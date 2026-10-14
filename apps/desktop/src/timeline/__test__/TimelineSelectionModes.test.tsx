@@ -23,7 +23,7 @@ import { pageFlags } from "../timelinePlayhead";
 
 /**
  * Page navigation and the selection on the `base.tsx` fixtures (ui.md UI-9 Page-relative tools;
- * P8.11). Under `test:timeline` (a converted show with the flag on), navigation moves the
+ * P8.11). On the converted fixture show, navigation moves the
  * playhead to a flag and selects that page's box, home for the first page, and the legacy selected
  * page follows the playhead. The default run checks that page mode still selects pages and never
  * touches the timeline selection.
@@ -113,6 +113,18 @@ describeDbTests("page navigation and the selection", (it) => {
         await waitFor(() =>
             expect(probed().selectedPage?.id).toBe(pages[0]!.id),
         );
+
+        // Shift+E and Shift+Q step the playhead a beat (beats 0 and 1 are both the start of the
+        // show), and stop at the start
+        await trigger("nextBeat");
+        await waitFor(() => expect(timelineSelection().playheadBeat).toBe(2));
+        await trigger("nextBeat");
+        await waitFor(() => expect(timelineSelection().playheadBeat).toBe(3));
+        await trigger("previousBeat");
+        await waitFor(() => expect(timelineSelection().playheadBeat).toBe(2));
+        await trigger("previousBeat");
+        await trigger("previousBeat");
+        await waitFor(() => expect(timelineSelection().playheadBeat).toBe(0));
     });
 
     it("sets the selection from the harness: a page's box resolves to its converted timeline, home to none", async ({

@@ -19,6 +19,7 @@ import {
     FileActionHandlers,
 } from "@/shortcuts/ActionHandlers";
 import TimelineContainer from "@/components/timeline/TimelineContainer";
+import { TimelineSplitter } from "@/components/timeline/TimelineSplitter";
 import { SelectedAudioFileProvider } from "@/context/SelectedAudioFileContext";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import TitleBar from "@/components/titlebar/TitleBar";
@@ -47,7 +48,10 @@ import tolgee from "./global/singletons/Tolgee";
 import { InContextTools } from "@tolgee/web/tools";
 import clsx from "clsx";
 import AlertModal from "./components/AlertModal";
+import ConvertShowDialog from "./components/ConvertShowDialog";
 import ShortcutsDialog from "./components/ShortcutsDialog";
+import WebWelcomeModal from "./components/WebWelcomeModal";
+import { isWebBuild } from "./utilities/webBuild";
 import { useLoadFileErrorHandler } from "./hooks/useLoadFileErrorHandler";
 import { toast } from "sonner";
 import { version as currentVersion } from "../package.json";
@@ -266,6 +270,8 @@ function App() {
                         </div>
                     )}
                     <AlertModal />
+                    {isWebBuild && <WebWelcomeModal />}
+                    <ConvertShowDialog />
                     <ShortcutDispatcher />
                     <CommandPalette />
                     <ShortcutsDialog />
@@ -332,7 +338,14 @@ function App() {
                                                             canvas={appCanvas}
                                                         />
                                                     </div>
-                                                    <TimelineContainer />
+                                                    {focussedComponent ===
+                                                    "timeline" ? (
+                                                        <TimelineContainer />
+                                                    ) : (
+                                                        <TimelineSplitter>
+                                                            <TimelineContainer />
+                                                        </TimelineSplitter>
+                                                    )}
                                                 </div>
                                                 {!isFullscreen && (
                                                     <div
