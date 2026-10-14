@@ -12,6 +12,7 @@ import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { filesOf, footprintOf, ranksOf } from "../box/boxGeometry";
 import { formatSteps } from "../tool/ShapeToolReadout";
 import { useShapeToolStore } from "../tool/shapeToolStore";
+import { useBoxSelectionStore } from "./boxSelectionStore";
 import PlacedBoxLayer, { type PlacedBoxDrawing } from "./PlacedBoxLayer";
 import type { PlacedBox } from "./placedBox";
 import {
@@ -55,6 +56,8 @@ export function usePlacedBoxesCanvas({
     const beat = useTimelineSelectionStore(displayedBeat);
     const timelines = useTimelineSelectionStore((s) => s.storedTimelines);
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
+    // The selected box draws its own outline and handles (useLiveBox)
+    const editing = useBoxSelectionStore((s) => s.selected?.recipe.id ?? null);
     const selected = useSelectedMarchers()?.selectedMarchers;
     const layerRef = useRef<PlacedBoxLayer | null>(null);
 
@@ -92,8 +95,9 @@ export function usePlacedBoxesCanvas({
         const drawings: PlacedBoxDrawing[] = placedBoxesAt(beat, recipes)
             .filter(
                 (box) =>
-                    mode === "always" ||
-                    box.recipe.members.some((m) => ids.has(m.marcherId)),
+                    box.recipe.id !== editing &&
+                    (mode === "always" ||
+                        box.recipe.members.some((m) => ids.has(m.marcherId))),
             )
             .map((box) => {
                 const f = footprintOf(box.params, box.spots);
@@ -114,5 +118,6 @@ export function usePlacedBoxesCanvas({
         beat,
         version,
         timelines,
+        editing,
     ]);
 }

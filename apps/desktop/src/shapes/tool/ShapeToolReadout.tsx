@@ -24,7 +24,7 @@ export function formatSteps(steps: number): string {
 }
 
 /** Where a field point is drawn, relative to the readout's positioned parent */
-function screenPoint(
+export function screenPoint(
     canvas: OpenMarchCanvas,
     parent: Element,
     p: { x: number; y: number },

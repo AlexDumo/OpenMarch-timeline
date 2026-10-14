@@ -33,6 +33,9 @@ import { useTimelineStaticRender } from "@/timeline/useTimelineStaticRender";
 import { useTimelinePathRender } from "@/timeline/useTimelinePathRender";
 import { useShapeToolCanvas } from "@/shapes/tool/useShapeToolCanvas";
 import { usePlacedBoxesCanvas } from "@/shapes/placed/usePlacedBoxesCanvas";
+import { useBoxSelection } from "@/shapes/placed/useBoxSelection";
+import { useLiveBox } from "@/shapes/placed/useLiveBox";
+import { PlacedBoxReadout } from "@/shapes/placed/PlacedBoxReadout";
 import { ShapeToolReadout } from "@/shapes/tool/ShapeToolReadout";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -488,6 +491,9 @@ export default function Canvas({
         isPlaying,
         theme: fieldProperties?.theme,
     });
+    // Figma-like: a click selects the whole box, and a selected box is edited in place
+    useBoxSelection({ canvas, isPlaying });
+    useLiveBox({ canvas, theme: fieldProperties?.theme });
 
     // Isolation (docs/timeline/research/ownership/09-isolation.md): the isolated move's own paths and ghosts
     // replace the paths below
@@ -569,6 +575,7 @@ export default function Canvas({
         >
             <TimelineIsolationBar />
             <ShapeToolReadout canvas={canvas} />
+            <PlacedBoxReadout canvas={canvas} />
             <TimelineFromStartBadge />
             {drawFromResolver && (
                 // UI-18: a broken chain beside each marcher kept on the current page

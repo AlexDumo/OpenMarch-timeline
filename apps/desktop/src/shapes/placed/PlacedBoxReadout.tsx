@@ -1,0 +1,126 @@
+import { useEffect, useRef, useState } from "react";
+import { MinusIcon, PlusIcon } from "@phosphor-icons/react";
+import { useQueryClient } from "@tanstack/react-query";
+import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
+import { filesOf, footprintOf, ranksOf, shortBy } from "../box/boxGeometry";
+import { formatSteps, screenPoint } from "../tool/ShapeToolReadout";
+import { useBoxSelectionStore } from "./boxSelectionStore";
+import type { PlacedBox } from "./placedBox";
+import { stepPlacedBoxFiles } from "./PlacedBoxKeys";
+
+const plural = (n: number, one: string, many: string) =>
+    `${n} ${n === 1 ? one : many}`;
+
+/** "Page 3" for the page a box was placed at the end of, when that is before `beat` */
+export function useDrawnOnPage(box: PlacedBox | null): string | null {
+    const beat = useTimelineSelectionStore(displayedBeat);
+    const pages = useTimelineSelectionStore((s) => s.pageBoxes);
+    if (!box || box.endBeat >= beat - 1e-9) return null;
+    const page = pages.find((p) => Math.abs(p.end - box.endBeat) < 1e-9);
+    return page?.name ? `Page ${page.name}` : null;
+}
+
+/**
+ * The numbers of a placed box: "5 files × 4 ranks · 2 steps · 1 short · 1 empty" (short: spots
+ * the back rank never had; empty: holes members left)
+ */
+export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
+    const across = formatSteps(box.params.across / stepPx);
+    const deep = formatSteps(box.params.deep / stepPx);
+    const empty = box.spots - box.recipe.members.length;
+    const short = shortBy(box.params, box.spots);
+    return [
+        `${plural(filesOf(box.params), "file", "files")} × ${plural(ranksOf(box.params, box.spots), "rank", "ranks")}`,
+        `${across === deep ? across : `${across} × ${deep}`} steps`,
+        ...(short > 0 ? [`${short} short`] : []),
+        ...(empty > 0 ? [`${empty} empty`] : []),
+    ].join(" · ");
+}
+
+/**
+ * The selected placed box's numbers, just under it, with one file fewer or more (also `[` and
+ * `]`), saved at once. Says which page the box was drawn on when that's an earlier one.
+ */
+export function PlacedBoxReadout({
+    canvas,
+}: {
+    canvas: OpenMarchCanvas | null;
+}) {
+    const box = useBoxSelectionStore((s) => s.selected);
+    const queryClient = useQueryClient();
+    const drawnOn = useDrawnOnPage(box);
+    const ref = useRef<HTMLDivElement>(null);
+    const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+    useEffect(() => {
+        if (!canvas || !box) {
+            setAt(null);
+            return;
+        }
+        const place = () => {
+            const parent = ref.current?.offsetParent;
+            if (!parent) return;
+            const f = footprintOf(box.params, box.spots);
+            const p = screenPoint(canvas, parent, {
+                x: (f.left + f.right) / 2,
+                y: f.bottom + box.params.deep / 2,
+            });
+            setAt((old) =>
+                old &&
+                Math.abs(old.x - p.x) < 0.5 &&
+                Math.abs(old.y - p.y) < 0.5
+                    ? old
+                    : p,
+            );
+        };
+        place();
+        canvas.on("after:render", place);
+        return () => {
+            canvas.off("after:render", place as never);
+        };
+    }, [canvas, box]);
+
+    if (!canvas || !box) return null;
+    const files = filesOf(box.params);
+    return (
+        <div
+            ref={ref}
+            className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex -translate-x-1/2 items-center gap-8 border px-8 py-4 whitespace-nowrap"
+            style={
+                at ? { left: at.x, top: at.y + 10 } : { visibility: "hidden" }
+            }
+            data-testid="placed-box-readout"
+        >
+            <button
+                type="button"
+                aria-label="One file fewer"
+                title="One file fewer ( [ )"
+                className="hover:text-accent disabled:opacity-40"
+                disabled={files <= 1}
+                onClick={() => stepPlacedBoxFiles(-1, queryClient)}
+            >
+                <MinusIcon size={14} />
+            </button>
+            <span data-testid="placed-box-readout-text">
+                Box ·{" "}
+                {placedBoxSummary(box, canvas.fieldProperties.pixelsPerStep)}
+                {drawnOn && (
+                    <span className="text-text/50"> · from {drawnOn}</span>
+                )}
+            </span>
+            <button
+                type="button"
+                aria-label="One file more"
+                title="One file more ( ] )"
+                className="hover:text-accent disabled:opacity-40"
+                disabled={files >= box.spots}
+                onClick={() => stepPlacedBoxFiles(1, queryClient)}
+            >
+                <PlusIcon size={14} />
+            </button>
+        </div>
+    );
+}

@@ -4,6 +4,7 @@ import { getButtonClassName } from "@openmarch/ui";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import ActionButton from "@/shortcuts/ActionButton";
 import { useShapeToolStore } from "./shapeToolStore";
+import { PlacedBoxSection } from "../placed/PlacedBoxSection";
 
 /**
  * The inspector's way into the shape tool: with marchers selected, a Box button (also B). While
@@ -23,7 +24,8 @@ export function ShapeToolSection() {
                         : "Drag a corner or side to stretch it, or inside to move it. Enter places the marchers, Esc cancels."}
                 </p>
             ) : (
-                <div className="flex gap-8">
+                <div className="flex flex-wrap gap-8">
+                    <PlacedBoxSection />
                     <ActionButton
                         action="shapeBlock"
                         className={clsx(

@@ -58,6 +58,12 @@ it back.
 - Dragging a selected box's handles or inside it saves on release, as one undo step. Only drawing
   a new box keeps the preview and Place.
 - The inspector shows the readout, − and +, and **Select box**.
+- A press on a marcher that is already selected (the whole box, or one picked by a marquee)
+  drags the selection, as in Figma.
+- With a box selected, the nudge keys move the whole box the same distance, so it stays a box.
+  (The plain nudge rounds each marcher on its own, which bends a box whose ranks sit on half
+  steps; found while testing, 2026-10-14.)
+- With the View tab's **Shapes** set to Off, boxes are neither drawn nor selected as boxes.
 
 ## Build order
 

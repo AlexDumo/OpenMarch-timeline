@@ -26,8 +26,16 @@ export interface ShapeToolInput {
     press(at: XY, keys: Keys): void;
     move(at: XY, keys: Keys): void;
     release(): void;
-    /** The cursor to show over `at` while no gesture is going */
-    cursorAt(at: XY, keys: Keys): string;
+    /** The cursor to show over `at` while no gesture is going; null leaves fabric's */
+    cursorAt(at: XY, keys: Keys): string | null;
+    /**
+     * Whether the layer takes a press at `at`. Without it, it takes every plain left press;
+     * with it, the presses it turns down go to fabric as usual (a selected placed box, which
+     * takes only its handles and its inside)
+     */
+    claims?(at: XY, keys: Keys): boolean;
+    /** A double click on a press the layer took */
+    doubleClick?(at: XY, keys: Keys): void;
 }
 
 export interface Keys {
@@ -43,7 +51,7 @@ const offset = FieldProperties.GRID_STROKE_WIDTH / 2;
  * The shape tool on the canvas: its input boundary and its drawing.
  *
  * **Input.** While the layer exists, it owns every left press on the field that isn't an
- * Alt-press (Alt+drag pans the canvas). It takes the press in the capture phase on fabric's
+ * Alt-press (Alt+drag pans the canvas), or only the ones its input `claims`. It takes the press in the capture phase on fabric's
  * wrapper, before fabric sees it, and follows the gesture on the window until release. Fabric
  * never sees those presses, so nothing selects, drags or lassos underneath. Other buttons and
  * the wheel go to fabric as usual, so panning and zooming keep working.
@@ -57,6 +65,8 @@ export default class ShapeToolLayer {
     private walks: fabric.Line[] = [];
     private handles: fabric.Rect[] = [];
     private gesture = false;
+    /** Whether the layer took the last press, so the mouse events after it follow suit */
+    private took = false;
 
     constructor(
         private readonly canvas: OpenMarchCanvas,
@@ -66,7 +76,7 @@ export default class ShapeToolLayer {
         const wrapper = this.wrapper();
         wrapper?.addEventListener("pointerdown", this.onPointerDown, true);
         wrapper?.addEventListener("mousedown", this.onMouseDown, true);
-        wrapper?.addEventListener("dblclick", this.onMouseDown, true);
+        wrapper?.addEventListener("dblclick", this.onDoubleClick, true);
         // After fabric's own mousemove, which sets its cursor
         upperCanvasOf(canvas).addEventListener("mousemove", this.onHover);
     }
@@ -76,7 +86,7 @@ export default class ShapeToolLayer {
         const wrapper = this.wrapper();
         wrapper?.removeEventListener("pointerdown", this.onPointerDown, true);
         wrapper?.removeEventListener("mousedown", this.onMouseDown, true);
-        wrapper?.removeEventListener("dblclick", this.onMouseDown, true);
+        wrapper?.removeEventListener("dblclick", this.onDoubleClick, true);
         upperCanvasOf(this.canvas).removeEventListener(
             "mousemove",
             this.onHover,
@@ -112,7 +122,11 @@ export default class ShapeToolLayer {
     }
 
     private readonly onPointerDown = (e: PointerEvent) => {
-        if (!ShapeToolLayer.owns(e) || this.gesture) return;
+        if (this.gesture) return;
+        this.took =
+            ShapeToolLayer.owns(e) &&
+            (this.input.claims?.(this.fieldPoint(e), keysOf(e)) ?? true);
+        if (!this.took) return;
         e.preventDefault();
         e.stopPropagation();
         this.gesture = true;
@@ -124,9 +138,16 @@ export default class ShapeToolLayer {
 
     /** Fabric listens for mouse events too: the press it would see is the tool's */
     private readonly onMouseDown = (e: MouseEvent) => {
-        if (!ShapeToolLayer.owns(e)) return;
+        if (!ShapeToolLayer.owns(e) || !this.took) return;
         e.preventDefault();
         e.stopPropagation();
+    };
+
+    private readonly onDoubleClick = (e: MouseEvent) => {
+        if (!ShapeToolLayer.owns(e) || !this.took) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.input.doubleClick?.(this.fieldPoint(e), keysOf(e));
     };
 
     private readonly onPointerMove = (e: PointerEvent) => {
@@ -151,9 +172,12 @@ export default class ShapeToolLayer {
 
     private readonly onHover = (e: MouseEvent) => {
         if (this.gesture) return;
-        upperCanvasOf(this.canvas).style.cursor = e.altKey
-            ? ""
-            : this.input.cursorAt(this.fieldPoint(e), keysOf(e));
+        if (e.altKey) {
+            upperCanvasOf(this.canvas).style.cursor = "";
+            return;
+        }
+        const cursor = this.input.cursorAt(this.fieldPoint(e), keysOf(e));
+        if (cursor !== null) upperCanvasOf(this.canvas).style.cursor = cursor;
     };
 
     /** Keeps the layer above marchers drawn after it */

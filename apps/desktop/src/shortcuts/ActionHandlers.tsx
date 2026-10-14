@@ -12,6 +12,8 @@ import { useUiActionHandlers } from "./handlers/useUiActionHandlers";
 import { useShapeToolActions } from "@/shapes/tool/useShapeToolActions";
 import { ShapeToolKeys } from "@/shapes/tool/ShapeToolKeys";
 import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
+import { PlacedBoxKeys } from "@/shapes/placed/PlacedBoxKeys";
+import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
 
 /** Handlers available before a show is open (launch page). */
 export function FileActionHandlers() {
@@ -32,7 +34,12 @@ export function EditorActionHandlers() {
     useShapeToolActions();
     useKeepActionHandlers();
     useTimelineActionEffects();
-    // Mounted after the handlers above, so the open shape tool's keys are on top
+    // Mounted after the handlers above, so the open shape tool's keys are on top, and a selected
+    // placed box's below them
     const shapeToolOpen = useShapeToolStore((s) => s.tool !== null);
-    return shapeToolOpen ? <ShapeToolKeys /> : null;
+    const boxSelected = useBoxSelectionStore(
+        (s) => s.selected !== null || s.inside !== null,
+    );
+    if (shapeToolOpen) return <ShapeToolKeys />;
+    return boxSelected ? <PlacedBoxKeys /> : null;
 }

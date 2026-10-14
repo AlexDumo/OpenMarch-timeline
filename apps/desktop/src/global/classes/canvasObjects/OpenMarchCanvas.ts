@@ -141,6 +141,11 @@ export default class OpenMarchCanvas extends fabric.Canvas {
      * Set it to false after making selection
      */
     handleSelectLock = false;
+    /**
+     * Set by a `mouse:down:before` handler that has already decided what the press selects (a
+     * Shift-click on a placed box), so the default mouse-down handling leaves it alone
+     */
+    pressTakenBefore = false;
     /** Denotes whether the Canvas itself is being dragged by the user to pan the view */
     isDragging = false;
     /** The point where the user's mouse was when they started dragging the canvas. This is used to adjust the viewport transform. */

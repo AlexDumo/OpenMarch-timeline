@@ -1,0 +1,60 @@
+import type { QueryClient } from "@tanstack/react-query";
+import { db } from "@/global/database/db";
+import { saveShapeRecipeInTransaction } from "@/db-functions/shapeRecipes";
+import { historyKeys } from "@/hooks/queries/useHistory";
+import { transformMarchersInSelection } from "@/timeline/timelineCoordinateWrites";
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import type { BoxParams } from "../box/boxGeometry";
+import { currentCanvas, shapeContextFor } from "../canvas/shapeCanvasContext";
+import { liveTargets } from "./liveBox";
+import type { PlacedBox } from "./placedBox";
+
+/**
+ * Saves a selected box drawn with `params`: its members move to their spots in it and its recipe
+ * is saved, as one edit at the edit window (a canvas edit). A box held from an earlier move gets
+ * its own copy on this one; the earlier one stays.
+ */
+export async function commitBox(
+    box: PlacedBox,
+    params: BoxParams,
+    queryClient: QueryClient,
+): Promise<void> {
+    const canvas = currentCanvas();
+    if (!canvas) return;
+    const targets = liveTargets(box, params, shapeContextFor(canvas));
+    const to = new Map(targets.map((t) => [t.marcherId, t]));
+    try {
+        await transformMarchersInSelection({
+            db,
+            marcherIds: targets.map((t) => t.marcherId),
+            transform: (current) =>
+                current.flatMap((c) => {
+                    const t = to.get(c.marcher_id);
+                    return t
+                        ? [{ marcher_id: c.marcher_id, x: t.x, y: t.y }]
+                        : [];
+                }),
+            writesShapes: true,
+            afterWrite: async (tx, timelineId) => {
+                await saveShapeRecipeInTransaction({
+                    tx,
+                    timelineId,
+                    recipe: {
+                        ...box.recipe,
+                        params: { ...params, spots: box.spots },
+                    },
+                    members: targets,
+                    replaces:
+                        box.recipe.timelineId === timelineId
+                            ? box.recipe.id
+                            : undefined,
+                });
+            },
+        });
+    } catch (e) {
+        toastTimelineError(e, "Error editing the box");
+        return;
+    }
+    // Not a React Query mutation, so refresh what one would
+    void queryClient.invalidateQueries({ queryKey: historyKeys.all() });
+}

@@ -166,6 +166,12 @@ export default class DefaultListeners implements CanvasListeners {
     handleMouseDown(fabricEvent: fabric.IEvent<MouseEvent>) {
         const evt = fabricEvent.e;
 
+        // A placed box took this press before fabric did (Shift-click on a box): no lasso
+        if (this.canvas.pressTakenBefore) {
+            this.canvas.pressTakenBefore = false;
+            return;
+        }
+
         // Alt+drag panning is owned by OpenMarchCanvas (forceTrackpadPan); skip here.
         if (evt.altKey) {
             evt.preventDefault();
