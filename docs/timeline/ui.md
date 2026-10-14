@@ -792,9 +792,12 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Play (Space), looping on**, loops exactly the loop's region (no roll, V-24) until stopped,
     wherever the playhead is. Stopping puts the canvas back on the playhead, which looping never
     moved (project owner). An isolated move loops its range the same way.
-  - **One Play button**, which reads Stop while playing. While looping its icon is a short bar in the
-    start flag's color, then Play (the owner picked it from mockups), and its name is "Play the
-    loop". There is no Pause and no separate Stop or second play button; Loop is its own button.
+  - **One Play button**, which reads Stop while playing. Its icon is a plain Play; while Shift is
+    held it becomes a short bar in the text color, then Play, and its name says Shift+click plays
+    from the playhead (or the loop once), as Previous and Next swap theirs (owner, 2026-10-14). Its
+    tooltip is a guide like theirs: Play with Space, then the barred Play with Shift + Space, the
+    held one lit. While looping its name is "Play the loop". There is no Pause and no separate Stop
+    or second play button; Loop is its own button.
   - **A click, scrub or page jump while looping**: inside the loop it jumps and keeps looping;
     outside it, playback plays on from there and the stop stays (UI-11, UI-12).
   - **The loop is its own region** (project owner, 2026-10-09, after trying the follow model by
@@ -808,7 +811,7 @@ from it. The spec still wins on the model; this file decides presentation.
     Q, a page box) moves it to that page, as the round 2 test chose ("the loop follows your page").
     Shift+click on page boxes, with looping on, sets it to those pages. The field line names the loop
     only while it is elsewhere than the window being edited ("Space loops Page 3's move"); on its
-    own page the lit Loop button, the bar and Play's icon say it (owner, 2026-10-09).
+    own page the lit Loop button and the bar say it (owner, 2026-10-09).
   - **Turning looping on and off**: C, or the **Loop** button on the transport (lit while on), loops
     the window being edited (the page, or the pages Shift+click selected); again turns it off.
     **Ctrl+drag** (Cmd on macOS) on the timeline draws the loop and turns looping on, as dragging
