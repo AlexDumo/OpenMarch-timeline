@@ -1709,9 +1709,9 @@ describe("a calmer timeline (UI-12)", () => {
                 active: row.hasAttribute("data-active"),
             }));
         expect(rows()).toEqual([
-            { text: "Next pageEClick", active: true },
-            { text: "Next beatShiftEShift+click", active: false },
-            { text: "End of the showAltEAlt+click", active: false },
+            { text: "Next pageE", active: true },
+            { text: "Next beatShift+E", active: false },
+            { text: "End of the showAlt+E", active: false },
         ]);
         fireEvent.keyDown(window, { key: "Alt", altKey: true });
         expect(rows().map((row) => row.active)).toEqual([false, false, true]);

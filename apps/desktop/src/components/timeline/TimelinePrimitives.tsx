@@ -178,6 +178,7 @@ const TransportButton = memo(function TransportButton({
     label,
     shortcut,
     hint,
+    hideLabel,
     keyShortcut,
     children,
     onClick,
@@ -192,6 +193,8 @@ const TransportButton = memo(function TransportButton({
     hint?: ReactNode;
     /** The shortcut for assistive tech when the tooltip shows it elsewhere (in a guide) */
     keyShortcut?: string;
+    /** The tooltip is just `hint`, without the label above it */
+    hideLabel?: boolean;
     children: ReactNode;
     onClick?: (event: ReactMouseEvent) => void;
     pressed?: boolean;
@@ -200,7 +203,12 @@ const TransportButton = memo(function TransportButton({
     navigation?: boolean;
 }) {
     return (
-        <ShortcutTooltip label={label} shortcut={shortcut} hint={hint}>
+        <ShortcutTooltip
+            label={label}
+            shortcut={shortcut}
+            hint={hint}
+            hideLabel={hideLabel}
+        >
             <button
                 type="button"
                 aria-label={label}
@@ -299,8 +307,6 @@ interface NavigationGuideRow {
     readonly label: string;
     /** The shortcut as keycaps */
     readonly shortcut: string;
-    /** The click that does the same */
-    readonly click: string;
 }
 
 /** What Previous (or Next) does with each modifier, in the order the tooltip lists them */
@@ -314,7 +320,6 @@ const navigationGuide = (back: boolean): readonly NavigationGuideRow[] => {
             shortcut: back
                 ? TRANSPORT_SHORTCUTS.previousPage
                 : TRANSPORT_SHORTCUTS.nextPage,
-            click: "Click",
         },
         {
             mode: "beat",
@@ -323,7 +328,6 @@ const navigationGuide = (back: boolean): readonly NavigationGuideRow[] => {
             shortcut: back
                 ? TRANSPORT_SHORTCUTS.previousBeat
                 : TRANSPORT_SHORTCUTS.nextBeat,
-            click: "Shift+click",
         },
         {
             mode: "edge",
@@ -333,7 +337,6 @@ const navigationGuide = (back: boolean): readonly NavigationGuideRow[] => {
                 ? TRANSPORT_SHORTCUTS.firstPage
                 : TRANSPORT_SHORTCUTS.lastPage
             ).replace("Alt", alt),
-            click: `${alt}+click`,
         },
     ];
 };
@@ -350,37 +353,26 @@ function NavigationGuide({
     mode: TransportNavigationMode;
 }) {
     return (
-        <span className="mt-4 flex w-max flex-col gap-4">
-            <span
-                data-testid="timeline-navigation-guide"
-                className="grid grid-cols-[auto_auto_auto_auto] items-center gap-x-8 gap-y-4"
-            >
-                {rows.map((row) => (
-                    <span
-                        key={row.mode}
-                        data-active={row.mode === mode || undefined}
-                        className={clsx(
-                            "col-span-4 grid grid-cols-subgrid items-center",
-                            row.mode === mode ? "text-accent" : "text-text",
-                        )}
-                    >
-                        <span aria-hidden="true" className="flex">
-                            {row.icon}
-                        </span>
-                        <span className="text-[12px]">{row.label}</span>
-                        <Keycaps shortcut={row.shortcut} />
-                        <span className="text-text-subtitle text-[11px]">
-                            {row.click}
-                        </span>
+        <span
+            data-testid="timeline-navigation-guide"
+            className="grid w-max grid-cols-[auto_auto_auto] items-center gap-x-8 gap-y-4"
+        >
+            {rows.map((row) => (
+                <span
+                    key={row.mode}
+                    data-active={row.mode === mode || undefined}
+                    className={clsx(
+                        "col-span-3 grid grid-cols-subgrid items-center",
+                        row.mode === mode ? "text-accent" : "text-text",
+                    )}
+                >
+                    <span aria-hidden="true" className="flex">
+                        {row.icon}
                     </span>
-                ))}
-            </span>
-            {/* Wraps to the table's width rather than widening the tooltip */}
-            <span className="text-text-subtitle w-0 min-w-full text-[11px]">
-                Hold Shift or {isMac() ? "Option" : "Alt"} to switch the
-                buttons. Home and End also go to the start and end. While
-                playing, playback jumps there and keeps going.
-            </span>
+                    <span className="text-[12px]">{row.label}</span>
+                    <Keycaps shortcut={row.shortcut} plus />
+                </span>
+            ))}
         </span>
     );
 }
@@ -413,6 +405,7 @@ const TransportNavigationButton = memo(function TransportNavigationButton({
         <TransportButton
             label={row.label}
             keyShortcut={row.shortcut}
+            hideLabel
             hint={<NavigationGuide rows={guide} mode={mode} />}
             testId={`timeline-${direction}`}
             navigation
