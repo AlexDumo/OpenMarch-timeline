@@ -28,6 +28,10 @@ describe("transport shortcuts (UI-17)", () => {
         expect(TRANSPORT_SHORTCUTS).toEqual({
             previousPage: "Q",
             nextPage: "E",
+            firstPage: "Alt + Q",
+            lastPage: "Alt + E",
+            previousBeat: "Shift + Q",
+            nextBeat: "Shift + E",
             play: "Space",
             playPage: "Shift + Space",
             loop: "C",
@@ -37,18 +41,22 @@ describe("transport shortcuts (UI-17)", () => {
         expect(TRANSPORT_SHORTCUTS.previousPage).toBe(shown("previousPage"));
         expect(TRANSPORT_SHORTCUTS.nextPage).toBe(shown("nextPage"));
         expect(TRANSPORT_SHORTCUTS.loop).toBe(shown("toggleLoop"));
+        expect(TRANSPORT_SHORTCUTS.firstPage).toBe(shown("firstPage"));
+        expect(TRANSPORT_SHORTCUTS.lastPage).toBe(shown("lastPage"));
+        expect(TRANSPORT_SHORTCUTS.previousBeat).toBe(shown("previousBeat"));
+        expect(TRANSPORT_SHORTCUTS.nextBeat).toBe(shown("nextBeat"));
     });
 });
 
 describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
     const items = [...PLAYBACK_MENU_ACTIONS, ...HELP_MENU_ACTIONS];
 
-    it("lists Play, Play Page Once and Loop, plus the shortcuts list (UI-17)", () => {
+    it("lists Play, Play from Playhead and Loop, plus the shortcuts list (UI-17)", () => {
         expect(PLAYBACK_MENU_ACTIONS).toEqual([
             { action: "playPause", label: "Play / Stop", accelerator: "Space" },
             {
                 action: "playPage",
-                label: "Play Page Once",
+                label: "Play from Playhead",
                 accelerator: "Shift+Space",
             },
             {
