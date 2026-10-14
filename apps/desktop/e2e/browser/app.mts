@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import type { Show } from "./fixtures.mjs";
 import { savedPositions } from "./positions.mjs";
+import type {} from "../../src/field/fieldTestApi";
 
 /** Steps a user takes in the app, shared between specs. */
 
@@ -12,43 +13,41 @@ export type DrawnMarcher = {
     y: number;
     /** The dot's position in the viewport, for mouse actions. */
     screen: { x: number; y: number };
-    /** False when the dot is scrolled out of the visible canvas. */
+    /** False when the dot is scrolled out of the visible field. */
     onScreen: boolean;
 };
 
-/** Reads the marchers off the field canvas (`window.canvas`). */
-export const drawnMarchers = (page: Page): Promise<DrawnMarcher[]> =>
-    page.evaluate(() => {
-        const canvas = window.canvas as any;
-        const rect = canvas.upperCanvasEl.getBoundingClientRect();
-        const [scaleX, , , scaleY, panX, panY] = canvas.viewportTransform;
-        const cssScale = rect.width / canvas.width;
-        return canvas.getCanvasMarchers().map((marcher: any) => {
-            const center = marcher.getCenterPoint();
-            const screen = {
-                x: rect.x + (center.x * scaleX + panX) * cssScale,
-                y: rect.y + (center.y * scaleY + panY) * cssScale,
-            };
-            return {
-                id: marcher.marcherObj.id,
-                drillNumber: marcher.marcherObj.drill_number,
-                ...marcher.getDatabaseCoords(),
-                screen,
-                onScreen:
-                    screen.x > rect.left &&
-                    screen.x < rect.right &&
-                    screen.y > rect.top &&
-                    screen.y < rect.bottom,
-            };
-        });
-    });
+// Helpers read the field only through the field test API
+// (`window.fieldTest`, `src/field/fieldTestApi.ts`), so the scenarios run
+// against any field renderer.
 
-/** Screen pixels per field unit at the canvas's current zoom. */
+/** Waits until the field shows a page and its test API is installed. */
+export const waitForField = (page: Page) =>
+    page.waitForFunction(() => window.fieldTest?.pageId() != null);
+
+/** Reads the marchers drawn on the field. */
+export const drawnMarchers = (page: Page): Promise<DrawnMarcher[]> =>
+    page.evaluate(() =>
+        window.fieldTest!.marchers().map(({ label, ...marcher }) => ({
+            ...marcher,
+            drillNumber: label,
+        })),
+    );
+
+/** Screen pixels per field unit at the field's current zoom. */
 export const canvasScale = (page: Page): Promise<number> =>
+    page.evaluate(() => window.fieldTest!.viewport().zoom);
+
+/** The field's selection, view, handles and gesture in progress, as the field test API reads them. */
+export const readField = (page: Page) =>
     page.evaluate(() => {
-        const canvas = window.canvas as any;
-        const rect = canvas.upperCanvasEl.getBoundingClientRect();
-        return canvas.viewportTransform[0] * (rect.width / canvas.width);
+        const field = window.fieldTest!;
+        return {
+            selection: field.selection(),
+            viewport: field.viewport(),
+            handles: field.handles(),
+            activeGesture: field.activeGesture(),
+        };
     });
 
 /** Adds marchers through the sidebar form, then closes the sidebar. */
@@ -112,8 +111,8 @@ export async function expectCanvasMatchesShow(show: Show) {
     const round = (value: number) => Math.round(value * 100) / 100;
     await expect
         .poll(async () => {
-            const pageId = await show.page.evaluate(
-                () => (window.canvas as any).currentPage.id as number,
+            const pageId = await show.page.evaluate(() =>
+                window.fieldTest!.pageId(),
             );
             const saved = (await savedPositions(show, pageId)).map(
                 ({ id, x, y }) => ({ id, x: round(x), y: round(y) }),
@@ -139,21 +138,23 @@ export async function clickMarcher(
         (drawn) => drawn.drillNumber === drillNumber,
     );
     if (!marcher?.onScreen)
-        throw new Error(`${drillNumber} is not visible on the canvas`);
+        throw new Error(`${drillNumber} is not visible on the field`);
     if (add) await page.keyboard.down("Shift");
     await page.mouse.click(marcher.screen.x, marcher.screen.y);
     if (add) await page.keyboard.up("Shift");
 }
 
-/** The drill numbers of the marchers selected on the canvas. */
+/** The drill numbers of the marchers selected on the field. */
 export const selectedDrillNumbers = (page: Page): Promise<string[]> =>
-    page.evaluate(() =>
-        (window.canvas as any)
-            .getActiveObjects()
-            .filter((object: any) => object.marcherObj)
-            .map((object: any) => object.marcherObj.drill_number as string)
-            .sort(),
-    );
+    page.evaluate(() => {
+        const field = window.fieldTest!;
+        const selected = new Set(field.selection());
+        return field
+            .marchers()
+            .filter((marcher) => selected.has(marcher.id))
+            .map((marcher) => marcher.label)
+            .sort();
+    });
 
 /** Opens a marcher's row menu in the Marchers sidebar and picks an item. */
 export async function marcherRowAction(

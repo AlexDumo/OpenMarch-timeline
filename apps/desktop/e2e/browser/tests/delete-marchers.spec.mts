@@ -31,6 +31,11 @@ test.use({
             ],
         ],
     }),
+    // Pre-existing on fork main ef7b6efe, about 2 runs in 3: the undo can restore T2's
+    // selection a moment before the canvas redraws T2, so the selection listener logs this
+    // and skips it. The selection and drawing end up right; the field is frozen until the
+    // new renderer (#189), which replaces this listener.
+    allowedPageErrors: [/SelectedMarcher not found on Canvas/],
 });
 
 const marchers = (show: Show) =>

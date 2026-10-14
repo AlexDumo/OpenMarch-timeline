@@ -80,6 +80,12 @@ test("creates marchers", async ({ show }) => {
   each marcher at the end of a page, the way the app reads it: the app's
   `readTimelineTables` and the resolver at the page's end beat. It runs in the
   host bundle, so it needs `pnpm run build:browser` for both targets.
+- Read the field only through the field test API, `window.fieldTest`
+  (`src/field/fieldTestApi.ts`): the drawn marchers, the selection, the view,
+  the selection handles and the gesture in progress. The helpers
+  (`drawnMarchers`, `readField`, `selectedDrillNumbers`) wrap it. Never reach
+  into the renderer (`window.canvas`, Fabric objects): the same scenarios must
+  run against the new field renderer (#189).
 - `expectCanvasMatchesShow(show)` waits until every marcher is drawn where
   `savedPositions` puts it. Call it after any step that moves marchers or
   changes page.

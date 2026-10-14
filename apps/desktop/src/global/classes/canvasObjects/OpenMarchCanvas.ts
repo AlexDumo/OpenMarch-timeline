@@ -201,6 +201,11 @@ export default class OpenMarchCanvas extends fabric.Canvas {
     /** Track state for CSS-based panning */
     private isPanning = false;
 
+    /** Whether an Alt-drag pan is in progress, for the field test API */
+    get isAltPanning() {
+        return this.isPanning;
+    }
+
     /** Track pinch gesture for zooming */
     private initialPinchDistance = 0;
 
