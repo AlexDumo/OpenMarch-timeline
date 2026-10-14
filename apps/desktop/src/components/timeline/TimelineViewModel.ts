@@ -198,11 +198,18 @@ export type TimelineSeek = (
     options?: TimelineSeekOptions,
 ) => number | void;
 
-export type TimelineNavigation =
+/** Page navigation: Q and E, Shift for the start and end of the show */
+export type TimelinePageNavigation =
     | "first-page"
     | "previous-page"
     | "next-page"
     | "last-page";
+
+/** Q and E with Alt (or Alt+click Previous and Next) step a beat instead of a page */
+export type TimelineNavigation =
+    | TimelinePageNavigation
+    | "previous-beat"
+    | "next-beat";
 
 export interface TimelineInteractionProps {
     readonly positionBeat: BeatPosition;
@@ -235,6 +242,10 @@ export interface TimelineInteractionProps {
      * while it's given and the timeline isn't playing; the owner passes it only where **+** applies.
      */
     readonly onAddPageFlag?: () => void;
+    /** **Add subset page** in the right-click menu of **+**; without it, **+** has no menu */
+    readonly onAddSubsetPage?: () => void;
+    /** The names **+**'s menu shows, muted, after **Add page** and **Add subset page** */
+    readonly addPageNames?: { readonly page: string; readonly subset: string };
     /**
      * Moving page flags by their grips (docs/timeline/research/move-page-flag), in view beats here.
      * The owner passes it only where flags can move (paused, not isolated).
