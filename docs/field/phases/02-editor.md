@@ -255,6 +255,52 @@ preview frame is held (`Canvas.tsx`, the preview-swallowing effect, story 60);
 the new field doesn't yet, so a press there selects or drags. The hook belongs
 at the start of `FieldEditor.pointerDown` (see #193's note).
 
+### #195 Marquee and lasso
+
+**Files.** `editor/selectionArea.ts` holds the pure rules: `lassoCloses`
+(under `LASSO_CLOSE_DISTANCE`, 50 screen px, measured as field distance times
+the current zoom), `pointInPolygon`, `marchersInRect`, `marchersInPolygon`,
+and `selectionAfterArea`. `editor/areaGestures.ts` has the two
+`FieldGesture`s, `startMarquee` and `startLasso`; each exposes `shape()`, a
+stable snapshot the overlay reads through `FieldEditor.areaShape()`.
+
+**`startDrag` now** is `startMove(press) ?? startArea(press)`: #196's move
+wins (a marcher, or empty field inside a multi-selection's box, the one box
+test `insideSelectionBox`); the rest of the empty field is a lasso after a
+double-click, else a marquee. The editor calls the gesture's `move` with the
+first pointer, so a quick flick (released past the slop with no move in
+between) selects at once. `area-selection.spec.mts` pins that a drag from
+inside the box draws no marquee and keeps the selection.
+
+**Double-click.** The editor keeps the last click (time, screen point, hit). A
+press within `DOUBLE_CLICK_MS` (500) and `DOUBLE_CLICK_SLOP` (8 screen px) of a
+click on empty field is a double press; dragged, it's a lasso; released, it's
+a plain click, and starts no triple. The clock is `FieldEditorOptions.now`.
+`pointerCancel` keeps the last click: `fieldPointerInput` cancels on
+a lost pointer capture after every release.
+
+**Rules as built.** The marquee takes every marcher whose dot it touches (its
+click target, `hitRadius`), as Fabric's marquee touches objects; the lasso
+takes centers. Both skip hidden and dimmed marchers, like a click and Ctrl+A.
+Shift at the press adds; a marquee over nothing clears (Shift keeps). A lasso
+released 50 px or more from its start changes nothing. The overlay draws the
+marquee in the theme's shape color at 20% fill, the lasso dashed in
+`primaryStroke`, and `nextPath` green while a release would close it.
+
+**Scenarios.** `e2e/browser/tests/area-selection.spec.mts`: marquee scenarios
+on both fields; one `change:` (Shift+drag is a marquee that adds, not
+Fabric's lasso) is `test.fail` on Fabric; lasso scenarios skip on Fabric. The
+green cue and the drawn shapes are checked by eye (the test API has no reading
+for overlay shapes). The closing rule at other zooms is unit-tested only:
+the new field can't zoom until #194 lands.
+
+**Open for the #208 checklist.** Without Shift, the first click of a
+double-click on empty field clears the selection, so a lasso that doesn't
+close leaves nothing selected (with Shift, the selection is kept). "Within 50
+screen px" is strict: exactly 50 doesn't close.
+A lasso (Shift+double-click-and-drag included) can't start inside an existing
+multi-selection's box: there the drag moves the selection (owner decision).
+
 ### #197 Snapping, precision and locks
 
 **Files.** `src/field/editor/moveRules.ts`: `ruledMove(rules)` is the

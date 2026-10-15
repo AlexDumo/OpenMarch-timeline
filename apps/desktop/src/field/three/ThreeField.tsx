@@ -510,7 +510,13 @@ function ThreeFieldView() {
                     />
                 </Canvas>
             )}
-            {fieldProperties && <FieldOverlay marchers={marchers} />}
+            {fieldProperties && (
+                <FieldOverlay
+                    marchers={marchers}
+                    editor={editor}
+                    theme={fieldProperties.theme}
+                />
+            )}
             <KeptMarksOverlay marks={keptMarks} elements={keptMarkElements} />
             <KeptMarkTooltipView tooltip={keptMarkTooltip} />
         </div>
