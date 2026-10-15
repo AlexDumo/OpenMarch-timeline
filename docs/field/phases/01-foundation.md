@@ -50,6 +50,14 @@ Append notes the next tickets need: file locations, seams, surprises.
   fast-check generator. `fc.float`/`fc.double` draw NaN unless you pass
   `noNaN: true`, even with `min`/`max` set (those already keep out
   infinities). Reproduce with `fc.check(..., { numRuns: 200000 })`.
+- **#224:** to read several tables as one committed state outside the editor's
+  write lock (the 3D View window, an export, a test API reading), use
+  `db.batch([...])`: main runs the reads in one synchronous call and waits out
+  any open transaction (ADR 0002, amendment 2026-10-15). For the timeline,
+  `readTimelineTablesSnapshot` does this and `acquireExportResolver` uses it.
+  `readTimelineTables` reads one statement at a time: use it only inside a
+  transaction or under `withTimelineWriteLock`. A test database without batch
+  reads (the sql.js fixture) makes `readTimelineTablesSnapshot` throw.
 
 ### #192 Tracer bullet
 

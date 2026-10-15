@@ -135,7 +135,7 @@ test("zoom to collisions frames the collisions", async ({ show }) => {
         y: a!.y + 2,
         distance: 6,
     };
-    // Collision detection is off app-wide (upstream b61834d8b): the scenario puts one on the page
+    // A made-up collision at a known spot (real ones: collisions.spec.mts)
     await page.evaluate(
         (c) => window.openmarchCollisions!.show([c]),
         collision,

@@ -4,7 +4,7 @@ import type { DbConnection } from "@/db-functions/types";
 import { calculateTimestamps, fromDatabaseBeat } from "@/global/classes/Beat";
 import { beatAtTime, type BeatTiming } from "./timeMap";
 import type { PositionSource } from "./positionBuffer";
-import { readTimelineTables } from "./timelineRows";
+import { readTimelineTablesSnapshot } from "./timelineRows";
 import {
     buildKeyframes,
     keyframesToJson,
@@ -22,12 +22,13 @@ import {
  * builds its own. The store's resolver is updated in place by every committed batch, so an edit
  * during a long export would change later frames and stop matching the beats read at the start.
  * The private resolver is not subscribed to changes, so an export reads one moment. (The live
- * preview may use the store's resolver.)
+ * preview may use the store's resolver.) The tables are read as one snapshot, which needs no write
+ * lock, so the 3D View window (another renderer) builds its resolver this way too (#224).
  */
 export async function acquireExportResolver(
     db: DbConnection,
 ): Promise<Resolver> {
-    const { snapshot } = await readTimelineTables(db);
+    const { snapshot } = await readTimelineTablesSnapshot(db);
     return createResolver(snapshot);
 }
 

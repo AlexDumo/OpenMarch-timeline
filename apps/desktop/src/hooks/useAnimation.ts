@@ -27,32 +27,14 @@ export const useAnimation = ({ canvas, onTimelineBeat }: UseAnimationProps) => {
     const { beats } = useTimingObjects()!;
     const { selectedPage } = useSelectedPage()!;
     const { isPlaying, setIsPlaying } = useIsPlaying()!;
-    const {
-        collisions: pageCollisions,
-        // setCollisions,
-        setCurrentCollision,
-    } = useCollisionStore();
+    const { setCurrentCollision } = useCollisionStore();
 
     const animationFrameRef = useRef<number | null>(null);
 
-    // Get collisions for the currently selected page
-    const getCollisionsForSelectedPage = useCallback(() => {
-        if (!selectedPage) {
-            return [];
-        }
-
-        // this looks stupid but empty array if nothing is returned
-        const collisions = selectedPage.nextPageId
-            ? pageCollisions.get(selectedPage.nextPageId)
-            : [];
-
-        return collisions ?? [];
-    }, [pageCollisions, selectedPage]);
-
-    // Update collisions when selected page changes
+    // The selected page's collisions (found by `useCollisionDetection`)
     useEffect(() => {
         setCurrentCollision(selectedPage);
-    }, [selectedPage, getCollisionsForSelectedPage, setCurrentCollision]);
+    }, [selectedPage, setCurrentCollision]);
 
     // P5.4: one reused buffer, filled from the resolver each frame
     const timelineBufferRef = useRef<TimelinePositionBuffer | null>(null);
