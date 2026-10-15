@@ -795,7 +795,7 @@ window.addEventListener("resize", () => { S.force = true; render(); });
 function go(q, v, keepShape) {
   cur().leave?.(); S.q = q; S.v = v; V = {}; S.drag = null; S.tip = null; S.order = "nearest"; S.keepSpacing = false; if (!keepShape) S.shape = null;
   const Vt = cur(); if (Vt.setup && S.sel.size) Vt.setup();
-  const L = "ABCDE"[v]; history.replaceState(null, "", `?q=${q + 1}&v=${L}`);
+  const L = "ABCDE"[v]; try { history.replaceState(null, "", `?q=${q + 1}&v=${L}`); } catch { location.hash = `q=${q + 1}&v=${L}`; }
   notesEl.classList.remove("min");
   notesEl.innerHTML = `<div class="hdr"><div><div class="q">Question ${q + 1} · ${QS[q].title}</div><h3>${L}. ${Vt.name}</h3></div><button class="ghost" data-min title="Hide notes">–</button></div><div>${Vt.idea}</div><div class="lbl">Try</div><ul>${Vt.tryit.map((t) => `<li>${t}</li>`).join("")}</ul><div class="lbl">Good</div><div>${Vt.pros}</div><div class="lbl">Watch out</div><div>${Vt.cons}</div><div class="muted" style="margin-top:8px;font-size:11px">Scroll to zoom · middle-drag to pan · ← → change idea</div>`;
   notesEl.querySelector("[data-min]").onclick = () => notesEl.classList.toggle("min");
@@ -808,7 +808,7 @@ function drawSwitcher() { const sw = document.getElementById("switcher"); const 
   sw.querySelector("[data-reset]").onclick = () => { S.ms = clone(HOME); S.undo = null; go(S.q, S.v); };
   sw.querySelector("#grp").onchange = (e) => { setGroup(e.target.value); go(S.q, S.v); }; }
 
-const qs = new URLSearchParams(location.search);
+const qs = new URLSearchParams(location.hash.length > 1 ? location.hash.slice(1) : location.search);
 go(clamp((+qs.get("q") || 1) - 1, 0, QS.length - 1), Math.max(0, "ABCDE".indexOf((qs.get("v") || "A").toUpperCase())));
 requestAnimationFrame(() => { S.force = true; render(); });
 </script>
