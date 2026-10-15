@@ -88,18 +88,12 @@ import {
 import { FieldUnavailable, useFieldQualityNotice } from "./FieldQualityNotice";
 import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
-
-/** fabric's fonts: the marcher labels'. */
-const LABEL_FONT = 'bold "Courier New", monospace';
-/**
- * The field's fonts, named as fabric names them (`createFieldGrid`): its
- * default for yard numbers, and "mono" for checkpoint labels, a family that
- * doesn't exist, so the platform's fallback draws them in both fields.
- */
-const NUMBER_FONT = '"Times New Roman"';
-const CHECKPOINT_FONT = '"mono"';
-/** `CollisionMarker`'s label font. */
-const COLLISION_FONT = "Arial";
+import {
+    CHECKPOINT_FONT,
+    COLLISION_FONT,
+    LABEL_FONT,
+    NUMBER_FONT,
+} from "./fieldFonts";
 
 /**
  * Where the timeline's layers sit among the field's (#201): the isolated move's

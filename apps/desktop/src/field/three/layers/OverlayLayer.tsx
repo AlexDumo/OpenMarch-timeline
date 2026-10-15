@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Group } from "three";
 import type { OverlayPlan } from "@/field/timelineOverlays";
-import { useFieldViewStore } from "../fieldView";
+import { useFieldDraw } from "../fieldDrawContext";
 import { DotBatch, StrokeBatch } from "../overlayBatches";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
 
@@ -27,6 +27,7 @@ export default function OverlayLayer({
     atlas?: GlyphAtlas;
 }) {
     const invalidate = useThree((s) => s.invalidate);
+    const draw = useFieldDraw();
     const batches = useMemo(() => {
         const strokes = new StrokeBatch();
         const dots = new DotBatch();
@@ -57,7 +58,7 @@ export default function OverlayLayer({
     }, [plan, batches, invalidate]);
 
     useFrame(({ gl }) => {
-        const { zoom } = useFieldViewStore.getState();
+        const { zoom } = draw.view.getState();
         const unit = plan?.units === "screen" ? 1 / zoom : 1;
         const pixel = 1 / (zoom * gl.getPixelRatio());
         batches.strokes.setScale(unit, pixel);

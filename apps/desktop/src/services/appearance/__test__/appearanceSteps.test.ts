@@ -13,7 +13,6 @@ import {
     parseAppearanceFlagsKey,
 } from "../appearanceSteps";
 import { applyAppearanceStepsAt } from "@/hooks/useTimelineAppearance";
-import { getPlaybackPageForTimeMs } from "@/components/exporting/utils/exportAppearances";
 
 /**
  * Appearance by flag beat in timeline mode (docs/timeline/ui.md UI-9 No selected page; owner
@@ -235,7 +234,7 @@ describe("appearanceStackAtBeat", () => {
         );
     });
 
-    it("agrees with the video export's page at every time (last flag crossed)", () => {
+    it("agrees with the old video export's page at every time (last flag crossed)", () => {
         const steps = build();
         const byPage = new Map(
             pages.map((p) => [
@@ -248,10 +247,7 @@ describe("appearanceStackAtBeat", () => {
             ]),
         );
         for (let beat = 0; beat <= 20; beat += 0.25) {
-            const exportPage = getPlaybackPageForTimeMs(
-                pages,
-                timeOfBeat(beat),
-            );
+            const exportPage = pageAtTimeMs(pages, timeOfBeat(beat));
             // Beats 0 and 1 are both show time 0; on the canvas, beat 0 is home's flag
             if (beat < 1) continue;
             expect(fill(appearanceStackAtBeat(steps.get(1)!, beat))).toEqual(
@@ -260,6 +256,23 @@ describe("appearanceStackAtBeat", () => {
         }
     });
 });
+
+/**
+ * The rule the Fabric video export applied by time (`getPlaybackPageForTimeMs`, until #207 moved
+ * the export onto these steps): the page whose end was crossed last, or the first page before it
+ * ends. Kept as the reference these steps must agree with.
+ */
+function pageAtTimeMs(sortedPages: Page[], timeMs: number): Page {
+    const byId = new Map(sortedPages.map((page) => [page.id, page]));
+    const end = (page: Page) => (page.timestamp + page.duration) * 1000;
+    if (timeMs < end(sortedPages[0])) return sortedPages[0];
+    return (
+        sortedPages.find((page) => {
+            const next = page.nextPageId ? byId.get(page.nextPageId) : null;
+            return next != null && timeMs >= end(page) && timeMs < end(next);
+        }) ?? sortedPages[sortedPages.length - 1]
+    );
+}
 
 describe("appearanceChangeBeats and changeIndexAtBeat", () => {
     it("lists every beat where someone's appearance changes, and counts those crossed", () => {

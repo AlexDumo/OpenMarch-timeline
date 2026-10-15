@@ -29,6 +29,19 @@ export type ShowHost = {
 
 let handlersRegistered = false;
 const settings = new Map<string, unknown>();
+/** Where the open show's video export is written: the save dialog's answer. */
+let videoExportPath: string | null = null;
+let videoSessionCount = 0;
+const videoSessions = new Map<
+    string,
+    { file: fs.promises.FileHandle; path: string }
+>();
+
+/** Chunk bytes as they arrive over the exposed function: a typed array, or its plain-object form. */
+const chunkBytes = (data: unknown): Uint8Array =>
+    data instanceof Uint8Array
+        ? data
+        : Uint8Array.from(Object.values(data as Record<string, number>));
 
 function registerHandlers() {
     if (handlersRegistered) return;
@@ -87,6 +100,40 @@ function registerHandlers() {
         error: null,
     }));
     ipcMain.handle("auth:get-access-token", () => ({ token: null }));
+    registerVideoExportHandlers();
+}
+
+/** Restated from `VideoExportService`, with the test's file for the save dialog's answer. */
+function registerVideoExportHandlers() {
+    ipcMain.handle("export:videoStart", async () => {
+        if (!videoExportPath) return null;
+        const sessionId = String(++videoSessionCount);
+        const file = await fs.promises.open(videoExportPath, "w");
+        videoSessions.set(sessionId, { file, path: videoExportPath });
+        return { sessionId, filePath: videoExportPath };
+    });
+    ipcMain.handle(
+        "export:videoChunk",
+        async (_, sessionId: string, data: unknown, position: number) => {
+            const session = videoSessions.get(sessionId);
+            if (!session)
+                throw new Error("Invalid or expired video export session");
+            const bytes = chunkBytes(data);
+            await session.file.write(bytes, 0, bytes.byteLength, position);
+        },
+    );
+    ipcMain.handle(
+        "export:videoEnd",
+        async (_, sessionId: string, success: boolean) => {
+            const session = videoSessions.get(sessionId);
+            if (!session)
+                throw new Error("Invalid or expired video export session");
+            videoSessions.delete(sessionId);
+            await session.file.close();
+            if (!success) await fs.promises.rm(session.path, { force: true });
+            return success ? session.path : null;
+        },
+    );
 }
 
 /**
@@ -101,8 +148,11 @@ export async function openShow(args: {
     migrationsFolder: string;
     /** Settings the app would read from its store, e.g. `{ optOutAnalytics: true }`. */
     settings?: Record<string, unknown>;
+    /** Where a video export is saved, as if picked in the save dialog. */
+    videoExportPath?: string;
 }): Promise<ShowHost> {
     registerHandlers();
+    videoExportPath = args.videoExportPath ?? null;
     settings.clear();
     for (const [key, value] of Object.entries(args.settings ?? {}))
         settings.set(key, value);

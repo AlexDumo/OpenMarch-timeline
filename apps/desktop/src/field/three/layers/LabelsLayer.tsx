@@ -4,10 +4,9 @@ import type { FieldTheme } from "@openmarch/core";
 import { rgba01 } from "../fieldGeometry";
 import type { FieldMarchers } from "../fieldMarchers";
 import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
-import { useFieldViewStore } from "../fieldView";
+import { useFieldDraw } from "../fieldDrawContext";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
-import { currentQualitySettings } from "../useFieldQuality";
 
 /** fabric's marcher label: 14 field units, its center 2.2 dot radii above the dot. */
 const LABEL_SIZE = 14;
@@ -38,6 +37,7 @@ export default function LabelsLayer({
     atlas: GlyphAtlas;
 }) {
     const invalidate = useThree((s) => s.invalidate);
+    const draw = useFieldDraw();
     const text = useMemo(() => {
         const batch = new TextBatch(atlas);
         batch.setOffset(0, -LABEL_LIFT);
@@ -63,10 +63,10 @@ export default function LabelsLayer({
     useEffect(() => invalidate(), [labels, theme, invalidate]);
 
     useFrame(() => {
-        const { zoom } = useFieldViewStore.getState();
+        const { zoom } = draw.view.getState();
         // Labels scale with the field and fade out when they'd be too small to read
         // (`QUALITY_SETTINGS`: low-quality mode hides them sooner)
-        const { labelFadeFrom, labelFadeTo } = currentQualitySettings();
+        const { labelFadeFrom, labelFadeTo } = draw.quality();
         const opacity = Math.min(
             1,
             Math.max(

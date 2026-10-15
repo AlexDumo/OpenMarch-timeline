@@ -3,11 +3,7 @@ import { getBeats } from "@/db-functions/beat";
 import type { DbConnection } from "@/db-functions/types";
 import { calculateTimestamps, fromDatabaseBeat } from "@/global/classes/Beat";
 import { beatAtTime, type BeatTiming } from "./timeMap";
-import {
-    TimelinePositionBuffer,
-    type MarcherWithId,
-    type TimelinePositionSource,
-} from "./timelineCanvas";
+import type { PositionSource } from "./positionBuffer";
 import { readTimelineTables } from "./timelineRows";
 import {
     buildKeyframes,
@@ -42,40 +38,30 @@ export async function readExportBeats(db: DbConnection): Promise<BeatTiming[]> {
 }
 
 /**
- * Samples every marcher's position at a show time for the video export: seconds become a beat
- * through `beatAtTime`, and the resolver fills one reused `Float64Array`. Positions are applied
- * by marcher id, so a canvas marcher the resolver doesn't know stays where it is.
+ * Where every marcher is at a show time, for the video export: seconds become a beat through
+ * `beatAtTime`, and `source` answers the resolver's positions at that beat. The export's
+ * off-screen field (`offscreenField.tsx`) samples `source` as the on-screen field samples the
+ * store's resolver.
  */
 export class ResolverFrameSampler {
-    private readonly buffer: TimelinePositionBuffer;
+    readonly source: PositionSource;
 
     constructor(
         resolver: Pick<Resolver, "marcherIds" | "positionsAt">,
         private readonly beats: readonly BeatTiming[],
     ) {
-        const source: TimelinePositionSource = {
+        this.source = {
             marcherIds: () => resolver.marcherIds(),
             positionsAt: (beat, out) => {
                 resolver.positionsAt(beat, out);
                 return true;
             },
         };
-        this.buffer = new TimelinePositionBuffer(source);
     }
 
-    /** The beat a show time maps to; what `apply` samples at. */
+    /** The beat a show time maps to. */
     beatAt(timeSeconds: number): number {
         return beatAtTime(this.beats, timeSeconds);
-    }
-
-    /** Calls `apply(marcher, x, y)` for each marcher the resolver knows, at `timeSeconds`. */
-    apply<M extends MarcherWithId>(
-        timeSeconds: number,
-        marchers: Iterable<M>,
-        apply: (marcher: M, x: number, y: number) => void,
-    ): void {
-        if (!this.buffer.fill(this.beatAt(timeSeconds))) return;
-        this.buffer.forEachMarcher(marchers, apply);
     }
 }
 
