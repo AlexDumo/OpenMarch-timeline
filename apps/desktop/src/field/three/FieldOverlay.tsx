@@ -2,16 +2,18 @@ import { useCallback, useSyncExternalStore } from "react";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
+import { HANDLE_SIZE, type HandleId } from "@/field/editor/groupTransform";
 import type { FieldRect } from "@/field/editor/selectionArea";
 import type { LineToolShape } from "@/field/editor/lineTool";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 import {
-    dotSizes,
-    selectionBoxPadding,
-    SELECTION_COLOR,
-} from "./selectionRing";
+    drawnSelectionBox,
+    selectionHandles,
+    type DrawnSelectionBox,
+} from "./selectionFrame";
+import { dotSizes, SELECTION_COLOR } from "./selectionRing";
 
 /** Fabric's selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -35,18 +37,22 @@ const OUTLINE_DASH = [3, 5];
 /** How far a line marcher's outline's center line sits outside its dot. */
 const OUTLINE_GAP = 0.25;
 
+/** The rotate handle's connecting line, in CSS px (Fabric's border width). */
+const ROTATE_LINE_WIDTH = 1;
+
 /**
  * The SVG overlay over the field (ADR 0005 D-2): what the editor draws on top
  * of the WebGL field in screen space. The selection box around a selection of
- * two or more marchers (#193), and the marquee and lasso while one is drawn
- * (#195), and the line tool's line, previews and outlined marchers (#203);
- * handles (#198) come later.
+ * two or more marchers (#193) with its scale and rotate handles (#198), the
+ * marquee and lasso while one is drawn (#195), and the line tool's line,
+ * previews and outlined marchers (#203).
  *
  * It reads the camera from the view store, as the WebGL camera does, and
  * re-renders only when what it draws changes: with no box, playback doesn't
- * render it. During a marquee or lasso it re-renders on every pointer move;
- * nothing else in the app does. It takes no pointer events: the field under
- * it does.
+ * render it. During a marquee, lasso or handle drag it re-renders on every
+ * pointer move; nothing else in the app does. It takes no pointer events: the
+ * field under it does, and the editor hit-tests the handles as it does the
+ * marchers.
  */
 export default function FieldOverlay({
     marchers,
@@ -57,13 +63,23 @@ export default function FieldOverlay({
     editor: FieldEditor;
     theme: FieldTheme;
 }) {
-    // The box's bounds as a string, so an unchanged box is an unchanged snapshot
-    const box = useSyncExternalStore(marchers.subscribe, () =>
-        JSON.stringify(selectionBox(marchers)),
-    );
     const subscribeEditor = useCallback(
         (listener: () => void) => editor.subscribe(listener),
         [editor],
+    );
+    // The box as a string, so an unchanged box is an unchanged snapshot
+    const box = useSyncExternalStore(
+        useCallback(
+            (listener: () => void) => {
+                const off = [
+                    marchers.subscribe(listener),
+                    subscribeEditor(listener),
+                ];
+                return () => off.forEach((unsubscribe) => unsubscribe());
+            },
+            [marchers, subscribeEditor],
+        ),
+        () => JSON.stringify(drawnSelectionBox(marchers, editor)),
     );
     const area = useSyncExternalStore(subscribeEditor, () =>
         editor.areaShape(),
@@ -77,7 +93,7 @@ export default function FieldOverlay({
             className="pointer-events-none absolute inset-0 h-full w-full"
             data-testid="fieldOverlay"
         >
-            <SelectionBox box={JSON.parse(box) as FieldRect | null} />
+            <SelectionBox frame={JSON.parse(box) as DrawnSelectionBox | null} />
             {area?.kind === "marquee" && (
                 <Marquee rect={area.rect} theme={theme} />
             )}
@@ -93,23 +109,67 @@ export default function FieldOverlay({
     );
 }
 
-/** The box around a multi-selection, clear of the selection rings. */
-function SelectionBox({ box }: { box: FieldRect | null }) {
+/**
+ * The box around a multi-selection, clear of the selection rings, with its
+ * handles (#198): squares on the corners and middles, and the rotate handle
+ * above the top middle, joined to it by a line. Turned with the marchers
+ * while a rotation is dragged.
+ */
+function SelectionBox({ frame }: { frame: DrawnSelectionBox | null }) {
     const view = useFieldViewStore();
-    if (!box) return null;
-    const pad = selectionBoxPadding(view.zoom) * view.zoom;
-    const topLeft = fieldToElement(view, box.left, box.top);
-    const bottomRight = fieldToElement(view, box.right, box.bottom);
+    if (!frame) return null;
+    const screen = Object.fromEntries(
+        Object.entries(selectionHandles(frame, view.zoom)).map(([id, at]) => [
+            id,
+            fieldToElement(view, at.x, at.y),
+        ]),
+    ) as Record<HandleId, { x: number; y: number }>;
+    const corners = [screen.nw, screen.ne, screen.se, screen.sw]
+        .map(({ x, y }) => `${x},${y}`)
+        .join(" ");
+    const half = HANDLE_SIZE / 2;
     return (
-        <rect
-            x={topLeft.x - pad}
-            y={topLeft.y - pad}
-            width={bottomRight.x - topLeft.x + pad * 2}
-            height={bottomRight.y - topLeft.y + pad * 2}
-            fill="none"
-            stroke={SELECTION_COLOR}
-            strokeWidth={BOX_WIDTH}
-        />
+        <g data-testid="fieldSelectionBox">
+            <polygon
+                points={corners}
+                fill="none"
+                stroke={SELECTION_COLOR}
+                strokeWidth={BOX_WIDTH}
+            />
+            <line
+                x1={screen.n.x}
+                y1={screen.n.y}
+                x2={screen.rot.x}
+                y2={screen.rot.y}
+                stroke={SELECTION_COLOR}
+                strokeWidth={ROTATE_LINE_WIDTH}
+            />
+            {(Object.keys(screen) as HandleId[]).map((id) =>
+                id === "rot" ? (
+                    <circle
+                        key={id}
+                        cx={screen.rot.x}
+                        cy={screen.rot.y}
+                        r={half}
+                        fill="white"
+                        stroke={SELECTION_COLOR}
+                        strokeWidth={1}
+                    />
+                ) : (
+                    <rect
+                        key={id}
+                        x={-half}
+                        y={-half}
+                        width={HANDLE_SIZE}
+                        height={HANDLE_SIZE}
+                        transform={`translate(${screen[id].x} ${screen[id].y}) rotate(${frame.angle})`}
+                        fill="white"
+                        stroke={SELECTION_COLOR}
+                        strokeWidth={1}
+                    />
+                ),
+            )}
+        </g>
     );
 }
 
@@ -163,30 +223,6 @@ function Lasso({
             strokeDasharray={LASSO_DASH}
         />
     );
-}
-
-/**
- * The bounds of the selected marchers, in field units, or null when fewer
- * than two are selected (a single marcher gets its ring and no box).
- */
-function selectionBox(marchers: FieldMarchers): FieldRect | null {
-    const { selected, positions } = marchers;
-    let count = 0;
-    let left = Infinity;
-    let top = Infinity;
-    let right = -Infinity;
-    let bottom = -Infinity;
-    for (let i = 0; i < selected.length; i++) {
-        if (!selected[i]) continue;
-        count++;
-        const x = positions[i * 2];
-        const y = positions[i * 2 + 1];
-        left = Math.min(left, x);
-        right = Math.max(right, x);
-        top = Math.min(top, y);
-        bottom = Math.max(bottom, y);
-    }
-    return count < 2 ? null : { left, top, right, bottom };
 }
 
 /**

@@ -66,6 +66,7 @@ import {
 } from "./fieldNavigation";
 import { GlyphAtlas } from "./sdfText";
 import { selectionBoxPadding } from "./selectionRing";
+import { drawnSelectionBox, selectionHandles } from "./selectionFrame";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
@@ -354,6 +355,11 @@ function ThreeFieldView() {
         setActiveFieldEditor(editor);
         return () => setActiveFieldEditor(null);
     }, [editor]);
+    // A rotation typed into the inspector belongs to its selection and page:
+    // when either changes before it's saved, it's dropped (#198)
+    useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
+    const pageId = selectedPage?.id;
+    useEffect(() => editor.cancelRotation(), [editor, pageId]);
     useFieldLineTool(editor);
     // As Fabric's line tool, a finished line follows its marchers to another page
     useEffect(
@@ -373,6 +379,13 @@ function ThreeFieldView() {
                 contextLost: () => useFieldQualityStore.getState().contextLost,
                 selection: () => selection.current,
                 activeGesture: () => editor.activeGesture(),
+                handles() {
+                    const box = drawnSelectionBox(marchers, editor);
+                    return (
+                        box &&
+                        selectionHandles(box, useFieldViewStore.getState().zoom)
+                    );
+                },
                 lineTool: () => editor.lineToolShape(),
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,

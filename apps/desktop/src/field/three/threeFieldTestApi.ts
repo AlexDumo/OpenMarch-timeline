@@ -1,11 +1,14 @@
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import { resolveMarcherLook } from "@/entity-components/appearance";
+import type { FieldPoint } from "@/field/editor/fieldEditor";
 import type {
     FieldTestApi,
     FieldTestGesture,
+    FieldTestHandle,
     FieldTestImage,
     FieldTestLook,
     FieldTestMarcher,
+    ScreenPoint,
 } from "@/field/fieldTestApi";
 import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
 import type { LineToolShape } from "@/field/editor/lineTool";
@@ -32,14 +35,16 @@ export type ThreeFieldState = {
     /** The app's selection, as the editor reads it. */
     selection(): readonly number[];
     activeGesture(): FieldTestGesture | null;
+    /** The selection box's handles as drawn, in field units, or null with no box (#198). */
+    handles(): Record<FieldTestHandle, FieldPoint> | null;
     /** The editor's line tool, or null when it's off (#203). */
     lineTool(): LineToolShape | null;
 };
 
 /**
  * The field test API over the new field. Read-only. Selection and gestures
- * come from the editor (#193), and a pan from navigation (#194); handles come
- * with #198.
+ * come from the editor (#193), a pan from navigation (#194), and the handles
+ * from the overlay's selection box (#198).
  */
 export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
     return {
@@ -77,7 +82,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             const { zoom, panX, panY } = field.view();
             return { zoom, pan: { x: panX, y: panY } };
         },
-        handles: () => null,
+        handles: () => handlesOnScreen(field),
         activeGesture: () =>
             field.view().panning ? "pan" : field.activeGesture(),
         pageId: () => field.pageId(),
@@ -138,4 +143,21 @@ function lookOf(
         fill: rgbaToString(look.fill),
         outline: rgbaToString(look.outline),
     };
+}
+
+/** The selection box's handles as drawn, in viewport CSS px, or null with none. */
+function handlesOnScreen(
+    field: ThreeFieldState,
+): Record<FieldTestHandle, ScreenPoint> | null {
+    const element = field.element();
+    const handles = field.handles();
+    if (!element || !handles) return null;
+    const rect = element.getBoundingClientRect();
+    const view = field.view();
+    const screen = {} as Record<FieldTestHandle, ScreenPoint>;
+    for (const [id, at] of Object.entries(handles)) {
+        const { x, y } = fieldToElement(view, at.x, at.y);
+        screen[id as FieldTestHandle] = { x: rect.x + x, y: rect.y + y };
+    }
+    return screen;
 }

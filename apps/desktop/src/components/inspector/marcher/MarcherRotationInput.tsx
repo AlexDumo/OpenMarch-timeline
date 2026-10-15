@@ -1,12 +1,82 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import {
+    useState,
+    useCallback,
+    useEffect,
+    useRef,
+    useSyncExternalStore,
+} from "react";
 import { DragInput } from "@openmarch/ui";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import { rotateGroup } from "@/global/classes/canvasObjects/GroupUtils";
 import { fabric } from "fabric";
 import DefaultListeners from "@/components/canvas/listeners/DefaultListeners";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react";
+import {
+    activeFieldEditor,
+    subscribeActiveFieldEditor,
+} from "@/field/editor/activeFieldEditor";
+import type { FieldEditor } from "@/field/editor/fieldEditor";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 
+/** Rotates the selection on the field on screen: the new field's editor, or Fabric's group. */
 function MarcherRotationInput() {
+    const editor = useSyncExternalStore(
+        subscribeActiveFieldEditor,
+        activeFieldEditor,
+    );
+    return editor ? (
+        <FieldRotationInput editor={editor} />
+    ) : (
+        <FabricRotationInput />
+    );
+}
+
+/**
+ * The new field's rotation (#198, user story 54): typing or dragging turns
+ * the selection about its box's center through the editor, as the rotate
+ * handle does, and leaving the input saves it through the same drop. Left
+ * unchanged, it saves nothing. It shows what's typed until the rotation
+ * ends, then 0 again, as Fabric's group does: the selection's box fits it
+ * again. A press on the field saves it before the blur does.
+ */
+function FieldRotationInput({ editor }: { editor: FieldEditor }) {
+    const subscribe = useCallback(
+        (listener: () => void) => editor.subscribe(listener),
+        [editor],
+    );
+    // Each ended rotation starts the input over at 0. Its value isn't the
+    // editor's, so typing "22." isn't rewritten as "22" mid-number
+    const ended = useSyncExternalStore(subscribe, () =>
+        editor.rotationVersion(),
+    );
+    // The context holds no hidden marchers, as the editor's handles skip them
+    const canRotate = useSelectedMarchers()!.selectedMarchers.length >= 2;
+    const save = () => editor.endRotation();
+    // Gone without a blur: nothing typed stays drawn and unsaved
+    useEffect(() => () => editor.cancelRotation(), [editor]);
+
+    return (
+        <div className="flex flex-col gap-8">
+            <DragInput
+                key={ended}
+                dragSensitivity={0.5}
+                dragSensitivityWithShift={0.1}
+                value={0}
+                roundToNearest={15}
+                roundToNearestWithShift={1}
+                onDragChange={(value) => editor.rotateSelection(value)}
+                onChange={(value) => editor.rotateSelection(value)}
+                icon={ArrowClockwiseIcon}
+                aria-label="Rotation"
+                onBlur={save}
+                onDragEnd={save}
+                disabled={!canRotate}
+            />
+        </div>
+    );
+}
+
+function FabricRotationInput() {
     const [rotationAngle, setRotationAngle] = useState<number>(0);
     const [activeGroup, setActiveGroup] = useState<fabric.Group | null>(null);
     // Whether the group turned since the last save: tabbing through the field (a blur with no
@@ -28,7 +98,6 @@ function MarcherRotationInput() {
 
     useEffect(() => {
         const canvas: OpenMarchCanvas | undefined = window.canvas;
-        // The new field (dev switch, #192) has no Fabric canvas; its rotation comes in #198
         if (!canvas) return;
 
         const handleGroupSelection = (e: fabric.IEvent) => {
@@ -95,6 +164,7 @@ function MarcherRotationInput() {
                     handleRotationChange(value);
                 }}
                 icon={ArrowClockwiseIcon}
+                aria-label="Rotation"
                 onBlur={handleRotationDragEnd}
                 onDragEnd={handleRotationDragEnd}
                 disabled={!activeGroup}

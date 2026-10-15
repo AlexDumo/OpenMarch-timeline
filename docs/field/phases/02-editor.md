@@ -338,3 +338,78 @@ grid and compare within 1.5 units.
 **For #198 and #204.** Lock X / Lock Y must not constrain shape or group
 handles (rules table; Fabric locks them, a `change:` to pin there). Alt's
 quarter speed for handles can reuse `precisionDelta` and `anchorAt`.
+
+### #198 Group scale and rotate handles
+
+**Files.** `src/field/editor/groupTransform.ts` holds the pure rules:
+`handlePoints` (where the eight scale handles and the rotate handle sit on
+the padded box, 40 CSS px above it for `rot`, turned with the box while a
+rotation is dragged), `handleAt` (a 13 CSS px square per handle, Fabric's
+control size; the nearest wins), `handleCursor`, `scaleFor` and
+`scalePositions` (corners uniform along the diagonal, Shift frees them;
+middles one axis, Shift ignored; `MIN_SCALE` instead of a flip),
+`turnBetween`, `snapRotation` (15°, free with Shift or Alt) and
+`rotatePositions`. `src/field/editor/transformGestures.ts` has
+`ScaleGesture` and `RotateGesture`, the `FieldGesture`s, with Alt through
+#197's `precisionDelta` (and `anchorAt` for the snapped angle).
+
+**In the editor.** `pointerDown` asks `handleAt` after `takePress` and
+before the marcher hit test, so a handle wins over a marcher under it, and
+`startDrag` is `startTransform ?? startMove ?? startArea`. The editor
+hit-tests the handles itself (the box is `selectionBoxPadding` around the
+drawn selection), so the overlay stays `pointer-events: none`: no DOM
+handle targets, and the one pointer path stays the canvas's. A click on a
+handle does nothing. Handle drags drop through `drop`, the same pending,
+snap-back and timeline path as a move, and never call `moveTransform`, so
+Lock X / Lock Y and snapping don't apply.
+
+**The overlay** draws the box from `three/selectionFrame.ts`
+(`drawnSelectionBox`): the selected marchers' bounds, or during a rotation
+the press's box turned by the gesture's angle (`FieldEditor.rotationFrame`).
+The test API's `handles()` reads the same function, so it returns what's
+drawn.
+
+**The inspector's rotation input** (`MarcherRotationInput.tsx`) picks the
+field on screen through `subscribeActiveFieldEditor`. On the new field it
+calls `FieldEditor.rotateSelection(degrees)` while typing or dragging, and
+`endRotation()` on blur or drag end; a rotation left at 0 saves nothing.
+It shows what's typed until the rotation ends, then 0 again: the input
+remounts on `FieldEditor.rotationVersion()`, which goes up whether a blur
+or a press on the field saved it (the press saves first, before the blur).
+That's a `change:`: Fabric's input shows the selection's angle since it
+was made, and a typed value sets that angle. Whether the input is enabled
+comes from the app's selection, which the editor's ref only catches up with
+after render. A typed rotation is refused while the line tool is on
+(#203's `lineTool`, which also takes every press first, so the handles are
+inert and not drawn then), and is dropped unsaved when the selection
+or page changes, when the input unmounts without a blur, or when a drop it
+was typed over is refused. Transforms that change nothing (a whole turn, an
+axis scaled by 1) return the positions exactly as they were, so they save
+nothing even off the thousandths grid. During a handle rotation it doesn't follow the angle live (Fabric
+did): that would re-render the inspector on every pointer move.
+
+**Decided changes** (`change:` in `scale-and-rotate.spec.mts`, `test.fail`
+on Fabric): Shift on a middle handle still scales its axis ("Shift does
+nothing there"; Fabric cancels the scale while Shift is down), Alt is
+precision on scale and rotate (Alt pans on Fabric), and a press on a handle
+held over 300 ms but moved under 4 px changes nothing (Fabric's click has a
+time limit, so it transforms). As on Fabric, Lock X / Lock Y leave the group
+handles free, and the box fits the marchers again after a rotation (Fabric
+rebuilds its selection after the save).
+
+**Differences in the numbers, not pinned.** Fabric's box reaches past the
+dots (dot size, labels), so it scales from a corner a few units outside the
+outermost marchers and rotates about a center a little higher; the new field
+scales from the outermost marchers and rotates about their bounds' center.
+Scenarios compare within those few units. Fabric snaps the group's angle
+since the selection was made; the new field snaps each drag's angle, which
+is the same thing since Fabric's selection is rebuilt after every save.
+
+**No flip, in numbers.** Dragged far past the opposite side, a handle
+stops at `MIN_SCALE` (1%): the marchers stack about 1% of their spread
+apart, in order. Fabric's `lockScalingFlip` holds the last valid scale
+instead, wherever the pointer crossed. On the #208 checklist.
+
+**For #204.** The box tool's own handles can reuse `handlePoints`,
+`handleAt` and the gesture base in `transformGestures.ts`. Lock X / Lock Y
+must not constrain them either.
