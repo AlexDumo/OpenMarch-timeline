@@ -373,14 +373,20 @@ drawn.
 field on screen through `subscribeActiveFieldEditor`. On the new field it
 calls `FieldEditor.rotateSelection(degrees)` while typing or dragging, and
 `endRotation()` on blur or drag end; a rotation left at 0 saves nothing.
-It shows the rotation not yet saved, then 0, as Fabric's group does after
-its save. During a handle rotation it doesn't follow the angle live (Fabric
+It shows what's typed until the save, then 0 again (it remounts), as
+Fabric's group does after its save; whether it's enabled comes from the
+app's selection, which the editor's ref only catches up with after render.
+Transforms that change nothing (a whole turn, an axis scaled by 1) return
+the positions exactly as they were, so they save nothing even off the
+thousandths grid. During a handle rotation it doesn't follow the angle live (Fabric
 did): that would re-render the inspector on every pointer move.
 
 **Decided changes** (`change:` in `scale-and-rotate.spec.mts`, `test.fail`
 on Fabric): Shift on a middle handle still scales its axis ("Shift does
-nothing there"; Fabric cancels the scale while Shift is down), and Alt is
-precision on scale and rotate (Alt pans on Fabric). As on Fabric, Lock X / Lock Y leave the group
+nothing there"; Fabric cancels the scale while Shift is down), Alt is
+precision on scale and rotate (Alt pans on Fabric), and a press on a handle
+held over 300 ms but moved under 4 px changes nothing (Fabric's click has a
+time limit, so it transforms). As on Fabric, Lock X / Lock Y leave the group
 handles free, and the box fits the marchers again after a rotation (Fabric
 rebuilds its selection after the save).
 
