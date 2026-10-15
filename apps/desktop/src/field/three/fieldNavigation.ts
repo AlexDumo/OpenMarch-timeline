@@ -25,24 +25,42 @@ import { useFieldViewStore } from "./fieldView";
 
 const view = () => useFieldViewStore.getState();
 
-/** Moves the view to `next`, within the zoom and pan limits. */
+/** The user has moved the view since it was last centered. */
+let navigated = false;
+
+/** Moves the view to `next` for the user. */
+function navigate(next: FieldView) {
+    navigated = true;
+    useFieldViewStore.setState(next);
+}
+
+/** Moves the view to `next` for the user, within the zoom and pan limits. */
 function setView(next: FieldView) {
     const { field } = view();
     const { width, height, zoom, panX, panY } = clampPan(
         { ...next, zoom: clampZoom(next.zoom) },
         field,
     );
-    useFieldViewStore.setState({ width, height, zoom, panX, panY });
+    navigate({ width, height, zoom, panX, panY });
 }
 
 /** Centers the field at the base zoom, as a show opens and as the reset button does. */
 export function resetView() {
     const { width, height, field } = view();
     if (width <= 0 || height <= 0) return;
+    navigated = false;
     useFieldViewStore.setState({
         ...centerAtBase(width, height, field),
         baseZoom: baseZoom(height, field),
     });
+}
+
+/**
+ * Centers the field again while the show is opening and its panels settle,
+ * unless the user has already moved the view.
+ */
+export function settleView() {
+    if (!navigated) resetView();
 }
 
 /** Fits the whole field into `container` (its fullscreen container, padding included). */
@@ -166,7 +184,7 @@ function listenForWheel(
             settings(),
             current.field,
         );
-        if (next !== current) useFieldViewStore.setState(next);
+        if (next !== current) navigate(next);
     };
     return listen(surface, { wheel: onWheel }, { passive: false });
 }
@@ -271,7 +289,7 @@ function listenForTouch(
                 (a.clientY + b.clientY) / 2,
             );
             const current = view();
-            useFieldViewStore.setState(
+            navigate(
                 pinchStep(current, center, now - pinchDistance, current.field),
             );
             pinchDistance = now;

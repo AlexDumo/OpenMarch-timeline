@@ -51,6 +51,7 @@ import {
     attachFieldNavigation,
     fitFullscreen,
     resetView,
+    settleView,
 } from "./fieldNavigation";
 import { GlyphAtlas } from "./sdfText";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
@@ -237,7 +238,9 @@ export default function ThreeField() {
     // page are loaded. Latched: a page briefly unselected mustn't reset the view
     const [ready, setReady] = useState(false);
     if (!ready && fieldProperties && selectedPage) setReady(true);
-    useFullscreenFit(root, isFullscreen, ready);
+    // Until the layout settles, the view is still the opening view
+    const settled = useRef(false);
+    useFullscreenFit(root, isFullscreen, ready, settled);
 
     return (
         <div
@@ -284,6 +287,7 @@ export default function ThreeField() {
                         fieldProperties={fieldProperties}
                         root={root}
                         ready={ready}
+                        settled={settled}
                     />
                     <EditorInput
                         editor={editor}
@@ -329,49 +333,66 @@ const FULLSCREEN_SETTLE_MS = 250;
  * As the Fabric field: entering fullscreen fits the whole field and clears the
  * selection, and leaving it centers the field at the base zoom again, once the
  * layout has settled. The field also centers again that long after it's
- * `ready`, as the app's panels finish laying out around it.
+ * `ready`, as the app's panels finish laying out around it, and marks the
+ * view `settled`.
  */
 function useFullscreenFit(
     root: RefObject<HTMLDivElement | null>,
     isFullscreen: boolean,
     ready: boolean,
+    settled: RefObject<boolean>,
 ) {
     const { setSelectedMarchers } = useSelectedMarchers()!;
+    // Read when it runs: the effect follows fullscreen and readiness only
+    const clearSelection = useRef(() => setSelectedMarchers([]));
+    clearSelection.current = () => setSelectedMarchers([]);
+    const opening = useRef(true);
     useEffect(() => {
         if (!ready) return;
+        // Until it has run once, it's the show opening; then fullscreen changes
+        const first = opening.current;
         let frame = 0;
         const timeout = setTimeout(() => {
             frame = requestAnimationFrame(() => {
-                if (!isFullscreen) return resetView();
+                opening.current = false;
+                settled.current = true;
+                if (!isFullscreen) {
+                    if (first) settleView();
+                    else resetView();
+                    return;
+                }
                 if (root.current)
                     fitFullscreen({
                         width: root.current.clientWidth,
                         height: root.current.clientHeight,
                     });
-                setSelectedMarchers([]);
+                clearSelection.current();
             });
         }, FULLSCREEN_SETTLE_MS);
         return () => {
             clearTimeout(timeout);
             cancelAnimationFrame(frame);
         };
-    }, [isFullscreen, ready, root, setSelectedMarchers]);
+    }, [isFullscreen, ready, root, settled]);
 }
 
 /**
  * Keeps the view store's size and field in step with the canvas, opens the
  * show centered at the base zoom once it's `ready`, and points the camera at
- * the store's view. A resize keeps the zoom and where the field sits from the
+ * the store's view. Until the view has `settled`, a resize centers it again.
+ * After that a resize keeps the zoom and where the field sits from the
  * top-left, as the Fabric field did; in fullscreen it fits the field again.
  */
 function FieldCamera({
     fieldProperties,
     root,
     ready,
+    settled,
 }: {
     fieldProperties: FieldProperties;
     root: RefObject<HTMLDivElement | null>;
     ready: boolean;
+    settled: RefObject<boolean>;
 }) {
     const width = useThree((s) => s.size.width);
     const height = useThree((s) => s.size.height);
@@ -394,8 +415,10 @@ function FieldCamera({
                 width: root.current.clientWidth,
                 height: root.current.clientHeight,
             });
+        } else if (!settled.current) {
+            settleView();
         }
-    }, [width, height, fieldProperties, root, ready]);
+    }, [width, height, fieldProperties, root, ready, settled]);
 
     useLayoutEffect(() => {
         const apply = () => {
