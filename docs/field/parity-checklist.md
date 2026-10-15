@@ -111,12 +111,12 @@ numbers) is in [parity-gate-results.md](parity-gate-results.md).
 67. Drop on a page with later pages → "Move them too" appears and works (story 43).
 68. Arrow keys and WASD with their modifiers → nudges as on Fabric (story 44).
 69. Undo a drag → one Ctrl/Cmd+Z undoes it all (story 45).
-70. Start dragging a marcher, then switch windows (Alt+Tab, or Cmd+Tab on a Mac) before letting go → the drag is cancelled and the marcher goes back; nothing is saved, and the next press works. **Not decided yet:** the new field has done this since #193; Fabric kept the drag going. The same goes for a box, lasso or handle drag. Keep it?
+70. Start dragging a marcher, then switch windows (Alt+Tab, or Cmd+Tab on a Mac) before letting go → the drag is cancelled and the marcher goes back; nothing is saved, and the next press works. **(change)** Fabric kept the drag going (owner decision 2026-10-15: cancel). The same goes for a box, lasso or handle drag.
 
 ## Scaling and rotating
 
 71. Select several marchers → a box with corner, middle and rotate handles (story 46).
-72. Look at the handles → filled squares. **(change, look)** Fabric draws outlined squares. Keep?
+72. Look at the handles → filled squares. **(change, look)** Fabric drew outlined squares (owner decision 2026-10-15: keep filled).
 73. Select one marcher → no box, no handles (story 47).
 74. Drag a corner → scales uniformly from the opposite corner; with Shift, freely (story 48).
 75. Drag a middle handle → one axis; hold Shift → still one axis. **(change)** Fabric cancelled the scale while Shift was down (story 49).
@@ -174,6 +174,6 @@ the automated half, not by hand.
 ## Owner decisions
 
 113. Settled: dots cover drill numbers, as on Fabric (item 14; owner 2026-10-15).
-114. Open: the handle look, filled squares vs Fabric's outlines (item 72).
-115. Open: a drag cancelled when the window loses the pointer (Alt+Tab mid-drag), where Fabric kept it (item 70).
+114. Settled: the handles are filled squares (item 72; owner 2026-10-15).
+115. Settled: a drag is cancelled when the window loses the pointer (Alt+Tab mid-drag), where Fabric kept it (item 70; owner 2026-10-15).
 116. Settled: `ignore-gpu-blocklist` is app-wide, so it also affects Fabric (until #209) and the 3D View's compositing on drivers Chromium blocks (#205; owner confirmed 2026-10-15).
