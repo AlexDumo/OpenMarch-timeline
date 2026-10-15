@@ -59,7 +59,12 @@ fields by screen pixels.
 compare the two until #209 (`FabricFieldBenchmark.tsx`, mounted beside
 Fabric's `Canvas` in `App.tsx`; `fabricBenchmark.ts` reads Fabric through
 `window.canvas` and its render events). The runner takes a `FrameProbe` and
-a `BenchmarkView` per field; zoom is a pinch (Ctrl+wheel) through each
-field's own input, since Fabric draws its grid from a cache while it
-zooms. Reports carry `environment.field`. **#209:** delete
+a `BenchmarkView` per field; the new field's probe is
+`three/benchmarkFrames.ts`, kept out of `benchmark/` so the Fabric field's
+first chunk never imports three.js (`fieldChunk.test.ts`). Zoom is a pinch
+(Ctrl+wheel) through each field's own input, since Fabric draws its grid
+from a cache while it zooms. Reports carry `environment.field`. Compare the
+fields by fps and frame intervals only: the CPU columns measure different
+spans (the new field's frame hooks, uploads and render; Fabric's
+`renderAll`), and Fabric's draw calls are "n/a". **#209:** delete
 `FabricFieldBenchmark.tsx` and `fabricBenchmark.ts` with Fabric.

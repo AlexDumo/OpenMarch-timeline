@@ -28,6 +28,8 @@ test.use({
                 ],
             ],
         }),
+        // Drill numbers in magenta, which nothing else on the field is
+        `UPDATE field_properties SET json_data = json_set(json_data, '$.theme.defaultMarcher.label', json('{"r":200,"g":0,"b":200,"a":1}'))`,
         // Both drawn in a solid color, F1 with no label of its own
         `INSERT INTO section_appearances (id, section, fill_color, outline_color, shape_type, visible, label_visible) VALUES
             (1, 'Trumpet', 'rgba(0,0,255,1)', NULL, 'circle', 1, 1),
@@ -96,6 +98,7 @@ test("a neighbor's dot covers a drill number, as on Fabric and in the export", a
         height: Math.round(radius * 2),
     };
     const green = [0, 160, 0];
+    const magenta = [200, 0, 200];
     await expect
         .poll(async () => {
             const pixels = await screenPixels(page, box);
@@ -108,7 +111,7 @@ test("a neighbor's dot covers a drill number, as on Fabric and in the export", a
                     const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
                     if (d < radius * 0.7 && !near(color, green)) insideOff++;
                     // T1's number shows either side of F1's dot
-                    if (d > radius + 2 && Math.max(...color) < 90) ink++;
+                    if (d > radius + 2 && near(color, magenta)) ink++;
                 }),
             );
             return { insideOff, numberShows: ink > 0 };

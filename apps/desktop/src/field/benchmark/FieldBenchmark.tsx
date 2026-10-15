@@ -289,7 +289,7 @@ function BenchmarkTable({ report }: { report: BenchmarkReport }) {
                                         {result.stats.cpuP95.toFixed(2)}
                                     </td>
                                     <td className="pr-12">
-                                        {result.stats.drawCalls}
+                                        {result.stats.drawCalls ?? "n/a"}
                                     </td>
                                 </>
                             )}

@@ -35,8 +35,8 @@ export type FrameStats = {
     cpuAvg: number;
     cpuP95: number;
     cpuMax: number;
-    /** Draw calls in the last frame. */
-    drawCalls: number;
+    /** Draw calls in the last frame; null on Fabric, which draws with Canvas2D. */
+    drawCalls: number | null;
 };
 
 export type BenchmarkResult =
@@ -94,7 +94,7 @@ export function summarizeFrames({
     frameEnds: readonly number[];
     cpu: readonly number[];
     seconds: number;
-    drawCalls: number;
+    drawCalls: number | null;
 }): FrameStats {
     const intervals: number[] = [];
     for (let i = WARM_UP_FRAMES + 1; i < frameEnds.length; i++)
@@ -140,7 +140,7 @@ export function benchmarkMarkdown({
         ...results.map((result) =>
             "skipped" in result
                 ? `| ${result.kind} | skipped: ${result.skipped} | | | | | | | |`
-                : `| ${result.kind} | ${fixed(result.stats.fps)} | ${fixed(result.stats.intervalP50)} | ${fixed(result.stats.intervalP95)} | ${fixed(result.stats.intervalMax)} | ${result.stats.jank}/${result.stats.frames} | ${fixed(result.stats.cpuAvg, 2)} | ${fixed(result.stats.cpuP95, 2)} | ${result.stats.drawCalls} |`,
+                : `| ${result.kind} | ${fixed(result.stats.fps)} | ${fixed(result.stats.intervalP50)} | ${fixed(result.stats.intervalP95)} | ${fixed(result.stats.intervalMax)} | ${result.stats.jank}/${result.stats.frames} | ${fixed(result.stats.cpuAvg, 2)} | ${fixed(result.stats.cpuP95, 2)} | ${result.stats.drawCalls ?? "n/a"} |`,
         ),
     ];
     return lines.join("\n") + "\n";
