@@ -5,7 +5,7 @@ import { useCollisionStore } from "@/stores/CollisionStore";
 import { useMemo } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { WarningIcon, CaretDownIcon } from "@phosphor-icons/react";
-import { useCanvasStore } from "@/stores/CanvasStore";
+import { zoomToCollisions } from "@/field/zoomToCollisions";
 import { Button } from "@openmarch/ui";
 
 export function CollisionsTab() {
@@ -35,7 +35,6 @@ export function CollisionsTab() {
 
 function CollisionsToolbar({ collisionInfo }: { collisionInfo: any[] }) {
     const { t } = useTolgee();
-    const { zoomToCollisions } = useCanvasStore();
 
     return (
         <ToolbarSection aria-label={t("toolbar.collisions.collisionsToolbar")}>

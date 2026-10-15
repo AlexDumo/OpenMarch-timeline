@@ -11,6 +11,7 @@ import {
 } from "three";
 import type { FieldTheme } from "@openmarch/core";
 import type { FieldMarchers } from "../fieldMarchers";
+import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
 import { useFieldViewStore } from "../fieldView";
 import { writeMarcherLooks } from "../marcherLooks";
 
@@ -31,15 +32,18 @@ attribute vec2 aPos;
 attribute vec4 aFill;
 attribute vec4 aOutline;
 attribute float aShape;
+attribute float aOpacity;
 uniform float uScale;
 uniform float uMargin;
 varying vec2 vLocal;
 varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
+varying float vOpacity;
 void main() {
     vFill = aFill;
     vOutline = aOutline;
+    vOpacity = aOpacity;
     vShape = aShape;
     if (aShape < -0.5) {
         // Hidden: every corner on one point outside the view draws nothing
@@ -57,6 +61,7 @@ varying vec2 vLocal;
 varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
+varying float vOpacity;
 
 float square(vec2 p) {
     vec2 q = abs(p);
@@ -91,9 +96,10 @@ void main() {
     float fillA = vFill.a * fill;
     float strokeA = vOutline.a * stroke;
     float a = strokeA + fillA * (1.0 - strokeA);
-    if (a < 0.004) discard;
+    if (a * vOpacity < 0.004) discard;
     vec3 rgb = vOutline.rgb * strokeA + vFill.rgb * fillA * (1.0 - strokeA);
-    gl_FragColor = vec4(rgb / a, a);
+    // A dimmed marcher (#201) fades as a whole, as Fabric sets its opacity
+    gl_FragColor = vec4(rgb / a, a * vOpacity);
 }`;
 
 /** A dot's radius in field units, as fabric's `DOT_RADIUS`. */
@@ -105,15 +111,19 @@ type Drawn = {
     version: number;
     idsVersion: number;
     appearanceVersion: number;
+    dimVersion: number;
     theme: FieldTheme | null;
 };
 
 /** The marchers' dots, each in its appearance at the beat drawn. */
 export default function MarchersLayer({
     marchers,
+    dimming,
     theme,
 }: {
     marchers: FieldMarchers;
+    /** Marchers drawn dimmed (#201). */
+    dimming: FieldDimming;
     theme: FieldTheme;
 }) {
     const invalidate = useThree((s) => s.invalidate);
@@ -121,6 +131,7 @@ export default function MarchersLayer({
         version: -1,
         idsVersion: -1,
         appearanceVersion: -1,
+        dimVersion: -1,
         theme: null,
     });
 
@@ -157,6 +168,8 @@ export default function MarchersLayer({
 
     // A new theme restyles the dots on the next frame
     useEffect(() => invalidate(), [theme, invalidate]);
+    // New dimming redraws them on the next frame
+    useEffect(() => dimming.subscribe(invalidate), [dimming, invalidate]);
 
     useEffect(
         () => () => {
@@ -180,7 +193,14 @@ export default function MarchersLayer({
             resized ||
             marchers.appearanceVersion !== last.appearanceVersion ||
             theme !== last.theme;
-        if (!resized && !restyled && marchers.version === last.version) return;
+        const redimmed = resized || dimming.version !== last.dimVersion;
+        if (
+            !resized &&
+            !restyled &&
+            !redimmed &&
+            marchers.version === last.version
+        )
+            return;
         const geometry = mesh.geometry;
         if (resized || !geometry.getAttribute("aPos")) {
             // Frees the old buffers; three uploads the new ones on the next draw
@@ -198,6 +218,7 @@ export default function MarchersLayer({
                 dynamic(new Float32Array(n * 4), 4),
             );
             geometry.setAttribute("aShape", dynamic(new Float32Array(n), 1));
+            geometry.setAttribute("aOpacity", dynamic(new Float32Array(n), 1));
             geometry.instanceCount = n;
         }
         const instanced = (name: string) =>
@@ -215,6 +236,14 @@ export default function MarchersLayer({
             outline.needsUpdate = true;
             shape.needsUpdate = true;
         }
+        if (redimmed) {
+            const opacity = instanced("aOpacity");
+            const array = opacity.array as Float32Array;
+            marchers.ids.forEach((id, i) => {
+                array[i] = dimming.isDimmed(id) ? DIMMED_OPACITY : 1;
+            });
+            opacity.needsUpdate = true;
+        }
         const positions = instanced("aPos");
         (positions.array as Float32Array).set(marchers.positions);
         positions.needsUpdate = true;
@@ -222,6 +251,7 @@ export default function MarchersLayer({
             version: marchers.version,
             idsVersion: marchers.idsVersion,
             appearanceVersion: marchers.appearanceVersion,
+            dimVersion: dimming.version,
             theme,
         };
     });

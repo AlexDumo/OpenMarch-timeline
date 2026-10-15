@@ -27,6 +27,11 @@ export type FieldTestMarcher = {
     onScreen: boolean;
     /** How the marcher is drawn: its appearance at the beat shown. */
     look: FieldTestLook;
+    /**
+     * Drawn dimmed because it's outside the isolated move (UI-9); a dimmed
+     * marcher can't be selected.
+     */
+    dimmed: boolean;
 };
 
 /**

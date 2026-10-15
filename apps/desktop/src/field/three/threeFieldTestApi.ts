@@ -21,6 +21,8 @@ export type ThreeFieldState = {
     /** The field image as `BackgroundImageLayer` draws it, or null. */
     fieldImage(): FieldTestImage | null;
     theme(): FieldTheme;
+    /** Whether a marcher is drawn dimmed (#201). */
+    dimmed(id: number): boolean;
 };
 
 /**
@@ -54,6 +56,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                         screen.y > rect.top &&
                         screen.y < rect.bottom,
                     look: lookOf(stacks[i] ?? [], theme),
+                    dimmed: field.dimmed(id),
                 };
             });
         },

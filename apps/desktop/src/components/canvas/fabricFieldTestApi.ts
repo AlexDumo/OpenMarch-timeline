@@ -66,6 +66,7 @@ export function createFabricFieldTestApi(
                         screen.y > rect.top &&
                         screen.y < rect.bottom,
                     look: lookOf(marcher),
+                    dimmed: marcher.timelineDimmed,
                 };
             });
         },

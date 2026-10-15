@@ -36,6 +36,16 @@ import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
 import LabelsLayer from "./layers/LabelsLayer";
+import OverlayLayer from "./layers/OverlayLayer";
+import { useTimelineVisuals } from "./useTimelineVisuals";
+import {
+    KeptMarksOverlay,
+    KeptMarksPlacer,
+    KeptMarkTooltipView,
+    useFieldKeptMarks,
+    useKeptMarkTooltip,
+    type KeptMarkElements,
+} from "./KeptMarks";
 
 /** fabric's fonts: the marcher labels'. */
 const LABEL_FONT = 'bold "Courier New", monospace';
@@ -46,6 +56,18 @@ const LABEL_FONT = 'bold "Courier New", monospace';
  */
 const NUMBER_FONT = '"Times New Roman"';
 const CHECKPOINT_FONT = '"mono"';
+/** `CollisionMarker`'s label font. */
+const COLLISION_FONT = "Arial";
+
+/**
+ * Where the timeline's layers sit among the field's (#201): the isolated move's
+ * scene and the page's pathways above the field text (1) and under the
+ * marchers (2), as Fabric stacks them; collision markers over the labels (3),
+ * as Fabric adds them after the marchers.
+ */
+const FOCUS_ORDER = 1.4;
+const PATHS_ORDER = 1.5;
+const COLLISIONS_ORDER = 4;
 
 /**
  * The three.js field (ADR 0005), behind the dev switch in `fieldRenderer.ts`.
@@ -66,7 +88,7 @@ export default function ThreeField() {
     const { data: marcherRows } = useQuery(allMarchersQueryOptions());
     const { selectedPage } = useSelectedPage()!;
     const { isPlaying } = useIsPlaying()!;
-    const { beats } = useTimingObjects()!;
+    const { beats, pages } = useTimingObjects()!;
     const { image: fieldImage } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
@@ -100,6 +122,7 @@ export default function ThreeField() {
             label: new GlyphAtlas(LABEL_FONT),
             number: new GlyphAtlas(NUMBER_FONT),
             checkpoint: new GlyphAtlas(CHECKPOINT_FONT),
+            collision: new GlyphAtlas(COLLISION_FONT),
         }),
         [],
     );
@@ -108,9 +131,38 @@ export default function ThreeField() {
             atlases.label.dispose();
             atlases.number.dispose();
             atlases.checkpoint.dispose();
+            atlases.collision.dispose();
         },
         [atlases],
     );
+
+    // #201: the timeline's pathways, isolation scene, collisions, dimming and kept marks
+    const marcherIds = useMemo(
+        () => marcherRows?.map((marcher) => marcher.id),
+        [marcherRows],
+    );
+    const timeline = useTimelineVisuals({
+        isPlaying,
+        selectedPage,
+        pages,
+        marcherIds,
+        fieldProperties,
+    });
+    const { dimming } = timeline;
+    const keptMarks = useFieldKeptMarks({
+        enabled: timeline.ready,
+        isPlaying,
+        pages,
+        pageId: selectedPage?.id,
+        marcherIds,
+    });
+    const keptMarkElements = useRef<KeptMarkElements>(new Map());
+    const root = useRef<HTMLDivElement>(null);
+    const keptMarkTooltip = useKeptMarkTooltip({
+        target: root,
+        marks: keptMarks,
+        marchers,
+    });
 
     // The field test API reads the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
@@ -136,13 +188,15 @@ export default function ThreeField() {
                 pageId: () => latest.current.pageId,
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
+                dimmed: (id) => dimming.isDimmed(id),
             }),
         );
         return () => installFieldTestApi(undefined);
-    }, [marchers]);
+    }, [marchers, dimming]);
 
     return (
         <div
+            ref={root}
             className="rounded-6 relative h-full w-full overflow-hidden"
             data-testid="threeField"
         >
@@ -192,18 +246,40 @@ export default function ThreeField() {
                         image={fieldImage}
                         placement={fieldImagePlan}
                     />
+                    <OverlayLayer
+                        plan={timeline.focus}
+                        renderOrder={FOCUS_ORDER}
+                    />
+                    <OverlayLayer
+                        plan={timeline.paths}
+                        renderOrder={PATHS_ORDER}
+                    />
                     <MarchersLayer
                         marchers={marchers}
+                        dimming={dimming}
                         theme={fieldProperties.theme}
                     />
                     <LabelsLayer
                         marchers={marchers}
+                        dimming={dimming}
                         labels={labels}
                         theme={fieldProperties.theme}
                         atlas={atlases.label}
                     />
+                    <OverlayLayer
+                        plan={timeline.collisions}
+                        renderOrder={COLLISIONS_ORDER}
+                        atlas={atlases.collision}
+                    />
+                    <KeptMarksPlacer
+                        marks={keptMarks}
+                        marchers={marchers}
+                        elements={keptMarkElements}
+                    />
                 </Canvas>
             )}
+            <KeptMarksOverlay marks={keptMarks} elements={keptMarkElements} />
+            <KeptMarkTooltipView tooltip={keptMarkTooltip} />
         </div>
     );
 }

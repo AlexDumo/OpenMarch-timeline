@@ -17,6 +17,8 @@ export type DrawnMarcher = {
     onScreen: boolean;
     /** How it's drawn: shape, colors, and whether it and its label show. */
     look: FieldTestLook;
+    /** Drawn dimmed, outside the isolated move; it can't be selected. */
+    dimmed: boolean;
 };
 
 // Helpers read the field only through the field test API
