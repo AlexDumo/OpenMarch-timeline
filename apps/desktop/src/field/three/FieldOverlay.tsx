@@ -1,12 +1,10 @@
 import { useSyncExternalStore } from "react";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
-import { ringReach, SELECTION_COLOR } from "./selectionRing";
+import { selectionBoxPadding, SELECTION_COLOR } from "./selectionRing";
 
 /** Fabric's selection border width, in CSS px. */
 const BOX_WIDTH = 2;
-/** CSS px between the selection rings and the box. */
-const BOX_GAP = 3;
 
 /**
  * The SVG overlay over the field (ADR 0005 D-2): what the editor draws on top
@@ -44,7 +42,7 @@ type Bounds = { left: number; top: number; right: number; bottom: number };
 function SelectionBox({ box }: { box: Bounds | null }) {
     const view = useFieldViewStore();
     if (!box) return null;
-    const pad = ringReach(view.zoom) * view.zoom + BOX_GAP;
+    const pad = selectionBoxPadding(view.zoom) * view.zoom;
     const topLeft = fieldToElement(view, box.left, box.top);
     const bottomRight = fieldToElement(view, box.right, box.bottom);
     return (

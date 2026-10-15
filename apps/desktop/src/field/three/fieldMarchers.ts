@@ -35,6 +35,10 @@ const resolverStore: PositionSource = {
  *
  * It also marks which of them are selected (`selected`, `selectionVersion`),
  * from the app's selection, for the marchers layer's selection rings.
+ *
+ * The editor can draw some marchers somewhere else (`setOverrides`): where
+ * they're dragged, then where they were dropped until the drop is saved
+ * (#196). Every fill keeps them there.
  */
 export class FieldMarchers {
     private readonly sampled: PositionBuffer;
@@ -64,8 +68,12 @@ export class FieldMarchers {
 
     private steps: AppearanceStepsByMarcherId | undefined;
     private changeBeats: number[] = [];
-    /** The beat last filled. */
+    /** The beat last filled, and the isolation plan it was filled with. */
     private beat: number | null = null;
+    private isolationPlan: IsolationPlan | null | undefined;
+    /** Positions drawn instead of the sampled ones, by marcher id. */
+    private overrides: ReadonlyMap<number, { x: number; y: number }> | null =
+        null;
     /** The appearance change index and ids the stacks were last sampled for. */
     private sampledFor = { changeIndex: -1, ids: this.ids };
 
@@ -83,6 +91,7 @@ export class FieldMarchers {
         const ids = this.sampled.marcherIds;
         if (isolationPlan)
             applyIsolationPlan(this.sampled.buffer, ids, beat, isolationPlan);
+        this.applyOverrides(this.sampled.buffer, ids);
         if (ids !== this.ids) {
             this.ids = ids;
             this.idsVersion++;
@@ -91,9 +100,42 @@ export class FieldMarchers {
         this.positions = this.sampled.buffer;
         this.version++;
         this.beat = beat;
+        this.isolationPlan = isolationPlan;
         this.sampleAppearance(false);
         this.emit();
         return true;
+    }
+
+    /**
+     * Draws the marchers in `overrides` at those positions, whatever the
+     * show says, until it's called again. Marchers left out (all of them, for
+     * null) are drawn where the show has them, sampled again at the beat last
+     * filled.
+     */
+    setOverrides(
+        overrides: ReadonlyMap<number, { x: number; y: number }> | null,
+    ) {
+        // A marcher no longer overridden goes back to where the show has it
+        const released =
+            this.overrides !== null &&
+            [...this.overrides.keys()].some((id) => !overrides?.has(id));
+        this.overrides = overrides;
+        if (released && this.beat !== null) {
+            if (this.fill(this.beat, this.isolationPlan)) return;
+        }
+        this.applyOverrides(this.positions, this.ids);
+        this.version++;
+        this.emit();
+    }
+
+    private applyOverrides(positions: Float64Array, ids: readonly number[]) {
+        if (!this.overrides) return;
+        for (let i = 0; i < ids.length; i++) {
+            const at = this.overrides.get(ids[i]);
+            if (!at) continue;
+            positions[i * 2] = at.x;
+            positions[i * 2 + 1] = at.y;
+        }
     }
 
     /** New appearance steps (or none, until they load): every marcher is restyled. */
