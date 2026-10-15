@@ -38,12 +38,19 @@ const isolationBar = (page: Page) => page.getByTestId("timeline-isolation-bar");
 const drawnById = async (page: Page) =>
     new Map((await drawnMarchers(page)).map((m) => [m.id, m]));
 
-/** Selects every marcher that can be selected, and waits for `count` of them. */
+/**
+ * Selects every marcher that can be selected, and waits for `count` of them
+ * on the field and in the inspector: keys like L and K act on the app's
+ * selection, which reaches the app's state a render after the field's.
+ */
 async function selectAll(page: Page, count: number) {
     await page.keyboard.press("ControlOrMeta+a");
     await expect
         .poll(async () => (await readField(page)).selection.length)
         .toBe(count);
+    await expect(
+        page.getByText(new RegExp(`^${count} Marchers$`)).first(),
+    ).toBeVisible();
 }
 
 // A converted demo show: every page is a move. The move over the page box
