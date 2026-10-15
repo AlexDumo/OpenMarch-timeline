@@ -18,8 +18,8 @@ export function CollisionsTab() {
             const [a, b] = collision.label.split(",");
             return {
                 ...collision,
-                marcher1Label: a,
-                marcher2Label: b,
+                marcher1Label: a?.trim(),
+                marcher2Label: b?.trim(),
             };
         });
     }, [currentCollisions]);
