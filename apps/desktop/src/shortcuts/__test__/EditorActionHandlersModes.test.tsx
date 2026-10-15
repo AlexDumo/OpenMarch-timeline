@@ -9,7 +9,6 @@ import {
     setUpFeature,
 } from "@/test/featureHarness";
 import tolgee from "@/global/singletons/Tolgee";
-import { historyKeys } from "@/hooks/queries/useHistory";
 import { stopTimelineResolver } from "@/timeline/timelineStore";
 import { EditorActionHandlers } from "@/shortcuts/ActionHandlers";
 import ShortcutDispatcher from "@/shortcuts/ShortcutDispatcher";
@@ -297,7 +296,7 @@ describeDbTests("registered coordinate actions", (it) => {
         const ids = marchersAndPages.expectedMarchers
             .slice(10, 12)
             .map((m) => m.id);
-        const { qc, page } = await setUp(PAGE, ids);
+        const { page } = await setUp(PAGE, ids);
         const before = await positionsOn(db, page, ids);
 
         await trigger("moveSelectedMarchersUp");
@@ -305,14 +304,11 @@ describeDbTests("registered coordinate actions", (it) => {
             expect(await positionsOn(db, page, ids)).not.toEqual(before);
         });
 
-        // Look somewhere else, then undo
+        // Look somewhere else, then undo. No wait for the canUndo query: the undo itself
+        // decides whether there is anything to undo (#223).
         const elsewhere = probed().pages[1]!;
         const otherId = marchersAndPages.expectedMarchers[20]!.id;
         await selectPageAndMarchers(elsewhere, [otherId]);
-        await act(() => qc.invalidateQueries({ queryKey: historyKeys.all() }));
-        await waitFor(() =>
-            expect(qc.getQueryData(historyKeys.canUndo())).toBe(true),
-        );
 
         await trigger("performUndo");
 
