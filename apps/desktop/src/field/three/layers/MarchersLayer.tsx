@@ -14,6 +14,7 @@ import type { FieldMarchers } from "../fieldMarchers";
 import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
 import { useFieldViewStore } from "../fieldView";
 import { writeMarcherLooks } from "../marcherLooks";
+import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
 
 /**
  * Every marcher's dot in one instanced draw, shaded in the fragment shader so
@@ -26,6 +27,9 @@ import { writeMarcherLooks } from "../marcherLooks";
  * radius 5, a square of side 5·√π·1.2, an equilateral triangle 12 wide, and an
  * X of two 2-wide lines out to ±6. The 1-unit outline straddles the edge, and
  * corners are mitered, as Fabric strokes them.
+ *
+ * A selected marcher (#193) gets a ring a little outside its shape's edge, in
+ * the same draw.
  */
 const VERTEX = /* glsl */ `
 attribute vec2 aPos;
@@ -33,14 +37,18 @@ attribute vec4 aFill;
 attribute vec4 aOutline;
 attribute float aShape;
 attribute float aOpacity;
+attribute float aSelected;
 uniform float uScale;
 uniform float uMargin;
+uniform float uRingOuter;
 varying vec2 vLocal;
 varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
 varying float vOpacity;
+varying float vSelected;
 void main() {
+    vSelected = aSelected;
     vFill = aFill;
     vOutline = aOutline;
     vOpacity = aOpacity;
@@ -50,8 +58,8 @@ void main() {
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         return;
     }
-    // The largest shape (the X's line ends), plus a margin for the antialiased edge
-    vLocal = position.xy * (7.0 + uMargin);
+    // The largest shape (the X's line ends) and its ring, plus a margin for the antialiased edge
+    vLocal = position.xy * (7.0 + aSelected * uRingOuter + uMargin);
     gl_Position = projectionMatrix * viewMatrix * vec4(aPos + vLocal * uScale, 0.0, 1.0);
 }`;
 
@@ -62,6 +70,10 @@ varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
 varying float vOpacity;
+varying float vSelected;
+uniform vec4 uRing;
+uniform float uRingInner;
+uniform float uRingOuter;
 
 float square(vec2 p) {
     vec2 q = abs(p);
@@ -95,27 +107,29 @@ void main() {
     float stroke = vShape > 2.5 ? 0.0 : 1.0 - smoothstep(0.5 - aa, 0.5 + aa, abs(d));
     float fillA = vFill.a * fill;
     float strokeA = vOutline.a * stroke;
-    float a = strokeA + fillA * (1.0 - strokeA);
+    float dotA = strokeA + fillA * (1.0 - strokeA);
+    vec3 dotRgb = vOutline.rgb * strokeA + vFill.rgb * fillA * (1.0 - strokeA);
+    // The selection ring, between uRingInner and uRingOuter outside the shape's edge
+    float ringA = vSelected * uRing.a
+        * (smoothstep(uRingInner - aa, uRingInner + aa, d)
+            - smoothstep(uRingOuter - aa, uRingOuter + aa, d));
+    float a = dotA + ringA * (1.0 - dotA);
     if (a * vOpacity < 0.004) discard;
-    vec3 rgb = vOutline.rgb * strokeA + vFill.rgb * fillA * (1.0 - strokeA);
+    vec3 rgb = dotRgb + uRing.rgb * ringA * (1.0 - dotA);
     // A dimmed marcher (#201) fades as a whole, as Fabric sets its opacity
     gl_FragColor = vec4(rgb / a, a * vOpacity);
 }`;
-
-/** A dot's radius in field units, as fabric's `DOT_RADIUS`. */
-const DOT_RADIUS = 5;
-/** A dot never gets smaller than this on screen, in CSS pixels, so a zoomed-out show stays visible. */
-const MIN_SCREEN_RADIUS = 1.5;
 
 type Drawn = {
     version: number;
     idsVersion: number;
     appearanceVersion: number;
     dimVersion: number;
+    selectionVersion: number;
     theme: FieldTheme | null;
 };
 
-/** The marchers' dots, each in its appearance at the beat drawn. */
+/** The marchers' dots, each in its appearance at the beat drawn, with a ring on each selected one. */
 export default function MarchersLayer({
     marchers,
     dimming,
@@ -132,6 +146,7 @@ export default function MarchersLayer({
         idsVersion: -1,
         appearanceVersion: -1,
         dimVersion: -1,
+        selectionVersion: -1,
         theme: null,
     });
 
@@ -154,6 +169,9 @@ export default function MarchersLayer({
                 uniforms: {
                     uScale: { value: 1 },
                     uMargin: { value: 1 },
+                    uRing: { value: SELECTION_RGBA01 },
+                    uRingInner: { value: 1 },
+                    uRingOuter: { value: 2 },
                 },
                 transparent: true,
                 depthTest: false,
@@ -181,9 +199,12 @@ export default function MarchersLayer({
 
     useFrame(() => {
         const { zoom } = useFieldViewStore.getState();
-        const scale = Math.max(1, MIN_SCREEN_RADIUS / (DOT_RADIUS * zoom));
+        const { scale, ringGap, ringWidth } = dotSizes(zoom);
         const { uniforms } = mesh.material;
         uniforms.uScale.value = scale;
+        // In the shape's own units, as the edge distance `d`
+        uniforms.uRingInner.value = ringGap / scale;
+        uniforms.uRingOuter.value = (ringGap + ringWidth) / scale;
         // One CSS pixel, in the shape's own units
         uniforms.uMargin.value = 1 / (zoom * scale);
 
@@ -193,11 +214,14 @@ export default function MarchersLayer({
             resized ||
             marchers.appearanceVersion !== last.appearanceVersion ||
             theme !== last.theme;
-        const redimmed = resized || dimming.version !== last.dimVersion;
+        const dimChanged = resized || dimming.version !== last.dimVersion;
+        const reselected =
+            resized || marchers.selectionVersion !== last.selectionVersion;
         if (
             !resized &&
             !restyled &&
-            !redimmed &&
+            !dimChanged &&
+            !reselected &&
             marchers.version === last.version
         )
             return;
@@ -219,6 +243,7 @@ export default function MarchersLayer({
             );
             geometry.setAttribute("aShape", dynamic(new Float32Array(n), 1));
             geometry.setAttribute("aOpacity", dynamic(new Float32Array(n), 1));
+            geometry.setAttribute("aSelected", dynamic(new Float32Array(n), 1));
             geometry.instanceCount = n;
         }
         const instanced = (name: string) =>
@@ -236,13 +261,18 @@ export default function MarchersLayer({
             outline.needsUpdate = true;
             shape.needsUpdate = true;
         }
-        if (redimmed) {
+        if (dimChanged) {
             const opacity = instanced("aOpacity");
             const array = opacity.array as Float32Array;
             marchers.ids.forEach((id, i) => {
                 array[i] = dimming.isDimmed(id) ? DIMMED_OPACITY : 1;
             });
             opacity.needsUpdate = true;
+        }
+        if (reselected) {
+            const selected = instanced("aSelected");
+            (selected.array as Float32Array).set(marchers.selected);
+            selected.needsUpdate = true;
         }
         const positions = instanced("aPos");
         (positions.array as Float32Array).set(marchers.positions);
@@ -252,6 +282,7 @@ export default function MarchersLayer({
             idsVersion: marchers.idsVersion,
             appearanceVersion: marchers.appearanceVersion,
             dimVersion: dimming.version,
+            selectionVersion: marchers.selectionVersion,
             theme,
         };
     });
