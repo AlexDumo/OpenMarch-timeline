@@ -224,3 +224,33 @@ export async function addPageAt(page: Page, measure: number) {
     await goTo.press("Enter");
     await page.getByTestId("timeline-add-page-flag").click();
 }
+
+/**
+ * The cursor the field shows at a point in the viewport, as the browser reads
+ * it. The one field reading outside the field test API: it's what the user
+ * sees in the page, the same on any renderer, not a renderer internal.
+ */
+export const fieldCursorAt = (page: Page, at: { x: number; y: number }) =>
+    page.evaluate(({ x, y }) => {
+        const element = document.elementFromPoint(x, y);
+        return element ? getComputedStyle(element).cursor : null;
+    }, at);
+
+/**
+ * The drill numbers of the marchers the inspector shows as selected, sorted:
+ * "Marcher T2" for one, "2 Marchers" and their list for several.
+ */
+export async function inspectorMarchers(page: Page): Promise<string[]> {
+    const single = page.getByText(/^Marcher \S+$/);
+    if (await single.isVisible())
+        return [(await single.innerText()).replace(/^Marcher /, "")];
+    const several = page.getByText(/^\d+ Marchers$/);
+    if (!(await several.isVisible())) return [];
+    // The list of drill numbers under the heading
+    const list = await page
+        .locator("p.font-mono")
+        .filter({ hasText: /^[^,]+(, [^,]+)+$/ })
+        .first()
+        .innerText();
+    return list.split(", ").sort();
+}

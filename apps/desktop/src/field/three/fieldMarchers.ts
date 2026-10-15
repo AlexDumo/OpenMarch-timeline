@@ -18,6 +18,9 @@ const resolverStore: PositionSource = {
  * {@link PositionBuffer}, as the Fabric field and the 3D View sample
  * it. The marcher and label layers copy it into their GPU buffers when its
  * `version` changes, in a frame hook. The field test API reads it too.
+ *
+ * It also marks which of them are selected (`selected`, `selectionVersion`),
+ * from the app's selection, for the marchers layer's selection rings.
  */
 export class FieldMarchers {
     private readonly sampled: PositionBuffer;
@@ -29,6 +32,12 @@ export class FieldMarchers {
     version = 0;
     /** Goes up whenever `ids` changes: layers then resize their buffers. */
     idsVersion = 0;
+    /** 1 for each marcher in `ids` that's selected, else 0. */
+    selected: Uint8Array = new Uint8Array(0);
+    /** Goes up whenever `selected` changes. */
+    selectionVersion = 0;
+    private selectedIds: ReadonlySet<number> = new Set();
+    private readonly listeners = new Set<() => void>();
 
     constructor(source: PositionSource = resolverStore) {
         this.sampled = new PositionBuffer(source);
@@ -47,9 +56,38 @@ export class FieldMarchers {
         if (ids !== this.ids) {
             this.ids = ids;
             this.idsVersion++;
+            this.markSelected();
         }
         this.positions = this.sampled.buffer;
         this.version++;
+        this.emit();
         return true;
+    }
+
+    /** Marks the marchers in `ids` as selected, and every other one as not. */
+    setSelection(ids: Iterable<number>) {
+        this.selectedIds = new Set(ids);
+        this.markSelected();
+        this.emit();
+    }
+
+    /**
+     * Calls `listener` after every fill and selection change, for what draws
+     * outside the WebGL frame (the SVG overlay). Returns the unsubscribe.
+     */
+    subscribe = (listener: () => void): (() => void) => {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    };
+
+    private markSelected() {
+        this.selected = Uint8Array.from(this.ids, (id) =>
+            this.selectedIds.has(id) ? 1 : 0,
+        );
+        this.selectionVersion++;
+    }
+
+    private emit() {
+        for (const listener of this.listeners) listener();
     }
 }

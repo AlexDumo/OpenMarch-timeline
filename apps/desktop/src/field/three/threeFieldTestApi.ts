@@ -1,4 +1,8 @@
-import type { FieldTestApi, FieldTestMarcher } from "@/field/fieldTestApi";
+import type {
+    FieldTestApi,
+    FieldTestGesture,
+    FieldTestMarcher,
+} from "@/field/fieldTestApi";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, type FieldView } from "./fieldView";
 
@@ -11,11 +15,14 @@ export type ThreeFieldState = {
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
     pageId(): number | null;
+    /** The app's selection, as the editor reads it. */
+    selection(): readonly number[];
+    activeGesture(): FieldTestGesture | null;
 };
 
 /**
- * The field test API over the new field. Read-only. Selection, handles and
- * gestures come with the editor (#193 onward); until then the field has none.
+ * The field test API over the new field. Read-only. Selection and gestures
+ * come from the editor (#193); handles come with #198.
  */
 export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
     return {
@@ -45,13 +52,13 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                 };
             });
         },
-        selection: () => [],
+        selection: () => [...field.selection()].sort((a, b) => a - b),
         viewport() {
             const { zoom, panX, panY } = field.view();
             return { zoom, pan: { x: panX, y: panY } };
         },
         handles: () => null,
-        activeGesture: () => null,
+        activeGesture: () => field.activeGesture(),
         pageId: () => field.pageId(),
     };
 }

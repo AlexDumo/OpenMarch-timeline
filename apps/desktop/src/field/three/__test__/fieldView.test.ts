@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { cameraBounds, fieldToElement, fitView } from "../fieldView";
+import {
+    cameraBounds,
+    elementToField,
+    fieldToElement,
+    fitView,
+} from "../fieldView";
 
 const field = { width: 1600, height: 850 };
 
@@ -37,5 +42,15 @@ describe("cameraBounds", () => {
         expect(corner.y).toBeCloseTo(600);
         // Field y grows down the screen
         expect(top).toBeLessThan(bottom);
+    });
+});
+
+describe("elementToField", () => {
+    it("undoes fieldToElement", () => {
+        const view = fitView(1200, 700, field, 60);
+        const at = fieldToElement(view, 321.5, 87);
+        const back = elementToField(view, at.x, at.y);
+        expect(back.x).toBeCloseTo(321.5);
+        expect(back.y).toBeCloseTo(87);
     });
 });
