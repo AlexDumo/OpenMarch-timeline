@@ -31,6 +31,7 @@ import { FieldDimming } from "./fieldDimming";
  * edits and setting changes, never per frame; dimming goes to the layers
  * through {@link FieldDimming}, outside React.
  */
+// eslint-disable-next-line max-lines-per-function
 export function useTimelineVisuals({
     isPlaying,
     selectedPage,
@@ -140,7 +141,9 @@ export function useTimelineVisuals({
 function useFieldDimming(): FieldDimming {
     const dimming = useMemo(() => new FieldDimming(), []);
     useEffect(() => {
-        const update = (state: ReturnType<typeof useTimelineSelectionStore.getState>) =>
+        const update = (
+            state: ReturnType<typeof useTimelineSelectionStore.getState>,
+        ) =>
             dimming.set(
                 state.isolation === null
                     ? null

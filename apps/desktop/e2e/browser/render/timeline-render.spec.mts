@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { test, expect, type Show } from "../fixtures.mjs";
 import { waitForField } from "../app.mjs";
-import { compose, field, setFabricView, settle, type View } from "./compare.mjs";
+import {
+    compose,
+    field,
+    setFabricView,
+    settle,
+    type View,
+} from "./compare.mjs";
 
 /**
  * Render comparisons of the timeline's drawing on the field, Fabric against
@@ -133,9 +139,7 @@ const CASES: Case[] = [
             ).find((m) => !m.dimmed && m.onScreen)!;
             await page.mouse.click(member.screen.x, member.screen.y);
             await expect
-                .poll(() =>
-                    page.evaluate(() => window.fieldTest!.selection()),
-                )
+                .poll(() => page.evaluate(() => window.fieldTest!.selection()))
                 .toEqual([member.id]);
         },
     },

@@ -9,7 +9,13 @@ import {
 } from "@openmarch/core";
 import { tsImport } from "tsx/esm/api";
 import { test, expect } from "../fixtures.mjs";
-import { compose, field, setFabricView, settle, type View } from "./compare.mjs";
+import {
+    compose,
+    field,
+    setFabricView,
+    settle,
+    type View,
+} from "./compare.mjs";
 
 /**
  * Render comparisons of the field itself, Fabric against the new field

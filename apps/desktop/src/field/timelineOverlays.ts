@@ -219,6 +219,7 @@ export const FOCUS = {
  * rings, destinations, ghost ends and forks. With marchers selected
  * (`emphasis`), the others step back.
  */
+// eslint-disable-next-line max-lines-per-function
 export function planFocusOverlay(
     scene: FocusScene,
     ghostColor: string,

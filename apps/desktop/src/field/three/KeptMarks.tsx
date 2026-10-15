@@ -154,7 +154,10 @@ export function KeptMarksPlacer({
                 continue;
             }
             const box = keptMarkBox(
-                { x: marchers.positions[i * 2], y: marchers.positions[i * 2 + 1] },
+                {
+                    x: marchers.positions[i * 2],
+                    y: marchers.positions[i * 2 + 1],
+                },
                 view.zoom,
             );
             const size = box.size * view.zoom;

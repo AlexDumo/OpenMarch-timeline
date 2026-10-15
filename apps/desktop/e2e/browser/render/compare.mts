@@ -158,4 +158,3 @@ export async function compose(page: Page, fabric: Buffer, three: Buffer) {
     );
     return { ...result, png: Buffer.from(result.png, "base64") };
 }
-

@@ -339,7 +339,11 @@ function withoutRepeats(points: readonly Point[]): readonly Point[] {
     const out: Point[] = [];
     for (const p of points) {
         const last = out[out.length - 1];
-        if (!last || Math.abs(p.x - last.x) > 1e-6 || Math.abs(p.y - last.y) > 1e-6)
+        if (
+            !last ||
+            Math.abs(p.x - last.x) > 1e-6 ||
+            Math.abs(p.y - last.y) > 1e-6
+        )
             out.push(p);
     }
     return out;

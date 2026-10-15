@@ -146,6 +146,7 @@ export function useTimelinePathSamples({
  * Does nothing while `enabled` is false (the resolver isn't ready yet). When it turns false, the
  * curved paths are removed.
  */
+// eslint-disable-next-line max-lines-per-function
 export function useTimelinePathRender({
     canvas,
     enabled,

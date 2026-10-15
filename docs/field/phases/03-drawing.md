@@ -189,7 +189,7 @@ a setter, route this through it (Fabric doesn't clamp this zoom).
 
 **Render comparisons.** `e2e/browser/render/timeline-render.spec.mts` (project
 `render`, three first, then Fabric) captures pathways, mid-move, warnings,
-next paths forced past their toggle, two isolations (4 and 91 of 95 marchers),
+next paths forced past their toggle, two isolated moves (4 and 91 of 95 marchers),
 an isolation with a member selected, kept marks and collisions, plus a
 baseline with none of them. Every case diffs within ±0.3 points of the
 baseline (32.6% at fit, 14.7% large): what differs is the field grid
@@ -199,8 +199,8 @@ where the new field draws all paths, then all dots; isolation lines use miter
 joins and round ends where Fabric's Canvas2D uses round joins; collision
 markers, as above. Shared helpers moved to `render/compare.mts`.
 
-**For #202:** the kept-mark tooltip and dimmed marchers' unselectability are
-in and pinned (`timeline-visuals.spec.mts`). The "first press after a paused
+**For #202:** the kept-mark tooltip, and that dimmed marchers can't be
+selected, are in and pinned (`timeline-visuals.spec.mts`). The "first press after a paused
 preview" swallowing and Escape leaving isolation remain. **For #207:** the
 video export can draw the same plans; `OverlayLayer` needs only a plan and a
 render order. **For #209:** `planPathOverlay` imports the step-size rules from

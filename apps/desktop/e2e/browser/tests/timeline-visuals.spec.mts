@@ -80,7 +80,10 @@ async function turnOn(page: Page, setting: string) {
             /ui.?settings/i.test(k),
         )!;
         const stored = JSON.parse(localStorage.getItem(key)!);
-        localStorage.setItem(key, JSON.stringify({ ...stored, [setting]: true }));
+        localStorage.setItem(
+            key,
+            JSON.stringify({ ...stored, [setting]: true }),
+        );
     }, setting);
     await page.reload();
     await waitForField(page);
@@ -118,7 +121,7 @@ test("isolating a move dims the marchers outside it, and they can't be selected"
     await page.waitForTimeout(200);
     expect((await readField(page)).selection).toEqual([]);
 
-    // Leaving isolation undims everyone
+    // Leaving isolation dims nobody
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("timeline-isolation-bar")).toBeHidden();
     await expect
@@ -149,7 +152,9 @@ test("a kept marcher's mark shows its tooltip on hover", async ({ show }) => {
         )
         .toBe(91);
     await page.mouse.click(empty.x, empty.y);
-    await expect.poll(async () => (await readField(page)).selection).toEqual([]);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
 
     const [{ marcher_id: keptId }] = await query<{ marcher_id: number }>(
         `SELECT a.marcher_id FROM timeline_kept_assignments k
@@ -191,7 +196,10 @@ test("zoom to collisions frames the collisions", async ({ show }) => {
     await page.getByRole("button", { name: "Review" }).last().click();
 
     // The disc and its label, padded by 100 field units, at 70% of the zoom that fits them
-    const field = (await page.getByTestId("fieldCanvas").first().boundingBox())!;
+    const field = (await page
+        .getByTestId("fieldCanvas")
+        .first()
+        .boundingBox())!;
     const width = 2 * collision.distance + 200;
     const height = 12 + collision.distance / 2 + collision.distance + 200;
     const zoom =
@@ -202,10 +210,8 @@ test("zoom to collisions frames the collisions", async ({ show }) => {
     // Centered on them: the bounds' center within a pixel of the field's
     const { pan } = (await readField(page)).viewport;
     const centerY = (collision.y - 12 - 3 + collision.y + 6) / 2;
-    expect(
-        Math.abs(pan.x + collision.x * zoom - field.width / 2),
-    ).toBeLessThan(1);
-    expect(Math.abs(pan.y + centerY * zoom - field.height / 2)).toBeLessThan(
+    expect(Math.abs(pan.x + collision.x * zoom - field.width / 2)).toBeLessThan(
         1,
     );
+    expect(Math.abs(pan.y + centerY * zoom - field.height / 2)).toBeLessThan(1);
 });
