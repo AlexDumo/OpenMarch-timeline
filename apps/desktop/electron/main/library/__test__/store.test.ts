@@ -222,6 +222,62 @@ describe("local Library store", () => {
         expect(await afterRemoval.findVersion(a.version.hash)).toBeNull();
     });
 
+    it("ignores a stale index left by a crash before the index write", async () => {
+        const first = await store.addVersion({
+            kind: "model",
+            name: "Riser",
+            parts: { glb: bytes("v1") },
+        });
+        const staleIndex = await readFile(path.join(root, "index.json"));
+        const second = await store.addVersion({
+            itemId: first.item.id,
+            kind: "model",
+            name: "Riser",
+            parts: { glb: bytes("v2") },
+        });
+        // The manifest has v2, but the index went back to naming v1 only.
+        await writeFile(path.join(root, "index.json"), staleIndex);
+
+        const reopened = await open();
+        expect((await reopened.findVersion(second.version.hash))?.item.id).toBe(
+            first.item.id,
+        );
+        const again = await reopened.addVersion({
+            itemId: first.item.id,
+            kind: "model",
+            name: "Riser",
+            parts: { glb: bytes("v2") },
+        });
+        expect(again.outcome).toBe("existing");
+        expect(
+            (await reopened.getItem(first.item.id))?.versions.map(
+                (v) => v.hash,
+            ),
+        ).toEqual([first.version.hash, second.version.hash]);
+    });
+
+    it("refuses a corrupt blob and rewrites it when its bytes come back", async () => {
+        const glb = bytes("good bytes");
+        const created = await store.addVersion({
+            kind: "model",
+            name: "Riser",
+            parts: { glb },
+        });
+        const blob = path.join(root, blobRelativePath(sha256Hex(glb)));
+        await writeFile(blob, "");
+        await expectLibraryError(store.readBlob(sha256Hex(glb)), "corrupt");
+
+        // Importing the same bytes again, here as a new item, repairs it.
+        await store.addVersion({
+            kind: "model",
+            name: "Riser again",
+            parts: { glb, sidecar: bytes("{}") },
+        });
+        expect(
+            await store.readVersionParts(created.item.id, created.version.hash),
+        ).toEqual({ glb });
+    });
+
     it("reports unreadable manifests when rebuilding", async () => {
         await store.addVersion({
             kind: "model",
@@ -392,6 +448,11 @@ describe("local Library store", () => {
             reopened.deleteSizePreset(saved.id),
             "not-found",
         );
+    });
+
+    it("reports a corrupt size presets file as corrupt", async () => {
+        await writeFile(path.join(root, "size-presets.json"), "not json");
+        await expectLibraryError(store.listSizePresets(), "corrupt");
     });
 });
 

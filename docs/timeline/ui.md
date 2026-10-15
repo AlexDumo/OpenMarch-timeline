@@ -194,7 +194,10 @@ from it. The spec still wins on the model; this file decides presentation.
     so motion is unchanged. The new page is selected. Pages store their
     start beat, so this inserts a row at the split page's old start and moves
     that page's `start_beat` to the playhead. Past the last flag, nothing is
-    split: **+** appends a page ending at the playhead (_lead default_).
+    split: **+** appends a page ending at the playhead, in Basic (UI-19) too
+    (_owner, 2026-10-12_); it never adds beats, so where the music ends on
+    the last flag there is no **+** past it. The timeline keeps 32px after
+    the last beat so **+** stays on screen at the show's end.
   - **Subset pages (2026-10-13).** Right-clicking **+** opens a menu with
     **Add page** (the same as clicking **+**) and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
     subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
@@ -848,12 +851,19 @@ from it. The spec still wins on the model; this file decides presentation.
     (project owner, 2026-10-09, after trying round 3's choice by hand, V-176). Round 3 of the
     simulated-user tests had picked a hybrid (Space on a selected page plays its move once, Space
     straight after plays on); the owner found it asked two presses to play on from the playhead.
-  - **Playing on stops where it is**, and when that is a new page the field line says so with a ring
-    ("Stopped on a new page · Editing Page 4…") for a few seconds (owner; the quiet line was missed
-    by every tester who then edited the wrong set).
-  - **⏮ is the previous page; Shift+click (or Shift+Q) goes to the start of the show**, as before
-    (owner, 2026-10-09: briefly swapped after testers read ⏮ as "start"; the owner wants the
-    common step on the plain click). The tooltip says Shift+click goes to the start.
+  - **Playing on stops where it is**, and when that is another page the field line says so with a
+    ring ("Stopped on page 4 · Editing Page 4…") for a few seconds (owner; the quiet line was missed
+    by every tester who then edited the wrong set). Pages are compared, not the line's words, so
+    stopping inside the page it started on stays quiet, and leaving that page drops the note. Past
+    the last flag it reads "Stopped after the last page · Editing After page 5…". Basic can't edit
+    there, so its line says "Add a page with + to edit here" instead of "Editing …" whenever the
+    playhead is past the last flag, stopped there or not. It first said "Stopped on a new page", which
+    all four users of the Basic past-the-last-flag study read as "the app made a page" and went to
+    check.
+  - **⏮ is the previous page and ⏭ the next page** (owner, 2026-10-09: briefly swapped after
+    testers read ⏮ as "start"; the owner wants the common step on the plain click; confirmed for
+    Basic 2026-10-12, V-210). Since #178 Shift+click steps a beat and Alt+click goes to the start
+    or end of the show, as Shift and Alt with Q/E, and the tooltip lists all three.
   - **A click on a beat seeks to that count** (UI-12); the page box row selects the page (owner,
     2026-10-09, after briefly making any click select the page).
   - **Home while playing jumps playback to the start**; transport buttons don't take keyboard focus
@@ -930,20 +940,25 @@ from it. The spec still wins on the model; this file decides presentation.
     too, ahead of any move (wp19, after the final study): a later first move then doesn't reach the
     kept page. They get no chain on the page boxes (lead, wp19: it showed on every box); the
     inspector, the page box menu and **K** offer to keep them, and a kept one shows the kept chip.
-    - **Chains on the page boxes.** With marchers selected, each page box they follow into shows a
+    - **Chains on the page boxes.** With marchers selected, a page box they follow into can show a
       chain as a quiet outline. A box where they were kept shows a broken chain on a filled accent
-      chip. A box with some of each shows a chain outlined in the accent with a filled kept count.
-      Linked and kept are meant to differ at a glance (wp19). Nothing shows without a selection
-      (owner). The
-      chain is a 20 px target, 22 px in from the flag before its box, so the selected page's flag, the
-      start flag and the playhead never cover it. Its tooltip names the marchers a click changes, up
-      to three ("OT1, OT2 and 4 others" past that): "Keep OT1 and OT8 on Page 3 · They won't follow
-      Page 2 any more", "OT1 and OT8 kept on Page 3 · Click to follow Page 2 again", or "2 of the 8
-      selected are kept on Page 3 (OT1, OT8) · Click to keep the other 6 too". It counts the
-      selection only. The chain that **K** would toggle adds "(K)" to its tooltip. A click keeps
-      or lets follow again exactly those marchers, as one undo step. On a mixed chain a click keeps
-      the rest (_lead default_). A press never selects, scrubs or drags the box, and a right-click
-      opens the box's menu.
+      chip. A box with some of each shows a broken chain outlined in the accent with a filled kept
+      count. Linked and kept are meant to differ at a glance (wp19). Nothing shows without a
+      selection (owner). Kept and mixed chains always show; a linked one only on the selected page,
+      the page **K** works on, and while its box is hovered (V-223). The chain sits at the bottom
+      left of its box, on the start of the hold bar, 14 px in from the flag before it (past the
+      start flag's pennant; the playhead's **+** moves past any chain it would cover, also from a
+      beat before the flag zoomed out): 16 px where the page number leaves room, else 12 px. It
+      never covers the number (owner, 2026-10-12). Where it can't fit, a kept chain becomes a dot (a
+      ring for a mix; in a box only just wide enough for a one-digit number it touches the number)
+      and the box's tooltip takes its words, ending "Right-click the page to …" (V-222). Its tooltip
+      names the marchers a click changes, up to three ("OT1, OT2 and 4 others" past that): "Keep OT1
+      and OT8 on Page 3 · They won't follow Page 2 any more", "OT1 and OT8 kept on Page 3 · Click to
+      follow Page 2 again", or "2 of the 8 selected are kept on Page 3 (OT1, OT8) · Click to keep
+      the other 6 too". It counts the selection only. The chain that **K** would toggle adds "(K)"
+      to its tooltip. A click keeps or lets follow again exactly those marchers, as one undo step.
+      On a mixed chain a click keeps the rest (_lead default_). A press never selects, scrubs or
+      drags the box, and a right-click opens the box's menu.
     - **The inspector line** on a page they follow into: "Hold from Page 2 → · **Keep here**" (or
       "Hold from the start → · **Keep here**"). The link's tooltip says "Go to Page 2, where these
       marchers last moved". Where
@@ -993,6 +1008,14 @@ from it. The spec still wins on the model; this file decides presentation.
   - Deferred: a stored "lock here" for every later page (an Eos-style block), look-preserving
     ripple delete, live return links, hold marks and chains without a selection, and
     "Hold" on coordinate sheets. Marchers are never "pinned": the start flag owns that word.
+- **UI-19: Basic and Expert modes (project owner, 2026-10-11).** The page-box timeline becomes a
+  first-class **Basic** mode beside the full timeline (**Expert**). Basic is a UI over timeline data,
+  not page mode: same file, same resolver, a different bottom panel and a narrower set of edits. Basic
+  holds across pages (UI-18), never writes a move across a page flag or overlapping another move, and
+  splits a marcher's move at a mid-page count so the page's end position is kept. Expert data that
+  Basic can't express stays, plays, and is locked per marcher in Basic. The mode is an app setting
+  asked in a first-launch welcome flow. Design and work packages: `research/basic-mode/README.md`;
+  feel defaults are V-200 to V-206.
 
 - **UI-19: a resizable split between the canvas and the timeline (hands-on feedback, 2026-10-13).**
   A divider sits between the canvas and the timeline. Drag it, or focus it and press Arrow Up
@@ -1076,6 +1099,44 @@ from it. The spec still wins on the model; this file decides presentation.
     `lineDragPositions` in `TimelineSelectionStore.ts`) owns the rule. The timeline sends each beat
     a dragged line reaches as a seek with `line: "start"` or `line: "playhead"`
     (`TimelineSeekOptions`), and `seekTimeline` passes a paused one to the store.
+
+- **UI-23: the view follows the playhead (project owner, 2026-10-14, after a design review of how
+  DAWs and video editors follow playback).** Before, the timeline never scrolled to the playhead.
+  It now follows always, with no setting (owner). DAWs offer Page (jump a view), a fixed playhead
+  (Premiere's Smooth Scroll, Resolve's Fixed, Logic's Catch) or nothing; the owner wanted context
+  on both sides without pinning the playhead, so the view moves by pages instead.
+  - **Page-aware glides.** While playing, the view moves only when the playhead crosses into a page
+    that isn't fully in view; it glides so that page's flag lands 8% in from the left, keeping the
+    end of the page before. A page already in view never moves the view.
+  - **A page wider than the view** has a backstop: when the playhead reaches 85% of the view, it
+    glides back to 25%.
+  - **The glide** is a critically damped spring of about a quarter second, so a new target mid-glide
+    keeps its speed and it never overshoots. A move further than the view's width cuts, and so does
+    every move with reduced motion.
+  - **Pausing.** Scrolling by hand (a wheel, a swipe, the scrollbar) or dragging (a scrub, a clip, a
+    flag) pauses following when it leaves the playhead out of view; a scroll that leaves the
+    playhead in view keeps following. It resumes when the playhead comes back into view, on Play,
+    on navigation while playing (Q, E, Home, End, a page selected: the jump lands the playhead), or
+    from the chip. A click doesn't pause it. Zooming while following keeps the playhead in place on
+    screen and doesn't pause it (Cubase's suspend-on-edit, Logic's Catch and REAPER's "don't
+    autoscroll while viewing other parts" are the models).
+  - **Under the pointer.** While the pointer is down nothing moves: a glide that is due waits for
+    the release, so a click lands on what was under it. Hovering never holds the view.
+  - **The playhead chip.** Whenever the playhead is out of view, playing or stopped, a "Playhead"
+    chip with a caret sits at that edge of the timeline; clicking it brings the view back and
+    resumes following.
+  - **Stopped.** Navigating (Q, E, the go-to box, ⏮ ⏭) to a playhead out of view moves the view the
+    least to show its page with an 8% margin, or puts the playhead at 25% when its page is wider
+    than the view; so does Play Page Once going back to its set. A page selected from outside the
+    timeline (the page list, the field) moves the view the least to show it, its start when it is
+    wider. A selection made with the pointer on the timeline never moves the view. Stopping leaves
+    the view where it is; a glide already under way finishes.
+  - **Loops.** A loop that fits the view is framed once when Play starts, and while it is in view
+    the view holds still, through its wraps too; a wider loop cuts back to its start on each wrap.
+  - **How.** The rules are pure functions in `timelineFollow.ts`; `useTimelineFollow` reads the
+    scroll from scroll events and the sizes from props, so a frame reads no layout, and writes the
+    scroll only while a glide runs. All the numbers are lead defaults to tune by feel (V-230 to
+    V-238).
 
 ## Mapping the spec onto the view model
 
@@ -1293,7 +1354,9 @@ points (P7.2).
 
   TODO (project owner, 2026-10-01; not now):
   - how a selected marcher's spans (UI-1) show inside a timeline's one track;
-  - appending pages past the last flag (today's `defaultNewPageCounts`);
+  - ~~appending pages past the last flag~~ (decided, owner 2026-10-12: a
+    page ending at the playhead, Basic and Expert, and adding a page never
+    adds beats, measures or tempo for now; UI-9 **+**);
   - ~~whether clicking a clip selects its timeline~~ (yes: UI-12);
   - editing anywhere in the selected timeline, not only at its end (the
     temporary refusal in UI-9).
