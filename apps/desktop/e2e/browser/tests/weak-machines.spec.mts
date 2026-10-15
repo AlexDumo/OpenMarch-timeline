@@ -281,7 +281,10 @@ test("a WebGL context that doesn't come back is replaced, without reopening the 
         timeout: 10_000,
     });
     await expect(page.locator(FIELD_CANVAS)).toHaveCount(1);
-    expect((await quality(page)).contextLost).toBe(false);
+    // The new canvas reports its context a moment after it mounts
+    await expect
+        .poll(async () => (await quality(page)).contextLost)
+        .toBe(false);
     await expectCanvasMatchesShow(show);
     await expectDotsDrawn(page, before.dot);
     // The new canvas takes the pointer: a click selects

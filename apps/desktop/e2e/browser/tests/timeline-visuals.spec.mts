@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { test, expect } from "../fixtures.mjs";
 import { drawnMarchers, readField, waitForField } from "../app.mjs";
-import { emptyField, goToPage, isolate } from "../timeline.mjs";
+import { emptyField, goToPage, isolate, pressKeep } from "../timeline.mjs";
 
 // The timeline's drawing on the field (#201; #189 user stories 18, 19, 20):
 // dimmed marchers while a move is isolated, kept marks' tooltip, and "Zoom to
@@ -88,7 +88,7 @@ test("a kept marcher's mark shows its tooltip on hover", async ({ show }) => {
     await expect
         .poll(async () => (await readField(page)).selection.length)
         .toBe(95);
-    await page.keyboard.press("k");
+    await pressKeep(page);
     // The 91 marchers who follow on this page are kept
     await expect
         .poll(

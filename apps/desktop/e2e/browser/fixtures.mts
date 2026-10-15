@@ -10,7 +10,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
-import { waitForField } from "./app.mjs";
+import { waitForField, waitForSettledField } from "./app.mjs";
 import type { FieldRenderer } from "../../src/field/fieldRenderer";
 
 const desktopDir = path.resolve(
@@ -500,6 +500,8 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             await expect(page.getByTestId("threeField")).toHaveCount(
                 field === "three" ? 1 : 0,
             );
+            // Every scenario starts from the view the show settles at
+            await waitForSettledField(page);
             await use({
                 page,
                 databasePath,

@@ -68,3 +68,27 @@ fields by fps and frame intervals only: the CPU columns measure different
 spans (the new field's frame hooks, uploads and render; Fabric's
 `renderAll`), and Fabric's draw calls are "n/a". **#209:** delete
 `FabricFieldBenchmark.tsx` and `fabricBenchmark.ts` with Fabric.
+
+**From #208 (the gate's automated half).** Results:
+[parity-gate-results.md](../parity-gate-results.md); the owner's checklist:
+[parity-checklist.md](../parity-checklist.md). Left for the owner: the
+checklist in the lab build, and the benchmark on a Chromebook and an
+integrated-GPU laptop (steps in the results doc). New tools in
+`e2e/browser/render/` (see its README): `corpus-render` (the corpus at three
+zooms and four times), `stressShow.mts` (the 1,925-marcher show),
+`export-compare` + `export-diff.mts` (drill chart SVG and PDF diffs) and
+`benchmark` (the in-app benchmark on the corpus). For #209:
+
+- The show fixture now waits for the field to hold still before every
+  scenario (`waitForSettledField`): both fields center their view again once
+  the panels settle, later in Electron. Keep it when Fabric goes.
+- Run Electron scenarios with one worker per display (`--workers=1` per
+  om-capture container). Several Electron windows on one Xvfb display drop
+  gestures on the new field now and then (#236): a new window takes
+  activation and the field cancels a press that loses pointer capture.
+- The playback scenario can fail with parallel workers on either field: the
+  clock and the field read the stepping audio clock at different moments
+  (#250).
+- Delete the Fabric halves with Fabric: `FabricFieldBenchmark.tsx`,
+  `fabricBenchmark.ts`, the Fabric pass of the render and export capture
+  specs (`setFabricView` in `render/compare.mts`).

@@ -140,7 +140,9 @@ How #205 built it:
 
 - **GPU switch.** The main process appends `ignore-gpu-blocklist` at startup,
   for the whole app (the Fabric field and the 3D View draw on the same GPU
-  process). Windows 7 still turns hardware acceleration off.
+  process). Windows 7 still turns hardware acceleration off. The owner
+  confirmed the app-wide switch on 2026-10-15, including its effect on the
+  Fabric field and the 3D View's compositing on drivers Chromium blocks.
 - **IPC contract.** Two channels, both carrying no data from the renderer:
   `gpu:crashed` (`invoke`, answers whether the GPU process ended with
   anything but a clean exit this session) and `gpu:process-gone` (main to

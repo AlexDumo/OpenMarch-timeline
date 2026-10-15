@@ -62,3 +62,29 @@ e2e/browser/render/video-compare.sh /tmp/vc before after
 The script writes, to `<folder>/frames`, each pair of frames at 2%, 25%, 50%,
 75% and 98% of the video, a before | after | difference (×4) image per pair,
 and `summary.tsv` with each pair's PSNR. It needs ffmpeg.
+
+## The parity gate's captures (#208)
+
+- `corpus-render.spec.mts`: the Part 1 demo, Daft Punk pt. 2 and the
+  1,925-marcher stress show (`stressShow.mts` writes it to `RENDER_OUT` on
+  first use), at three zooms (the opening fit, 2.5× and 6×, pinched in at
+  the marchers' center) and four playback times. Three first, then Fabric,
+  as above.
+- `export-compare.spec.mts`: exports drill charts (full and individual)
+  through the export dialog and saves each chart's SVG pages, which the
+  harness writes instead of a PDF. Only with `EXPORT_COMPARE=<folder>`, into
+  `<folder>/<EXPORT_COMPARE_LABEL>/` (default `after`). Run it on two
+  checkouts, then pair them:
+
+  ```bash
+  node e2e/browser/render/export-diff.mts <folder> before after 3
+  ```
+
+  It writes, to `<folder>/diff`, each chart before | after | diff as drawn,
+  aligned for Fabric's half-pixel offset, and (full charts) as a PDF page
+  drawn the way the PDF export draws it, plus `summary.tsv`.
+
+- `benchmark.spec.mts`: the in-app field benchmark on the same corpus, on
+  the field `FIELD` picks. Only with `BENCHMARK_OUT=<folder>`; writes each
+  report as JSON and a line per scenario to `summary.tsv`. Headless WebGL is
+  software here, so its numbers are lower bounds.
