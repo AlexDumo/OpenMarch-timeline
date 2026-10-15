@@ -9,6 +9,8 @@ field test API's zoom and pan), scales them to one size, and writes
 (brighter is more different), side by side. Regions: `show` is every visible
 marcher with a margin; `detail` is a small window around the middle marcher,
 enlarged.
+
+Needs Pillow (`pip install pillow`, in a virtual environment).
 """
 
 import json

@@ -186,32 +186,26 @@ export default function MarchersLayer({
             // Frees the old buffers; three uploads the new ones on the next draw
             geometry.dispose();
             const n = marchers.ids.length;
-            const attribute = (array: Float32Array, size: number) => {
+            const dynamic = (array: Float32Array, size: number) => {
                 const a = new InstancedBufferAttribute(array, size);
                 a.setUsage(DynamicDrawUsage);
                 return a;
             };
-            geometry.setAttribute(
-                "aPos",
-                attribute(new Float32Array(n * 2), 2),
-            );
-            geometry.setAttribute(
-                "aFill",
-                attribute(new Float32Array(n * 4), 4),
-            );
+            geometry.setAttribute("aPos", dynamic(new Float32Array(n * 2), 2));
+            geometry.setAttribute("aFill", dynamic(new Float32Array(n * 4), 4));
             geometry.setAttribute(
                 "aOutline",
-                attribute(new Float32Array(n * 4), 4),
+                dynamic(new Float32Array(n * 4), 4),
             );
-            geometry.setAttribute("aShape", attribute(new Float32Array(n), 1));
+            geometry.setAttribute("aShape", dynamic(new Float32Array(n), 1));
             geometry.instanceCount = n;
         }
-        const attribute = (name: string) =>
+        const instanced = (name: string) =>
             geometry.getAttribute(name) as InstancedBufferAttribute;
         if (restyled) {
-            const fill = attribute("aFill");
-            const outline = attribute("aOutline");
-            const shape = attribute("aShape");
+            const fill = instanced("aFill");
+            const outline = instanced("aOutline");
+            const shape = instanced("aShape");
             writeMarcherLooks(marchers.stacks, theme, {
                 fill: fill.array as Float32Array,
                 outline: outline.array as Float32Array,
@@ -221,7 +215,7 @@ export default function MarchersLayer({
             outline.needsUpdate = true;
             shape.needsUpdate = true;
         }
-        const positions = attribute("aPos");
+        const positions = instanced("aPos");
         (positions.array as Float32Array).set(marchers.positions);
         positions.needsUpdate = true;
         drawn.current = {

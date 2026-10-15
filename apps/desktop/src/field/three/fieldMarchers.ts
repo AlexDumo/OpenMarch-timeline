@@ -55,9 +55,10 @@ export class FieldMarchers {
 
     private steps: AppearanceStepsByMarcherId | undefined;
     private changeBeats: number[] = [];
-    /** The beat last filled, and what the appearance was sampled for. */
+    /** The beat last filled. */
     private beat: number | null = null;
-    private styled = { changeIndex: -1, ids: this.ids };
+    /** The appearance change index and ids the stacks were last sampled for. */
+    private sampledFor = { changeIndex: -1, ids: this.ids };
 
     constructor(source: PositionSource = resolverStore) {
         this.sampled = new PositionBuffer(source);
@@ -101,11 +102,11 @@ export class FieldMarchers {
         const changeIndex = changeIndexAtBeat(this.changeBeats, this.beat);
         if (
             !force &&
-            this.styled.ids === this.ids &&
-            this.styled.changeIndex === changeIndex
+            this.sampledFor.ids === this.ids &&
+            this.sampledFor.changeIndex === changeIndex
         )
             return;
-        this.styled = { changeIndex, ids: this.ids };
+        this.sampledFor = { changeIndex, ids: this.ids };
         const hidden = new Uint8Array(this.ids.length);
         this.stacks = this.ids.map((id, i) => {
             const marcherSteps = this.steps?.get(id);
