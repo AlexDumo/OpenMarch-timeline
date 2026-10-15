@@ -166,6 +166,19 @@ function sliderToSpeed(value: number): number {
     return clampPlaybackSpeed(chip ?? Math.round(raw * 20) / 20);
 }
 
+// The tooltip's second part: what a click does, then each hold key on its own line
+const SPEED_HINT = (
+    <span className="text-text-subtitle flex flex-col gap-4 text-[11px]">
+        <span>Click for the next speed, right-click for more</span>
+        <span className="flex items-center gap-6">
+            Hold <Keycaps shortcut="]" /> for double speed
+        </span>
+        <span className="flex items-center gap-6">
+            Hold <Keycaps shortcut="[" /> for half speed
+        </span>
+    </span>
+);
+
 /**
  * Playback speed, as a video player has it. A click steps through 0.25×, 0.5×, 1×, 1.5×, 2× and
  * 4× (Shift+click steps back); a right-click opens a slider from 0.1× to 4× with the common
@@ -184,7 +197,7 @@ export function TimelineSpeedButton() {
         <Popover.Root open={open} onOpenChange={setOpen}>
             <ShortcutTooltip
                 label={open ? undefined : `Playback speed: ${shown}`}
-                hint="Click for the next speed, right-click for more. Hold ] for double speed, [ for half"
+                hint={SPEED_HINT}
             >
                 <Popover.Anchor asChild>
                     <button
