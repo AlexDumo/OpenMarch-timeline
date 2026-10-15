@@ -444,6 +444,11 @@ export default function AudioPlayer() {
         };
 
         if (isPlaying) {
+            // A browser starts a context made before any click suspended. Starting a buffer
+            // source used to resume it; the worklet has none, so Play resumes it (Play always
+            // follows a click or key, so the browser allows it). The clock holds while suspended,
+            // so the start below still lands PLAYBACK_DELAY after the audio runs
+            if (audioContext.state === "suspended") void audioContext.resume();
             const startAt = audioContext.currentTime + PLAYBACK_DELAY;
             const rate = effectivePlaybackSpeed(
                 usePlaybackSpeedStore.getState(),
