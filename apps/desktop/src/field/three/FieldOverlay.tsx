@@ -1,31 +1,51 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
+import { rgbaToString, type FieldTheme } from "@openmarch/core";
+import type { FieldEditor } from "@/field/editor/fieldEditor";
+import type { AreaShape } from "@/field/editor/areaGestures";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
-import { ringReach, SELECTION_COLOR } from "./selectionRing";
+import { SELECTION_COLOR } from "./selectionRing";
+import { boxPadding, selectedBounds } from "./selectionBox";
 
 /** Fabric's selection border width, in CSS px. */
 const BOX_WIDTH = 2;
-/** CSS px between the selection rings and the box. */
-const BOX_GAP = 3;
+/** Fabric's marquee border width, in CSS px. */
+const MARQUEE_WIDTH = 2;
+/** Fabric's lasso stroke: 2 CSS px, dashed 5 on, 5 off. */
+const LASSO_WIDTH = 2;
+const LASSO_DASH = "5 5";
 
 /**
  * The SVG overlay over the field (ADR 0005 D-2): what the editor draws on top
- * of the WebGL field in screen space. #193 draws the selection box around a
- * selection of two or more marchers; handles (#198), the marquee and lasso
- * (#195) and line previews (#203) come later.
+ * of the WebGL field in screen space. The selection box around a selection of
+ * two or more marchers (#193), and the marquee and lasso while one is drawn
+ * (#195); handles (#198) and line previews (#203) come later.
  *
  * It reads the camera from the view store, as the WebGL camera does, and
  * re-renders only when what it draws changes: with no box, playback doesn't
- * render it. It takes no pointer events: the field under it does.
+ * render it. During a marquee or lasso it re-renders on every pointer move;
+ * nothing else in the app does. It takes no pointer events: the field under
+ * it does.
  */
 export default function FieldOverlay({
     marchers,
+    editor,
+    theme,
 }: {
     marchers: FieldMarchers;
+    editor: FieldEditor;
+    theme: FieldTheme;
 }) {
     // The box's bounds as a string, so an unchanged box is an unchanged snapshot
     const box = useSyncExternalStore(marchers.subscribe, () =>
-        JSON.stringify(selectionBox(marchers)),
+        JSON.stringify(selectedBounds(marchers)),
+    );
+    const subscribeEditor = useCallback(
+        (listener: () => void) => editor.subscribe(listener),
+        [editor],
+    );
+    const area = useSyncExternalStore(subscribeEditor, () =>
+        editor.areaShape(),
     );
 
     return (
@@ -34,6 +54,10 @@ export default function FieldOverlay({
             data-testid="fieldOverlay"
         >
             <SelectionBox box={JSON.parse(box) as Bounds | null} />
+            {area?.kind === "marquee" && (
+                <Marquee rect={area.rect} theme={theme} />
+            )}
+            {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
         </svg>
     );
 }
@@ -44,7 +68,7 @@ type Bounds = { left: number; top: number; right: number; bottom: number };
 function SelectionBox({ box }: { box: Bounds | null }) {
     const view = useFieldViewStore();
     if (!box) return null;
-    const pad = ringReach(view.zoom) * view.zoom + BOX_GAP;
+    const pad = boxPadding(view.zoom) * view.zoom;
     const topLeft = fieldToElement(view, box.left, box.top);
     const bottomRight = fieldToElement(view, box.right, box.bottom);
     return (
@@ -60,26 +84,54 @@ function SelectionBox({ box }: { box: Bounds | null }) {
     );
 }
 
+/** The marquee, in Fabric's colors: the theme's shape color, filled at 20%. */
+function Marquee({ rect, theme }: { rect: Bounds; theme: FieldTheme }) {
+    const view = useFieldViewStore();
+    const topLeft = fieldToElement(view, rect.left, rect.top);
+    const bottomRight = fieldToElement(view, rect.right, rect.bottom);
+    return (
+        <rect
+            data-testid="fieldMarquee"
+            x={topLeft.x}
+            y={topLeft.y}
+            width={bottomRight.x - topLeft.x}
+            height={bottomRight.y - topLeft.y}
+            fill={rgbaToString({ ...theme.shape, a: 0.2 })}
+            stroke={rgbaToString(theme.shape)}
+            strokeWidth={MARQUEE_WIDTH}
+        />
+    );
+}
+
 /**
- * The bounds of the selected marchers, in field units, or null when fewer
- * than two are selected (a single marcher gets its ring and no box).
+ * The lasso's line, dashed as Fabric's: the theme's stroke color, and its
+ * next-path green while releasing would close it.
  */
-function selectionBox(marchers: FieldMarchers): Bounds | null {
-    const { selected, positions } = marchers;
-    let count = 0;
-    let left = Infinity;
-    let top = Infinity;
-    let right = -Infinity;
-    let bottom = -Infinity;
-    for (let i = 0; i < selected.length; i++) {
-        if (!selected[i]) continue;
-        count++;
-        const x = positions[i * 2];
-        const y = positions[i * 2 + 1];
-        left = Math.min(left, x);
-        right = Math.max(right, x);
-        top = Math.min(top, y);
-        bottom = Math.max(bottom, y);
-    }
-    return count < 2 ? null : { left, top, right, bottom };
+function Lasso({
+    lasso,
+    theme,
+}: {
+    lasso: AreaShape & { kind: "lasso" };
+    theme: FieldTheme;
+}) {
+    const view = useFieldViewStore();
+    const points = lasso.points
+        .map((point) => {
+            const at = fieldToElement(view, point.x, point.y);
+            return `${at.x},${at.y}`;
+        })
+        .join(" ");
+    return (
+        <polyline
+            data-testid="fieldLasso"
+            data-closes={lasso.closes}
+            points={points}
+            fill="none"
+            stroke={rgbaToString(
+                lasso.closes ? theme.nextPath : theme.primaryStroke,
+            )}
+            strokeWidth={LASSO_WIDTH}
+            strokeDasharray={LASSO_DASH}
+        />
+    );
 }

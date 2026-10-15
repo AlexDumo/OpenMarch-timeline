@@ -47,6 +47,7 @@ import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
 import { FieldMarchers } from "./fieldMarchers";
 import FieldOverlay from "./FieldOverlay";
+import { selectionBox } from "./selectionBox";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, fitView, useFieldViewStore } from "./fieldView";
 import { GlyphAtlas } from "./sdfText";
@@ -247,6 +248,11 @@ function ThreeFieldView() {
                             useTimelineSelectionStore.getState(),
                             id,
                         ),
+                    selectionBox: () =>
+                        selectionBox(
+                            marchers,
+                            useFieldViewStore.getState().zoom,
+                        ),
                 },
                 { isMac: isMacPlatform() },
             ),
@@ -359,7 +365,13 @@ function ThreeFieldView() {
                     />
                 </Canvas>
             )}
-            {fieldProperties && <FieldOverlay marchers={marchers} />}
+            {fieldProperties && (
+                <FieldOverlay
+                    marchers={marchers}
+                    editor={editor}
+                    theme={fieldProperties.theme}
+                />
+            )}
         </div>
     );
 }
