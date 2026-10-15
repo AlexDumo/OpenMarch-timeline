@@ -106,8 +106,8 @@ test("creates marchers", async ({ show }) => {
 - `savedPositions(show, pageId)` (`positions.mts`) says where the file puts
   each marcher at the end of a page, the way the app reads it: the app's
   `readTimelineTables` and the resolver at the page's end beat, on one
-  snapshot. It runs in the
-  host bundle, so it needs `pnpm run build:browser` for both targets.
+  snapshot. It runs in the host bundle, so it needs `pnpm run build:browser`
+  for both targets.
 - Read the field only through the field test API, `window.fieldTest`
   (`src/field/fieldTestApi.ts`): the drawn marchers, the selection, the view,
   the selection handles, the gesture in progress and the field image. The helpers

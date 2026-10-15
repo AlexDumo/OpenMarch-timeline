@@ -124,7 +124,7 @@ async function openInBrowser(
         page,
         query: async <T,>(sql: string, ...params: SQLInputValue[]) =>
             reader.prepare(sql).all(...params) as T[],
-        // Synchronous, so none of the host's statements run during the copy.
+        // VACUUM INTO reads one snapshot, so it copies only committed data.
         copyTo: async (file: string) => {
             reader.prepare("VACUUM INTO ?").run(file);
         },
@@ -207,8 +207,9 @@ async function openInElectron(
                 },
                 [databasePath, sql, params] as const,
             ) as Promise<T[]>,
-        // One synchronous step in the main process, where the app's database
-        // handlers run, so none of the app's statements land during the copy.
+        // VACUUM INTO reads one snapshot, so it copies only committed data.
+        // The app's COMMIT runs synchronously in this process, so the copy
+        // can't land partway through one.
         copyTo: async (file: string) => {
             await app.evaluate(
                 (_electron, [path, file]) => {
@@ -275,15 +276,17 @@ function snapshotReader(
     let snapshots = 0;
     return async (read) => {
         const file = outputPath(`snapshot-${++snapshots}.db`);
-        await app.copyTo(file);
-        const reader = new DatabaseSync(file, { readOnly: true });
+        let reader: DatabaseSync | undefined;
         try {
+            await app.copyTo(file);
+            reader = new DatabaseSync(file, { readOnly: true });
+            const opened = reader;
             return await read(
                 async <R,>(sql: string, ...params: SQLInputValue[]) =>
-                    reader.prepare(sql).all(...params) as R[],
+                    opened.prepare(sql).all(...params) as R[],
             );
         } finally {
-            reader.close();
+            reader?.close();
             fs.rmSync(file, { force: true });
         }
     };
