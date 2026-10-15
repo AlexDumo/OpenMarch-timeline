@@ -120,8 +120,8 @@ tickets (#204, #214, and the features in
   no input in fullscreen, so pointer mapping never meets the tilt; a feature
   that wants input there must map through the transform.
 - `window.canvas` is gone, and the plugin example in the 2025-06-12 blog post
-  used it. Whether plugins get a replacement is an open owner question (ADR
-  0005, Consequences).
+  used it. The owner accepted the break: no replacement, and the plugin
+  system is to be removed (#255).
 - The e2e fixture has no `field` or `webgl` option. Electron always gets
   software GL (`--use-angle=swiftshader`). Run Electron scenarios one worker
   per display (#236).

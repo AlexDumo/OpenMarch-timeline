@@ -235,7 +235,8 @@ Before the switch:
 - `window.canvas`, the Fabric canvas that plugins could reach, is gone with
   Fabric (#209). The plugin example in
   `apps/website/src/content/blog/2025-06-12-plugins-update/index.mdx` used
-  it. Whether plugins get a replacement is an open owner question.
+  it. The owner accepted the break (2026-10-15): no replacement, and the plugin
+  system itself is to be removed (#255).
 
 ## Verification
 
