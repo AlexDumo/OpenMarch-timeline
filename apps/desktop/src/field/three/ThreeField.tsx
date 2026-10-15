@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera, WebGLRenderer } from "three";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -16,6 +16,7 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import {
     allMarchersQueryOptions,
     fieldPropertiesQueryOptions,
+    moveMarchersInTargetMutationOptions,
 } from "@/hooks/queries";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useTimingObjects } from "@/hooks";
@@ -46,11 +47,13 @@ import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
+import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import { FieldMarchers } from "./fieldMarchers";
 import FieldOverlay from "./FieldOverlay";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, fitView, useFieldViewStore } from "./fieldView";
 import { GlyphAtlas } from "./sdfText";
+import { selectionBoxPadding } from "./selectionRing";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
@@ -132,7 +135,8 @@ export default function ThreeField() {
  * at the playhead, and installs the field test API. #199: each marcher in its
  * appearance at the playhead (the last flag crossed, `appearanceSteps`). #193: the
  * editor selects marchers by clicking them, with rings on the selected
- * marchers and a box around a multi-selection in the SVG overlay.
+ * marchers and a box around a multi-selection in the SVG overlay. #196:
+ * dragging marchers, and saving the drop through the timeline.
  *
  * Guard rails (ADR 0005 D-2): it draws only on demand (`frameloop="demand"`;
  * playback and changes invalidate), there's one component per layer, and
@@ -165,6 +169,9 @@ function ThreeFieldView() {
         [fieldProperties, fieldImage],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
+    const { mutateAsync: moveMarchers } = useMutation(
+        moveMarchersInTargetMutationOptions(),
+    );
 
     // Weak machines (#205): what draws WebGL here, known before the canvas mounts
     const [probed] = useState(
@@ -260,6 +267,7 @@ function ThreeFieldView() {
         pageId: selectedPage?.id ?? null,
         marcherRows,
         setSelectedMarchers,
+        moveMarchers,
         fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
     });
@@ -270,6 +278,7 @@ function ThreeFieldView() {
         theme: fieldProperties?.theme,
         marcherRows,
         setSelectedMarchers,
+        moveMarchers,
     };
 
     const editor = useMemo(
@@ -301,6 +310,16 @@ function ThreeFieldView() {
                             id,
                         ),
                     takePress: takeFieldPress,
+                    selectionBoxPadding: () =>
+                        selectionBoxPadding(useFieldViewStore.getState().zoom),
+                    showPositions: (positions) =>
+                        marchers.setOverrides(positions),
+                    // #196: drops go through the Fabric field's drop-to-timeline path, unchanged
+                    drop: (positions) =>
+                        dropMarchersOnTimeline(
+                            positions,
+                            latest.current.moveMarchers,
+                        ),
                 },
                 { isMac: isMacPlatform() },
             ),
@@ -477,7 +496,8 @@ function FieldCamera({
 
 /**
  * Sends the pointer on the canvas to the editor, and marks the app's
- * selection on the marchers for their rings and the overlay's box.
+ * selection on the marchers for their rings and the overlay's box. Draws the
+ * marchers the editor moves.
  */
 function EditorInput({
     editor,
@@ -492,6 +512,8 @@ function EditorInput({
     const invalidate = useThree((s) => s.invalidate);
 
     useEffect(() => attachFieldPointerInput(canvas, editor), [canvas, editor]);
+    // A drag moves marchers outside the playhead's fills: draw them
+    useEffect(() => marchers.subscribe(invalidate), [marchers, invalidate]);
 
     useEffect(() => {
         marchers.setSelection(selectedIds);

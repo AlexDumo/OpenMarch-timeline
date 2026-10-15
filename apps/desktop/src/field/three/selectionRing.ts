@@ -35,3 +35,15 @@ export function ringReach(zoom: number) {
     const { scale, ringGap, ringWidth } = dotSizes(zoom);
     return DOT_RADIUS * scale + ringGap + ringWidth;
 }
+
+/** CSS px between the selection rings and the selection box. */
+const BOX_SCREEN_GAP = 3;
+
+/**
+ * How far the selection box around a multi-selection reaches past its
+ * outermost marchers' centers, in field units: clear of their rings. A drag
+ * from inside it moves the selection.
+ */
+export function selectionBoxPadding(zoom: number) {
+    return ringReach(zoom) + BOX_SCREEN_GAP / zoom;
+}
