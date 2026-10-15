@@ -165,27 +165,34 @@ export function onlyThisPageMessage(
 ): { message: string; actionLabel: string } {
     const first = followed[0] ?? "";
     const last = followed[followed.length - 1] ?? first;
-    return {
-        message:
-            first === last
-                ? translate(
-                      "timeline.keep.followed.onePage",
-                      "Page {page} followed",
-                      { page: first },
-                  )
-                : translate(
-                      "timeline.keep.followed.pages",
-                      "Pages {first}–{last} followed",
-                      { first, last },
-                  ),
-        actionLabel: translate(
-            "timeline.keep.followed.only",
-            "Only Page {page}",
-            {
-                page: edited,
-            },
-        ),
-    };
+    void edited;
+    // Says why the later pages changed and names what the action keeps (shape sims: "I didn't
+    // touch pages 3 and 4!", and "Change only Page 2" read as an undo)
+    return first === last
+        ? {
+              message: translate(
+                  "timeline.keep.followed.onePage",
+                  "Page {page} was holding this form, so it changed too",
+                  { page: first },
+              ),
+              actionLabel: translate(
+                  "timeline.keep.followed.keepOne",
+                  "Keep Page {page} as before",
+                  { page: first },
+              ),
+          }
+        : {
+              message: translate(
+                  "timeline.keep.followed.pages",
+                  "Pages {first}–{last} were holding this form, so they changed too",
+                  { first, last },
+              ),
+              actionLabel: translate(
+                  "timeline.keep.followed.keepPages",
+                  "Keep Pages {first}–{last} as before",
+                  { first, last },
+              ),
+          };
 }
 
 /** The run of edits behind one **Only Page N** toast: the spots before its first edit */

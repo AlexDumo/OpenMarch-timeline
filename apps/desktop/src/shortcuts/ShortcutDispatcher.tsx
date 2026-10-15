@@ -6,7 +6,7 @@ import {
     shortcutStillRuns,
     skipsAppNudge,
 } from "@/components/timeline/timelineHotkeys";
-import { readShortcutContext } from "./context";
+import { layerIsOpen, readShortcutContext } from "./context";
 import {
     buildKeymap,
     compileKeymap,
@@ -32,7 +32,26 @@ export default function ShortcutDispatcher({
     );
 
     useEffect(() => {
+        // Read before anything handles the press: Escape closes an open menu or list (Radix),
+        // and by the time the press reaches this dispatcher the layer may be gone, so the same
+        // Escape would also cancel the shape tool (sims, round 7)
+        let layerOpenAtPress = false;
+        const onKeyDownCapture = (event: KeyboardEvent) => {
+            layerOpenAtPress = event.key === "Escape" && layerIsOpen();
+        };
         const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape" && layerOpenAtPress) return;
+            // Space on a Shape tool control reached by keyboard presses that control, not Play
+            // (sims, draw round 1: Shift+Tab to Natural, Space, and the show played). A clicked
+            // control keeps Space for Play.
+            const active = document.activeElement;
+            if (
+                event.key === " " &&
+                active instanceof HTMLElement &&
+                active.matches(":focus-visible") &&
+                active.closest("[data-shape-ui]")
+            )
+                return;
             if (
                 (event.defaultPrevented && !shortcutStillRuns(event)) ||
                 event.isComposing
@@ -67,8 +86,12 @@ export default function ShortcutDispatcher({
                 return;
             runAction(entry.id);
         };
+        window.addEventListener("keydown", onKeyDownCapture, true);
         window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
+        return () => {
+            window.removeEventListener("keydown", onKeyDownCapture, true);
+            window.removeEventListener("keydown", onKeyDown);
+        };
     }, [compiled]);
 
     return null;

@@ -7,7 +7,7 @@ import { START_INK } from "./startFlagInk";
 import { isTyping, overlayOpen, spaceStaysPlay } from "./timelineHotkeys";
 import { clipGestureActive } from "./TimelineClipResize";
 import { useTimingObjects } from "@/hooks";
-import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
+import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
 import {
     isolatedTimeline,
     useTimelineSelectionStore,
@@ -71,7 +71,7 @@ export function isolatedTimelineName(
  * Esc ends isolation (V-14). Since the UI-14 round-2 review one Esc leaves isolation however it
  * was entered, also with marchers selected (the registered Escape action deselects them in the
  * same press; **Edit move** selects nobody). Text fields, open popovers, menus and dialogs, and
- * the line or lasso tool keep their Esc.
+ * the open shape tool keep their Esc.
  * Listens in the capture phase, before the registered actions, which mark Escape handled.
  */
 export function useIsolationEscape(): void {
@@ -80,8 +80,7 @@ export function useIsolationEscape(): void {
         if (!active) return;
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key !== "Escape" || isTyping(event.target)) return;
-            if (useAlignmentEventStore.getState().alignmentEvent !== "default")
-                return;
+            if (useShapeToolStore.getState().tool) return;
             if (overlayOpen()) return;
             // A clip move or resize in progress takes this Esc (resize-move E14)
             if (clipGestureActive()) return;

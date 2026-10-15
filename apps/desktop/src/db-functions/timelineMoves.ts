@@ -1093,6 +1093,37 @@ const wroteSomething = (r: TimelineMoveResult): boolean =>
     r.convertedTransitionIds.length > 0 ||
     (r.cleared?.length ?? 0) > 0;
 
+/** The move whose beat range is exactly `range`, if there is one */
+async function timelineWithRange(
+    tx: DbTransaction,
+    range: { readonly start: number; readonly end: number },
+): Promise<number | null> {
+    const row = await tx
+        .select({ id: schema.timelines.id })
+        .from(schema.timelines)
+        .where(
+            and(
+                eq(schema.timelines.start_beat, range.start),
+                eq(schema.timelines.end_beat, range.end),
+            ),
+        )
+        .get();
+    return row?.id ?? null;
+}
+
+/** The move that ends at `beat`, if there is one (where a point edit's positions belong) */
+async function timelineEndingAt(
+    tx: DbTransaction,
+    beat: number,
+): Promise<number | null> {
+    const row = await tx
+        .select({ id: schema.timelines.id })
+        .from(schema.timelines)
+        .where(eq(schema.timelines.end_beat, beat))
+        .get();
+    return row?.id ?? null;
+}
+
 /**
  * A canvas move as one undoable edit (UI-9 Editing, Home; UI-10): the homes for `{kind: "home"}`,
  * the endings in the timeline for `{kind: "timeline"}` (`moveMarchersInTimelineInTransaction`),
@@ -1107,6 +1138,7 @@ export const moveMarchersInTarget = async ({
     moves,
     clearOwn = false,
     onStart,
+    afterWrite,
 }: {
     db: DbConnection;
     target: TimelineEditTarget;
@@ -1121,19 +1153,32 @@ export const moveMarchersInTarget = async ({
      * so it can read the positions the edit starts from (**Move them too**)
      */
     onStart?: () => void;
+    /**
+     * Called inside the edit after the positions are written, with the move they belong to
+     * (`null` for homes), so app data about them (a shape recipe, ADR 0006) is part of the same
+     * undo step. Not called for a range with no move to hold the positions. Resolving to `false`
+     * says it wrote nothing, so an edit that changed no positions either is still no undo step.
+     */
+    afterWrite?: (
+        tx: DbTransaction,
+        timelineId: number | null,
+    ) => Promise<void | boolean>;
 }): Promise<TimelineMoveResult> => {
     if (moves.length === 0)
         return { homes: [], slots: [], convertedTransitionIds: [] };
     try {
         return await transactionWithHistory(db, "moveMarchers", async (tx) => {
             onStart?.();
-            if (target.kind === "timeline")
-                return await moveMarchersInTimelineInTransaction({
+            if (target.kind === "timeline") {
+                const result = await moveMarchersInTimelineInTransaction({
                     tx,
                     timelineId: target.timelineId,
                     moves,
                     ghosts: target.ghosts ?? false,
                 });
+                await afterWrite?.(tx, target.timelineId);
+                return result;
+            }
             if (target.kind === "range" || target.kind === "point") {
                 const result =
                     target.kind === "range"
@@ -1150,8 +1195,18 @@ export const moveMarchersInTarget = async ({
                               moves,
                               clearOwn,
                           });
-                // An edit that writes nothing can't be an undo step
-                if (!wroteSomething(result)) throw new NothingWritten(result);
+                const timelineId = afterWrite
+                    ? target.kind === "range"
+                        ? await timelineWithRange(tx, target)
+                        : await timelineEndingAt(tx, target.beat)
+                    : null;
+                const wroteAppData =
+                    afterWrite && timelineId !== null
+                        ? (await afterWrite(tx, timelineId)) !== false
+                        : false;
+                // An edit that writes nothing (and no app data beside it) can't be an undo step
+                if (!wroteAppData && !wroteSomething(result))
+                    throw new NothingWritten(result);
                 return result;
             }
             refuseDuplicateMarchers(moves);
@@ -1164,6 +1219,7 @@ export const moveMarchersInTarget = async ({
                     home: [m.x, m.y],
                 })),
             });
+            await afterWrite?.(tx, null);
             return {
                 homes: moves.map((m) => m.marcherId),
                 slots: [],

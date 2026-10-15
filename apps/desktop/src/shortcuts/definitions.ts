@@ -481,46 +481,51 @@ const STATIC_ACTIONS = {
         hiddenFromPalette: true,
     },
 
-    // Cursor mode
-    applyQuickShape: {
-        labelKey: "actions.shape.applyQuick",
-        category: "cursor",
+    // Shape tool (docs/timeline/research/shapes/06-box-v1.md): select marchers, open a shape, draw
+    // it on the field, Enter places them. Escape is cancelAlignmentUpdates, which the open tool
+    // takes over (shapes/tool/ShapeToolKeys).
+    shapeBlock: {
+        labelKey: "actions.shape.block",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
         scope: "canvas",
-        defaultBindings: ["Shift+Enter"],
+        defaultBindings: ["B"],
+        args: { kind: "block" },
     },
+    applyShape: {
+        labelKey: "actions.shape.apply",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["Enter"],
+    },
+    shapeFewerFiles: {
+        labelKey: "actions.shape.fewerFiles",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["BracketLeft"],
+    },
+    shapeMoreFiles: {
+        labelKey: "actions.shape.moreFiles",
+        category: "shape",
+        scope: "canvas",
+        defaultBindings: ["BracketRight"],
+    },
+
+    // Cursor mode
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",
         category: "cursor",
         scope: "canvas",
         defaultBindings: ["Escape"],
     },
-    alignmentEventDefault: {
-        labelKey: "actions.cursor.defaultMode",
-        category: "cursor",
-        scope: "canvas",
-        defaultBindings: ["V"],
-    },
-    alignmentEventLine: {
-        labelKey: "actions.cursor.lineMode",
-        category: "cursor",
-        scope: "canvas",
-        defaultBindings: ["L"],
-    },
 
     // Select
+    // Global so it works right after clicking a set on the timeline (shape sims)
     selectAllMarchers: {
         labelKey: "actions.select.selectAll",
         category: "select",
-        scope: "canvas",
+        scope: "global",
         defaultBindings: ["$mod+A", "Control+A"],
-    },
-
-    // Shapes
-    createCircle: {
-        labelKey: "actions.shape.createCircle",
-        category: "shape",
-        scope: "canvas",
-        defaultBindings: ["O"],
     },
 
     // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it

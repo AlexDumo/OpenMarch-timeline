@@ -38,6 +38,12 @@ const CUE_TABLES = [
     "phrase_assets",
 ];
 
+/** Tables later migrations add (0023's shape recipes), gone from a file from before 0022 too */
+const LATER_TABLES = [
+    "timeline_shape_recipe_marchers",
+    "timeline_shape_recipes",
+];
+
 const tableNames = (db: DatabaseSync) =>
     (
         db
@@ -60,10 +66,12 @@ const count = (db: DatabaseSync, table: string) =>
 const removeCueMigration = (filePath: string) =>
     withDb(filePath, (db) => {
         db.exec("PRAGMA foreign_keys = OFF");
-        for (const table of CUE_TABLES) db.exec(`DROP TABLE ${table}`);
-        db.prepare("DELETE FROM __drizzle_migrations WHERE created_at = ?").run(
-            CUE_MIGRATION.when,
-        );
+        for (const table of [...CUE_TABLES, ...LATER_TABLES])
+            db.exec(`DROP TABLE ${table}`);
+        // This migration and every later one: the migrator applies only those after the last it finds
+        db.prepare(
+            "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
+        ).run(CUE_MIGRATION.when);
     });
 
 const migrate = async (db: DatabaseSync) => {
@@ -195,7 +203,7 @@ describe(`Migration ${CUE_MIGRATION.tag}`, () => {
 
         withDb(showPath, (db) => {
             expect(tableNames(db)).toEqual(
-                [...before.tables, ...CUE_TABLES].sort(),
+                [...before.tables, ...CUE_TABLES, ...LATER_TABLES].sort(),
             );
             expect(readUserVersion(db)).toBe(TIMELINE_MODEL_USER_VERSION);
             expect(count(db, "timelines")).toBe(before.timelines);
