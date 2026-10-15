@@ -12,7 +12,7 @@ import { beatAtTime, type BeatTiming } from "./timeMap";
  * stand-in in tests.
  */
 export interface PositionSource {
-    /** The marcher order of `positionsAt`: ids ascending */
+    /** The marcher order of `positionsAt`. Must be ascending: `PositionBuffer.indexOf` binary-searches it */
     marcherIds(): readonly number[];
     /** Fills `out` with x, y pairs; false, leaving `out` untouched, when it can't */
     positionsAt(beat: number, out: Float64Array): boolean;

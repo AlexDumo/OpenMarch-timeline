@@ -1,20 +1,26 @@
-import type { PositionSource } from "@/timeline/positionBuffer";
+import { PositionBuffer, type PositionSource } from "@/timeline/positionBuffer";
 import {
     applyIsolationPlan,
     type IsolationPlan,
 } from "@/timeline/timelineIsolationPlan";
-import { TimelinePositionBuffer } from "@/timeline/timelineCanvas";
+import { positionsAt, timelineMarcherIds } from "@/timeline/timelineStore";
+
+/** The open file's resolver store. */
+const resolverStore: PositionSource = {
+    marcherIds: timelineMarcherIds,
+    positionsAt,
+};
 
 /**
  * Where the new field draws each marcher, outside React (ADR 0005 D-2.3).
  *
  * The playhead driver fills it from the timeline resolver through the shared
- * {@link TimelinePositionBuffer}, as the Fabric field and the 3D View sample
+ * {@link PositionBuffer}, as the Fabric field and the 3D View sample
  * it. The marcher and label layers copy it into their GPU buffers when its
  * `version` changes, in a frame hook. The field test API reads it too.
  */
 export class FieldMarchers {
-    private readonly sampled: TimelinePositionBuffer;
+    private readonly sampled: PositionBuffer;
     /** The ids drawn, ascending: the resolver's ids at the last successful fill. */
     ids: readonly number[] = [];
     /** x, y per marcher in `ids`, in field units. */
@@ -24,8 +30,8 @@ export class FieldMarchers {
     /** Goes up whenever `ids` changes: layers then resize their buffers. */
     idsVersion = 0;
 
-    constructor(source?: PositionSource) {
-        this.sampled = new TimelinePositionBuffer(source);
+    constructor(source: PositionSource = resolverStore) {
+        this.sampled = new PositionBuffer(source);
     }
 
     /**

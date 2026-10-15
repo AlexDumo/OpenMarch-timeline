@@ -1,5 +1,4 @@
 import Canvas from "@/components/canvas/Canvas";
-import ThreeField from "@/field/three/ThreeField";
 import { fieldRenderer } from "@/field/fieldRenderer";
 import Toolbar from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
@@ -11,7 +10,7 @@ import StateInitializer from "@/components/singletons/StateInitializer";
 import { View3dPublisher } from "@/view3d/sync/useView3dPublisher";
 import TimelineResolverHost from "@/timeline/TimelineResolverHost";
 import LaunchPage from "@/components/launchpage/LaunchPage";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import CommandPalette from "@/shortcuts/palette/CommandPalette";
 import ExportCoordinatesModal from "@/components/exporting/ExportCoordinatesModal";
 import ShortcutDispatcher from "@/shortcuts/ShortcutDispatcher";
@@ -59,6 +58,9 @@ import { toast } from "sonner";
 import { version as currentVersion } from "../package.json";
 import { shouldShowUpdateNotification } from "./utilities/updateNotification";
 import { isAnalyticsChoiceMade } from "./components/welcome/welcomeFlowSteps";
+
+// The new field's own chunk, so the editor doesn't load three.js while Fabric draws the field
+const ThreeField = lazy(() => import("@/field/three/ThreeField"));
 
 export const queryClient = new QueryClient({
     defaultOptions: {
@@ -342,7 +344,9 @@ function App() {
                                                         )}
                                                         {fieldRenderer() ===
                                                         "three" ? (
-                                                            <ThreeField />
+                                                            <Suspense>
+                                                                <ThreeField />
+                                                            </Suspense>
                                                         ) : (
                                                             <Canvas
                                                                 onCanvasReady={

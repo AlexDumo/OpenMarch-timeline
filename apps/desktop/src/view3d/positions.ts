@@ -27,7 +27,11 @@ import { VIEW3D_TIMELINE_QUERY_KEY } from "@/view3d/sync/protocol";
 /** As in `@openmarch/core` `world.ts`. */
 const METERS_PER_INCH = 0.0254;
 
-/** What {@link ShowPositions} needs from a resolver. */
+/**
+ * What {@link ShowPositions} needs from a resolver. `marcherIds()` must be
+ * ascending, as `@openmarch/core`'s resolver returns them (`PositionSource`):
+ * {@link PositionBuffer} finds marchers by binary search.
+ */
 export type PositionResolver = Pick<Resolver, "marcherIds" | "positionsAt">;
 
 /**

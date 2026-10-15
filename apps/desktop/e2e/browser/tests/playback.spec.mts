@@ -2,8 +2,8 @@ import { test, expect } from "../fixtures.mjs";
 import { drawnMarchers, expectCanvasMatchesShow } from "../app.mjs";
 import { seedShowSql } from "../seed.mjs";
 
-// Two marchers trade places over page 1 (beats 1 to 16, half a second each):
-// at any time, T1 has moved as far right as T2 has moved left.
+// Two marchers trade places over page 1, a straight move from beat 1 to beat
+// 9 (the last page's 8 counts), half a second a beat.
 test.use({
     seedSql: seedShowSql({
         beats: 16,
@@ -28,13 +28,26 @@ test.use({
     }),
 });
 
-type Sample = { t1: { x: number; y: number }; t2: { x: number; y: number } };
+type Sample = {
+    /** The transport clock's show time, in seconds, read in the same frame. */
+    time: number;
+    t1: { x: number; y: number };
+    t2: { x: number; y: number };
+};
 
 test("playback draws the marchers where the show puts them at each moment", async ({
     show,
 }) => {
     const { page } = show;
     await expectCanvasMatchesShow(show);
+    // When the move starts: beat 1's timestamp, after beat 0
+    const [{ start }] = await show.query<{ start: number }>(
+        "SELECT SUM(duration) AS start FROM beats WHERE position < 1",
+    );
+    const moveSeconds = 8 * 0.5;
+    /** Where the show file puts T1 at a time: a straight, even move. */
+    const t1At = (time: number) =>
+        400 + 200 * Math.min(1, Math.max(0, (time - start) / moveSeconds));
 
     await page.keyboard.press("Space");
 
@@ -52,7 +65,18 @@ test("playback draws the marchers where the show puts them at each moment", asyn
                         )!;
                         return { x, y };
                     };
-                    out.push({ t1: at("T1"), t2: at("T2") });
+                    // The clock writes the live playback time each frame
+                    const clock = [
+                        ...document.querySelectorAll("span.font-mono"),
+                    ]
+                        .map((span) => span.textContent ?? "")
+                        .find((text) => /^\d\d:\d\d\.\d{3}$/.test(text));
+                    const [minutes, seconds] = (clock ?? "NaN:NaN").split(":");
+                    out.push({
+                        time: Number(minutes) * 60 + Number(seconds),
+                        t1: at("T1"),
+                        t2: at("T2"),
+                    });
                     if (performance.now() - start < 2500)
                         requestAnimationFrame(read);
                     else resolve(out);
@@ -65,7 +89,12 @@ test("playback draws the marchers where the show puts them at each moment", asyn
     // Mid-move: somewhere strictly between the two pages' positions
     const moving = samples.filter(({ t1 }) => t1.x > 400.5 && t1.x < 599.5);
     expect(moving.length, "frames drawn mid-move").toBeGreaterThan(5);
-    for (const { t1, t2 } of samples) {
+    for (const { time, t1, t2 } of samples) {
+        // At the moment the clock shows, within a frame of the move (25 units a second)
+        expect(
+            Math.abs(t1.x - t1At(time)),
+            `T1 at ${time} s: drawn ${t1.x}, the show says ${t1At(time)}`,
+        ).toBeLessThan(2);
         // Both are on the same moment of the same move
         expect(t1.x + t2.x).toBeCloseTo(1000, 1);
         expect(t1.y).toBeCloseTo(300, 1);
