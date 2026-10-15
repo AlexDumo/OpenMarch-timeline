@@ -341,7 +341,8 @@ export class TextBatch {
         // Frees the old buffers; three uploads the new ones on the next draw
         this.mesh.geometry.dispose();
         let count = 0;
-        for (const label of labels) count += label.text.length;
+        // Code points, as the layout loop below walks them
+        for (const label of labels) count += [...label.text].length;
         const quad = new Float32Array(count * 4);
         const uv = new Float32Array(count * 4);
         const scaleRot = new Float32Array(count * 2);

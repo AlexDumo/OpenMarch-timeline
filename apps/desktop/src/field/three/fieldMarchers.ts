@@ -46,9 +46,4 @@ export class FieldMarchers {
         this.version++;
         return true;
     }
-
-    /** The index of `marcherId` in `ids`, or -1. */
-    indexOf(marcherId: number): number {
-        return this.sampled.indexOf(marcherId);
-    }
 }

@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { waitForField } from "./app.mjs";
+import type { FieldRenderer } from "../../src/field/fieldRenderer";
 
 const desktopDir = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -41,7 +42,7 @@ export type Target = "browser" | "electron";
  * `src/field/fieldRenderer.ts`). Fabric unless `FIELD=three` is set, so the
  * same scenarios run on either: `FIELD=three pnpm run e2e:browser`.
  */
-export type FieldDriver = "fabric" | "three";
+export type FieldDriver = FieldRenderer;
 const FIELD_STORAGE_KEY = "openmarch:dev:field";
 const defaultField: FieldDriver =
     process.env.FIELD === "three" ? "three" : "fabric";
@@ -159,7 +160,7 @@ async function openInElectron(
             "--disable-audio-output",
             "--disable-audio-input",
             // The new field needs WebGL. A machine with no GPU (Xvfb in a
-            // container) has none unless Chromium may use its software GL
+            // container) only has it through Chromium's software GL
             ...(field === "three"
                 ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
                 : []),
