@@ -783,7 +783,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### 2026-10-13 · 3d worker (3d/c1-show-embedding) · C1.11
 
-- **Done:** migration 0020 (`library_blobs`, `library_items`, both outside
+- **Done:** migration 0021 (`library_blobs`, `library_items`, both outside
   undo history); embed with a hash check; the prune plan (keeps what the
   show's tables, pins and undo or redo rows name); a lazy, byte-bounded blob
   cache that never reads originals for rendering; update detection and
