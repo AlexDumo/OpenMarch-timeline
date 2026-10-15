@@ -15,6 +15,7 @@ function setup({
     dimmed = [] as number[],
     hidden = [] as number[],
     isMac = false,
+    takePress = undefined as (() => boolean) | undefined,
 } = {}) {
     const state = { selected: [...selected] as readonly number[] };
     const ports: FieldEditorPorts = {
@@ -35,6 +36,7 @@ function setup({
         }),
         zoom: () => 2,
         canSelect: (id) => !dimmed.includes(id),
+        takePress,
     };
     const editor = new FieldEditor(ports, { isMac });
     return { editor, state, ports };
@@ -233,5 +235,51 @@ describe("FieldEditor select all", () => {
         const { editor, state } = setup({ dimmed: [3], hidden: [1] });
         editor.selectAll();
         expect(state.selected).toEqual([2, 4]);
+    });
+});
+
+describe("FieldEditor presses the app takes (#202)", () => {
+    /** Takes the first `count` presses, as the app does the first press after a paused preview. */
+    const takeFirst = (count: number) => vi.fn(() => count-- > 0);
+
+    it("selects nothing on a press the app takes, and the next press clicks as usual", () => {
+        const takePress = takeFirst(1);
+        const { editor, state } = setup({ selected: [2], takePress });
+        expect(editor.pointerDown(at(100, 100))).toBe(true);
+        editor.pointerUp(at(100, 100));
+        expect(state.selected).toEqual([2]);
+        click(editor, 100, 100);
+        expect(state.selected).toEqual([1]);
+        expect(takePress).toHaveBeenCalledTimes(2);
+    });
+
+    it("starts no drag from a press the app takes", () => {
+        const startDrag = vi.fn();
+        class Recording extends FieldEditor {
+            protected startDrag() {
+                startDrag();
+                return null;
+            }
+        }
+        const { ports } = setup({ takePress: takeFirst(1) });
+        const editor = new Recording(ports);
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(150, 100));
+        expect(editor.cursor()).toBe("default");
+        editor.pointerUp(at(150, 100));
+        expect(startDrag).not.toHaveBeenCalled();
+        expect(editor.activeGesture()).toBeNull();
+
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(150, 100));
+        expect(startDrag).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't ask about presses that are navigation's", () => {
+        const takePress = vi.fn(() => true);
+        const { editor } = setup({ takePress });
+        expect(editor.pointerDown(at(100, 100, { button: 2 }))).toBe(false);
+        expect(editor.pointerDown(at(100, 100, { button: 1 }))).toBe(false);
+        expect(takePress).not.toHaveBeenCalled();
     });
 });

@@ -43,6 +43,7 @@ import {
 } from "@/field/fieldQuality";
 import { FieldEditor } from "@/field/editor/fieldEditor";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
+import { takeFieldPress } from "@/field/takeFieldPress";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
 import { FieldMarchers } from "./fieldMarchers";
@@ -299,6 +300,7 @@ function ThreeFieldView() {
                             useTimelineSelectionStore.getState(),
                             id,
                         ),
+                    takePress: takeFieldPress,
                 },
                 { isMac: isMacPlatform() },
             ),

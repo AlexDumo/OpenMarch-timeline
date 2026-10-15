@@ -5,6 +5,7 @@ import getPageCollisions, {
 import Marcher from "@/global/classes/Marcher";
 import Page from "@/global/classes/Page";
 import { MarcherTimeline } from "@/utilities/Keyframes";
+import { isPlaywrightSession } from "@/utilities/playwrightSession";
 import { create } from "zustand";
 
 type CollisionStoreInterface = {
@@ -57,16 +58,6 @@ declare global {
  * Playwright sessions; the scenarios still read the field only through the
  * field test API.
  */
-const isPlaywrightSession = (): boolean => {
-    try {
-        return (
-            !!import.meta.env.VITE_PUBLIC_PLAYWRIGHT_SESSION ||
-            !!window.electron?.isPlaywrightSession
-        );
-    } catch {
-        return false;
-    }
-};
 if (typeof window !== "undefined" && isPlaywrightSession())
     window.openmarchCollisions = {
         show: (collisions) =>

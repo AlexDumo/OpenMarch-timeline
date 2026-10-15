@@ -45,6 +45,12 @@ export type FieldEditorPorts = {
     zoom(): number;
     /** False for a marcher that can't be selected or hit (one dimmed outside the isolated move). */
     canSelect(id: number): boolean;
+    /**
+     * Asked first on every edit press. True when the app takes the press for
+     * itself, so it selects, drags and drops nothing (story 60: the first
+     * press after a paused preview only clears the preview).
+     */
+    takePress?(): boolean;
 };
 
 export type FieldEditorOptions = {
@@ -101,6 +107,12 @@ export class FieldEditor {
         if (!this.isEditButton(pointer)) return false;
         this.cancelGesture();
         this.ignoredButton = null;
+        if (this.ports.takePress?.()) {
+            // Captured all the same, so its moves and release do nothing either
+            this.press = null;
+            this.ignoredButton = pointer.button;
+            return true;
+        }
         this.press = { start: pointer, hit: this.marcherAt(pointer.field) };
         return true;
     }
