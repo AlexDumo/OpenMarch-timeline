@@ -195,10 +195,15 @@ for (const show of fs.readdirSync(path.join(folder, afterLabel))) {
     const files = fs
         .readdirSync(dir(afterLabel))
         .filter((f) => f.endsWith(".svg"));
+    // Individual charts captured on both sides
     const drill = [
         ...new Set(
             files
-                .filter((f) => !f.startsWith("MAIN-"))
+                .filter(
+                    (f) =>
+                        !f.startsWith("MAIN-") &&
+                        fs.existsSync(path.join(dir(beforeLabel), f)),
+                )
                 .map((f) => f.split("-")[0]!),
         ),
     ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));

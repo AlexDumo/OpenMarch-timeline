@@ -7,6 +7,8 @@ through it in the lab build of the `field-renderer` branch (draft PR #214):
 - Fabric, for comparison: <https://lab.openmarch.com/x/field-renderer/>
   (the same build without `?field=three`)
 - Feedback page: <https://lab.openmarch.com/t/field-renderer>
+- The same build without the lab's sign-in and feedback widget:
+  <https://field-renderer-openmarch-fork-preview-build.alexdumo.workers.dev/?field=three>
 
 Each item is one action and what should happen. **(change)** marks a decided
 difference from Fabric: check that it happens and that you still want it.
@@ -20,8 +22,8 @@ numbers) is in [parity-gate-results.md](parity-gate-results.md).
 
 ## Setup
 
-1. Open the new-field link, open the Part 1 demo, and check the URL keeps `?field=three` → the field draws; no error.
-2. Open the Daft Punk demo too, for the larger show (385 marchers).
+1. Open the new-field link, open "Part 1 Demo" from the launch page, and check the URL keeps `?field=three` → the field draws; no error. (Checked headless on the preview build, 2026-10-15.)
+2. Open "LHB '26 – Daft Punk pt. 2" too, for the larger show (385 marchers).
 3. If the field shows a one-time note about software graphics, read it → it explains low-quality mode and how to turn graphics acceleration on, and doesn't show again after a reload.
 
 ## Viewing the field

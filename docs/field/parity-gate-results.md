@@ -36,7 +36,9 @@ no regression on the new field. The benchmark plays the show from the top,
 scrubs back and forth across it, pinch-zooms in to 8× and out, and pans in a
 circle, 4 s each, then shows a table. Dragging isn't measured yet (#208
 follow-up). Since #208 it runs on the Fabric field too, so both fields can be
-measured on the same machine.
+measured on the same machine. The lab build has that once #208's PR is
+merged into `field-renderer` (the lab republishes on every push); before
+that, "Run field benchmark" only exists on the new field.
 
 ### Shows
 
@@ -63,13 +65,15 @@ and open each with the app's Open file, so both builds open the same files:
    (WebGL: "Hardware accelerated" or not) and the GL renderer. If WebGL is
    software only, say so in the results: the new field runs in low-quality
    mode there.
-2. Fabric: open <https://lab.openmarch.com/x/field-renderer/>, open the
-   show, press Ctrl+K, type "field benchmark", press Enter, then **Run**.
+2. Fabric: open <https://lab.openmarch.com/x/field-renderer/> (or the same
+   build without the lab's sign-in:
+   <https://field-renderer-openmarch-fork-preview-build.alexdumo.workers.dev/>),
+   open the show, press Ctrl+K, type "field benchmark", press Enter, then
+   **Run**.
 3. When the table shows, press **Copy as Markdown** and paste it into the
    results table below (or a comment on #208).
-4. New field: open
-   <https://lab.openmarch.com/x/field-renderer/?field=three> and repeat
-   steps 2–3 on the same show.
+4. New field: add `?field=three` to the address, reload, and repeat steps
+   2–3 on the same show.
 5. Repeat for the three shows. Run each one twice if the numbers look odd.
 
 ### Laptop with integrated graphics: the desktop app
@@ -114,3 +118,51 @@ between frames in ms (lower is better).
 
 The gate passes when no new-field row is slower than its Fabric row, and the
 new field holds about 60 fps on play and scrub where the GPU is real.
+
+## 2. Render comparisons
+
+`e2e/browser/render/corpus-render.spec.mts` (project `render`): the Part 1
+demo (95 marchers), Daft Punk pt. 2 (385) and the stress show (1,925, built
+by `render/stressShow.mts`, the prototype's script), at three zooms (`fit`,
+the opening view; `near`, 2.5×; `close`, 6×, pinched in at the marchers'
+center) and four times (the first page, page 4, four beats into the next
+move, and two beats past page 8): 36 cases. The new field picks the view and
+Fabric is pointed at the same one, so the pairs line up in field units. Side
+by sides, diffs and `summary.tsv` are in the fork prerelease
+[`field-render-208`](https://github.com/AlexDumo/OpenMarch-timeline/releases/tag/field-render-208).
+
+```sh
+pnpm run build:browser
+FIELD=three pnpm exec playwright test --project=render corpus-render
+FIELD=fabric pnpm exec playwright test --project=render corpus-render
+```
+
+Changed pixels (no match within one pixel; most of it is the half-line
+shift of every grid line):
+
+| Show      | fit         | near        | close        |
+| --------- | ----------- | ----------- | ------------ |
+| Part 1    | 36.2–36.3%  | 11.6–11.7%  | 8.5–9.4%     |
+| Daft Punk | 9.1–9.3%    | 6.6–9.4%    | 3.3–8.0%     |
+| Stress    | 17.6–21.7%  | 24.2–32.3%  | 8.5–35.9%    |
+
+Part 1's demo copy uses a dark theme with a white line every step, so at fit
+nearly every pixel is next to a grid line that moved half a line. Marchers
+stand in the same places at every time in every case, mid-move included.
+
+Every difference, and where it's decided:
+
+| Difference                                                                                          | Where it's decided                                                       |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Grid, dots and labels half a grid line up and left of Fabric's                                       | Rules table, Dot position (#199, #200)                                   |
+| Lines pixel-snapped where Fabric smooths them over two pixels                                         | #200                                                                     |
+| Yard numbers centered on their yard line, not 22 units left of it                                    | Export improvements (#206), #200                                         |
+| Marcher labels in SDF glyphs (Courier New bold): about a pixel different                             | #192, #199                                                               |
+| Labels fade out below a readable size (on Fabric they shrink to a smear)                              | Rules table, Labels                                                      |
+| Dots at least 1.5 CSS px in radius at very low zooms                                                  | #192                                                                     |
+| **Labels draw over neighboring dots; on Fabric (and in the export) every dot covers every label**     | **Not decided.** Visible only where marchers crowd: the stress show, and the Daft Punk front line at 6×. The new field draws all labels in one batch above all dots (render order 3 over 2). On the [checklist](parity-checklist.md) (items 14, 110). |
+
+The timeline drawing (pathways, isolation, kept marks, collisions) and every
+theme, variant and field image were compared in #201 and #200 (prereleases
+`field-render-201`, `field-render-200`; marcher shapes in `render-diff-199`),
+and their drawing hasn't changed since.
