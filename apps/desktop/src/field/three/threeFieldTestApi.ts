@@ -2,6 +2,7 @@ import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import type {
     FieldTestApi,
+    FieldTestImage,
     FieldTestLook,
     FieldTestMarcher,
 } from "@/field/fieldTestApi";
@@ -17,6 +18,8 @@ export type ThreeFieldState = {
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
     pageId(): number | null;
+    /** The field image as `BackgroundImageLayer` draws it, or null. */
+    fieldImage(): FieldTestImage | null;
     theme(): FieldTheme;
 };
 
@@ -63,6 +66,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
         handles: () => null,
         activeGesture: () => (field.view().panning ? "pan" : null),
         pageId: () => field.pageId(),
+        fieldImage: () => field.fieldImage(),
     };
 }
 

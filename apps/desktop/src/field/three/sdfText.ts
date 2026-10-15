@@ -292,6 +292,8 @@ export type TextLabel = {
     align?: "left" | "center" | "right";
     /** The baseline's offset below the anchor, in em. */
     baseline?: number;
+    /** Extra space between characters, in em (not after the last). */
+    letterSpacing?: number;
     /** `[r, g, b, a]`, 0 to 1. */
     color: readonly [number, number, number, number];
 };
@@ -351,7 +353,10 @@ export class TextBatch {
         this.anchors = new Float32Array(count * 2);
         let g = 0;
         labels.forEach((label, li) => {
-            const width = this.atlas.measure(label.text);
+            const spacing = label.letterSpacing ?? 0;
+            const width =
+                this.atlas.measure(label.text) +
+                spacing * Math.max(0, [...label.text].length - 1);
             let pen =
                 label.align === "left"
                     ? 0
@@ -372,7 +377,7 @@ export class TextBatch {
                 scaleRot[g * 2 + 1] = label.rotation ?? 0;
                 color.set(label.color, g * 4);
                 this.owner[g] = li;
-                pen += glyph.advance;
+                pen += glyph.advance + spacing;
                 g++;
             }
         });

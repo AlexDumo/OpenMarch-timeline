@@ -84,3 +84,55 @@ half a line off on Fabric (the dropped offset), yard numbers and label glyphs
 differ by about a pixel (SDF fonts, #200). Since #194 both fields open at
 the same view. At very low zooms the new field's dots are larger than Fabric's, because
 of #192's 1.5 CSS px minimum dot radius (Fabric has none).
+
+### #200 Field themes and background image
+
+**One 2D field plan.** `apps/desktop/src/field/fieldPlan.ts` (`planField2d`)
+lays out the flat field in field units: today's `createFieldGrid`, element
+for element, minus Fabric's half-pixel offset. It was lifted from #206's
+`drillChartSvg.ts`, which now renders it to SVG (byte-identical output for
+every template, variant and option); `three/fieldGeometry.ts` turns the same
+plan into rectangles and SDF labels. The new field no longer uses the 3D
+View's `planField`: its `theme` plan is in meters, clipped to the checkpoint
+footprint (wrong for fields whose checkpoints aren't centered), has no
+outside labels and puts the border inside the edge. The 3D View keeps
+`planTheme` for its surface. Unifying the two (planTheme from `planField2d`)
+would change how the 3D View looks; that's a separate ticket if wanted.
+
+**Settings.** `FieldLayer` reads the grid lines and half lines settings from
+`useUiSettingsStore` and rebuilds when they change. Fonts are named as Fabric
+names them: yard numbers `"Times New Roman"`, checkpoint labels `"mono"` (a
+family that doesn't exist, so both fields get the platform fallback), each
+in its own glyph atlas; marcher labels keep bold Courier New. `TextLabel`
+gained `letterSpacing` (em, between characters) for the yard numbers'
+`charSpacing`.
+
+**Field image.** `layers/BackgroundImageLayer.tsx` draws it at render order
+-1, between the background (its own one-rectangle draw at -2) and the lines
+(0). The bytes come from the 3D View's `useFieldImage` (decoded once per
+image). Placement is `planFieldImage`, Fabric's fit/fill rule; like Fabric a
+filled image isn't cropped to the field. Render order so far: background -2,
+image -1, lines 0, field text 1, marchers 2, labels 3. **#201**: put timeline
+overlays between 1 and 2, or above 3, as they sit in Fabric.
+
+**The image moves 0.5 field units relative to the lines, vs Fabric** (about
+12 px at the maximum zoom of 25). Fabric draws its lines, background and
+marchers half a grid line down and right in its plane, but not the image; the
+new field draws all of them exactly on their coordinates, as the export does
+(the spec's no-offset rule; accepted in review). Listed for the owner's
+hands-on checklist (#208).
+
+**Field test API.** `fieldImage()` returns where the image is drawn (field
+units) and its opacity, or null. Because of the shift above, the Fabric
+reading is half a field unit up and left of the new field's. `field-image.spec.mts` pins fit, fill and hidden on
+both fields.
+
+**Render comparisons.** `e2e/browser/render/` (Playwright project `render`;
+see its README) captures every template, theme and variant on both fields at
+the same view and writes side-by-side and diff PNGs. **#208** can extend its
+case list to the demo shows and marchers. Differences it shows, all expected:
+lines are pixel-snapped on the new field where Fabric smooths them over
+two pixels; yard numbers are centered on their yard line (the export's rule)
+where Fabric left-aligns them 22 units left of it; with a translucent
+border color, Fabric's corners are darker, because its four border lines
+overlap there and the new field's don't.
