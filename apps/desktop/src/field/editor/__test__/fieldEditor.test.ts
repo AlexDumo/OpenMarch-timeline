@@ -3,9 +3,12 @@ import {
     CLICK_SLOP,
     DOUBLE_CLICK_MS,
     FieldEditor,
+    type DropResult,
     type FieldEditorPorts,
+    type FieldPoint,
     type FieldPointer,
 } from "../fieldEditor";
+import type { MarcherPosition, MoveTransform } from "../moveGesture";
 
 /**
  * Marchers 1 to 4 in a row 100 field units apart, at zoom 2 (2 CSS px per
@@ -16,9 +19,19 @@ function setup({
     dimmed = [] as number[],
     hidden = [] as number[],
     isMac = false,
+    moveTransform = undefined as MoveTransform | undefined,
 } = {}) {
-    const state = { selected: [...selected] as readonly number[] };
     const clock = { now: 1000 };
+    const state = {
+        selected: [...selected] as readonly number[],
+        /** What the field draws instead of the show, as the editor last said */
+        shown: null as ReadonlyMap<number, FieldPoint> | null,
+        /** Each drop handed to the timeline, with the answer to give it */
+        drops: [] as {
+            positions: readonly MarcherPosition[];
+            answer: (result: DropResult) => void;
+        }[],
+    };
     const ports: FieldEditorPorts = {
         selection: {
             get: () => state.selected,
@@ -37,19 +50,22 @@ function setup({
         }),
         zoom: () => 2,
         canSelect: (id) => !dimmed.includes(id),
-        // The bounds of the selection, with no padding, around two or more marchers
-        selectionBox: () => {
-            if (state.selected.length < 2) return null;
-            const xs = state.selected.map((id) => 100 * id);
-            return {
-                left: Math.min(...xs),
-                right: Math.max(...xs),
-                top: 100,
-                bottom: 100,
-            };
-        },
+        selectionBoxPadding: () => 10,
+        showPositions: vi.fn((positions) => {
+            state.shown = positions;
+        }),
+        drop: vi.fn(
+            (positions) =>
+                new Promise<DropResult>((answer) => {
+                    state.drops.push({ positions, answer });
+                }),
+        ),
     };
-    const editor = new FieldEditor(ports, { isMac, now: () => clock.now });
+    const editor = new FieldEditor(ports, {
+        isMac,
+        moveTransform,
+        now: () => clock.now,
+    });
     return { editor, state, ports, clock };
 }
 
@@ -153,18 +169,39 @@ describe("FieldEditor click vs drag", () => {
     });
 
     it("doesn't click once a press has moved 4 screen px, even if it comes back", () => {
-        const { editor, state, ports } = setup({ selected: [2] });
+        // A click on 1 would narrow the selection to it (user story 23)
+        const { editor, state, ports } = setup({ selected: [1, 2] });
         editor.pointerDown(at(100, 100));
         editor.pointerMove(at(100 + slop, 100));
         editor.pointerMove(at(100, 100));
         editor.pointerUp(at(100, 100));
-        expect(state.selected).toEqual([2]);
+        expect(state.selected).toEqual([1, 2]);
         expect(ports.selection.set).not.toHaveBeenCalled();
     });
 
-    it("leaves the cursor alone while a drag that does nothing is held", () => {
+    it("moves nothing on a press on a marcher that moves under 4 screen px", () => {
+        const { editor, state, ports } = setup();
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(100 + slop * 0.9, 100));
+        expect(editor.activeGesture()).toBeNull();
+        editor.pointerUp(at(100 + slop * 0.9, 100));
+        expect(ports.showPositions).not.toHaveBeenCalled();
+        expect(state.drops).toEqual([]);
+        expect(state.selected).toEqual([1]);
+    });
+
+    it("starts a move once a press on a marcher moves 4 screen px, however quickly", () => {
+        const { editor, state } = setup();
+        editor.pointerDown(at(100, 100));
+        editor.pointerUp(at(100 + slop, 100));
+        expect(state.drops.map((d) => d.positions)).toEqual([
+            [{ id: 1, x: 100 + slop, y: 100 }],
+        ]);
+    });
+
+    it("leaves the cursor alone while a drag is held", () => {
         const { editor } = setup();
-        // From a marcher: a move, which is #196's
+        // From a marcher: a move (#196)
         editor.pointerDown(at(400, 100));
         editor.pointerMove(at(400 + slop, 100));
         editor.pointerMove(at(100, 100));
@@ -250,8 +287,223 @@ describe("FieldEditor select all", () => {
     });
 });
 
-/** A drag from (x0, y0) through `through` to the last point, with the press's modifiers. */
+/** Presses at `from`, drags to `to` in two moves and releases there. */
 const drag = (
+    editor: FieldEditor,
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    modifiers?: Parameters<typeof at>[2],
+) => {
+    editor.pointerDown(at(from.x, from.y, modifiers));
+    editor.pointerMove(at((from.x + to.x) / 2, (from.y + to.y) / 2, modifiers));
+    editor.pointerMove(at(to.x, to.y, modifiers));
+    editor.pointerUp(at(to.x, to.y, modifiers));
+};
+
+const shown = (state: ReturnType<typeof setup>["state"]) =>
+    state.shown && Object.fromEntries(state.shown);
+
+describe("FieldEditor moving marchers", () => {
+    it("drags a marcher with the pointer and drops it where it's released", () => {
+        const { editor, state } = setup();
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(130, 110));
+        expect(editor.activeGesture()).toBe("move");
+        expect(shown(state)).toEqual({ 1: { x: 130, y: 110 } });
+        editor.pointerUp(at(150, 140));
+        expect(editor.activeGesture()).toBeNull();
+        expect(state.drops.map((d) => d.positions)).toEqual([
+            [{ id: 1, x: 150, y: 140 }],
+        ]);
+    });
+
+    it("keeps the offset from the dot to where it was pressed", () => {
+        const { editor, state } = setup();
+        drag(editor, { x: 103, y: 98 }, { x: 203, y: 298 });
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 200, y: 300 }]);
+    });
+
+    it("selects the marcher dragged when it isn't selected", () => {
+        const { editor, state } = setup({ selected: [2, 3] });
+        drag(editor, { x: 100, y: 100 }, { x: 100, y: 150 });
+        expect(state.selected).toEqual([1]);
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 100, y: 150 }]);
+    });
+
+    it("adds the marcher dragged with Shift, and moves the whole selection", () => {
+        const { editor, state } = setup({ selected: [2] });
+        drag(editor, { x: 100, y: 100 }, { x: 100, y: 150 }, { shift: true });
+        expect(state.selected).toEqual([2, 1]);
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 100, y: 150 },
+            { id: 2, x: 200, y: 150 },
+        ]);
+    });
+
+    it("moves the whole selection from one of its marchers, without narrowing it", () => {
+        const { editor, state, ports } = setup({ selected: [1, 3] });
+        drag(editor, { x: 300, y: 100 }, { x: 320, y: 90 });
+        expect(ports.selection.set).not.toHaveBeenCalled();
+        expect(state.selected).toEqual([1, 3]);
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 120, y: 90 },
+            { id: 3, x: 320, y: 90 },
+        ]);
+    });
+
+    it("moves a multi-selection from empty field inside its box (owner decision, #196)", () => {
+        const { editor, state, ports } = setup({ selected: [1, 3] });
+        // Between marchers 1 and 3, on the box's padding below them
+        drag(editor, { x: 250, y: 108 }, { x: 250, y: 158 });
+        expect(ports.selection.set).not.toHaveBeenCalled();
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 100, y: 150 },
+            { id: 3, x: 300, y: 150 },
+        ]);
+    });
+
+    it("moves nothing from empty field outside the box, or around a single marcher", () => {
+        const outside = setup({ selected: [1, 3] });
+        drag(outside.editor, { x: 250, y: 115 }, { x: 250, y: 165 });
+        drag(outside.editor, { x: 350, y: 100 }, { x: 350, y: 150 });
+        expect(outside.state.drops).toEqual([]);
+        expect(outside.editor.activeGesture()).toBeNull();
+
+        const single = setup({ selected: [1] });
+        drag(single.editor, { x: 105, y: 108 }, { x: 105, y: 158 });
+        expect(single.state.drops).toEqual([]);
+    });
+
+    it("can't drag a dimmed marcher", () => {
+        const { editor, state } = setup({ dimmed: [2] });
+        drag(editor, { x: 200, y: 100 }, { x: 200, y: 150 });
+        expect(state.drops).toEqual([]);
+        expect(state.selected).toEqual([]);
+    });
+
+    it("leaves hidden selected marchers where they are", () => {
+        const { editor, state } = setup({ selected: [1, 2], hidden: [2] });
+        drag(editor, { x: 100, y: 100 }, { x: 100, y: 150 });
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 100, y: 150 }]);
+    });
+
+    it("drops nothing when the pointer comes back to where it started", () => {
+        const { editor, state } = setup();
+        drag(editor, { x: 100, y: 100 }, { x: 100, y: 100 });
+        expect(state.drops).toEqual([]);
+        expect(state.shown).toBeNull();
+    });
+
+    it("puts the marchers back when the drag is cancelled", () => {
+        const { editor, state } = setup();
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(100, 150));
+        expect(shown(state)).toEqual({ 1: { x: 100, y: 150 } });
+        editor.pointerCancel();
+        expect(editor.activeGesture()).toBeNull();
+        expect(state.shown).toBeNull();
+        editor.pointerUp(at(100, 150));
+        expect(state.drops).toEqual([]);
+    });
+
+    it("leaves the right button to navigation mid-drag", () => {
+        const { editor, state } = setup();
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(100, 150));
+        editor.pointerUp(at(100, 150, { button: 2 }));
+        expect(editor.activeGesture()).toBe("move");
+        editor.pointerUp(at(100, 160));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 100, y: 160 }]);
+    });
+
+    it("hands the pointer delta to the move transform (#197's seam)", () => {
+        // Whole tens across, and no movement down
+        const moveTransform = vi.fn<MoveTransform>((delta, _pointer, starts) =>
+            starts.map((s) => ({
+                id: s.id,
+                x: s.x + Math.round(delta.x / 10) * 10,
+                y: s.y,
+            })),
+        );
+        const { editor, state } = setup({ moveTransform });
+        drag(editor, { x: 100, y: 100 }, { x: 137, y: 120 }, { alt: true });
+        expect(moveTransform).toHaveBeenLastCalledWith(
+            { x: 37, y: 20 },
+            expect.objectContaining({ alt: true }),
+            [{ id: 1, x: 100, y: 100 }],
+        );
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 140, y: 100 }]);
+    });
+});
+
+describe("FieldEditor drops waiting to be saved", () => {
+    it("keeps the marchers where they were dropped until the save settles (user story 42)", async () => {
+        const { editor, state } = setup();
+        drag(editor, { x: 100, y: 100 }, { x: 100, y: 150 });
+        expect(shown(state)).toEqual({ 1: { x: 100, y: 150 } });
+        state.drops[0].answer("saved");
+        await Promise.resolve();
+        expect(state.shown).toBeNull();
+    });
+
+    it("snaps the marchers back when the drop is refused", async () => {
+        const { editor, state } = setup();
+        drag(editor, { x: 100, y: 100 }, { x: 100, y: 150 });
+        state.drops[0].answer("refused");
+        await Promise.resolve();
+        expect(state.shown).toBeNull();
+    });
+
+    it("keeps an earlier drop drawn while a later one is dragged, until it's saved", async () => {
+        const { editor, state } = setup();
+        drag(editor, { x: 100, y: 100 }, { x: 100, y: 150 });
+        editor.pointerDown(at(200, 100));
+        editor.pointerMove(at(200, 130));
+        expect(shown(state)).toEqual({
+            1: { x: 100, y: 150 },
+            2: { x: 200, y: 130 },
+        });
+        // The first drop is saved mid-drag: the field draws it from the show,
+        // and the marcher dragged stays under the pointer
+        state.drops[0].answer("saved");
+        await Promise.resolve();
+        expect(shown(state)).toEqual({ 2: { x: 200, y: 130 } });
+        editor.pointerUp(at(200, 140));
+        expect(shown(state)).toEqual({ 2: { x: 200, y: 140 } });
+        state.drops[1].answer("saved");
+        await Promise.resolve();
+        expect(state.shown).toBeNull();
+    });
+
+    it("draws an earlier drop still saving when a later drag is cancelled", () => {
+        const { editor, state } = setup();
+        drag(editor, { x: 100, y: 100 }, { x: 100, y: 150 });
+        editor.pointerDown(at(200, 100));
+        editor.pointerMove(at(200, 130));
+        editor.pointerCancel();
+        expect(shown(state)).toEqual({ 1: { x: 100, y: 150 } });
+    });
+
+    it("logs a drop that hasn't settled after 30 s, and keeps it drawn", () => {
+        vi.useFakeTimers();
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+            const { editor, state } = setup();
+            drag(editor, { x: 100, y: 100 }, { x: 100, y: 150 });
+            vi.advanceTimersByTime(29_000);
+            expect(error).not.toHaveBeenCalled();
+            vi.advanceTimersByTime(2_000);
+            expect(error).toHaveBeenCalledTimes(1);
+            expect(shown(state)).toEqual({ 1: { x: 100, y: 150 } });
+        } finally {
+            error.mockRestore();
+            vi.useRealTimers();
+        }
+    });
+});
+
+/** Presses at the first point, moves through the rest and releases at the last, with the press's modifiers. */
+const dragThrough = (
     editor: FieldEditor,
     points: readonly (readonly [number, number])[],
     modifiers?: Parameters<typeof at>[2],
@@ -268,7 +520,7 @@ const drag = (
 describe("FieldEditor marquee", () => {
     it("replaces the selection with the marchers it covers", () => {
         const { editor, state } = setup({ selected: [4] });
-        drag(editor, [
+        dragThrough(editor, [
             [150, 50],
             [250, 150],
         ]);
@@ -277,7 +529,7 @@ describe("FieldEditor marquee", () => {
 
     it("adds to the selection with Shift", () => {
         const { editor, state } = setup({ selected: [1] });
-        drag(
+        dragThrough(
             editor,
             [
                 [250, 50],
@@ -291,13 +543,13 @@ describe("FieldEditor marquee", () => {
     it("takes a marcher whose dot it touches", () => {
         // The dot reaches 6 field units at zoom 2 (its click target)
         const touching = setup();
-        drag(touching.editor, [
+        dragThrough(touching.editor, [
             [250, 50],
             [295, 150],
         ]);
         expect(touching.state.selected).toEqual([3]);
         const clear = setup();
-        drag(clear.editor, [
+        dragThrough(clear.editor, [
             [250, 50],
             [293, 150],
         ]);
@@ -306,7 +558,7 @@ describe("FieldEditor marquee", () => {
 
     it("never takes a hidden or dimmed marcher", () => {
         const { editor, state } = setup({ hidden: [1], dimmed: [3] });
-        drag(editor, [
+        dragThrough(editor, [
             [50, 50],
             [450, 150],
         ]);
@@ -315,13 +567,13 @@ describe("FieldEditor marquee", () => {
 
     it("clears the selection when it covers nothing, and keeps it with Shift", () => {
         const plain = setup({ selected: [1] });
-        drag(plain.editor, [
+        dragThrough(plain.editor, [
             [150, 200],
             [250, 300],
         ]);
         expect(plain.state.selected).toEqual([]);
         const shift = setup({ selected: [1] });
-        drag(
+        dragThrough(
             shift.editor,
             [
                 [150, 200],
@@ -346,7 +598,8 @@ describe("FieldEditor marquee", () => {
         });
         // Selects only on release
         expect(state.selected).toEqual([]);
-        expect(listener).toHaveBeenCalledTimes(2);
+        // The gesture starting, its first point, and the move
+        expect(listener).toHaveBeenCalledTimes(3);
         editor.pointerUp(at(250, 150));
         expect(editor.activeGesture()).toBeNull();
         expect(editor.areaShape()).toBeNull();
@@ -368,7 +621,7 @@ describe("FieldEditor marquee", () => {
         // On empty field between 2 and 3, inside the box from 1 to 3
         editor.pointerDown(at(250, 100));
         editor.pointerMove(at(250, 200));
-        expect(editor.activeGesture()).not.toBe("marquee");
+        expect(editor.activeGesture()).toBe("move");
         editor.pointerUp(at(250, 200));
         expect(state.selected).toEqual([1, 3]);
         expect(ports.selection.set).not.toHaveBeenCalled();
@@ -376,11 +629,20 @@ describe("FieldEditor marquee", () => {
 
     it("starts outside a multi-selection's box", () => {
         const { editor, state } = setup({ selected: [1, 3] });
-        drag(editor, [
+        dragThrough(editor, [
             [350, 50],
             [450, 150],
         ]);
         expect(state.selected).toEqual([4]);
+    });
+
+    it("selects at once on a quick flick released past the slop with no move in between", () => {
+        const { editor, state } = setup({ selected: [4] });
+        editor.pointerDown(at(150, 50));
+        editor.pointerUp(at(250, 150));
+        expect(state.selected).toEqual([2]);
+        expect(editor.activeGesture()).toBeNull();
+        expect(editor.areaShape()).toBeNull();
     });
 
     it("is a marquee, not a lasso, with Shift held (rules table: Shift)", () => {
@@ -407,7 +669,7 @@ const lasso = (
     modifiers?: Parameters<typeof at>[2],
 ) => {
     click(editor, points[0][0], points[0][1], modifiers);
-    drag(editor, points, modifiers);
+    dragThrough(editor, points, modifiers);
 };
 
 describe("FieldEditor lasso", () => {
@@ -523,6 +785,6 @@ describe("FieldEditor lasso", () => {
         click(editor, 250, 100, { shift: true });
         editor.pointerDown(at(250, 100, { shift: true }));
         editor.pointerMove(at(250, 200, { shift: true }));
-        expect(editor.activeGesture()).toBeNull();
+        expect(editor.activeGesture()).toBe("move");
     });
 });

@@ -5,8 +5,7 @@ import type { AreaShape } from "@/field/editor/areaGestures";
 import type { FieldRect } from "@/field/editor/selectionArea";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
-import { SELECTION_COLOR } from "./selectionRing";
-import { boxPadding, selectedBounds } from "./selectionBox";
+import { selectionBoxPadding, SELECTION_COLOR } from "./selectionRing";
 
 /** Fabric's selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -39,7 +38,7 @@ export default function FieldOverlay({
 }) {
     // The box's bounds as a string, so an unchanged box is an unchanged snapshot
     const box = useSyncExternalStore(marchers.subscribe, () =>
-        JSON.stringify(selectedBounds(marchers)),
+        JSON.stringify(selectionBox(marchers)),
     );
     const subscribeEditor = useCallback(
         (listener: () => void) => editor.subscribe(listener),
@@ -67,7 +66,7 @@ export default function FieldOverlay({
 function SelectionBox({ box }: { box: FieldRect | null }) {
     const view = useFieldViewStore();
     if (!box) return null;
-    const pad = boxPadding(view.zoom) * view.zoom;
+    const pad = selectionBoxPadding(view.zoom) * view.zoom;
     const topLeft = fieldToElement(view, box.left, box.top);
     const bottomRight = fieldToElement(view, box.right, box.bottom);
     return (
@@ -133,4 +132,28 @@ function Lasso({
             strokeDasharray={LASSO_DASH}
         />
     );
+}
+
+/**
+ * The bounds of the selected marchers, in field units, or null when fewer
+ * than two are selected (a single marcher gets its ring and no box).
+ */
+function selectionBox(marchers: FieldMarchers): FieldRect | null {
+    const { selected, positions } = marchers;
+    let count = 0;
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    for (let i = 0; i < selected.length; i++) {
+        if (!selected[i]) continue;
+        count++;
+        const x = positions[i * 2];
+        const y = positions[i * 2 + 1];
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y);
+    }
+    return count < 2 ? null : { left, top, right, bottom };
 }

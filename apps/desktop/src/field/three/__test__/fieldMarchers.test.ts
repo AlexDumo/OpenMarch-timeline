@@ -147,4 +147,43 @@ describe("FieldMarchers appearance", () => {
         expect(marchers.appearanceVersion).toBe(version + 3);
         expect(marchers.stacks).toEqual([null, null]);
     });
+
+    it("draws overridden marchers where the editor puts them, through every fill", () => {
+        const { positionSource } = source([1, 2]);
+        const marchers = new FieldMarchers(positionSource);
+        marchers.fill(3);
+        const version = marchers.version;
+        marchers.setOverrides(new Map([[2, { x: 50, y: 60 }]]));
+        expect(Array.from(marchers.positions)).toEqual([13, 100, 50, 60]);
+        expect(marchers.version).toBeGreaterThan(version);
+        marchers.fill(4);
+        expect(Array.from(marchers.positions)).toEqual([14, 100, 50, 60]);
+    });
+
+    it("draws a marcher no longer overridden where the show has it again", () => {
+        const { positionSource } = source([1, 2]);
+        const marchers = new FieldMarchers(positionSource);
+        marchers.fill(3);
+        marchers.setOverrides(
+            new Map([
+                [1, { x: 0, y: 0 }],
+                [2, { x: 50, y: 60 }],
+            ]),
+        );
+        marchers.setOverrides(new Map([[2, { x: 55, y: 60 }]]));
+        expect(Array.from(marchers.positions)).toEqual([13, 100, 55, 60]);
+        marchers.setOverrides(null);
+        expect(Array.from(marchers.positions)).toEqual([13, 100, 23, 200]);
+    });
+
+    it("tells subscribers when overrides change what's drawn", () => {
+        const { positionSource } = source([1]);
+        const marchers = new FieldMarchers(positionSource);
+        marchers.fill(0);
+        let calls = 0;
+        marchers.subscribe(() => calls++);
+        marchers.setOverrides(new Map([[1, { x: 5, y: 5 }]]));
+        marchers.setOverrides(null);
+        expect(calls).toBe(2);
+    });
 });

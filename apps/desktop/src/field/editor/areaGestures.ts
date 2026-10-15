@@ -48,11 +48,10 @@ export interface AreaGesture extends FieldGesture {
 export function startMarquee(
     ports: AreaPorts,
     start: FieldPointer,
-    pointer: FieldPointer,
 ): AreaGesture {
-    let shape: AreaShape & { kind: "marquee" } = {
+    let shape: AreaShape = {
         kind: "marquee",
-        rect: rectBetween(start.field, pointer.field),
+        rect: rectBetween(start.field, start.field),
     };
     return {
         kind: "marquee",
@@ -87,14 +86,10 @@ export function startMarquee(
  * nothing; the double-click's first click has already cleared the selection,
  * unless Shift was held.
  */
-export function startLasso(
-    ports: AreaPorts,
-    start: FieldPointer,
-    pointer: FieldPointer,
-): AreaGesture {
+export function startLasso(ports: AreaPorts, start: FieldPointer): AreaGesture {
     // Appended to in place: a long lasso isn't copied on every move
     const points: FieldPoint[] = [start.field];
-    let shape!: AreaShape;
+    let shape: AreaShape = { kind: "lasso", points, closes: true };
     const add = (point: FieldPoint) => {
         points.push(point);
         shape = {
@@ -103,7 +98,6 @@ export function startLasso(
             closes: lassoCloses(start.field, point, ports.zoom()),
         };
     };
-    add(pointer.field);
     return {
         kind: "lasso",
         shape: () => shape,

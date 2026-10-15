@@ -120,13 +120,6 @@ export function selectionAfterArea(
     return added.length ? [...current, ...added] : current;
 }
 
-/** True when `point` is inside `rect`, edges included. */
-export const rectContains = (rect: FieldRect, point: FieldPoint) =>
-    point.x >= rect.left &&
-    point.x <= rect.right &&
-    point.y >= rect.top &&
-    point.y <= rect.bottom;
-
 function selectableWhere(
     marchers: DrawnMarchers,
     canSelect: (id: number) => boolean,
