@@ -49,7 +49,7 @@ export async function isolate(page: Page, startBeat: number) {
     }).toPass();
 }
 
-/** The field's top-left corner area, clear of every marcher in the demo shows. */
+/** The field's top-left corner area, where no marcher stands in the converted demo shows. */
 export async function emptyField(page: Page) {
     const box = (await page.getByTestId("fieldCanvas").first().boundingBox())!;
     return { x: box.x + 12, y: box.y + 12 };

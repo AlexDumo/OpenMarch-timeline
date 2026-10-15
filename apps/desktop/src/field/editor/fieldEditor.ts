@@ -46,9 +46,10 @@ export type FieldEditorPorts = {
     /** False for a marcher that can't be selected or hit (one dimmed outside the isolated move). */
     canSelect(id: number): boolean;
     /**
-     * Asked first on every edit press. True when the app takes the press for
-     * itself, so it selects, drags and drops nothing (story 60: the first
-     * press after a paused preview only clears the preview).
+     * Called once at the start of every edit press, before the editor does
+     * anything with it. The app may act on the press here (story 60: the
+     * first press after a paused preview clears the preview) and returns
+     * true when it takes it, so the editor selects, drags and drops nothing.
      */
     takePress?(): boolean;
 };

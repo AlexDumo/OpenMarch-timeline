@@ -132,11 +132,12 @@ test("kept mark tooltip: it shows after a delay, within one and a half dot radii
     await waitForField(page);
     const { marcher, zoom } = await keptMarcher(page, query);
 
-    // 6 field units above the dot's center: off the dot (radius 5), within 1.5 radii
+    // 6 field units above the dot's center: off the dot (radius 5), within 1.5 radii.
+    // It shows, but not before the delay (500 ms) has passed since the move
+    const movedAt = Date.now();
     await page.mouse.move(marcher.screen.x, marcher.screen.y - 6 * zoom);
-    await page.waitForTimeout(150);
-    await expect(tooltip(page)).toBeHidden();
     await expect(tooltip(page)).toBeVisible();
+    expect(Date.now() - movedAt).toBeGreaterThanOrEqual(450);
 
     // 9 field units above: off both the dot's reach and the mark (right of the dot)
     await page.mouse.move(marcher.screen.x, marcher.screen.y - 9 * zoom);

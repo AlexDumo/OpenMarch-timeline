@@ -35,4 +35,9 @@ describe("takeFieldPress (#202)", () => {
         expect(takeFieldPress()).toBe(true);
         expect(takeFieldPress()).toBe(true);
     });
+
+    it("leaves presses to the editor in the other alignment events", () => {
+        useAlignmentEventStore.getState().setAlignmentEvent("lasso");
+        expect(takeFieldPress()).toBe(false);
+    });
 });

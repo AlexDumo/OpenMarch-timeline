@@ -53,11 +53,17 @@ async function holdPreview(page: Page) {
     await waitForField(page);
     await waitForIdle(page);
     const atPlayhead = await shown(page);
-    // Halfway through the move: nobody is where they are at the playhead
-    await page.evaluate(() => window.openmarchPreview!.hold(5));
-    await expect
-        .poll(async () => (await shown(page)).T1)
-        .toEqual({ x: 500, y: 300 });
+    // Halfway through the move: nobody is where they are at the playhead. The
+    // stored moves load after the field, and loading them drops a held frame
+    // (as any timeline edit does), so hold until it stays
+    await expect(async () => {
+        await page.evaluate(() => window.openmarchPreview!.hold(5));
+        await expect
+            .poll(async () => (await shown(page)).T1, { timeout: 1000 })
+            .toEqual({ x: 500, y: 300 });
+        await page.waitForTimeout(300);
+        expect((await shown(page)).T1).toEqual({ x: 500, y: 300 });
+    }).toPass();
     const t1 = (await drawnMarchers(page)).find((m) => m.drillNumber === "T1")!;
     return { atPlayhead, t1 };
 }
@@ -88,8 +94,8 @@ test("a drag from a paused preview's frame moves no one", async ({ show }) => {
     const pages = await show.query<{ id: number }>("SELECT id FROM pages");
     const saved = () =>
         Promise.all(pages.map(({ id }) => savedPositions(show, id)));
-    const before = await saved();
     const { atPlayhead, t1 } = await holdPreview(page);
+    const before = await saved();
 
     await page.mouse.move(t1.screen.x, t1.screen.y);
     await page.mouse.down();

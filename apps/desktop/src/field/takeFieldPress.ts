@@ -20,5 +20,5 @@ export function takeFieldPress(): boolean {
         timeline.clearCursor();
         return true;
     }
-    return useAlignmentEventStore.getState().alignmentEvent !== "default";
+    return useAlignmentEventStore.getState().alignmentEvent === "line";
 }

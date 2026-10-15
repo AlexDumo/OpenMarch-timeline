@@ -42,7 +42,7 @@ null`): it clears the cursor and takes the press, as Fabric's `Canvas.tsx`
   held preview pans on the new field and leaves the preview held, where
   Fabric swallowed it too (its pan listens to the same mouse events). On the
   #208 list.
-- **The line tool is on** (`alignmentEvent !== "default"`): every press is
+- **The line tool is on** (`alignmentEvent === "line"`): every press is
   taken, so no marcher can be selected mid-tool, which closes Fabric's known
   gap (docs/timeline/ui.md: a marcher whose dimming ends mid-tool becomes
   selectable). **#203:** replace this branch with the line tool's own press
@@ -74,7 +74,7 @@ demo shows' moves are page moves, which have no clip, and the rule is the
 timeline's alone (`TimelineClipResize.test.tsx` pins it).
 
 **Fabric bug found, not fixed (freeze):** the kept-mark tooltip stays up when
-the pointer leaves the field over the field. Fabric's `mouse:out` names the
+the pointer leaves the field over the grid. Fabric's `mouse:out` names the
 object last under the pointer (the field grid, or a marcher), and
 `useTimelineKeptMarks` hides only when there is none. The scenario is
 `test.fail` on Fabric; the new field hides it when the pointer leaves its element. On the #208
