@@ -113,6 +113,9 @@ canvas (`videoCanvas.ts`) is gone.
   disables Export. This holds on the Fabric field too: a machine with no
   WebGL loses video export, which drew on Canvas2D before (no Canvas2D
   fallback, per the spec).
+- **Context lost mid-export:** `draw` throws `FieldContextLostError`, and the
+  export stops with that message and deletes the partial file, instead of
+  saving frames with no field. The preview logs it and stays blank.
 - **three.js stays lazy:** `createVideoRenderContext` imports
   `offscreenField` dynamically (`fieldChunk.test.ts` would fail otherwise).
 - The export draws no pathways, collisions or dimming, as before. A later
@@ -131,7 +134,8 @@ hooks constructs an `OpenMarchCanvas` now, apart from the editor's own
 
 **Scenarios.** `video-export.spec.mts` exports a short seeded show and reads
 frames with ffmpeg (size, length, marchers where the show file puts them),
-and checks the no-WebGL explanation (browser only). The harness gained the
+checks the no-WebGL explanation, and loses the export's context mid-export
+(both browser only). The harness gained the
 export's IPC (`host/index.ts`), `show.videoExportPath`, and the `webgl`
 option (Electron software GL on the Fabric field).
 `render/video-compare.spec.mts` + `video-compare.sh` produce before/after
