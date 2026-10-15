@@ -4,6 +4,7 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { fieldRenderer } from "./fieldRenderer";
 import { collisionsView } from "./timelineOverlays";
 import { useFieldViewStore } from "./three/fieldView";
+import { setView } from "./three/fieldNavigation";
 
 /**
  * "Zoom to collisions" on whichever field is on screen. Fabric frames its
@@ -25,5 +26,5 @@ export function zoomToCollisions(isPlaying: boolean): void {
         width,
         height,
     );
-    if (view) useFieldViewStore.setState(view);
+    if (view) setView({ width, height, ...view });
 }

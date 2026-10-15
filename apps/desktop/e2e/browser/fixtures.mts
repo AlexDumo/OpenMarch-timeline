@@ -44,6 +44,8 @@ export type Target = "browser" | "electron";
  */
 export type FieldDriver = FieldRenderer;
 const FIELD_STORAGE_KEY = "openmarch:dev:field";
+/** `UI_SETTINGS_STORAGE_KEY` in `src/stores/UiSettingsStore.ts`. */
+const UI_SETTINGS_STORAGE_KEY = "openmarch:uiSettings";
 const defaultField: FieldDriver =
     process.env.FIELD === "three" ? "three" : "fabric";
 /** `QUALITY_NOTICE_STORAGE_KEY`: the field's low-quality explanations already shown. */
@@ -168,6 +170,7 @@ async function openInElectron(
     appSettings: Record<string, unknown>,
     userDataDir: string,
     field: FieldDriver,
+    storage: Record<string, string>,
 ): Promise<App> {
     // The app's settings store (electron-store) reads this file at startup.
     fs.mkdirSync(userDataDir, { recursive: true });
@@ -200,6 +203,14 @@ async function openInElectron(
             PLAYWRIGHT_SESSION: "true",
         },
     });
+    // Every load starts with the storage asked for. The window is already
+    // loading by now, so the fixture reloads it once; the app saves its
+    // settings while it starts, which would overwrite storage set later.
+    // This runs on every load, so a scenario that changes a setting and then
+    // reloads gets the fixture's storage back, not its own.
+    await app.context().addInitScript((entries) => {
+        for (const [key, value] of entries) localStorage.setItem(key, value);
+    }, Object.entries(storage));
     const log: string[] = [];
     app.process().stdout?.on("data", (data) => log.push(String(data)));
     app.process().stderr?.on("data", (data) => log.push(String(data)));
@@ -299,6 +310,12 @@ type Fixtures = {
     /** Messages matching any of these don't fail the test. */
     allowedPageErrors: RegExp[];
     /**
+     * The renderer's UI settings (`openmarch:uiSettings` in its local
+     * storage), merged over the defaults when the app starts. Unset keeps the
+     * defaults.
+     */
+    uiSettings: Record<string, unknown> | undefined;
+    /**
      * Whether the new field may explain its low-quality mode (#205). Off by
      * default, as if already explained, so the toast covers nothing.
      */
@@ -361,6 +378,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     seedSql: [[], { option: true }],
     showFile: [undefined, { option: true }],
     allowedPageErrors: [[], { option: true }],
+    uiSettings: [undefined, { option: true }],
     fieldQualityNotice: [false, { option: true }],
     initScript: [null, { option: true }],
 
@@ -373,6 +391,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             seedSql,
             showFile,
             allowedPageErrors,
+            uiSettings,
             fieldQualityNotice,
             initScript,
         },
@@ -391,7 +410,10 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             }
         }
 
+        // The renderer's local storage when the app starts
         const storage = startupStorage(field, fieldQualityNotice);
+        if (uiSettings)
+            storage[UI_SETTINGS_STORAGE_KEY] = JSON.stringify(uiSettings);
         let app: App;
         if (target === "electron") {
             if (initScript)
@@ -402,6 +424,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 appSettings,
                 testInfo.outputPath("user-data"),
                 field,
+                storage,
             );
         } else {
             app = await openInBrowser(
@@ -414,8 +437,9 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
         }
         const { page } = app;
         if (target === "electron") {
-            // The window is already loading when Playwright gets it: set the
-            // switch (and the rest), then load again with it
+            // The window was already loading when the storage was set up
+            // (`openInElectron`): load it again with it. Settings always
+            // reload: the app saves its own while it starts.
             await page.waitForLoadState("domcontentloaded");
             const changed = await page.evaluate((storage) => {
                 let changed = false;
@@ -426,7 +450,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 }
                 return changed;
             }, storage);
-            if (changed) await page.reload();
+            if (changed || uiSettings) await page.reload();
         }
 
         const pageErrors: string[] = [];
