@@ -12,25 +12,19 @@
  *   `modified` set, inheriting the built-in's license fields.
  * - Adding bytes that already form a Version anywhere in the Library reuses
  *   that item ("already in your Library").
- * - The index is a cache: it is rebuilt from the manifests whenever it is
- *   missing, unreadable or names a different set of items.
+ * - The index is a cache: it is rebuilt from the manifests every time the
+ *   store opens, so a crash between a manifest write and the index write
+ *   can't leave it stale.
+ * - Blobs are checked against their hash when read, and an existing blob
+ *   that doesn't match is rewritten the next time its bytes are added.
  */
 import { randomUUID as nodeRandomUUID } from "node:crypto";
-import {
-    access,
-    mkdir,
-    readdir,
-    readFile,
-    rename,
-    rm,
-    writeFile,
-} from "node:fs/promises";
+import { mkdir, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { computeVersionHash, sha256Hex } from "./hash";
 import {
     LIBRARY_SCHEMA_VERSION,
     LICENSE_UNKNOWN,
-    LibraryIndexSchema,
     LibraryItemIdSchema,
     LibraryItemManifestSchema,
     LicenseIdSchema,
@@ -38,7 +32,6 @@ import {
     SizePresetFileSchema,
     VersionHashSchema,
     type DerivedFrom,
-    type LibraryIndex,
     type LibraryIndexEntry,
     type LibraryItem,
     type LibraryItemKind,
@@ -82,8 +75,10 @@ export interface AddVersionInput {
     /**
      * The item this Version belongs to: a re-import ("New version of …"), or
      * "Add to my Library" with the show's item id. A built-in's id makes a
-     * user copy. An id not in the Library creates the item with that id.
-     * Left out, a new item gets a new UUID.
+     * user copy, and every such call makes another copy: to add a later
+     * Version to that copy, pass the copy's id (`result.item.id`). An id not
+     * in the Library creates the item with that id. Left out, a new item gets
+     * a new UUID.
      */
     itemId?: string;
     /** When `itemId` is a built-in: the Version the copy derives from. Defaults to its latest. */
@@ -270,13 +265,22 @@ class LocalLibrary implements LibraryStore {
             ? [this.root, this.builtinsRoot]
             : [this.root];
         for (const base of roots) {
+            let bytes: Uint8Array;
             try {
-                return new Uint8Array(
+                bytes = new Uint8Array(
                     await readFile(path.join(base, blobRelativePath(hash))),
                 );
             } catch (error) {
-                if (!isMissing(error)) throw error;
+                if (isMissing(error)) continue;
+                throw error;
             }
+            if (sha256Hex(bytes) !== hash) {
+                throw new LibraryError(
+                    "corrupt",
+                    `Blob ${hash} doesn't match its hash`,
+                );
+            }
+            return bytes;
         }
         throw new LibraryError("not-found", `No blob ${hash}`);
     }
@@ -431,24 +435,9 @@ class LocalLibrary implements LibraryStore {
         return this.exclusive(() => this.rebuildIndexNow());
     }
 
-    /** Uses `index.json` when it names exactly the manifests on disk, else rebuilds it. */
+    /** Rebuilds the index from the manifests, which are the source of truth. */
     async loadIndex(): Promise<void> {
-        const ids = (await listManifestFiles(path.join(this.root, ITEMS_DIR)))
-            .map((file) => file.slice(0, -".json".length))
-            .sort();
-        const index = await readIndexFile(path.join(this.root, INDEX_FILE));
-        const indexed = index?.items.map((e) => e.id).sort();
-        if (
-            !index ||
-            !indexed ||
-            indexed.length !== ids.length ||
-            indexed.some((id, i) => id !== ids[i] || this.builtins.has(id))
-        ) {
-            await this.rebuildIndexNow();
-            return;
-        }
-        for (const entry of index.items) this.userIndex.set(entry.id, entry);
-        this.rebuildVersionOwners();
+        await this.rebuildIndexNow();
     }
 
     private async rebuildIndexNow(): Promise<RebuildIndexResult> {
@@ -489,7 +478,16 @@ class LocalLibrary implements LibraryStore {
             if (isMissing(error)) return [];
             throw error;
         }
-        const parsed = SizePresetFileSchema.safeParse(JSON.parse(raw));
+        let json: unknown;
+        try {
+            json = JSON.parse(raw);
+        } catch (error) {
+            throw new LibraryError(
+                "corrupt",
+                `Size presets are unreadable: ${String(error)}`,
+            );
+        }
+        const parsed = SizePresetFileSchema.safeParse(json);
         if (!parsed.success) {
             throw new LibraryError(
                 "corrupt",
@@ -580,7 +578,7 @@ class LocalLibrary implements LibraryStore {
     private async writeBlob(bytes: Uint8Array): Promise<string> {
         const hash = sha256Hex(bytes);
         const file = path.join(this.root, blobRelativePath(hash));
-        if (await exists(file)) return hash;
+        if (await blobMatches(file, hash)) return hash;
         await mkdir(path.dirname(file), { recursive: true });
         await this.writeAtomic(file, bytes);
         return hash;
@@ -629,13 +627,22 @@ class LocalLibrary implements LibraryStore {
         await this.writeAtomic(file, `${JSON.stringify(value, null, 2)}\n`);
     }
 
-    /** Writes beside the target, then renames, so readers never see half a file. */
+    /**
+     * Writes to a temp file, flushes it to disk, then renames, so readers
+     * never see half a file and a power cut can't leave an empty one behind.
+     */
     private async writeAtomic(
         file: string,
         data: string | Uint8Array,
     ): Promise<void> {
         const tmp = path.join(this.root, TMP_DIR, this.newUUID());
-        await writeFile(tmp, data);
+        const handle = await open(tmp, "w");
+        try {
+            await handle.writeFile(data);
+            await handle.sync();
+        } finally {
+            await handle.close();
+        }
         await rename(tmp, file);
     }
 }
@@ -740,17 +747,6 @@ async function readManifestFile(file: string): Promise<LibraryItemManifest> {
     return LibraryItemManifestSchema.parse(raw);
 }
 
-async function readIndexFile(file: string): Promise<LibraryIndex | null> {
-    try {
-        const parsed = LibraryIndexSchema.safeParse(
-            JSON.parse(await readFile(file, "utf8")),
-        );
-        return parsed.success ? parsed.data : null;
-    } catch {
-        return null;
-    }
-}
-
 async function loadBuiltins(
     builtinsRoot: string,
 ): Promise<Map<string, LibraryItemManifest>> {
@@ -852,10 +848,10 @@ function isMissing(error: unknown): boolean {
     );
 }
 
-async function exists(file: string): Promise<boolean> {
+/** Whether `file` exists and holds the bytes `hash` names. */
+async function blobMatches(file: string, hash: string): Promise<boolean> {
     try {
-        await access(file);
-        return true;
+        return sha256Hex(new Uint8Array(await readFile(file))) === hash;
     } catch (error) {
         if (isMissing(error)) return false;
         throw error;

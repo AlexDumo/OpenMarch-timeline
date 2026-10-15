@@ -30,6 +30,9 @@ import {
     isStale,
     type ImportClient,
 } from "@/view3d/library/importClient";
+import { LicenseIdSchema } from "@om-electron/main/library/types";
+import { LIBRARY_LIMITS } from "@/view3d/library/protocol";
+import type { ImportedVersion } from "@/view3d/library/showLibraryEmbed";
 import type {
     ArtworkImportReport,
     ArtworkInspection,
@@ -201,6 +204,8 @@ export interface ImportReviewActions {
     /** A point on the model, in the normalized GLB's meters. */
     setGrip(point: Vec3): void;
     setShowBefore(before: boolean): void;
+    /** The before GLB didn't load: back to after; Before asks again next time. */
+    beforeFailed(): void;
     retryPreview(): void;
     togglePage(fileId: string, page: number): void;
     focusPage(fileId: string, page: number): void;
@@ -233,6 +238,18 @@ export interface ImportReviewOptions {
     onClose?: () => void;
     /** Called after a commit stores items, with their ids (Q76). */
     onCommitted?: (itemIds: string[], done: DoneSummary) => void;
+    /**
+     * Called after a cancelled artwork commit has closed the review. Pages
+     * stored before the cancel stay in the Library, and the review can't
+     * tell which, so it ends rather than offer Add again.
+     */
+    onCommitStopped?: () => void;
+    /**
+     * Called with every Version a commit saved, so the show can embed a copy (ADR 0002 D-12:
+     * imports land in the local Library and the show embeds a copy). Not called when nothing
+     * was saved.
+     */
+    onImported?: (saved: ImportedVersion[]) => void;
 }
 
 // ------------------------------------------------------------------ helpers
@@ -295,7 +312,8 @@ export function litMaterial(model: ModelReview): MaterialInfo | null {
 /** The filename without its extension, underscores as spaces. */
 export function displayName(filename: string): string {
     const base = filename.replace(/\.[A-Za-z0-9]+$/, "");
-    return (base || filename).replace(/_/g, " ").trim() || filename;
+    const name = (base || filename).replace(/_/g, " ").trim() || filename;
+    return name.slice(0, LIBRARY_LIMITS.nameLength).trim();
 }
 
 /** A stable key for a set of choices. */
@@ -571,27 +589,31 @@ export function addBlocker(state: ImportReviewState): AddBlocker | null {
     return "nothing";
 }
 
+// Tags and license are trimmed to what `CommitMetaSchema` accepts, so a
+// long field never turns into an `invalid-request` that Try again repeats.
 function tagsOf(text: string): string[] {
     return [
         ...new Set(
             text
                 .split(",")
-                .map((t) => t.trim())
+                .map((t) => t.trim().slice(0, LIBRARY_LIMITS.tagLength).trim())
                 .filter(Boolean),
         ),
-    ].slice(0, 32);
+    ].slice(0, LIBRARY_LIMITS.tags);
 }
 
 function licenseOf(meta: ReviewMeta) {
-    const author = meta.author.trim();
-    const license = meta.license.trim();
-    const sourceUrl = meta.sourceUrl.trim();
+    const author = meta.author.trim().slice(0, LIBRARY_LIMITS.nameLength);
+    const license = meta.license
+        .trim()
+        .slice(0, LIBRARY_LIMITS.licenseTextLength);
+    const sourceUrl = meta.sourceUrl.trim().slice(0, 2048);
     if (!author && !license && !sourceUrl) return undefined;
     return {
         ...(author ? { author } : {}),
         // Free text goes in `licenseText`; an SPDX-like id also in `license`.
         ...(license
-            ? /^[A-Za-z0-9.+-]+$/.test(license)
+            ? LicenseIdSchema.safeParse(license).success
                 ? { license }
                 : { licenseText: license }
             : {}),
@@ -663,7 +685,10 @@ export function artworkCommitFiles(
                 ]),
             ),
             meta: {
-                name: name || displayName(file.inspection.filename),
+                name: (name || displayName(file.inspection.filename)).slice(
+                    0,
+                    LIBRARY_LIMITS.nameLength,
+                ),
                 ...(tags.length ? { tags } : {}),
                 ...(license ? { license } : {}),
                 ...(match ? { itemId: match.itemId } : {}),
@@ -713,6 +738,8 @@ export function createImportReview(
     let capture: (() => Promise<Uint8Array<ArrayBuffer> | null>) | null = null;
     /** Bumped by every model inspect; previews from an older one are dropped. */
     let inspectGen = 0;
+    /** The kind and choices the shown inspection ran with, for a cancelled re-inspect. */
+    let inspected: Pick<ModelReview, "kind" | "choices"> | null = null;
     /** Artwork preview loads in flight, by key. */
     const loadingPreviews = new Set<string>();
     let closed = false;
@@ -792,18 +819,32 @@ export function createImportReview(
                 });
                 if (closed || isStale(result)) return;
                 if (!result.ok) {
+                    if (
+                        result.error.code === "cancelled" &&
+                        get().model?.inspection &&
+                        inspected
+                    ) {
+                        // Back to the report on screen, and the choices it ran with.
+                        patchModel({ inspecting: false, ...inspected });
+                        set({ progress: null });
+                        return;
+                    }
                     patchModel({ inspecting: false });
                     fail(result.error.code, "inspect");
                     return;
                 }
                 const inspection = result.value;
                 const first = !get().model?.inspection;
+                const ran = get().model;
+                if (ran) inspected = { kind: ran.kind, choices: ran.choices };
                 patchModel({ inspection, inspecting: false });
-                const patch: Partial<ImportReviewState> = {
-                    phase: "review",
-                    error: null,
-                    progress: null,
-                };
+                // Only the first inspect, or one in review, moves the phase:
+                // a late reply must not reopen Add during a commit.
+                const phase = get().phase;
+                const patch: Partial<ImportReviewState> =
+                    phase === "inspecting" || phase === "review"
+                        ? { phase: "review", error: null, progress: null }
+                        : {};
                 if (first) {
                     const match = inspection.matches[0];
                     const { copyright, license } = inspection.report.metadata;
@@ -867,6 +908,7 @@ export function createImportReview(
             }
 
             async function begin(session: ImportSession) {
+                inspected = null;
                 set({
                     session,
                     phase: "inspecting",
@@ -1022,7 +1064,9 @@ export function createImportReview(
                     kind: inspection.report.kind,
                     choices: model.choices,
                     meta: {
-                        name: meta.name.trim(),
+                        name: meta.name
+                            .trim()
+                            .slice(0, LIBRARY_LIMITS.nameLength),
                         ...(tags.length ? { tags } : {}),
                         ...(license ? { license } : {}),
                         ...(match ? { itemId: match.itemId } : {}),
@@ -1050,6 +1094,12 @@ export function createImportReview(
                     set({ phase: "review", progress: null });
                     return;
                 }
+                options.onImported?.([
+                    {
+                        item: value.saved.item,
+                        versionHash: value.saved.versionHash,
+                    },
+                ]);
                 set({
                     phase: "done",
                     progress: null,
@@ -1081,16 +1131,20 @@ export function createImportReview(
                 if (closed) return;
                 if (!result.ok) {
                     if (result.error.code === "cancelled") {
-                        set({
-                            phase: "review",
-                            progress: null,
-                            cancelledCommit: true,
-                        });
+                        get().close();
+                        options.onCommitStopped?.();
                     } else fail(result.error.code, "commit");
                     return;
                 }
                 if (result.value.type !== "artwork") return;
                 const reports: ArtworkImportReport[] = result.value.reports;
+                const saved = reports.flatMap((r) =>
+                    r.imported.map((p) => ({
+                        item: p.item,
+                        versionHash: p.version.hash,
+                    })),
+                );
+                if (saved.length > 0) options.onImported?.(saved);
                 set({
                     phase: "done",
                     progress: null,
@@ -1149,7 +1203,7 @@ export function createImportReview(
 
                 setKind(kind) {
                     const model = get().model;
-                    if (!model) return;
+                    if (!model || get().phase === "committing") return;
                     dropUrl(model.beforeUrl);
                     patchModel({
                         kind,
@@ -1163,7 +1217,7 @@ export function createImportReview(
 
                 setChoices(patch) {
                     const model = get().model;
-                    if (!model) return;
+                    if (!model || get().phase === "committing") return;
                     const choices = { ...model.choices, ...patch };
                     const onlySimplify = Object.keys(patch).every(
                         (k) => k === "simplify",
@@ -1179,7 +1233,7 @@ export function createImportReview(
 
                 setArtworkSurface(material) {
                     const model = get().model;
-                    if (!model) return;
+                    if (!model || get().phase === "committing") return;
                     const info = model.inspection?.report.materials.find(
                         (m) => m.index === material,
                     );
@@ -1207,6 +1261,7 @@ export function createImportReview(
                 },
 
                 startGripPick() {
+                    if (get().phase === "committing") return;
                     patchModel({ pickingGrip: true, showBefore: false });
                 },
                 cancelGripPick() {
@@ -1214,7 +1269,7 @@ export function createImportReview(
                 },
                 setGrip(point) {
                     const model = get().model;
-                    if (!model) return;
+                    if (!model || get().phase === "committing") return;
                     patchModel({
                         choices: { ...model.choices, grip: { right: point } },
                         pickingGrip: false,
@@ -1227,6 +1282,13 @@ export function createImportReview(
                     if (!model) return;
                     patchModel({ showBefore: before });
                     if (before && !model.beforeUrl) void loadBefore();
+                },
+
+                beforeFailed() {
+                    const model = get().model;
+                    if (!model) return;
+                    dropUrl(model.beforeUrl);
+                    patchModel({ beforeUrl: null, showBefore: false });
                 },
 
                 retryPreview() {

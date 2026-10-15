@@ -392,8 +392,11 @@ export const ModelSidecarSchema = z.object({
             ),
         })
         .nullable(),
+    /**
+     * From the file's `asset`. The picked file's name is left out: the sidecar
+     * is a hashed part, so the same model under another name must match.
+     */
     metadata: z.object({
-        sourceFilename: z.string(),
         generator: z.string().nullable(),
         copyright: z.string().nullable(),
     }),
