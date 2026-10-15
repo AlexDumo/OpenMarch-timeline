@@ -1,6 +1,5 @@
 import Marcher from "@/global/classes/Marcher";
 import Page from "@/global/classes/Page";
-import CanvasMarcher from "@/global/classes/canvasObjects/CanvasMarcher";
 import {
     MarcherIdsByTagId,
     SectionAppearance,
@@ -71,34 +70,6 @@ export function buildMarcherAppearancesByPageId({
     }
 
     return appearancesByPageId;
-}
-
-export function applyMarcherAppearancesForPage({
-    pageId,
-    marcherAppearancesByPageId,
-    canvasMarchersById,
-    fieldProperties,
-}: {
-    pageId: number;
-    marcherAppearancesByPageId: MarcherAppearancesByPageId;
-    canvasMarchersById: Record<number, CanvasMarcher>;
-    fieldProperties: FieldProperties;
-}) {
-    const appearancesByMarcherId = marcherAppearancesByPageId.get(pageId);
-    if (!appearancesByMarcherId) return;
-
-    const labelColor = fieldProperties.theme.defaultMarcher.label;
-    for (const [marcherId, appearances] of Object.entries(
-        appearancesByMarcherId,
-    )) {
-        const canvasMarcher = canvasMarchersById[Number(marcherId)];
-        if (!canvasMarcher) continue;
-        canvasMarcher.setAppearance(
-            appearances,
-            { requestRenderAll: false },
-            labelColor,
-        );
-    }
 }
 
 /**
