@@ -46,6 +46,10 @@ Append notes the next tickets need: file locations, seams, surprises.
   (`Buffer` in `electron/database/backup.ts`, and `lab:dev` pre-bundles
   drizzle's migrator past the `fs` shim). The export diffs used converted
   copies of the demos.
+- **#230:** if CI's core `test` job fails once and passes on rerun, suspect a
+  fast-check generator. `fc.float`/`fc.double` draw NaN unless you pass
+  `noNaN: true`, even with `min`/`max` set (those already keep out
+  infinities). Reproduce with `fc.check(..., { numRuns: 200000 })`.
 
 ### #192 Tracer bullet
 
