@@ -1,0 +1,816 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throw away. Not app code.
+  Question: what should drawing and editing shapes look like? Four questions,
+  3–5 variants each, switchable from the bottom bar (?q=1..4&v=A..E, or ← →).
+  Shapes here are one-moment tools: they set where the selected marchers stand
+  at the current beat. Every shape shares one frame (center, size, rotation,
+  flip), so the same transforms work on every kind.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PROTOTYPE · Shape UI ideas</title>
+<style>
+  :root {
+    --bg: rgb(15, 14, 19);
+    --bg2: rgb(24, 23, 30);
+    --bg3: rgb(34, 33, 42);
+    --stroke: rgba(255, 255, 255, 0.08);
+    --text: rgb(208, 208, 208);
+    --sub: rgba(208, 208, 208, 0.6);
+    --dim: rgba(208, 208, 208, 0.35);
+    --accent: rgb(150, 126, 255);
+    --accent2: rgba(150, 126, 255, 0.25);
+    --red: rgb(227, 74, 74);
+    --yellow: rgb(220, 190, 40);
+    --green: rgb(90, 180, 70);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  button { font: inherit; color: inherit; background: var(--bg3); border: 1px solid var(--stroke);
+    border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+  button:hover { border-color: rgba(255,255,255,0.2); }
+  button.on { background: var(--accent2); border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+  button.ghost { background: transparent; border-color: transparent; }
+  input, select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--stroke);
+    border-radius: 5px; padding: 2px 6px; width: 56px; }
+  select { width: auto; }
+  #app { display: grid; grid-template-rows: 44px 1fr 74px; height: 100%; }
+  #top { display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--stroke); background: var(--bg2); }
+  .brand { font-weight: 700; }
+  .muted { color: var(--sub); }
+  .tag { font-size: 11px; color: var(--yellow); border: 1px solid rgba(220,190,40,0.4); border-radius: 4px; padding: 1px 6px; }
+  #topslot { display: flex; gap: 4px; align-items: center; margin-left: 12px; }
+  main { display: grid; grid-template-columns: 1fr auto; min-height: 0; }
+  #stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+  #fld { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; }
+  #ov { position: absolute; inset: 0; pointer-events: none; }
+  #ov > * { pointer-events: auto; }
+  #ov .pe-none { pointer-events: none; }
+  #panel { width: 0; overflow: auto; border-left: 1px solid var(--stroke); background: var(--bg2); }
+  #panel.open { width: 290px; padding: 12px; }
+  #tl { border-top: 1px solid var(--stroke); background: var(--bg2); position: relative; padding: 8px 12px; }
+  #notes { position: absolute; left: 10px; top: 10px; width: 330px; background: rgba(24,23,30,0.94);
+    border: 1px solid var(--stroke); border-radius: 10px; padding: 10px 12px; z-index: 5; }
+  #notes h3 { margin: 0 0 4px; font-size: 14px; }
+  #notes .q { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  #notes ul { margin: 4px 0; padding-left: 18px; }
+  #notes li { margin: 2px 0; }
+  #notes .lbl { color: var(--sub); font-size: 11px; text-transform: uppercase; margin-top: 6px; }
+  #notes.min > :not(.hdr) { display: none; }
+  #notes .hdr { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+  #switcher { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 20;
+    display: flex; gap: 6px; align-items: center; background: #f1efe6; color: #111; padding: 6px 8px;
+    border-radius: 999px; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+  #switcher button { white-space: nowrap; background: #fff; color: #111; border-color: #ccc; border-radius: 999px; }
+  #switcher button.on { background: #111; color: #fff; border-color: #111; }
+  #switcher .vl { white-space: nowrap; min-width: 210px; text-align: center; font-weight: 600; }
+  #switcher .sep { width: 1px; height: 20px; background: #ccc; margin: 0 2px; }
+  #switcher select { background: #fff; color: #111; border-color: #ccc; }
+  .chip { position: absolute; background: var(--bg2); border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 9px; padding: 5px 7px; display: flex; gap: 5px; align-items: center; white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.45); transform: translateX(-50%); }
+  .chip button { padding: 1px 7px; }
+  .chip .sep { width: 1px; height: 18px; background: var(--stroke); }
+  .chip b { font-variant-numeric: tabular-nums; }
+  .chip.col { flex-direction: column; align-items: stretch; }
+  .row { display: flex; gap: 5px; align-items: center; }
+  .hint { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(24,23,30,0.9);
+    border: 1px solid var(--stroke); border-radius: 8px; padding: 6px 10px; color: var(--sub); pointer-events: none !important; }
+  .kbd { display: inline-block; border: 1px solid rgba(255,255,255,0.25); border-bottom-width: 2px; border-radius: 4px;
+    padding: 0 4px; font-size: 11px; color: var(--text); margin: 0 1px; }
+  .ico { width: 18px; height: 18px; display: block; }
+  .tool { display: flex; align-items: center; gap: 5px; padding: 3px 7px; }
+  .tool .k { color: var(--sub); font-size: 11px; }
+  .dim { position: absolute; transform: translate(-50%, -50%); background: var(--bg); border: 1px solid var(--accent);
+    color: var(--text); border-radius: 5px; padding: 0 5px; font-size: 12px; white-space: nowrap; cursor: text; }
+  .dim span.tok { border-bottom: 1px dotted var(--accent); cursor: text; }
+  .dim input { width: 44px; padding: 0 3px; }
+  .radial { position: absolute; width: 0; height: 0; }
+  .radial button { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; border-radius: 999px;
+    background: var(--bg2); box-shadow: 0 3px 12px rgba(0,0,0,0.5); }
+  .radial button.hot { background: var(--accent); color: #111; }
+  .radial .ctr { position: absolute; transform: translate(-50%,-50%); width: 34px; height: 34px; border-radius: 50%;
+    border: 1px dashed var(--accent); pointer-events: none; }
+  .drawer { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(24,23,30,0.96); border-top: 1px solid var(--stroke);
+    padding: 8px 10px; display: flex; gap: 8px; overflow-x: auto; align-items: stretch; }
+  .card { flex: none; width: 112px; border: 1px solid var(--stroke); border-radius: 8px; padding: 4px; cursor: pointer; background: var(--bg); text-align: center; }
+  .card:hover, .card.on { border-color: var(--accent); }
+  .card svg { width: 100%; height: 62px; display: block; }
+  .card .nm { font-size: 12px; }
+  .card .sb { font-size: 10.5px; color: var(--sub); }
+  .drawer .grp { flex: none; writing-mode: vertical-rl; transform: rotate(180deg); color: var(--sub); font-size: 11px; text-transform: uppercase; text-align: center; }
+  .cmd { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); width: 420px; background: var(--bg2);
+    border: 1px solid var(--accent); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); }
+  .cmd input { width: 100%; border: 0; background: transparent; font-size: 15px; padding: 9px 12px; outline: none; }
+  .cmd .sug { border-top: 1px solid var(--stroke); padding: 4px; }
+  .cmd .sug div { padding: 4px 8px; border-radius: 6px; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .cmd .sug div.hot, .cmd .sug div:hover { background: var(--accent2); }
+  .cmd .sug .ex { color: var(--sub); }
+  .hud { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: var(--bg2); border: 1px solid var(--accent);
+    border-radius: 8px; padding: 6px 12px; font-size: 14px; }
+  .tip { position: absolute; background: #111; color: #eee; border-radius: 5px; padding: 2px 6px; font-size: 12px; pointer-events: none !important; white-space: nowrap; }
+  .toast { position: absolute; left: 50%; bottom: 130px; transform: translateX(-50%); background: var(--bg3);
+    border: 1px solid var(--stroke); border-radius: 8px; padding: 6px 10px; display: flex; gap: 8px; align-items: center; }
+  .pn h4 { margin: 0 0 8px; font-size: 13px; }
+  .pn .sec { border-top: 1px solid var(--stroke); padding: 9px 0; }
+  .pn .sec:first-child { border-top: 0; padding-top: 0; }
+  .pn .f { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 4px 0; }
+  .pn .f label { color: var(--sub); }
+  .pn .grid9 { display: grid; grid-template-columns: repeat(3, 22px); gap: 4px; }
+  .pn .grid9 button { width: 22px; height: 22px; padding: 0; border-radius: 50%; }
+  .pn .seg { display: flex; } .pn .seg button { border-radius: 0; } .pn .seg button:first-child { border-radius: 6px 0 0 6px; } .pn .seg button:last-child { border-radius: 0 6px 6px 0; }
+  .pn .help { color: var(--sub); font-size: 11.5px; }
+  .tlbar { height: 20px; border-radius: 4px; background: var(--bg3); position: relative; margin-top: 6px; }
+  .tlmove { position: absolute; top: 2px; bottom: 2px; background: rgba(150,126,255,0.35); border-radius: 3px; font-size: 11px; padding: 0 5px; }
+  .tlhead { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--yellow); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top"><span class="brand">OpenMarch</span><span class="tag">PROTOTYPE · shape UI ideas</span><div id="topslot"></div></header>
+  <main>
+    <div id="stage"><svg id="fld"></svg><div id="ov"></div><div id="notes"></div></div>
+    <aside id="panel"></aside>
+  </main>
+  <footer id="tl">
+    <div class="muted" style="font-size:11px">Timeline (stub) · the shape sets positions at the playhead: <b style="color:var(--text)">count 33</b>, the end of Move 3</div>
+    <div class="tlbar"><div class="tlmove" style="left:2%;width:22%">Move 1</div><div class="tlmove" style="left:26%;width:18%">Move 2</div><div class="tlmove" style="left:46%;width:20%">Move 3</div><div class="tlhead" style="left:66%"></div><div class="tlmove" style="left:68%;width:24%;opacity:.5">Move 4</div></div>
+  </footer>
+</div>
+<div id="switcher"></div>
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const svg = $("#fld"), ov = $("#ov"), panel = $("#panel"), notesEl = $("#notes"), topslot = $("#topslot"), stage = $("#stage");
+const FW = 160, FH = 84; // steps (8 to 5), front sideline is the bottom edge
+const snap = (v) => Math.round(v * 2) / 2;
+const snapP = (p) => ({ x: snap(p.x), y: snap(p.y) });
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = (v) => { const r = Math.round(v * 10) / 10; return String(r); };
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const deg = (r) => (r * 180) / Math.PI, rad = (d) => (d * Math.PI) / 180;
+const clone = (o) => JSON.parse(JSON.stringify(o));
+
+/* ---------------- band ---------------- */
+function makeBand() {
+  const ms = [];
+  for (let i = 0; i < 12; i++) { const a = Math.PI * (1.15 + 0.7 * (i / 11)); ms.push({ id: "T" + (i + 1), x: snap(80 + 22 * Math.cos(a) + ((i % 3) - 1) * 0.8), y: snap(46 + 14 * Math.sin(a) + (i % 2) * 1.2) }); }
+  for (let i = 0; i < 6; i++) ms.push({ id: "M" + (i + 1), x: 66 + i * 5.5, y: 52 });
+  for (let i = 0; i < 8; i++) ms.push({ id: "F" + (i + 1), x: 44 + (i % 4) * 3, y: 58 + Math.floor(i / 4) * 4 });
+  for (let i = 0; i < 6; i++) ms.push({ id: "C" + (i + 1), x: 106 + (i % 3) * 3, y: 58 + Math.floor(i / 3) * 4 });
+  return ms;
+}
+const GROUPS = { Trumpets: (id) => id[0] === "T", Mellos: (id) => id[0] === "M", Flutes: (id) => id[0] === "F", "3 trumpets": (id) => ["T1", "T2", "T3"].includes(id), Everyone: () => true };
+
+/* ---------------- kinds ---------------- */
+const KINDS = {
+  line: { name: "Line", key: "L", icon: '<path d="M4 12H20"/><circle cx="4" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="20" cy="12" r="1.6"/>' },
+  arc: { name: "Arc", key: "A", icon: '<path d="M4 17A8 8 0 0 1 20 17"/>' },
+  circle: { name: "Circle", key: "O", icon: '<circle cx="12" cy="12" r="7.5"/>' },
+  box: { name: "Box", key: "B", icon: '<rect x="5" y="6" width="14" height="12" rx="1"/><circle cx="9" cy="10" r="1.2"/><circle cx="15" cy="10" r="1.2"/><circle cx="9" cy="14" r="1.2"/><circle cx="15" cy="14" r="1.2"/>' },
+  diamond: { name: "Diamond", key: "D", icon: '<path d="M12 4l8 8-8 8-8-8z"/>' },
+  triangle: { name: "Triangle", key: "T", icon: '<path d="M12 5l8 14H4z"/>' },
+  wedge: { name: "Wedge", key: "V", icon: '<path d="M4 7l8 11 8-11"/>' },
+  path: { name: "Curve", key: "C", icon: '<path d="M4 16C8 4 14 20 20 8"/>' },
+};
+const KIND_KEYS = Object.keys(KINDS);
+const icon = (k) => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${KINDS[k].icon}</svg>`;
+const DEFAULT_PATH = [{ x: -0.5, y: 0.3 }, { x: -0.25, y: -0.5 }, { x: 0, y: 0 }, { x: 0.25, y: 0.5 }, { x: 0.5, y: -0.3 }];
+
+function outlineLocal(s) {
+  const w = s.w, h = s.h, P = [];
+  switch (s.kind) {
+    case "line": return { pts: [{ x: -w / 2, y: 0 }, { x: w / 2, y: 0 }], closed: false };
+    case "arc": for (let i = 0; i <= 32; i++) { const t = Math.PI + (Math.PI * i) / 32; P.push({ x: (w / 2) * Math.cos(t), y: h / 2 + h * Math.sin(t) }); } return { pts: P, closed: false };
+    case "circle": for (let i = 0; i < 48; i++) { const t = -Math.PI / 2 + (2 * Math.PI * i) / 48; P.push({ x: (w / 2) * Math.cos(t), y: (h / 2) * Math.sin(t) }); } return { pts: P, closed: true };
+    case "box": return { pts: [{ x: -w / 2, y: -h / 2 }, { x: w / 2, y: -h / 2 }, { x: w / 2, y: h / 2 }, { x: -w / 2, y: h / 2 }], closed: true };
+    case "diamond": return { pts: [{ x: 0, y: -h / 2 }, { x: w / 2, y: 0 }, { x: 0, y: h / 2 }, { x: -w / 2, y: 0 }], closed: true };
+    case "triangle": return { pts: [{ x: 0, y: -h / 2 }, { x: w / 2, y: h / 2 }, { x: -w / 2, y: h / 2 }], closed: true };
+    case "wedge": return { pts: [{ x: -w / 2, y: -h / 2 }, { x: 0, y: h / 2 }, { x: w / 2, y: -h / 2 }], closed: false };
+    case "path": return { pts: smoothPath((s.pts || DEFAULT_PATH).map((p) => ({ x: p.x * w, y: p.y * h }))), closed: false };
+  }
+}
+function smoothPath(pts) { // Catmull-Rom so a few clicked points read as a curve
+  if (pts.length < 3) return pts;
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+    for (let t = 0; t < 1; t += 0.125) { const t2 = t * t, t3 = t2 * t;
+      out.push({ x: 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+                 y: 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3) }); }
+  }
+  out.push(pts[pts.length - 1]); return out;
+}
+function samplePoly(pts, closed, n) {
+  const seg = [], L = [0]; const m = closed ? pts.length : pts.length - 1;
+  for (let i = 0; i < m; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; seg.push([a, b]); L.push(L[L.length - 1] + dist(a, b)); }
+  const tot = L[L.length - 1], out = [];
+  for (let i = 0; i < n; i++) {
+    const t = closed ? (tot * i) / n : n === 1 ? tot / 2 : (tot * i) / (n - 1);
+    let j = 0; while (j < seg.length - 1 && L[j + 1] < t) j++;
+    const [a, b] = seg[j] || [pts[0], pts[0]]; const sl = L[j + 1] - L[j] || 1; const f = clamp((t - L[j]) / sl, 0, 1);
+    out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f });
+  }
+  return { out, tot };
+}
+function boxSplit(s, n) {
+  const cols = s.cols ? Math.min(s.cols, n) : clamp(Math.round(Math.sqrt((n * s.w) / Math.max(s.h, 0.01))), 1, n);
+  return { cols, rows: Math.ceil(n / cols) };
+}
+function spotsLocal(s, n) {
+  if (!n) return [];
+  if (s.kind === "box") {
+    const { cols, rows } = boxSplit(s, n); const dx = cols > 1 ? s.w / (cols - 1) : 0, dy = rows > 1 ? s.h / (rows - 1) : 0; const out = [];
+    for (let r = 0; r < rows; r++) { const cnt = r < rows - 1 ? cols : n - cols * (rows - 1); const off = ((cols - cnt) * dx) / 2;
+      for (let c = 0; c < cnt; c++) out.push({ x: -s.w / 2 + off + c * dx, y: rows === 1 ? 0 : s.h / 2 - r * dy }); }
+    return out;
+  }
+  if (s.kind === "circle") { const out = []; for (let i = 0; i < n; i++) { const t = -Math.PI / 2 + (2 * Math.PI * i) / n; out.push({ x: (s.w / 2) * Math.cos(t), y: (s.h / 2) * Math.sin(t) }); } return out; }
+  const o = outlineLocal(s); return samplePoly(o.pts, o.closed, n).out;
+}
+function intervals(s, n) {
+  if (s.kind === "box") { const { cols, rows } = boxSplit(s, n); return { cols, rows, across: cols > 1 ? s.w / (cols - 1) : 0, deep: rows > 1 ? s.h / (rows - 1) : 0, short: cols * rows - n }; }
+  const o = outlineLocal(s); const { tot } = samplePoly(o.pts, o.closed, 2); const lenTot = o.closed ? tot : tot;
+  return { apart: o.closed ? lenTot / n : lenTot / Math.max(1, n - 1) };
+}
+const toWorld = (s, p) => { const x = p.x * (s.fx || 1), y = p.y * (s.fy || 1), c = Math.cos(s.rot), si = Math.sin(s.rot); return { x: s.cx + x * c - y * si, y: s.cy + x * si + y * c }; };
+const toLocal = (s, p) => { const dx = p.x - s.cx, dy = p.y - s.cy, c = Math.cos(-s.rot), si = Math.sin(-s.rot); return { x: (dx * c - dy * si) * (s.fx || 1), y: (dx * si + dy * c) * (s.fy || 1) }; };
+const spotsOf = (s, n) => spotsLocal(s, n).map((p) => toWorld(s, p));
+
+function shapeFromDrag(kind, a, b, shift) {
+  const d = dist(a, b), ang = Math.atan2(b.y - a.y, b.x - a.x);
+  if (kind === "line") return { kind, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, w: d, h: 0, rot: ang };
+  if (kind === "circle") return { kind, cx: a.x, cy: a.y, w: 2 * d, h: 2 * d, rot: 0 };
+  if (kind === "arc") { const s = { kind, cx: 0, cy: 0, w: d, h: d / 2, rot: ang }; const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; const o = toWorld({ ...s, cx: 0, cy: 0 }, { x: 0, y: -s.h / 2 }); return { ...s, cx: m.x + o.x, cy: m.y + o.y }; }
+  let w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
+  if (shift) { const m = Math.max(w, h); w = h = m; }
+  const sx = Math.sign(b.x - a.x) || 1, sy = Math.sign(b.y - a.y) || 1;
+  return { kind, cx: a.x + (sx * w) / 2, cy: a.y + (sy * h) / 2, w, h, rot: 0, pts: kind === "path" ? DEFAULT_PATH : undefined };
+}
+function autoShape(kind, n, iv = 2, at) {
+  const c = at || selCenter(); let w, h, cols;
+  switch (kind) {
+    case "line": w = iv * (n - 1); h = 0; break;
+    case "box": cols = clamp(Math.round(Math.sqrt(n * 1.5)), 1, n); w = iv * (cols - 1); h = iv * (Math.ceil(n / cols) - 1); break;
+    case "circle": w = h = (n * iv) / Math.PI; break;
+    case "arc": { const r = ((n - 1) * iv) / Math.PI; w = 2 * r; h = r; break; }
+    case "diamond": { const side = (n * iv) / 4; w = h = side * Math.SQRT2; break; }
+    case "triangle": { const side = (n * iv) / 3; w = side; h = side * 0.866; break; }
+    case "wedge": { const leg = ((n - 1) * iv) / 2; w = leg * Math.SQRT2; h = leg * Math.SQRT1_2; break; }
+    case "path": w = iv * (n - 1) * 0.8; h = w * 0.35; break;
+  }
+  return { kind, cx: snap(c.x), cy: snap(c.y), w, h, rot: 0, cols, pts: kind === "path" ? DEFAULT_PATH : undefined };
+}
+function convertKind(s, kind) {
+  const t = { ...s, kind };
+  if (kind === "line") t.h = 0;
+  else if (t.h < 1) t.h = kind === "arc" ? t.w / 2 : t.w * 0.6;
+  if (kind === "circle") { const m = Math.max(t.w, t.h); t.w = t.h = m; }
+  if (kind === "path" && !t.pts) t.pts = DEFAULT_PATH;
+  if (kind !== "box") delete t.cols;
+  return t;
+}
+// one transform for every kind: rotate by dθ and scale by sx, sy (in the shape's own axes) about a pivot
+function transformShape(s0, pivot, sx = 1, sy = 1, dth = 0) {
+  const s = clone(s0); const c = Math.cos(s0.rot), si = Math.sin(s0.rot);
+  let vx = s0.cx - pivot.x, vy = s0.cy - pivot.y; let lx = vx * c + vy * si, ly = -vx * si + vy * c; lx *= sx; ly *= sy;
+  vx = lx * c - ly * si; vy = lx * si + ly * c; s.w = s0.w * Math.abs(sx); s.h = s0.h * Math.abs(sy);
+  if (sx < 0) s.fx = -(s0.fx || 1); if (sy < 0) s.fy = -(s0.fy || 1);
+  const c2 = Math.cos(dth), s2 = Math.sin(dth); s.cx = pivot.x + vx * c2 - vy * s2; s.cy = pivot.y + vx * s2 + vy * c2; s.rot = s0.rot + dth;
+  return s;
+}
+
+/* ---------------- state ---------------- */
+const S = { ms: makeBand(), sel: new Set(), shape: null, kind: "box", q: 0, v: 0, drag: null, mouse: { x: 80, y: 42 }, undo: null, toast: null, order: "nearest", keepSpacing: false, cache: {}, view: { x: 36, y: 14, w: 88, h: 51.6 } };
+let HOME = clone(S.ms);
+let V = {}; // per-variant scratch state
+function setGroup(g) { S.sel = new Set(S.ms.filter((m) => GROUPS[g](m.id)).map((m) => m.id)); S.group = g; }
+setGroup("Trumpets");
+const selMs = () => S.ms.filter((m) => S.sel.has(m.id));
+function selCenter() { const a = selMs(); if (!a.length) return { x: 80, y: 42 }; return { x: a.reduce((t, m) => t + m.x, 0) / a.length, y: a.reduce((t, m) => t + m.y, 0) / a.length }; }
+
+function assign(spots, ms) {
+  const res = {};
+  if (S.order === "drill") { const sorted = [...ms].sort((a, b) => +a.id.slice(1) - +b.id.slice(1)); sorted.forEach((m, i) => (res[m.id] = spots[i])); return res; }
+  const pairs = []; ms.forEach((m) => spots.forEach((p, j) => pairs.push([(m.x - p.x) ** 2 + (m.y - p.y) ** 2, m.id, j])));
+  pairs.sort((a, b) => a[0] - b[0]); const used = new Set();
+  for (const [, id, j] of pairs) { if (res[id] || used.has(j)) continue; res[id] = spots[j]; used.add(j); }
+  return res;
+}
+function place() {
+  if (!S.shape || !S.cache.asg) return; const asg = S.cache.asg; S.undo = clone(S.ms);
+  const from = clone(S.ms), to = S.ms.map((m) => (asg[m.id] ? { x: asg[m.id].x, y: asg[m.id].y } : { x: m.x, y: m.y }));
+  const t0 = performance.now(); S.shape = null; cur().after?.();
+  const step = (t) => { const f = clamp((t - t0) / 350, 0, 1), e = 1 - (1 - f) ** 3; S.ms.forEach((m, i) => { m.x = from[i].x + (to[i].x - from[i].x) * e; m.y = from[i].y + (to[i].y - from[i].y) * e; }); render(); if (f < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step); toast(`Placed ${S.sel.size} marchers at count 33`, true);
+}
+function toast(msg, undo) { S.toast = { msg, undo }; clearTimeout(S.tt); S.tt = setTimeout(() => { S.toast = null; render(); }, 4500); }
+
+/* ---------------- geometry for the view ---------------- */
+function ctm() { return svg.getScreenCTM(); }
+const k = () => ctm().a; // px per step
+function toField(e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(ctm().inverse()); return { x: q.x, y: q.y }; }
+function toScreen(p) { const m = ctm(), r = stage.getBoundingClientRect(); return { x: m.a * p.x + m.e - r.left, y: m.d * p.y + m.f - r.top }; }
+function worldBBox(s) { const o = outlineLocal(s).pts.map((p) => toWorld(s, p)); const xs = o.map((p) => p.x), ys = o.map((p) => p.y); return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; }
+function insideShape(s, p, pad = 1.5) { const l = toLocal(s, p); return Math.abs(l.x) <= s.w / 2 + pad && Math.abs(l.y) <= s.h / 2 + pad; }
+function yardDesc(x) { const i = clamp(Math.round(x / 8), 0, 20), yd = Math.min(5 * i, 100 - 5 * i), side = i < 10 ? "S1" : i > 10 ? "S2" : "", off = x - 8 * i;
+  const inward = i < 10 ? off > 0 : off < 0; const o = Math.abs(off) < 0.05 ? "on" : `${fmt(Math.abs(off))} ${inward ? "in" : "out"} from`; return `${o} ${side} ${yd}`.replace("  ", " ").trim(); }
+function depthDesc(y) { const refs = [["back sideline", 0], ["back hash", 28], ["front hash", 56], ["front sideline", FH]]; let best = refs[0]; for (const r of refs) if (Math.abs(y - r[1]) < Math.abs(y - best[1])) best = r;
+  const d = y - best[1]; return Math.abs(d) < 0.05 ? `on ${best[0]}` : `${fmt(Math.abs(d))} ${d < 0 ? "behind" : "in front of"} ${best[0]}`; }
+
+/* ---------------- field ---------------- */
+const FIELD = (() => {
+  let h = `<rect x="0" y="0" width="${FW}" height="${FH}" fill="#1f3427"/>`;
+  for (let i = 0; i <= 20; i++) { const x = i * 8; h += `<line x1="${x}" y1="0" x2="${x}" y2="${FH}" stroke="rgba(255,255,255,${i % 2 ? 0.22 : 0.4})" vector-effect="non-scaling-stroke"/>`;
+    for (const y of [28, 56]) h += `<line x1="${x - 0.8}" y1="${y}" x2="${x + 0.8}" y2="${y}" stroke="rgba(255,255,255,.5)" vector-effect="non-scaling-stroke"/>`;
+    if (i % 2 === 0 && i > 0 && i < 20) { const n = Math.min(5 * i, 100 - 5 * i); h += `<text x="${x}" y="${FH - 9}" font-size="2.4" fill="rgba(255,255,255,.3)" text-anchor="middle">${n}</text><text x="${x}" y="11" font-size="2.4" fill="rgba(255,255,255,.35)" text-anchor="middle" transform="rotate(180 ${x} 10.2)">${n}</text>`; } }
+  h += `<text x="${FW / 2}" y="${FH + 4.5}" font-size="2.6" fill="rgba(255,255,255,.35)" text-anchor="middle">FRONT · audience</text>`;
+  return h;
+})();
+
+/* ---------------- render ---------------- */
+function render() {
+  const Vt = cur(), n = S.sel.size, sh = S.shape;
+  S.phase = S.drag?.draw ? "drawing" : sh ? "open" : "idle";
+  svg.setAttribute("viewBox", `${S.view.x} ${S.view.y} ${S.view.w} ${S.view.h}`);
+  const p = Vt.panel?.() || ""; panel.classList.toggle("open", !!p);
+  if (panel._h !== p && !(panel.contains(document.activeElement) && document.activeElement.tagName === "INPUT" && !S.force)) { panel.innerHTML = p; panel._h = p; }
+  const K = k() || 6;
+  let sp = null, asg = null; if (sh && n) { sp = spotsOf(sh, n); asg = assign(sp, selMs()); }
+  S.cache = { sp, asg };
+  let h = FIELD + (Vt.under?.(K) || "");
+  if (asg && Vt.walks !== false) for (const m of selMs()) { const p = asg[m.id]; if (p) h += `<line x1="${m.x}" y1="${m.y}" x2="${p.x}" y2="${p.y}" stroke="rgba(150,126,255,.45)" stroke-width="1" vector-effect="non-scaling-stroke"/>`; }
+  if (sh) h += outlineSVG(sh, Vt.outline);
+  for (const m of S.ms) h += marcherSVG(m, S.sel.has(m.id), Vt);
+  if (sp) for (const p of sp) h += `<circle cx="${p.x}" cy="${p.y}" r="0.7" fill="var(--accent)" stroke="#fff" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+  if (asg && Vt.labels !== false) for (const m of selMs()) { const p = asg[m.id]; if (p) h += `<text x="${p.x}" y="${p.y - 1.05}" font-size="1.05" fill="#fff" text-anchor="middle" pointer-events="none">${m.id}</text>`; }
+  h += Vt.over?.(K) || "";
+  svg.innerHTML = h;
+  let o = Vt.overlay?.() || "";
+  if (S.toast) o += `<div class="toast">${S.toast.msg}${S.toast.undo ? ' <button data-act="undo">Undo</button>' : ""}</div>`;
+  if (ov._h !== o && !(ov.contains(document.activeElement) && document.activeElement.tagName === "INPUT" && !S.force)) { ov.innerHTML = o; ov._h = o; Vt.afterOverlay?.(); }
+  const t = Vt.top?.() ?? stripCompact(); if (topslot._h !== t) { topslot.innerHTML = t; topslot._h = t; }
+  S.force = false;
+}
+function outlineSVG(s, style) {
+  const o = outlineLocal(s), pts = o.pts.map((p) => toWorld(s, p)).map((p) => `${p.x},${p.y}`).join(" ");
+  const tag = o.closed ? "polygon" : "polyline";
+  return `<${tag} points="${pts}" fill="${o.closed ? "rgba(150,126,255,.06)" : "none"}" stroke="var(--accent)" stroke-width="${style === "faint" ? 1 : 1.5}" stroke-dasharray="${S.phase === "drawing" ? "5 4" : "none"}" opacity="${style === "faint" ? 0.5 : 0.9}" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+}
+function marcherSVG(m, sel, Vt) {
+  const st = Vt.mstyle ? Vt.mstyle(m, sel) : defaultStyle(m, sel);
+  if (st.hidden) return "";
+  const r = st.r ?? 0.6;
+  let h = `<g opacity="${st.op ?? 1}">`;
+  if (st.halo) h += `<circle cx="${m.x}" cy="${m.y}" r="${r + 1.1}" fill="${st.halo}" />`;
+  h += `<circle cx="${m.x}" cy="${m.y}" r="${r}" fill="${st.fill ?? "#e8e8e8"}" stroke="${st.ring ?? "#222"}" stroke-width="${st.ringW ?? 1}" vector-effect="non-scaling-stroke"/>`;
+  if (st.label !== false) h += `<text x="${m.x}" y="${m.y - 1.1}" font-size="1.15" fill="${st.lc ?? "rgba(255,255,255,.75)"}" text-anchor="middle">${m.id}</text>`;
+  return h + "</g>";
+}
+function defaultStyle(m, sel) {
+  if (sel && S.shape) return { fill: "transparent", ring: "rgba(150,126,255,.8)", ringW: 1.2, lc: "rgba(255,255,255,.35)", label: false };
+  if (sel) return { fill: "#fff", ring: "var(--accent)", ringW: 2 };
+  return {};
+}
+const cur = () => QS[S.q].variants[S.v];
+
+/* ---------------- shared handles (Figma-ish box) ---------------- */
+const HANDLES = [["nw", -1, -1], ["n", 0, -1], ["ne", 1, -1], ["e", 1, 0], ["se", 1, 1], ["s", 0, 1], ["sw", -1, 1], ["w", -1, 0]];
+function handlesSVG(K, opts = {}) {
+  const s = S.shape; if (!s || S.phase === "drawing") return ""; const r = 4.5 / K; let h = "";
+  const flat = s.h < 0.3;
+  for (const [nm, sx, sy] of HANDLES) { if (flat && sy !== 0) continue; if (opts.cornersOnly && (sx === 0 || sy === 0)) continue;
+    const p = toWorld(s, { x: (sx * s.w) / 2, y: (sy * s.h) / 2 });
+    h += `<rect data-h="${nm}" x="${p.x - r}" y="${p.y - r}" width="${2 * r}" height="${2 * r}" fill="#fff" stroke="var(--accent)" stroke-width="1.5" vector-effect="non-scaling-stroke" style="cursor:pointer"/>`; }
+  if (opts.rotKnob !== false) { const top = toWorld(s, { x: 0, y: -s.h / 2 - 22 / K }), base = toWorld(s, { x: 0, y: -s.h / 2 });
+    h += `<line x1="${base.x}" y1="${base.y}" x2="${top.x}" y2="${top.y}" stroke="var(--accent)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/><circle data-h="rot" cx="${top.x}" cy="${top.y}" r="${r}" fill="var(--bg)" stroke="var(--accent)" stroke-width="1.5" vector-effect="non-scaling-stroke" style="cursor:grab"/>`; }
+  return h;
+}
+function scaleDrag(name, p0, e0) {
+  const s0 = clone(S.shape), H = HANDLES.find((h) => h[0] === name); const [, hx, hy] = H; const n = S.sel.size; const iv0 = intervals(s0, n);
+  if (s0.kind === "box" && !s0.cols) s0.cols = iv0.cols;
+  return { move(p, e) {
+    let q = toLocal(s0, p); q = { x: snap(q.x), y: snap(q.y) };
+    if (s0.kind === "line") { // line ends are free points
+      const other = toWorld(s0, { x: (-hx * s0.w) / 2, y: 0 }), me = snapP(p);
+      S.shape = e.altKey ? { ...shapeFromDrag("line", { x: 2 * s0.cx - me.x, y: 2 * s0.cy - me.y }, me) } : shapeFromDrag("line", other, me); S.tip = { p, t: `${fmt(dist(other, me))} steps · ${fmt(S.shape.w / Math.max(1, n - 1))} apart` }; return; }
+    let w = s0.w, h = s0.h, cxl = 0, cyl = 0; const ax = (-hx * s0.w) / 2, ay = (-hy * s0.h) / 2;
+    if (hx) { if (e.altKey) w = 2 * Math.abs(q.x); else { w = Math.abs(q.x - ax); cxl = (q.x + ax) / 2; } }
+    if (hy) { if (e.altKey) h = 2 * Math.abs(q.y); else { h = Math.abs(q.y - ay); cyl = (q.y + ay) / 2; } }
+    if (e.shiftKey && hx && hy) { const f = Math.max(w / (s0.w || 1), h / (s0.h || 1)); w = s0.w * f; h = s0.h * f; if (!e.altKey) { cxl = ax + hx * w / 2; cyl = ay + hy * h / 2; } }
+    const s = { ...s0, w, h };
+    if (S.keepSpacing && s0.kind === "box") { // size changes the count across, not the spacing
+      if (hx) { s.cols = clamp(Math.round(w / (iv0.across || 2)) + 1, 1, n); s.w = (iv0.across || 2) * (s.cols - 1); }
+      else if (hy) { const rows = clamp(Math.round(h / (iv0.deep || 2)) + 1, 1, n); s.cols = Math.ceil(n / rows); }
+      const rr = Math.ceil(n / s.cols); s.h = (iv0.deep || 2) * (rr - 1);
+      if (!e.altKey) { cxl = hx ? ax + (hx * s.w) / 2 : 0; cyl = hy ? ay + (hy * s.h) / 2 : 0; }
+    }
+    const c = toWorld({ ...s0, fx: 1, fy: 1 }, { x: cxl * (s0.fx || 1), y: cyl * (s0.fy || 1) }); s.cx = c.x; s.cy = c.y; S.shape = s;
+    const iv = intervals(s, n); S.tip = { p, t: s.kind === "box" ? `${iv.cols} × ${iv.rows} · ${fmt(iv.across)} across, ${fmt(iv.deep)} deep` : `${fmt(s.w)} × ${fmt(s.h)} steps · ${fmt(iv.apart)} apart` };
+  }, up() { S.tip = null; } };
+}
+function rotDrag(p0, pivot) {
+  const s0 = clone(S.shape), c = pivot || { x: s0.cx, y: s0.cy }, a0 = Math.atan2(p0.y - c.y, p0.x - c.x);
+  return { move(p, e) { let d = Math.atan2(p.y - c.y, p.x - c.x) - a0; let tot = deg(s0.rot + d); tot = e.shiftKey ? Math.round(tot / 15) * 15 : Math.round(tot); d = rad(tot) - s0.rot;
+      S.shape = transformShape(s0, c, 1, 1, d); S.tip = { p, t: `${((tot % 360) + 360) % 360}°${e.shiftKey ? "" : " · Shift for 15°"}` }; }, up() { S.tip = null; } };
+}
+function moveDrag(p0) { const s0 = clone(S.shape); return { move(p) { S.shape = { ...s0, cx: s0.cx + snap(p.x - p0.x), cy: s0.cy + snap(p.y - p0.y) }; }, up() {} }; }
+function drawDrag(kind, p0) {
+  const a = snapP(p0), prev = S.shape; let moved = false;
+  return { draw: true, move(p, e) { if (dist(p, p0) > 0.8) moved = true; if (!moved) return; S.shape = shapeFromDrag(kind, a, snapP(p), e.shiftKey); },
+    up() { if (!moved) { S.shape = prev; return; } if (S.shape.kind === "box") S.shape.cols = boxSplit(S.shape, S.sel.size).cols; } };
+}
+function stdDown(hit, p, e) {
+  if (hit.h === "rot") return rotDrag(p);
+  if (hit.h && hit.h !== "pivot") return scaleDrag(hit.h, p, e);
+  if (hit.t === "marcher" && e.shiftKey) { const id = hit.m.id; S.sel.has(id) ? S.sel.delete(id) : S.sel.add(id); S.group = null; return null; }
+  if (hit.t === "shape") return moveDrag(p);
+  if (S.sel.size) return drawDrag(S.kind, p);
+  return null;
+}
+function hitTest(e, p) {
+  const h = e.target.closest?.("[data-h]"); if (h) return { h: h.dataset.h };
+  if (S.shape && insideShape(S.shape, p)) return { t: "shape" };
+  let best = null, bd = 1.4; for (const m of S.ms) { const d = dist(m, p); if (d < bd) { bd = d; best = m; } }
+  if (best) return { t: "marcher", m: best };
+  return { t: "field" };
+}
+function tipHTML() { if (!S.tip) return ""; const s = toScreen(S.tip.p); return `<div class="tip" style="left:${s.x + 14}px;top:${s.y + 14}px">${S.tip.t}</div>`; }
+
+/* ---------------- shared actions ---------------- */
+function act(a, el) {
+  const s = S.shape, n = S.sel.size;
+  if (a === "place") return place();
+  if (a === "cancel") { S.shape = null; return; }
+  if (a === "undo") { if (S.undo) { S.ms = S.undo; S.undo = null; } S.toast = null; return; }
+  if (a.startsWith("kind:")) { const kd = a.slice(5); S.kind = kd; if (s) S.shape = convertKind(s, kd); return; }
+  if (a.startsWith("sel:")) { setGroup(a.slice(4)); return; }
+  if (!s) return;
+  const iv = intervals(s, n);
+  if (a === "cols+" || a === "cols-") { if (s.kind !== "box") return; const c = clamp(iv.cols + (a === "cols+" ? 1 : -1), 1, n); const rows = Math.ceil(n / c);
+    S.shape = { ...s, cols: c, w: (iv.across || 2) * (c - 1), h: (iv.deep || 2) * (rows - 1) }; return; }
+  if (a === "spx+" || a === "spx-") { const d = a.endsWith("+") ? 0.5 : -0.5; if (s.kind === "box") S.shape = { ...s, cols: iv.cols, w: Math.max(0.5, iv.across + d) * (iv.cols - 1) }; else return act(a === "spx+" ? "sp+" : "sp-"); return; }
+  if (a === "spy+" || a === "spy-") { const d = a.endsWith("+") ? 0.5 : -0.5; if (s.kind === "box") S.shape = { ...s, cols: iv.cols, h: Math.max(0.5, iv.deep + d) * (iv.rows - 1) }; return; }
+  if (a === "sp+" || a === "sp-") { const cur = s.kind === "box" ? iv.across : iv.apart; const nv = Math.max(0.5, snap(cur) + (a === "sp+" ? 0.5 : -0.5)); return setApart(nv); }
+  if (a.startsWith("rot:")) { S.shape = transformShape(s, cur().pivotP?.() || { x: s.cx, y: s.cy }, 1, 1, rad(+a.slice(4))); return; }
+  if (a === "flipx") { S.shape = transformShape(s, cur().pivotP?.() || { x: s.cx, y: s.cy }, -1, 1, 0); return; }
+  if (a === "flipy") { S.shape = transformShape(s, cur().pivotP?.() || { x: s.cx, y: s.cy }, 1, -1, 0); return; }
+  if (a === "order") { S.order = S.order === "nearest" ? "drill" : "nearest"; return; }
+}
+function setApart(v) { const s = S.shape, n = S.sel.size, iv = intervals(s, n);
+  if (s.kind === "box") { S.shape = { ...s, cols: iv.cols, w: v * (iv.cols - 1), h: v * (iv.rows - 1) }; return; }
+  const f = v / (iv.apart || 1); S.shape = { ...s, w: s.w * f, h: s.h * f }; }
+function summary(s) { const n = S.sel.size, iv = intervals(s, n); return s.kind === "box" ? `${iv.cols} × ${iv.rows}${iv.short ? ` · ${iv.short} short` : ""} · ${fmt(iv.across)} across, ${fmt(iv.deep)} deep` : `${KINDS[s.kind].name} · ${n} · ${fmt(iv.apart)} steps apart`; }
+
+/* ---------------- shared bits of UI ---------------- */
+function stripCompact() { return KIND_KEYS.map((kd) => `<button class="ghost ${S.kind === kd ? "on" : ""}" data-act="kind:${kd}" title="${KINDS[kd].name}">${icon(kd)}</button>`).join("") + `<span class="muted" style="margin-left:8px">Drag on the field to draw · <span class="kbd">Enter</span> place · <span class="kbd">Esc</span> cancel · Shift-click a marcher to add/remove</span>`; }
+function placeBar() { return S.shape ? `<button class="primary" data-act="place">Place</button>` : ""; }
+function hintIfIdle(t) { return !S.shape && S.phase !== "drawing" ? `<div class="hint">${t}</div>` : ""; }
+function chipBelow(inner, extraY = 26, cls = "") { const b = worldBBox(S.shape), s = toScreen({ x: (b.x0 + b.x1) / 2, y: b.y1 }); return `<div class="chip ${cls}" style="left:${s.x}px;top:${s.y + extraY}px">${inner}</div>`; }
+
+/* ======================= QUESTIONS AND VARIANTS ======================= */
+const QS = [
+/* ---------- Q1: drawing with a selection ---------- */
+{ short: "Selection", title: "Drawing with a selection", key: "focus", variants: [
+  { name: "Fade the rest", idea: "While the shape tool is open, every marcher you didn't select fades to about 20%. The selected ones stay bright.",
+    tryit: ["Drag on the field to draw a box (pick other shapes up top).", "Look at how easy it is to find your 12 versus seeing the rest of the band.", "Change the selection with the chips in the bottom bar."],
+    pros: "Simple. Your marchers are obvious at a glance.", cons: "It hides who you might land on. A faded flute under a new spot is easy to miss.",
+    mstyle(m, sel) { if (sel) return defaultStyle(m, sel); return { op: 0.2, label: false }; } },
+  { name: "Spotlight", idea: "The field darkens, and a lit area follows your marchers and the shape. Everyone else stays visible but sits in the dark.",
+    tryit: ["Draw a shape and watch the lit area grow to cover where your marchers will go.", "Try selecting Everyone: the spotlight covers the whole field."],
+    pros: "Feels like a mode. The surroundings stay readable, so you can still place relative to other sections.", cons: "Heavier. It may feel dramatic for a quick edit, and it darkens the field image.",
+    under() { return ""; },
+    over(K) { const pts = selMs().map((m) => ({ x: m.x, y: m.y })).concat(S.cache.sp || []); if (!pts.length) return ""; const hull = convexHull(pts);
+      return `<defs><mask id="spot"><rect x="-10" y="-10" width="${FW + 20}" height="${FH + 20}" fill="#fff"/><polygon points="${hull.map((p) => p.x + "," + p.y).join(" ")}" fill="#000" stroke="#000" stroke-width="10" stroke-linejoin="round"/></mask><filter id="blur"><feGaussianBlur stdDeviation="1.2"/></filter></defs><rect x="-10" y="-10" width="${FW + 20}" height="${FH + 20}" fill="rgba(5,5,10,.62)" mask="url(#spot)" pointer-events="none"/>`; } },
+  { name: "Keep context, warn on landings", idea: "Nobody fades. Your marchers get a halo instead, a count follows the cursor while you draw, and anyone you didn't select who stands within a step of a new spot is flagged in red.",
+    tryit: ["Draw a big box across the mellophones (the line in front).", "Watch the red rings and the chip near the cursor."],
+    pros: "You see what you're about to collide with. Nothing gets hidden.", cons: "Busier. With a full band on the field it is harder to see your own marchers.",
+    mstyle(m, sel) { if (sel) return S.shape ? { fill: "transparent", ring: "rgba(150,126,255,.8)", label: false } : { fill: "#fff", ring: "var(--accent)", halo: "rgba(150,126,255,.35)" };
+      if (S.cache.sp && S.cache.sp.some((p) => dist(p, m) < 1.2)) return { ring: "var(--red)", ringW: 3, halo: "rgba(227,74,74,.35)" }; return {}; },
+    overlay() { let o = hintIfIdle(`${S.sel.size} selected · drag to draw a ${KINDS[S.kind].name.toLowerCase()}`);
+      if (S.shape && S.cache.sp) { const hits = S.ms.filter((m) => !S.sel.has(m.id) && S.cache.sp.some((p) => dist(p, m) < 1.2)); const sc = toScreen(S.mouse);
+        o += `<div class="tip" style="left:${sc.x + 16}px;top:${sc.y + 16}px">${S.sel.size} → ${KINDS[S.shape.kind].name}${hits.length ? ` · <span style="color:var(--red)">lands on ${hits.map((m) => m.id).join(", ")}</span>` : ""}</div>`; }
+      return o; } },
+  { name: "Fade only while drawing", idea: "The field looks normal until you press. During the drag everyone else fades and your marchers' current spots turn into hollow rings. On release the rest come back to about 60%. Hold H to hide everyone else.",
+    tryit: ["Press and drag slowly: the fade only happens while your finger is down.", "Release, then hold H to peek at just your marchers."],
+    pros: "Context is there when you're thinking, and focus is there when you're drawing.", cons: "The view changes on press, which may feel jumpy. The H key is one more thing to learn.",
+    mstyle(m, sel) { if (sel) return defaultStyle(m, sel); if (V.peek) return { hidden: true }; if (S.phase === "drawing") return { op: 0.15, label: false }; if (S.phase === "open") return { op: 0.6 }; return {}; },
+    key(e, down) { if (e.key.toLowerCase() === "h") { V.peek = down; return true; } } },
+] },
+
+/* ---------- Q2: on-field controls vs inspector ---------- */
+{ short: "Controls", title: "Quick controls vs inspector", key: "controls", variants: [
+  { name: "Floating chip", setup: () => (S.shape = autoShape("box", S.sel.size, 3)),
+    idea: "A small bar sits under the shape with only the numbers you change most: size (4 × 3), spacing, and Place. ⋯ opens a second row with the less common things.",
+    tryit: ["Use ± to change how many across, and to change the spacing.", "Open ⋯ and switch to a line or an arc: the chip changes to fit.", "Drag the shape: the chip follows."],
+    pros: "Right where your eyes are. It shows few numbers by design.", cons: "It can cover marchers in front of the shape, and it moves around.",
+    over: (K) => handlesSVG(K),
+    overlay() { if (!S.shape) return hintIfIdle("Drag on the field to draw, or Reset in the bar") + tipHTML(); const s = S.shape, iv = intervals(s, S.sel.size);
+      let row = s.kind === "box" ? `<button data-act="cols-">−</button><b>${iv.cols} × ${iv.rows}</b><button data-act="cols+">+</button><span class="sep"></span><span class="muted">↔</span><button data-act="spx-">−</button><b>${fmt(iv.across)}</b><button data-act="spx+">+</button><span class="muted">↕</span><button data-act="spy-">−</button><b>${fmt(iv.deep)}</b><button data-act="spy+">+</button>`
+        : `<b>${KINDS[s.kind].name}</b><span class="sep"></span><span class="muted">apart</span><button data-act="sp-">−</button><b>${fmt(iv.apart)}</b><button data-act="sp+">+</button>`;
+      row += `<span class="sep"></span><button class="${V.more ? "on" : ""}" data-act="more">⋯</button><button class="primary" data-act="place">Place</button>`;
+      const more = V.more ? `<div class="row">${KIND_KEYS.map((kd) => `<button class="ghost ${s.kind === kd ? "on" : ""}" data-act="kind:${kd}" title="${KINDS[kd].name}">${icon(kd)}</button>`).join("")}<span class="sep"></span><button data-act="rot:-90">⟲ 90°</button><button data-act="flipy">Flip</button><button data-act="order">${S.order === "nearest" ? "Nearest" : "Drill order"}</button></div>` : "";
+      return chipBelow(`<div class="row">${row}</div>${more}`, 26, "col") + tipHTML(); },
+    act(a) { if (a === "more") { V.more = !V.more; return true; } } },
+  { name: "Numbers on the field", setup: () => (S.shape = autoShape("box", S.sel.size, 3)),
+    idea: "No panel and no chip. The numbers are drawn on the shape like dimensions on a drawing. Click any number to type over it.",
+    tryit: ["Click the across spacing above the box and type 3.", "Click the count (4 across) and type 6.", "Switch to a circle (top bar) and edit the radius line."],
+    pros: "You change the number right next to what it measures. Nothing to look away to.", cons: "Labels pile up on small or dense shapes. Settings that don't measure anything (order, kind) have no home.",
+    over(K) { return handlesSVG(K) + (S.shape ? dimsSVG(K) : ""); },
+    overlay() { return (S.shape ? dimsHTML() + chipBelow(`<button class="primary" data-act="place">Place</button>`, 40) : hintIfIdle("Drag on the field to draw")) + tipHTML(); },
+    afterOverlay() { ov.querySelectorAll("[data-edit]").forEach((el) => (el.onclick = () => editToken(el))); } },
+  { name: "Inspector only", setup: () => (S.shape = autoShape("box", S.sel.size, 3)),
+    idea: "Everything lives in the side panel, as the first section while the tool is open. The field only shows handles. The position is spelled out the way drill writers say it.",
+    tryit: ["Change the numbers in the panel on the right.", "Drag the box and watch the position text update (\"2 in from S1 45\")."],
+    pros: "Everything in one predictable place, room for every option, and keyboard-friendly.", cons: "Your eyes jump between the field and the panel. It's the panel-first model that sims and you found slow.",
+    over: (K) => handlesSVG(K), overlay: () => hintIfIdle("Drag on the field to draw") + tipHTML(),
+    panel() { const s = S.shape; if (!s) return `<div class="pn"><h4>Shape</h4><div class="help">Draw on the field to start a shape for ${S.sel.size} marchers.</div></div>`;
+      const n = S.sel.size, iv = intervals(s, n);
+      return `<div class="pn"><div class="sec"><h4>${KINDS[s.kind].name} · ${n} marchers</h4><div class="f"><label>Shape</label><select data-in="kind">${KIND_KEYS.map((kd) => `<option value="${kd}" ${kd === s.kind ? "selected" : ""}>${KINDS[kd].name}</option>`).join("")}</select></div></div>
+      <div class="sec">${s.kind === "box" ? `<div class="f"><label>Size</label><span><input data-in="cols" value="${iv.cols}"> × ${iv.rows}${iv.short ? ` <span class="muted">(${iv.short} short)</span>` : ""}</span></div><div class="f"><label>Across, steps apart</label><input data-in="across" value="${fmt(iv.across)}"></div><div class="f"><label>Deep, steps apart</label><input data-in="deep" value="${fmt(iv.deep)}"></div>`
+        : `<div class="f"><label>Steps apart</label><input data-in="apart" value="${fmt(iv.apart)}"></div>`}
+        <div class="f"><label>Footprint</label><span class="muted">${fmt(s.w)} × ${fmt(s.h)} steps</span></div></div>
+      <div class="sec"><div class="f"><label>Side to side</label><span>${yardDesc(s.cx)}</span></div><div class="f"><label>Front to back</label><span>${depthDesc(s.cy)}</span></div><div class="f"><label>Rotation</label><span><input data-in="rot" value="${Math.round(deg(s.rot))}">°</span></div></div>
+      <div class="sec"><div class="f"><label>Who goes where</label><span class="seg"><button class="${S.order === "nearest" ? "on" : ""}" data-act="order">Nearest</button><button class="${S.order === "drill" ? "on" : ""}" data-act="order">Drill order</button></span></div></div>
+      <div class="sec row"><button class="primary" data-act="place">Place</button><button data-act="cancel">Cancel</button></div></div>`; },
+    input(name, v) { const s = S.shape; if (!s) return; const n = S.sel.size, iv = intervals(s, n); v = name === "kind" ? v : +v; if (name !== "kind" && !isFinite(v)) return;
+      if (name === "kind") return act("kind:" + v);
+      if (name === "cols") { const c = clamp(Math.round(v), 1, n); S.shape = { ...s, cols: c, w: iv.across * (c - 1) || 2 * (c - 1), h: (iv.deep || 2) * (Math.ceil(n / c) - 1) }; }
+      if (name === "across") S.shape = { ...s, cols: iv.cols, w: v * (iv.cols - 1) };
+      if (name === "deep") S.shape = { ...s, cols: iv.cols, h: v * (iv.rows - 1) };
+      if (name === "apart") setApart(v);
+      if (name === "rot") S.shape = transformShape(s, { x: s.cx, y: s.cy }, 1, 1, rad(v) - s.rot); } },
+  { name: "Right-click ring", setup: () => (S.shape = autoShape("box", S.sel.size, 3)),
+    idea: "Nothing is visible until you ask. Right-click the shape (long-press on a tablet) and a ring of the common actions opens around the cursor. Each click applies and the ring stays open, so you can tap + + +.",
+    tryit: ["Right-click inside the box.", "Click Wider a few times, then Rotate 90°.", "Esc or click off the ring to close it."],
+    pros: "A clean field, and it's quick once your hands know where things are.", cons: "You can't find it unless you know to right-click. Numbers are hidden, so you can't type an exact value.",
+    over: (K) => handlesSVG(K),
+    context(p, e) { if (S.shape && insideShape(S.shape, p)) { V.ring = toScreen(p); return true; } },
+    overlay() { let o = S.shape ? chipBelow(`<span class="muted">${summary(S.shape)}</span><span class="sep"></span><span class="muted">Right-click for options</span><button class="primary" data-act="place">Place</button>`) : hintIfIdle("Drag on the field to draw");
+      if (V.ring && S.shape) { const items = [["Wider", "sp+"], ["Rotate 90°", "rot:90"], [S.shape.kind === "box" ? "More across" : "Flip", S.shape.kind === "box" ? "cols+" : "flipy"], ["Next shape", "nextkind"], ["Tighter", "sp-"], ["Rotate back", "rot:-90"], [S.shape.kind === "box" ? "Fewer across" : "Flip side", S.shape.kind === "box" ? "cols-" : "flipx"], [S.order === "nearest" ? "Drill order" : "Nearest", "order"]];
+        o += `<div class="radial" style="left:${V.ring.x}px;top:${V.ring.y}px"><div class="ctr"></div>${items.map(([l, a], i) => { const t = -Math.PI / 2 + (i * 2 * Math.PI) / items.length; return `<button style="left:${Math.cos(t) * 130}px;top:${Math.sin(t) * 92}px" data-act="${a}">${l}</button>`; }).join("")}</div>`; }
+      return o + tipHTML(); },
+    act(a) { if (a === "nextkind") { const i = KIND_KEYS.indexOf(S.shape.kind); act("kind:" + KIND_KEYS[(i + 1) % KIND_KEYS.length]); return true; } },
+    down() { if (V.ring) { V.ring = null; return null; } } },
+] },
+
+/* ---------- Q3: palette ---------- */
+{ short: "Palette", title: "A palette of shapes", key: "palette", variants: [
+  { name: "Labeled toolbar", idea: "Every shape sits in the top bar with its name and key, always visible. Keys work while the tool is open, and switching keeps the size and spot.",
+    tryit: ["Press A, O, B, D… while a shape is open.", "Imagine 15 kinds: does the bar still work?"],
+    pros: "Nothing to discover, and the names fix the Arc vs Curve mix-up from the sims.", cons: "Takes a lot of room in the top bar and doesn't scale to many kinds or saved shapes.",
+    top() { return KIND_KEYS.map((kd) => `<button class="tool ${S.kind === kd ? "on" : ""}" data-act="kind:${kd}">${icon(kd)}<span>${KINDS[kd].name}</span><span class="k">${KINDS[kd].key}</span></button>`).join(""); },
+    over: (K) => handlesSVG(K), overlay: () => hintIfIdle(`Drag on the field to draw a ${KINDS[S.kind].name.toLowerCase()}`) + (S.shape ? chipBelow(`<span class="muted">${summary(S.shape)}</span><button class="primary" data-act="place">Place</button>`) : "") + tipHTML(),
+    key(e, down) { if (!down || e.metaKey || e.ctrlKey) return; const kd = KIND_KEYS.find((x) => KINDS[x].key === e.key.toUpperCase()); if (kd) { act("kind:" + kd); return true; } } },
+  { name: "Ring at the cursor", idea: "Hold S, or press and hold the right mouse button, and the shapes open in a ring around the cursor. Slide toward one and let go. A small badge by the cursor shows what you'll draw.",
+    tryit: ["Hold S, move toward Circle, release S.", "Right-press on the field, drag toward Wedge, and release.", "Then drag on the field to draw."],
+    pros: "No screen space at all, and it's fast once learned (the same direction every time).", cons: "Hidden. It needs a keyboard or a right button. Eight items is about the limit.",
+    top: () => `<span class="muted">Hold <span class="kbd">S</span> or right-press on the field for shapes</span>`,
+    over: (K) => handlesSVG(K),
+    overlay() { let o = hintIfIdle(`Hold <span class="kbd">S</span> for shapes`); const sc = toScreen(S.mouse);
+      if (!V.ring) o += `<div class="tip" style="left:${sc.x + 14}px;top:${sc.y + 14}px">${icon(S.kind).replace('class="ico"', 'class="ico" style="display:inline;width:13px;height:13px;vertical-align:-2px"')} ${KINDS[S.kind].name}</div>`;
+      if (V.ring) o += `<div class="radial" style="left:${V.ring.x}px;top:${V.ring.y}px"><div class="ctr"></div>${KIND_KEYS.map((kd, i) => { const t = -Math.PI / 2 + (i * 2 * Math.PI) / 8; return `<button class="tool ${V.hot === kd ? "hot" : ""}" style="left:${Math.cos(t) * 96}px;top:${Math.sin(t) * 78}px" data-act="kind:${kd}">${icon(kd)}${KINDS[kd].name}</button>`; }).join("")}</div>`;
+      if (S.shape) o += chipBelow(`<span class="muted">${summary(S.shape)}</span><button class="primary" data-act="place">Place</button>`);
+      return o + tipHTML(); },
+    ringHot(p) { if (!V.ring) return; const s = toScreen(p), dx = s.x - V.ring.x, dy = s.y - V.ring.y; if (Math.hypot(dx, dy) < 30) { V.hot = null; return; } let t = Math.atan2(dy, dx) + Math.PI / 2; t = (t + 2 * Math.PI) % (2 * Math.PI); V.hot = KIND_KEYS[Math.round(t / (Math.PI / 4)) % 8]; },
+    key(e, down) { if (e.key.toLowerCase() !== "s" || e.metaKey || e.ctrlKey) return; if (down && !V.ring) V.ring = toScreen(S.mouse); if (!down && V.ring) { if (V.hot) act("kind:" + V.hot); V.ring = null; V.hot = null; } return true; },
+    hover(p) { this.ringHot(p); },
+    down(hit, p, e) { if (e.button === 2) { V.ring = toScreen(p); V.rdrag = true; return { move: (q) => this.ringHot(q), up: () => { if (V.hot) act("kind:" + V.hot); V.ring = null; V.hot = null; } }; } if (V.ring) { V.ring = null; return null; } },
+    context: () => true },
+  { name: "Gallery of your marchers", idea: "A drawer shows every shape drawn with your actual marchers (12 dots, 2 steps apart), plus a Saved row of shapes you've kept. Point at a card to preview it on the field. Click to drop it around the selection, already sized.",
+    tryit: ["Point at the cards: the field previews each one.", "Click Arc, then drag it into place.", "Change the selection to 3 trumpets: the cards redraw.", "Make a shape you like and click + Save this."],
+    pros: "You see the result before choosing. Saved shapes give you a library of your own forms (\"our company front\").", cons: "Takes vertical space. Auto-sizing from 2 steps may not be what you want. Previews can be noisy.",
+    top: () => `<span class="muted">Pick from the drawer · or drag on the field to draw the last one picked</span>`,
+    over: (K) => handlesSVG(K),
+    overlay() { const n = S.sel.size; const card = (s, nm, sb, key, on) => { const sp = spotsLocal(s, n); const o = outlineLocal(s); const all = o.pts.concat(sp); const xs = all.map((p) => p.x), ys = all.map((p) => p.y);
+        const x0 = Math.min(...xs) - 1.5, y0 = Math.min(...ys) - 1.5, w = Math.max(...xs) - x0 + 1.5, hh = Math.max(...ys) - y0 + 1.5; const sz = Math.max(w, hh * 1.7);
+        return `<div class="card ${on ? "on" : ""}" data-card="${key}"><svg viewBox="${x0 + w / 2 - sz / 2} ${y0 + hh / 2 - sz / 3.4} ${sz} ${sz / 1.7}"><${o.closed ? "polygon" : "polyline"} points="${o.pts.map((p) => p.x + "," + p.y).join(" ")}" fill="none" stroke="rgba(150,126,255,.5)" stroke-width="${sz / 90}"/>${sp.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="${sz / 45}" fill="#fff"/>`).join("")}</svg><div class="nm">${nm}</div><div class="sb">${sb}</div></div>`; };
+      let h = `<div class="drawer"><div class="grp">Shapes</div>`; for (const kd of KIND_KEYS) { const s = autoShape(kd, n, 2, { x: 0, y: 0 }); s.cx = s.cy = 0; h += card(s, KINDS[kd].name, `${n} · 2 apart`, kd, S.shape?.kind === kd && !V.fromSaved); }
+      h += `<div class="grp">Saved</div>`; (V.saved || SAVED_DEFAULT).forEach((sv, i) => { const s = { ...sv.shape, cx: 0, cy: 0, rot: sv.shape.rot || 0 }; h += card(s, sv.name, sv.note, "saved:" + i, false); });
+      h += `<div class="card" data-act="save" style="display:flex;align-items:center;justify-content:center">+ Save this</div></div>`;
+      if (S.shape) h += chipBelow(`<span class="muted">${summary(S.shape)}</span><button class="primary" data-act="place">Place</button>`, 26);
+      return hintIfIdle("Point at a card to preview, click to use") + h + tipHTML(); },
+    afterOverlay() { ov.querySelectorAll("[data-card]").forEach((el) => { const key = el.dataset.card; const make = () => { const n = S.sel.size; if (key.startsWith("saved:")) { const sv = (V.saved || SAVED_DEFAULT)[+key.slice(6)]; const s = clone(sv.shape); const c = selCenter(); s.cx = snap(c.x); s.cy = snap(c.y); return s; } return autoShape(key, n); };
+      el.onmouseenter = () => { if (V.committed && S.shape) return; V.preview = true; S.shape = make(); render(); }; el.onmouseleave = () => { if (V.committed && S.shape) return; if (V.preview) { S.shape = null; V.preview = false; render(); } };
+      el.onclick = () => { S.shape = make(); S.kind = S.shape.kind; V.committed = true; V.preview = false; render(); }; }); },
+    act(a) { if (a === "save") { if (!S.shape) { toast("Draw or pick a shape first"); return true; } V.saved = (V.saved || SAVED_DEFAULT.slice()).concat([{ name: "My " + KINDS[S.shape.kind].name.toLowerCase(), note: summary(S.shape).split(" · ").slice(-1)[0], shape: clone(S.shape) }]); toast("Saved to this show's shapes"); return true; } },
+    after() { V.committed = false; }, down(hit, p, e) { if (hit.t === "field" && S.sel.size) V.committed = true; } },
+  { name: "Type it", idea: "Press / and type what you want: \"box 4x3 2 steps\", \"circle 8\", \"arc 2 apart\", \"company front\". The field previews it as you type, and suggestions show what was understood.",
+    tryit: ["Press / and type: box 6x2 1.5 steps", "Try: circle r 6, or: wedge 2 apart rotated 180", "Enter makes it, then fine-tune with the handles."],
+    pros: "The fastest path for pros who know the numbers. It scales to any number of kinds and saved shapes.", cons: "Blank-box fear for new directors. It needs a forgiving parser and good examples.",
+    top: () => `<button data-act="cmd">Type a shape… <span class="kbd">/</span></button>`,
+    over: (K) => handlesSVG(K),
+    overlay() { let o = ""; if (V.cmd) { const q = V.q || "";
+        o += `<div class="cmd"><input id="cmdin" placeholder="box 4x3 2 steps · circle r 6 · arc 2 apart…" value="${q.replace(/"/g, "&quot;")}" autocomplete="off"><div class="sug">${cmdSug(q)}</div></div>`; }
+      else o += hintIfIdle(`Press <span class="kbd">/</span> and type a shape`);
+      if (S.shape && !V.cmd) o += chipBelow(`<span class="muted">${summary(S.shape)}</span><button class="primary" data-act="place">Place</button>`);
+      return o + tipHTML(); },
+    afterOverlay() { const i = $("#cmdin"); if (!i) return; i.focus(); i.setSelectionRange(i.value.length, i.value.length); const bindEx = () => ov.querySelectorAll("[data-ex]").forEach((el) => (el.onmousedown = (e) => { e.preventDefault(); i.value = V.q = el.dataset.ex; i.oninput(); }));
+      i.oninput = () => { V.q = i.value; const p = parseCmd(V.q); S.shape = p ? p.shape : V.before; S.force = false; render(); ov.querySelector(".sug").innerHTML = cmdSug(V.q); bindEx(); }; bindEx();
+      i.onkeydown = (e) => { if (e.key === "Enter") { V.cmd = false; if (S.shape) S.kind = S.shape.kind; S.force = true; render(); e.stopPropagation(); } if (e.key === "Escape") { V.cmd = false; S.shape = V.before; S.force = true; render(); e.stopPropagation(); } };
+    },
+    act(a) { if (a === "cmd") { V.cmd = true; V.q = ""; V.before = S.shape; S.force = true; return true; } },
+    key(e, down) { if (down && e.key === "/" && !V.cmd) { e.preventDefault(); this.act("cmd"); return true; } } },
+  { name: "Sketch and it guesses", idea: "No palette at all. Sketch roughly and the tool guesses the shape, with the other likely guesses one click away. \"Keep as drawn\" turns your stroke into a curve.",
+    tryit: ["Sketch a rough circle, a box, a straight line and a V.", "If it guessed wrong, click a different chip.", "Draw a squiggle and choose Keep as drawn."],
+    pros: "As direct as a pencil. Nothing to learn, and it suits a tablet. You said recognition should be fantastic someday.", cons: "Guessing will miss sometimes. Exact numbers still need a chip or the panel.",
+    top: () => `<span class="muted">Sketch a shape on the field</span>`,
+    over(K) { let h = handlesSVG(K); if (V.stroke) h += `<polyline points="${V.stroke.map((p) => p.x + "," + p.y).join(" ")}" fill="none" stroke="#fff" stroke-width="2" opacity=".7" vector-effect="non-scaling-stroke"/>`; return h; },
+    overlay() { let o = hintIfIdle("Sketch roughly: a line, circle, box, arc, V…"); if (S.shape && V.guesses) { o += chipBelow(`<span class="muted">Looks like</span>${V.guesses.map((g, i) => `<button class="tool ${V.gi === i ? "on" : ""}" data-act="guess:${i}">${icon(g.shape.kind)}${g.shape.kind === "path" ? "Keep as drawn" : KINDS[g.shape.kind].name}</button>`).join("")}<span class="sep"></span><span class="muted">${summary(S.shape)}</span><button class="primary" data-act="place">Place</button>`); } else if (S.shape) o += chipBelow(`<button class="primary" data-act="place">Place</button>`); return o + tipHTML(); },
+    act(a) { if (a.startsWith("guess:")) { V.gi = +a.slice(6); S.shape = clone(V.guesses[V.gi].shape); return true; } },
+    down(hit, p, e) { if (hit.h) return undefined; if (hit.t === "shape" && !e.altKey) return undefined; if (!S.sel.size) return null; V.stroke = [p]; const prev = S.shape;
+      return { draw: true, move: (q) => V.stroke.push(q), up: () => { const st = V.stroke; V.stroke = null; if (st.length < 5) { S.shape = prev; return; } V.guesses = recognize(st); V.gi = 0; S.shape = clone(V.guesses[0].shape); } }; } },
+] },
+
+/* ---------- Q4: transforms ---------- */
+{ short: "Transforms", title: "Rotate, scale and flip", key: "transform", variants: [
+  { name: "Box handles (Figma)", setup: () => (S.shape = autoShape("box", S.sel.size, 3)),
+    idea: "The usual design-app frame. Corners and sides resize, and just outside a corner the cursor turns into rotate. Shift keeps the proportions or snaps to 15°, and Alt works from the center.",
+    tryit: ["Hover just outside a corner, then drag to rotate (Shift for 15°).", "Drag a side, then a corner with Shift, then with Alt.", "Switch to an arc or a wedge up top: the same frame, the same handles."],
+    pros: "Everyone already knows it, and it's the same on every shape.", cons: "Rotating is always about the center. A box resize stretches spacing, which is right for some directors but not all (see D).",
+    over(K) { const s = S.shape; if (!s || S.phase === "drawing") return ""; let h = ""; if (s.h >= 0.3) for (const [, sx, sy] of HANDLES.filter((x) => x[1] && x[2])) { const p = toWorld(s, { x: (sx * s.w) / 2 + (sx * 9) / K, y: (sy * s.h) / 2 + (sy * 9) / K }); h += `<circle data-h="rot" cx="${p.x}" cy="${p.y}" r="${9 / K}" fill="${V.rhot ? "rgba(150,126,255,.18)" : "transparent"}" style="cursor:alias"/>`; } return h + handlesSVG(K, { rotKnob: false }); },
+    overlay: () => (S.shape ? chipBelow(`<span class="muted">${summary(S.shape)} · ${Math.round(((deg(S.shape.rot) % 360) + 360) % 360)}°</span><button class="primary" data-act="place">Place</button>`) : hintIfIdle("Drag on the field to draw")) + tipHTML(),
+    hover(p, e) { V.rhot = e.target.dataset?.h === "rot"; } },
+  { name: "Pivot gizmo", setup: () => (S.shape = autoShape("box", S.sel.size, 3)),
+    idea: "A widget at a pivot point: the ring rotates, the arrows stretch along the shape's own front-back and side-side, and the square scales evenly. Drag the pivot dot anywhere. It snaps to marchers and spots, so you can rotate a line about its end marcher. Double-click the dot to put it back in the center.",
+    tryit: ["Drag the pivot dot onto the end spot of the box, then drag the ring.", "Drag an arrow to stretch along one axis only.", "Try it on a line: rotating about one end is the drill classic."],
+    pros: "Pivots are how drill actually moves (\"pinwheel on T1\"). Precise, and the same on every shape.", cons: "More machinery on screen. It's a 3D-app look that may feel heavy for new directors.",
+    pivotP() { return V.pivot || (S.shape ? { x: S.shape.cx, y: S.shape.cy } : null); },
+    over(K) { const s = S.shape; if (!s || S.phase === "drawing") return ""; const pv = this.pivotP(), R = 46 / K, c = Math.cos(s.rot), si = Math.sin(s.rot); const ax = { x: c, y: si }, ay = { x: -si, y: c };
+      const A = (v, L) => ({ x: pv.x + v.x * L, y: pv.y + v.y * L }); const ex = A(ax, 78 / K), ey = A(ay, -78 / K), uni = { x: pv.x + (ax.x - ay.x) * 40 / K, y: pv.y + (ax.y - ay.y) * 40 / K };
+      return `<circle cx="${pv.x}" cy="${pv.y}" r="${R}" fill="none" stroke="var(--accent)" stroke-width="1.5" vector-effect="non-scaling-stroke"/><circle data-h="ring" cx="${pv.x}" cy="${pv.y}" r="${R}" fill="none" stroke="transparent" stroke-width="10" vector-effect="non-scaling-stroke" style="cursor:grab"/>
+        <line x1="${pv.x}" y1="${pv.y}" x2="${ex.x}" y2="${ex.y}" stroke="#e66" stroke-width="2" vector-effect="non-scaling-stroke"/><circle data-h="sx" cx="${ex.x}" cy="${ex.y}" r="${6 / K}" fill="#e66" style="cursor:ew-resize"/>
+        <line x1="${pv.x}" y1="${pv.y}" x2="${ey.x}" y2="${ey.y}" stroke="#6c6" stroke-width="2" vector-effect="non-scaling-stroke"/><circle data-h="sy" cx="${ey.x}" cy="${ey.y}" r="${6 / K}" fill="#6c6" style="cursor:ns-resize"/>
+        <rect data-h="su" x="${uni.x - 5 / K}" y="${uni.y - 5 / K}" width="${10 / K}" height="${10 / K}" fill="#fff" stroke="var(--accent)" vector-effect="non-scaling-stroke" style="cursor:nwse-resize"/>
+        <circle data-h="pivot" cx="${pv.x}" cy="${pv.y}" r="${5 / K}" fill="var(--yellow)" stroke="#111" vector-effect="non-scaling-stroke" style="cursor:move"/>`; },
+    overlay() { return (S.shape ? chipBelow(`<span class="muted">${summary(S.shape)} · ${Math.round(((deg(S.shape.rot) % 360) + 360) % 360)}° · pivot ${V.pivot ? V.pivotName || "moved" : "center"}</span><button class="primary" data-act="place">Place</button>`) : hintIfIdle("Drag on the field to draw")) + tipHTML(); },
+    down(hit, p, e) { const s0 = S.shape; if (!s0) return undefined; const pv = this.pivotP();
+      if (hit.h === "pivot") { const now = performance.now(); if (now - (V.lastPd || 0) < 350) { V.pivot = null; V.lastPd = 0; return null; } V.lastPd = now; return { move: (q) => { const cands = (S.cache.sp || []).map((x, i) => ({ p: x, n: "a spot" })).concat(S.ms.map((m) => ({ p: m, n: m.id }))); let b = null, bd = 1.2; for (const c of cands) { const d = dist(c.p, q); if (d < bd) { bd = d; b = c; } } V.pivot = b ? { x: b.p.x, y: b.p.y } : snapP(q); V.pivotName = b ? (b.n === "a spot" ? "on a spot" : "on " + b.n) : "on the grid"; } }; }
+      if (hit.h === "ring") return rotDrag(p, pv);
+      if (hit.h === "sx" || hit.h === "sy" || hit.h === "su") { const c = Math.cos(s0.rot), si = Math.sin(s0.rot); const proj = (q, v) => (q.x - pv.x) * v.x + (q.y - pv.y) * v.y; const ax = { x: c, y: si }, ay = { x: -si, y: c };
+        const d0x = proj(p, ax), d0y = proj(p, ay), d0 = dist(p, pv);
+        return { move: (q) => { let sx = 1, sy = 1; if (hit.h === "sx") sx = proj(q, ax) / d0x; else if (hit.h === "sy") sy = proj(q, ay) / d0y; else sx = sy = dist(q, pv) / d0; S.shape = transformShape(s0, pv, sx, sy, 0); S.tip = { p: q, t: `× ${fmt(sx)}${hit.h === "su" ? "" : ` / × ${fmt(sy)}`} · ${summary(S.shape)}` }; }, up: () => (S.tip = null) }; }
+      if (hit.t === "shape") { const d = moveDrag(p); return { move: (q) => { d.move(q); if (V.pivot) { V.pivot = { x: V.pivot.x + (S.shape.cx - s0.cx), y: V.pivot.y + (S.shape.cy - s0.cy) }; s0.cx = S.shape.cx; s0.cy = S.shape.cy; } }, up() {} }; }
+      return undefined; },
+    after() { V.pivot = null; } },
+  { name: "Keys, then type", setup: () => (S.shape = autoShape("line", S.sel.size, 3)),
+    idea: "Blender-style. Press R, S or G and move the mouse to rotate, scale or move. Type a number for an exact value (R 45), press X or Y to lock to the shape's side-side or front-back axis, and Enter or click to apply.",
+    tryit: ["Point near the line, press R, sweep the mouse, then type 90 and press Enter.", "Press S, then X, and move the mouse: it stretches along the line only.", "Press G, then Y: it slides front to back only."],
+    pros: "Very fast for pros, gives exact numbers without a panel, and works the same on every shape.", cons: "Invisible to new users and modal (you must finish or cancel). Mouse-relative feel takes practice.",
+    over: (K) => (V.mode ? "" : handlesSVG(K)),
+    overlay() { let o = ""; if (V.mode) { const m = V.mode; const lbl = { r: "Rotate", s: "Scale", g: "Move" }[m.t]; o += `<div class="hud"><b>${lbl}</b> ${m.val} ${m.axis ? `· locked to ${m.axis === "x" ? "side-side" : "front-back"}` : ""} <span class="muted">· type a number · X / Y lock · Enter apply · Esc cancel</span></div>`; }
+      else if (S.shape) o += `<div class="hint"><span class="kbd">R</span> rotate · <span class="kbd">S</span> scale · <span class="kbd">G</span> move · then type a number</div>` + chipBelow(`<span class="muted">${summary(S.shape)}</span><button class="primary" data-act="place">Place</button>`);
+      else o += hintIfIdle("Drag on the field to draw");
+      return o + tipHTML(); },
+    key(e, down) { if (!down || !S.shape || e.metaKey || e.ctrlKey) return; const kk = e.key.toLowerCase();
+      if (!V.mode && "rsg".includes(kk) && kk.length === 1) { V.mode = { t: kk, s0: clone(S.shape), p0: { ...S.mouse }, typed: "", axis: null, val: "" }; this.apply(); return true; }
+      if (!V.mode) return; const m = V.mode;
+      if (kk === "escape") { S.shape = m.s0; V.mode = null; return true; }
+      if (kk === "enter") { V.mode = null; return true; }
+      if (kk === "x" || kk === "y") { m.axis = m.axis === kk ? null : kk; this.apply(); return true; }
+      if (/^[0-9.\-]$/.test(e.key)) { m.typed += e.key; this.apply(); return true; }
+      if (kk === "backspace") { m.typed = m.typed.slice(0, -1); this.apply(); return true; }
+      return true; },
+    apply() { const m = V.mode; if (!m) return; const s0 = m.s0, c = { x: s0.cx, y: s0.cy }, q = S.mouse; const typed = m.typed !== "" && isFinite(+m.typed) ? +m.typed : null;
+      if (m.t === "r") { let d = typed != null ? rad(typed) : Math.atan2(q.y - c.y, q.x - c.x) - Math.atan2(m.p0.y - c.y, m.p0.x - c.x); if (typed == null) d = rad(Math.round(deg(d))); S.shape = transformShape(s0, c, 1, 1, d); m.val = `${Math.round(deg(d))}°`; }
+      if (m.t === "s") { const f = typed != null ? typed : Math.max(0.05, dist(q, c) / Math.max(0.5, dist(m.p0, c))); S.shape = transformShape(s0, c, m.axis === "y" ? 1 : f, m.axis === "x" ? 1 : f, 0); m.val = `× ${fmt(f)} → ${summary(S.shape)}`; }
+      if (m.t === "g") { let dx = q.x - m.p0.x, dy = q.y - m.p0.y; if (m.axis) { const cc = Math.cos(s0.rot), si = Math.sin(s0.rot); const along = m.axis === "x" ? { x: cc, y: si } : { x: -si, y: cc }; let d = typed != null ? typed : dx * along.x + dy * along.y; dx = along.x * d; dy = along.y * d; } S.shape = { ...s0, cx: s0.cx + snap(dx), cy: s0.cy + snap(dy) }; m.val = `${fmt(Math.hypot(snap(dx), snap(dy)))} steps`; } },
+    hover() { if (V.mode) this.apply(); },
+    down(hit, p, e) { if (V.mode) { if (e.button === 2) S.shape = V.mode.s0; V.mode = null; return null; } } },
+  { name: "Transform panel + size rule", setup: () => (S.shape = autoShape("box", S.sel.size, 3)),
+    idea: "Exact transforms in the side panel: a 9-dot pivot picker, rotate buttons (90°, 180°, 15°), flips, and scale. It also asks the question shapes really have: when you resize a box, should the spacing stretch, or should the spacing stay and the number across change?",
+    tryit: ["Pick the bottom-left pivot dot, then ⟳ 90°.", "Switch \"When I resize\" to Keep spacing, then drag a side handle on the field: files get added instead.", "Flip front-to-back on a wedge or triangle."],
+    pros: "Exact, and the pivot is explicit. The size rule makes the box behave the way the director thinks.", cons: "It's a panel again. The pivot grid is abstract (a corner of the frame, not a marcher).",
+    pivotP() { const s = S.shape; if (!s) return null; const [gx, gy] = V.pv || [0, 0]; return toWorld(s, { x: (gx * s.w) / 2, y: (gy * s.h) / 2 }); },
+    over(K) { let h = handlesSVG(K); const pv = this.pivotP(); if (pv && S.phase !== "drawing") h += `<circle cx="${pv.x}" cy="${pv.y}" r="${5 / K}" fill="var(--yellow)" stroke="#111" vector-effect="non-scaling-stroke"/>`; return h; },
+    overlay: () => hintIfIdle("Drag on the field to draw") + tipHTML(),
+    panel() { const s = S.shape; if (!s) return `<div class="pn"><div class="help">Draw a shape to transform it.</div></div>`; const pv = V.pv || [0, 0];
+      return `<div class="pn"><div class="sec"><h4>${summary(s)}</h4></div>
+      <div class="sec"><div class="f"><label>Pivot</label><div class="grid9">${[-1, 0, 1].map((gy) => [-1, 0, 1].map((gx) => `<button class="${pv[0] === gx && pv[1] === gy ? "on" : ""}" data-act="pv:${gx},${gy}"></button>`).join("")).join("")}</div></div></div>
+      <div class="sec"><div class="f"><label>Rotate</label><span><input data-in="rot" value="${Math.round(((deg(s.rot) % 360) + 360) % 360)}">°</span></div><div class="row" style="flex-wrap:wrap"><button data-act="rot:-90">⟲ 90°</button><button data-act="rot:90">⟳ 90°</button><button data-act="rot:180">180°</button><button data-act="rot:-15">⟲ 15°</button><button data-act="rot:15">⟳ 15°</button></div></div>
+      <div class="sec"><div class="f"><label>Flip</label><span class="row"><button data-act="flipx">Side to side</button><button data-act="flipy">Front to back</button></span></div></div>
+      <div class="sec"><div class="f"><label>Scale</label><span class="row"><button data-act="sc:0.5">½</button><button data-act="sc:0.8">−</button><button data-act="sc:1.25">+</button><button data-act="sc:2">×2</button></span></div>
+        <div class="f"><label>Footprint</label><span class="muted">${fmt(s.w)} × ${fmt(s.h)} steps</span></div></div>
+      ${s.kind === "box" ? `<div class="sec"><div class="f"><label>When I resize</label></div><div class="seg"><button class="${!S.keepSpacing ? "on" : ""}" data-act="ks:0">Stretch spacing</button><button class="${S.keepSpacing ? "on" : ""}" data-act="ks:1">Keep spacing</button></div><div class="help" style="margin-top:6px">${S.keepSpacing ? "Handles add or remove marchers across, and the spacing stays." : "Handles change the spacing, and the size stays."}</div></div>` : ""}
+      <div class="sec row"><button class="primary" data-act="place">Place</button><button data-act="cancel">Cancel</button></div></div>`; },
+    act(a) { const s = S.shape; if (a.startsWith("pv:")) { V.pv = a.slice(3).split(",").map(Number); return true; } if (a.startsWith("ks:")) { S.keepSpacing = a === "ks:1"; return true; }
+      if (a.startsWith("sc:") && s) { const f = +a.slice(3); if (S.keepSpacing && s.kind === "box") { const iv = intervals(s, S.sel.size); const c = clamp(Math.round((iv.cols - 1) * f) + 1, 1, S.sel.size); S.shape = { ...s, cols: c, w: iv.across * (c - 1), h: iv.deep * (Math.ceil(S.sel.size / c) - 1) }; } else S.shape = transformShape(s, this.pivotP(), f, f, 0); return true; } },
+    input(name, v) { if (name === "rot" && S.shape && isFinite(+v)) S.shape = transformShape(S.shape, this.pivotP(), 1, 1, rad(+v) - S.shape.rot); },
+    leave() { S.keepSpacing = false; } },
+] },
+];
+const SAVED_DEFAULT = [
+  { name: "Company front", note: "line · 1.5 apart", shape: { kind: "line", w: 16.5, h: 0, rot: 0 } },
+  { name: "Arrowhead", note: "wedge · points back", shape: { kind: "wedge", w: 16, h: 7, rot: 0, fy: -1 } },
+  { name: "Tight diamond", note: "diamond · 1.5 apart", shape: { kind: "diamond", w: 6.4, h: 6.4, rot: 0 } },
+];
+
+/* ---------------- dimension labels (Q2B) ---------------- */
+function dimsSVG(K) { const s = S.shape, n = S.sel.size, off = 16 / K; let h = ""; const L = (a, b) => `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="var(--accent)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+  if (s.kind === "box" || s.kind === "line") { const y = s.kind === "box" ? -s.h / 2 - off : -off; const a = toWorld(s, { x: -s.w / 2, y }), b = toWorld(s, { x: s.w / 2, y }); h += L(a, b) + L(toWorld(s, { x: -s.w / 2, y: y - 3 / K }), toWorld(s, { x: -s.w / 2, y: y + 6 / K })) + L(toWorld(s, { x: s.w / 2, y: y - 3 / K }), toWorld(s, { x: s.w / 2, y: y + 6 / K }));
+    if (s.kind === "box") { const x = -s.w / 2 - off; const c = toWorld(s, { x, y: -s.h / 2 }), d = toWorld(s, { x, y: s.h / 2 }); h += L(c, d); } }
+  if (s.kind === "circle") { const c = { x: s.cx, y: s.cy }, e = toWorld(s, { x: (s.w / 2) * Math.cos(-Math.PI / 4), y: (s.h / 2) * Math.sin(-Math.PI / 4) }); h += `<line x1="${c.x}" y1="${c.y}" x2="${e.x}" y2="${e.y}" stroke="var(--accent)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`; }
+  return h; }
+function dimsHTML() { const s = S.shape, n = S.sel.size, iv = intervals(s, n), K = k(), off = 16 / K; const lab = (p, html) => { const q = toScreen(p); return `<div class="dim" style="left:${q.x}px;top:${q.y}px">${html}</div>`; }; const tok = (name, v) => `<span class="tok" data-edit="${name}" data-v="${v}">${v}</span>`; let h = "";
+  if (s.kind === "box") { h += lab(toWorld(s, { x: 0, y: -s.h / 2 - off }), `${tok("cols", iv.cols)} across · ${tok("across", fmt(iv.across))} apart`); h += lab(toWorld(s, { x: -s.w / 2 - off - 34 / K, y: 0 }), `${iv.rows} deep · ${tok("deep", fmt(iv.deep))} apart`); }
+  else if (s.kind === "line") h += lab(toWorld(s, { x: 0, y: -off }), `${n} · ${tok("apart", fmt(iv.apart))} apart · ${fmt(s.w)} steps`);
+  else if (s.kind === "circle") { h += lab(toWorld(s, { x: (s.w / 4) * Math.cos(-Math.PI / 4), y: (s.h / 4) * Math.sin(-Math.PI / 4) }), `r ${tok("r", fmt(s.w / 2))}`); h += lab(toWorld(s, { x: 0, y: s.h / 2 + off }), `${n} · ${tok("apart", fmt(iv.apart))} apart`); }
+  else h += lab(toWorld(s, { x: 0, y: s.h / 2 + off }), `${n} · ${tok("apart", fmt(iv.apart))} apart`);
+  if (Math.abs(Math.sin(s.rot)) > 0.01) h += lab(toWorld(s, { x: s.w / 2 + off, y: -s.h / 2 - off }), `${tok("rot", Math.round(deg(s.rot)))}°`);
+  return h; }
+function editToken(el) { const name = el.dataset.edit; el.outerHTML = `<input data-tokin="${name}" value="${el.dataset.v}">`; const i = ov.querySelector(`[data-tokin="${name}"]`); i.focus(); i.select();
+  let fired = false; const done = (ok) => { if (fired) return; fired = true; if (ok) { const v = +i.value; const s = S.shape, n = S.sel.size, iv = intervals(s, n); if (isFinite(v) && v > 0) {
+    if (name === "cols") { const c = clamp(Math.round(v), 1, n); S.shape = { ...s, cols: c, w: iv.across * (c - 1), h: iv.deep * (Math.ceil(n / c) - 1) }; }
+    if (name === "across") S.shape = { ...s, cols: iv.cols, w: v * (iv.cols - 1) }; if (name === "deep") S.shape = { ...s, cols: iv.cols, h: v * (iv.rows - 1) };
+    if (name === "apart") setApart(v); if (name === "r") S.shape = { ...s, w: 2 * v, h: 2 * v }; }
+    if (name === "rot" && isFinite(v)) S.shape = transformShape(s, { x: s.cx, y: s.cy }, 1, 1, rad(v) - s.rot); }
+    S.force = true; i.blur(); render(); };
+  i.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") done(true); if (e.key === "Escape") done(false); }; i.onblur = () => { if (ov.contains(i)) done(true); }; }
+
+/* ---------------- parsing (Q3D) ---------------- */
+function cmdSug(q) { const parsed = parseCmd(q); const ex = ["box 4x3 2 steps", "circle r 6", "arc 2 apart", "line 1.5 steps", "company front", "wedge 2 apart rotated 180", "diamond 1.5 steps"].filter((x) => !q || x.startsWith(q.split(" ")[0]) || !parsed);
+  return (parsed ? `<div class="hot">${icon(parsed.shape.kind)}<span>${parsed.label}</span><span class="ex" style="margin-left:auto">Enter</span></div>` : q ? `<div><span class="ex">Not sure what that is yet. Start with a shape name.</span></div>` : "") + ex.slice(0, 4).map((x) => `<div data-ex="${x}"><span class="ex">Try</span> ${x}</div>`).join(""); }
+function parseCmd(q) { q = q.toLowerCase().trim(); if (!q) return null; const n = S.sel.size;
+  const syn = [["company front", "line"], ["line", "line"], ["arc", "arc"], ["curve", "path"], ["circle", "circle"], ["ring", "circle"], ["box", "box"], ["block", "box"], ["rect", "box"], ["square", "box"], ["diamond", "diamond"], ["triangle", "triangle"], ["wedge", "wedge"], ["chevron", "wedge"], ["v ", "wedge"]];
+  const hit = syn.find(([w]) => q.startsWith(w) || q.includes(" " + w)); if (!hit) return null; const kind = hit[1];
+  const iv = +(q.match(/([\d.]+)\s*(steps?|apart|step)/)?.[1] || (q.match(/@\s*([\d.]+)/)?.[1]) || (hit[0] === "company front" ? 1.5 : 2));
+  const s = autoShape(kind, n, iv || 2); const dims = q.match(/(\d+)\s*(x|by|×)\s*(\d+)/); let label = `${KINDS[kind].name} · ${n} marchers · ${fmt(iv)} steps apart`;
+  if (dims && kind === "box") { const c = clamp(+dims[1], 1, n); s.cols = c; s.w = iv * (c - 1); s.h = iv * (Math.ceil(n / c) - 1); label = `Box ${c} × ${Math.ceil(n / c)} · ${fmt(iv)} apart`; }
+  const r = q.match(/(?:r|radius)\s*([\d.]+)/); if (r && (kind === "circle" || kind === "arc")) { const R = +r[1]; s.w = 2 * R; s.h = kind === "circle" ? 2 * R : R; label = `${KINDS[kind].name} · radius ${fmt(R)} · ${fmt(intervals(s, n).apart)} apart`; }
+  else if (kind === "circle" && /circle\s+(\d+)\s*$/.test(q)) { const R = +q.match(/circle\s+(\d+)/)[1]; s.w = s.h = 2 * R; label = `Circle · radius ${R} · ${fmt(intervals(s, n).apart)} apart`; }
+  const rt = q.match(/(?:rotated?|turn(?:ed)?)\s*(-?[\d.]+)/); if (rt) { s.rot = rad(+rt[1]); label += ` · rotated ${rt[1]}°`; }
+  return { shape: s, label }; }
+
+/* ---------------- recognition (Q3E) ---------------- */
+function recognize(st) { const n = S.sel.size; let len = 0; for (let i = 1; i < st.length; i++) len += dist(st[i - 1], st[i]); const a = st[0], b = st[st.length - 1], chord = dist(a, b);
+  const xs = st.map((p) => p.x), ys = st.map((p) => p.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0);
+  const bb = (kind) => ({ kind, cx: snap(cx), cy: snap(cy), w: snap(w), h: snap(h), rot: 0 });
+  const asDrawn = () => { const pts = st.filter((_, i) => i % Math.max(1, Math.floor(st.length / 24)) === 0).concat([b]).map((p) => ({ x: (p.x - cx) / w, y: (p.y - cy) / h })); return { kind: "path", cx, cy, w, h, rot: 0, pts }; };
+  const out = [];
+  if (chord < 0.25 * len) { const err = (f) => st.reduce((t, p) => { const u = (p.x - cx) / (w / 2), v = (p.y - cy) / (h / 2); return t + Math.abs(f(u, v) - 1); }, 0) / st.length;
+    const sc = [["circle", err((u, v) => Math.hypot(u, v))], ["box", err((u, v) => Math.max(Math.abs(u), Math.abs(v)))], ["diamond", err((u, v) => Math.abs(u) + Math.abs(v))], ["triangle", 0.35]].sort((p, q) => p[1] - q[1]);
+    for (const [kd] of sc) { const s = bb(kd); if (kd === "circle" && Math.abs(w - h) / Math.max(w, h) < 0.25) s.w = s.h = snap((w + h) / 2); if (kd === "box") s.cols = boxSplit(s, n).cols; out.push({ shape: s }); } }
+  else { const ang = Math.atan2(b.y - a.y, b.x - a.x); if (chord / len > 0.9) out.push({ shape: shapeFromDrag("line", snapP(a), snapP(b)) });
+    let far = 0, fi = 0; const nx = -(b.y - a.y) / chord, ny = (b.x - a.x) / chord; st.forEach((p, i) => { const d = (p.x - a.x) * nx + (p.y - a.y) * ny; if (Math.abs(d) > Math.abs(far)) { far = d; fi = i; } });
+    const seg = (i0, i1) => { let l = 0; for (let i = i0 + 1; i <= i1; i++) l += dist(st[i - 1], st[i]); return dist(st[i0], st[i1]) / (l || 1); };
+    const wedgeish = seg(0, fi) > 0.93 && seg(fi, st.length - 1) > 0.93;
+    const arc = { kind: "arc", w: chord, h: Math.abs(far), rot: ang, fy: far > 0 ? -1 : 1 }; const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; arc.cx = m.x + nx * far / 2; arc.cy = m.y + ny * far / 2;
+    const wedge = { ...arc, kind: "wedge", fy: far > 0 ? 1 : -1 };
+    if (wedgeish) out.push({ shape: wedge }, { shape: arc }); else out.push({ shape: arc }, { shape: wedge });
+    if (chord / len <= 0.9) out.push({ shape: shapeFromDrag("line", snapP(a), snapP(b)) }); }
+  out.push({ shape: asDrawn() }); return out; }
+
+function convexHull(P) { const pts = P.slice().sort((a, b) => a.x - b.x || a.y - b.y); if (pts.length < 3) return pts; const cr = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); const lo = [], up = [];
+  for (const p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of pts.slice().reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1)); }
+
+/* ---------------- events ---------------- */
+svg.addEventListener("wheel", (e) => { e.preventDefault(); const p = toField(e), v = S.view, f = Math.exp(e.deltaY * 0.0015), w = clamp(v.w * f, 30, 180), h = (w * 51.6) / 88;
+  S.view = { x: p.x - ((p.x - v.x) * w) / v.w, y: p.y - ((p.y - v.y) * h) / v.h, w, h }; S.force = true; render(); }, { passive: false });
+svg.addEventListener("pointerdown", (e) => { if (e.button === 1 || (e.button === 0 && V.space)) { e.preventDefault(); const c0 = { x: e.clientX, y: e.clientY }, v0 = { ...S.view }; S.drag = { move: (_, ev) => { const kk = k(); S.view = { ...v0, x: v0.x - (ev.clientX - c0.x) / kk, y: v0.y - (ev.clientY - c0.y) / kk }; S.force = true; }, up() {} }; svg.setPointerCapture(e.pointerId); return; } const p = toField(e); S.mouse = p; const hit = hitTest(e, p); const Vt = cur();
+  let d = Vt.down ? Vt.down(hit, p, e) : undefined; if (d === undefined) d = e.button === 2 ? null : stdDown(hit, p, e);
+  if (d) { S.drag = d; svg.setPointerCapture(e.pointerId); } render(); });
+svg.addEventListener("pointermove", (e) => { const p = toField(e); S.mouse = p; if (S.drag) S.drag.move(p, e); cur().hover?.(p, e); render(); });
+svg.addEventListener("pointerup", (e) => { if (S.drag) { S.drag.up?.(toField(e), e); S.drag = null; } render(); });
+stage.addEventListener("contextmenu", (e) => { if (cur().context?.(toField(e), e)) { e.preventDefault(); render(); } });
+function onAct(e) { const el = e.target.closest("[data-act]"); if (!el) return; const a = el.dataset.act; if (!(cur().act?.(a, el))) act(a, el); S.force = true; render(); }
+ov.addEventListener("click", onAct); panel.addEventListener("click", onAct); topslot.addEventListener("click", onAct);
+document.getElementById("switcher").addEventListener("click", onAct);
+panel.addEventListener("change", (e) => { const n = e.target.dataset?.in; if (n) { cur().input?.(n, e.target.value); S.force = true; render(); } });
+window.addEventListener("keydown", (e) => { if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") { if (e.key === "Enter" && e.target.dataset?.in) { e.target.dispatchEvent(new Event("change", { bubbles: true })); } return; }
+  if (cur().key?.(e, true)) { e.preventDefault(); render(); return; }
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") { go(S.q, (S.v + (e.key === "ArrowRight" ? 1 : -1) + QS[S.q].variants.length) % QS[S.q].variants.length); return; }
+  if (e.key === "Enter") { place(); render(); } if (e.key === "Escape") { V.ring = null; S.shape = null; render(); }
+  if (e.key === "[" ) { act("cols-"); render(); } if (e.key === "]") { act("cols+"); render(); } });
+window.addEventListener("keyup", (e) => { if (e.target.tagName === "INPUT") return; if (cur().key?.(e, false)) render(); });
+window.addEventListener("resize", () => { S.force = true; render(); });
+
+/* ---------------- switcher + notes ---------------- */
+function go(q, v, keepShape) {
+  cur().leave?.(); S.q = q; S.v = v; V = {}; S.drag = null; S.tip = null; S.order = "nearest"; S.keepSpacing = false; if (!keepShape) S.shape = null;
+  const Vt = cur(); if (Vt.setup && S.sel.size) Vt.setup();
+  const L = "ABCDE"[v]; history.replaceState(null, "", `?q=${q + 1}&v=${L}`);
+  notesEl.classList.remove("min");
+  notesEl.innerHTML = `<div class="hdr"><div><div class="q">Question ${q + 1} · ${QS[q].title}</div><h3>${L}. ${Vt.name}</h3></div><button class="ghost" data-min title="Hide notes">–</button></div><div>${Vt.idea}</div><div class="lbl">Try</div><ul>${Vt.tryit.map((t) => `<li>${t}</li>`).join("")}</ul><div class="lbl">Good</div><div>${Vt.pros}</div><div class="lbl">Watch out</div><div>${Vt.cons}</div><div class="muted" style="margin-top:8px;font-size:11px">Scroll to zoom · middle-drag to pan · ← → change idea</div>`;
+  notesEl.querySelector("[data-min]").onclick = () => notesEl.classList.toggle("min");
+  drawSwitcher(); S.force = true; render();
+}
+function drawSwitcher() { const sw = document.getElementById("switcher"); const vs = QS[S.q].variants;
+  sw.innerHTML = QS.map((qq, i) => `<button class="${i === S.q ? "on" : ""}" data-q="${i}" title="${qq.title}">${i + 1}. ${qq.short}</button>`).join("") + `<span class="sep"></span><button data-v="-1">←</button><span class="vl">${"ABCDE"[S.v]} · ${vs[S.v].name} <span style="font-weight:400;color:#666">(${S.v + 1}/${vs.length})</span></span><button data-v="1">→</button><span class="sep"></span><select id="grp">${Object.keys(GROUPS).map((g) => `<option ${g === S.group ? "selected" : ""}>${g}</option>`).join("")}${S.group ? "" : "<option selected>Custom</option>"}</select><button data-reset>Reset</button>`;
+  sw.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => go(+b.dataset.q, 0)));
+  sw.querySelectorAll("[data-v]").forEach((b) => (b.onclick = () => go(S.q, (S.v + +b.dataset.v + vs.length) % vs.length)));
+  sw.querySelector("[data-reset]").onclick = () => { S.ms = clone(HOME); S.undo = null; go(S.q, S.v); };
+  sw.querySelector("#grp").onchange = (e) => { setGroup(e.target.value); go(S.q, S.v); }; }
+
+const qs = new URLSearchParams(location.search);
+go(clamp((+qs.get("q") || 1) - 1, 0, QS.length - 1), Math.max(0, "ABCDE".indexOf((qs.get("v") || "A").toUpperCase())));
+requestAnimationFrame(() => { S.force = true; render(); });
+</script>
+</body>
+</html>
