@@ -6,7 +6,7 @@ plus what the owner still has to do: the
 [hands-on checklist](parity-checklist.md) and the
 [benchmark on real hardware](#benchmark-on-real-hardware).
 
-Every number here comes from this agent machine: Ryzen 5 3600 (12 threads),
+Every number here comes from this agent machine: an AMD 6-core desktop CPU (12 threads),
 no GPU. **Headless Chromium draws WebGL in software (SwiftShader)** and
 Electron in a container uses software GL too, so every frame rate here is a
 lower bound, and a comparison of the two fields here says nothing about real
