@@ -74,7 +74,7 @@ registered" error, so a test that wanders into these fails loudly:
 
 - opening, saving, closing and creating files, and the launch page
 - native dialogs and menus
-- PDF and video export, audio import
+- PDF export, audio import
 - sign-in, plugins, updates
 
 Those stay in `e2e/tests/`, which runs the packaged app.
@@ -135,6 +135,12 @@ test("creates marchers", async ({ show }) => {
   `test.use({ fieldQualityNotice: true })` lets it show.
 - `test.use({ initScript: "..." })` runs a script in the page before the app
   on every load, e.g. to take WebGL away. Browser target only.
+- The video export saves to `show.videoExportPath`, as if picked in its
+  save dialog (the host restates the export's three IPC handlers; Electron
+  reads `PLAYWRIGHT_VIDEO_EXPORT_PATH`). It draws through WebGL even on the
+  Fabric field (#207), so `test.use({ webgl: true })` gives Electron software
+  GL as the new field always gets. `tests/video-export.spec.mts` reads frames
+  from the file with ffmpeg.
 - `await waitForIdle(page)` waits until the app's writes have finished. Use it
   before a step that must not overlap the previous one.
 - Put steps a user takes (fill a form, drag a dot) in `app.mts` so specs read

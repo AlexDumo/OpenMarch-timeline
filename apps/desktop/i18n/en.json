@@ -385,6 +385,7 @@
         "videoFieldScale": "Scale",
         "videoFrameRate": "Frame rate",
         "videoNoAudio": "No audio file selected. The video will use a silent audio track.",
+        "videoNoWebGL": "Video export needs WebGL, which this computer doesn't have right now. Turn on hardware acceleration or update your graphics drivers, then reopen this window.",
         "videoOpenFile": "Click to open video",
         "videoOverlay": "On-screen info",
         "videoOverlayClock": "Elapsed time",
