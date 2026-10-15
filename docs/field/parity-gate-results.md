@@ -1,42 +1,200 @@
 # Parity gate results (#208)
 
 The automated half of the [parity gate](implementation-plan.md#parity-gate),
-run on the fork branch `field-renderer` (with this ticket's tooling merged),
-plus what the owner still has to do: the
+run on the fork branch `field/208-parity-gate` (`field-renderer` at 92ce5c033
+plus #208's tooling and test fixes), and what the owner still has to do: the
 [hands-on checklist](parity-checklist.md) and the
 [benchmark on real hardware](#benchmark-on-real-hardware).
 
-Every number here comes from this agent machine: an AMD 6-core desktop CPU (12 threads),
-no GPU. **Headless Chromium draws WebGL in software (SwiftShader)** and
-Electron in a container uses software GL too, so every frame rate here is a
-lower bound, and a comparison of the two fields here says nothing about real
-hardware.
+Every number here comes from the agent machine: a 6-core AMD desktop CPU
+(12 threads) with no GPU. **Headless Chromium draws WebGL in software
+(SwiftShader), and Electron in its container uses software GL too**, so
+frame rates here are lower bounds and say nothing about how the two fields
+compare on real hardware.
 
 ## Summary
 
-| Gate item                                           | Result                                                                                                                                                                                        |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Scenario suite, browser, new field               | SCENARIO_BROWSER_THREE                                                                                                                                                                        |
-| 1. Scenario suite, browser, Fabric                  | SCENARIO_BROWSER_FABRIC                                                                                                                                                                       |
-| 1. Scenario suite, Electron, new field              | SCENARIO_ELECTRON_THREE                                                                                                                                                                       |
-| 1. Scenario suite, Electron, Fabric                 | SCENARIO_ELECTRON_FABRIC                                                                                                                                                                      |
-| 2. Render comparisons (3 shows × 3 zooms × 4 times) | Every difference explained ([below](#2-render-comparisons)). One unlisted difference found (labels over neighboring dots) and fixed in #245 by owner decision. Prerelease `field-render-208`. |
-| 3. Export diffs: drill charts and PDFs              | EXPORT_VERDICT                                                                                                                                                                                |
-| 3. Export diffs: video                              | VIDEO_VERDICT                                                                                                                                                                                 |
-| 4. Owner's hands-on checklist                       | Not run yet: [parity-checklist.md](parity-checklist.md)                                                                                                                                       |
-| 5. Benchmark, software GL here                      | BENCH_VERDICT                                                                                                                                                                                 |
-| 5. Benchmark, real hardware                         | Not run yet: [steps below](#benchmark-on-real-hardware)                                                                                                                                       |
-| Open issues                                         | OPEN_ISSUES                                                                                                                                                                                   |
+| Gate item                                           | Result                                                                                                                                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Scenario suite, browser, new field               | Quiet: 412 passed, 2 failed (playback, #250), 27 skipped. Under load: 414 passed, 0 failed                                                                                                                    |
+| 1. Scenario suite, browser, Fabric                  | Quiet: 384 passed, 0 failed, 57 skipped. Under load: 383 passed, 1 failed (playback, #250)                                                                                                                    |
+| 1. Scenario suite, Electron, new field              | 272 passed, 0 failed, 22 skipped (×2, one window per display)                                                                                                                                                 |
+| 1. Scenario suite, Electron, Fabric                 | 250 passed (42 of them expected failures), 0 failed, 44 skipped (×2, one window per display)                                                                                                                  |
+| 2. Render comparisons (3 shows × 3 zooms × 4 times) | Every difference explained. One unlisted difference found (drill numbers over neighboring dots), fixed in #245 by owner decision. Prerelease `field-render-208`.                                              |
+| 3. Export diffs: drill charts and PDFs              | Same content; what's left once aligned is #206's approved list. Prerelease `export-diff-208`.                                                                                                                 |
+| 3. Export diffs: video                              | Same content: frames match #207's reviewed run (PSNR within 0.04 dB; the change is the labels now under the dots). Export takes 2.8–3.7× Fabric's time on software GL.                                        |
+| 4. Owner's hands-on checklist                       | To do: [parity-checklist.md](parity-checklist.md), in the lab build                                                                                                                                           |
+| 5. Benchmark, software GL here                      | Runs on both fields. With no GPU the new field is fill-bound (main thread under 1.2 ms a frame); Fabric wins play and scrub on 385+ marchers here, as in the prototype. Not the gate: [details](#5-benchmark) |
+| 5. Benchmark, real hardware                         | To do: [steps](#benchmark-on-real-hardware)                                                                                                                                                                   |
+| Issues filed or updated                             | #236 (findings), #246 (opening view under heavy load), #247 (benchmark drag), #250 (playback scenario races the audio clock)                                                                                  |
 
-## 5. Benchmark on this machine (software GL)
+## 1. The scenario suite
+
+146 scenarios in 31 files (`e2e/browser/tests/`), on both fields, in the
+browser three times each (`--repeat-each=3`) and in Electron twice. On
+Fabric, 22 scenarios are expected to fail (`test.fail`): the 19 `change:`
+scenarios (the rules table's decided changes) and 3 Fabric bugs the new field
+fixes; they count as passed. Skips are opt-in captures and scenarios for one
+field or target. All counts are on `field-renderer` 92ce5c033 with #208's
+fixes, except that the browser runs predate the last fix (a 20 s limit on the
+settle wait for big shows), which none of the suite's shows needed.
+
+```sh
+# apps/desktop, after pnpm run build:browser (browser) or pnpm run build (Electron)
+FIELD=three  pnpm exec playwright test --project=browser --workers=4 --repeat-each=3
+FIELD=fabric pnpm exec playwright test --project=browser --workers=4 --repeat-each=3
+FIELD=three  ~/om-capture/e2e --repo <worktree> --no-build --project=electron-scenarios --workers=1 --repeat-each=2
+FIELD=fabric ~/om-capture/e2e --repo <worktree> --no-build --project=electron-scenarios --workers=1 --repeat-each=2
+```
+
+| Target, field       | Quiet machine                                     | Under load                                        |
+| ------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| Browser, new field  | 412 passed, 2 failed (playback, #250), 27 skipped | 414 passed, 0 failed, 27 skipped                  |
+| Browser, Fabric     | 384 passed, 0 failed, 57 skipped                  | 383 passed, 1 failed (playback, #250), 57 skipped |
+| Electron, new field | 272 passed, 0 failed, 22 skipped                  | see #236 below                                    |
+| Electron, Fabric    | 250 passed, 0 failed, 44 skipped                  | see #236 below                                    |
+
+"Under load" is both browser passes at once (8 workers on 12 threads).
+Under the heavier load of earlier runs (load average around 80, while other
+workers built and tested), the failures were app-start timeouts, not
+scenario results.
+Electron counts are with one worker per om-capture container, so each
+Electron window has its own X display; see the parallel-window flake below.
+
+### Fixed test races
+
+Each was a test reading the app before it had caught up; none needed a
+retry or a longer timeout.
+
+| Scenario(s)                                                                                         | Cause                                                                                                                                                                                                                                     | Fix                                                                                                                     |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Kept-mark tooltip scenarios, "a kept marcher's mark shows its tooltip" (Fabric, under load)         | K was pressed once the field showed the selection; K acts on the app's selection and the stored moves, which can settle a render later. K did nothing and the 91 kept marchers never appeared.                                            | `pressKeep` (`timeline.mts`) waits for the timeline's chain marked "(K)", which shows exactly when K will act.          |
+| "Escape in isolation with the line tool on only cancels the tool" (new field, under load)           | The same race for L: the line tool started with nothing selected.                                                                                                                                                                         | The timeline scenarios' `selectAll` waits until the inspector shows the selection too.                                  |
+| "A WebGL context that doesn't come back is replaced" (new field, Electron and browser, once each)   | It read `contextLost` once, right after the new canvas mounted, before the store caught up.                                                                                                                                               | Polls it.                                                                                                               |
+| "Alt scales at a quarter of the pointer's speed" (new field, Electron, 3 in 5), first-action misses | Scenarios read the zoom or a marcher's place on screen before the field's opening view settled (it centers again once the panels settle, 250 ms after ready, later in Electron: one run read zoom 0.760, then the view settled at 0.722). | The show fixture waits until the view and the field's element hold still (`waitForSettledField`) before every scenario. |
+
+### Known flakes, explained, not fixed
+
+| Flake                                                                        | Where                                                                    | Cause                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #236: a click, drag, lasso or hover on the new field that never takes effect | Electron, new field, only with several Electron windows on one X display | Not CPU load: one worker under a heavy CPU load passed 50/50; four workers on a quiet machine failed 5 in 126. The traces show the whole gesture sent and ignored. Each test opens its own window on the shared display, and a new window takes activation; the new field cancels a press when it loses pointer capture, and Fabric uses no capture. Likely cause, not proven. Real users can lose capture too (Alt+Tab mid-drag): now unit-tested (nothing left behind) and on the checklist (item 69). Details on #236. |
+| Opening view a panel-row off the fit (navigation scenarios)                  | Browser, new field, only under heavy CPU load (10 busy loops)            | The view re-centers on resizes only within 250 ms of opening; under heavy load the panels settle later. Same 250 ms rule as Fabric. #246.                                                                                                                                                                                                                                                                                                                                                                                 |
+| "Playback draws the marchers where the show puts them"                       | Browser, both fields, with parallel workers (1–3 in 12)                  | The clock and the field each read the stepping audio clock (`getLivePlaybackPosition`) at a different moment. Headless Chromium's fake audio output steps every 43 ms; failures are about 87 ms (2.1–2.2 units) apart, over the 2-unit tolerance. Equal on both fields, so not a parity difference. A race-free version needs a test API reading of the time each field drew: #250.                                                                                                                                       |
+| Fabric "undo and redo a move", edit-positions undo steps                     | (earlier reports)                                                        | Fixed by #223 (presses were dropped); not seen in these runs.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| #196's "quick 19 px flick" in Electron, weak-machines Electron context loss  | (earlier reports)                                                        | Not seen in these runs; both are covered by the opening-view and context-state fixes above.                                                                                                                                                                                                                                                                                                                                                                                                                               |
+
+## 2. Render comparisons
+
+`e2e/browser/render/corpus-render.spec.mts` (project `render`): the Part 1
+demo (95 marchers), Daft Punk pt. 2 (385) and the stress show (1,925, built
+by `render/stressShow.mts`, the prototype's script), at three zooms (`fit`,
+the opening view; `near`, 2.5×; `close`, 6×, pinched in at the marchers'
+center) and four times (the first page, page 4, four beats into the next
+move, and two beats past page 8): 36 cases. The new field picks the view and
+Fabric is pointed at the same one, so the pairs line up in field units. Side
+by sides, diffs and `summary.tsv` are in the fork prerelease
+[`field-render-208`](https://github.com/AlexDumo/OpenMarch-timeline/releases/tag/field-render-208).
+
+```sh
+FIELD=three pnpm exec playwright test --project=render corpus-render
+FIELD=fabric pnpm exec playwright test --project=render corpus-render
+```
+
+Changed pixels (no match within one pixel; most of it is the half-line shift
+of every grid line):
+
+| Show      | fit        | near       | close     |
+| --------- | ---------- | ---------- | --------- |
+| Part 1    | 36.2–36.3% | 11.6–11.7% | 8.5–9.4%  |
+| Daft Punk | 9.1–9.3%   | 6.6–9.4%   | 3.3–8.0%  |
+| Stress    | 14.8–18.7% | 18.5–24.2% | 7.6–25.8% |
+
+Part 1's demo copy uses a dark theme with a white line every step, so at fit
+nearly every pixel is next to a grid line that moved. Marchers stand in the
+same places at every time in every case, mid-move included. The stress cases
+were captured again after #245 (drill numbers under the dots).
+
+Every difference, and where it's decided:
+
+| Difference                                                                   | Where it's decided                                                                                     |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Grid, dots and labels half a grid line up and left of Fabric's               | Rules table, Dot position (#199, #200)                                                                 |
+| Lines pixel-snapped where Fabric smooths them over two pixels                | #200                                                                                                   |
+| Yard numbers centered on their yard line, not 22 units left of it            | Export improvements (#206), #200                                                                       |
+| Marcher labels in SDF glyphs (Courier New bold): about a pixel different     | #192, #199                                                                                             |
+| Labels fade out below a readable size (on Fabric they shrink to a smear)     | Rules table, Labels                                                                                    |
+| Dots at least 1.5 CSS px in radius at very low zooms                         | #192                                                                                                   |
+| Drill numbers drew over neighboring dots (Fabric and the export: under them) | Found here; owner decision 2026-10-15: match Fabric. Fixed in #245; `label-stacking.spec.mts` pins it. |
+
+The timeline drawing (pathways, isolation, kept marks, collisions) and every
+theme, variant and field image were compared in #201 and #200 (prereleases
+`field-render-201`, `field-render-200`; marcher shapes in `render-diff-199`),
+and their drawing hasn't changed since. Collision detection is back since
+#226 (#242); its markers are drawn where the marchers meet, where Fabric drew
+them at the field's corner (checklist item 34).
+
+## 3. Export diffs
+
+Fork prerelease
+[`export-diff-208`](https://github.com/AlexDumo/OpenMarch-timeline/releases/tag/export-diff-208)
+(README inside).
+
+**Drill charts and PDFs.** `render/export-compare.spec.mts` exports drill
+charts through the export dialog (full and individual); the browser harness
+writes each chart's SVG pages, the PDF's input. Before: `field-renderer` at
+04ce48876 (Fabric draws the charts, just before #206) with the current
+harness copied in. After: this branch before #245 (drill charts are drawn
+from show data and don't use the field's layers, so #245 doesn't change
+them). `render/export-diff.mts` pairs them as drawn, aligned for Fabric's
+half-pixel offset, and as PDF pages (pdfkit and svg-to-pdfkit as the PDF
+export draws them, read back with pdf.js).
+
+```sh
+EXPORT_COMPARE=/tmp/ec EXPORT_COMPARE_LABEL=after pnpm exec playwright test --project=render export-compare
+# the same with EXPORT_COMPARE_LABEL=before in a base worktree, then:
+node e2e/browser/render/export-diff.mts /tmp/ec before after 3
+```
+
+| Show                                   | as drawn  | aligned    | PDF      |
+| -------------------------------------- | --------- | ---------- | -------- |
+| Part 1, 23 full + 69 individual charts | 21.9%     | 0.54–0.58% | 22.3%    |
+| Part 1 with a field image              | 22.0%     | 0.68–0.78% | 21.6%    |
+| Daft Punk, 18 full charts              | 9.9–10.5% | 1.12–1.39% | 8.2–8.9% |
+
+Same content. Aligned, what's left is #206's approved list (centered drill
+numbers and yard numbers, side labels, the closed border); Daft Punk has four
+times as many labels. The demo copies here have a dark theme with a line
+every step, which is why the unaligned and PDF shares are higher than #206's
+(9–12% and 3.6–6.8% on the default theme). Fabric didn't finish Daft Punk's
+385 individual charts in 28 minutes, so individual charts are compared on
+Part 1 only.
+
+**Video.** #207's `video-compare` rerun on a quiet machine (before: af5b9b441,
+Fabric's video canvas; after: this branch, with #245). Every frame's PSNR
+matches #207's reviewed run (`field-video-207`) within 0.04 dB; what moved is
+the drill numbers, now under the dots. Same content. 1080p export times
+here (software GL): Part 1 45 → 135 s, Part 1 with image 46 → 170 s, Daft
+Punk 94 → 260 s, so 2.8–3.7× Fabric's. To time on real hardware (benchmark
+step 6).
+
+## 4. The owner's hands-on checklist
+
+[parity-checklist.md](parity-checklist.md): 114 one-line items, by area,
+in the lab build (`?field=three` for the new field). It covers every user
+story in #189, every decided change (marked **(change)**), every "for #208"
+item from the phase notes, and the owner decisions still open (the handle
+look). Settled on 2026-10-15: drill numbers under the dots (#245) and the
+app-wide `ignore-gpu-blocklist`.
+
+## 5. Benchmark
+
+### On this machine (software GL)
 
 `e2e/browser/render/benchmark.spec.mts` runs the in-app benchmark
 (`window.fieldBenchmark.run()`) on the corpus, on a production browser build
 in headless Chromium, 1600 × 1000 window (field 1206 × 699 CSS px at 1×), on
 a quiet machine. **WebGL here is SwiftShader (software)**, so the new field
-runs in low-quality mode, and Fabric's Canvas2D is software too. These are
-lower bounds; they don't predict real hardware, where the prototype measured
-the opposite (WebGL 60 fps at 1,925 marchers where Fabric managed about 1).
+runs in low-quality mode, and Fabric's Canvas2D is software too.
 
 ```sh
 BENCHMARK_OUT=/tmp/bench FIELD=fabric pnpm exec playwright test --project=render benchmark
@@ -47,41 +205,41 @@ fps, Fabric / new field (p95 frame interval in ms in brackets):
 
 | Show            | play                   | scrub                 | zoom                  | pan                   |
 | --------------- | ---------------------- | --------------------- | --------------------- | --------------------- |
-| Part 1 (95)     | 60.0 / 59.8 (17 / 19)  | 59.7 / 51.6 (17 / 22) | 53.8 / 60.0 (25 / 17) | 4.4 / 60.0 (232 / 17) |
-| Daft Punk (385) | 60.0 / 27.9 (17 / 39)  | 60.0 / 26.8 (17 / 40) | 27.9 / 37.6 (58 / 35) | 4.2 / 30.9 (242 / 35) |
-| Stress (1,925)  | 19.1 / 5.5 (155 / 187) | 16.5 / 5.5 (65 / 195) | 5.7 / 8.0 (304 / 175) | 3.5 / 5.7 (295 / 179) |
+| Part 1 (95)     | 60.0 / 58.2 (17 / 20)  | 59.7 / 50.0 (17 / 25) | 54.1 / 59.8 (25 / 18) | 4.3 / 59.8 (238 / 18) |
+| Daft Punk (385) | 60.0 / 28.0 (17 / 38)  | 60.1 / 26.8 (18 / 40) | 27.9 / 37.8 (54 / 35) | 4.1 / 30.8 (248 / 35) |
+| Stress (1,925)  | 19.1 / 5.6 (127 / 332) | 15.9 / 5.7 (69 / 204) | 5.5 / 7.5 (325 / 165) | 3.3 / 5.5 (318 / 213) |
 
-Main-thread time per frame: the new field 0.2–1.2 ms; Fabric 0.7–47 ms for
-play and scrub and 9–283 ms for zoom and pan. Drag isn't measured yet.
+The new field's main thread spends 0.2–2.0 ms a frame.
+
+Compare the fields by fps and frame intervals only: the benchmark's CPU
+columns measure different spans (the new field's frame hooks, uploads and
+render; Fabric's `renderAll`). Drag isn't measured yet (#247).
 
 What it shows: with no GPU, the new field is limited by single-threaded
-SwiftShader filling pixels (its main thread is nearly idle), while Fabric
-plays and scrubs from cached sprites and so wins on mid-size shows, as the
-prototype found (385 marchers on SwiftShader: Fabric 60, prototype 29).
-Fabric's pan is about 4 fps here because every pan frame redraws its grid
-(its real trackpad pan measures the same). On real hardware the new field
-should hold 60 fps; the rows below decide the gate.
+SwiftShader filling pixels (its main thread spends about a millisecond a
+frame), while Fabric plays and scrubs from cached sprites and so wins on
+mid-size shows, as the prototype found (385 marchers on SwiftShader: Fabric
+60, prototype 29). Fabric's pan is about 4 fps here because every pan frame
+redraws its grid (its real trackpad pan measures the same). The prototype
+measured the opposite with a working GPU (WebGL 60 fps at 1,925 marchers,
+Fabric about 1), so the real-hardware rows decide the gate.
 
 How each field is measured: the frames each field draws (R3F's render on the
-new field; Fabric's `before:render` to `after:render`), during the same
+new field; Fabric's `before:render` to `after:render`) during the same
 scenarios. Play and scrub drive the app's playhead; zoom is a pinch
-(Ctrl+wheel) through each field's own input, so Fabric uses the grid cache
-it keeps while zooming; pan moves each field's view as its trackpad pan
-does.
+(Ctrl+wheel) through each field's own input, so Fabric draws its grid from
+the cache it keeps while zooming; pan moves each field's view as its
+trackpad pan does.
 
-## Benchmark on real hardware
+### Benchmark on real hardware
 
 Gate item 5: the in-app benchmark on a real low-end Chromebook (the lab web
 build) and an integrated-GPU laptop (the desktop app), on both fields, with
 no regression on the new field. The benchmark plays the show from the top,
 scrubs back and forth across it, pinch-zooms in to 8× and out, and pans in a
-circle, 4 s each, then shows a table. Dragging isn't measured yet (#208
-follow-up). Since #208 it runs on the Fabric field too, so both fields can be
-measured on the same machine. The lab build has that once #208's PR is
-merged into `field-renderer` (the lab republishes on every push); before
-that, "Run field benchmark" only exists on the new field.
+circle, 4 s each, then shows a table. It runs on both fields since #245.
 
-### Shows
+#### Shows
 
 Download the three show files from the fork prerelease `field-render-208`
 and open each with the app's Open file, so both builds open the same files:
@@ -90,7 +248,7 @@ and open each with the app's Open file, so both builds open the same files:
   demo shows, already converted to timelines;
 - `stress-1925.dots` (1,925): every Daft Punk marcher cloned four times.
 
-### Before each run
+#### Before each run
 
 1. Plug the machine in, close other apps and tabs, and leave it a minute to
    settle.
@@ -100,11 +258,11 @@ and open each with the app's Open file, so both builds open the same files:
    stress show).
 4. Don't touch the mouse or keyboard while it runs.
 
-### Chromebook: the lab web build
+#### Chromebook: the lab web build
 
 1. Open `chrome://gpu` and note the first lines of "Graphics Feature Status"
    (WebGL: "Hardware accelerated" or not) and the GL renderer. If WebGL is
-   software only, say so in the results: the new field runs in low-quality
+   software only, say so with the results: the new field runs in low-quality
    mode there.
 2. Fabric: open <https://lab.openmarch.com/x/field-renderer/> (or the same
    build without the lab's sign-in:
@@ -117,7 +275,7 @@ and open each with the app's Open file, so both builds open the same files:
    2–3 on the same show.
 5. Repeat for the three shows. Run each one twice if the numbers look odd.
 
-### Laptop with integrated graphics: the desktop app
+#### Laptop with integrated graphics: the desktop app
 
 The desktop app needs a production build of `field-renderer`:
 
@@ -133,13 +291,13 @@ The desktop app needs a production build of `field-renderer`:
    Reload. Repeat step 4. To go back to Fabric, run
    `localStorage.removeItem("openmarch:dev:field")` and reload.
 6. Also time a video export of the Daft Punk show (Export › Video, 1080p,
-   30 fps) on each field: from pressing Export to "Export completed!". Here
-   (software GL) the new field took about 3× as long as Fabric; the question
-   is whether that holds with a real GPU.
+   30 fps) on each field, from pressing Export to "Export completed!". Here
+   (software GL) the new field took 2.8–3.7× as long as Fabric; the
+   question is whether that holds with a real GPU.
 
-### Results to fill in
+#### Results to fill in
 
-fps (higher is better) per scenario; "p95" is the 95th-percentile time
+fps per scenario (higher is better); "p95" is the 95th-percentile time
 between frames in ms (lower is better).
 
 | Machine    | GPU / GL renderer | Show            | Field  | play fps | scrub fps | zoom fps | pan fps | play p95 ms | Video export |
@@ -159,122 +317,3 @@ between frames in ms (lower is better).
 
 The gate passes when no new-field row is slower than its Fabric row, and the
 new field holds about 60 fps on play and scrub where the GPU is real.
-
-## 1. The scenario suite
-
-146 scenarios in 31 files (`e2e/browser/tests/`), each run three times
-(`--repeat-each=3`) in the browser and twice in Electron, on both fields.
-On Fabric, 22 scenarios are expected to fail (`test.fail`): the 19 `change:`
-scenarios, the rules-table changes, plus 3 where Fabric has a known bug the
-new field fixes. Skips are opt-in capture specs and target- or field-only
-scenarios.
-
-```sh
-# from apps/desktop, after pnpm run build:browser
-FIELD=three  pnpm exec playwright test --project=browser --workers=4 --repeat-each=3
-FIELD=fabric pnpm exec playwright test --project=browser --workers=4 --repeat-each=3
-# Electron (after pnpm run build), headless in Docker + Xvfb
-FIELD=three  ~/om-capture/e2e --repo <worktree> --project=electron-scenarios --workers=3 --repeat-each=2
-FIELD=fabric ~/om-capture/e2e --repo <worktree> --project=electron-scenarios --workers=3 --repeat-each=2
-```
-
-| Target, field       | Quiet machine                                                   | Under load           |
-| ------------------- | --------------------------------------------------------------- | -------------------- |
-| Browser, new field  | 411 passed, 0 failed, 27 skipped                                | LOAD_BROWSER_THREE   |
-| Browser, Fabric     | 381 passed (66 of them expected failures), 0 failed, 57 skipped | LOAD_BROWSER_FABRIC  |
-| Electron, new field | ELECTRON_THREE                                                  | ELECTRON_LOAD_THREE  |
-| Electron, Fabric    | ELECTRON_FABRIC                                                 | ELECTRON_LOAD_FABRIC |
-
-### Failures and their causes
-
-FAILURE_LIST
-
-## 2. Render comparisons
-
-`e2e/browser/render/corpus-render.spec.mts` (project `render`): the Part 1
-demo (95 marchers), Daft Punk pt. 2 (385) and the stress show (1,925, built
-by `render/stressShow.mts`, the prototype's script), at three zooms (`fit`,
-the opening view; `near`, 2.5×; `close`, 6×, pinched in at the marchers'
-center) and four times (the first page, page 4, four beats into the next
-move, and two beats past page 8): 36 cases. The new field picks the view and
-Fabric is pointed at the same one, so the pairs line up in field units. Side
-by sides, diffs and `summary.tsv` are in the fork prerelease
-[`field-render-208`](https://github.com/AlexDumo/OpenMarch-timeline/releases/tag/field-render-208).
-
-```sh
-pnpm run build:browser
-FIELD=three pnpm exec playwright test --project=render corpus-render
-FIELD=fabric pnpm exec playwright test --project=render corpus-render
-```
-
-Changed pixels (no match within one pixel; most of it is the half-line
-shift of every grid line):
-
-| Show      | fit        | near       | close     |
-| --------- | ---------- | ---------- | --------- |
-| Part 1    | 36.2–36.3% | 11.6–11.7% | 8.5–9.4%  |
-| Daft Punk | 9.1–9.3%   | 6.6–9.4%   | 3.3–8.0%  |
-| Stress    | 17.6–21.7% | 24.2–32.3% | 8.5–35.9% |
-
-Part 1's demo copy uses a dark theme with a white line every step, so at fit
-nearly every pixel is next to a grid line that moved half a line. Marchers
-stand in the same places at every time in every case, mid-move included.
-
-Every difference, and where it's decided:
-
-| Difference                                                                                    | Where it's decided                                                                                                                                                                                                |
-| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Grid, dots and labels half a grid line up and left of Fabric's                                | Rules table, Dot position (#199, #200)                                                                                                                                                                            |
-| Lines pixel-snapped where Fabric smooths them over two pixels                                 | #200                                                                                                                                                                                                              |
-| Yard numbers centered on their yard line, not 22 units left of it                             | Export improvements (#206), #200                                                                                                                                                                                  |
-| Marcher labels in SDF glyphs (Courier New bold): about a pixel different                      | #192, #199                                                                                                                                                                                                        |
-| Labels fade out below a readable size (on Fabric they shrink to a smear)                      | Rules table, Labels                                                                                                                                                                                               |
-| Dots at least 1.5 CSS px in radius at very low zooms                                          | #192                                                                                                                                                                                                              |
-| Labels drew over neighboring dots; on Fabric (and in the export) every dot covers every label | Owner decision 2026-10-15: match Fabric. Fixed in #245 (labels at render order 1.9, under the dots); `label-stacking.spec.mts` pins it. The stress-show cases in `field-render-208` were captured before the fix. |
-
-The timeline drawing (pathways, isolation, kept marks, collisions) and every
-theme, variant and field image were compared in #201 and #200 (prereleases
-`field-render-201`, `field-render-200`; marcher shapes in `render-diff-199`),
-and their drawing hasn't changed since.
-
-## 3. Export diffs
-
-Fork prerelease
-[`export-diff-208`](https://github.com/AlexDumo/OpenMarch-timeline/releases/tag/export-diff-208)
-(README inside).
-
-**Drill charts and PDFs.** `render/export-compare.spec.mts` exports drill
-charts through the export dialog (full and individual), and the browser
-harness writes each chart's SVG pages, the PDF's input. Before: `field-renderer`
-at 04ce48876 (Fabric draws the charts, just before #206) with the current
-harness copied in. After: this branch. `render/export-diff.mts` pairs them
-as drawn, aligned for Fabric's half-pixel offset, and as PDF pages
-(pdfkit + svg-to-pdfkit, as the PDF export draws them, read back with
-pdf.js).
-
-```sh
-EXPORT_COMPARE=/tmp/ec EXPORT_COMPARE_LABEL=after pnpm exec playwright test --project=render export-compare
-# the same with EXPORT_COMPARE_LABEL=before in a base worktree, then:
-node e2e/browser/render/export-diff.mts /tmp/ec before after 3
-```
-
-| Show                                   | as drawn  | aligned    | PDF      |
-| -------------------------------------- | --------- | ---------- | -------- |
-| Part 1, 23 full + 69 individual charts | 21.9%     | 0.54–0.58% | 22.3%    |
-| Part 1 with a field image              | 22.0%     | 0.68–0.78% | 21.6%    |
-| Daft Punk, 18 full charts              | 9.9–10.5% | 1.12–1.39% | 8.2–8.9% |
-
-Same content. Aligned, what's left is #206's approved list (centered drill
-numbers and yard numbers, side labels, the closed border); Daft Punk has four
-times as many labels. The demo copies used here have a dark theme with a line
-every step, which is why the unaligned and PDF shares are higher than #206's
-(9–12% and 3.6–6.8% on the default theme). Fabric didn't finish Daft Punk's
-385 individual charts in 28 minutes, so individual charts are compared on
-Part 1 only.
-
-**Video.** #207's `video-compare` rerun (before: af5b9b441, Fabric's video
-canvas; after: this branch). Every frame's PSNR is identical to #207's
-reviewed run (`field-video-207`) to six decimals: the export draws exactly
-what was approved there. 1080p export times here (software GL, a loaded
-machine): Part 1 60 → 145 s, Part 1 with image 68 → 190 s, Daft Punk 129 →
-262 s, so 2.0–2.8× Fabric's. To time on real hardware (benchmark step 6).

@@ -55,15 +55,19 @@ export async function waitForSettledField(page: Page) {
         });
     let last = await read();
     let still = 0;
-    // The same three reads in a row, 150 ms apart: past the 250 ms settle
+    // The same three reads in a row, 150 ms apart: past the 250 ms settle. A
+    // big show opens slowly (as the fixture's other waits allow for)
     await expect
-        .poll(async () => {
-            await page.waitForTimeout(150);
-            const now = await read();
-            still = now === last ? still + 1 : 0;
-            last = now;
-            return still >= 3;
-        })
+        .poll(
+            async () => {
+                await page.waitForTimeout(150);
+                const now = await read();
+                still = now === last ? still + 1 : 0;
+                last = now;
+                return still >= 3;
+            },
+            { timeout: 20_000 },
+        )
         .toBe(true);
 }
 
