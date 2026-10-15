@@ -15,6 +15,7 @@ import fs from "node:fs";
 import * as DatabaseServices from "@om-electron/database/database.services";
 import { getOrm } from "@om-electron/database/db";
 import { DrizzleMigrationService } from "@om-electron/database/services/DrizzleMigrationService";
+import { GPU_CRASHED_CHANNEL } from "@om-electron/main/gpu";
 import { ipcHandlers, ipcListeners, ipcMain } from "./electron";
 
 export type ShowHost = {
@@ -77,6 +78,8 @@ function registerHandlers() {
     ipcMain.handle("conversion:getPending", () => null);
     ipcMain.handle("load-file:takeRefusal", () => null);
     ipcMain.handle("plugins:list", () => []);
+    // A headless browser has no GPU process of the app's to crash
+    ipcMain.handle(GPU_CRASHED_CHANNEL, () => false);
     ipcMain.handle("auth:get-state", () => ({
         isAuthenticated: false,
         isLoading: false,

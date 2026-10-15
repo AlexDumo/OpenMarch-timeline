@@ -22,6 +22,7 @@ import type {
 } from "@om-electron/main/auth/types";
 import { AUTH_IPC_CHANNELS } from "../../src/global/auth/constants";
 import { MENU_ACTION_CHANNEL } from "../../src/global/menuActions";
+import { GPU_CRASHED_CHANNEL, GPU_PROCESS_GONE_CHANNEL } from "../main/gpu";
 import type { HistoryResponse } from "@/db-functions";
 import type { PendingConversion } from "@om-electron/database/convertOnOpenGate";
 import type { ConvertProgress } from "@om-electron/database/convertOnOpenProtocol";
@@ -158,6 +159,16 @@ const APP_API = {
         ) => callback(change);
         ipcRenderer.on("settings:changed", listener);
         return () => ipcRenderer.removeListener("settings:changed", listener);
+    },
+    /** Whether the GPU process crashed this session (ADR 0005 D-3) */
+    gpuCrashed: () =>
+        ipcRenderer.invoke(GPU_CRASHED_CHANNEL) as Promise<boolean>,
+    /** Calls `callback` when the GPU process crashes; returns the unsubscribe */
+    onGpuCrashed: (callback: () => void) => {
+        const listener = () => callback();
+        ipcRenderer.on(GPU_PROCESS_GONE_CHANNEL, listener);
+        return () =>
+            ipcRenderer.removeListener(GPU_PROCESS_GONE_CHANNEL, listener);
     },
     isMacOS: process.platform === "darwin",
     /** Page zoom (View → Zoom In/Out), so native-sized UI can undo it. */
