@@ -92,7 +92,7 @@ for (const c of CASES)
             const seconds = (Date.now() - started) / 1000;
 
             const video = fs.readFileSync(show.videoExportPath);
-            // WebM starts with the EBML magic number; anything else here is MP4
+            // WebM files start with these four bytes; anything else here is MP4
             const extension =
                 video.subarray(0, 4).toString("hex") === "1a45dfa3"
                     ? "webm"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# cspell:ignore lutrgb hstack tpsnr lavfi
 # Pairs frames of two video export runs (video-compare.spec.mts, #207).
 #
 #   video-compare.sh <folder> [before-label] [after-label] [fractions...]

@@ -60,6 +60,20 @@ export class NoWebGLError extends Error {
 }
 
 /**
+ * Thrown when an off-screen field's WebGL context is lost while drawing (a
+ * GPU reset, or the browser reclaiming contexts): its frames would show only
+ * what's drawn outside WebGL, so the video export stops instead.
+ */
+export class FieldContextLostError extends Error {
+    constructor() {
+        super(
+            "The field's WebGL context was lost, so the video can't be drawn. Try the export again.",
+        );
+        this.name = "FieldContextLostError";
+    }
+}
+
+/**
  * Asks the browser for a throwaway WebGL context to see what draws it, then
  * releases it. The field's own context is created later, so this is how the
  * field knows, before it mounts, whether it can draw at all.

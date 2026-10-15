@@ -9,6 +9,7 @@ import type { OrthographicCamera } from "three";
 import { createStore, type StoreApi } from "zustand";
 import type { FieldProperties } from "@openmarch/core";
 import {
+    FieldContextLostError,
     NoWebGLError,
     probeWebGL,
     QUALITY_SETTINGS,
@@ -54,6 +55,7 @@ export interface OffscreenFieldArgs {
  * samples the marchers, runs the layers' frame hooks and renders, all
  * synchronously, so the canvas holds that beat's frame when it returns. It's
  * kept until the next draw (`preserveDrawingBuffer`), for the caller to copy.
+ * If the context is lost, `draw` throws `FieldContextLostError`.
  */
 export interface OffscreenField {
     /** The drawn frame, `width` × `height` pixels, transparent outside the field. */
@@ -187,8 +189,12 @@ export async function createOffscreenField(
         },
         draw(beat) {
             marchers.fill(beat);
+            const state = store.getState();
             // This root only: the on-screen field draws on its own
-            advance(performance.now() / 1000, false, store.getState());
+            advance(performance.now() / 1000, false, state);
+            // A lost context draws nothing: say so rather than save empty frames
+            if (state.gl.getContext().isContextLost())
+                throw new FieldContextLostError();
         },
         dispose() {
             if (disposed) return;

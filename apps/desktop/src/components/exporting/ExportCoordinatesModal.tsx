@@ -1193,6 +1193,8 @@ function VideoExport() {
     const { pages, measures, beats } = useTimingObjects()!;
     // Positions come from the resolver (P7.8)
     const storeResolver = useTimelineResolverStore((s) => s.resolver);
+    // The store's resolver is updated in place; a new version redraws the preview
+    const resolverVersion = useTimelineResolverStore((s) => s.version);
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const { data: marchers, isSuccess: marchersLoaded } = useQuery(
         allMarchersQueryOptions(),
@@ -1279,6 +1281,7 @@ function VideoExport() {
                 !fieldImage.loaded ||
                 !appearanceSteps
             ) {
+                setPreviewError(null);
                 return;
             }
 
@@ -1598,6 +1601,7 @@ function VideoExport() {
                     previewTimeSeconds={0}
                     durationSeconds={Math.max(durationSeconds, 0.001)}
                     isLoading={previewLoading}
+                    redrawKey={resolverVersion}
                     loadingLabel={t(
                         previewError
                             ? "exportCoordinates.exportNotAvailable"

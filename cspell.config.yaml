@@ -219,6 +219,8 @@ words:
   - toks
   - tolgee
   - Tolgee
+  - ffprobe
+  - PSNR
   - Tinykeys
   - tinykeys
   - Topbar
