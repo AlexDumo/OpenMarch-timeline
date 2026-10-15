@@ -15,18 +15,18 @@ import {
 } from "./selectionFrame";
 import { dotSizes, SELECTION_COLOR } from "./selectionRing";
 
-/** Fabric's selection border width, in CSS px. */
+/** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
-/** Fabric's marquee border width, in CSS px. */
+/** The marquee border width, in CSS px. */
 const MARQUEE_WIDTH = 2;
-/** Fabric's lasso stroke: 2 CSS px, dashed 5 on, 5 off. */
+/** The lasso stroke: 2 CSS px, dashed 5 on, 5 off. */
 const LASSO_WIDTH = 2;
 const LASSO_DASH = "5 5";
 /**
- * The line tool's look, as Fabric's (`LineListeners`), in field units, so
- * they scale with the field: a 3-wide line, 2-wide pathways dashed 5 on, 3
- * off, and dots of radius 3 at each pathway's middle and end. Its marchers'
- * outlines are squares just outside the dot, 1.5 wide, dashed 3 on, 5 off.
+ * The line tool's look, in field units, so they scale with the field: a
+ * 3-wide line, 2-wide pathways dashed 5 on, 3 off, and dots of radius 3 at
+ * each pathway's middle and end. Its marchers' outlines are squares just
+ * outside the dot, 1.5 wide, dashed 3 on, 5 off.
  */
 const LINE_WIDTH = 3;
 const PATH_WIDTH = 2;
@@ -37,7 +37,7 @@ const OUTLINE_DASH = [3, 5];
 /** How far a line marcher's outline's center line sits outside its dot. */
 const OUTLINE_GAP = 0.25;
 
-/** The rotate handle's connecting line, in CSS px (Fabric's border width). */
+/** The rotate handle's connecting line, in CSS px. */
 const ROTATE_LINE_WIDTH = 1;
 
 /**
@@ -173,7 +173,7 @@ function SelectionBox({ frame }: { frame: DrawnSelectionBox | null }) {
     );
 }
 
-/** The marquee, in Fabric's colors: the theme's shape color, filled at 20%. */
+/** The marquee: the theme's shape color, filled at 20%. */
 function Marquee({ rect, theme }: { rect: FieldRect; theme: FieldTheme }) {
     const view = useFieldViewStore();
     const topLeft = fieldToElement(view, rect.left, rect.top);
@@ -193,7 +193,7 @@ function Marquee({ rect, theme }: { rect: FieldRect; theme: FieldTheme }) {
 }
 
 /**
- * The lasso's line, dashed as Fabric's: the theme's stroke color, and its
+ * The lasso's line, dashed: the theme's stroke color, and its
  * next-path green while releasing would close it.
  */
 function Lasso({
@@ -303,7 +303,7 @@ function LineToolPreview({
                             cx={(a.x + b.x) / 2}
                             cy={(a.y + b.y) / 2}
                             r={PATH_DOT_RADIUS * z}
-                            // Fabric's midpoints are white whatever the theme
+                            // Midpoints are white whatever the theme
                             fill="white"
                             stroke={path}
                             strokeWidth={PATH_WIDTH * z}

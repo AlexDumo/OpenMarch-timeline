@@ -44,26 +44,18 @@ pnpm run e2e:scenarios:electron   # needs a display (Xvfb on a headless machine)
 Each launch gets its own `--user-data-dir`, so these run in parallel too. Run
 them before merging a change to the harness, the preload or the main process.
 
-## Choosing the field renderer
+## WebGL in Electron
 
-The scenarios run against the Fabric field by default. `FIELD=three` runs the
-same scenarios against the three.js field instead (ADR 0005), through its dev
-switch (`src/field/fieldRenderer.ts`):
-
-```bash
-FIELD=three pnpm run e2e:browser
-FIELD=three pnpm run e2e:scenarios:electron
-```
-
-The fixture checks that the field asked for is the one on screen. For
-Electron it also passes Chromium's software GL switches, since a machine with
-no GPU (Xvfb in a container) otherwise has no WebGL. Until the editor tickets
-land, the scenarios that select or drag marchers fail on the new field.
+The field draws with WebGL (ADR 0005). For Electron the fixture passes
+Chromium's software GL switches, since a machine with no GPU (Xvfb in a
+container) otherwise has no WebGL. Run Electron scenarios with one worker per
+display: several windows on one display drop gestures now and then (#236).
 
 ## Render comparisons
 
-`e2e/browser/render/` captures the field itself on Fabric and on the new
-field at the same view, and writes side-by-side and diff images to review.
+`e2e/browser/render/` captures the field itself, and compares the captures
+with an earlier run's (another checkout) in side-by-side and diff images to
+review.
 It's its own Playwright project (`render`), not part of the scenarios; see
 `render/README.md`.
 
@@ -114,8 +106,8 @@ test("creates marchers", async ({ show }) => {
   (`src/field/fieldTestApi.ts`): the drawn marchers, the selection, the view,
   the selection handles, the gesture in progress and the field image. The helpers
   (`drawnMarchers`, `readField`, `selectedDrillNumbers`) wrap it. Never reach
-  into the renderer (`window.canvas`, Fabric objects): the same scenarios must
-  run against the new field renderer (#189). The one exception is simulating
+  into the renderer (three.js objects, shaders): scenarios check what the
+  user sees and what gets saved (#189). The one exception is simulating
   a lost WebGL context (`weak-machines.spec.mts`), which needs the canvas's
   `WEBGL_lose_context` extension.
 - `expectCanvasMatchesShow(show)` waits until every marcher is drawn where
@@ -132,16 +124,15 @@ test("creates marchers", async ({ show }) => {
   Go to field and **+**.
 - A test fails if the page logs an error or throws. Allow a known message with
   `test.use({ allowedPageErrors: [/.../] })`.
-- The new field explains its low-quality mode once, in a toast, on machines
+- The field explains its low-quality mode once, in a toast, on machines
   with software GL (all of ours). The fixture marks it as already explained;
   `test.use({ fieldQualityNotice: true })` lets it show.
 - `test.use({ initScript: "..." })` runs a script in the page before the app
   on every load, e.g. to take WebGL away. Browser target only.
 - The video export saves to `show.videoExportPath`, as if picked in its
   save dialog (the host restates the export's three IPC handlers; Electron
-  reads `PLAYWRIGHT_VIDEO_EXPORT_PATH`). It draws through WebGL even on the
-  Fabric field (#207), so `test.use({ webgl: true })` gives Electron software
-  GL as the new field always gets. `tests/video-export.spec.mts` reads frames
+  reads `PLAYWRIGHT_VIDEO_EXPORT_PATH`). It draws through WebGL off screen
+  (#207). `tests/video-export.spec.mts` reads frames
   from the file with ffmpeg.
 - `await waitForIdle(page)` waits until the app's writes have finished. Use it
   before a step that must not overlap the previous one.

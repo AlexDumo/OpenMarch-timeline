@@ -3,17 +3,21 @@
 Part 4 of the [parity gate](implementation-plan.md#parity-gate) (#208). Work
 through it in the lab build of the `field-renderer` branch (draft PR #214):
 
-- New field: <https://lab.openmarch.com/x/field-renderer/?field=three>
-- Fabric, for comparison: <https://lab.openmarch.com/x/field-renderer/>
-  (the same build without `?field=three`)
+- New field: <https://lab.openmarch.com/x/field-renderer/> (since #209 the
+  only field; no query string)
+- Fabric, for comparison: the pinned pre-switch build (fork branch
+  `field-renderer-pre-209`, at 6ee1ee99c):
+  <https://field-renderer-pre-209-openmarch-fork-preview-build.alexdumo.workers.dev/>.
+  Without a query string it draws Fabric; `?field=three` there is the new
+  field as it was before the switch.
 - Feedback page: <https://lab.openmarch.com/t/field-renderer>
-- The same build without the lab's sign-in and feedback widget:
-  <https://field-renderer-openmarch-fork-preview-build.alexdumo.workers.dev/?field=three>
+- The new field without the lab's sign-in and feedback widget:
+  <https://field-renderer-openmarch-fork-preview-build.alexdumo.workers.dev/>
 
 Each item is one action and what should happen. **(change)** marks a decided
 difference from Fabric: check that it happens and that you still want it.
 Everything else should match Fabric; when in doubt, try the same thing in
-the Fabric tab. Mouse items assume mouse mode (Settings, mouse/trackpad)
+the Fabric tab (the pinned build). Mouse items assume mouse mode (Settings, mouse/trackpad)
 unless they say trackpad. On a Mac, read Ctrl as Cmd where an item says
 Ctrl/Cmd.
 
@@ -22,7 +26,7 @@ numbers) is in [parity-gate-results.md](parity-gate-results.md).
 
 ## Setup
 
-1. Open the new-field link, open "Part 1 Demo" from the launch page, and check the URL keeps `?field=three` → the field draws; no error. (Checked headless on the preview build, 2026-10-15.)
+1. Open the new-field link and open "Part 1 Demo" from the launch page → the field draws; no error. (Checked headless on the preview build, 2026-10-15.)
 2. Open "LHB '26 – Daft Punk pt. 2" too, for the larger show (385 marchers).
 3. If the field shows a one-time note about software graphics, read it → it explains low-quality mode and how to turn graphics acceleration on, and doesn't show again after a reload.
 
@@ -52,6 +56,7 @@ numbers) is in [parity-gate-results.md](parity-gate-results.md).
 22. Right-drag the field far off screen and let go → it stops about one screen past the edge. **(change)** Fabric skipped the pan limit for right-drag, the zoom buttons and pinch.
 23. Use the zoom buttons, zoom reset and fit → as on Fabric (story 9).
 24. Enter fullscreen → the whole field fits, the selection clears; leave it → the field centers again (story 9).
+    24a. In fullscreen, open Perspective on the zoom widget and drag it to about 40° → the field and what's drawn on it lean back together, as on Fabric; leave fullscreen → the field is flat again and the button shows no angle. (Ported in #209; `navigation.spec.mts` pins it.)
 25. On a touchscreen: one-finger pan, two-finger pinch → as on Fabric (story 10).
 26. Mac only: Ctrl+click a marcher without dragging → nothing is selected; it's a pan press. **(change)** Fabric selected.
 

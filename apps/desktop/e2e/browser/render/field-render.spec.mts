@@ -1,6 +1,4 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import type { Page } from "@playwright/test";
 import {
     createFieldTheme,
@@ -9,33 +7,18 @@ import {
 } from "@openmarch/core";
 import { tsImport } from "tsx/esm/api";
 import { test, expect } from "../fixtures.mjs";
-import {
-    compose,
-    field,
-    setFabricView,
-    settle,
-    type View,
-} from "./compare.mjs";
+import { field, OUT, saveCapture, settle } from "./compare.mjs";
 
 /**
- * Render comparisons of the field itself, Fabric against the new field
- * (#200; see README.md here). Not a pass/fail suite: it writes screenshots,
- * side-by-sides and diffs for a person to review.
+ * Render captures of the field itself (#200; see README.md here). Not a
+ * pass/fail suite: it writes screenshots, and with `RENDER_BASE` side-by-sides
+ * and diffs against an earlier run, for a person to review:
  *
- * Run the new field first, then Fabric, which matches each view to the new
- * field's and composes the comparisons:
- *
- *     FIELD=three pnpm exec playwright test --project=render
- *     FIELD=fabric pnpm exec playwright test --project=render
+ *     RENDER_LABEL=before pnpm exec playwright test --project=render field-render
+ *     RENDER_LABEL=after RENDER_BASE=before pnpm exec playwright test --project=render field-render
  *
  * Output goes to `RENDER_OUT` (default `$TMPDIR/openmarch-field-render`).
  */
-
-// Outside `playwright-report`, which each run clears
-const OUT = path.resolve(
-    process.env.RENDER_OUT ?? path.join(os.tmpdir(), "openmarch-field-render"),
-);
-const FIELD = process.env.FIELD === "three" ? "three" : "fabric";
 
 /** A 64 by 24 PNG: a checkerboard of 8 px squares with a red border, wider than any field. */
 const IMAGE_PNG = fs
@@ -239,37 +222,12 @@ for (const c of CASES) {
                 await page.setViewportSize(size);
                 await settle(page);
                 await page.waitForTimeout(300);
-                const base = path.join(OUT, `${c.name}-${size.name}`);
-                if (FIELD === "three") {
-                    const view = (await page.evaluate(() =>
-                        window.fieldTest!.viewport(),
-                    )) as View;
-                    fs.writeFileSync(`${base}.view.json`, JSON.stringify(view));
-                    await page.waitForTimeout(500);
-                    fs.writeFileSync(
-                        `${base}.three.png`,
-                        await field(page).screenshot(),
-                    );
-                    continue;
-                }
-                const view = JSON.parse(
-                    fs.readFileSync(`${base}.view.json`, "utf8"),
-                ) as View;
-                await setFabricView(page, view);
-                const fabric = await field(page).screenshot();
-                fs.writeFileSync(`${base}.fabric.png`, fabric);
-                const composed = await compose(
+                await page.waitForTimeout(500);
+                await saveCapture(
                     page,
-                    fabric,
-                    fs.readFileSync(`${base}.three.png`),
-                );
-                fs.writeFileSync(`${base}.compare.png`, composed.png);
-                fs.appendFileSync(
-                    path.join(OUT, "summary.tsv"),
-                    `${c.name}\t${size.name}\t${composed.differing}\t${composed.total}\t${(
-                        (100 * composed.differing) /
-                        composed.total
-                    ).toFixed(2)}%\n`,
+                    `${c.name}-${size.name}`,
+                    await field(page).screenshot(),
+                    [c.name, size.name],
                 );
             }
         });

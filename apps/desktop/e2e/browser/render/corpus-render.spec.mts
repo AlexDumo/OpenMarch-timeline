@@ -1,37 +1,26 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { test, expect } from "../fixtures.mjs";
 import { waitForField } from "../app.mjs";
-import {
-    compose,
-    field,
-    setFabricView,
-    settle,
-    type View,
-} from "./compare.mjs";
+import { field, OUT, saveCapture, settle } from "./compare.mjs";
 import { makeStressShow } from "./stressShow.mjs";
 
 /**
- * The parity gate's render comparisons (#189, run in #208): the corpus of
- * shows (both demo shows and the 1,925-marcher stress show) at several zooms
- * and playback times, Fabric against the new field at the same view. Not a
- * pass/fail suite: it writes side-by-sides and diffs for a person to review
- * (see README.md here). Three first, then Fabric:
+ * The parity gate's render captures (#189, run in #208): the corpus of shows
+ * (both demo shows and the 1,925-marcher stress show) at several zooms and
+ * playback times. Not a pass/fail suite: it writes screenshots, and with
+ * `RENDER_BASE` side-by-sides and diffs against an earlier run, for a person
+ * to review (see README.md here):
  *
- *     FIELD=three pnpm exec playwright test --project=render corpus-render
- *     FIELD=fabric pnpm exec playwright test --project=render corpus-render
+ *     RENDER_LABEL=before pnpm exec playwright test --project=render corpus-render
+ *     RENDER_LABEL=after RENDER_BASE=before pnpm exec playwright test --project=render corpus-render
  *
  * Output goes to `RENDER_OUT` (default `$TMPDIR/openmarch-field-render`),
  * with the stress show written there on first use.
  */
 
-const OUT = path.resolve(
-    process.env.RENDER_OUT ?? path.join(os.tmpdir(), "openmarch-field-render"),
-);
-const FIELD = process.env.FIELD === "three" ? "three" : "fabric";
 const desktop = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     "../../..",
@@ -55,8 +44,7 @@ const TIMES = [
 
 /**
  * Zooms, as a factor of the opening fit, reached with small Ctrl+wheel steps
- * (a pinch in trackpad mode) at the marchers' center. The Fabric pass copies
- * the view.
+ * (a pinch in trackpad mode) at the marchers' center.
  */
 const ZOOMS = [
     { name: "fit", factor: 1 },
@@ -125,7 +113,7 @@ async function goTo(
     for (let i = 0; i < beats; i++) await page.keyboard.press("Shift+E");
 }
 
-/** Zooms the new field in to `factor` times its zoom, at the marchers' center. */
+/** Zooms the field in to `factor` times its zoom, at the marchers' center. */
 async function zoomIn(page: Page, factor: number) {
     if (factor === 1) return;
     const zoomNow = () =>
@@ -169,7 +157,7 @@ for (const show of SHOWS)
                 test.setTimeout(600_000);
                 const { page } = app;
                 await page.setViewportSize(SIZE);
-                // The Fabric field fits the show only when it opens
+                // The field fits the show when it opens
                 await page.reload();
                 await waitForField(page);
                 await settled(page);
@@ -177,53 +165,19 @@ for (const show of SHOWS)
                 const firstPage = await page.evaluate(() =>
                     window.fieldTest!.pageId(),
                 );
-                const base = (time: string) =>
-                    path.join(OUT, `corpus-${show.name}-${zoom.name}-${time}`);
-                let view: View;
-                if (FIELD === "three") {
-                    await zoomIn(page, zoom.factor);
-                    await settle(page);
-                    view = (await page.evaluate(() =>
-                        window.fieldTest!.viewport(),
-                    )) as View;
-                } else {
-                    view = JSON.parse(
-                        fs.readFileSync(
-                            `${base(TIMES[0]!.name)}.view.json`,
-                            "utf8",
-                        ),
-                    ) as View;
-                }
+                await zoomIn(page, zoom.factor);
+                await settle(page);
                 await hideChrome(page);
                 for (const time of TIMES) {
                     await goTo(page, firstPage, time.pages, time.beats);
                     await settled(page);
-                    if (FIELD === "fabric") await setFabricView(page, view);
                     await settle(page);
                     await page.waitForTimeout(500);
-                    const file = base(time.name);
-                    if (FIELD === "three") {
-                        fs.writeFileSync(
-                            `${file}.view.json`,
-                            JSON.stringify(view),
-                        );
-                        fs.writeFileSync(`${file}.three.png`, await shot(page));
-                        continue;
-                    }
-                    const fabric = await shot(page);
-                    fs.writeFileSync(`${file}.fabric.png`, fabric);
-                    const composed = await compose(
+                    await saveCapture(
                         page,
-                        fabric,
-                        fs.readFileSync(`${file}.three.png`),
-                    );
-                    fs.writeFileSync(`${file}.compare.png`, composed.png);
-                    fs.appendFileSync(
-                        path.join(OUT, "summary.tsv"),
-                        `corpus-${show.name}-${time.name}\t${zoom.name}\t${composed.differing}\t${composed.total}\t${(
-                            (100 * composed.differing) /
-                            composed.total
-                        ).toFixed(2)}%\n`,
+                        `corpus-${show.name}-${zoom.name}-${time.name}`,
+                        await shot(page),
+                        [`corpus-${show.name}-${time.name}`, zoom.name],
                     );
                 }
             });

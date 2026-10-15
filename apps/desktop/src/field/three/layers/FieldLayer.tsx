@@ -138,9 +138,9 @@ export default function FieldLayer({
     labelAtlas,
 }: {
     fieldProperties: FieldProperties;
-    /** Fabric's yard number font. */
+    /** The yard number font. */
     numberAtlas: GlyphAtlas;
-    /** Fabric's checkpoint label font. */
+    /** The checkpoint label font. */
     labelAtlas: GlyphAtlas;
 }) {
     const invalidate = useThree((s) => s.invalidate);

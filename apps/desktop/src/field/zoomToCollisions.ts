@@ -1,23 +1,15 @@
-import { useCanvasStore } from "@/stores/CanvasStore";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { fieldRenderer } from "./fieldRenderer";
 import { collisionsView } from "./timelineOverlays";
 import { useFieldViewStore } from "./three/fieldView";
 import { setView } from "./three/fieldNavigation";
 
 /**
- * "Zoom to collisions" on whichever field is on screen. Fabric frames its
- * collision markers (`CanvasStore.zoomToCollisions`); the new field frames the
- * same collisions the same way (`collisionsView`, fork #201), while it draws
- * them: the Show collisions setting on, and not playing (Fabric removes its
- * markers during playback, so its zoom then does nothing).
+ * "Zoom to collisions": frames the selected page's collisions
+ * (`collisionsView`, fork #201) while the field draws them: the Show
+ * collisions setting on, and not playing.
  */
 export function zoomToCollisions(isPlaying: boolean): void {
-    if (fieldRenderer() !== "three") {
-        useCanvasStore.getState().zoomToCollisions();
-        return;
-    }
     if (isPlaying || !useUiSettingsStore.getState().uiSettings.showCollisions)
         return;
     const { width, height } = useFieldViewStore.getState();

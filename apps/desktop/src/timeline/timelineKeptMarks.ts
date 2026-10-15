@@ -10,7 +10,7 @@ export interface TimelineKeptMark {
     readonly text: string;
 }
 
-/** A dot's radius in field units (`CanvasMarcher`'s `DEFAULT_DOT_RADIUS`). */
+/** A dot's radius in field units, as drawn (`MarchersLayer`). */
 const DOT_RADIUS = 5;
 /** The mark's side on screen: about a drill number's height, never tiny, never loud. */
 const SIZE_PER_ZOOM = 12;

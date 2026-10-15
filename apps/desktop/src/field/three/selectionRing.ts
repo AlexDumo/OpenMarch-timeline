@@ -11,7 +11,7 @@ const MIN_SCREEN_RADIUS = 1.5;
 /** The ring is 2 CSS px wide, clear of the shape's edge by its outline width or 1.5 CSS px, whichever is more. */
 const RING_SCREEN_WIDTH = 2;
 const RING_SCREEN_GAP = 1.5;
-/** Fabric's selection border color (#0d6efd), as 0–255 RGB. */
+/** The selection border color (#0d6efd), as 0–255 RGB. */
 const SELECTION_RGB = [13, 110, 253] as const;
 export const SELECTION_COLOR = `rgb(${SELECTION_RGB.join(" ")})`;
 /** The same, as 0–1 RGBA for shaders. */

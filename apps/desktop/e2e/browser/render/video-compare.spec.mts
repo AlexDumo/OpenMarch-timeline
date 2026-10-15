@@ -65,7 +65,6 @@ for (const c of CASES)
         test.use({
             showFile: path.join(desktop, c.file),
             seedSql: c.seedSql,
-            webgl: true,
         });
         // Minutes of video, drawn and encoded on this machine's CPU
         test.setTimeout(3_600_000);

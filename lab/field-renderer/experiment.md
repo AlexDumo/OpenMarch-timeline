@@ -15,10 +15,11 @@ This build has a new field. It should look and behave like the field you
 know, with a few deliberate fixes, and stay smooth on large shows and
 slower computers.
 
-**Open the new field**
+**Compare with the old field**
 
-Add `?field=three` to the address and reload. Without it, you get today's
-field, for comparison.
+This build has only the new field; no query string needed. To compare with
+the old field, open the build from before the switch:
+<https://field-renderer-pre-209-openmarch-fork-preview-build.alexdumo.workers.dev/>.
 
 **What to try**
 

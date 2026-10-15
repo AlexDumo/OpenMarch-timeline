@@ -4,7 +4,7 @@ import { waitForField } from "../app.mjs";
 
 /**
  * Lines of the same width are drawn the same width at every zoom (#249). The
- * new field first drew its lines without antialiasing, so at a zoom of 1.6
+ * field first drew its lines without antialiasing, so at a zoom of 1.6
  * some yard lines were 1 px wide and others 2 px, and zooming changed which.
  *
  * Read on screen pixels: with the grid and half lines off, the middle row of

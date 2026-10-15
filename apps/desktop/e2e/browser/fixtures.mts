@@ -11,7 +11,6 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { waitForField, waitForSettledField } from "./app.mjs";
-import type { FieldRenderer } from "../../src/field/fieldRenderer";
 
 const desktopDir = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -37,36 +36,16 @@ const requireBuilt = (file: string, script: string) => {
 /** Where the scenarios run. Set per Playwright project. */
 export type Target = "browser" | "electron";
 
-/**
- * Which field renderer the app draws with (the dev switch in
- * `src/field/fieldRenderer.ts`). Fabric unless `FIELD=three` is set, so the
- * same scenarios run on either: `FIELD=three pnpm run e2e:browser`.
- */
-export type FieldDriver = FieldRenderer;
-const FIELD_STORAGE_KEY = "openmarch:dev:field";
 /** `UI_SETTINGS_STORAGE_KEY` in `src/stores/UiSettingsStore.ts`. */
 const UI_SETTINGS_STORAGE_KEY = "openmarch:uiSettings";
-const defaultField: FieldDriver =
-    process.env.FIELD === "three" ? "three" : "fabric";
 /** `QUALITY_NOTICE_STORAGE_KEY`: the field's low-quality explanations already shown. */
 const QUALITY_NOTICE_KEY = "openmarch:field:qualityNoticeSeen";
 
-/** What the app finds in `localStorage` when it starts. Fabric is the default. */
-const startupStorage = (
-    field: FieldDriver,
-    qualityNotice: boolean,
-): Record<string, string> =>
-    field === "fabric"
-        ? {}
-        : {
-              [FIELD_STORAGE_KEY]: field,
-              // Machines here draw WebGL in software: the new field would
-              // explain its low-quality mode once, in a toast over the app,
-              // in every test
-              ...(qualityNotice
-                  ? {}
-                  : { [QUALITY_NOTICE_KEY]: '["software"]' }),
-          };
+/** What the app finds in `localStorage` when it starts. */
+const startupStorage = (qualityNotice: boolean): Record<string, string> =>
+    // Machines here draw WebGL in software: the field would explain its
+    // low-quality mode once, in a toast over the app, in every test
+    qualityNotice ? {} : { [QUALITY_NOTICE_KEY]: '["software"]' };
 
 type Query = <T = Record<string, unknown>>(
     sql: string,
@@ -171,7 +150,6 @@ async function openInElectron(
     databasePath: string,
     appSettings: Record<string, unknown>,
     userDataDir: string,
-    softwareGL: boolean,
     storage: Record<string, string>,
     videoExportPath: string,
 ): Promise<App> {
@@ -194,11 +172,10 @@ async function openInElectron(
             "--no-audio",
             "--disable-audio-output",
             "--disable-audio-input",
-            // The new field needs WebGL. A machine with no GPU (Xvfb in a
+            // The field needs WebGL. A machine with no GPU (Xvfb in a
             // container) only has it through Chromium's software GL
-            ...(softwareGL
-                ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
-                : []),
+            "--use-angle=swiftshader",
+            "--enable-unsafe-swiftshader",
         ],
         env: {
             ...process.env,
@@ -323,7 +300,7 @@ type Fixtures = {
      */
     uiSettings: Record<string, unknown> | undefined;
     /**
-     * Whether the new field may explain its low-quality mode (#205). Off by
+     * Whether the field may explain its low-quality mode (#205). Off by
      * default, as if already explained, so the toast covers nothing.
      */
     fieldQualityNotice: boolean;
@@ -332,12 +309,6 @@ type Fixtures = {
      * only, e.g. to take WebGL away.
      */
     initScript: string | null;
-    /**
-     * Gives Electron WebGL in software on a machine without a GPU, as the new
-     * field always gets, for scenarios that need WebGL on the Fabric field
-     * too (the video export, #207).
-     */
-    webgl: boolean;
     show: Show;
 };
 
@@ -367,15 +338,12 @@ function snapshotReader(
 
 type WorkerFixtures = {
     target: Target;
-    /** The field renderer; from the `FIELD` environment variable by default. */
-    field: FieldDriver;
     /** One Chromium per worker for the browser target; unused for Electron. */
     chromium: Browser | undefined;
 };
 
 export const test = base.extend<Fixtures, WorkerFixtures>({
     target: ["browser", { option: true, scope: "worker" }],
-    field: [defaultField, { option: true, scope: "worker" }],
     chromium: [
         async ({ target, playwright }, use) => {
             if (target !== "browser") return use(undefined);
@@ -394,12 +362,10 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     uiSettings: [undefined, { option: true }],
     fieldQualityNotice: [false, { option: true }],
     initScript: [null, { option: true }],
-    webgl: [false, { option: true }],
 
     show: async (
         {
             target,
-            field,
             chromium,
             appSettings,
             seedSql,
@@ -408,7 +374,6 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             uiSettings,
             fieldQualityNotice,
             initScript,
-            webgl,
         },
         use,
         testInfo,
@@ -428,7 +393,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
         }
 
         // The renderer's local storage when the app starts
-        const storage = startupStorage(field, fieldQualityNotice);
+        const storage = startupStorage(fieldQualityNotice);
         if (uiSettings)
             storage[UI_SETTINGS_STORAGE_KEY] = JSON.stringify(uiSettings);
         let app: App;
@@ -440,7 +405,6 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 databasePath,
                 appSettings,
                 testInfo.outputPath("user-data"),
-                field === "three" || webgl,
                 storage,
                 videoExportPath,
             );
@@ -488,7 +452,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
         let failed = false;
         try {
             // Allow for several apps starting at once on a busy machine.
-            // The field's canvas, or the new field's explanation of why it has none
+            // The field's canvas, or its explanation of why it has none
             await expect(
                 page
                     .locator("canvas")
@@ -496,10 +460,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                     .first(),
             ).toBeVisible({ timeout: 20_000 });
             await waitForField(page);
-            // The switch took: the field on screen is the one asked for
-            await expect(page.getByTestId("threeField")).toHaveCount(
-                field === "three" ? 1 : 0,
-            );
+            await expect(page.getByTestId("threeField")).toHaveCount(1);
             // Every scenario starts from the view the show settles at
             await waitForSettledField(page);
             await use({

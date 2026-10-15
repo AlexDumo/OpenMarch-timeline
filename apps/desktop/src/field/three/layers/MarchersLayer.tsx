@@ -22,11 +22,11 @@ import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
  * (fill, outline, shape; `marcherLooks.ts`). Dots sit exactly on their
  * positions: no half-grid-line offset.
  *
- * Shapes are signed distances in field units, sized as `CanvasMarcher` and the
- * drill-chart export draw them (`drillChartSvg.ts`'s `dotSvg`): a circle of
+ * Shapes are signed distances in field units, sized as the drill-chart export
+ * draws them (`drillChartSvg.ts`'s `dotSvg`): a circle of
  * radius 5, a square of side 5·√π·1.2, an equilateral triangle 12 wide, and an
  * X of two 2-wide lines out to ±6. The 1-unit outline straddles the edge, and
- * corners are mitered, as Fabric strokes them.
+ * corners are mitered.
  *
  * A selected marcher (#193) gets a ring a little outside its shape's edge, in
  * the same draw.
@@ -116,7 +116,7 @@ void main() {
     float a = dotA + ringA * (1.0 - dotA);
     if (a * vOpacity < 0.004) discard;
     vec3 rgb = dotRgb + uRing.rgb * ringA * (1.0 - dotA);
-    // A dimmed marcher (#201) fades as a whole, as Fabric sets its opacity
+    // A dimmed marcher (#201) fades as a whole
     gl_FragColor = vec4(rgb / a, a * vOpacity);
 }`;
 

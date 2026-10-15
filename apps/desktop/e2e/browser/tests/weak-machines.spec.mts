@@ -10,14 +10,10 @@ import {
 import { seedShowSql } from "../seed.mjs";
 import type { FieldTestQuality } from "../../../src/field/fieldTestApi";
 
-// Weak machines (#205, ADR 0005 D-3): the new field's low-quality mode, what
+// Weak machines (#205, ADR 0005 D-3): the field's low-quality mode, what
 // it does with no WebGL, and how it gets through a lost WebGL context. The
 // machines these run on draw WebGL in software (SwiftShader), which is the
 // case the low-quality mode is for.
-test.skip(
-    ({ field }) => field !== "three",
-    "Quality modes and WebGL recovery are the new field's (FIELD=three)",
-);
 
 // Two marchers who trade places over page 1
 test.use({

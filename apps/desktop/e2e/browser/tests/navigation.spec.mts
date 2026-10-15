@@ -4,9 +4,9 @@ import { readField, waitForIdle } from "../app.mjs";
 import type { Show } from "../fixtures.mjs";
 
 // Navigation on the field (fork #194): wheel, trackpad, pinch, pan drags,
-// limits, the zoom controls, fullscreen and touch. Pinned on Fabric first; the
-// two decided changes (#189's rules table, "Panning" and "Alt") are marked
-// where Fabric fails them. The view is read only through the field test API.
+// limits, the zoom controls, fullscreen and touch, with the two decided
+// changes in #189's rules table ("Panning" and "Alt"). The view is read only
+// through the field test API.
 
 type View = { zoom: number; pan: { x: number; y: number } };
 
@@ -51,8 +51,7 @@ const fieldPointAt = (v: View, x: number, y: number) => ({
 });
 
 /**
- * Within a pixel or two: Fabric reports its field half a grid line off, and
- * rounds the field's size to whole pixels.
+ * Within a pixel or two: the field's size is rounded to whole pixels.
  */
 const expectNear = (actual: number, expected: number, within = 1.5) =>
     expect(Math.abs(actual - expected)).toBeLessThanOrEqual(within);
@@ -290,11 +289,7 @@ test("right-drag pans one to one", async ({ show }) => {
     expect((await readField(page)).activeGesture).toBeNull();
 });
 
-test("middle-drag pans one to one", async ({ show, field }) => {
-    test.fail(
-        field === "fabric",
-        "Decided change (#189, Panning): middle-drag never panned on Fabric",
-    );
+test("middle-drag pans one to one", async ({ show }) => {
     const { page } = show;
     const before = await openedView(show);
     await dragField(
@@ -310,11 +305,7 @@ test("middle-drag pans one to one", async ({ show, field }) => {
     expectNear(after.pan.y, before.pan.y + 60, 0.01);
 });
 
-test("Alt+drag doesn't pan", async ({ show, field }) => {
-    test.fail(
-        field === "fabric",
-        "Decided change (#189, Alt): Alt+drag panned on Fabric",
-    );
+test("Alt+drag doesn't pan", async ({ show }) => {
     const { page } = show;
     const before = await openedView(show);
     await dragField(
@@ -442,4 +433,42 @@ test.describe("touch", () => {
         expectNear(drawn.x, mid.x, 0.5);
         expectNear(drawn.y, mid.y, 0.5);
     });
+});
+
+test("fullscreen's perspective tilts the field, and leaving fullscreen flattens it", async ({
+    show,
+}) => {
+    const { page } = show;
+    const perspective = page.getByTestId("field-perspective");
+    // Only in fullscreen
+    await expect(perspective).toBeDisabled();
+    await page
+        .getByRole("button", { name: "Toggle timeline fullscreen" })
+        .click();
+    await expect(perspective).toBeEnabled();
+    const tilt = page.getByTestId("fieldTilt");
+    const flat = (await tilt.boundingBox())!;
+
+    await perspective.click();
+    const slider = page.getByRole("slider", { name: "Perspective" });
+    await slider.focus();
+    for (let i = 0; i < 40; i++) await page.keyboard.press("ArrowRight");
+    await expect(perspective).toHaveAccessibleName("Perspective, 40°");
+    // Leaning back, the field looks shorter on screen
+    await expect
+        .poll(async () => (await tilt.boundingBox())!.height)
+        .toBeLessThan(flat.height * 0.9);
+    await page.keyboard.press("Escape");
+
+    await page
+        .getByRole("button", { name: "Toggle timeline fullscreen" })
+        .click();
+    await expect(perspective).toHaveAccessibleName("Perspective, 0°");
+    await expect
+        .poll(async () => {
+            const box = (await tilt.boundingBox())!;
+            const inner = await tilt.evaluate((el) => el.clientHeight);
+            return Math.abs(box.height - inner);
+        })
+        .toBeLessThanOrEqual(1);
 });

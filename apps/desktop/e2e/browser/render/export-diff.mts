@@ -11,7 +11,8 @@
  * - `<show>-<chart>-svg.png`: before | after | diff, as Chromium draws the
  *   SVG at 2×;
  * - `<show>-<chart>-svg-aligned.png`: the same with "after" moved half a
- *   pixel right and down, Fabric's offset, so only content changes show;
+ *   pixel right and down (exports before #206 drew half a pixel off), so
+ *   only content changes show;
  * - `<show>-MAIN-<page>-pdf.png`: the full charts drawn into a PDF page as
  *   the PDF export does (pdfkit and svg-to-pdfkit, letter landscape), then
  *   drawn by pdf.js at 2×;

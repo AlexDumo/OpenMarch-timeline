@@ -3,8 +3,7 @@
  * every navigation input follows (fork #189, ticket #194). Plain functions
  * over plain data, with no DOM, React or renderer, so the limits and the
  * zoom-at-a-point math are unit-tested here and any field renderer can use
- * them. The numbers are the Fabric field's (`OpenMarchCanvas`,
- * `CanvasZoomControls`, `Canvas.tsx`).
+ * them.
  *
  * Field units are the timeline's (x right, y toward the front sideline). A
  * field point (x, y) sits at `(panX + x * zoom, panY + y * zoom)` CSS pixels
@@ -118,7 +117,7 @@ const FULLSCREEN_FILL = 0.87;
 /**
  * The view on entering fullscreen: the whole field at 87% of its container,
  * centered across and a tenth of the spare height down. `container` is the
- * field's container including its padding, as the Fabric field measured it.
+ * field's container including its padding.
  */
 export function fullscreenFit(
     view: FieldView,
@@ -179,7 +178,7 @@ export function wheel(
             ),
             field,
         );
-    // Fabric's rates: a pinch zooms about three times as fast as the wheel
+    // A pinch zooms about three times as fast as the wheel
     const base = pinch ? 0.99 : 0.997;
     const zoom =
         view.zoom * base ** (input.deltaY * 0.5 * settings.zoomSensitivity);

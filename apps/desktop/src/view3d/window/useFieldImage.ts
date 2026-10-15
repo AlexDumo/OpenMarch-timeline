@@ -5,8 +5,8 @@ import { fieldPropertiesKeys } from "@/hooks/queries/useFieldProperties";
 import { DEFAULT_STALE_TIME } from "@/hooks/queries/constants";
 
 /**
- * The show's field background image bytes, as the 2D canvas reads them
- * (`OpenMarchCanvas.refreshBackgroundImage`). The key sits under the field
+ * The show's field background image bytes, as the 2D field reads them. The
+ * key sits under the field
  * properties' detail key, so the editor's field-properties invalidation (which
  * follows every image import) refreshes it too.
  */

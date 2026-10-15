@@ -73,8 +73,7 @@ export function fitFullscreen(container: { width: number; height: number }) {
 }
 
 /**
- * The zoom controls' view of the new field: the same calls they make on the
- * Fabric canvas, over the view store.
+ * The zoom controls' view of the field, over the view store.
  */
 export const threeZoomControls: ZoomControlsCanvas = {
     get width() {

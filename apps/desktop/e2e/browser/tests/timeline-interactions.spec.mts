@@ -24,8 +24,7 @@ import { emptyField, goToPage, isolate, pressKeep } from "../timeline.mjs";
 // moves, which have no clip: it's pinned by `TimelineClipResize.test.tsx`
 // ("while a resize or move runs, Esc belongs to it, not to isolation").
 //
-// Changes from today's Fabric field, decided in #189, are the "change:"
-// scenarios, marked `test.fail(field === "fabric", ...)`.
+// The "change:" scenarios are the rules-table changes decided in #189.
 
 const desktop = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -194,16 +193,8 @@ test("kept mark tooltip: it doesn't show while a button is down, and goes on a p
 
 test("kept mark tooltip: it goes when the pointer leaves the field", async ({
     show,
-    field,
 }) => {
-    // Not a decided change: the rule (#202) is that it hides on leave,
-    // and Fabric's hook means to, but Fabric's "mouse:out" names the
-    // object last under the pointer (the field grid, or a marcher),
-    // and the hook hides only when there is none. On the #208 list.
-    test.fail(
-        field === "fabric",
-        "Fabric keeps the tooltip when the pointer leaves the field over the grid",
-    );
+    // The rule (#202): it hides on leave, whatever was last under the pointer
     const { page, query } = show;
     await waitForField(page);
     const { marcher, zoom } = await keptMarcher(page, query);
@@ -279,12 +270,7 @@ test("Escape in isolation with a dialog open only closes the dialog", async ({
 
 test("change: a marcher no longer dimmed while the line tool is on can't be selected until the tool ends (user story 20)", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric makes a marcher selectable mid-tool when its dimming ends (docs/timeline/ui.md, known gaps)",
-    );
     const { page } = show;
     await waitForField(page);
     await isolate(page, 53);

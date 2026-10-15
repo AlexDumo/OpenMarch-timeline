@@ -14,8 +14,8 @@ import type { FieldPlanImage } from "@/field/fieldPlan";
 /**
  * The show's field image, between the field's background and its lines
  * (render order -1), where `planFieldImage` (and so the export) places it:
- * its fit or fill setting, at its opacity. Like Fabric, a filled image isn't
- * cropped to the field.
+ * its fit or fill setting, at its opacity. A filled image isn't cropped to
+ * the field.
  */
 export default function BackgroundImageLayer({
     image,

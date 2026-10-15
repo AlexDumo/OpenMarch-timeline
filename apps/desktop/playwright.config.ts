@@ -53,7 +53,7 @@ export default defineConfig<object, { target: Target }>({
             use: { target: "electron" },
         },
         {
-            // Render comparisons of the field, Fabric against the new field
+            // Render captures of the field, compared run to run
             // (e2e/browser/render/README.md). Writes images; needs `build:browser`.
             name: "render",
             testDir: "./e2e/browser/render",

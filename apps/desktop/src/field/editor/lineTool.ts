@@ -4,13 +4,12 @@ import type { FieldPoint, FieldPointer } from "./fieldEditor";
 import type { MarcherPosition } from "./moveGesture";
 
 /**
- * The line tool (L, #203; #189 user stories 56 and 57), as Fabric's
- * `LineListeners`: a click starts a line, its end follows the pointer, and a
- * second click finishes it. The marchers it holds are ordered along the line
- * and spaced evenly from its start to its end, as previews; the app applies
- * them (Shift+Enter) or cancels the tool (Escape). A right-click clears the
- * line. While the tool is on, no press selects a marcher (rules table: Click
- * target).
+ * The line tool (L, #203; #189 user stories 56 and 57): a click starts a line,
+ * its end follows the pointer, and a second click finishes it. The marchers
+ * it holds are ordered along the line and spaced evenly from its start to its
+ * end, as previews; the app applies them (Shift+Enter) or cancels the tool
+ * (Escape). A right-click clears the line. While the tool is on, no press
+ * selects a marcher (rules table: Click target).
  */
 
 /** A line on the field, from where it was started to its end. */
@@ -81,7 +80,7 @@ const WHOLE_STEPS = {
     coordinateRounding: { nearestXSteps: 1, nearestYSteps: 1 },
 };
 
-/** `point` rounded to the nearest whole step from center front, as Fabric's line does. */
+/** `point` rounded to the nearest whole step from center front. */
 export function roundToStep(point: FieldPoint, grid: StepGrid): FieldPoint {
     const rounded = getRoundCoordinates2({
         coordinate: { xPixels: point.x, yPixels: point.y },
@@ -153,8 +152,7 @@ export class LineTool {
 
     /**
      * A right-click: clears the line, so the next click starts a new one. The
-     * previews of a finished line stay until the next one is finished, as on
-     * Fabric.
+     * previews of a finished line stay until the next one is finished.
      */
     clear() {
         if (!this.line) return;
@@ -165,8 +163,7 @@ export class LineTool {
 
     /**
      * The marchers are drawn somewhere else (a page change, playback): a
-     * finished line lines them up again from there, as Fabric's
-     * `refreshMarchers` does.
+     * finished line lines them up again from there.
      */
     refresh() {
         if (this.line && !this.drawing) this.finish();

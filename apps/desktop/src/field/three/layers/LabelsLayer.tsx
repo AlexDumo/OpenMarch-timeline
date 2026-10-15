@@ -8,7 +8,7 @@ import { useFieldDraw } from "../fieldDrawContext";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
 
-/** fabric's marcher label: 14 field units, its center 2.2 dot radii above the dot. */
+/** A marcher label: 14 field units, its center 2.2 dot radii above the dot. */
 const LABEL_SIZE = 14;
 const LABEL_LIFT = 5 * 2.2;
 /** The baseline's offset below the label's center, in em. */
@@ -16,7 +16,7 @@ const CENTER_BASELINE = 0.35;
 
 /**
  * Every marcher's label (drill number) in one instanced draw of SDF glyphs,
- * in the theme's label color, as the Fabric field draws them. A marcher whose
+ * in the theme's label color. A marcher whose
  * appearance hides its label has no glyphs. The text is laid out again only
  * when the marchers, their labels or which labels show change; a frame only
  * rewrites the anchors.
@@ -41,9 +41,9 @@ export default function LabelsLayer({
     const text = useMemo(() => {
         const batch = new TextBatch(atlas);
         batch.setOffset(0, -LABEL_LIFT);
-        // Under the dots, over the pathways: every dot covers every label, as
-        // on Fabric and in the drill chart export, so a crowded neighbor's dot
-        // hides a number rather than a number hiding a dot (#208)
+        // Under the dots, over the pathways: every dot covers every label, so
+        // a crowded neighbor's dot hides a number rather than a number hiding
+        // a dot (#208)
         batch.mesh.renderOrder = 1.9;
         return batch;
     }, [atlas]);

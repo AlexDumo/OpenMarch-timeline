@@ -31,7 +31,7 @@ describe("lineOrder", () => {
         expect(lineOrder(line(30, 100, 0, 0))).toBe("bottomToTop");
     });
 
-    it("orders a vertical line by y, and a zero-length one bottom to top, as Fabric does", () => {
+    it("orders a vertical line by y, and a zero-length one bottom to top", () => {
         expect(lineOrder(line(5, 0, 5, 10))).toBe("topToBottom");
         expect(lineOrder(line(5, 10, 5, 0))).toBe("bottomToTop");
         expect(lineOrder(line(5, 5, 5, 5))).toBe("bottomToTop");
@@ -279,7 +279,7 @@ describe("FieldEditor line tool", () => {
         // Cleared on the release, not the press
         expect(editor.lineToolShape()!.line).not.toBeNull();
         editor.pointerUp(at(51, 50, { button: 2 }));
-        // The finished line's previews stay until the next is finished, as on Fabric
+        // The finished line's previews stay until the next is finished
         expect(editor.lineToolShape()).toMatchObject({
             line: null,
             previews: [{ id: 1 }, { id: 2 }],
@@ -309,7 +309,7 @@ describe("FieldEditor line tool", () => {
         expect(editor.lineToolShape()!.line!.end).toEqual({ x: 200, y: 0 });
     });
 
-    it("leaves the line alone on a Ctrl/Cmd+click, as Fabric does", () => {
+    it("leaves the line alone on a Ctrl/Cmd+click", () => {
         const { editor, ports } = setup();
         editor.setLineTool([1, 2]);
         click(editor, 0, 0, { ctrl: true });

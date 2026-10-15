@@ -20,9 +20,7 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // homes, on a later page that page's move, and in isolation the isolated
 // move's end.
 //
-// Changes from today's Fabric field, decided in #189, are the "change:"
-// scenarios, marked `test.fail(field === "fabric", ...)`: Fabric is pinned as
-// differing, and the new field must pass.
+// The "change:" scenarios are the rules-table changes decided in #189.
 
 // Four trumpets on three pages, all in view, 4 beats a measure.
 const PAGE_0: SeedPosition[] = [
@@ -89,8 +87,7 @@ const movedBy = (
 
 /**
  * Waits until page `pageId` saves `expected`, each within a field unit: a
- * drop lands where the dot was dragged on screen, and Fabric draws dots half
- * a grid line off their positions (#189: Dot position).
+ * drop lands where the dot was dragged on screen, to the nearest pixel.
  */
 async function expectSaved(show: Show, pageId: number, expected: Position[]) {
     await expect
@@ -156,7 +153,7 @@ test("dragging a selected marcher moves the whole selection, as one undo step", 
     show,
 }) => {
     const { page } = show;
-    // T3 is on the top edge of the selection's box, clear of Fabric's handles
+    // T3 is on the top edge of the selection's box, clear of its handles
     await clickMarcher(page, "T1");
     await clickMarcher(page, "T3", { add: true });
     await clickMarcher(page, "T4", { add: true });
@@ -224,19 +221,8 @@ test("dragging a marcher that isn't selected selects it and moves only it", asyn
 
 test("change: a quick 19 px flick moves the marcher (rules table: Click vs drag)", async ({
     show,
-    field,
     target,
 }) => {
-    // Fabric's rule has a time limit: in Electron on this harness the flick
-    // takes over 300 ms, and Fabric moves it too
-    test.skip(
-        field === "fabric" && target === "electron",
-        "Fabric's 300 ms limit makes this depend on the machine's speed",
-    );
-    test.fail(
-        field === "fabric",
-        "Fabric treats a press under 300 ms and 20 px as a click",
-    );
     const { page } = show;
     await clickMarcher(page, "T2");
     await expect.poll(() => selectedDrillNumbers(page)).toEqual(["T2"]);
@@ -282,7 +268,7 @@ test("a drop that leaves a later move behind offers to move it too", async ({
 }) => {
     const { page } = show;
     await selectPage(show, "Page 1");
-    // T3 is on the top edge of the selection's box, clear of Fabric's handles
+    // T3 is on the top edge of the selection's box, clear of its handles
     await clickMarcher(page, "T1");
     await clickMarcher(page, "T3", { add: true });
     await clickMarcher(page, "T4", { add: true });

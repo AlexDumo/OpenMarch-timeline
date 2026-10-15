@@ -1,8 +1,5 @@
-import { useEffect, useRef } from "react";
-import type { FieldProperties } from "@openmarch/core";
-import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
-import { canShowPath } from "@/global/classes/canvasObjects/stepSizeWarning";
-import type { MarcherVisualMap } from "@/hooks/queries";
+import { useRef } from "react";
+import { canShowPath } from "@/timeline/stepSizeWarning";
 import { useTimelineResolverStore } from "./timelineStore";
 import {
     pathsIntoPage,
@@ -68,7 +65,7 @@ export interface TimelinePathSamples {
  * Cost: the samples are kept per resolver version and page pair, so toggles and visual changes
  * don't resample, and neither do Play and Stop; a side that can't show (its toggle off and no
  * forced warning) isn't sampled; nothing is sampled while playing or while `enabled` is false,
- * and the last samples are returned instead. Shared by both fields.
+ * and the last samples are returned instead.
  */
 export function useTimelinePathSamples({
     enabled,
@@ -133,116 +130,4 @@ export function useTimelinePathSamples({
         [sampleOut, resolver, version, marcherIds, selectedPage, nextPage],
     );
     return { previousPaths, nextPaths, active };
-}
-
-/**
- * Draws the selected page's path visuals from the resolver (docs/timeline/phases/07-page-parity.md
- * P7.10): the move into the selected page and the move out of it, as curves sampled between page
- * end beats (`useTimelinePathSamples`), with midsets and step-size warnings from the same samples.
- *
- * Nothing is drawn while playing, as with `useTimelineStaticRender`, and stopping on the page that
- * was drawn doesn't draw it again.
- *
- * Does nothing while `enabled` is false (the resolver isn't ready yet). When it turns false, the
- * curved paths are removed.
- */
-// eslint-disable-next-line max-lines-per-function
-export function useTimelinePathRender({
-    canvas,
-    enabled,
-    isPlaying,
-    selectedPage,
-    pages,
-    marcherIds,
-    marcherVisuals,
-    fieldProperties,
-    previousPathsEnabled,
-    nextPathsEnabled,
-    stepSizeWarningsEnabled,
-}: {
-    canvas: OpenMarchCanvas | null;
-    enabled: boolean;
-    isPlaying: boolean;
-    selectedPage: PathRenderPage | null;
-    pages: readonly PathRenderPage[];
-    marcherIds: readonly number[] | undefined;
-    marcherVisuals: MarcherVisualMap | null | undefined;
-    fieldProperties: FieldProperties | undefined;
-    previousPathsEnabled: boolean;
-    nextPathsEnabled: boolean;
-    stepSizeWarningsEnabled: boolean;
-}): void {
-    const { previousPaths, nextPaths, active } = useTimelinePathSamples({
-        enabled,
-        isPlaying,
-        selectedPage,
-        pages,
-        marcherIds,
-        previousPathsEnabled,
-        nextPathsEnabled,
-        stepSizeWarningsEnabled,
-    });
-
-    /**
-     * What the last draw drew; the paths stay on the canvas while playing, so a draw with the same
-     * inputs after playback stops would only redo the same work.
-     */
-    const lastDraw = useRef<readonly unknown[] | null>(null);
-    useEffect(() => {
-        if (!canvas) return;
-        if (!enabled) {
-            canvas.removeTimelinePathways();
-            lastDraw.current = null;
-            return;
-        }
-        if (
-            !active ||
-            !selectedPage ||
-            !marcherIds ||
-            marcherVisuals == null ||
-            !fieldProperties
-        )
-            return;
-
-        const draw = [
-            canvas,
-            marcherIds,
-            marcherVisuals,
-            fieldProperties,
-            previousPaths,
-            nextPaths,
-            previousPathsEnabled,
-            nextPathsEnabled,
-            stepSizeWarningsEnabled,
-        ];
-        const last = lastDraw.current;
-        if (last && last.every((d, i) => Object.is(d, draw[i]))) return;
-        lastDraw.current = draw;
-
-        canvas.renderTimelinePathVisuals({
-            marcherVisuals,
-            marcherIds,
-            previousPaths,
-            nextPaths,
-            previousPathsEnabled,
-            nextPathsEnabled,
-            stepSizeWarningsEnabled,
-            fieldProperties,
-        });
-        canvas.sendCanvasMarchersToFront();
-        canvas.requestRenderAll();
-    }, [
-        canvas,
-        enabled,
-        active,
-        selectedPage,
-        marcherIds,
-        marcherVisuals,
-        fieldProperties,
-        previousPaths,
-        nextPaths,
-        previousPathsEnabled,
-        nextPathsEnabled,
-        stepSizeWarningsEnabled,
-    ]);
 }

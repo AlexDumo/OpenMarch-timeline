@@ -15,7 +15,7 @@ import type { DotPlan, StrokePlan } from "@/field/timelineOverlays";
  * persistent: a new plan is written into them in place, and they only grow.
  *
  * Sizes are in "plan units": `unit` field units each, so 1 for sizes in field
- * units (they scale with the zoom, as Fabric objects do) and 1 / zoom for
+ * units (they scale with the zoom) and 1 / zoom for
  * sizes in CSS pixels. Lines and outlines never get thinner than one device
  * pixel; thinner ones are drawn one pixel wide and fade by coverage, as the
  * field's lines do.

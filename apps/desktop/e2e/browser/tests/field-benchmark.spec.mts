@@ -32,7 +32,6 @@ test.use({
 
 test("the field benchmark runs from the command palette and puts the field back", async ({
     show,
-    field,
 }) => {
     test.setTimeout(90_000);
     const { page } = show;
@@ -67,10 +66,7 @@ test("the field benchmark runs from the command palette and puts the field back"
         "pan",
         "drag",
     ]);
-    // Fabric repaints its whole field from Canvas2D on every zoom frame, a
-    // few frames a second here (software graphics): it only needs frames
-    const least =
-        field === "fabric" ? { fps: 1, frames: 3 } : { fps: 5, frames: 10 };
+    const least = { fps: 5, frames: 10 };
     for (const row of rows.slice(0, 4)) {
         expect(Number(row[1]), `${row[0]} fps`).toBeGreaterThan(least.fps);
         const [, measured] = row[5]!.split("/").map(Number);
@@ -78,10 +74,8 @@ test("the field benchmark runs from the command palette and puts the field back"
     }
     expect(rows[4][1]).toContain("not measured yet");
     // Which field was measured, and on what
-    await expect(dialog).toContainText(
-        field === "fabric" ? "Fabric · " : "new field · ",
-    );
-    // Software GL here: SwiftShader, or llvmpipe for Fabric in Electron
+    await expect(dialog).toContainText("three.js field · ");
+    // Software GL here: SwiftShader, or llvmpipe
     await expect(dialog).toContainText(/swiftshader|llvmpipe/i);
     await expect(dialog).toContainText("lower bound");
     // Measured on a production build: no warning that the numbers don't count

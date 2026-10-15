@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { Page } from "@playwright/test";
 
 /** Shared by the render comparison specs here (see README.md). */
@@ -17,50 +20,60 @@ export const settle = (page: Page) =>
             ),
     );
 
+// Outside `playwright-report`, which each run clears
+export const OUT = path.resolve(
+    process.env.RENDER_OUT ?? path.join(os.tmpdir(), "openmarch-field-render"),
+);
+/** This run's name: its captures go to `OUT/<LABEL>`. */
+export const LABEL = process.env.RENDER_LABEL ?? "after";
+/** An earlier run's name, to compare each capture with (`OUT/<BASE>`). */
+export const BASE = process.env.RENDER_BASE;
+
 /**
- * Points the Fabric field at `view` (the field test API's units), through
- * Fabric itself: a capture tool, not a scenario.
+ * Saves a capture as `OUT/<LABEL>/<name>.png`. With `RENDER_BASE` set and
+ * the same capture in that run, also writes `OUT/compare/<name>.png`
+ * (before | after | diff) and a line in `OUT/compare/summary.tsv`:
+ * `columns`, then the pixels that differ.
  */
-export async function setFabricView(page: Page, view: View) {
-    await page.evaluate((view) => {
-        const canvas = (
-            window as unknown as {
-                canvas: {
-                    getWidth(): number;
-                    upperCanvasEl: HTMLCanvasElement;
-                    setViewportTransform(vpt: number[]): void;
-                    requestRenderAll(): void;
-                };
-            }
-        ).canvas;
-        const css =
-            canvas.upperCanvasEl.getBoundingClientRect().width /
-            canvas.getWidth();
-        const zoom = view.zoom / css;
-        // The field test API's (0, 0) is half a grid line into Fabric's plane
-        canvas.setViewportTransform([
-            zoom,
-            0,
-            0,
-            zoom,
-            view.pan.x / css - zoom / 2,
-            view.pan.y / css - zoom / 2,
-        ]);
-        canvas.requestRenderAll();
-    }, view);
-    await settle(page);
-    await page.waitForTimeout(300);
+export async function saveCapture(
+    page: Page,
+    name: string,
+    png: Buffer,
+    columns: readonly string[],
+) {
+    const folder = path.join(OUT, LABEL);
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, `${name}.png`), png);
+    if (!BASE) return;
+    const before = path.join(OUT, BASE, `${name}.png`);
+    if (!fs.existsSync(before)) return;
+    const composed = await compose(page, fs.readFileSync(before), png, [
+        BASE,
+        LABEL,
+    ]);
+    const compare = path.join(OUT, "compare");
+    fs.mkdirSync(compare, { recursive: true });
+    fs.writeFileSync(path.join(compare, `${name}.png`), composed.png);
+    fs.appendFileSync(
+        path.join(compare, "summary.tsv"),
+        `${[...columns, composed.differing, composed.total, `${((100 * composed.differing) / composed.total).toFixed(2)}%`].join("\t")}\n`,
+    );
 }
 
 /**
- * Builds `[Fabric | new field | diff]` in the page from two PNGs, and how
- * many pixels differ. The diff shows Fabric faded, with pixels that have no
- * match (within 24 in every channel) within one pixel in the other image in
- * red (new field darker) or blue (lighter).
+ * Builds `[before | after | diff]` in the page from two PNGs, and how many
+ * pixels differ. The diff shows the first image faded, with pixels that have
+ * no match (within 24 in every channel) within one pixel in the other image
+ * in red (the second darker) or blue (lighter).
  */
-export async function compose(page: Page, fabric: Buffer, three: Buffer) {
+export async function compose(
+    page: Page,
+    before: Buffer,
+    after: Buffer,
+    labels: readonly [string, string] = ["before", "after"],
+) {
     const result = await page.evaluate(
-        async ([a, b]) => {
+        async ([a, b, labelA, labelB]) => {
             const load = async (b64: string) => {
                 const blob = await (
                     await fetch(`data:image/png;base64,${b64}`)
@@ -137,7 +150,7 @@ export async function compose(page: Page, fabric: Buffer, three: Buffer) {
             g.drawImage(th, w, 0);
             g.putImageData(diff, w * 2, 0);
             g.font = "bold 20px sans-serif";
-            for (const [i, label] of ["Fabric", "three.js", "diff"].entries()) {
+            for (const [i, label] of [labelA, labelB, "diff"].entries()) {
                 g.fillStyle = "rgba(255,255,255,0.85)";
                 g.fillRect(i * w + 8, 8, 110, 30);
                 g.fillStyle = "black";
@@ -154,7 +167,12 @@ export async function compose(page: Page, fabric: Buffer, three: Buffer) {
                 total: w * h,
             };
         },
-        [fabric.toString("base64"), three.toString("base64")] as const,
+        [
+            before.toString("base64"),
+            after.toString("base64"),
+            labels[0],
+            labels[1],
+        ] as const,
     );
     return { ...result, png: Buffer.from(result.png, "base64") };
 }

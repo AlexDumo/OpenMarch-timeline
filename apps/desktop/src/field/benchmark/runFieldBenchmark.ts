@@ -21,9 +21,9 @@ export type BenchmarkScenario = {
 /**
  * How the benchmark sees the field draw: calls `onStart` as a frame of the
  * field starts and `onEnd` once it has drawn, until the returned function is
- * called. One per field: `r3fFrames` (`three/benchmarkFrames.ts`) for the new
- * field, and `fabricFrames` for Fabric. Nothing here imports three.js: the
- * Fabric field loads this module in the editor's first chunk.
+ * called: `r3fFrames` (`three/benchmarkFrames.ts`). Nothing here imports
+ * three.js, so the benchmark's runner and report stay out of the field's
+ * three.js chunk.
  */
 export type FrameProbe = {
     listen(onStart: () => void, onEnd: () => void): () => void;
@@ -43,8 +43,8 @@ export const nextFrame = () =>
 /**
  * Runs one scenario and measures every frame the field draws meanwhile: when
  * it finished, and the main-thread time from the start of the field's frame
- * to the end of its render (on the new field: frame hooks, buffer uploads and
- * draw submission; on Fabric: its whole render).
+ * to the end of its render (frame hooks, buffer uploads and draw
+ * submission).
  */
 export async function measureScenario(
     scenario: BenchmarkScenario,

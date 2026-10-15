@@ -4,7 +4,6 @@ import { T } from "@tolgee/react";
 import { Switch } from "@openmarch/ui";
 import { useTheme } from "@/context/ThemeContext";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { fieldRenderer } from "@/field/fieldRenderer";
 import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
 
@@ -63,27 +62,24 @@ export default function AppearanceSettings() {
                 />
             </SettingRow>
 
-            {/* Only the new field has a low-quality mode; shown to everyone in the switch (#209) */}
-            {fieldRenderer() === "three" && (
-                <SettingRow
-                    label={<T keyName="settings.general.performanceMode" />}
-                    htmlFor="field-performance-mode"
-                    description={
-                        <T keyName="settings.general.performanceMode.description" />
+            <SettingRow
+                label={<T keyName="settings.general.performanceMode" />}
+                htmlFor="field-performance-mode"
+                description={
+                    <T keyName="settings.general.performanceMode.description" />
+                }
+            >
+                <Switch
+                    id="field-performance-mode"
+                    checked={uiSettings.fieldPerformanceMode}
+                    onCheckedChange={(checked) =>
+                        setUiSettings({
+                            ...uiSettings,
+                            fieldPerformanceMode: checked,
+                        })
                     }
-                >
-                    <Switch
-                        id="field-performance-mode"
-                        checked={uiSettings.fieldPerformanceMode}
-                        onCheckedChange={(checked) =>
-                            setUiSettings({
-                                ...uiSettings,
-                                fieldPerformanceMode: checked,
-                            })
-                        }
-                    />
-                </SettingRow>
-            )}
+                />
+            </SettingRow>
         </SettingsPanel>
     );
 }

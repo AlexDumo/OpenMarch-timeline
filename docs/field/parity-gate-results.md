@@ -181,12 +181,12 @@ matches #207's reviewed run (`field-video-207`) within 0.04 dB; what moved is
 the drill numbers, now under the dots. Same content. 1080p export times
 here (software GL): Part 1 45 → 135 s, Part 1 with image 46 → 170 s, Daft
 Punk 94 → 260 s, so 2.8–3.7× Fabric's. To time on real hardware (benchmark
-step 6).
+step 5).
 
 ## 4. The owner's hands-on checklist
 
 [parity-checklist.md](parity-checklist.md): 116 one-line items, by area,
-in the lab build (`?field=three` for the new field). It covers every user
+in the lab build (since #209 the new field, no query string; Fabric is the pinned `field-renderer-pre-209` build). It covers every user
 story in #189, every decided change (marked **(change)**), every "for #208"
 item from the phase notes, and the owner decisions still open (the handle
 look, and whether a drag should survive losing the pointer). Settled on 2026-10-15: drill numbers under the dots (#245) and the
@@ -243,7 +243,10 @@ Gate item 5: the in-app benchmark on a real low-end Chromebook (the lab web
 build) and an integrated-GPU laptop (the desktop app), on both fields, with
 no regression on the new field. The benchmark plays the show from the top,
 scrubs back and forth across it, pinch-zooms in to 8× and out, and pans in a
-circle, 4 s each, then shows a table. It runs on both fields since #245.
+circle, 4 s each, then shows a table. Since #209 the field-renderer build has
+only the new field; Fabric runs use the pinned pre-switch build (fork branch
+`field-renderer-pre-209`, at 6ee1ee99c), where the benchmark runs on both
+fields (#245).
 
 #### Shows
 
@@ -270,41 +273,41 @@ and open each with the app's Open file, so both builds open the same files:
    (WebGL: "Hardware accelerated" or not) and the GL renderer. If WebGL is
    software only, say so with the results: the new field runs in low-quality
    mode there.
-2. Fabric: open <https://lab.openmarch.com/x/field-renderer/> (or the same
-   build without the lab's sign-in:
-   <https://field-renderer-openmarch-fork-preview-build.alexdumo.workers.dev/>),
-   open the show, press Ctrl+K, type "field benchmark", press Enter, then
-   **Run**.
+2. Fabric: open the pinned pre-switch build,
+   <https://field-renderer-pre-209-openmarch-fork-preview-build.alexdumo.workers.dev/>
+   (no query string: Fabric), open the show, press Ctrl+K, type "field
+   benchmark", press Enter, then **Run**.
 3. When the table shows, press **Copy as Markdown** and paste it into the
    results table below (or a comment on #208).
-4. New field: add `?field=three` to the address, reload, and repeat steps
-   2–3 on the same show.
+4. New field: open <https://lab.openmarch.com/x/field-renderer/> (or the
+   same build without the lab's sign-in:
+   <https://field-renderer-openmarch-fork-preview-build.alexdumo.workers.dev/>),
+   no query string, and repeat steps 2–3 on the same show.
 5. Repeat for the three shows. Run each one twice if the numbers look odd.
 
 #### Laptop with integrated graphics
 
 The quickest way needs no setup: the lab build in Chrome or Edge on the
-laptop, exactly as on the Chromebook above (steps 1–5:
-<https://lab.openmarch.com/x/field-renderer/>, then `?field=three`; Ctrl/Cmd+K,
-"Run field benchmark", **Run**, **Copy as Markdown**). That measures the
+laptop, exactly as on the Chromebook above (steps 1–5: the pinned build for
+Fabric, then <https://lab.openmarch.com/x/field-renderer/> for the new field;
+Ctrl/Cmd+K, "Run field benchmark", **Run**, **Copy as Markdown**). That measures the
 field in the browser, which is the same drawing code as the desktop app.
 
 To measure the desktop app itself (developer setup):
 
-1. `git fetch timeline field-renderer && git switch --detach timeline/field-renderer`
+1. For Fabric, `git fetch timeline field-renderer-pre-209 && git switch --detach timeline/field-renderer-pre-209`;
+   for the new field, the same with `field-renderer`. Build and run steps
+   2–4 once in each checkout.
 2. `pnpm install && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm --filter @openmarch/desktop build:electron`
    (an unpacked build with no code signing, as the nightly workflow builds
    without a certificate).
 3. Start the app from `apps/desktop/release/<version>/`: `win-unpacked/OpenMarch.exe`
    on Windows, `mac-arm64/OpenMarch.app` on an Apple Silicon Mac,
    `mac/OpenMarch.app` on an Intel Mac, the app in `linux-unpacked/` on Linux.
-4. Fabric: open the show, Ctrl/Cmd+K, "field benchmark", **Run**, then
-   **Copy as Markdown**.
-5. New field: View › Toggle Developer Tools, Console, run
-   `localStorage.setItem("openmarch:dev:field", "three")`, then View ›
-   Reload. Repeat step 4. To go back to Fabric, run
-   `localStorage.removeItem("openmarch:dev:field")` and reload.
-6. Also time a video export of the Daft Punk show (Export › Video, 1080p,
+4. Open the show, Ctrl/Cmd+K, "field benchmark", **Run**, then
+   **Copy as Markdown**. The pre-switch checkout opens on Fabric; the
+   `field-renderer` checkout has only the new field.
+5. Also time a video export of the Daft Punk show (Export › Video, 1080p,
    30 fps) on each field, from pressing Export to "Export completed!" (the
    lab build exports video too). Here (software GL) the new field took
    2.8–3.7× as long as Fabric; the question is whether that holds with a

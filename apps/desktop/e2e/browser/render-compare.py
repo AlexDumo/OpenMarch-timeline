@@ -1,12 +1,12 @@
-"""Pairs the Fabric and three.js captures from `tests/render-compare.spec.mts`.
+"""Pairs two runs' captures from `tests/render-compare.spec.mts`.
 
-    python3 e2e/browser/render-compare.py <folder>
+    python3 e2e/browser/render-compare.py <folder> [before] [after]
 
-For each capture in <folder>/fabric and <folder>/three, crops both screenshots
-to the same region in field units (from each field's own view, through the
-field test API's zoom and pan), scales them to one size, and writes
-<folder>/compare/<name>-<region>.png: Fabric, three.js, and their difference
-(brighter is more different), side by side. Regions: `show` is every visible
+For each capture in <folder>/<before> and <folder>/<after> (defaults `before`
+and `after`), crops both screenshots to the same region in field units (from
+each run's own view, through the field test API's zoom and pan), scales them
+to one size, and writes <folder>/compare/<name>-<region>.png: before, after,
+and their difference (brighter is more different), side by side. Regions: `show` is every visible
 marcher with a margin; `detail` is a small window around the middle marcher,
 enlarged.
 
@@ -20,13 +20,15 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 folder = Path(sys.argv[1])
+before = sys.argv[2] if len(sys.argv) > 2 else "before"
+after = sys.argv[3] if len(sys.argv) > 3 else "after"
 out = folder / "compare"
 out.mkdir(exist_ok=True)
 
 
-def crop(driver: str, name: str, region, size):
-    state = json.loads((folder / driver / f"{name}.json").read_text())
-    image = Image.open(folder / driver / f"{name}.png").convert("RGB")
+def crop(run: str, name: str, region, size):
+    state = json.loads((folder / run / f"{name}.json").read_text())
+    image = Image.open(folder / run / f"{name}.png").convert("RGB")
     zoom = state["viewport"]["zoom"]
     pan = state["viewport"]["pan"]
     rect = state["rect"]
@@ -41,7 +43,7 @@ def crop(driver: str, name: str, region, size):
 
 
 def regions(name: str):
-    state = json.loads((folder / "fabric" / f"{name}.json").read_text())
+    state = json.loads((folder / before / f"{name}.json").read_text())
     shown = [m for m in state["marchers"] if m["look"]["visible"]]
     xs = sorted(m["x"] for m in shown)
     ys = sorted(m["y"] for m in shown)
@@ -55,18 +57,18 @@ def regions(name: str):
     return [("show", show, (width, height)), ("detail", detail, (720, 480))]
 
 
-for capture in sorted((folder / "fabric").glob("*.json")):
+for capture in sorted((folder / before).glob("*.json")):
     name = capture.stem
-    if not (folder / "three" / f"{name}.json").exists():
+    if not (folder / after / f"{name}.json").exists():
         continue
     for label, region, size in regions(name):
-        fabric = crop("fabric", name, region, size)
-        three = crop("three", name, region, size)
-        diff = ImageOps.autocontrast(ImageChops.difference(fabric, three).convert("L"))
+        first = crop(before, name, region, size)
+        second = crop(after, name, region, size)
+        diff = ImageOps.autocontrast(ImageChops.difference(first, second).convert("L"))
         sheet = Image.new("RGB", (size[0] * 3 + 20, size[1] + 24), "white")
         draw = ImageDraw.Draw(sheet)
         for i, (title, image) in enumerate(
-            [("Fabric", fabric), ("three.js", three), ("difference", diff.convert("RGB"))]
+            [(before, first), (after, second), ("difference", diff.convert("RGB"))]
         ):
             sheet.paste(image, (i * (size[0] + 10), 24))
             draw.text((i * (size[0] + 10) + 4, 4), f"{title}  {name} {label}", fill="black")

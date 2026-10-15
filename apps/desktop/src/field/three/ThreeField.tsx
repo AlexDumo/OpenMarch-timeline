@@ -5,6 +5,7 @@ import {
     useMemo,
     useRef,
     useState,
+    type CSSProperties,
     type RefObject,
 } from "react";
 import clsx from "clsx";
@@ -102,8 +103,7 @@ import {
 /**
  * Where the timeline's layers sit among the field's (#201): the isolated move's
  * scene and the page's pathways above the field text (1) and under the
- * labels (1.9) and marchers (2), as Fabric stacks them; collision markers over
- * the marchers, as Fabric adds them after the marchers.
+ * labels (1.9) and marchers (2). Collision markers sit over the marchers.
  */
 const FOCUS_ORDER = 1.4;
 const PATHS_ORDER = 1.5;
@@ -139,7 +139,7 @@ export default function ThreeField() {
 }
 
 /**
- * The three.js field (ADR 0005), behind the dev switch in `fieldRenderer.ts`.
+ * The field, drawn with three.js (ADR 0005).
  * #192, the tracer bullet: it draws the field, and every marcher and its label
  * at the playhead, and installs the field test API. #199: each marcher in its
  * appearance at the playhead (the last flag crossed, `appearanceSteps`). #193: the
@@ -163,6 +163,12 @@ function ThreeFieldView() {
     const { isPlaying } = useIsPlaying()!;
     const { beats, pages } = useTimingObjects()!;
     const isFullscreen = useFullscreenStore((s) => s.isFullscreen);
+    const perspective = useFullscreenStore((s) => s.perspective);
+    const setPerspective = useFullscreenStore((s) => s.setPerspective);
+    // The tilt is fullscreen's only: leaving fullscreen flattens the field
+    useEffect(() => {
+        if (!isFullscreen) setPerspective(0);
+    }, [isFullscreen, setPerspective]);
     const { image: fieldImage } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
@@ -334,7 +340,7 @@ function ThreeFieldView() {
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
                     showPositions: (positions) =>
                         marchers.setOverrides(positions),
-                    // #196: drops go through the Fabric field's drop-to-timeline path, unchanged
+                    // #196: drops go through the drop-to-timeline path
                     drop: (positions) =>
                         dropMarchersOnTimeline(
                             positions,
@@ -371,7 +377,7 @@ function ThreeFieldView() {
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
     useFieldLineTool(editor);
-    // As Fabric's line tool, a finished line follows its marchers to another page
+    // A finished line follows its marchers to another page
     useEffect(
         () => marchers.subscribe(() => editor.refreshLineTool()),
         [marchers, editor],
@@ -414,8 +420,8 @@ function ThreeFieldView() {
             () => useUiSettingsStore.getState().uiSettings.mouseSettings,
         );
     }, []);
-    // The view opens as Fabric's canvas, which it creates once the field and a
-    // page are loaded. Latched: a page briefly unselected mustn't reset the view
+    // The view opens once the field and a page are loaded. Latched: a page
+    // briefly unselected mustn't reset the view
     const [ready, setReady] = useState(false);
     if (!ready && fieldProperties && selectedPage) setReady(true);
     // Until the layout settles, the view is still the opening view
@@ -428,18 +434,18 @@ function ThreeFieldView() {
     return (
         <div
             ref={root}
-            // As the Fabric field: fullscreen leaves room above the field, and
-            // the field takes no input there
+            // Fullscreen leaves room above the field, and the field takes no
+            // input there
             className={clsx(
                 "rounded-6 relative h-full w-full touch-none overflow-hidden",
                 isFullscreen && "pointer-events-none pt-128",
             )}
+            style={TILT_PERSPECTIVE}
             data-testid="threeField"
         >
             <TimelineIsolationBar />
             <TimelineFromStartBadge />
             <FieldBenchmark
-                field="three"
                 frames={benchFrames}
                 view={benchView}
                 element={benchElement}
@@ -453,118 +459,147 @@ function ThreeFieldView() {
                     }}
                 />
             )}
-            {fieldProperties && quality.reason !== "noWebGL" && (
-                <Canvas
-                    key={canvasKey}
-                    // As the Fabric field's canvas, for the scenarios
-                    data-testid="fieldCanvas"
-                    frameloop="demand"
-                    orthographic
-                    // Bounds given here make the camera manual: `FieldCamera` sets them
-                    camera={{
-                        left: 0,
-                        right: 1,
-                        top: 0,
-                        bottom: 1,
-                        near: 0.1,
-                        far: 100,
-                        position: [0, 0, 10],
-                    }}
-                    dpr={quality.settings.dpr}
-                    // Colors are drawn as the theme gives them, with no tone mapping
-                    flat
-                    linear
-                    gl={{
-                        powerPreference: "high-performance",
-                        antialias: false,
-                    }}
-                    onCreated={({ gl }) => {
-                        element.current = gl.domElement;
-                        renderer.current = gl;
-                    }}
-                >
-                    <ContextLossGuard onGiveUp={startOver} />
-                    <FieldCamera
-                        fieldProperties={fieldProperties}
-                        root={root}
-                        ready={ready}
-                        opened={opened}
-                        settled={settled}
-                    />
-                    <EditorInput
+            <div
+                // Fullscreen's perspective (UI-12) tilts the field and what's
+                // drawn over it together. The field takes no input in
+                // fullscreen, so nothing hit-tests through the tilt
+                className="relative h-full w-full"
+                style={tiltStyle(perspective)}
+                data-testid="fieldTilt"
+            >
+                {fieldProperties && quality.reason !== "noWebGL" && (
+                    <Canvas
+                        // Sized by layout, not by the tilted box on screen
+                        resize={{ offsetSize: true }}
+                        key={canvasKey}
+                        // The field canvas, for the scenarios
+                        data-testid="fieldCanvas"
+                        frameloop="demand"
+                        orthographic
+                        // Bounds given here make the camera manual: `FieldCamera` sets them
+                        camera={{
+                            left: 0,
+                            right: 1,
+                            top: 0,
+                            bottom: 1,
+                            near: 0.1,
+                            far: 100,
+                            position: [0, 0, 10],
+                        }}
+                        dpr={quality.settings.dpr}
+                        // Colors are drawn as the theme gives them, with no tone mapping
+                        flat
+                        linear
+                        gl={{
+                            powerPreference: "high-performance",
+                            antialias: false,
+                        }}
+                        onCreated={({ gl }) => {
+                            element.current = gl.domElement;
+                            renderer.current = gl;
+                        }}
+                    >
+                        <ContextLossGuard onGiveUp={startOver} />
+                        <FieldCamera
+                            fieldProperties={fieldProperties}
+                            root={root}
+                            ready={ready}
+                            opened={opened}
+                            settled={settled}
+                        />
+                        <EditorInput
+                            editor={editor}
+                            marchers={marchers}
+                            selectedIds={selectedIds}
+                        />
+                        <PlayheadDriver
+                            marchers={marchers}
+                            isPlaying={isPlaying}
+                            beats={beats}
+                            appearanceSteps={appearanceSteps}
+                        />
+                        <FieldLayer
+                            fieldProperties={fieldProperties}
+                            numberAtlas={atlases.number}
+                            labelAtlas={atlases.checkpoint}
+                        />
+                        <BackgroundImageLayer
+                            image={fieldImage}
+                            placement={fieldImagePlan}
+                        />
+                        <OverlayLayer
+                            plan={timeline.focus}
+                            renderOrder={FOCUS_ORDER}
+                        />
+                        <OverlayLayer
+                            plan={timeline.paths}
+                            renderOrder={PATHS_ORDER}
+                        />
+                        <MarchersLayer
+                            marchers={marchers}
+                            dimming={dimming}
+                            theme={fieldProperties.theme}
+                        />
+                        <LabelsLayer
+                            marchers={marchers}
+                            dimming={dimming}
+                            labels={labels}
+                            theme={fieldProperties.theme}
+                            atlas={atlases.label}
+                        />
+                        <OverlayLayer
+                            plan={timeline.collisions}
+                            renderOrder={COLLISIONS_ORDER}
+                            atlas={atlases.collision}
+                        />
+                        <KeptMarksPlacer
+                            marks={keptMarks}
+                            marchers={marchers}
+                            elements={keptMarkElements}
+                        />
+                    </Canvas>
+                )}
+                {fieldProperties && (
+                    <FieldOverlay
+                        marchers={marchers}
                         editor={editor}
-                        marchers={marchers}
-                        selectedIds={selectedIds}
-                    />
-                    <PlayheadDriver
-                        marchers={marchers}
-                        isPlaying={isPlaying}
-                        beats={beats}
-                        appearanceSteps={appearanceSteps}
-                    />
-                    <FieldLayer
-                        fieldProperties={fieldProperties}
-                        numberAtlas={atlases.number}
-                        labelAtlas={atlases.checkpoint}
-                    />
-                    <BackgroundImageLayer
-                        image={fieldImage}
-                        placement={fieldImagePlan}
-                    />
-                    <OverlayLayer
-                        plan={timeline.focus}
-                        renderOrder={FOCUS_ORDER}
-                    />
-                    <OverlayLayer
-                        plan={timeline.paths}
-                        renderOrder={PATHS_ORDER}
-                    />
-                    <MarchersLayer
-                        marchers={marchers}
-                        dimming={dimming}
                         theme={fieldProperties.theme}
                     />
-                    <LabelsLayer
-                        marchers={marchers}
-                        dimming={dimming}
-                        labels={labels}
-                        theme={fieldProperties.theme}
-                        atlas={atlases.label}
-                    />
-                    <OverlayLayer
-                        plan={timeline.collisions}
-                        renderOrder={COLLISIONS_ORDER}
-                        atlas={atlases.collision}
-                    />
-                    <KeptMarksPlacer
-                        marks={keptMarks}
-                        marchers={marchers}
-                        elements={keptMarkElements}
-                    />
-                </Canvas>
-            )}
-            {fieldProperties && (
-                <FieldOverlay
-                    marchers={marchers}
-                    editor={editor}
-                    theme={fieldProperties.theme}
+                )}
+                <KeptMarksOverlay
+                    marks={keptMarks}
+                    elements={keptMarkElements}
                 />
-            )}
-            <KeptMarksOverlay marks={keptMarks} elements={keptMarkElements} />
+            </div>
             <KeptMarkTooltipView tooltip={keptMarkTooltip} />
         </div>
     );
 }
 
-/** How long the Fabric field waited for the fullscreen layout to settle. */
+/** The tilt's depth: the field is viewed from 1500 CSS px away, at its center. */
+const TILT_PERSPECTIVE: CSSProperties = {
+    perspective: "1500px",
+    perspectiveOrigin: "center center",
+};
+
+/**
+ * Fullscreen's perspective: the field leans back `degrees` about a line
+ * below its center, which looks more natural, and eases into each angle.
+ */
+const tiltStyle = (degrees: number): CSSProperties => ({
+    transform: degrees === 0 ? undefined : `rotateX(${degrees}deg)`,
+    transformOrigin: "center 70%",
+    transition: "transform 0.2s ease-out",
+});
+
+/** How long to wait for the fullscreen layout to settle. */
 const FULLSCREEN_SETTLE_MS = 250;
 
 /**
- * As the Fabric field: entering fullscreen fits the whole field and clears the
- * selection, and leaving it centers the field at the base zoom again, once the
- * layout has settled. The field also centers again that long after it's
- * `ready`, as the app's panels finish laying out around it, and marks the
- * view `settled`.
+ * Entering fullscreen fits the whole field and clears the selection, and
+ * leaving it centers the field at the base zoom again, once the layout has
+ * settled. The field also centers again that long after it's `ready`, as the
+ * app's panels finish laying out around it, and marks the view `settled`.
  */
 function useFullscreenFit(
     root: RefObject<HTMLDivElement | null>,
@@ -611,7 +646,7 @@ function useFullscreenFit(
  * show centered at the base zoom once it's `ready`, and points the camera at
  * the store's view. Until the view has `settled`, a resize centers it again.
  * After that a resize keeps the zoom and where the field sits from the
- * top-left, as the Fabric field did; in fullscreen it fits the field again.
+ * top-left; in fullscreen it fits the field again.
  */
 function FieldCamera({
     fieldProperties,

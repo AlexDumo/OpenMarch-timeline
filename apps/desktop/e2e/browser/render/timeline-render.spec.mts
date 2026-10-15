@@ -1,37 +1,26 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { test, expect, type Show } from "../fixtures.mjs";
 import { waitForField } from "../app.mjs";
 import { pressKeep } from "../timeline.mjs";
-import {
-    compose,
-    field,
-    setFabricView,
-    settle,
-    type View,
-} from "./compare.mjs";
+import { field, OUT, saveCapture, settle } from "./compare.mjs";
 
 /**
- * Render comparisons of the timeline's drawing on the field, Fabric against
- * the new field (#201; see README.md here): pathways, midpoints, endpoints,
- * step-size warnings, an isolated move's scene with its dimmed marchers, kept
- * marks and collision markers, on a converted demo show. Not a pass/fail
- * suite: it writes screenshots, side-by-sides and diffs for a person to
- * review.
+ * Render captures of the timeline's drawing on the field (#201; see README.md
+ * here): pathways, midpoints, endpoints, step-size warnings, an isolated
+ * move's scene with its dimmed marchers, kept marks and collision markers, on
+ * a converted demo show. Not a pass/fail suite: it writes screenshots, and
+ * with `RENDER_BASE` side-by-sides and diffs against an earlier run, for a
+ * person to review.
  *
- *     FIELD=three pnpm exec playwright test --project=render timeline-render
- *     FIELD=fabric pnpm exec playwright test --project=render timeline-render
+ *     RENDER_LABEL=before pnpm exec playwright test --project=render timeline-render
+ *     RENDER_LABEL=after RENDER_BASE=before pnpm exec playwright test --project=render timeline-render
  *
  * Output goes to `RENDER_OUT` (default `$TMPDIR/openmarch-field-render`).
  */
 
-const OUT = path.resolve(
-    process.env.RENDER_OUT ?? path.join(os.tmpdir(), "openmarch-field-render"),
-);
-const FIELD = process.env.FIELD === "three" ? "three" : "fabric";
 const desktop = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     "../../..",
@@ -239,7 +228,7 @@ async function applySettings(page: Page, settings: Settings) {
 
 /**
  * Hides what the app draws over the field (toolbars, the isolation bar,
- * badges), but not the field's own overlays (the new field's kept marks).
+ * badges), but not the field's own overlays (its kept marks).
  */
 async function hideChrome(page: Page) {
     await page.evaluate(() => {
@@ -279,40 +268,18 @@ for (const c of CASES)
             await applySettings(page, c.settings);
             for (const size of SIZES) {
                 await page.setViewportSize(size);
-                // The Fabric field fits the show only when it opens
+                // The field fits the show when it opens
                 await page.reload();
                 await waitForField(page);
                 await c.setup(page, show);
                 await hideChrome(page);
                 await settle(page);
                 await page.waitForTimeout(500);
-                const base = path.join(OUT, `timeline-${c.name}-${size.name}`);
-                if (FIELD === "three") {
-                    const view = (await page.evaluate(() =>
-                        window.fieldTest!.viewport(),
-                    )) as View;
-                    fs.writeFileSync(`${base}.view.json`, JSON.stringify(view));
-                    fs.writeFileSync(`${base}.three.png`, await shot(page));
-                    continue;
-                }
-                const view = JSON.parse(
-                    fs.readFileSync(`${base}.view.json`, "utf8"),
-                ) as View;
-                await setFabricView(page, view);
-                const fabric = await shot(page);
-                fs.writeFileSync(`${base}.fabric.png`, fabric);
-                const composed = await compose(
+                await saveCapture(
                     page,
-                    fabric,
-                    fs.readFileSync(`${base}.three.png`),
-                );
-                fs.writeFileSync(`${base}.compare.png`, composed.png);
-                fs.appendFileSync(
-                    path.join(OUT, "summary.tsv"),
-                    `timeline-${c.name}\t${size.name}\t${composed.differing}\t${composed.total}\t${(
-                        (100 * composed.differing) /
-                        composed.total
-                    ).toFixed(2)}%\n`,
+                    `timeline-${c.name}-${size.name}`,
+                    await shot(page),
+                    [`timeline-${c.name}`, size.name],
                 );
             }
         });

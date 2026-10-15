@@ -1,10 +1,10 @@
 // @vitest-environment node
 /**
- * three.js stays out of the editor's first chunk: the new field loads it
- * lazily (`App.tsx` imports `ThreeField` with `lazy`), so Fabric users and a
- * machine without WebGL never download it. Walks the static imports from the
- * renderer's entry, as the bundler does, and fails if any reaches three.js or
- * React Three Fiber. Dynamic `import()` and `import type` don't count.
+ * three.js stays out of the editor's first chunk: the field loads it lazily
+ * (`App.tsx` imports `ThreeField` with `lazy`), so a machine without WebGL
+ * never downloads it. Walks the static imports from the renderer's entry, as
+ * the bundler does, and fails if any reaches three.js or React Three Fiber.
+ * Dynamic `import()` and `import type` don't count.
  */
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";

@@ -14,9 +14,9 @@ import type { FieldRect } from "./selectionArea";
 /** A handle on the selection box: corners and middles scale, `rot` rotates. */
 export type HandleId = FieldTestHandle;
 
-/** Fabric's control size: a handle is a square this many CSS px across, and a press inside it takes it. */
+/** A handle is a square this many CSS px across, and a press inside it takes it. */
 export const HANDLE_SIZE = 13;
-/** How far above the box's top middle the rotate handle sits, in CSS px (Fabric's `mtr` offset). */
+/** How far above the box's top middle the rotate handle sits, in CSS px. */
 export const ROTATE_HANDLE_OFFSET = 40;
 /** Rotation snaps to multiples of this many degrees unless Shift or Alt is down. */
 export const ROTATION_SNAP = 15;
@@ -110,7 +110,7 @@ export function handleAt(
     return found;
 }
 
-/** The cursor over a handle: a resize arrow along its axis, a crosshair to rotate (Fabric's). */
+/** The cursor over a handle: a resize arrow along its axis, a crosshair to rotate. */
 export function handleCursor(handle: HandleId) {
     switch (handle) {
         case "nw":

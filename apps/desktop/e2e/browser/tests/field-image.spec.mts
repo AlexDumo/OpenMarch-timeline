@@ -2,8 +2,7 @@ import type { Page } from "@playwright/test";
 import { test, expect } from "../fixtures.mjs";
 
 // The show's field image is drawn with its fit or fill setting and its
-// opacity (`refreshBackgroundImageValues` on Fabric, `planFieldImage` on the
-// new field).
+// opacity (`planFieldImage`).
 
 /** A 4 by 1 PNG: four times as wide as it is tall, wider than any field. */
 const WIDE_PNG =
@@ -21,10 +20,7 @@ const withImage = (
         image = X'${WIDE_PNG}'`,
 ];
 
-/**
- * Fabric draws its field lines half a grid line into its plane but the image
- * on it, so its image reads half a field unit up and left of the new field's.
- */
+/** Within three quarters of a field unit, for edges drawn between pixels. */
 const TOLERANCE = 0.75;
 
 /** The field's size in field units, as `FieldProperties` works it out. */

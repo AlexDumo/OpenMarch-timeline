@@ -105,11 +105,10 @@ function viewScenario(
 
 /**
  * In to 8× and back out at the center, every 3 s, through the field's own
- * pinch zoom: a Ctrl+wheel event each frame, which both fields take as a
+ * pinch zoom: a Ctrl+wheel event each frame, which the field takes as a
  * pinch in either mouse mode. Each event steers the zoom toward the curve, so
- * both fields follow it whatever their zoom speed. Fabric draws its grid from
- * a cache while a zoom is in progress; writing its view directly would skip
- * that.
+ * the field follows it whatever its zoom speed, and the zoom goes through the
+ * same input a user's does.
  */
 function zoomScenario(view: BenchmarkView): BenchmarkScenario {
     let start: FieldView | null = null;

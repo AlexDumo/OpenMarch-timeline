@@ -25,8 +25,7 @@ import type { FieldTestLineTool } from "../../../src/field/fieldTestApi";
 // and gives the selection back, and a right-click clears the line. Escape
 // with the line tool on in isolation (story 59) is `timeline-interactions`.
 //
-// Changes from today's Fabric field, decided in #189, are the "change:"
-// scenarios, marked `test.fail(field === "fabric", ...)`.
+// The "change:" scenarios are the rules-table changes decided in #189.
 
 // Four trumpets on the home page, all in view, none on the grid.
 const PAGE_0: SeedPosition[] = [
@@ -94,8 +93,8 @@ const spaced = (ids: number[], start: Point, end: Point): Position[] =>
         .sort((a, b) => a.id - b.id);
 
 /**
- * Within 1.5 field units on both axes: Fabric saves half a unit off where it
- * draws, and the mouse lands on whole screen pixels.
+ * Within 1.5 field units on both axes: the mouse lands on whole screen
+ * pixels.
  */
 const near = (a: Point, b: Point, within = 1.5) =>
     Math.abs(a.x - b.x) < within && Math.abs(a.y - b.y) < within;
@@ -331,12 +330,7 @@ test("a right-click clears the line being drawn, and the next click starts a new
 
 test("change: after the line is finished, a click on a marcher selects nothing (rules table: Click target)", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric makes the marchers selectable again once the line is finished",
-    );
     const { page } = show;
     await startTool(page);
     await drawLine(page, SHALLOW.from, SHALLOW.to);
@@ -353,12 +347,7 @@ test("change: after the line is finished, a click on a marcher selects nothing (
 
 test("change: Shift+Enter saves the marchers exactly where the previews are drawn (rules table: Dot position)", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric saves the line half a field unit right of and below where it draws it",
-    );
     const { page } = show;
     await startTool(page);
     await drawLine(page, SHALLOW.from, SHALLOW.to);
@@ -372,12 +361,7 @@ test("change: Shift+Enter saves the marchers exactly where the previews are draw
 
 test("change: a right-drag pans and keeps the line being drawn, so its end can be placed past the edge (user story 5)", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric clears the line on every right press, a pan's included",
-    );
     const { page } = show;
     const grid = await fieldGrid(show);
     await startTool(page);

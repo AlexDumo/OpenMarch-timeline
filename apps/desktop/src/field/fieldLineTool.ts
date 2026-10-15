@@ -44,7 +44,7 @@ export function useFieldLineTool(editor: FieldEditor) {
 /**
  * Gives the line's positions to the alignment event, which the
  * `applyQuickShape` action (Shift+Enter) saves through the timeline's rules,
- * in one undo step, as it does Fabric's. It ignores page ids (timeline
+ * in one undo step. It ignores page ids (timeline
  * writes edit where the selection edits), so none is given.
  */
 export function publishLinePreviews(positions: readonly MarcherPosition[]) {

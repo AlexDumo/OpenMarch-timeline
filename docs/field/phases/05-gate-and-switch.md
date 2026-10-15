@@ -18,7 +18,7 @@
 
 #209 merged. The field freeze ends: remove the freeze notes from
 `apps/desktop/AGENTS.md`, `apps/desktop/src/components/canvas/README.md`
-and [the README](../README.md).
+and [the README](../README.md). (Done in #209.)
 
 ## Handoff notes
 
@@ -92,3 +92,47 @@ zooms and four times), `stressShow.mts` (the 1,925-marcher show),
 - Delete the Fabric halves with Fabric: `FabricFieldBenchmark.tsx`,
   `fabricBenchmark.ts`, the Fabric pass of the render and export capture
   specs (`setFabricView` in `render/compare.mts`).
+
+**From #209 (the switch).** The three.js field is the only field. For later
+tickets (#204, #214, and the features in
+[the porting guide](../porting-fabric-features.md)):
+
+- Gone: `components/canvas/` except `CanvasZoomControls.tsx`,
+  `global/classes/canvasObjects/`, `MarcherVisualGroup` and the
+  `marcherWithVisuals` query, `CanvasStore`, `useAnimation`,
+  `useTimelineAppearance`, the Fabric timeline hooks
+  (`useTimelineStaticRender`, `useTimelineFocusRender`, `useTimelineKeptMarks`,
+  the canvas half of `useTimelineDimming`), `fieldRenderer.ts`, and the
+  Fabric benchmark. `window.canvas` no longer exists. To read Fabric's code,
+  check out `field-renderer-pre-209`.
+- Moved: `stepSizeWarning.ts` is in `timeline/`. `useTimelinePathRender.ts`
+  is `useTimelinePathSamples.ts` (sampling only; its tests moved with it).
+- P7.11's spec-shape handles are deleted with `timelineShapeCanvas.ts` (owner
+  decision). `TimelineShapesEditor` keeps its typed inputs; its canvas help
+  text and the drag-commit link are gone.
+- The Playwright codegen mode (`attachCodegenListeners`) recorded Fabric
+  mouse events on marchers; it went with Fabric. The codegen IPC
+  (`window.electron.codegen`) is still there; #254 tracks recording field
+  presses again.
+- Fullscreen's perspective tilt is ported: the `fieldTilt` wrapper in
+  `ThreeField.tsx` tilts the canvas and its overlays, the canvas sizes by
+  layout (`offsetSize`), and leaving fullscreen flattens it. The field takes
+  no input in fullscreen, so pointer mapping never meets the tilt; a feature
+  that wants input there must map through the transform.
+- `window.canvas` is gone, and the plugin example in the 2025-06-12 blog post
+  used it. The owner accepted the break: no replacement, and the plugin
+  system is to be removed (#255).
+- The e2e fixture has no `field` or `webgl` option. Electron always gets
+  software GL (`--use-angle=swiftshader`). Run Electron scenarios one worker
+  per display (#236).
+- The render capture specs (`e2e/browser/render/`) compare two runs
+  (`RENDER_LABEL`, `RENDER_BASE`) instead of two fields; `render-compare.py`
+  takes two labels. For Fabric comparisons, use the harness on
+  `field-renderer-pre-209`.
+- The benchmark report still has `environment.field` (always `"three"`) and
+  says "three.js field", so its reports compare with the pinned build's.
+- `~/om-capture/e2e` passes `FIELD` through; nothing reads it now. Several
+  om-capture custom scenarios (`scenarios/dc-lib.mjs`, `appear-parity.mjs`,
+  `page-cascade.mjs`, `perf/scenarios/play-layer-probe*.mjs`,
+  `scrub-parity.mjs` and others) read Fabric through `window.canvas` and need
+  the field test API before they work again.

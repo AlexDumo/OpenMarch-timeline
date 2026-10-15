@@ -7,19 +7,21 @@ import { drawnMarchers, waitForField } from "../app.mjs";
 
 /**
  * Render comparison captures (ADR 0005 D-6.2), not a scenario: it only runs
- * with `RENDER_COMPARE=<folder>`. Run it once per field, then pair the two
- * with `e2e/browser/render-compare.py`:
+ * with `RENDER_COMPARE=<folder>`, and saves to `<folder>/<RENDER_COMPARE_LABEL>`
+ * (default `after`). Run it on two checkouts (a detached worktree for the
+ * base), then pair the two with `e2e/browser/render-compare.py`:
  *
- *   RENDER_COMPARE=/tmp/rc FIELD=fabric pnpm exec playwright test --project=browser render-compare
- *   RENDER_COMPARE=/tmp/rc FIELD=three pnpm exec playwright test --project=browser render-compare
- *   python3 e2e/browser/render-compare.py /tmp/rc
+ *   RENDER_COMPARE=/tmp/rc RENDER_COMPARE_LABEL=before pnpm exec playwright test --project=browser render-compare
+ *   RENDER_COMPARE=/tmp/rc pnpm exec playwright test --project=browser render-compare
+ *   python3 e2e/browser/render-compare.py /tmp/rc before after
  *
  * Each capture is a screenshot of the window plus the field test API's view
- * and marchers (`<name>.json`), so the pairing script can crop both fields to
+ * and marchers (`<name>.json`), so the pairing script can crop both runs to
  * the same region in field units whatever each one's zoom and pan.
  */
 
 const out = process.env.RENDER_COMPARE;
+const label = process.env.RENDER_COMPARE_LABEL ?? "after";
 const desktop = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     "../../..",
@@ -69,14 +71,14 @@ for (const show of SHOWS)
             seedSql: show.seedSql,
         });
 
-        test("captures", async ({ show: app, field }, testInfo) => {
+        test("captures", async ({ show: app }, testInfo) => {
             testInfo.setTimeout(180_000);
             const { page } = app;
             await waitForField(page);
             const firstPageId = await page.evaluate(() =>
                 window.fieldTest!.pageId(),
             );
-            const folder = path.join(out!, field);
+            const folder = path.join(out!, label);
             fs.mkdirSync(folder, { recursive: true });
 
             // Times: home, a page part way in, and four beats past it (mid-move)
@@ -98,7 +100,7 @@ for (const show of SHOWS)
                 },
             ];
             for (const size of SIZES) {
-                // The Fabric field fits the show only when it opens
+                // The field fits the show when it opens
                 await page.setViewportSize(size);
                 await page.reload();
                 await waitForField(page);

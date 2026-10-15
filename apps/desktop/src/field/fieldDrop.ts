@@ -8,9 +8,9 @@ import {
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 
 /**
- * Saves marchers dropped on the new field through the same drop-to-timeline
- * path as the Fabric field (`canvasCoordinateWriter`, unchanged): a range drop
- * creates or joins that range's move, home edits homes, isolation edits the
+ * Saves marchers dropped on the field through the drop-to-timeline path
+ * (`canvasCoordinateWriter`): a range drop creates or joins that range's move,
+ * home edits homes, isolation edits the
  * isolated end and moves the playhead there, and a refusal (nothing selected
  * on the timeline) is a toast. `write` is the timeline write, which offers
  * "Move them too" (`moveMarchersInTargetMutationOptions`).

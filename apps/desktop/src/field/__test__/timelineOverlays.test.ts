@@ -307,7 +307,7 @@ describe("collisions", () => {
         });
     });
 
-    it("frames the markers and their labels as Fabric's zoom to collisions", () => {
+    it("frames the markers and their labels for zoom to collisions", () => {
         // Bounds: x 96..306, y from the first label (200 - 12 - 2 = 186) to 266
         const view = collisionsView(collisions, 1000, 600)!;
         const w = 306 - 96 + 200;

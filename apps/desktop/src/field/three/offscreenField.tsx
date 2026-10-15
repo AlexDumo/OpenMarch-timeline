@@ -213,7 +213,7 @@ export async function createOffscreenField(
 
 /**
  * Full quality, whatever the machine. Labels never fade: an export draws them
- * at every size, as Fabric's did, and its preview shows what the video will.
+ * at every size, and its preview shows what the video will.
  */
 const EXPORT_QUALITY: QualitySettings = {
     ...QUALITY_SETTINGS.full,

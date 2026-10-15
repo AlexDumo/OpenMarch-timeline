@@ -12,7 +12,7 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useTimelineFocusScene } from "@/timeline/useTimelineFocusScene";
 import { ghostColorFor } from "@/timeline/useTimelineFocusScene";
-import { useTimelinePathSamples } from "@/timeline/useTimelinePathRender";
+import { useTimelinePathSamples } from "@/timeline/useTimelinePathSamples";
 import {
     planCollisionOverlay,
     planFocusOverlay,
@@ -22,14 +22,14 @@ import {
 import { FieldDimming } from "./fieldDimming";
 
 /**
- * Everything the timeline draws on the new field (fork #201), from the same
- * data the Fabric field draws: the selected page's pathways, midpoints,
- * endpoints and step-size warnings (`useTimelinePathSamples`), an isolated
- * move's focus scene (`useTimelineFocusScene`, which also publishes the
- * isolation plan the playhead driver draws members at), collision markers
- * (`useCollisionStore`), and who's dimmed. Plans change on page changes,
- * edits and setting changes, never per frame; dimming goes to the layers
- * through {@link FieldDimming}, outside React.
+ * Everything the timeline draws on the field (fork #201): the selected page's
+ * pathways, midpoints, endpoints and step-size warnings
+ * (`useTimelinePathSamples`), an isolated move's focus scene
+ * (`useTimelineFocusScene`, which also publishes the isolation plan the
+ * playhead driver draws members at), collision markers (`useCollisionStore`),
+ * and who's dimmed. Plans change on page changes, edits and setting changes,
+ * never per frame; dimming goes to the layers through {@link FieldDimming},
+ * outside React.
  */
 // eslint-disable-next-line max-lines-per-function
 export function useTimelineVisuals({
@@ -52,7 +52,7 @@ export function useTimelineVisuals({
     /** Whether the resolver is ready: the timeline draws nothing before. */
     ready: boolean;
 } {
-    // Drawn from the resolver only once it's ready, as on Fabric
+    // Drawn from the resolver only once it's ready
     const ready = useTimelineResolverStore((s) => s.status === "ready");
     const settings = useUiSettingsStore(
         useShallow((s) => ({
@@ -116,7 +116,7 @@ export function useTimelineVisuals({
         [scene, theme, emphasis],
     );
 
-    // As `useAnimation` on Fabric: the selected page's collisions
+    // The selected page's collisions
     const { currentCollisions, setCurrentCollision } = useCollisionStore();
     useEffect(() => {
         setCurrentCollision(selectedPage);
@@ -135,9 +135,9 @@ export function useTimelineVisuals({
 
 /**
  * UI-9: while a move is isolated, the marchers outside it are dimmed, once the
- * resolver is ready (as Fabric's `useTimelineDimming` takes `enabled`). Follows
- * the timeline selection store outside React; `FieldDimming` ignores updates
- * that keep the same members, such as the window moving inside the move.
+ * resolver is ready. Follows the timeline selection store outside React;
+ * `FieldDimming` ignores updates that keep the same members, such as the
+ * window moving inside the move.
  */
 function useFieldDimming(enabled: boolean): FieldDimming {
     const dimming = useMemo(() => new FieldDimming(), []);

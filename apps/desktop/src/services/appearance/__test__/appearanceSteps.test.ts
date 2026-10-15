@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import type Marcher from "@/global/classes/Marcher";
 import type Page from "@/global/classes/Page";
@@ -12,7 +12,6 @@ import {
     hiddenMarcherIdsAtBeat,
     parseAppearanceFlagsKey,
 } from "../appearanceSteps";
-import { applyAppearanceStepsAt } from "@/hooks/useTimelineAppearance";
 
 /**
  * Appearance by flag beat in timeline mode (docs/timeline/ui.md UI-9 No selected page; owner
@@ -258,9 +257,9 @@ describe("appearanceStackAtBeat", () => {
 });
 
 /**
- * The rule the Fabric video export applied by time (`getPlaybackPageForTimeMs`, until #207 moved
- * the export onto these steps): the page whose end was crossed last, or the first page before it
- * ends. Kept as the reference these steps must agree with.
+ * The rule the video export applied by time (`getPlaybackPageForTimeMs`,
+ * until #207 moved the export onto these steps): the page whose end was crossed last, or the first
+ * page before it ends. Kept as the reference these steps must agree with.
  */
 function pageAtTimeMs(sortedPages: Page[], timeMs: number): Page {
     const byId = new Map(sortedPages.map((page) => [page.id, page]));
@@ -303,40 +302,5 @@ describe("hiddenMarcherIdsAtBeat", () => {
         expect(hiddenMarcherIdsAtBeat(steps, 12)).toEqual(new Set());
         expect(hiddenMarcherIdsAtBeat(steps, 13)).toEqual(new Set([1, 3]));
         expect(hiddenMarcherIdsAtBeat(steps, 20)).toEqual(new Set([1, 3]));
-    });
-});
-
-describe("applyAppearanceStepsAt (the canvas side)", () => {
-    const stubMarchers = () =>
-        marchers.map((marcherObj) => ({
-            marcherObj,
-            setAppearance: vi.fn(),
-        }));
-
-    it("styles each marcher, then again only when its appearance changes", () => {
-        const canvasMarchers = stubMarchers();
-        const steps = build();
-        const applied = new WeakMap<object, unknown>();
-        const at = (beat: number) =>
-            applyAppearanceStepsAt({
-                canvasMarchers: canvasMarchers as never,
-                steps,
-                beat,
-                applied,
-            });
-
-        expect(at(3)).toBe(3);
-        // Nothing changes before page 12's flag
-        expect(at(8)).toBe(0);
-        // Crossing it restyles only the tagged marchers
-        expect(at(9)).toBe(2);
-        expect(canvasMarchers[0]!.setAppearance).toHaveBeenLastCalledWith(
-            steps.get(1)!.stacks[1],
-            { requestRenderAll: false },
-            undefined,
-        );
-        expect(canvasMarchers[1]!.setAppearance).toHaveBeenCalledTimes(1);
-        // Going back (a loop or a seek) restyles them again
-        expect(at(2)).toBe(2);
     });
 });
