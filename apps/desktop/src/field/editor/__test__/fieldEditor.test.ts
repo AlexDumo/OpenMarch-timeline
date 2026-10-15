@@ -496,13 +496,94 @@ describe("FieldEditor moving marchers", () => {
             })),
         );
         const { editor, state } = setup({ moveTransform });
-        drag(editor, { x: 100, y: 100 }, { x: 137, y: 120 }, { alt: true });
+        drag(editor, { x: 100, y: 100 }, { x: 137, y: 120 }, { shift: true });
         expect(moveTransform).toHaveBeenLastCalledWith(
             { x: 37, y: 20 },
-            expect.objectContaining({ alt: true }),
+            expect.objectContaining({ shift: true }),
             [{ id: 1, x: 100, y: 100 }],
         );
         expect(state.drops[0].positions).toEqual([{ id: 1, x: 140, y: 100 }]);
+    });
+
+    it("moves at a quarter of the pointer's speed while Alt is down (user story 39)", () => {
+        const { editor, state } = setup();
+        drag(editor, { x: 100, y: 100 }, { x: 180, y: 140 }, { alt: true });
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 120, y: 110 }]);
+    });
+
+    // Snaps to tens, except with Shift or Alt
+    const snapToTens: MoveTransform = (delta, pointer, starts) =>
+        starts.map((s) => ({
+            id: s.id,
+            x:
+                pointer.alt || pointer.shift
+                    ? s.x + delta.x
+                    : s.x + Math.round(delta.x / 10) * 10,
+            y: s.y + delta.y,
+        }));
+
+    it("drops where the marcher is drawn when Alt comes up before a release that doesn't move", () => {
+        const { editor, state } = setup({ moveTransform: snapToTens });
+        editor.pointerDown(at(100, 100, { alt: true }));
+        editor.pointerMove(at(112, 100, { alt: true }));
+        expect(shown(state)).toEqual({ 1: { x: 103, y: 100 } });
+        // Alt up fires no pointer event; the release reports it up
+        editor.pointerUp(at(112, 100));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 103, y: 100 }]);
+    });
+
+    it("drops where the marcher is drawn when Shift goes down before a release that doesn't move", () => {
+        const { editor, state } = setup({ moveTransform: snapToTens });
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(137, 100));
+        expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
+        editor.pointerUp(at(137, 100, { shift: true }));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 140, y: 100 }]);
+    });
+
+    it("drops by the release's modifiers when the release moved the pointer", () => {
+        const { editor, state } = setup({ moveTransform: snapToTens });
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(137, 100));
+        editor.pointerUp(at(138, 100, { shift: true }));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 138, y: 100 }]);
+    });
+
+    it("goes on slowly from the snapped spot when Alt is pressed during a snapped drag", () => {
+        // Snaps to tens, except with Alt
+        const moveTransform: MoveTransform = (delta, pointer, starts) =>
+            starts.map((s) => ({
+                id: s.id,
+                x: pointer.alt
+                    ? s.x + delta.x
+                    : s.x + Math.round(delta.x / 10) * 10,
+                y: s.y + delta.y,
+            }));
+        const { editor, state } = setup({ moveTransform });
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(137, 100));
+        expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
+        editor.pointerMove(at(137, 100, { alt: true }));
+        expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
+        editor.pointerUp(at(157, 100, { alt: true }));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 145, y: 100 }]);
+    });
+
+    it("carries on from where the marchers are when Alt is pressed or released mid-drag", () => {
+        const { editor, state } = setup();
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(140, 100));
+        expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
+        // Alt down: the next 40 units count as 10, with no jump
+        editor.pointerMove(at(140, 100, { alt: true }));
+        expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
+        editor.pointerMove(at(180, 100, { alt: true }));
+        expect(shown(state)).toEqual({ 1: { x: 150, y: 100 } });
+        // Alt up: full speed again, still trailing the pointer by 30
+        editor.pointerMove(at(180, 100));
+        expect(shown(state)).toEqual({ 1: { x: 150, y: 100 } });
+        editor.pointerUp(at(200, 120));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 170, y: 120 }]);
     });
 });
 

@@ -47,3 +47,11 @@ export async function savedPosition(
     if (!found) throw new Error(`Marcher ${marcherId} has no position`);
     return { x: found.x, y: found.y };
 }
+
+export type { FieldGrid } from "./host/positions";
+
+/** The show's field grid, for coordinate rounding: step size and center front. */
+export async function fieldGrid(show: Pick<Show, "query">) {
+    const { fieldGrid: read } = await loadHost();
+    return read((sql, ...params) => show.query(sql, ...params));
+}

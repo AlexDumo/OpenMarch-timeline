@@ -137,4 +137,4 @@ export async function openShow(args: {
     };
 }
 
-export { savedPositions } from "./positions";
+export { fieldGrid, savedPositions } from "./positions";
