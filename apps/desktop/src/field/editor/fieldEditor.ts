@@ -59,6 +59,13 @@ export type FieldEditorPorts = {
     /** False for a marcher that can't be selected or hit (one dimmed outside the isolated move). */
     canSelect(id: number): boolean;
     /**
+     * Called once at the start of every edit press, before the editor does
+     * anything with it. The app may act on the press here (story 60: the
+     * first press after a paused preview clears the preview) and returns
+     * true when it takes it, so the editor selects, drags and drops nothing.
+     */
+    takePress?(): boolean;
+    /**
      * How far the selection box drawn around a multi-selection reaches past
      * its outermost marchers, in field units. A drag from inside it moves the
      * selection. 0 when omitted.
@@ -176,6 +183,14 @@ export class FieldEditor {
         if (!this.isEditButton(pointer)) return false;
         this.cancelGesture();
         this.ignoredButton = null;
+        if (this.ports.takePress?.()) {
+            // Captured all the same, so its moves and release do nothing either.
+            // Nor is it half of a double-click: the next press can't start a lasso
+            this.press = null;
+            this.lastClick = null;
+            this.ignoredButton = pointer.button;
+            return true;
+        }
         const hit = this.marcherAt(pointer.field);
         this.press = {
             start: pointer,
