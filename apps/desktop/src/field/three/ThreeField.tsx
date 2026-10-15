@@ -103,11 +103,9 @@ export default function ThreeField() {
     // The editor reads the selection it last wrote until React renders it, so
     // a second click before then builds on the first
     const selection = useRef<readonly number[]>(selectedIds);
-    const renderedSelection = useRef(selectedIds);
-    if (renderedSelection.current !== selectedIds) {
-        renderedSelection.current = selectedIds;
+    useLayoutEffect(() => {
         selection.current = selectedIds;
-    }
+    }, [selectedIds]);
 
     // The field test API and the editor read the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);

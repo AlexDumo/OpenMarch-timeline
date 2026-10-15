@@ -35,10 +35,13 @@ export function attachFieldPointerInput(
         };
     };
 
+    /** The pointer the editor's press captured; other captures (navigation's) aren't its to cancel. */
+    let captured: number | null = null;
     const down = (event: PointerEvent) => {
         if (event.pointerType === "touch") return;
-        if (editor.pointerDown(pointer(event)))
-            element.setPointerCapture(event.pointerId);
+        if (!editor.pointerDown(pointer(event))) return;
+        captured = event.pointerId;
+        element.setPointerCapture(event.pointerId);
     };
     const move = (event: PointerEvent) => {
         if (event.pointerType === "touch") return;
@@ -48,7 +51,11 @@ export function attachFieldPointerInput(
         if (event.pointerType === "touch") return;
         editor.pointerUp(pointer(event));
     };
-    const cancel = () => editor.pointerCancel();
+    const cancel = (event: PointerEvent) => {
+        if (event.pointerId !== captured) return;
+        captured = null;
+        editor.pointerCancel();
+    };
     const leave = (event: PointerEvent) => {
         if (event.buttons === 0) editor.pointerLeave();
     };

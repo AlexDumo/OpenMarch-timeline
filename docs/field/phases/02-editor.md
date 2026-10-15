@@ -79,7 +79,8 @@ selection.
 
 **Renderer side** (`src/field/three/`): `fieldPointerInput.ts` attaches the
 canvas's pointer events to the editor (touch is left to #194) and shows its
-cursor. `FieldMarchers.setSelection` marks `selected` (`Uint8Array`, by `ids`
+cursor. It cancels the editor's press only when the pointer it captured is
+lost, so navigation's own captures don't. `FieldMarchers.setSelection` marks `selected` (`Uint8Array`, by `ids`
 index) and bumps `selectionVersion`; `MarchersLayer` draws a 2 px ring in the
 same instanced draw (`aSelected`). `selectionRing.ts` sizes dots and rings for
 both. `FieldOverlay.tsx` is the SVG overlay over the canvas
@@ -94,6 +95,16 @@ selected marchers narrows to it; a click on empty field inside the box clears;
 Shift+click on empty field keeps the selection; a second Ctrl+A keeps
 everything selected. **#196:** pressing a selected marcher and dragging must
 still move the whole selection: the narrowing happens only on a click.
+
+**Open for #195 and #196.** A drag that starts on empty field inside a
+multi-selection's box: by the spec (Marquee row) it's a marquee, but Fabric
+moves the group. The owner is being asked; #196 pins the answer with a
+scenario. The editor's `startDrag` gets `press.hit === null` there either way,
+so the box test belongs in `startDrag`.
+
+**For #202.** A first press on the field during a paused preview selects on
+the new field, where Fabric only clears the preview (story 60). #202 needs a
+hook at the start of `FieldEditor.pointerDown` that can swallow the press.
 
 **Not covered yet.** The scenarios check the field's selection against the
 inspector and the toolbar's Select tab, not the timeline (it reads the same
