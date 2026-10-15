@@ -302,3 +302,39 @@ close leaves nothing selected (with Shift, the selection is kept). "Within 50
 screen px" is strict: exactly 50 doesn't close.
 A lasso (Shift+double-click-and-drag included) can't start inside an existing
 multi-selection's box: there the drag moves the selection (owner decision).
+
+### #197 Snapping, precision and locks
+
+**Files.** `src/field/editor/moveRules.ts`: `ruledMove(rules)` is the
+`MoveTransform` `ThreeField` passes the editor. It reads `MoveRules` on every
+pointer event (the coordinate-rounding settings, Lock X/Y from
+`useUiSettingsStore`, the field's grid), so a setting changed mid-drag applies
+at the next move. One marcher snaps through `getRoundCoordinates2`, the
+function Fabric's `CanvasMarcher.handleMoving` uses; a group's delta is
+rounded to whole multiples of each axis's rounding step. Shift or Alt turns
+snapping off; a locked axis stays where the marchers started (a single locked
+marcher snaps on the other axis only, as on Fabric).
+
+**Alt** is in `MoveGesture`, not the transform: `precisionDelta` counts the
+pointer's distance since the last event at ¼ while Alt is down, so the
+transform gets the slowed delta (the seam's "raw delta" is that now). Pressing
+Alt re-anchors on where the first marcher is drawn (`anchorAt`), so a snapped
+drag goes on from the grid point with no jump. Releasing Alt keeps the lag
+and snaps again. A modifier pressed while the pointer stands still applies at
+the next pointer move: the renderer reports pointer events only. So a release
+where the last move left the pointer drops the positions last drawn (Alt up
+or Shift down just before letting go doesn't change the drop); a release
+that moved evaluates the rules with its own modifiers.
+
+**Scenarios.** `e2e/browser/tests/snapping-and-locks.spec.mts`. The rounding
+ones set `coordinateRounding` through localStorage and reload; the grid comes
+from the show file (`fieldGrid` in `positions.mts`, through the host bundle's
+`FieldProperties`). `change:` scenarios on Fabric: a group snapping in whole
+steps, Alt at ¼ speed, Alt pressed mid-drag. Fabric drops land up to about
+1.1 field units off the pointer (half a unit for its dot offset, the rest
+whole-pixel mouse positions zoomed out), so drags aim a quarter step off the
+grid and compare within 1.5 units.
+
+**For #198 and #204.** Lock X / Lock Y must not constrain shape or group
+handles (rules table; Fabric locks them, a `change:` to pin there). Alt's
+quarter speed for handles can reuse `precisionDelta` and `anchorAt`.
