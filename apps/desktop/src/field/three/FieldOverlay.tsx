@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
-import { dotSizes, SELECTION_COLOR } from "./selectionRing";
+import { ringReach, SELECTION_COLOR } from "./selectionRing";
 
 /** Fabric's selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -44,7 +44,7 @@ type Bounds = { left: number; top: number; right: number; bottom: number };
 function SelectionBox({ box }: { box: Bounds | null }) {
     const view = useFieldViewStore();
     if (!box) return null;
-    const pad = dotSizes(view.zoom).ringOuter * view.zoom + BOX_GAP;
+    const pad = ringReach(view.zoom) * view.zoom + BOX_GAP;
     const topLeft = fieldToElement(view, box.left, box.top);
     const bottomRight = fieldToElement(view, box.right, box.bottom);
     return (

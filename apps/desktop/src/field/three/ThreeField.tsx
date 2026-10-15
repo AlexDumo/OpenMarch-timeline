@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera } from "three";
 import { useQuery } from "@tanstack/react-query";
-import type { FieldProperties } from "@openmarch/core";
+import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
@@ -12,6 +12,8 @@ import {
 } from "@/hooks/queries";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useTimingObjects } from "@/hooks";
+import { useMarcherAppearanceSteps } from "@/hooks/useMarcherAppearanceSteps";
+import type { AppearanceStepsByMarcherId } from "@/services/appearance/appearanceSteps";
 import { getLivePlaybackPosition } from "@/components/timeline/audio/AudioPlayer";
 import TimelineIsolationBar, {
     TimelineFromStartBadge,
@@ -46,9 +48,10 @@ const NUMBER_FONT = '"Times New Roman", serif';
 /**
  * The three.js field (ADR 0005), behind the dev switch in `fieldRenderer.ts`.
  * #192, the tracer bullet: it draws the field, and every marcher and its label
- * at the playhead, and installs the field test API. #193: the editor selects
- * marchers by clicking them, with rings on the selected marchers and a box
- * around a multi-selection in the SVG overlay.
+ * at the playhead, and installs the field test API. #199: each marcher in its
+ * appearance at the playhead (the last flag crossed, `appearanceSteps`). #193: the
+ * editor selects marchers by clicking them, with rings on the selected
+ * marchers and a box around a multi-selection in the SVG overlay.
  *
  * Guard rails (ADR 0005 D-2): it draws only on demand (`frameloop="demand"`;
  * playback and changes invalidate), there's one component per layer, and
@@ -65,6 +68,7 @@ export default function ThreeField() {
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const { isPlaying } = useIsPlaying()!;
     const { beats } = useTimingObjects()!;
+    const appearanceSteps = useMarcherAppearanceSteps(true);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
     const labels = useMemo(
@@ -112,10 +116,12 @@ export default function ThreeField() {
         pageId: selectedPage?.id ?? null,
         marcherRows,
         setSelectedMarchers,
+        theme: fieldProperties?.theme,
     });
     latest.current = {
         labels,
         pageId: selectedPage?.id ?? null,
+        theme: fieldProperties?.theme,
         marcherRows,
         setSelectedMarchers,
     };
@@ -168,6 +174,7 @@ export default function ThreeField() {
                 pageId: () => latest.current.pageId,
                 selection: () => selection.current,
                 activeGesture: () => editor.activeGesture(),
+                theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
             }),
         );
         return () => installFieldTestApi(undefined);
@@ -218,6 +225,7 @@ export default function ThreeField() {
                         marchers={marchers}
                         isPlaying={isPlaying}
                         beats={beats}
+                        appearanceSteps={appearanceSteps}
                     />
                     <FieldLayer
                         fieldProperties={fieldProperties}
@@ -301,7 +309,8 @@ function EditorInput({
 }
 
 /**
- * Moves the marchers to the playhead. Paused, it follows the beat the timeline
+ * Moves the marchers to the playhead, and gives them their appearance steps
+ * (`FieldMarchers` samples them with the positions). Paused, it follows the beat the timeline
  * shows (the playhead, or a held preview frame) through a store subscription,
  * so a scrub draws each beat without re-rendering React. Playing, it samples
  * the live playback time in a frame hook and asks for the next frame.
@@ -310,12 +319,19 @@ function PlayheadDriver({
     marchers,
     isPlaying,
     beats,
+    appearanceSteps,
 }: {
     marchers: FieldMarchers;
     isPlaying: boolean;
     beats: readonly BeatTiming[];
+    appearanceSteps: AppearanceStepsByMarcherId | undefined;
 }) {
     const invalidate = useThree((s) => s.invalidate);
+
+    useEffect(() => {
+        marchers.setAppearanceSteps(appearanceSteps);
+        invalidate();
+    }, [marchers, appearanceSteps, invalidate]);
     // A new version means new answers from the resolver
     const version = useTimelineResolverStore((s) => s.version);
     const isolationPlan = useIsolationPlanStore((s) => s.current);

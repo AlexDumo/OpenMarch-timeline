@@ -161,10 +161,12 @@ export class FieldEditor {
         this.setHover("default");
     }
 
-    /** Ctrl/Cmd+A: every marcher that can be selected. */
+    /** Ctrl/Cmd+A: every marcher drawn that can be selected. */
     selectAll(): void {
-        const { ids } = this.ports.marchers();
-        this.write(ids.filter((id) => this.ports.canSelect(id)));
+        const { ids, hidden } = this.ports.marchers();
+        this.write(
+            ids.filter((id, i) => !hidden?.[i] && this.ports.canSelect(id)),
+        );
     }
 
     /** The gesture in progress, for the field test API and the overlay; a press that's still a click has none. */

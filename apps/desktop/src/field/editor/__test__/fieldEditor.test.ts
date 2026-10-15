@@ -13,6 +13,7 @@ import {
 function setup({
     selected = [] as number[],
     dimmed = [] as number[],
+    hidden = [] as number[],
     isMac = false,
 } = {}) {
     const state = { selected: [...selected] as readonly number[] };
@@ -28,6 +29,9 @@ function setup({
             positions: Float64Array.from([
                 100, 100, 200, 100, 300, 100, 400, 100,
             ]),
+            hidden: Uint8Array.from([1, 2, 3, 4], (id) =>
+                hidden.includes(id) ? 1 : 0,
+            ),
         }),
         zoom: () => 2,
         canSelect: (id) => !dimmed.includes(id),
@@ -226,8 +230,8 @@ describe("FieldEditor hover", () => {
 
 describe("FieldEditor select all", () => {
     it("selects every marcher it can select", () => {
-        const { editor, state } = setup({ dimmed: [3] });
+        const { editor, state } = setup({ dimmed: [3], hidden: [1] });
         editor.selectAll();
-        expect(state.selected).toEqual([1, 2, 4]);
+        expect(state.selected).toEqual([2, 4]);
     });
 });

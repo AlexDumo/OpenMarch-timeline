@@ -73,8 +73,9 @@ they're #194's.
 **Selection.** The one selection is `SelectedMarchersContext` (Marcher
 objects). `ThreeField` gives the editor ids through a ref that holds the last
 write until React renders it, so two quick clicks build on each other. Hidden
-marchers are dropped by the context itself; the editor doesn't know about them
-yet (#199 can make `canSelect` say so, so they can't be hit).
+marchers (#199's `FieldMarchers.hidden`) have no click target and aren't
+selected by Ctrl/Cmd+A; the context also drops hidden marchers from the
+selection.
 
 **Renderer side** (`src/field/three/`): `fieldPointerInput.ts` attaches the
 canvas's pointer events to the editor (touch is left to #194) and shows its

@@ -42,6 +42,12 @@ describe("marcherAt", () => {
         expect(marcherAt(marchers, { x: 105, y: 100 }, 6)).toBe(2);
     });
 
+    it("passes over hidden marchers", () => {
+        const withHidden = { ...marchers, hidden: Uint8Array.from([0, 1, 0]) };
+        expect(marcherAt(withHidden, { x: 105, y: 100 }, 6)).toBe(1);
+        expect(marcherAt(withHidden, { x: 113, y: 100 }, 6)).toBeNull();
+    });
+
     it("passes over marchers that can't be selected", () => {
         const notTwo = (id: number) => id !== 2;
         expect(marcherAt(marchers, { x: 105, y: 100 }, 6, notTwo)).toBe(1);

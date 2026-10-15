@@ -15,16 +15,18 @@ export function hitRadius(zoom: number): number {
     return Math.max(DOT_RADIUS + OUTLINE_WIDTH, MIN_HIT_SCREEN_RADIUS / zoom);
 }
 
-/** The marchers drawn: ids, and x, y per id in field units. */
+/** The marchers drawn: ids, x, y per id in field units, and 1 per id that's hidden (not drawn). */
 export type DrawnMarchers = {
     readonly ids: readonly number[];
     readonly positions: ArrayLike<number>;
+    readonly hidden?: ArrayLike<number>;
 };
 
 /**
  * The marcher a press at `point` lands on: the nearest one within `radius`
- * (field units) that `canSelect` allows, or null on empty field. Marchers that
- * can't be selected (dimmed ones) are passed over, as if not there.
+ * (field units) that `canSelect` allows, or null on empty field. Hidden
+ * marchers and ones that can't be selected (dimmed ones) are passed over, as
+ * if not there.
  */
 export function marcherAt(
     marchers: DrawnMarchers,
@@ -32,7 +34,7 @@ export function marcherAt(
     radius: number,
     canSelect: (id: number) => boolean = () => true,
 ): number | null {
-    const { ids, positions } = marchers;
+    const { ids, positions, hidden } = marchers;
     let best: number | null = null;
     let bestDistance = radius * radius;
     for (let i = 0; i < ids.length; i++) {
@@ -41,6 +43,7 @@ export function marcherAt(
         const distance = dx * dx + dy * dy;
         if (distance > bestDistance) continue;
         if (best !== null && distance === bestDistance) continue;
+        if (hidden?.[i]) continue;
         if (!canSelect(ids[i])) continue;
         best = ids[i];
         bestDistance = distance;
