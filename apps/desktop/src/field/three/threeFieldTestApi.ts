@@ -2,6 +2,7 @@ import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import type {
     FieldTestApi,
+    FieldTestImage,
     FieldTestLook,
     FieldTestMarcher,
 } from "@/field/fieldTestApi";
@@ -21,6 +22,8 @@ export type ThreeFieldState = {
     pageId(): number | null;
     quality(): CurrentFieldQuality;
     contextLost(): boolean;
+    /** The field image as `BackgroundImageLayer` draws it, or null. */
+    fieldImage(): FieldTestImage | null;
     theme(): FieldTheme;
 };
 
@@ -79,6 +82,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                 contextLost: field.contextLost(),
             };
         },
+        fieldImage: () => field.fieldImage(),
     };
 }
 

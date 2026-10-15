@@ -107,7 +107,20 @@ export interface FieldTestApi {
     pageId(): number | null;
     /** How the field draws on this machine. Only the new field has quality modes. */
     quality?(): FieldTestQuality;
+    /**
+     * Where the show's field image is drawn, in field units, and how opaque;
+     * null when none is shown (no image, hidden, or not loaded yet).
+     */
+    fieldImage(): FieldTestImage | null;
 }
+
+export type FieldTestImage = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    opacity: number;
+};
 
 declare global {
     // eslint-disable-next-line no-unused-vars
