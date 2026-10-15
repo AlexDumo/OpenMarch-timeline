@@ -1,4 +1,10 @@
-import type { FieldTestApi, FieldTestMarcher } from "@/field/fieldTestApi";
+import { rgbaToString, type FieldTheme } from "@openmarch/core";
+import { resolveMarcherLook } from "@/entity-components/appearance";
+import type {
+    FieldTestApi,
+    FieldTestLook,
+    FieldTestMarcher,
+} from "@/field/fieldTestApi";
 import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, type FieldView } from "./fieldView";
@@ -15,6 +21,7 @@ export type ThreeFieldState = {
     pageId(): number | null;
     quality(): CurrentFieldQuality;
     contextLost(): boolean;
+    theme(): FieldTheme;
 };
 
 /**
@@ -29,7 +36,8 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             const rect = element.getBoundingClientRect();
             const view = field.view();
             const labels = field.labels();
-            const { ids, positions } = field.marchers;
+            const { ids, positions, stacks } = field.marchers;
+            const theme = field.theme();
             return ids.map((id, i): FieldTestMarcher => {
                 const x = positions[i * 2];
                 const y = positions[i * 2 + 1];
@@ -46,6 +54,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                         screen.x < rect.right &&
                         screen.y > rect.top &&
                         screen.y < rect.bottom,
+                    look: lookOf(stacks[i] ?? [], theme),
                 };
             });
         },
@@ -70,5 +79,31 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                 contextLost: field.contextLost(),
             };
         },
+    };
+}
+
+/** A marcher's look as the marcher and label layers draw it (`marcherLooks.ts`). */
+function lookOf(
+    stack: Parameters<typeof resolveMarcherLook>[0],
+    theme: FieldTheme,
+): FieldTestLook {
+    const look = resolveMarcherLook(stack, theme);
+    const common = {
+        visible: look.visible,
+        labelVisible: look.labelVisible,
+        labelColor: rgbaToString(theme.defaultMarcher.label),
+    };
+    if (look.shape === "cross")
+        return {
+            ...common,
+            shape: "x",
+            fill: rgbaToString(look.crossColor),
+            outline: null,
+        };
+    return {
+        ...common,
+        shape: look.shape,
+        fill: rgbaToString(look.fill),
+        outline: rgbaToString(look.outline),
     };
 }
