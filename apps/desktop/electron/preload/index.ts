@@ -25,6 +25,10 @@ import { MENU_ACTION_CHANNEL } from "../../src/global/menuActions";
 import { GPU_CRASHED_CHANNEL, GPU_PROCESS_GONE_CHANNEL } from "../main/gpu";
 import type { HistoryResponse } from "@/db-functions";
 import type { PendingConversion } from "@om-electron/database/convertOnOpenGate";
+import type {
+    SqlBatchQuery,
+    SqlReadBatchResult,
+} from "@om-electron/database/sqlProxy";
 import type { ConvertProgress } from "@om-electron/database/convertOnOpenProtocol";
 // Types only, so this preload doesn't share a chunk with the sandboxed 3D
 // View preload.
@@ -498,6 +502,15 @@ const APP_API = {
         ipcRenderer.invoke("sql:proxy", sql, params, method) as Promise<{
             rows: any[] | any;
         }>,
+    /**
+     * Runs read-only statements as one consistent snapshot (#224). `busy` means a transaction was
+     * open on the connection and nothing ran: try again.
+     */
+    sqlReadBatch: (queries: SqlBatchQuery[]) =>
+        ipcRenderer.invoke(
+            "sql:read-batch",
+            queries,
+        ) as Promise<SqlReadBatchResult>,
     /** Only needed for the triggers */
     unsafeSqlProxy: (sql: string) =>
         ipcRenderer.invoke("unsafeSql:proxy", sql) as Promise<{
