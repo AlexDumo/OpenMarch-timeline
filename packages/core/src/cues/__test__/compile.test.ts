@@ -1,8 +1,9 @@
-// cspell:words choreo recompiles
+// cspell:words choreo recompiles mellophones
 import { describe, expect, it } from "vitest";
 import {
     CUE_CHANNELS,
     compileCues,
+    traceCue,
     type CompileInput,
     type CueInput,
     type CueMarcher,
@@ -642,6 +643,60 @@ describe("compileCues", () => {
             from: 7,
             cueId: 131,
         });
+    });
+
+    it("lets a later-authored cue beat a rippled cue that lands after it", () => {
+        const trumpets = [1, 2].map((order) => ({
+            ...trumpet,
+            id: 40 + order,
+            drillOrder: order,
+        }));
+        const mellophones = [3, 4].map((order) => ({
+            ...trumpet,
+            id: 40 + order,
+            section: "Mellophone",
+            drillOrder: order,
+        }));
+        const out = compileCues(
+            show(
+                [
+                    {
+                        ...hornCue(
+                            150,
+                            { kind: "band" },
+                            8,
+                            "builtin:horn.down",
+                        ),
+                        ripple: { span: 8, order: "drill" },
+                    },
+                    hornCue(
+                        151,
+                        { kind: "section", section: "Mellophone" },
+                        10,
+                        "builtin:horn.trail",
+                    ),
+                ],
+                [...trumpets, ...mellophones],
+            ),
+        );
+
+        // The band cue on 8 ripples to the mellophones after count 10, but
+        // the section cue on 10 is the later cue, so they keep trailing.
+        for (const m of mellophones) {
+            expect(
+                out
+                    .segments(m.id, "horn_equipment")
+                    .filter((s) => s.kind === "state")
+                    .map((s) => s.cueId),
+            ).toEqual([151]);
+            expect(traceCue(out, m.id, "horn_equipment", 20)).toMatchObject({
+                winner: 151,
+                beaten: [150],
+            });
+        }
+        expect(
+            out.segments(41, "horn_equipment").find((s) => s.kind === "state"),
+        ).toMatchObject({ from: 8, cueId: 150 });
     });
 
     it("fills each value's settings from its defaults and the show's", () => {
