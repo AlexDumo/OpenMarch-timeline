@@ -73,7 +73,9 @@ for (const c of CASES)
         test("export", async ({ show }) => {
             const { page } = show;
             await page.getByRole("tab", { name: "File" }).click();
-            await page.getByRole("button", { name: "Export", exact: true }).click();
+            await page
+                .getByRole("button", { name: "Export", exact: true })
+                .click();
             await page.getByRole("tab", { name: "Video" }).click();
             await page.getByRole("combobox", { name: /^\d+ fps$/ }).click();
             await page.getByRole("option", { name: "30 fps" }).click();
@@ -97,7 +99,10 @@ for (const c of CASES)
                     : "mp4";
             const folder = path.join(out!, label);
             fs.mkdirSync(folder, { recursive: true });
-            fs.writeFileSync(path.join(folder, `${c.name}.${extension}`), video);
+            fs.writeFileSync(
+                path.join(folder, `${c.name}.${extension}`),
+                video,
+            );
             fs.appendFileSync(
                 path.join(folder, "export-times.tsv"),
                 `${c.name}\t${seconds.toFixed(1)}\n`,
