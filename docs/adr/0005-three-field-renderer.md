@@ -136,6 +136,24 @@ The drawing techniques proven in the prototype are the starting point:
 - No Canvas2D fallback ships. One is built only if real users need it, and it
   must then cache marcher and label sprites as Fabric does.
 
+How #205 built it:
+
+- **GPU switch.** The main process appends `ignore-gpu-blocklist` at startup,
+  for the whole app (the Fabric field and the 3D View draw on the same GPU
+  process). Windows 7 still turns hardware acceleration off.
+- **IPC contract.** Two channels, both carrying no data from the renderer:
+  `gpu:crashed` (`invoke`, answers whether the GPU process ended with
+  anything but a clean exit this session) and `gpu:process-gone` (main to
+  every window, no payload, sent on such an exit). The preload exposes them
+  as `gpuCrashed()` and `onGpuCrashed(callback)`. The renderer gains no new
+  capability: it learns one boolean. The web build answers `false`, since the
+  browser owns its GPU process. Names live in `electron/main/gpu.ts`.
+- **What "low quality" means** is one table, `QUALITY_SETTINGS` in
+  `src/field/fieldQuality.ts`, so later layers read the same switch.
+- **Without WebGL** the field shows an explanation in its place instead of
+  throwing into the app's error boundary, and the rest of the app keeps
+  working.
+
 ### D-4 One cut-over, and a field freeze until then
 
 - The new field is built beside Fabric and switched on in one cut-over PR

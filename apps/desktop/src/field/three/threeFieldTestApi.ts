@@ -7,8 +7,10 @@ import type {
     FieldTestLook,
     FieldTestMarcher,
 } from "@/field/fieldTestApi";
+import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, type FieldView } from "./fieldView";
+import type { CurrentFieldQuality } from "./useFieldQuality";
 
 /** What the field test API reads from the new field. */
 export type ThreeFieldState = {
@@ -19,6 +21,8 @@ export type ThreeFieldState = {
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
     pageId(): number | null;
+    quality(): CurrentFieldQuality;
+    contextLost(): boolean;
     /** The field image as `BackgroundImageLayer` draws it, or null. */
     fieldImage(): FieldTestImage | null;
     theme(): FieldTheme;
@@ -72,6 +76,19 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
         handles: () => null,
         activeGesture: () => field.activeGesture(),
         pageId: () => field.pageId(),
+        quality() {
+            const { mode, reason, settings } = field.quality();
+            const gl = useFieldQualityStore.getState().gl;
+            return {
+                mode,
+                reason,
+                gl: gl?.kind ?? null,
+                renderer: gl?.renderer ?? null,
+                pixelRatio: canvasPixelRatio(field.element()),
+                labelsHiddenBelow: settings.labelFadeFrom,
+                contextLost: field.contextLost(),
+            };
+        },
         fieldImage: () => field.fieldImage(),
     };
 }
