@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -8,7 +9,7 @@ import {
 } from "react";
 import clsx from "clsx";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import type { OrthographicCamera } from "three";
+import type { OrthographicCamera, WebGLRenderer } from "three";
 import { useQuery } from "@tanstack/react-query";
 import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -39,6 +40,11 @@ import { useIsolationPlanStore } from "@/timeline/timelineIsolationPlan";
 import { playbackBeat } from "@/timeline/positionBuffer";
 import type { BeatTiming } from "@/timeline/timeMap";
 import { installFieldTestApi } from "@/field/fieldTestApi";
+import {
+    probeWebGL,
+    reprobeWebGL,
+    useFieldQualityStore,
+} from "@/field/fieldQuality";
 import { FieldEditor } from "@/field/editor/fieldEditor";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { isMacPlatform } from "@/shortcuts/platform";
@@ -59,6 +65,14 @@ import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
 import LabelsLayer from "./layers/LabelsLayer";
+import {
+    currentFieldQuality,
+    useFieldQuality,
+    useGpuCrashWatch,
+} from "./useFieldQuality";
+import { FieldUnavailable, useFieldQualityNotice } from "./FieldQualityNotice";
+import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
+import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
 
 /** fabric's fonts: the marcher labels'. */
 const LABEL_FONT = 'bold "Courier New", monospace';
@@ -69,6 +83,35 @@ const LABEL_FONT = 'bold "Courier New", monospace';
  */
 const NUMBER_FONT = '"Times New Roman"';
 const CHECKPOINT_FONT = '"mono"';
+
+/**
+ * The three.js field, or an explanation in its place when its canvas can't get
+ * a WebGL context (#205), instead of the app's error boundary.
+ */
+export default function ThreeField() {
+    const [attempt, setAttempt] = useState(0);
+    return (
+        <CanvasErrorBoundary
+            key={attempt}
+            fallback={
+                <FieldUnavailable
+                    onRetry={() => {
+                        reprobeWebGL();
+                        setAttempt((n) => n + 1);
+                    }}
+                />
+            }
+            onError={(error) => {
+                console.warn("The field couldn't start WebGL", error);
+                useFieldQualityStore.setState({
+                    gl: { kind: "none", renderer: null },
+                });
+            }}
+        >
+            <ThreeFieldView />
+        </CanvasErrorBoundary>
+    );
+}
 
 /**
  * The three.js field (ADR 0005), behind the dev switch in `fieldRenderer.ts`.
@@ -83,7 +126,7 @@ const CHECKPOINT_FONT = '"mono"';
  * positions reach the GPU through {@link FieldMarchers} in frame hooks, never
  * through React state.
  */
-export default function ThreeField() {
+function ThreeFieldView() {
     const databaseReady = useDatabaseReady();
     const { data: fieldProperties } = useQuery(
         fieldPropertiesQueryOptions(databaseReady),
@@ -110,6 +153,21 @@ export default function ThreeField() {
         [fieldProperties, fieldImage],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
+
+    // Weak machines (#205): what draws WebGL here, known before the canvas mounts
+    const [probed] = useState(
+        () => useFieldQualityStore.getState().gl ?? probeWebGL(),
+    );
+    useLayoutEffect(() => {
+        if (!useFieldQualityStore.getState().gl)
+            useFieldQualityStore.setState({ gl: probed });
+    }, [probed]);
+    useGpuCrashWatch();
+    const quality = useFieldQuality();
+    useFieldQualityNotice(quality.reason);
+    // A new key starts the field over on a new canvas, with a new context
+    const [canvasKey, setCanvasKey] = useState(0);
+    const startOver = useCallback(() => setCanvasKey((key) => key + 1), []);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
     const labels = useMemo(
@@ -152,6 +210,9 @@ export default function ThreeField() {
 
     // The field test API and the editor read the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
+    const renderer = useRef<WebGLRenderer | null>(null);
+    const benchRenderer = useCallback(() => renderer.current, []);
+    const benchMarchers = useCallback(() => marchers.ids.length, [marchers]);
     const latest = useRef({
         labels,
         pageId: selectedPage?.id ?? null,
@@ -215,6 +276,8 @@ export default function ThreeField() {
                 view: () => useFieldViewStore.getState(),
                 element: () => element.current,
                 pageId: () => latest.current.pageId,
+                quality: currentFieldQuality,
+                contextLost: () => useFieldQualityStore.getState().contextLost,
                 selection: () => selection.current,
                 activeGesture: () => editor.activeGesture(),
                 fieldImage: () => latest.current.fieldImage,
@@ -240,6 +303,9 @@ export default function ThreeField() {
     if (!ready && fieldProperties && selectedPage) setReady(true);
     // Until the layout settles, the view is still the opening view
     const settled = useRef(false);
+    // Here, not in the camera: a canvas started over after a lost context
+    // keeps the view
+    const opened = useRef(false);
     useFullscreenFit(root, isFullscreen, ready, settled);
 
     return (
@@ -255,8 +321,21 @@ export default function ThreeField() {
         >
             <TimelineIsolationBar />
             <TimelineFromStartBadge />
-            {fieldProperties && (
+            <FieldBenchmark
+                renderer={benchRenderer}
+                marcherCount={benchMarchers}
+            />
+            {quality.reason === "noWebGL" && (
+                <FieldUnavailable
+                    onRetry={() => {
+                        reprobeWebGL();
+                        startOver();
+                    }}
+                />
+            )}
+            {fieldProperties && quality.reason !== "noWebGL" && (
                 <Canvas
+                    key={canvasKey}
                     // As the Fabric field's canvas, for the scenarios
                     data-testid="fieldCanvas"
                     frameloop="demand"
@@ -271,7 +350,7 @@ export default function ThreeField() {
                         far: 100,
                         position: [0, 0, 10],
                     }}
-                    dpr={[1, 2]}
+                    dpr={quality.settings.dpr}
                     // Colors are drawn as the theme gives them, with no tone mapping
                     flat
                     linear
@@ -281,12 +360,15 @@ export default function ThreeField() {
                     }}
                     onCreated={({ gl }) => {
                         element.current = gl.domElement;
+                        renderer.current = gl;
                     }}
                 >
+                    <ContextLossGuard onGiveUp={startOver} />
                     <FieldCamera
                         fieldProperties={fieldProperties}
                         root={root}
                         ready={ready}
+                        opened={opened}
                         settled={settled}
                     />
                     <EditorInput
@@ -387,18 +469,19 @@ function FieldCamera({
     fieldProperties,
     root,
     ready,
+    opened,
     settled,
 }: {
     fieldProperties: FieldProperties;
     root: RefObject<HTMLDivElement | null>;
     ready: boolean;
+    opened: RefObject<boolean>;
     settled: RefObject<boolean>;
 }) {
     const width = useThree((s) => s.size.width);
     const height = useThree((s) => s.size.height);
     const camera = useThree((s) => s.camera) as OrthographicCamera;
     const invalidate = useThree((s) => s.invalidate);
-    const opened = useRef(false);
 
     useLayoutEffect(() => {
         const field = {
@@ -418,7 +501,7 @@ function FieldCamera({
         } else if (!settled.current) {
             settleView();
         }
-    }, [width, height, fieldProperties, root, ready, settled]);
+    }, [width, height, fieldProperties, root, ready, opened, settled]);
 
     useLayoutEffect(() => {
         const apply = () => {

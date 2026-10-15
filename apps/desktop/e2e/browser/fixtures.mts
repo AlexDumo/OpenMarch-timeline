@@ -48,6 +48,25 @@ const FIELD_STORAGE_KEY = "openmarch:dev:field";
 const UI_SETTINGS_STORAGE_KEY = "openmarch:uiSettings";
 const defaultField: FieldDriver =
     process.env.FIELD === "three" ? "three" : "fabric";
+/** `QUALITY_NOTICE_STORAGE_KEY`: the field's low-quality explanations already shown. */
+const QUALITY_NOTICE_KEY = "openmarch:field:qualityNoticeSeen";
+
+/** What the app finds in `localStorage` when it starts. Fabric is the default. */
+const startupStorage = (
+    field: FieldDriver,
+    qualityNotice: boolean,
+): Record<string, string> =>
+    field === "fabric"
+        ? {}
+        : {
+              [FIELD_STORAGE_KEY]: field,
+              // Machines here draw WebGL in software: the new field would
+              // explain its low-quality mode once, in a toast over the app,
+              // in every test
+              ...(qualityNotice
+                  ? {}
+                  : { [QUALITY_NOTICE_KEY]: '["software"]' }),
+          };
 
 type Query = <T = Record<string, unknown>>(
     sql: string,
@@ -60,6 +79,8 @@ type App = {
     close: () => Promise<void>;
     /** Main-process output, for diagnosing a failure. Electron only. */
     log?: () => string;
+    /** Kills the app's GPU process, as a driver crash would. Electron only. */
+    killGpuProcess?: () => Promise<void>;
 };
 
 /**
@@ -71,6 +92,7 @@ async function openInBrowser(
     databasePath: string,
     appSettings: Record<string, unknown>,
     storage: Record<string, string>,
+    initScript: string | null,
 ): Promise<App> {
     const { openShow } = (await import(pathToFileURL(hostBundle).href)) as {
         openShow: typeof import("./host/index").openShow;
@@ -81,9 +103,11 @@ async function openInBrowser(
         settings: appSettings,
     });
     const context = await browser.newContext({ viewport: VIEWPORT });
-    await context.addInitScript((entries) => {
-        for (const [key, value] of entries) localStorage.setItem(key, value);
-    }, Object.entries(storage));
+    await context.addInitScript((storage) => {
+        for (const [key, value] of Object.entries(storage))
+            localStorage.setItem(key, value);
+    }, storage);
+    if (initScript) await context.addInitScript(initScript);
     const page = await context.newPage();
 
     await page.exposeFunction(
@@ -213,6 +237,14 @@ async function openInElectron(
             ) as Promise<T[]>,
         close: () => app.close(),
         log: () => log.join(""),
+        killGpuProcess: async () => {
+            const pid = await app.evaluate(
+                ({ app }) =>
+                    app.getAppMetrics().find((p) => p.type === "GPU")?.pid,
+            );
+            if (!pid) throw new Error("The app has no GPU process");
+            process.kill(pid, "SIGKILL");
+        },
     };
 }
 
@@ -225,6 +257,8 @@ export type Show = {
     query: Query;
     /** Errors the page has logged or thrown so far. */
     pageErrors: string[];
+    /** Kills the app's GPU process, as a driver crash would. Electron only. */
+    killGpuProcess?: () => Promise<void>;
 };
 
 type Fixtures = {
@@ -248,6 +282,16 @@ type Fixtures = {
      * defaults.
      */
     uiSettings: Record<string, unknown> | undefined;
+    /**
+     * Whether the new field may explain its low-quality mode (#205). Off by
+     * default, as if already explained, so the toast covers nothing.
+     */
+    fieldQualityNotice: boolean;
+    /**
+     * A script run in the page before the app, on every load. Browser target
+     * only, e.g. to take WebGL away.
+     */
+    initScript: string | null;
     show: Show;
 };
 
@@ -278,6 +322,8 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     showFile: [undefined, { option: true }],
     allowedPageErrors: [[], { option: true }],
     uiSettings: [undefined, { option: true }],
+    fieldQualityNotice: [false, { option: true }],
+    initScript: [null, { option: true }],
 
     show: async (
         {
@@ -289,6 +335,8 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             showFile,
             allowedPageErrors,
             uiSettings,
+            fieldQualityNotice,
+            initScript,
         },
         use,
         testInfo,
@@ -306,12 +354,13 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
         }
 
         // The renderer's local storage when the app starts
-        const storage: Record<string, string> = { [FIELD_STORAGE_KEY]: field };
+        const storage = startupStorage(field, fieldQualityNotice);
         if (uiSettings)
             storage[UI_SETTINGS_STORAGE_KEY] = JSON.stringify(uiSettings);
-
         let app: App;
         if (target === "electron") {
+            if (initScript)
+                throw new Error("initScript only runs in the browser target");
             requireBuilt(electronMain, "build");
             app = await openInElectron(
                 databasePath,
@@ -326,20 +375,25 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 databasePath,
                 appSettings,
                 storage,
+                initScript,
             );
         }
         const { page } = app;
         if (target === "electron") {
             // The window was already loading when the storage was set up
-            // (`openInElectron`): load it again with it, unless only the
-            // field switch was asked for and that already took
+            // (`openInElectron`): load it again with it. Settings always
+            // reload: the app saves its own while it starts.
             await page.waitForLoadState("domcontentloaded");
-            const current = await page.evaluate(
-                (key) => localStorage.getItem(key),
-                FIELD_STORAGE_KEY,
-            );
-            if (uiSettings || (current ?? "fabric") !== field)
-                await page.reload();
+            const changed = await page.evaluate((storage) => {
+                let changed = false;
+                for (const [key, value] of Object.entries(storage)) {
+                    if (localStorage.getItem(key) === value) continue;
+                    localStorage.setItem(key, value);
+                    changed = true;
+                }
+                return changed;
+            }, storage);
+            if (changed || uiSettings) await page.reload();
         }
 
         const pageErrors: string[] = [];
@@ -358,15 +412,25 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
         let failed = false;
         try {
             // Allow for several apps starting at once on a busy machine.
-            await expect(page.locator("canvas").first()).toBeVisible({
-                timeout: 20_000,
-            });
+            // The field's canvas, or the new field's explanation of why it has none
+            await expect(
+                page
+                    .locator("canvas")
+                    .or(page.getByTestId("fieldUnavailable"))
+                    .first(),
+            ).toBeVisible({ timeout: 20_000 });
             await waitForField(page);
             // The switch took: the field on screen is the one asked for
             await expect(page.getByTestId("threeField")).toHaveCount(
                 field === "three" ? 1 : 0,
             );
-            await use({ page, databasePath, pageErrors, query: app.query });
+            await use({
+                page,
+                databasePath,
+                pageErrors,
+                query: app.query,
+                killGpuProcess: app.killGpuProcess,
+            });
         } catch (error) {
             failed = true;
             throw error;

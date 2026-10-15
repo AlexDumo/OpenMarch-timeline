@@ -13,6 +13,7 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { fieldGeometry, rgba01, type FieldRects } from "../fieldGeometry";
 import { useFieldViewStore } from "../fieldView";
 import { TextBatch, type GlyphAtlas, type TextLabel } from "../sdfText";
+import { currentQualitySettings } from "../useFieldQuality";
 
 /**
  * Every rectangle of the field in one instanced draw. A rectangle thinner than
@@ -24,11 +25,18 @@ const VERTEX = /* glsl */ `
 attribute vec4 aBounds; // minX, minY, maxX, maxY
 attribute vec4 aColor;
 uniform float uPixel;   // one device pixel in field units
+uniform float uMinCoverage;
 varying vec4 vColor;
 void main() {
     vec2 size = aBounds.zw - aBounds.xy;
     vec2 drawn = max(size, vec2(uPixel));
     float coverage = min(1.0, size.x / uPixel) * min(1.0, size.y / uPixel);
+    if (coverage < uMinCoverage) {
+        // Too faint to be worth drawing (low-quality mode): outside the view
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        vColor = vec4(0.0);
+        return;
+    }
     vec2 p = (aBounds.xy + aBounds.zw) * 0.5 + (position.xy - 0.5) * drawn;
     vColor = vec4(aColor.rgb, aColor.a * coverage);
     gl_Position = projectionMatrix * viewMatrix * vec4(p, 0.0, 1.0);
@@ -65,7 +73,7 @@ function rectsMesh(rects: FieldRects, renderOrder: number) {
         new ShaderMaterial({
             vertexShader: VERTEX,
             fragmentShader: FRAGMENT,
-            uniforms: { uPixel: { value: 1 } },
+            uniforms: { uPixel: { value: 1 }, uMinCoverage: { value: 0 } },
             transparent: true,
             depthTest: false,
             depthWrite: false,
@@ -151,6 +159,8 @@ export default function FieldLayer({
         const pixel = 1 / (zoom * dpr);
         layer.background.material.uniforms.uPixel.value = pixel;
         layer.lines.material.uniforms.uPixel.value = pixel;
+        layer.lines.material.uniforms.uMinCoverage.value =
+            currentQualitySettings().minLineCoverage;
     });
 
     return (
