@@ -136,3 +136,73 @@ two pixels; yard numbers are centered on their yard line (the export's rule)
 where Fabric left-aligns them 22 units left of it; with a translucent
 border color, Fabric's corners are darker, because its four border lines
 overlap there and the new field's don't.
+
+### #201 Timeline visuals
+
+**Same data as Fabric, new drawing.** The renderer-free parts of the Fabric
+hooks were split out unchanged, and both fields use them:
+`useTimelinePathSamples` (in `useTimelinePathRender.ts`),
+`useTimelineFocusScene` (`useTimelineFocusScene.ts`; it also publishes the
+isolation plan, which the playhead driver and drops in isolation need),
+`useKeptMarks` (`useKeptMarks.ts`) and the kept-mark placement
+(`timelineKeptMarks.ts`). The Fabric hooks keep their signatures.
+
+**Plans, then two primitives.** `src/field/timelineOverlays.ts` turns the data
+into plain strokes, dots and labels, sized as the Fabric objects they replace
+(`planPathOverlay`, `planFocusOverlay`, `planCollisionOverlay`), and computes
+"Zoom to collisions" (`collisionsView`). Unit-tested in
+`field/__test__/timelineOverlays.test.ts`. `three/overlayBatches.ts` draws
+them: `StrokeBatch` (one instance per segment, miter joins so translucent
+lines never double up, dashes along the whole polyline, never under one device
+pixel) and `DotBatch` (a fill and an outline centered on the edge). Buffers are
+persistent and only grow; a new plan is written in place. `layers/OverlayLayer`
+is one layer per plan, and only sets the zoom on a frame.
+
+**Where they sit:** the isolation scene at render order 1.4 and the page's
+pathways at 1.5 (over the field text, under the marchers), collision markers
+at 4 (over the labels). Plans are in field units (pathways, collisions, which
+scale with the zoom as Fabric's objects do) or CSS pixels (the isolation
+scene, as `TimelineFocusLayer`).
+
+**Dimming** is `three/fieldDimming.ts`, set from the timeline selection store
+outside React. The marchers layer has an `aOpacity` per instance, and the
+labels layer dims label colors. The field test API reads it as each marcher's
+`dimmed`, on both fields. Hit testing already skips dimmed marchers (#193's
+`canSelect`).
+
+**Kept marks** are an SVG over the canvas (`three/KeptMarks.tsx`):
+React renders the marks only when they change, and `KeptMarksPlacer` moves
+them in a frame hook from the drawn positions and the view store. The hover
+tooltip listens for pointer moves on the field's root element, hit-tests in
+field units (`keptMarkAt`), and uses the same test id as Fabric's.
+
+**Collisions.** Nothing computes collisions in timeline mode
+(`setCollisions` has no caller since an upstream change), so neither field
+shows any to a user today. The scenarios put some on the page through
+`window.openmarchCollisions`, which exists only in Playwright sessions.
+Fabric draws every collision marker and label at the field's top-left corner
+(its objects hold the right coordinates; Fabric places them wrong). The new
+field draws them where they are. "Zoom to collisions" goes through
+`field/zoomToCollisions.ts`: Fabric as before, the new field with the same
+framing written to the view store. **#194**: if the view store gains limits or
+a setter, route this through it (Fabric doesn't clamp this zoom).
+
+**Render comparisons.** `e2e/browser/render/timeline-render.spec.mts` (project
+`render`, three first, then Fabric) captures pathways, mid-move, warnings,
+next paths forced past their toggle, two isolations (4 and 91 of 95 marchers),
+an isolation with a member selected, kept marks and collisions, plus a
+baseline with none of them. Every case diffs within ±0.3 points of the
+baseline (32.6% at fit, 14.7% large): what differs is the field grid
+(#200's pixel snapping), not the timeline drawing. Known differences in the
+drawing: Fabric stacks each marcher's path, midpoint and endpoint together,
+where the new field draws all paths, then all dots; isolation lines use miter
+joins and round ends where Fabric's Canvas2D uses round joins; collision
+markers, as above. Shared helpers moved to `render/compare.mts`.
+
+**For #202:** the kept-mark tooltip and dimmed marchers' unselectability are
+in and pinned (`timeline-visuals.spec.mts`). The "first press after a paused
+preview" swallowing and Escape leaving isolation remain. **For #207:** the
+video export can draw the same plans; `OverlayLayer` needs only a plan and a
+render order. **For #209:** `planPathOverlay` imports the step-size rules from
+`global/classes/canvasObjects/stepSizeWarning.ts` (no Fabric in it): move that
+file out of `canvasObjects/` before deleting the folder.

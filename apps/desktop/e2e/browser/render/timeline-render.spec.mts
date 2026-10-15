@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
-import { test, expect } from "../fixtures.mjs";
+import { test, expect, type Show } from "../fixtures.mjs";
 import { waitForField } from "../app.mjs";
 import { compose, field, setFabricView, settle, type View } from "./compare.mjs";
 
@@ -42,8 +42,8 @@ type Case = {
     name: string;
     settings: Settings;
     seedSql?: string[];
-    /** Brings the field to what's compared, after the show opens. */
-    setup: (page: Page) => Promise<void>;
+    /** Brings the field to what's compared, after the show opens; runs once per size. */
+    setup: (page: Page, show: Show) => Promise<void>;
 };
 
 /** Goes to the page `n` pages after the first, then `beats` beats on. */
@@ -102,6 +102,8 @@ const isolate = (startBeat: number) => async (page: Page) => {
 };
 
 const CASES: Case[] = [
+    // The baseline: nothing of the timeline's drawn, so the diff is the field's and the marchers'
+    { name: "plain-page4", settings: {}, setup: goTo(4) },
     { name: "paths-page4", settings: PATHS, setup: goTo(4) },
     { name: "paths-page4-mid-move", settings: PATHS, setup: goTo(4, 4) },
     { name: "paths-page9", settings: PATHS, setup: goTo(9) },
@@ -121,10 +123,27 @@ const CASES: Case[] = [
     { name: "isolation-few", settings: PATHS, setup: isolate(53) },
     { name: "isolation-most", settings: {}, setup: isolate(37) },
     {
+        // With a member selected, the others' paths step back
+        name: "isolation-selected",
+        settings: {},
+        setup: async (page, show) => {
+            await isolate(37)(page, show);
+            const member = (
+                await page.evaluate(() => window.fieldTest!.marchers())
+            ).find((m) => !m.dimmed && m.onScreen)!;
+            await page.mouse.click(member.screen.x, member.screen.y);
+            await expect
+                .poll(() =>
+                    page.evaluate(() => window.fieldTest!.selection()),
+                )
+                .toEqual([member.id]);
+        },
+    },
+    {
         // The move of the box at 53 has 4 marchers: the other 91 follow there, and K keeps them
         name: "kept",
         settings: {},
-        setup: async (page) => {
+        setup: async (page, { query }) => {
             const box = page
                 .locator(
                     '[data-timeline-range-page][data-timeline-range-start="53"]',
@@ -133,9 +152,25 @@ const CASES: Case[] = [
             await box.scrollIntoViewIfNeeded();
             await box.click();
             await settledOnPage(page);
-            await page.keyboard.press("ControlOrMeta+a");
-            await page.keyboard.press("k");
-            await page.keyboard.press("Escape");
+            // An empty corner of the field: clicks there clear the selection
+            const field = (await page
+                .getByTestId("fieldCanvas")
+                .first()
+                .boundingBox())!;
+            const kept = async () =>
+                (
+                    await query<{ n: number }>(
+                        "SELECT count(*) AS n FROM timeline_kept_assignments",
+                    )
+                )[0]!.n;
+            // K toggles: keep only once, at the first size
+            if ((await kept()) === 0) {
+                await page.mouse.click(field.x + 12, field.y + 12);
+                await page.keyboard.press("ControlOrMeta+a");
+                await page.keyboard.press("k");
+                await expect.poll(kept).toBe(91);
+                await page.mouse.click(field.x + 12, field.y + 12);
+            }
             await page.waitForTimeout(500);
         },
     },
@@ -242,7 +277,7 @@ for (const c of CASES)
                 // The Fabric field fits the show only when it opens
                 await page.reload();
                 await waitForField(page);
-                await c.setup(page);
+                await c.setup(page, show);
                 await hideChrome(page);
                 await settle(page);
                 await page.waitForTimeout(500);

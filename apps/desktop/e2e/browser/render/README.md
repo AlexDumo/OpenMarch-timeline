@@ -32,3 +32,13 @@ clears).
 
 When the new field's view rules change (#194), the tool still works: the
 Fabric pass copies whatever view the new field chose.
+
+`timeline-render.spec.mts` does the same for the timeline's drawing on a
+converted demo show (#201): pathways, warnings, isolation, kept marks and
+collision markers, plus a baseline with none of them. Run it the same way, three
+first:
+
+```bash
+FIELD=three pnpm exec playwright test --project=render timeline-render
+FIELD=fabric pnpm exec playwright test --project=render timeline-render
+```
