@@ -38,3 +38,37 @@ export const useCollisionStore = create<CollisionStoreInterface>((set) => ({
             ),
         })),
 }));
+
+declare global {
+    interface Window {
+        /** Scenario setup, in Playwright sessions only; see below. */
+        openmarchCollisions?: {
+            show(collisions: CollisionData[]): void;
+        };
+    }
+}
+
+/**
+ * Scenario setup (fork #201): collision detection is off app-wide since
+ * upstream commit b61834d8b ("TODO - make collisions a query and put this
+ * back" in `useAnimation.ts`; `setCollisions` has no caller), so the parity
+ * scenarios for collision markers and "Zoom to collisions" put some on the
+ * page through this. Only in
+ * Playwright sessions; the scenarios still read the field only through the
+ * field test API.
+ */
+const isPlaywrightSession = (): boolean => {
+    try {
+        return (
+            !!import.meta.env.VITE_PUBLIC_PLAYWRIGHT_SESSION ||
+            !!window.electron?.isPlaywrightSession
+        );
+    } catch {
+        return false;
+    }
+};
+if (typeof window !== "undefined" && isPlaywrightSession())
+    window.openmarchCollisions = {
+        show: (collisions) =>
+            useCollisionStore.setState({ currentCollisions: collisions }),
+    };
