@@ -140,11 +140,11 @@ FIELD=fabric pnpm exec playwright test --project=render corpus-render
 Changed pixels (no match within one pixel; most of it is the half-line
 shift of every grid line):
 
-| Show      | fit         | near        | close        |
-| --------- | ----------- | ----------- | ------------ |
-| Part 1    | 36.2–36.3%  | 11.6–11.7%  | 8.5–9.4%     |
-| Daft Punk | 9.1–9.3%    | 6.6–9.4%    | 3.3–8.0%     |
-| Stress    | 17.6–21.7%  | 24.2–32.3%  | 8.5–35.9%    |
+| Show      | fit        | near       | close     |
+| --------- | ---------- | ---------- | --------- |
+| Part 1    | 36.2–36.3% | 11.6–11.7% | 8.5–9.4%  |
+| Daft Punk | 9.1–9.3%   | 6.6–9.4%   | 3.3–8.0%  |
+| Stress    | 17.6–21.7% | 24.2–32.3% | 8.5–35.9% |
 
 Part 1's demo copy uses a dark theme with a white line every step, so at fit
 nearly every pixel is next to a grid line that moved half a line. Marchers
@@ -152,17 +152,59 @@ stand in the same places at every time in every case, mid-move included.
 
 Every difference, and where it's decided:
 
-| Difference                                                                                          | Where it's decided                                                       |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Grid, dots and labels half a grid line up and left of Fabric's                                       | Rules table, Dot position (#199, #200)                                   |
-| Lines pixel-snapped where Fabric smooths them over two pixels                                         | #200                                                                     |
-| Yard numbers centered on their yard line, not 22 units left of it                                    | Export improvements (#206), #200                                         |
-| Marcher labels in SDF glyphs (Courier New bold): about a pixel different                             | #192, #199                                                               |
-| Labels fade out below a readable size (on Fabric they shrink to a smear)                              | Rules table, Labels                                                      |
-| Dots at least 1.5 CSS px in radius at very low zooms                                                  | #192                                                                     |
-| **Labels draw over neighboring dots; on Fabric (and in the export) every dot covers every label**     | **Not decided.** Visible only where marchers crowd: the stress show, and the Daft Punk front line at 6×. The new field draws all labels in one batch above all dots (render order 3 over 2). On the [checklist](parity-checklist.md) (items 14, 110). |
+| Difference                                                                                        | Where it's decided                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Grid, dots and labels half a grid line up and left of Fabric's                                    | Rules table, Dot position (#199, #200)                                                                                                                                                                                                                |
+| Lines pixel-snapped where Fabric smooths them over two pixels                                     | #200                                                                                                                                                                                                                                                  |
+| Yard numbers centered on their yard line, not 22 units left of it                                 | Export improvements (#206), #200                                                                                                                                                                                                                      |
+| Marcher labels in SDF glyphs (Courier New bold): about a pixel different                          | #192, #199                                                                                                                                                                                                                                            |
+| Labels fade out below a readable size (on Fabric they shrink to a smear)                          | Rules table, Labels                                                                                                                                                                                                                                   |
+| Dots at least 1.5 CSS px in radius at very low zooms                                              | #192                                                                                                                                                                                                                                                  |
+| **Labels draw over neighboring dots; on Fabric (and in the export) every dot covers every label** | **Not decided.** Visible only where marchers crowd: the stress show, and the Daft Punk front line at 6×. The new field draws all labels in one batch above all dots (render order 3 over 2). On the [checklist](parity-checklist.md) (items 14, 111). |
 
 The timeline drawing (pathways, isolation, kept marks, collisions) and every
 theme, variant and field image were compared in #201 and #200 (prereleases
 `field-render-201`, `field-render-200`; marcher shapes in `render-diff-199`),
 and their drawing hasn't changed since.
+
+## 3. Export diffs
+
+Fork prerelease
+[`export-diff-208`](https://github.com/AlexDumo/OpenMarch-timeline/releases/tag/export-diff-208)
+(README inside).
+
+**Drill charts and PDFs.** `render/export-compare.spec.mts` exports drill
+charts through the export dialog (full and individual), and the browser
+harness writes each chart's SVG pages, the PDF's input. Before: `field-renderer`
+at 04ce48876 (Fabric draws the charts, just before #206) with the current
+harness copied in. After: this branch. `render/export-diff.mts` pairs them
+as drawn, aligned for Fabric's half-pixel offset, and as PDF pages
+(pdfkit + svg-to-pdfkit, as the PDF export draws them, read back with
+pdf.js).
+
+```sh
+EXPORT_COMPARE=/tmp/ec EXPORT_COMPARE_LABEL=after pnpm exec playwright test --project=render export-compare
+# the same with EXPORT_COMPARE_LABEL=before in a base worktree, then:
+node e2e/browser/render/export-diff.mts /tmp/ec before after 3
+```
+
+| Show                                   | as drawn  | aligned    | PDF      |
+| -------------------------------------- | --------- | ---------- | -------- |
+| Part 1, 23 full + 69 individual charts | 21.9%     | 0.54–0.58% | 22.3%    |
+| Part 1 with a field image              | 22.0%     | 0.68–0.78% | 21.6%    |
+| Daft Punk, 18 full charts              | 9.9–10.5% | 1.12–1.39% | 8.2–8.9% |
+
+Same content. Aligned, what's left is #206's approved list (centered drill
+numbers and yard numbers, side labels, the closed border); Daft Punk has four
+times as many labels. The demo copies used here have a dark theme with a line
+every step, which is why the unaligned and PDF shares are higher than #206's
+(9–12% and 3.6–6.8% on the default theme). Fabric didn't finish Daft Punk's
+385 individual charts in 28 minutes, so individual charts are compared on
+Part 1 only.
+
+**Video.** #207's `video-compare` rerun (before: af5b9b441, Fabric's video
+canvas; after: this branch). Every frame's PSNR is identical to #207's
+reviewed run (`field-video-207`) to six decimals: the export draws exactly
+what was approved there. 1080p export times here (software GL, a loaded
+machine): Part 1 60 → 145 s, Part 1 with image 68 → 190 s, Daft Punk 129 →
+262 s, so 2.0–2.8× Fabric's. To time on real hardware (benchmark step 6).
