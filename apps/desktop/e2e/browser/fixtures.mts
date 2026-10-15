@@ -55,6 +55,8 @@ type Query = <T = Record<string, unknown>>(
 type App = {
     page: Page;
     query: Query;
+    /** Writes one committed state of the show file to `file`, in one step. */
+    copyTo: (file: string) => Promise<void>;
     close: () => Promise<void>;
     /** Main-process output, for diagnosing a failure. Electron only. */
     log?: () => string;
@@ -122,6 +124,10 @@ async function openInBrowser(
         page,
         query: async <T,>(sql: string, ...params: SQLInputValue[]) =>
             reader.prepare(sql).all(...params) as T[],
+        // Synchronous, so none of the host's statements run during the copy.
+        copyTo: async (file: string) => {
+            reader.prepare("VACUUM INTO ?").run(file);
+        },
         close: async () => {
             reader.close();
             await context.close();
@@ -201,6 +207,24 @@ async function openInElectron(
                 },
                 [databasePath, sql, params] as const,
             ) as Promise<T[]>,
+        // One synchronous step in the main process, where the app's database
+        // handlers run, so none of the app's statements land during the copy.
+        copyTo: async (file: string) => {
+            await app.evaluate(
+                (_electron, [path, file]) => {
+                    const { DatabaseSync } = process.getBuiltinModule(
+                        "node:sqlite",
+                    ) as typeof import("node:sqlite");
+                    const reader = new DatabaseSync(path, { readOnly: true });
+                    try {
+                        reader.prepare("VACUUM INTO ?").run(file);
+                    } finally {
+                        reader.close();
+                    }
+                },
+                [databasePath, file] as const,
+            );
+        },
         close: () => app.close(),
         log: () => log.join(""),
     };
@@ -211,8 +235,16 @@ export type Show = {
     page: Page;
     /** The test's own copy of the show file. */
     databasePath: string;
-    /** Reads the show file, for asserting on what was saved. */
+    /**
+     * Reads the show file, for asserting on what was saved. Each call is its
+     * own read: an edit the app commits between two calls shows in the second.
+     */
     query: Query;
+    /**
+     * Runs `read` against one committed state of the show file, for reads of
+     * several statements that must agree with each other (#212).
+     */
+    readSnapshot: <T>(read: (query: Query) => Promise<T>) => Promise<T>;
     /** Errors the page has logged or thrown so far. */
     pageErrors: string[];
 };
@@ -346,7 +378,30 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             await expect(page.getByTestId("threeField")).toHaveCount(
                 field === "three" ? 1 : 0,
             );
-            await use({ page, databasePath, pageErrors, query: app.query });
+            let snapshots = 0;
+            const readSnapshot = async <T,>(
+                read: (query: Query) => Promise<T>,
+            ): Promise<T> => {
+                const file = testInfo.outputPath(`snapshot-${++snapshots}.db`);
+                await app.copyTo(file);
+                const reader = new DatabaseSync(file, { readOnly: true });
+                try {
+                    return await read(
+                        async <R,>(sql: string, ...params: SQLInputValue[]) =>
+                            reader.prepare(sql).all(...params) as R[],
+                    );
+                } finally {
+                    reader.close();
+                    fs.rmSync(file, { force: true });
+                }
+            };
+            await use({
+                page,
+                databasePath,
+                pageErrors,
+                query: app.query,
+                readSnapshot,
+            });
         } catch (error) {
             failed = true;
             throw error;
