@@ -11,7 +11,7 @@
  * events.
  */
 
-import type { GlKind, LowQualityReason } from "./fieldQuality";
+import type { FieldQuality, GlKind, LowQualityReason } from "./fieldQuality";
 
 /** A point in viewport CSS pixels. */
 export type ScreenPoint = { x: number; y: number };
@@ -56,7 +56,7 @@ export type FieldTestGesture =
 /** How the field draws on this machine (the new field only, #205). */
 export type FieldTestQuality = {
     /** `low` in low-quality mode. */
-    mode: "full" | "low";
+    mode: FieldQuality["mode"];
     /** Why it's in low-quality mode, or null at full quality. */
     reason: LowQualityReason | null;
     /** What draws WebGL: a GPU, software, or nothing; null before it's known. */

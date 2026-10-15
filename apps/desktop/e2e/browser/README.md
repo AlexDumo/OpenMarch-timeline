@@ -101,7 +101,9 @@ test("creates marchers", async ({ show }) => {
   the selection handles and the gesture in progress. The helpers
   (`drawnMarchers`, `readField`, `selectedDrillNumbers`) wrap it. Never reach
   into the renderer (`window.canvas`, Fabric objects): the same scenarios must
-  run against the new field renderer (#189).
+  run against the new field renderer (#189). The one exception is simulating
+  a lost WebGL context (`weak-machines.spec.mts`), which needs the canvas's
+  `WEBGL_lose_context` extension.
 - `expectCanvasMatchesShow(show)` waits until every marcher is drawn where
   `savedPositions` puts it. Call it after any step that moves marchers or
   changes page.

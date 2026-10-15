@@ -67,9 +67,14 @@ export function ContextLossGuard({ onGiveUp }: { onGiveUp: () => void }) {
     return null;
 }
 
+/** three's error when the browser gives it no WebGL context. */
+const isWebGLStartError = (error: unknown) =>
+    error instanceof Error && /WebGL context/i.test(error.message);
+
 /**
  * Catches the field's canvas failing to start (no WebGL context to be had), so
- * the field shows `fallback` instead of the app's error boundary.
+ * the field shows `fallback` instead of the app's error boundary. Any other
+ * error goes on to the app's error boundary: it's a bug, not the machine.
  */
 export class CanvasErrorBoundary extends Component<
     {
@@ -77,19 +82,22 @@ export class CanvasErrorBoundary extends Component<
         onError: (error: unknown) => void;
         children: ReactNode;
     },
-    { failed: boolean }
+    { error: unknown }
 > {
-    state = { failed: false };
+    state: { error: unknown } = { error: null };
 
-    static getDerivedStateFromError() {
-        return { failed: true };
+    static getDerivedStateFromError(error: unknown) {
+        return { error };
     }
 
     componentDidCatch(error: unknown) {
-        this.props.onError(error);
+        if (isWebGLStartError(error)) this.props.onError(error);
     }
 
     render() {
-        return this.state.failed ? this.props.fallback : this.props.children;
+        const { error } = this.state;
+        if (error === null) return this.props.children;
+        if (!isWebGLStartError(error)) throw error;
+        return this.props.fallback;
     }
 }

@@ -1,5 +1,5 @@
 import type { FieldTestApi, FieldTestMarcher } from "@/field/fieldTestApi";
-import { useFieldQualityStore } from "@/field/fieldQuality";
+import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, type FieldView } from "./fieldView";
 import type { CurrentFieldQuality } from "./useFieldQuality";
@@ -60,17 +60,12 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
         quality() {
             const { mode, reason, settings } = field.quality();
             const gl = useFieldQualityStore.getState().gl;
-            const element = field.element();
-            const width = element?.getBoundingClientRect().width ?? 0;
             return {
                 mode,
                 reason,
                 gl: gl?.kind ?? null,
                 renderer: gl?.renderer ?? null,
-                pixelRatio:
-                    element instanceof HTMLCanvasElement && width > 0
-                        ? element.width / width
-                        : null,
+                pixelRatio: canvasPixelRatio(field.element()),
                 labelsHiddenBelow: settings.labelFadeFrom,
                 contextLost: field.contextLost(),
             };

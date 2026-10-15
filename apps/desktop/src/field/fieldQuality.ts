@@ -24,8 +24,7 @@ export type LowQualityReason =
     /** The Performance mode setting is on. */
     | "setting";
 
-const SOFTWARE_RENDERERS =
-    /swiftshader|llvmpipe|softpipe|software|basic render/i;
+const SOFTWARE_RENDERERS = /swiftshader|llvmpipe|softpipe|basic render/i;
 
 /**
  * Whether a WebGL renderer string (`UNMASKED_RENDERER_WEBGL`, or `RENDERER`
@@ -67,6 +66,19 @@ export function probeWebGL(): GlInfo {
     } catch {
         return { kind: "none", renderer: null };
     }
+}
+
+/** Probes WebGL again and records the answer: the field's "Try again". */
+export function reprobeWebGL(): void {
+    useFieldQualityStore.setState({ gl: probeWebGL() });
+}
+
+/** Device pixels per CSS pixel a canvas draws at, or null when it isn't laid out. */
+export function canvasPixelRatio(element: Element | null | undefined) {
+    const width = element?.getBoundingClientRect().width ?? 0;
+    return element instanceof HTMLCanvasElement && width > 0
+        ? element.width / width
+        : null;
 }
 
 export type FieldQualityInput = {
@@ -134,7 +146,7 @@ export const QUALITY_SETTINGS: Record<FieldQuality["mode"], QualitySettings> = {
 type FieldQualityState = {
     /** What draws the field's WebGL: probed before it mounts, then read from its own context. */
     gl: GlInfo | null;
-    /** The desktop app's GPU process crashed this session (`gpu:processGone`). */
+    /** The desktop app's GPU process crashed this session (`gpu:crashed`, `gpu:process-gone`). */
     gpuCrashed: boolean;
     /** The field's WebGL context is lost and not yet back. */
     contextLost: boolean;

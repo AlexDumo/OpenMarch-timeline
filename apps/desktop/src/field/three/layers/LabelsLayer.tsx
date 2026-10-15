@@ -12,11 +12,6 @@ const LABEL_SIZE = 14;
 const LABEL_LIFT = 5 * 2.2;
 /** The baseline's offset below the label's center, in em. */
 const CENTER_BASELINE = 0.35;
-/*
- * Labels scale with the field and fade out when they'd be too small to read:
- * fully drawn from `labelFadeTo` CSS pixels per em, gone under `labelFadeFrom`.
- * Low-quality mode hides them sooner (`QUALITY_SETTINGS`).
- */
 
 /**
  * Every marcher's label (drill number) in one instanced draw of SDF glyphs.
@@ -54,6 +49,8 @@ export default function LabelsLayer({
 
     useFrame(() => {
         const { zoom } = useFieldViewStore.getState();
+        // Labels scale with the field and fade out when they'd be too small to read
+        // (`QUALITY_SETTINGS`: low-quality mode hides them sooner)
         const { labelFadeFrom, labelFadeTo } = currentFieldQuality().settings;
         const opacity = Math.min(
             1,

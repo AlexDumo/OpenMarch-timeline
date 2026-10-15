@@ -69,7 +69,7 @@ async function screenColor(page: Page, x: number, y: number) {
     }, png.toString("base64"));
 }
 
-const close = (a: number[], b: number[]) =>
+const colorsClose = (a: number[], b: number[]) =>
     a.every((value, i) => Math.abs(value - b[i]) <= 24);
 
 /**
@@ -97,7 +97,7 @@ async function expectDotsDrawn(page: Page, dotColor: number[]) {
         .poll(async () => {
             for (const { screen } of await drawnMarchers(page)) {
                 const color = await screenColor(page, screen.x, screen.y);
-                if (!close(color, dotColor)) return false;
+                if (!colorsClose(color, dotColor)) return false;
             }
             return true;
         })
@@ -236,9 +236,10 @@ test("a lost WebGL context comes back and the field draws the show again", async
     const { page } = show;
     await expectCanvasMatchesShow(show);
     const before = await dotColors(page, "T1");
-    expect(close(before.dot, before.beside), "the dot shows on the field").toBe(
-        false,
-    );
+    expect(
+        colorsClose(before.dot, before.beside),
+        "the dot shows on the field",
+    ).toBe(false);
 
     await loseContext(page);
     await expect.poll(async () => (await quality(page)).contextLost).toBe(true);
@@ -350,6 +351,8 @@ test("the field benchmark runs from the command palette and puts the field back"
     expect(rows[4][1]).toContain("#196");
     await expect(dialog).toContainText(/swiftshader/i);
     await expect(dialog).toContainText("lower bound");
+    // Measured on a production build: no warning that the numbers don't count
+    await expect(dialog).not.toContainText("development build");
 
     // What the scenarios changed is back: the view and the page
     await dialog.press("Escape");

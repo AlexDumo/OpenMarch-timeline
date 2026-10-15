@@ -6,6 +6,8 @@
  */
 
 /** What the benchmark does to the field, one at a time. */
+import type { GlKind } from "@/field/fieldQuality";
+
 export type BenchmarkKind = "play" | "scrub" | "zoom" | "pan" | "drag";
 
 export const BENCHMARK_KINDS: readonly BenchmarkKind[] = [
@@ -45,7 +47,7 @@ export type BenchmarkResult =
 export type BenchmarkEnvironment = {
     /** The WebGL renderer string, e.g. "ANGLE (Intel, … UHD Graphics 620 …)". */
     renderer: string | null;
-    gl: "hardware" | "software" | "none" | null;
+    gl: GlKind | null;
     /** The field's quality mode, and why it's low. */
     quality: string;
     /** Device pixels per CSS pixel the field draws at. */

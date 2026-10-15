@@ -31,7 +31,11 @@ import { useIsolationPlanStore } from "@/timeline/timelineIsolationPlan";
 import { playbackBeat } from "@/timeline/positionBuffer";
 import type { BeatTiming } from "@/timeline/timeMap";
 import { installFieldTestApi } from "@/field/fieldTestApi";
-import { probeWebGL, useFieldQualityStore } from "@/field/fieldQuality";
+import {
+    probeWebGL,
+    reprobeWebGL,
+    useFieldQualityStore,
+} from "@/field/fieldQuality";
 import { FieldMarchers } from "./fieldMarchers";
 import { cameraBounds, fitView, useFieldViewStore } from "./fieldView";
 import { GlyphAtlas } from "./sdfText";
@@ -64,7 +68,7 @@ export default function ThreeField() {
             fallback={
                 <FieldUnavailable
                     onRetry={() => {
-                        useFieldQualityStore.setState({ gl: probeWebGL() });
+                        reprobeWebGL();
                         setAttempt((n) => n + 1);
                     }}
                 />
@@ -178,7 +182,7 @@ function ThreeFieldView() {
             {quality.reason === "noWebGL" && (
                 <FieldUnavailable
                     onRetry={() => {
-                        useFieldQualityStore.setState({ gl: probeWebGL() });
+                        reprobeWebGL();
                         startOver();
                     }}
                 />

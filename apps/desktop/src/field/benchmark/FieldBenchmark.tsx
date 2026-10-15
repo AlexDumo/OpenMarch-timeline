@@ -10,7 +10,7 @@ import {
 } from "@openmarch/ui";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
-import { useFieldQualityStore } from "@/field/fieldQuality";
+import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
 import { currentFieldQuality } from "@/field/three/useFieldQuality";
 import {
     BENCHMARK_KINDS,
@@ -69,15 +69,13 @@ export default function FieldBenchmark({
         const quality = currentFieldQuality();
         const canvas = renderer()?.domElement;
         const rect = canvas?.getBoundingClientRect();
+        const pixelRatio = canvasPixelRatio(canvas);
         return {
             renderer: gl?.renderer ?? null,
             gl: gl?.kind ?? null,
             quality:
                 quality.mode === "low" ? `low (${quality.reason})` : "full",
-            pixelRatio:
-                canvas && rect && rect.width > 0
-                    ? canvas.width / rect.width
-                    : null,
+            pixelRatio,
             width: Math.round(rect?.width ?? 0),
             height: Math.round(rect?.height ?? 0),
             marchers: marcherCount(),

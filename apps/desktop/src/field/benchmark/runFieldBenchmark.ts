@@ -9,8 +9,7 @@ import {
 /** One thing the benchmark does to the field, for a few seconds. */
 export type BenchmarkScenario = {
     kind: BenchmarkKind;
-    /** Why it can't run yet; the result says so instead of measuring. */
-    unavailable?: string;
+    /** Throws {@link ScenarioSkipped} when it can't run; the result says why. */
     start(): void | Promise<void>;
     /**
      * Moves the scenario on, once per animation frame, `elapsed` ms after it
@@ -27,7 +26,7 @@ export class ScenarioSkipped extends Error {}
 /** How long each scenario runs, as the prototype's "Run benchmarks". */
 export const SCENARIO_MS = 4000;
 
-const nextFrame = () =>
+export const nextFrame = () =>
     new Promise<number>((resolve) => requestAnimationFrame(resolve));
 
 /**
@@ -40,9 +39,6 @@ export async function measureScenario(
     renderer: () => WebGLRenderer | null,
     ms = SCENARIO_MS,
 ): Promise<BenchmarkResult> {
-    if (scenario.unavailable)
-        return { kind: scenario.kind, skipped: scenario.unavailable };
-
     try {
         await scenario.start();
     } catch (error) {

@@ -3,13 +3,11 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useFieldViewStore, type FieldView } from "@/field/three/fieldView";
 import type { BenchmarkKind } from "./frameStats";
 import {
+    nextFrame,
     SCENARIO_MS,
     ScenarioSkipped,
     type BenchmarkScenario,
 } from "./runFieldBenchmark";
-
-const nextFrame = () =>
-    new Promise<number>((resolve) => requestAnimationFrame(resolve));
 
 const timeline = () => useTimelineSelectionStore.getState();
 
@@ -132,8 +130,11 @@ export function fieldBenchmarkScenarios({
             kind: "drag",
             // TODO(#196): select all and drag them in a circle through the editor's move
             // gesture, as the prototype's `bench("drag")`, then undo
-            unavailable: "needs dragging marchers on the new field (#196)",
-            start() {},
+            start() {
+                throw new ScenarioSkipped(
+                    "needs dragging marchers on the new field (#196)",
+                );
+            },
             step: () => false,
             stop() {},
         },
