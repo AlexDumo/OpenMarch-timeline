@@ -155,11 +155,9 @@ next drag start from the drawn positions, overrides included.
 (range, home, isolation, refusals, Move them too, one undo step). Its promise
 must settle on every path, or marchers stay pinned.
 
-**Isolation plan.** Only Fabric's canvas mounted `useTimelineFocusRender`,
-which publishes the isolated move's plan; without it every drop in isolation
-was refused ("still loading"). `ThreeField` calls it with `canvas: null`
-(draws nothing). **#201** splits out `useTimelineFocusScene` and calls it from
-`useTimelineVisuals`: whichever merges second keeps only that call.
+**Isolation plan.** Only Fabric's canvas published the isolated move's plan,
+so every drop in isolation was refused ("still loading") until the new field
+published it too; it now does through #201's `useTimelineVisuals`.
 
 **Scenarios.** `e2e/browser/tests/move-and-drop.spec.mts` (group drag and one
 undo, box drag, unselected marcher, the 19 px flick as a `change:`, page and
