@@ -7,38 +7,40 @@
  * (`CueInput`): camelCase, the target as one value, set members inlined.
  */
 import { and, asc, eq, inArray, notExists, sql } from "drizzle-orm";
+import type {
+    CueChannel,
+    CueInput,
+    CueRipple,
+    CueTarget,
+    RippleOrder,
+} from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { CUE_CHANNELS } from "@om-electron/database/migrations/schema";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 
 export { CUE_CHANNELS };
+export type { CueChannel, CueRipple, CueTarget };
 
-/** One part of a performer's behavior that cues set independently. */
-export type CueChannel = (typeof CUE_CHANNELS)[number];
+// The schema's CHECK list and core's channels must name the same channels.
+type SameChannels<A, B> = [A] extends [B]
+    ? [B] extends [A]
+        ? true
+        : never
+    : never;
+const _channelsMatch: SameChannels<(typeof CUE_CHANNELS)[number], CueChannel> =
+    true;
+void _channelsMatch;
 
-export type CueKind = "state" | "phrase";
+export type CueKind = CueInput["kind"];
 
-/** Who a cue applies to, broadest first. A set is exactly those marchers. */
-export type CueTarget =
-    | { kind: "band" }
-    | { kind: "section"; section: string }
-    | { kind: "tag"; tagId: number }
-    | { kind: "set"; marcherIds: readonly number[] };
-
+export type CueRippleOrder = RippleOrder;
 export const CUE_RIPPLE_ORDERS = [
     "drill",
     "left_right",
     "right_left",
     "down_form",
-] as const;
-export type CueRippleOrder = (typeof CUE_RIPPLE_ORDERS)[number];
-
-/** One cue staggered across its marchers over `span` counts, inclusive. */
-export interface CueRipple {
-    span: number;
-    order: CueRippleOrder;
-}
+] as const satisfies readonly RippleOrder[];
 
 /** The stored ripple format, `{ version: 1, span, order }`. */
 const RIPPLE_FORMAT_VERSION = 1;
@@ -94,6 +96,10 @@ export interface ModifiedCueArgs {
     ripple?: CueRipple | null;
     notes?: string | null;
 }
+
+// A stored cue is what compile reads.
+const _isCueInput = (cue: DatabaseCue): CueInput => cue;
+void _isCueInput;
 
 type RealDatabaseCue = typeof schema.cues.$inferSelect;
 type RealNewCue = typeof schema.cues.$inferInsert;
