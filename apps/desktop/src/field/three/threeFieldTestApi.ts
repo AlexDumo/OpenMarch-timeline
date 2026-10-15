@@ -2,6 +2,7 @@ import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import type {
     FieldTestApi,
+    FieldTestGesture,
     FieldTestImage,
     FieldTestLook,
     FieldTestMarcher,
@@ -21,12 +22,15 @@ export type ThreeFieldState = {
     /** The field image as `BackgroundImageLayer` draws it, or null. */
     fieldImage(): FieldTestImage | null;
     theme(): FieldTheme;
+    /** The app's selection, as the editor reads it. */
+    selection(): readonly number[];
+    activeGesture(): FieldTestGesture | null;
 };
 
 /**
- * The field test API over the new field. Read-only. Selection, handles and
- * the editing gestures come with the editor (#193 onward); until then the
- * only gesture is a pan.
+ * The field test API over the new field. Read-only. Selection and gestures
+ * come from the editor (#193), and a pan from navigation (#194); handles come
+ * with #198.
  */
 export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
     return {
@@ -58,13 +62,14 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                 };
             });
         },
-        selection: () => [],
+        selection: () => [...field.selection()].sort((a, b) => a - b),
         viewport() {
             const { zoom, panX, panY } = field.view();
             return { zoom, pan: { x: panX, y: panY } };
         },
         handles: () => null,
-        activeGesture: () => (field.view().panning ? "pan" : null),
+        activeGesture: () =>
+            field.view().panning ? "pan" : field.activeGesture(),
         pageId: () => field.pageId(),
         fieldImage: () => field.fieldImage(),
     };
