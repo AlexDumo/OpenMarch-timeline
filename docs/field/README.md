@@ -21,16 +21,19 @@ Rules while the freeze holds:
   fixed behavior, so the new field must match it.
 - Don't add field features or change field behavior on Fabric. Build them on
   the new field instead.
-- Box v1 (fork PR #181) is held, and rebuilt on the new field in #204.
+- Box v1 (fork PR #181) is held, and rebuilt on the new field in #204 (on
+  hold). Other in-flight Fabric features aren't ported by the migration; see
+  [porting-fabric-features.md](porting-fabric-features.md).
 - The timeline panel, inspector, data layer, 3D View, export content and
   shortcuts aren't frozen.
 
 ## Files
 
-| File                                             | Purpose                                                                                    |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| [implementation-plan.md](implementation-plan.md) | Ticket index and blocking order, architecture rules, interaction rules table, parity gate. |
-| [phases/](phases/)                               | One file per phase: scope, tickets, exit gate and handoff notes.                           |
+| File                                                     | Purpose                                                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [implementation-plan.md](implementation-plan.md)         | Ticket index and blocking order, architecture rules, interaction rules table, parity gate. |
+| [phases/](phases/)                                       | One file per phase: scope, tickets, exit gate and handoff notes.                           |
+| [porting-fabric-features.md](porting-fabric-features.md) | Porting a Fabric feature to the new field, and the inventory of in-flight Fabric work.     |
 
 ## Where status lives
 
