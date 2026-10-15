@@ -226,14 +226,30 @@ function orientationMarker(
     return { tri, labelAt, label };
 }
 
+/** A character width, in ems, a little wider than Helvetica digits (0.556). */
+const CHAR_WIDTH_EM = 0.6;
+
+/**
+ * The info block's lines, wrapped so they end inside `widthM`: unwrapped,
+ * the Resolution line runs past the trim on portrait surfaces.
+ */
+function fitInfoLines(
+    t: ResolvedTemplate,
+    sizeM: number,
+    widthM: number,
+): string[] {
+    const max = Math.max(20, Math.floor(widthM / (sizeM * CHAR_WIDTH_EM)));
+    return templateInfoLines(t).flatMap((line) => wrap(line, max));
+}
+
 /** The info block as text lines from a baseline start. */
 function infoText(
-    t: ResolvedTemplate,
+    lines: readonly string[],
     x: number,
     y0: number,
     sizeM: number,
 ): Shape[] {
-    return templateInfoLines(t).map((text, i) => ({
+    return lines.map((text, i) => ({
         type: "text",
         x,
         y: y0 + i * sizeM * 1.4,
@@ -252,14 +268,43 @@ function infoTextSize(
     short: number,
     marker: number,
     header: number,
+    lineCount: number,
 ): number {
     if (t.surface.orientation !== "poleLeft") return short / 48;
-    const lineCount = templateInfoLines(t).length;
     const room = header / 2 - marker / 2 - t.safeM.top;
     return Math.max(
         short / 200,
         Math.min(short / 48, room / (1.4 * lineCount + 1.5)),
     );
+}
+
+/**
+ * The info block's text size and wrapped lines. Wrapping makes the block
+ * longer, and a silk's must still end above its marker, so a silk's text
+ * shrinks once more when wrapping adds lines.
+ */
+function fitInfoBlock(
+    t: ResolvedTemplate,
+    short: number,
+    marker: number,
+    header: number,
+    left: number,
+): { textSize: number; info: string[] } {
+    const room = (size: number) => t.trimM.width - left - size - t.safeM.right;
+    let textSize = infoTextSize(
+        t,
+        short,
+        marker,
+        header,
+        templateInfoLines(t).length,
+    );
+    let info = fitInfoLines(t, textSize, room(textSize));
+    const shrunk = infoTextSize(t, short, marker, header, info.length);
+    if (shrunk < textSize) {
+        textSize = shrunk;
+        info = fitInfoLines(t, textSize, room(textSize));
+    }
+    return { textSize, info };
 }
 
 /** The cut mask (trim minus outline, even-odd), the trim line and the cut line. */
@@ -326,7 +371,12 @@ export function layoutTemplate(t: ResolvedTemplate): TemplateDrawing {
     const line = b > 0 ? Math.min(short / 500, b / 2) : short / 500;
     const marker = short / 12;
     const header = s.header?.m ?? h;
-    const textSize = infoTextSize(t, short, marker, header);
+    const safe = t.safeM;
+    // Q43: the pole sleeve, a dashed guide along the pole edge.
+    const guide = s.kind === "silk" ? sleeveGuide(t, header) : undefined;
+    // Right of the sleeve guide on silks.
+    const left = guide ? Math.max(safe.left, SLEEVE_GUIDE.m) : safe.left;
+    const { textSize, info } = fitInfoBlock(t, short, marker, header, left);
     const at = (p: Point): Point => [p[0] + b, p[1] + b];
     const trimRing = rect(b, b, w, h);
     const shapes: Shape[] = [
@@ -342,11 +392,8 @@ export function layoutTemplate(t: ResolvedTemplate): TemplateDrawing {
 
     shapes.push(...trimAndCut(trimRing, t.outlineM?.map(at), line));
 
-    const safe = t.safeM;
     shapes.push(safeAreaShape(t, line, short / 60));
 
-    // Q43: the pole sleeve, a dashed guide along the pole edge.
-    const guide = s.kind === "silk" ? sleeveGuide(t, header) : undefined;
     if (guide)
         shapes.push({
             type: "line",
@@ -380,10 +427,13 @@ export function layoutTemplate(t: ResolvedTemplate): TemplateDrawing {
         s.orientation === "upTop"
             ? Math.max(safe.top, marker * 1.2 + textSize)
             : safe.top;
-    // Right of the sleeve guide on silks.
-    const left = guide ? Math.max(safe.left, SLEEVE_GUIDE.m) : safe.left;
     shapes.push(
-        ...infoText(t, b + left + textSize, b + top + textSize * 1.5, textSize),
+        ...infoText(
+            info,
+            b + left + textSize,
+            b + top + textSize * 1.5,
+            textSize,
+        ),
     );
 
     return {

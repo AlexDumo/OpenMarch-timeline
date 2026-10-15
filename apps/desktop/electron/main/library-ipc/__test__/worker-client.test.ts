@@ -68,6 +68,33 @@ describe("ImportWorkerClient", () => {
         expect(spawner.children).toHaveLength(2);
     });
 
+    it("fails every queued job when a new process can't start after a crash", async () => {
+        let spawns = 0;
+        const spawner = fakeSpawner(() => {
+            spawns++;
+            if (spawns > 1) throw new Error("no worker");
+            const child: FakeWorkerChild = new FakeWorkerChild(async () => {
+                child.crash(134);
+            });
+            return child;
+        });
+        client = new ImportWorkerClient({ spawn: spawner.spawn });
+        const input = { surfaceId: "x", format: "svg" } as const;
+        const running = client.run("template", input);
+        const second = client.run("template", input);
+        const third = client.run("template", input);
+        await expect(running).rejects.toMatchObject({
+            code: "worker-crashed",
+        });
+        await expect(second).rejects.toMatchObject({
+            code: "worker-crashed",
+        });
+        await expect(third).rejects.toMatchObject({
+            code: "worker-crashed",
+        });
+        expect(spawns).toBe(3);
+    });
+
     it("cancels by tag: a queued job is dropped, the running one kills the process", async () => {
         const spawner = fakeSpawner(() => new FakeWorkerChild(never));
         client = new ImportWorkerClient({ spawn: spawner.spawn });

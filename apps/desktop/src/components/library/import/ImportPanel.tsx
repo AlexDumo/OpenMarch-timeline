@@ -407,8 +407,13 @@ export default function ImportPanel({ store }: { store: ImportReviewStore }) {
                                 state.context?.kind
                             }
                             actions={state}
+                            disabled={phase !== "review"}
                         />
-                        <ModelReportView model={model} actions={state} />
+                        <ModelReportView
+                            model={model}
+                            actions={state}
+                            disabled={phase !== "review"}
+                        />
                     </>
                 )}
                 {artwork && (

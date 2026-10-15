@@ -51,6 +51,16 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
                 }
                 if (done.notImported.length === 0) review.getState().close();
             },
+            // A cancelled artwork import ended the review: show the Library,
+            // which holds whatever was stored before the cancel.
+            onCommitStopped: () => {
+                set({
+                    highlight: {
+                        itemIds: [],
+                        seq: (get().highlight?.seq ?? 0) + 1,
+                    },
+                });
+            },
         });
         set({ review });
         void review.getState().pick("any");

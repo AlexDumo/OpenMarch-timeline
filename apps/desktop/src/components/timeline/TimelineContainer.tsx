@@ -1,149 +1,75 @@
-import { useIsPlaying } from "@/context/IsPlayingContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useEffect, useRef } from "react";
-import {
-    XIcon,
-    PencilSimpleIcon,
-    PlusIcon,
-    MinusIcon,
-} from "@phosphor-icons/react";
+import { XIcon, PlusIcon, MinusIcon } from "@phosphor-icons/react";
 import { defaultSettings, useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { useTimingObjects } from "@/hooks";
 import AudioPlayer from "./audio/AudioPlayer";
 import ActionButton from "@/shortcuts/ActionButton";
 import EditableAudioPlayer from "./audio/EditableAudioPlayer";
-import TimelineControls from "./TimelineControls";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
-import PerspectiveSlider from "./PerspectiveSlider";
-import PageTimeline from "./PageTimeline";
 import TimelineModePanel from "./TimelineModePanel";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { T } from "@tolgee/react";
 import clsx from "clsx";
+import { TOAST_BOTTOM_VAR } from "@/components/ui/Toaster";
+
+/**
+ * Keeps toasts 8px above `ref`'s top while it is mounted (`TOAST_BOTTOM_VAR`): in their usual
+ * corner they would cover the timeline's right end, where **+** is at the show's end, and a toast
+ * holds still while the pointer is over it.
+ */
+function useToastsAbove(ref: React.RefObject<HTMLElement | null>) {
+    useEffect(() => {
+        const element = ref.current;
+        if (!element) return;
+        const root = document.documentElement;
+        const place = () =>
+            root.style.setProperty(
+                TOAST_BOTTOM_VAR,
+                `${Math.max(0, window.innerHeight - element.getBoundingClientRect().top) + 8}px`,
+            );
+        place();
+        const observer =
+            typeof ResizeObserver === "undefined"
+                ? null
+                : new ResizeObserver(place);
+        observer?.observe(element);
+        window.addEventListener("resize", place);
+        return () => {
+            observer?.disconnect();
+            window.removeEventListener("resize", place);
+            root.style.removeProperty(TOAST_BOTTOM_VAR);
+        };
+    }, [ref]);
+}
 
 export default function TimelineContainer() {
-    const { isPlaying } = useIsPlaying()!;
-    const { measures } = useTimingObjects()!;
-    const { selectedPage } = useSelectedPage()!;
     const focussedComponent = useUiSettingsStore(
         (s) => s.uiSettings.focussedComponent,
     );
-    const { isFullscreen } = useFullscreenStore();
-    const timelineRef = useRef<HTMLDivElement>(null);
-    const timelineMode = useTimelineMode();
 
-    useEffect(() => {
-        if (!selectedPage) return;
+    // The timeline draws its own waveform lane, so the audio player stays mounted headless: it
+    // runs playback and the timeline reads its clock.
+    if (focussedComponent !== "timeline") return <TimelineModeContainer />;
 
-        const container = timelineRef.current;
-        const selectedPageElement = document.querySelector(
-            `[timeline-page-id="${selectedPage.id}"]`,
-        );
-
-        if (!container || !selectedPageElement) return;
-
-        if (isPlaying) {
-            // During playback: Linear scroll animation
-            container.style.scrollBehavior = "auto";
-            const containerRect = container.getBoundingClientRect();
-            const elementRect = selectedPageElement.getBoundingClientRect();
-
-            const targetScroll =
-                elementRect.left +
-                container.scrollLeft -
-                containerRect.left -
-                (containerRect.width - elementRect.width) / 2;
-
-            // Set the scroll directly without transition (animation handled by CSS)
-            container.scrollLeft = targetScroll;
-        } else {
-            // Manual selection: Smooth scroll
-            container.style.scrollBehavior = "smooth";
-            selectedPageElement.scrollIntoView({
-                block: "nearest",
-                inline: "center",
-            });
-        }
-
-        return () => {
-            container.style.scrollBehavior = "smooth";
-            container.style.transition = "";
-        };
-    }, [selectedPage, isPlaying]);
-
-    // Rerender the timeline when the measures or pages change
-    useEffect(() => {
-        // do nothing, just re-render
-    }, [measures]);
-
-    // With the file's timeline dev flag on, the timeline replaces the page timeline and its controls.
-    // Editing beats (the focused timeline) still uses the page timeline. The audio player stays
-    // mounted, headless, because it runs playback and the timeline reads its clock. The timeline
-    // draws its own waveform lane, so the player builds no wavesurfer or markers here.
-    if (timelineMode && focussedComponent !== "timeline") {
-        return (
-            // UI-12: perspective and fullscreen live on the field's zoom widget in timeline mode
-            <div className="flex gap-8" data-testid="timeline-mode-container">
-                <TimelineModePanel />
-                <AudioPlayer headless />
-            </div>
-        );
-    }
-
+    // Editing beats (the focused timeline): the beat and measure editor on the audio waveform
     return (
         <div className="flex gap-8">
-            {focussedComponent !== "timeline" && <TimelineControls />}
-            {isFullscreen && <PerspectiveSlider />}
             <div
-                ref={timelineRef}
                 id="timeline"
                 className="rounded-6 border-stroke bg-fg-1 relative flex h-full w-full min-w-0 overflow-x-auto overflow-y-hidden border p-8 transition-all duration-200"
             >
                 <div className="flex h-full min-h-0 w-fit flex-col justify-center gap-8">
-                    <div className="flex h-fit items-center">
-                        <div>
-                            <p className="text-sub w-[4rem]">
-                                <T keyName="timeline.pages" />
-                            </p>
-                        </div>
-                        <PageTimeline />
-                    </div>
-
                     <div className={"flex items-center"}>
-                        {!isFullscreen && (
-                            <div className="flex w-[4rem] gap-6">
-                                <p className="text-sub">
-                                    <T keyName="timeline.audio" />
-                                </p>
-                                {focussedComponent !== "timeline" ? (
-                                    <ActionButton
-                                        action="focusTimeline"
-                                        className="w-fit"
-                                    >
-                                        <PencilSimpleIcon />
-                                    </ActionButton>
-                                ) : (
-                                    <ActionButton
-                                        action="focusCanvas"
-                                        className="w-fit"
-                                    >
-                                        <XIcon />
-                                    </ActionButton>
-                                )}
-                            </div>
-                        )}
-
-                        {focussedComponent === "timeline" ? (
-                            <EditableAudioPlayer />
-                        ) : (
-                            <div
-                                style={{
-                                    display: isFullscreen ? "none" : "flex",
-                                }}
+                        <div className="flex w-[4rem] gap-6">
+                            <p className="text-sub">
+                                <T keyName="timeline.audio" />
+                            </p>
+                            <ActionButton
+                                action="focusCanvas"
+                                className="w-fit"
                             >
-                                <AudioPlayer />
-                            </div>
-                        )}
+                                <XIcon />
+                            </ActionButton>
+                        </div>
+                        <EditableAudioPlayer />
                     </div>
                 </div>
                 <TimelineZoomControls />
@@ -220,6 +146,25 @@ function TimelineZoomControls() {
             >
                 <PlusIcon size={14} weight="bold" />
             </button>
+        </div>
+    );
+}
+
+/**
+ * The timeline with the audio player beside it, and toasts kept above it (`useToastsAbove`).
+ * UI-12: perspective and fullscreen live on the field's zoom widget.
+ */
+function TimelineModeContainer() {
+    const ref = useRef<HTMLDivElement>(null);
+    useToastsAbove(ref);
+    return (
+        <div
+            ref={ref}
+            className="flex min-h-0 flex-1 gap-8"
+            data-testid="timeline-mode-container"
+        >
+            <TimelineModePanel />
+            <AudioPlayer />
         </div>
     );
 }

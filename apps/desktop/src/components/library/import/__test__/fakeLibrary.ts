@@ -254,7 +254,6 @@ export function sidecar(grip: [number, number, number] | null): ModelSidecar {
         stamp: { itemId: null, kind: null, kitVersion: null },
         garment: null,
         metadata: {
-            sourceFilename: "mace.glb",
             generator: null,
             copyright: null,
         },

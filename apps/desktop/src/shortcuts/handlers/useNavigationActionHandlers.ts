@@ -1,23 +1,20 @@
 import type { TimelineNavigation } from "@/components/timeline/TimelineViewModel";
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { useSelectedPage } from "@/context/SelectedPageContext";
-import Page, { getNextPage, getPreviousPage } from "@/global/classes/Page";
 import { useTimingObjects } from "@/hooks";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
 import {
-    navigateTimelinePages,
+    navigateTimeline,
     playTimelinePage,
     toggleTimelineLoop,
     toggleTimelinePlayback,
 } from "@/timeline/timelineTransport";
 import { useActionHandler } from "../useActionHandler";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useEditorReadiness } from "./useEditorReadiness";
 
 // eslint-disable-next-line max-lines-per-function
 export function useNavigationActionHandlers() {
-    const { selectedPage, ready, timelineMode } = useEditorReadiness();
-    const setSelectedPage =
-        useSelectedPage()?.setSelectedPage ?? (() => undefined);
+    const { ready } = useEditorReadiness();
     const { pages, beats } = useTimingObjects()!;
     const isPlayingContext = useIsPlaying();
     const isPlaying = isPlayingContext?.isPlaying ?? false;
@@ -25,23 +22,17 @@ export function useNavigationActionHandlers() {
     const toggleMetronome = useMetronomeStore()?.toggleMetronome ?? (() => {});
     const canNavigate = ready && !!pages && pages.length > 0;
 
-    const go = (target: Page | null | undefined) => {
-        if (target && !isPlaying) setSelectedPage(target);
-    };
-    /** UI-9: in timeline mode, navigation moves the playhead to a flag and selects that page */
-    const navigate = (
-        timelineTarget: TimelineNavigation,
-        pageTarget: () => Page | null | undefined,
-    ) => {
-        if (!timelineMode) return go(pageTarget());
-        if (!isPlaying) navigateTimelinePages(pages, timelineTarget);
-    };
+    /**
+     * UI-9: navigation moves the playhead to a flag and selects that page, or a beat on with Shift.
+     * Playing, it jumps playback there, as the transport's Previous and Next do.
+     */
+    const navigate = (target: TimelineNavigation) =>
+        navigateTimeline(beats, pages, isPlaying, target);
 
-    const goNext = () =>
-        navigate("next-page", () => getNextPage(selectedPage!, pages));
-    const goPrevious = () =>
-        navigate("previous-page", () => getPreviousPage(selectedPage!, pages));
-    const enabled = { enabled: canNavigate };
+    const goNext = () => navigate("next-page");
+    const goPrevious = () => navigate("previous-page");
+    // Playing, each jump restarts the audio, so a held key jumps once rather than stuttering
+    const enabled = { enabled: canNavigate, ignoreRepeat: isPlaying };
     const transport = () => ({
         isPlaying,
         showEndBeat: beats.length,
@@ -52,32 +43,24 @@ export function useNavigationActionHandlers() {
     useActionHandler("timelineNextPage", goNext, enabled);
     useActionHandler("previousPage", goPrevious, enabled);
     useActionHandler("timelinePreviousPage", goPrevious, enabled);
-    useActionHandler(
-        "firstPage",
-        () => navigate("first-page", () => pages[0]),
-        enabled,
-    );
-    useActionHandler(
-        "lastPage",
-        () => navigate("last-page", () => pages[pages.length - 1]),
-        enabled,
-    );
+    useActionHandler("firstPage", () => navigate("first-page"), enabled);
+    useActionHandler("lastPage", () => navigate("last-page"), enabled);
+    useActionHandler("previousBeat", () => navigate("previous-beat"), enabled);
+    useActionHandler("nextBeat", () => navigate("next-beat"), enabled);
     useActionHandler(
         "playPause",
-        () => {
-            // UI-17 Play: loops a pinned window, or plays on; playing, it stops
-            if (timelineMode) return toggleTimelinePlayback(transport());
-            if (getNextPage(selectedPage!, pages)) setIsPlaying(!isPlaying);
-        },
+        // UI-17 Play: loops the loop, or plays on from the start flag; playing, it stops
+        () => toggleTimelinePlayback(transport()),
         enabled,
     );
-    // UI-17: Shift+Space plays the page's move once, back to its set
+    // Shift+Space plays on from the playhead (or the loop once)
     useActionHandler("playPage", () => playTimelinePage(transport()), {
-        enabled: canNavigate && timelineMode,
+        enabled: canNavigate,
     });
-    // UI-17: C turns looping on over the page being edited, or off
+    // UI-17: C turns looping on over the page being edited, or off. Not in Basic (UI-19)
+    const basic = useIsBasicMode();
     useActionHandler("toggleLoop", () => toggleTimelineLoop(), {
-        enabled: ready && timelineMode,
+        enabled: ready && !basic,
     });
     useActionHandler("toggleMetronome", () => toggleMetronome());
 }
