@@ -166,3 +166,5 @@ the new field can't zoom until #194 lands.
 double-click on empty field clears the selection, so a lasso that doesn't
 close leaves nothing selected (with Shift, the selection is kept). "Within 50
 screen px" is strict: exactly 50 doesn't close.
+A lasso (Shift+double-click-and-drag included) can't start inside an existing
+multi-selection's box: there the drag moves the selection (owner decision).

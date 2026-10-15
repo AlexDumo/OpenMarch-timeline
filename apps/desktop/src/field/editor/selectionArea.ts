@@ -115,7 +115,8 @@ export function selectionAfterArea(
     shift: boolean,
 ): readonly number[] {
     if (!shift) return inside;
-    const added = inside.filter((id) => !current.includes(id));
+    const selected = new Set(current);
+    const added = inside.filter((id) => !selected.has(id));
     return added.length ? [...current, ...added] : current;
 }
 

@@ -87,6 +87,24 @@ describe("pointInPolygon", () => {
         expect(pointInPolygon({ x: 2, y: 8 }, square.slice(0, 3))).toBe(false);
     });
 
+    it("uses the even-odd rule where the line crosses itself", () => {
+        // A figure 8 (bow tie): both loops are inside, the crossing's sides aren't
+        const figure8 = [
+            { x: 0, y: 0 },
+            { x: 10, y: 10 },
+            { x: 10, y: 0 },
+            { x: 0, y: 10 },
+        ];
+        expect(pointInPolygon({ x: 2, y: 5 }, figure8)).toBe(true);
+        expect(pointInPolygon({ x: 8, y: 5 }, figure8)).toBe(true);
+        expect(pointInPolygon({ x: 5, y: 2 }, figure8)).toBe(false);
+        expect(pointInPolygon({ x: 5, y: 8 }, figure8)).toBe(false);
+        // Around the same square twice: covered twice is outside, as Fabric's lasso
+        expect(pointInPolygon({ x: 5, y: 5 }, [...square, ...square])).toBe(
+            false,
+        );
+    });
+
     it("has no inside with under three points", () => {
         expect(pointInPolygon({ x: 0, y: 0 }, [])).toBe(false);
         expect(pointInPolygon({ x: 5, y: 0 }, square.slice(0, 2))).toBe(false);
