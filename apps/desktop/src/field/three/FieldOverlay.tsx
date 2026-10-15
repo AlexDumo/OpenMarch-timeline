@@ -4,10 +4,11 @@ import type { FieldEditor } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
 import type { FieldRect } from "@/field/editor/selectionArea";
 import type { LineToolShape } from "@/field/editor/lineTool";
+import { DOT_RADIUS } from "@/field/editor/hitTest";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 import {
-    ringReach,
+    dotSizes,
     selectionBoxPadding,
     SELECTION_COLOR,
 } from "./selectionRing";
@@ -23,16 +24,16 @@ const LASSO_DASH = "5 5";
  * The line tool's look, as Fabric's (`LineListeners`), in field units, so
  * they scale with the field: a 3-wide line, 2-wide pathways dashed 5 on, 3
  * off, and dots of radius 3 at each pathway's middle and end. Its marchers'
- * outlines are 2 CSS px, dashed 3 on, 5 off.
+ * outlines are squares just outside the dot, 1.5 wide, dashed 3 on, 5 off.
  */
 const LINE_WIDTH = 3;
 const PATH_WIDTH = 2;
 const PATH_DASH = [5, 3];
 const PATH_DOT_RADIUS = 3;
-const OUTLINE_SCREEN_WIDTH = 2;
-const OUTLINE_DASH = "3 5";
-/** CSS px between a line marcher's outline and its dot's selection ring reach. */
-const OUTLINE_SCREEN_GAP = 2;
+const OUTLINE_WIDTH = 1.5;
+const OUTLINE_DASH = [3, 5];
+/** How far a line marcher's outline's center line sits outside its dot. */
+const OUTLINE_GAP = 0.25;
 
 /**
  * The SVG overlay over the field (ADR 0005 D-2): what the editor draws on top
@@ -212,7 +213,7 @@ function LineToolPreview({
     const z = view.zoom;
     const at = (point: { x: number; y: number }) =>
         fieldToElement(view, point.x, point.y);
-    const half = ringReach(z) * z + OUTLINE_SCREEN_GAP;
+    const half = (DOT_RADIUS * dotSizes(z).scale + OUTLINE_GAP) * z;
     const { line } = tool;
     return (
         <g data-testid="fieldLineTool">
@@ -228,8 +229,10 @@ function LineToolPreview({
                             height={half * 2}
                             fill="none"
                             stroke={shape}
-                            strokeWidth={OUTLINE_SCREEN_WIDTH}
-                            strokeDasharray={OUTLINE_DASH}
+                            strokeWidth={OUTLINE_WIDTH * z}
+                            strokeDasharray={OUTLINE_DASH.map(
+                                (d) => d * z,
+                            ).join(" ")}
                         />
                     );
                 },
