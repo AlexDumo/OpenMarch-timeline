@@ -140,6 +140,7 @@ async function openInElectron(
     appSettings: Record<string, unknown>,
     userDataDir: string,
     field: FieldDriver,
+    storage: Record<string, string>,
 ): Promise<App> {
     // The app's settings store (electron-store) reads this file at startup.
     fs.mkdirSync(userDataDir, { recursive: true });
@@ -172,6 +173,12 @@ async function openInElectron(
             PLAYWRIGHT_SESSION: "true",
         },
     });
+    // Every load starts with the storage asked for. The window is already
+    // loading by now, so the fixture reloads it once; the app saves its
+    // settings while it starts, which would overwrite storage set later.
+    await app.context().addInitScript((entries) => {
+        for (const [key, value] of entries) localStorage.setItem(key, value);
+    }, Object.entries(storage));
     const log: string[] = [];
     app.process().stdout?.on("data", (data) => log.push(String(data)));
     app.process().stderr?.on("data", (data) => log.push(String(data)));
@@ -305,6 +312,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 appSettings,
                 testInfo.outputPath("user-data"),
                 field,
+                storage,
             );
         } else {
             app = await openInBrowser(
@@ -316,26 +324,10 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
         }
         const { page } = app;
         if (target === "electron") {
-            // The window is already loading when Playwright gets it: set the
-            // storage, then load again with it
+            // The window was already loading when the storage was set up
+            // (`openInElectron`): load it again with it
             await page.waitForLoadState("domcontentloaded");
-            const changed = await page.evaluate(
-                ([entries, fieldKey]) => {
-                    let changed = false;
-                    for (const [key, value] of entries) {
-                        const current =
-                            localStorage.getItem(key) ??
-                            // No switch means Fabric
-                            (key === fieldKey ? "fabric" : null);
-                        if (current === value) continue;
-                        localStorage.setItem(key, value);
-                        changed = true;
-                    }
-                    return changed;
-                },
-                [Object.entries(storage), FIELD_STORAGE_KEY] as const,
-            );
-            if (changed) await page.reload();
+            await page.reload();
         }
 
         const pageErrors: string[] = [];
