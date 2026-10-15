@@ -102,8 +102,8 @@ move. Rings and the box are checked by eye (screenshots on the PR), since the
 test API has no reading for them; #198's `handles()` covers the box. The hover
 cursor updates on pointer moves only, so it can be stale while marchers move
 under a still pointer (playback). Shift+click on empty field keeping the
-selection is read from the rules table's Shift row, not a user story: the
-owner should confirm it.
+selection follows the rules table's Shift row (a zero-size Shift marquee adds
+nothing); decided by the orchestrator, and on the #208 hands-on checklist.
 
 **Found while testing.** `move-marchers` "undo and redo a move" fails about 2
 times in 3 on Fabric in the browser, on `field-renderer` before #193 too.
