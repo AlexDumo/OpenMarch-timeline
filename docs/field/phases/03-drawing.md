@@ -263,15 +263,17 @@ them in a frame hook from the drawn positions and the view store. The hover
 tooltip listens for pointer moves on the field's root element, hit-tests in
 field units (`keptMarkAt`), and uses the same test id as Fabric's.
 
-**Collisions.** Nothing computes collisions in timeline mode
-(`setCollisions` has no caller since an upstream change), so neither field
-shows any to a user today. The scenarios put some on the page through
+**Collisions.** Collision detection is off app-wide since upstream commit
+b61834d8b ("TODO - make collisions a query and put this back" in
+`useAnimation.ts`; `setCollisions` has no caller), so neither field shows any
+to a user today. It isn't a timeline or field regression. The scenarios put some on the page through
 `window.openmarchCollisions`, which exists only in Playwright sessions.
 Fabric draws every collision marker and label at the field's top-left corner
 (its objects hold the right coordinates; Fabric places them wrong). The new
 field draws them where they are. "Zoom to collisions" goes through
 `field/zoomToCollisions.ts`: Fabric as before, the new field with the same
-framing written to the view store. **#194**: if the view store gains limits or
+framing written to the view store, and nothing while playing (as Fabric, which
+has no markers then). **#194**: if the view store gains limits or
 a setter, route this through it (Fabric doesn't clamp this zoom).
 
 **Render comparisons.** `e2e/browser/render/timeline-render.spec.mts` (project

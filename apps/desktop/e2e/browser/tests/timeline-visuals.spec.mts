@@ -186,7 +186,7 @@ test("zoom to collisions frames the collisions", async ({ show }) => {
         y: a!.y + 2,
         distance: 6,
     };
-    // Nothing computes collisions in timeline mode: the scenario puts one on the page
+    // Collision detection is off app-wide (upstream b61834d8b): the scenario puts one on the page
     await page.evaluate(
         (c) => window.openmarchCollisions!.show([c]),
         collision,

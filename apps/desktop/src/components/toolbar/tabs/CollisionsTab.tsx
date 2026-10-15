@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { WarningIcon, CaretDownIcon } from "@phosphor-icons/react";
 import { zoomToCollisions } from "@/field/zoomToCollisions";
+import { useIsPlaying } from "@/context/IsPlayingContext";
 import { Button } from "@openmarch/ui";
 
 export function CollisionsTab() {
@@ -35,6 +36,7 @@ export function CollisionsTab() {
 
 function CollisionsToolbar({ collisionInfo }: { collisionInfo: any[] }) {
     const { t } = useTolgee();
+    const isPlaying = useIsPlaying()?.isPlaying ?? false;
 
     return (
         <ToolbarSection aria-label={t("toolbar.collisions.collisionsToolbar")}>
@@ -63,7 +65,10 @@ function CollisionsToolbar({ collisionInfo }: { collisionInfo: any[] }) {
                                 next page
                             </p>
 
-                            <Button size="compact" onClick={zoomToCollisions}>
+                            <Button
+                                size="compact"
+                                onClick={() => zoomToCollisions(isPlaying)}
+                            >
                                 Review
                             </Button>
 

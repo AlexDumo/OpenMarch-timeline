@@ -5,7 +5,7 @@ import type Page from "@/global/classes/Page";
 import { db } from "@/global/database/db";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import {
-    isMarcherDimmed,
+    isolatedTimeline,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
@@ -129,37 +129,33 @@ export function useTimelineVisuals({
         [isPlaying, settings.showCollisions, currentCollisions],
     );
 
-    const dimming = useFieldDimming();
+    const dimming = useFieldDimming(ready);
     return { paths, focus, collisions, dimming, ready };
 }
 
 /**
- * UI-9: while a move is isolated, the marchers outside it are dimmed. Follows
- * the timeline selection store outside React, so moving the window doesn't
- * re-render the field.
+ * UI-9: while a move is isolated, the marchers outside it are dimmed, once the
+ * resolver is ready (as Fabric's `useTimelineDimming` takes `enabled`). Follows
+ * the timeline selection store outside React; `FieldDimming` ignores updates
+ * that keep the same members, such as the window moving inside the move.
  */
-function useFieldDimming(): FieldDimming {
+function useFieldDimming(enabled: boolean): FieldDimming {
     const dimming = useMemo(() => new FieldDimming(), []);
     useEffect(() => {
-        const update = (
-            state: ReturnType<typeof useTimelineSelectionStore.getState>,
-        ) =>
-            dimming.set(
-                state.isolation === null
-                    ? null
-                    : (id) => isMarcherDimmed(state, id),
-            );
-        update(useTimelineSelectionStore.getState());
+        const update = () => {
+            const isolated = enabled
+                ? isolatedTimeline(useTimelineSelectionStore.getState())
+                : null;
+            dimming.set(isolated?.marcherIds ?? null);
+        };
+        update();
         return useTimelineSelectionStore.subscribe((state, previous) => {
             if (
-                state.isolation === previous.isolation &&
-                state.storedTimelines === previous.storedTimelines &&
-                (state.isolation === null ||
-                    state.selection === previous.selection)
+                state.isolation !== previous.isolation ||
+                state.storedTimelines !== previous.storedTimelines
             )
-                return;
-            update(state);
+                update();
         });
-    }, [dimming]);
+    }, [dimming, enabled]);
     return dimming;
 }

@@ -6,11 +6,10 @@
  * editor's: it asks the same `isMarcherDimmed`.
  */
 export class FieldDimming {
-    /** Goes up whenever who's dimmed may have changed. */
+    /** Goes up whenever who's dimmed changes. */
     version = 0;
-    private dimmed: (id: number) => boolean = () => false;
-    /** Whether anyone can be dimmed: false skips asking per marcher. */
-    any = false;
+    /** The isolated move's marchers, the only ones not dimmed; null dims nobody. */
+    private members: ReadonlySet<number> | null = null;
     private readonly listeners = new Set<() => void>();
 
     /** Calls `listener` after each change (a layer asks for a frame). Returns the unsubscribe. */
@@ -21,19 +20,33 @@ export class FieldDimming {
         };
     }
 
-    /** Dims the marchers `dimmed` names; null dims nobody. */
-    set(dimmed: ((id: number) => boolean) | null) {
-        if (!dimmed && !this.any) return;
-        this.dimmed = dimmed ?? (() => false);
-        this.any = dimmed !== null;
+    /**
+     * Dims every marcher but `members`; null dims nobody. Nothing changes, and
+     * nothing redraws, when the set is the same as before (as Fabric's
+     * `setTimelineDimmed` returns early), so moving the playhead inside an
+     * isolated move costs nothing here.
+     */
+    set(members: ReadonlySet<number> | null) {
+        if (sameMembers(members, this.members)) return;
+        this.members = members;
         this.version++;
         for (const listener of this.listeners) listener();
     }
 
     isDimmed(id: number): boolean {
-        return this.any && this.dimmed(id);
+        return this.members !== null && !this.members.has(id);
     }
 }
+
+const sameMembers = (
+    a: ReadonlySet<number> | null,
+    b: ReadonlySet<number> | null,
+) =>
+    a === b ||
+    (a !== null &&
+        b !== null &&
+        a.size === b.size &&
+        [...a].every((id) => b.has(id)));
 
 /** How opaque a dimmed marcher and its label are (Fabric's `CanvasMarcher.DIMMED_OPACITY`). */
 export const DIMMED_OPACITY = 0.25;
