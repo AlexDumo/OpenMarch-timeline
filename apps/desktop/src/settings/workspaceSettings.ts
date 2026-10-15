@@ -20,17 +20,22 @@ export const workspaceSettingsSchema = z.object({
     ),
 
     /**
-     * Development only: drive this file's canvas from the timeline resolver instead of
-     * `marcher_pages` (docs/timeline, Phase 5). Off when absent, and not shown in the settings UI.
-     */
-    timelineMode: z.boolean().optional(),
-
-    /**
      * When the file was converted to timelines, or created as a timeline file (ISO time; P9.3,
-     * ADR 0001 §6). Written by the main process; kept here so saving the settings keeps it. Its
-     * presence is how a file reset to version 7 by an older release is recognized.
+     * ADR 0001 §6). Written by the main process; kept here so saving the settings keeps it. The
+     * conversion worker's host reads it to tell whether a conversion committed.
      */
     timelineConvertedAt: z.string().optional(),
+
+    /**
+     * Show-wide performer defaults the cues fall back to (ADR 0004 D-4). Absent fields mean left
+     * foot and foot on the dot (`performerDefaultsOf`). Not shown in the settings UI yet.
+     */
+    performerDefaults: z
+        .object({
+            stepOffFoot: z.enum(["left", "right"]).optional(),
+            dotMode: z.enum(["foot", "body"]).optional(),
+        })
+        .optional(),
 });
 
 export type WorkspaceSettings = z.infer<typeof workspaceSettingsSchema>;
@@ -77,11 +82,17 @@ export function serializeWorkspaceSettings(
     return JSON.stringify(settings);
 }
 
-/**
- * Whether the timeline dev flag is on for this file. Absent means off.
- */
-export function isTimelineModeEnabled(
-    settings: Pick<WorkspaceSettings, "timelineMode"> | undefined,
-): boolean {
-    return settings?.timelineMode === true;
+export type PerformerDefaults = {
+    stepOffFoot: "left" | "right";
+    dotMode: "foot" | "body";
+};
+
+/** The show's performer defaults, filled in: left foot and foot on the dot when absent. */
+export function performerDefaultsOf(
+    settings: Pick<WorkspaceSettings, "performerDefaults"> | undefined,
+): PerformerDefaults {
+    return {
+        stepOffFoot: settings?.performerDefaults?.stepOffFoot ?? "left",
+        dotMode: settings?.performerDefaults?.dotMode ?? "foot",
+    };
 }

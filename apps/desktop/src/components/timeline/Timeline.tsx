@@ -10,6 +10,7 @@ import {
     type ReactNode,
     useContext,
     useMemo,
+    useRef,
     useState,
 } from "react";
 import {
@@ -20,7 +21,11 @@ import {
 import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { clamp } from "./TimelineGeometry";
 import { useLatestCallback } from "./useLatestCallback";
-import { CollapsedTimeline, ExpandedTimeline } from "./TimelineVariants";
+import {
+    BasicTimeline,
+    CollapsedTimeline,
+    ExpandedTimeline,
+} from "./TimelineVariants";
 import type { LabeledHoldMarks } from "./PageHoldMark";
 import type { PageKeepChains } from "./PageKeepChain";
 import type {
@@ -31,6 +36,7 @@ import type {
 } from "./TimelineRangeMenu";
 import type {
     TimelineActivitySpan,
+    TimelineBasicPoint,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineNavigation,
@@ -46,7 +52,8 @@ import type {
     TimelineWaveform,
 } from "./TimelineViewModel";
 
-export type TimelineMode = "expanded" | "collapsed";
+/** `basic` is Basic mode's page boxes with the music inside them (UI-19) */
+export type TimelineMode = "expanded" | "collapsed" | "basic";
 
 export interface TimelineLegInput {
     readonly id: string | number;
@@ -110,10 +117,10 @@ export interface TimelinePlayback {
     readonly onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops (UI-17): the button says so */
     readonly playLoops?: boolean;
-    /** With no pin, a page is selected (UI-17): Play's tooltip names Shift+Space and C */
-    readonly playNext?: "page";
-    /** Shift+Space's once-through is playing (UI-17) */
+    /** Shift+Space's once-through of the loop is playing (UI-17) */
     readonly playingOnce?: boolean;
+    /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
+    readonly onPlayFromPlayhead?: () => void;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -174,6 +181,15 @@ export interface TimelineProps {
      * show (on a flag, at home, past the beats).
      */
     readonly onAddPageFlag?: () => void;
+    /** **Add subset page** in **+**'s right-click menu: the same page, as a subset (UI-9) */
+    readonly onAddSubsetPage?: () => void;
+    /** The names **+**'s menu shows, muted, after **Add page** and **Add subset page** */
+    readonly addPageNames?: { readonly page: string; readonly subset: string };
+    /**
+     * The page box menu's **Change to subset** / **Change to normal page** (UI-9): sets page
+     * `pageId` to a subset page, or back to a numbered one. Without it, the menu has no such entry.
+     */
+    readonly onSetPageSubset?: (pageId: number, subset: boolean) => void;
     /** The page box menu's **Delete page** (UI-9 Deleting a flag), by page id */
     readonly onDeletePageFlag?: (pageId: number) => void;
     /** The page box menu's **Delete page and its moves**, by page id */
@@ -200,6 +216,12 @@ export interface TimelineProps {
     readonly keepChains?: PageKeepChains;
     /** The page box menu's **Keep selected marchers here** and **Let selected marchers follow again** */
     readonly keepHere?: TimelineKeepHereMenu;
+    /** UI-19 Basic: the selected marchers' mid-page positions, spec beats */
+    readonly basicPoints?: readonly TimelineBasicPoint[];
+    /** UI-19 Basic: **Remove this count's position**, by its spec beat */
+    readonly onRemoveBasicPoint?: (beat: number) => void;
+    /** UI-19 Basic: per page id, how many marchers on it use Expert moves */
+    readonly expertMarks?: ReadonlyMap<string | number, number>;
 }
 
 const TimelineWaveformContext = createContext<TimelineWaveform | null>(null);
@@ -524,6 +546,7 @@ export function Timeline(props: TimelineProps) {
         addSelectedMarchers,
         onDeletePageFlag,
         onDeletePageWithMoves,
+        onSetPageSubset,
         onOpenRange,
         keepHere,
     } = props;
@@ -562,6 +585,28 @@ export function Timeline(props: TimelineProps) {
             ? (pageId: string | number) => onDeletePageWithMoves(Number(pageId))
             : undefined,
     );
+    const setSubset = useLatestCallback(
+        onSetPageSubset
+            ? (pageId: string | number, subset: boolean) =>
+                  onSetPageSubset(Number(pageId), subset)
+            : undefined,
+    );
+    const pagesRef = useRef(props.pages);
+    pagesRef.current = props.pages;
+    // Read when the menu opens, so the toggle shows the page's subset state now
+    const subsetMenu = useMemo(
+        () =>
+            setSubset
+                ? {
+                      isSubset: (pageId: string | number) =>
+                          pagesRef.current.find(
+                              (p) => String(p.id) === String(pageId),
+                          )?.isSubset ?? false,
+                      onSet: setSubset,
+                  }
+                : undefined,
+        [setSubset],
+    );
     const addMarchers = useLatestCallback(
         addSelectedMarchers?.onAdd
             ? (target: TimelineMenuTarget) =>
@@ -572,6 +617,7 @@ export function Timeline(props: TimelineProps) {
         addSelectedMarchers ||
         onDeletePageFlag ||
         onDeletePageWithMoves ||
+        onSetPageSubset ||
         keepHere
     );
     const disabledReason = addSelectedMarchers?.disabledReason;
@@ -587,6 +633,7 @@ export function Timeline(props: TimelineProps) {
                           ? { onDeleteWithMoves: deleteWithMoves }
                           : {}),
                       ...(keepHere ? { keepHere } : {}),
+                      ...(subsetMenu ? { subset: subsetMenu } : {}),
                       onAdd: addMarchers,
                   }
                 : undefined,
@@ -597,6 +644,7 @@ export function Timeline(props: TimelineProps) {
             disabledReason,
             hasMarchersMenu,
             keepHere,
+            subsetMenu,
         ],
     );
     // A clip's track id to its stored timeline (`linkId`), for the move commands (UI-14)
@@ -674,6 +722,21 @@ export function Timeline(props: TimelineProps) {
                 : undefined,
         [axis, flagCommit, flagLimits],
     );
+    // UI-19 Basic: mid-page positions on the view axis, and back
+    const { basicPoints, onRemoveBasicPoint } = props;
+    const viewBasicPoints = useMemo(
+        () =>
+            basicPoints?.map((point) => ({
+                ...point,
+                beat: axis.toView(point.beat),
+            })),
+        [axis, basicPoints],
+    );
+    const removeBasicPoint = useLatestCallback(
+        onRemoveBasicPoint
+            ? (viewBeat: number) => onRemoveBasicPoint(axis.toSpec(viewBeat))
+            : undefined,
+    );
     const commonProps = {
         model,
         positionBeat,
@@ -686,8 +749,8 @@ export function Timeline(props: TimelineProps) {
         onSeek: seekToBeat,
         onPlayingChange: useLatestCallback(playback.onPlayingChange),
         playLoops: playback.playLoops,
-        playNext: playback.playNext,
         playingOnce: playback.playingOnce,
+        onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,
@@ -697,6 +760,8 @@ export function Timeline(props: TimelineProps) {
         addSelectedMarchers: addMarchersMenu,
         moveCommands: trackMoveCommands,
         onAddPageFlag: useLatestCallback(props.onAddPageFlag),
+        onAddSubsetPage: useLatestCallback(props.onAddSubsetPage),
+        addPageNames: props.addPageNames,
         pageFlagMove,
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,
@@ -711,9 +776,14 @@ export function Timeline(props: TimelineProps) {
         transportAccessories: props.transportAccessories,
         holdMarks: props.holdMarks,
         keepChains: props.keepChains,
+        basicPoints: viewBasicPoints,
+        onRemoveBasicPoint: removeBasicPoint,
+        expertMarks: props.expertMarks,
     };
 
-    return props.mode === "expanded" ? (
+    return props.mode === "basic" ? (
+        <BasicTimeline {...commonProps} />
+    ) : props.mode === "expanded" ? (
         <ExpandedTimeline {...commonProps} />
     ) : (
         <CollapsedTimeline {...commonProps} />

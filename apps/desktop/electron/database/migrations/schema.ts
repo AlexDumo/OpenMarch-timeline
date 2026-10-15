@@ -9,12 +9,13 @@ import {
     unique,
     customType,
     sqliteView,
+    primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 /*************** COMMON COLUMNS ***************/
 
-const timestamps = {
+export const timestamps = {
     created_at: text()
         .notNull()
         .default(sql`(CURRENT_TIMESTAMP)`),
@@ -170,101 +171,6 @@ export const marchers = sqliteTable(
     ],
 );
 
-export const pathways = sqliteTable("pathways", {
-    id: integer().primaryKey(),
-    path_data: text().notNull(),
-    notes: text(),
-    ...timestamps,
-});
-
-/**
- * A MarcherPage is used to represent a Marcher's position on a Page.
- * MarcherPages can/should not be created or deleted directly, but are created and deleted when a Marcher or Page is.
- * There should be a MarcherPage for every Marcher and Page combination (M * P).
- */
-export const marcher_pages = sqliteTable(
-    "marcher_pages",
-    {
-        /** The id of the MarcherPage in the database */
-        id: integer().primaryKey(),
-        /** The id of the Marcher the MarcherPage is associated with */
-        marcher_id: integer()
-            .notNull()
-            .references(() => marchers.id, { onDelete: "cascade" }),
-        /** The id of the Page the MarcherPage is associated with */
-        page_id: integer()
-            .notNull()
-            .references(() => pages.id, { onDelete: "cascade" }),
-        /** X coordinate of the MarcherPage in pixels */
-        x: real().notNull(),
-        /** Y coordinate of the MarcherPage in pixels */
-        y: real().notNull(),
-        ...timestamps,
-        /** The ID of the pathway data */
-        path_data_id: integer().references(() => pathways.id, {
-            onDelete: "set null",
-        }),
-        /**
-         * The position along the pathway (0-1).
-         * This is the position in the pathway the marcher starts at for this coordinate.
-         * If this is null, then it is assumed to be 0 (the start of the pathway).
-         */
-        path_start_position: real(),
-        /**
-         * The position along the pathway (0-1).
-         * This is the position in the pathway the marcher ends up at for this coordinate.
-         * If this is null, then it is assumed to be 1 (the end of the pathway).
-         */
-        path_end_position: real(),
-        /** Any notes about the MarcherPage. Optional - currently not implemented */
-        notes: text(),
-        rotation_degrees: real().notNull().default(0),
-        ...appearance_columns,
-    },
-    (table) => [
-        check(
-            "marcher_pages_path_data_position_check",
-            sql`path_start_position >= 0 AND path_start_position <= 1 AND path_end_position >= 0 AND path_end_position <= 1`,
-        ),
-        index("index_marcher_pages_on_page_id").on(table.page_id),
-        index("index_marcher_pages_on_marcher_id").on(table.marcher_id),
-        unique().on(table.marcher_id, table.page_id),
-    ],
-);
-
-export const midsets = sqliteTable(
-    "midsets",
-    {
-        id: integer().primaryKey(),
-        /** The ID of the marcher page this midset is going to */
-        mp_id: integer()
-            .notNull()
-            .references(() => marcher_pages.id, { onDelete: "cascade" }),
-        x: real().notNull(),
-        y: real().notNull(),
-        /** The progress placement of the midset on the marcher page */
-        progress_placement: real().notNull(),
-        ...timestamps,
-        path_data_id: integer().references(() => pathways.id, {
-            onDelete: "set null",
-        }),
-        path_start_position: real(),
-        path_end_position: real(),
-        notes: text(),
-    },
-    (table) => [
-        check(
-            "midsets_path_data_position_check",
-            sql`path_start_position >= 0 AND path_start_position <= 1 AND path_end_position >= 0 AND path_end_position <= 1`,
-        ),
-        check(
-            "placement_check",
-            sql`progress_placement > 0 AND progress_placement < 1`,
-        ),
-        unique().on(table.mp_id, table.progress_placement),
-    ],
-);
-
 export const field_properties = sqliteTable(
     "field_properties",
     {
@@ -283,52 +189,6 @@ export const audio_files = sqliteTable("audio_files", {
     selected: integer().default(0).notNull(),
     ...timestamps,
 });
-
-export const shapes = sqliteTable("shapes", {
-    id: integer().primaryKey(),
-    name: text(),
-    ...timestamps,
-    notes: text(),
-});
-
-export const shape_pages = sqliteTable(
-    "shape_pages",
-    {
-        id: integer().primaryKey(),
-        shape_id: integer()
-            .notNull()
-            .references(() => shapes.id, { onDelete: "cascade" }),
-        page_id: integer()
-            .notNull()
-            .references(() => pages.id, { onDelete: "cascade" }),
-        svg_path: text().notNull(),
-        ...timestamps,
-        notes: text(),
-    },
-    (table) => [unique().on(table.page_id, table.shape_id)],
-);
-
-export const shape_page_marchers = sqliteTable(
-    "shape_page_marchers",
-    {
-        id: integer().primaryKey(),
-        shape_page_id: integer()
-            .notNull()
-            .references(() => shape_pages.id, { onDelete: "cascade" }),
-        marcher_id: integer()
-            .notNull()
-            .references(() => marchers.id, { onDelete: "cascade" }),
-        position_order: integer().notNull(),
-        ...timestamps,
-        notes: text(),
-    },
-    (table) => [
-        index("idx-spm-marcher_id").on(table.marcher_id),
-        index("idx-spm-shape_page_id").on(table.shape_page_id),
-        unique().on(table.shape_page_id, table.marcher_id),
-        unique().on(table.shape_page_id, table.position_order),
-    ],
-);
 
 export const section_appearances = sqliteTable("section_appearances", {
     id: integer().primaryKey(),
@@ -679,6 +539,250 @@ export const timeline_change_log = sqliteTable("timeline_change_log", {
     /** JSON row image; NULL on delete */
     after: text(),
 });
+
+/* ======================= PERFORMER CUES ======================= */
+/*
+ * What performers do, count by count (ADR 0004, docs/3d/performer-behavior.md). Cues sit on beat
+ * ids, so beat edits never rewrite them; deleting a beat deletes its cues. No trigger reads or
+ * writes these tables. The compile step (`@openmarch/core` cues) reads them; storage keeps the
+ * columns consistent, and compile applies the behavior rules (fits, states-only channels,
+ * take-overs).
+ */
+
+/** The channels a cue can set (ADR 0004 D-1, and its 2026-10-11 amendment for the last three). */
+export const CUE_CHANNELS = [
+    "feet",
+    "horn_equipment",
+    "facing",
+    "body",
+    "carry",
+    "silk",
+    "uniform",
+] as const;
+
+/** Channels whose values name Library items (`library:<uuid>@<version hash>`; amendment 2026-10-11). */
+const LIBRARY_VALUE_CHANNELS_SQL = "'carry', 'silk', 'uniform'";
+
+/**
+ * A show-stored phrase asset (ADR 0004 D-3). Built-ins aren't stored; cues name them by id.
+ * `data_json` is the versioned phrase format (spec section 5); readers migrate older
+ * `format_version`s on load and never write back silently.
+ */
+export const phrase_assets = sqliteTable(
+    "phrase_assets",
+    {
+        id: integer().primaryKey(),
+        name: text().notNull(),
+        label: text().notNull(),
+        /** copied_builtin, posed or imported; v1 writes only copied_builtin */
+        source: text().notNull(),
+        /** JSON array of the channels the phrase plays on and takes over */
+        channels_json: text().notNull(),
+        format_version: integer().notNull(),
+        data_json: text().notNull(),
+        ...timestamps,
+    },
+    (_table) => [
+        check(
+            "phrase_assets_source_check",
+            sql`source IN ('copied_builtin', 'posed', 'imported')`,
+        ),
+        check(
+            "phrase_assets_channels_json_check",
+            sql`json_valid(channels_json) AND json_type(channels_json) = 'array'`,
+        ),
+        check(
+            "phrase_assets_format_version_check",
+            sql`typeof(format_version) = 'integer' AND format_version >= 1`,
+        ),
+        check(
+            "phrase_assets_data_json_check",
+            sql`json_valid(data_json) AND json_type(data_json) = 'object'`,
+        ),
+    ],
+);
+
+/**
+ * A cue: on one channel, for one target, on one beat (ADR 0004 D-1). Same-count,
+ * same-specificity ties go to the higher `id`. Hand-picked set members are in `cue_marchers`.
+ */
+export const cues = sqliteTable(
+    "cues",
+    {
+        id: integer().primaryKey(),
+        /** One of `CUE_CHANNELS` */
+        channel: text().notNull(),
+        /** state or phrase */
+        kind: text().notNull(),
+        /** band, section, tag or set */
+        target_kind: text().notNull(),
+        /** Set only for a section target */
+        target_section: text(),
+        /** Set only for a tag target. Deleting the tag deletes its cues. */
+        target_tag_id: integer().references(() => tags.id, {
+            onDelete: "cascade",
+        }),
+        /** The beat the cue sits on; its instant is the start of the beat (the count's click) */
+        beat_id: integer()
+            .notNull()
+            .references(() => beats.id, { onDelete: "cascade" }),
+        /**
+         * `builtin:<channel>.<family>.<value>`, `show:<phrase_assets.id>`,
+         * `library:<uuid>@<version hash>` (Carry, Silk, Uniform) or `none` (Carry)
+         */
+        value: text().notNull(),
+        /** Set only for a show phrase; a phrase asset in use can't be deleted */
+        phrase_asset_id: integer().references(() => phrase_assets.id, {
+            onDelete: "restrict",
+        }),
+        /** Phrases only: the length in counts, inclusive, at least 2 */
+        length: integer(),
+        /** States only: the transition length in counts, at least 1; null is the library default */
+        transition_length: integer(),
+        /** The value's settings as a JSON object */
+        settings_json: text().notNull().default("{}"),
+        /** `{ version: 1, span, order }`, or null for no ripple. Never on Feet. */
+        ripple_json: text(),
+        notes: text(),
+        ...timestamps,
+    },
+    (table) => [
+        check(
+            "cues_channel_check",
+            sql.raw(
+                `channel IN (${CUE_CHANNELS.map((c) => `'${c}'`).join(", ")})`,
+            ),
+        ),
+        check("cues_kind_check", sql`kind IN ('state', 'phrase')`),
+        check(
+            "cues_target_check",
+            sql`(target_kind IN ('band', 'set') AND target_section IS NULL AND target_tag_id IS NULL) OR (target_kind = 'section' AND target_section IS NOT NULL AND target_tag_id IS NULL) OR (target_kind = 'tag' AND target_tag_id IS NOT NULL AND target_section IS NULL)`,
+        ),
+        check(
+            "cues_length_check",
+            sql`(kind = 'phrase' AND typeof(length) = 'integer' AND length >= 2 AND transition_length IS NULL) OR (kind = 'state' AND length IS NULL AND (transition_length IS NULL OR (typeof(transition_length) = 'integer' AND transition_length >= 1)))`,
+        ),
+        check(
+            "cues_value_check",
+            sql.raw(
+                `(value GLOB 'builtin:?*' AND phrase_asset_id IS NULL) OR (kind = 'phrase' AND phrase_asset_id IS NOT NULL AND value = 'show:' || phrase_asset_id) OR (channel IN (${LIBRARY_VALUE_CHANNELS_SQL}) AND kind = 'state' AND value GLOB 'library:?*@?*' AND phrase_asset_id IS NULL) OR (channel = 'carry' AND kind = 'state' AND value = 'none' AND phrase_asset_id IS NULL)`,
+            ),
+        ),
+        check(
+            "cues_settings_json_check",
+            sql`json_valid(settings_json) AND json_type(settings_json) = 'object'`,
+        ),
+        check(
+            "cues_ripple_json_check",
+            sql`ripple_json IS NULL OR (channel <> 'feet' AND json_valid(ripple_json) AND json_type(ripple_json) = 'object' AND json_extract(ripple_json, '$.version') = 1 AND json_type(ripple_json, '$.span') = 'integer' AND json_extract(ripple_json, '$.span') >= 1 AND json_extract(ripple_json, '$.order') IN ('drill', 'left_right', 'right_left', 'down_form'))`,
+        ),
+        index("cues_beat_id_idx").on(table.beat_id),
+        index("cues_channel_beat_id_idx").on(table.channel, table.beat_id),
+    ],
+);
+
+/**
+ * The marchers of a hand-picked set cue (ADR 0004 D-2). The marcher deletion write path deletes
+ * a set cue left with no members, in the same transaction.
+ *
+ * Has a surrogate `id`, unique on (cue, marcher), rather than the ADR's two-column primary key:
+ * history replays by rowid, so undo has to restore the same rowid (as `marcher_tags` does).
+ */
+export const cue_marchers = sqliteTable(
+    "cue_marchers",
+    {
+        id: integer().primaryKey(),
+        cue_id: integer()
+            .notNull()
+            .references(() => cues.id, { onDelete: "cascade" }),
+        marcher_id: integer()
+            .notNull()
+            .references(() => marchers.id, { onDelete: "cascade" }),
+    },
+    (table) => [
+        unique("cue_marchers_cue_marcher_unique").on(
+            table.cue_id,
+            table.marcher_id,
+        ),
+        index("cue_marchers_marcher_id_idx").on(table.marcher_id),
+    ],
+);
+
+/** Per-set performer settings (ADR 0004 D-4). No row means the show default. */
+export const page_performer_settings = sqliteTable(
+    "page_performer_settings",
+    {
+        page_id: integer()
+            .primaryKey()
+            .references(() => pages.id, { onDelete: "cascade" }),
+        /** What the set's dot marks: the landing foot or the body's center */
+        dot_mode: text().notNull(),
+    },
+    (_table) => [
+        check(
+            "page_performer_settings_dot_mode_check",
+            sql`dot_mode IN ('foot', 'body')`,
+        ),
+    ],
+);
+
+/* ======================= SHOW LIBRARY ======================== */
+/*
+ * The show's copies of the Library items it uses (ADR 0002 D-12, props-spec.md section 2,
+ * package C1.11). Following `audio_files` and `field_properties.image`, the bytes live in the
+ * show file, so a show renders on a machine whose local Library is empty. Neither table has
+ * history triggers: embedding and pruning are not undoable edits.
+ */
+
+/** Content-addressed bytes, deduped across every embedded Version. */
+export const library_blobs = sqliteTable(
+    "library_blobs",
+    {
+        /** sha256 of `data`, lowercase hex */
+        hash: text().primaryKey(),
+        data: browserSafeBinaryBlob().notNull(),
+    },
+    (_table) => [
+        check("library_blobs_hash_check", sql`length(hash) = 64`),
+        check("library_blobs_data_type_check", sql`typeof(data) = 'blob'`),
+    ],
+);
+
+/** One embedded Version of a Library item. A show may keep several Versions of one item. */
+export const library_items = sqliteTable(
+    "library_items",
+    {
+        item_id: text().notNull(),
+        version_hash: text().notNull(),
+        kind: text().notNull(),
+        name: text().notNull(),
+        /** Built-ins are embedded too, so app updates never change old shows */
+        built_in: integer().notNull().default(0),
+        /** JSON object, part role to `library_blobs.hash` */
+        parts: text().notNull(),
+        /** JSON array of `{ itemId, versionHash }` this Version pins, such as a Uniform's Garments */
+        pins: text().notNull().default("[]"),
+        /** JSON snapshot of the item's metadata (tags, license, dates) when it was embedded */
+        metadata: text().notNull(),
+        /** A model's sidecar JSON, so the show reads it at open without a blob read */
+        sidecar: text(),
+        embedded_at: text()
+            .notNull()
+            .default(sql`(CURRENT_TIMESTAMP)`),
+    },
+    (table) => [
+        primaryKey({ columns: [table.item_id, table.version_hash] }),
+        check(
+            "library_items_kind_check",
+            sql`kind IN ('model', 'artwork', 'uniform')`,
+        ),
+        check("library_items_built_in_check", sql`built_in IN (0, 1)`),
+        check(
+            "library_items_version_hash_check",
+            sql`length(version_hash) = 64`,
+        ),
+    ],
+);
 
 /* =========================== VIEWS =========================== */
 /**

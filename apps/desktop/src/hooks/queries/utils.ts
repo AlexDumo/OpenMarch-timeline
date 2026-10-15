@@ -38,8 +38,6 @@ export const validateQueryKey = (
 
 const singleTableNameToQueryKey = (tableName: string): string[][] => {
     switch (tableName) {
-        case "shape_page_marchers":
-            return [["shape_pages"], ["marcher_pages"]];
         // Timeline data tables (ADR 0001 §3). No React Query reads them: the resolver store, and
         // every view that follows its version, picks up their changes from each edit's change
         // batch (P7.13). Mapping them to no keys keeps undo and redo from invalidating keys that
@@ -52,6 +50,9 @@ const singleTableNameToQueryKey = (tableName: string): string[][] => {
         case "timeline_slot_destinations":
         case "timeline_kept_assignments":
             return [];
+        // A cue's set members are read with the cue (`useCues.ts`)
+        case "cue_marchers":
+            return [["cues"]];
         default:
             return [[tableName]];
     }

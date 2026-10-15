@@ -1,5 +1,10 @@
 import { create } from "zustand";
+import { parseTimelineHeight } from "@/components/timeline/timelineSplit";
 import { syncFromStorage } from "@/stores/syncFromStorage";
+import {
+    parseWaveformStyle,
+    type WaveformStyle,
+} from "@/timeline/timelineWaveform";
 
 export type FocusableComponents = "canvas" | "timeline";
 export interface UiSettings {
@@ -26,8 +31,12 @@ export interface UiSettings {
     timelinePixelsPerBeat: number;
     /** Whether the timeline-mode timeline is drawn as its compact strip (UI-12) */
     timelineCompact: boolean;
+    /** The timeline pane's height in pixels, set by the splitter; null fits it to its tracks */
+    timelineHeight: number | null;
     /** Whether the timeline was fitted to the show, so the next show opens fitted (UI-12) */
     timelineZoomFitted: boolean;
+    /** How the timeline draws the waveform: simplified rounded bars or precise per-beat detail */
+    timelineWaveformStyle: WaveformStyle;
     /** The current audio volume percentage for timeline playback */
     audioVolume: number;
     /** Whether all app audio is muted */
@@ -74,7 +83,9 @@ export const defaultSettings: UiSettings = {
     timelinePixelsPerSecond: 40,
     timelinePixelsPerBeat: 16,
     timelineCompact: false,
+    timelineHeight: null,
     timelineZoomFitted: false,
+    timelineWaveformStyle: "simplified",
     audioVolume: 100,
     audioMuted: false,
     focussedComponent: "canvas",
@@ -115,6 +126,8 @@ const parseSettings = (raw: string): UiSettings => {
     return {
         ...defaultSettings,
         ...parsed,
+        timelineHeight: parseTimelineHeight(parsed.timelineHeight),
+        timelineWaveformStyle: parseWaveformStyle(parsed.timelineWaveformStyle),
         mouseSettings: mergedMouseSettings,
         coordinateRounding: parsed.coordinateRounding
             ? {
@@ -156,6 +169,7 @@ interface UiSettingsStoreActions {
     setTimelineZoomFitted: (fitted: boolean) => void;
     /** Turns the compact timeline on or off (`!timelineCompact` without an argument) */
     setTimelineCompact: (compact?: boolean) => void;
+    setTimelineHeight: (height: number | null) => void;
     toggleAudioMute: () => void;
     setAudioVolume: (volume: number) => void;
 }
@@ -205,6 +219,8 @@ export const useUiSettingsStore = create<UiSettingsStoreInterface>(
             setSetting("timelinePixelsPerBeat", pixelsPerBeat),
         setTimelineZoomFitted: (fitted: boolean) =>
             setSetting("timelineZoomFitted", fitted),
+        setTimelineHeight: (height: number | null) =>
+            setSetting("timelineHeight", parseTimelineHeight(height)),
         setTimelineCompact: (compact?: boolean) =>
             setSetting(
                 "timelineCompact",
