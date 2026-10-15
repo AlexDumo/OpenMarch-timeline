@@ -359,12 +359,18 @@ test("fullscreen fits the whole field, and leaving it centers the field again", 
     await expect
         .poll(async () => (await view(page)).zoom)
         .not.toBe(before.zoom);
-    const fit = await settledView(page);
-    const box = await fieldBox(page);
     // Centered across at 87% of the room, a tenth of the spare height down.
     // Today's fit measures the room with the 128 px left above the field, so
     // when the height limits it the field's back edge can run off the bottom.
-    expectNear(fit.pan.x, (box.width - field.width * fit.zoom) / 2);
+    // The canvas can take a moment to grow into the room: read both afresh.
+    const offCenter = async () => {
+        const v = await view(page);
+        const { width } = await fieldBox(page);
+        return Math.abs(v.pan.x - (width - field.width * v.zoom) / 2);
+    };
+    await expect.poll(offCenter).toBeLessThanOrEqual(1.5);
+    const fit = await settledView(page);
+    const box = await fieldBox(page);
     expect(fit.pan.y).toBeGreaterThan(0);
     expect(fit.zoom).toBeLessThanOrEqual(
         (box.width / field.width) * 0.87 + 1e-6,
