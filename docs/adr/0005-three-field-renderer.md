@@ -41,11 +41,11 @@ were production builds on the same machine and in the same Chromium. That
 machine had no working GPU driver, so every WebGL number is software GL
 (llvmpipe or SwiftShader) and is a lower bound.
 
-| Show and condition                 | Fabric (play / drag fps) | three.js (play / drag fps) |
-| ---------------------------------- | ------------------------ | -------------------------- |
-| 385 marchers, 4× slower CPU        | 34 / 24                  | 60 / 59                    |
-| 1,925 marchers, 4× slower CPU      | 1.2 / 4                  | 60 / 58                    |
-| 385 marchers, no GPU (SwiftShader) | 60 / 59                  | 29 / 26                    |
+| Show and condition                  | Fabric (play / drag fps) | three.js (play / drag fps) |
+| ----------------------------------- | ------------------------ | -------------------------- |
+| 385 marchers, 4× slower CPU         | 34 / 24                  | 60 / 59                    |
+| 1,925 marchers, 4× slower CPU       | 1.2 / 4                  | 60 / 58                    |
+| 385 marchers, no GPU (SwiftShader)  | 60 / 59                  | 29 / 26                    |
 
 What the prototype showed:
 
@@ -91,7 +91,6 @@ This record changes cross-package ownership (field geometry shared with the
 
   A drop hands its result to the existing drop-to-timeline planner, which is
   reused unchanged.
-
 - **The field renderer** is a React Three Fiber Canvas, separate from the 3D
   View's. It draws what the editor exposes and reports nothing but pointer
   positions. It draws the field, background image, marchers, labels,
