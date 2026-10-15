@@ -189,7 +189,7 @@ export async function waitForIdle(page: Page, quietMs = 250) {
         if (w.__omIdle) return;
         const state = { inFlight: 0, last: performance.now() };
         w.__omIdle = state;
-        for (const name of ["sqlProxy", "unsafeSqlProxy"]) {
+        for (const name of ["sqlProxy", "unsafeSqlProxy", "sqlReadBatch"]) {
             const original = w.electron[name];
             w.electron[name] = async (...args: unknown[]) => {
                 state.inFlight++;
