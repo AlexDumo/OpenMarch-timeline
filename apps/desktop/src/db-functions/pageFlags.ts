@@ -1,4 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
+import { generatePageNames } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
@@ -7,7 +8,6 @@ import {
     planTimelineRipple,
     readPageGrid,
     readRippleRows,
-    timelineModeInTransaction,
     withTimelinePageRipple,
     type GridPage,
     type PageGrid,
@@ -21,6 +21,10 @@ import {
     type DatabasePage,
 } from "./page";
 import { moveTagAppearancesOffPagesInTransaction } from "./tagAppearancePageDelete";
+import {
+    splitMovesAtBeatInTransaction,
+    type SplitMovesResult,
+} from "./timelinePointMoves";
 
 /**
  * Page flags in timeline mode (docs/timeline/ui.md UI-9 **+** and Deleting a flag; P8.13).
@@ -32,7 +36,8 @@ import { moveTagAppearancesOffPagesInTransaction } from "./tagAppearancePageDele
  *
  * **+** and Delete flag write only page rows, and `last_page_counts` when the last page changes.
  * They never run `withTimelinePageRipple` (P7.4): no timeline, transition or assignment is created,
- * moved or deleted, so motion is unchanged. Timelines track flags only when a flag moves, so
+ * moved or deleted, so motion is unchanged. The exception is **+** in Basic (`splitMoves`), which
+ * also splits each marcher's move at the new flag, keeping motion unchanged. Timelines track flags only when a flag moves, so
  * moving one does run it (`movePageFlagInTransaction`). Each is one undoable edit.
  *
  * Beats here are ordinals (resolver beats), the same as timeline rows and `readPageGrid`: page 0
@@ -103,6 +108,32 @@ export function planPageFlagInsertion(
     return null;
 }
 
+/**
+ * The names the page added by **+** would have, as a plain page and as a subset page ("3" and
+ * "2A"), for the right-click menu. `pages` are the show's pages in order (home first); the new page
+ * goes where `insertion` puts it (before the split page, or last). `pageNumberOffset` is the file's
+ * first page number (workspace settings), as the pages' own names use.
+ */
+export function newPageNames(
+    pages: readonly { readonly id: number; readonly isSubset: boolean }[],
+    insertion: PageFlagInsertion,
+    pageNumberOffset = 0,
+): { page: string; subset: string } {
+    const index =
+        insertion.kind === "split"
+            ? Math.max(
+                  pages.findIndex((p) => p.id === insertion.page.id),
+                  0,
+              )
+            : pages.length;
+    const nameWith = (isSubset: boolean) => {
+        const flags = pages.map((p) => p.isSubset);
+        flags.splice(index, 0, isSubset);
+        return generatePageNames(flags, pageNumberOffset)[index]!;
+    };
+    return { page: nameWith(false), subset: nameWith(true) };
+}
+
 const gridOf = (grid: PageGrid): PageFlagGrid => ({
     beatCount: grid.beatIds.length,
     pages: grid.pages,
@@ -117,16 +148,13 @@ const lastPageCountsIn = async (tx: DbTransaction): Promise<number> => {
     return utility.lastPageCounts;
 };
 
-const refuseOutsideTimelineMode = async (tx: DbTransaction, what: string) => {
-    if (!(await timelineModeInTransaction(tx)))
-        refuse(`${what} is only for timeline mode`);
-};
-
 /** A page added by **+**: the new page row and its page timeline's range `[startBeat, endBeat)`. */
 export interface AddedPageFlag {
     page: DatabasePage;
     startBeat: number;
     endBeat: number;
+    /** With `splitMoves` and a split: the marchers split at the new flag, and those left alone */
+    splitMoves?: SplitMovesResult;
 }
 
 /**
@@ -135,20 +163,30 @@ export interface AddedPageFlag {
  *
  * - **Split:** the split page's `start_beat` moves to `beat`, and a new page row takes its old
  *   start, so the split page keeps its flag, id and data (notes, appearance) and the new page comes
- *   before it. Later pages renumber; no `is_subset` page is made. Splitting the last page also
+ *   before it. Later pages renumber, unless `subset` (**Add subset page**) makes the new page a
+ *   subset, which takes a letter and leaves every later page's number. Splitting the last page also
  *   rewrites `last_page_counts` so its flag stays where it was.
- * - **Append:** a new page starts at the last flag and ends at `beat` (`last_page_counts`).
+ * - **Append:** a new page starts at the last flag and ends at `beat` (`last_page_counts`); a
+ *   `subset` one takes the last page's number and the next letter.
+ *
+ * With `splitMoves` (Basic, README "Basic's panel"), a split first splits each marcher's move
+ * across `beat` there (`splitMovesAtBeatInTransaction` on the split page's box), so no simple
+ * move crosses the new flag; motion is unchanged. Without it (Expert), only page rows are written.
  *
  * Returns the new page and its range, which is the page timeline the UI selects.
  */
 export async function addPageFlagInTransaction({
     tx,
     beat,
+    splitMoves = false,
+    subset = false,
 }: {
     tx: DbTransaction;
     beat: number;
+    splitMoves?: boolean;
+    /** Make the new page a subset page (**Add subset page**) */
+    subset?: boolean;
 }): Promise<AddedPageFlag> {
-    await refuseOutsideTimelineMode(tx, "Adding a page flag");
     const grid = await readPageGrid(tx);
     const plan = planPageFlagInsertion(gridOf(grid), beat);
     if (!plan)
@@ -159,6 +197,14 @@ export async function addPageFlagInTransaction({
     if (plan.kind === "split") {
         const { page } = plan;
         const lastPageCounts = plan.last ? await lastPageCountsIn(tx) : 0;
+        // Before the page rows change, while the split page's box is still a page's
+        const split = splitMoves
+            ? await splitMovesAtBeatInTransaction({
+                  tx,
+                  beat,
+                  box: { start: page.start, end: page.end },
+              })
+            : undefined;
         // The split page moves off its start first: `pages.start_beat` is unique
         await tx
             .update(schema.pages)
@@ -167,7 +213,10 @@ export async function addPageFlagInTransaction({
         const [created] = await createPagesInTransaction({
             tx,
             newPages: [
-                { start_beat: grid.beatIds[page.start]!, is_subset: false },
+                {
+                    start_beat: grid.beatIds[page.start]!,
+                    is_subset: subset,
+                },
             ],
         });
         // Keep the last flag where it was, even where the show's beats end before it
@@ -176,13 +225,18 @@ export async function addPageFlagInTransaction({
                 tx,
                 lastPageCounts: page.start + lastPageCounts - beat,
             });
-        return { page: created!, startBeat: page.start, endBeat: beat };
+        return {
+            page: created!,
+            startBeat: page.start,
+            endBeat: beat,
+            ...(split ? { splitMoves: split } : {}),
+        };
     }
 
     const start = plan.lastPage.end;
     const [created] = await createPagesInTransaction({
         tx,
-        newPages: [{ start_beat: grid.beatIds[start]!, is_subset: false }],
+        newPages: [{ start_beat: grid.beatIds[start]!, is_subset: subset }],
     });
     await updateLastPageCounts({ tx, lastPageCounts: beat - start });
     return { page: created!, startBeat: start, endBeat: beat };
@@ -192,14 +246,19 @@ export async function addPageFlagInTransaction({
 export async function addPageFlag({
     db,
     beat,
+    splitMoves = false,
+    subset = false,
 }: {
     db: DbConnection;
     beat: number;
+    splitMoves?: boolean;
+    subset?: boolean;
 }): Promise<AddedPageFlag> {
     return await transactionWithHistory(
         db,
         "addPageFlag",
-        async (tx) => await addPageFlagInTransaction({ tx, beat }),
+        async (tx) =>
+            await addPageFlagInTransaction({ tx, beat, splitMoves, subset }),
     );
 }
 
@@ -224,7 +283,6 @@ export async function deletePageFlagsInTransaction({
     tx: DbTransaction;
     pageIds: ReadonlySet<number>;
 }): Promise<DatabasePage[]> {
-    await refuseOutsideTimelineMode(tx, "Deleting a page flag");
     const ids = [...pageIds].filter((id) => id !== FIRST_PAGE_ID);
     if (ids.length === 0) return [];
     const initial = await readPageGrid(tx);
@@ -253,12 +311,7 @@ export async function deletePageFlagsInTransaction({
             pageIds: new Set([id]),
         });
         // The page goes before the next one takes its start: `pages.start_beat` is unique.
-        // Its marcher pages are frozen in timeline mode (P9.5) and may go only once it's gone; they
-        // follow through the cascade, or the delete after it where foreign keys are off.
         await tx.delete(schema.pages).where(eq(schema.pages.id, id));
-        await tx
-            .delete(schema.marcher_pages)
-            .where(inArray(schema.marcher_pages.page_id, [id]));
 
         if (next) {
             await tx
@@ -501,7 +554,6 @@ export async function pageFlagMoveLimitsInTransaction({
     tx: DbTransaction;
     pageId: number;
 }): Promise<PageFlagMoveLimits | null> {
-    if (!(await timelineModeInTransaction(tx))) return null;
     return planPageFlagMoveLimits(
         await readPageGrid(tx),
         await readRippleRows(tx),
@@ -549,7 +601,6 @@ export async function movePageFlagInTransaction({
     pageId: number;
     beat: number;
 }): Promise<MovedPageFlag> {
-    await refuseOutsideTimelineMode(tx, "Moving a page flag");
     if (pageId === FIRST_PAGE_ID) refuse("home's flag can't move");
     const grid = await readPageGrid(tx);
     const index = grid.pages.findIndex((p) => p.id === pageId);

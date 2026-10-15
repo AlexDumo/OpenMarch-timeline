@@ -36,6 +36,7 @@ import {
     surfaceReport,
 } from "./fakeLibrary";
 import { toMeters, type Length } from "@/view3d/core/sizes";
+import { CommitMetaSchema } from "@/view3d/library/protocol";
 
 let urlCount = 0;
 const urls = {
@@ -64,6 +65,10 @@ describe("helpers", () => {
     it("names a file without its extension", () => {
         expect(displayName("drum_major_mace.glb")).toBe("drum major mace");
         expect(displayName("Winter guard.PDF")).toBe("Winter guard");
+    });
+
+    it("keeps a name from a long file name within the name limit", () => {
+        expect(displayName(`${"a".repeat(300)}.png`)).toHaveLength(200);
     });
 
     it("keys choices independent of key order", () => {
@@ -435,6 +440,89 @@ describe("createImportReview: a model", () => {
         expect(store.getState().cancelledCommit).toBe(true);
     });
 
+    it("locks the choices while a commit runs, so Add can't reopen", async () => {
+        const lib = modelFake();
+        const pending = deferred<unknown>();
+        lib.on("importCommit", () => pending.promise);
+        const store = createImportReview(lib.client, urls);
+        await store.getState().pick("model");
+        const inspects = lib.calls.importInspect.length;
+        void store.getState().commit();
+        await tick();
+        store.getState().setChoices({ simplify: false });
+        store.getState().setKind("prop");
+        store.getState().startGripPick();
+        await tick();
+        expect(lib.calls.importInspect).toHaveLength(inspects);
+        expect(store.getState().phase).toBe("committing");
+        expect(store.getState().model?.choices).toEqual({});
+        expect(store.getState().model?.pickingGrip).toBe(false);
+        expect(addBlocker(store.getState())).toBe("busy");
+        pending.resolve(
+            ok({ type: "model", report: choicesReport(), saved: null }),
+        );
+        await tick();
+        expect(lib.calls.importCommit).toHaveLength(1);
+    });
+
+    it("keeps the report and its choices when a re-inspect is cancelled", async () => {
+        const lib = modelFake();
+        const store = createImportReview(lib.client, urls);
+        await store.getState().pick("model");
+        const shown = store.getState().model?.inspection;
+        lib.on("importInspect", () => ({
+            ok: false,
+            error: { code: "cancelled", message: "x" },
+        }));
+        store.getState().setChoices({ rotateToYUp: false });
+        await tick();
+        const state = store.getState();
+        expect(state.phase).toBe("review");
+        expect(state.error).toBeNull();
+        expect(state.model?.inspection).toBe(shown);
+        expect(state.model?.choices).toEqual({});
+        expect(state.model?.inspecting).toBe(false);
+    });
+
+    it("goes back to after when the before model fails to load", async () => {
+        const lib = modelFake();
+        const revokeUrl = vi.fn();
+        const store = createImportReview(lib.client, { ...urls, revokeUrl });
+        await store.getState().pick("model");
+        store.getState().setShowBefore(true);
+        await tick();
+        const before = store.getState().model!.beforeUrl;
+        store.getState().beforeFailed();
+        expect(store.getState().model).toMatchObject({
+            beforeUrl: null,
+            showBefore: false,
+        });
+        expect(revokeUrl).toHaveBeenCalledWith(before);
+        expect(store.getState().model?.glbUrl).toMatch(/^blob:test\//);
+    });
+
+    it("sends only meta main accepts, however long the fields", async () => {
+        const lib = modelFake();
+        lib.on("importCommit", () =>
+            ok({ type: "model", report: choicesReport(), saved: null }),
+        );
+        const store = createImportReview(lib.client, urls);
+        await store.getState().pick("model");
+        store.getState().setMeta({
+            name: "n".repeat(300),
+            tags: `${"t".repeat(100)}, b`,
+            author: "a".repeat(300),
+            license: "+",
+        });
+        await store.getState().commit();
+        const meta = (lib.calls.importCommit[0] as { meta: unknown }).meta;
+        expect(CommitMetaSchema.safeParse(meta).success).toBe(true);
+        expect(meta).toMatchObject({
+            tags: ["t".repeat(64), "b"],
+            license: { licenseText: "+" },
+        });
+    });
+
     it("shows a crashed worker inline and retries the inspect", async () => {
         const lib = modelFake();
         lib.on("importInspect", () => ({
@@ -717,6 +805,28 @@ describe("createImportReview: artwork", () => {
         expect(
             store.getState().artwork!.previews[`${ART_FILE_A}:1@256`],
         ).toMatch(/^blob:/);
+    });
+
+    it("ends the review and shows the Library when a commit is cancelled", async () => {
+        const lib = artworkFake();
+        lib.on("importCommit", () => ({
+            ok: false,
+            error: { code: "cancelled", message: "x" },
+        }));
+        const onCommitStopped = vi.fn();
+        const onClose = vi.fn();
+        const store = createImportReview(lib.client, {
+            ...urls,
+            onCommitStopped,
+            onClose,
+        });
+        await store.getState().pick("any");
+        await store.getState().commit();
+        // Pages stored before the cancel stay; Add can't import them twice.
+        expect(store.getState().phase).toBe("closed");
+        expect(lib.closed).toEqual([SESSION]);
+        expect(onClose).toHaveBeenCalledOnce();
+        expect(onCommitStopped).toHaveBeenCalledOnce();
     });
 
     it("reports added and skipped pages when done", async () => {

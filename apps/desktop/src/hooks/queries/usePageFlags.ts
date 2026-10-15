@@ -4,6 +4,7 @@ import {
     mutationOptions,
     QueryClient,
     useMutation,
+    useQuery,
     useQueryClient,
 } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
@@ -14,6 +15,7 @@ import {
     movePageFlag,
     type MovedPageFlag,
     pageFlagGrid,
+    newPageNames,
     planPageFlagInsertion,
     type AddedPageFlag,
     type PageFlagInsertion,
@@ -27,7 +29,9 @@ import {
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { invalidatePageQueries } from "./usePages";
+import { workspaceSettingsQueryOptions } from "./useWorkspaceSettings";
 import { invalidateTagQueries } from "./tags/queries";
+import { isBasicMode } from "@/stores/EditorModeStore";
 
 /**
  * Page flag writes in timeline mode (ui.md UI-9 **+** and Deleting a flag, P8.13). They change only
@@ -37,14 +41,16 @@ import { invalidateTagQueries } from "./tags/queries";
 
 /**
  * **+** at a beat. Resolves to the new page and its range `[startBeat, endBeat)`, the page timeline
- * the UI selects next (`onAdded`).
+ * the UI selects next (`onAdded`). In Basic it also splits each marcher's move at the new flag
+ * (`splitMoves`); those rows reach the resolver through the database's change events.
  */
 export const addPageFlagMutationOptions = (
     qc: QueryClient,
     onAdded?: (added: AddedPageFlag) => void,
 ) =>
     mutationOptions({
-        mutationFn: (beat: number) => addPageFlag({ db, beat }),
+        mutationFn: ({ beat, subset }: { beat: number; subset?: boolean }) =>
+            addPageFlag({ db, beat, subset, splitMoves: isBasicMode() }),
         onSuccess: (added) => {
             void invalidatePageQueries(qc);
             onAdded?.(added);
@@ -167,12 +173,21 @@ export function useAddPageFlag({
     isPlaying,
     onAdded,
 }: {
-    pages: Parameters<typeof pageFlagGrid>[0];
+    pages: readonly (Parameters<typeof pageFlagGrid>[0][number] & {
+        readonly isSubset: boolean;
+    })[];
     beatCount: number;
     playheadBeat: number;
     isPlaying: boolean;
     onAdded?: (added: AddedPageFlag) => void;
-}): { insertion: PageFlagInsertion | null; add: () => void } {
+}): {
+    insertion: PageFlagInsertion | null;
+    add: () => void;
+    /** **Add subset page**: the same page, as a subset */
+    addSubset: () => void;
+    /** What the new page would be named as a plain page and as a subset; null with no insertion */
+    names: { page: string; subset: string } | null;
+} {
     const queryClient = useQueryClient();
     const { mutate } = useMutation(
         addPageFlagMutationOptions(queryClient, onAdded),
@@ -188,7 +203,30 @@ export function useAddPageFlag({
         [pages, beatCount, playheadBeat, isPlaying],
     );
     const add = useCallback(() => {
-        if (insertion) mutate(insertion.beat);
+        if (insertion) mutate({ beat: insertion.beat });
     }, [insertion, mutate]);
-    return { insertion, add };
+    const addSubset = useCallback(() => {
+        if (insertion) mutate({ beat: insertion.beat, subset: true });
+    }, [insertion, mutate]);
+    // The pages' names start at the file's first page number, so the new page's must too
+    const { data: workspaceSettings } = useQuery(
+        workspaceSettingsQueryOptions(),
+    );
+    const pageNumberOffset = workspaceSettings?.pageNumberOffset ?? 0;
+    const names = useMemo(
+        () =>
+            insertion
+                ? newPageNames(
+                      [...pages].sort(
+                          (a, b) =>
+                              (a.beats[0]?.index ?? 0) -
+                              (b.beats[0]?.index ?? 0),
+                      ),
+                      insertion,
+                      pageNumberOffset,
+                  )
+                : null,
+        [insertion, pages, pageNumberOffset],
+    );
+    return { insertion, add, addSubset, names };
 }
