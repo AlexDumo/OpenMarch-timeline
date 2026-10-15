@@ -95,6 +95,7 @@ function MarcherRotationInput() {
                     handleRotationChange(value);
                 }}
                 icon={ArrowClockwiseIcon}
+                aria-label="Rotation"
                 onBlur={handleRotationDragEnd}
                 onDragEnd={handleRotationDragEnd}
                 disabled={!activeGroup}
