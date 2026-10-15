@@ -33,6 +33,10 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { timeAtBeat, type BeatTiming } from "@/timeline/timeMap";
+import {
+    effectivePlaybackSpeed,
+    usePlaybackSpeedStore,
+} from "@/stores/PlaybackSpeedStore";
 import { updateVenueSettingsMutationOptions } from "@/hooks/queries/useVenueSettings";
 import { venueSettingsSchema } from "@/view3d/core/venueSettings";
 import { runAction } from "@/shortcuts/registry";
@@ -128,6 +132,7 @@ export function useView3dPublisher() {
     const pausedBeat = useTimelineSelectionStore(displayedBeat);
     // The playhead also moves while playing; only a paused one re-anchors the clock
     const heldBeat = isPlaying ? null : pausedBeat;
+    const playbackSpeed = usePlaybackSpeedStore(effectivePlaybackSpeed);
     const { mutate: updateVenue } = useMutation(
         updateVenueSettingsMutationOptions(queryClient),
     );
@@ -169,7 +174,10 @@ export function useView3dPublisher() {
             playing,
             anchorShowMs: currentAnchorShowMs(playing, b, beat),
             anchorWallMs: wallNowMs(),
-            rate: 1,
+            // The window's clock runs at the playback speed too
+            rate: playing
+                ? effectivePlaybackSpeed(usePlaybackSpeedStore.getState())
+                : 1,
         };
         window.electron.publishToView3d(VIEW3D_CLOCK_CHANNEL, clock);
     }, []);
@@ -232,8 +240,8 @@ export function useView3dPublisher() {
         };
     }, []);
 
-    // Clock: on play, pause, a move of the paused playhead and a tempo change,
-    // and a heartbeat while playing.
+    // Clock: on play, pause, a move of the paused playhead, a tempo or speed
+    // change, and a heartbeat while playing.
     useEffect(() => {
         if (!windowOpen) return;
         sendClock();
@@ -244,7 +252,7 @@ export function useView3dPublisher() {
             clearTimeout(settle);
             clearInterval(heartbeat);
         };
-    }, [windowOpen, isPlaying, heldBeat, beats, sendClock]);
+    }, [windowOpen, isPlaying, heldBeat, beats, playbackSpeed, sendClock]);
 
     useEffect(() => {
         if (windowOpen) sendSelection();

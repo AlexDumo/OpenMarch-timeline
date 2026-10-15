@@ -10,6 +10,8 @@ interface HandlerOptions {
      * `ignoreRepeat` does, but it can change with state (navigation while playing). Default false.
      */
     ignoreRepeat?: boolean;
+    /** Runs when the key that ran the action is let go (or the window loses focus while held) */
+    onRelease?: () => void;
 }
 
 export function useActionHandler(
@@ -29,9 +31,12 @@ export function useActionHandlerGroup(
     const runRef = useRef(run);
     const enabledRef = useRef(enabled);
     const ignoreRepeatRef = useRef(options.ignoreRepeat ?? false);
+    const releaseRef = useRef(options.onRelease);
+    const hasRelease = options.onRelease !== undefined;
     useLayoutEffect(() => {
         runRef.current = run;
         ignoreRepeatRef.current = options.ignoreRepeat ?? false;
+        releaseRef.current = options.onRelease;
     });
     useLayoutEffect(() => {
         if (enabledRef.current === enabled) return;
@@ -49,8 +54,9 @@ export function useActionHandlerGroup(
                 run: (args) => runRef.current(id as ActionId, args),
                 isEnabled: () => enabledRef.current,
                 ignoresRepeat: () => ignoreRepeatRef.current,
+                release: hasRelease ? () => releaseRef.current?.() : undefined,
             }),
         );
         return () => unregister.forEach((off) => off());
-    }, [idsKey]);
+    }, [idsKey, hasRelease]);
 }

@@ -2,6 +2,7 @@ import type { TimelineNavigation } from "@/components/timeline/TimelineViewModel
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useTimingObjects } from "@/hooks";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
+import { usePlaybackSpeedStore } from "@/stores/PlaybackSpeedStore";
 import {
     navigateTimeline,
     playTimelinePage,
@@ -63,4 +64,18 @@ export function useNavigationActionHandlers() {
         enabled: ready && !basic,
     });
     useActionHandler("toggleMetronome", () => toggleMetronome());
+    // Playback speed: ] and [ last while held
+    const speed = usePlaybackSpeedStore.getState;
+    // Letting go of one key leaves the other's hold if it was pressed since
+    const letGo = (hold: "faster" | "slower") => () => {
+        if (speed().hold === hold) speed().setHold(null);
+    };
+    useActionHandler("holdFasterPlayback", () => speed().setHold("faster"), {
+        onRelease: letGo("faster"),
+    });
+    useActionHandler("holdSlowerPlayback", () => speed().setHold("slower"), {
+        onRelease: letGo("slower"),
+    });
+    useActionHandler("nextPlaybackSpeed", () => speed().stepSpeed());
+    useActionHandler("resetPlaybackSpeed", () => speed().setSpeed(1));
 }

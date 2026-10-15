@@ -82,6 +82,11 @@
             "play": "Play",
             "playPage": "Play from playhead",
             "playPause": "Play / stop",
+            "holdFaster": "Double speed while held",
+            "holdSlower": "Half speed while held",
+            "nextSpeed": "Next playback speed",
+            "resetSpeed": "Normal playback speed",
+            "speedKeywords": "speed rate slow fast tempo playback",
             "toggleMetronome": "Toggle metronome",
             "toggleLoop": "Loop on / off"
         },
