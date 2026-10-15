@@ -53,45 +53,42 @@ function useSamplesWhileActive(
     return paths;
 }
 
+/** The selected page's moves in and out, as `useTimelinePathSamples` keeps them. */
+export interface TimelinePathSamples {
+    /** Each marcher's move into the selected page */
+    readonly previousPaths: Paths;
+    /** Each marcher's move into the next page */
+    readonly nextPaths: Paths;
+}
+
 /**
- * Draws the selected page's path visuals from the resolver (docs/timeline/phases/07-page-parity.md
- * P7.10): the move into the selected page and the move out of it, as curves sampled between page
- * end beats, with midsets and step-size warnings from the same samples.
+ * The selected page's paths from the resolver (docs/timeline/phases/07-page-parity.md P7.10): the
+ * move into the selected page and the move out of it, sampled between page end beats.
  *
  * Cost: the samples are kept per resolver version and page pair, so toggles and visual changes
- * redraw without resampling, and so do Play and Stop; a side that can't show (its toggle off and
- * no forced warning) isn't sampled; nothing is sampled or drawn while playing, as with
- * `useTimelineStaticRender`, and stopping on the page that was drawn doesn't draw it again.
- *
- * Does nothing while `enabled` is false (the resolver isn't ready yet). When it turns false, the
- * curved paths are removed.
+ * don't resample, and neither do Play and Stop; a side that can't show (its toggle off and no
+ * forced warning) isn't sampled; nothing is sampled while playing or while `enabled` is false,
+ * and the last samples are returned instead. Shared by both fields.
  */
-// eslint-disable-next-line max-lines-per-function
-export function useTimelinePathRender({
-    canvas,
+export function useTimelinePathSamples({
     enabled,
     isPlaying,
     selectedPage,
     pages,
     marcherIds,
-    marcherVisuals,
-    fieldProperties,
     previousPathsEnabled,
     nextPathsEnabled,
     stepSizeWarningsEnabled,
 }: {
-    canvas: OpenMarchCanvas | null;
     enabled: boolean;
     isPlaying: boolean;
     selectedPage: PathRenderPage | null;
     pages: readonly PathRenderPage[];
     marcherIds: readonly number[] | undefined;
-    marcherVisuals: MarcherVisualMap | null | undefined;
-    fieldProperties: FieldProperties | undefined;
     previousPathsEnabled: boolean;
     nextPathsEnabled: boolean;
     stepSizeWarningsEnabled: boolean;
-}): void {
+}): TimelinePathSamples & { readonly active: boolean } {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
     const active = enabled && !isPlaying && resolver !== null;
@@ -135,6 +132,56 @@ export function useTimelinePathRender({
                 : NO_PATHS,
         [sampleOut, resolver, version, marcherIds, selectedPage, nextPage],
     );
+    return { previousPaths, nextPaths, active };
+}
+
+/**
+ * Draws the selected page's path visuals from the resolver (docs/timeline/phases/07-page-parity.md
+ * P7.10): the move into the selected page and the move out of it, as curves sampled between page
+ * end beats (`useTimelinePathSamples`), with midsets and step-size warnings from the same samples.
+ *
+ * Nothing is drawn while playing, as with `useTimelineStaticRender`, and stopping on the page that
+ * was drawn doesn't draw it again.
+ *
+ * Does nothing while `enabled` is false (the resolver isn't ready yet). When it turns false, the
+ * curved paths are removed.
+ */
+// eslint-disable-next-line max-lines-per-function
+export function useTimelinePathRender({
+    canvas,
+    enabled,
+    isPlaying,
+    selectedPage,
+    pages,
+    marcherIds,
+    marcherVisuals,
+    fieldProperties,
+    previousPathsEnabled,
+    nextPathsEnabled,
+    stepSizeWarningsEnabled,
+}: {
+    canvas: OpenMarchCanvas | null;
+    enabled: boolean;
+    isPlaying: boolean;
+    selectedPage: PathRenderPage | null;
+    pages: readonly PathRenderPage[];
+    marcherIds: readonly number[] | undefined;
+    marcherVisuals: MarcherVisualMap | null | undefined;
+    fieldProperties: FieldProperties | undefined;
+    previousPathsEnabled: boolean;
+    nextPathsEnabled: boolean;
+    stepSizeWarningsEnabled: boolean;
+}): void {
+    const { previousPaths, nextPaths, active } = useTimelinePathSamples({
+        enabled,
+        isPlaying,
+        selectedPage,
+        pages,
+        marcherIds,
+        previousPathsEnabled,
+        nextPathsEnabled,
+        stepSizeWarningsEnabled,
+    });
 
     /**
      * What the last draw drew; the paths stay on the canvas while playing, so a draw with the same

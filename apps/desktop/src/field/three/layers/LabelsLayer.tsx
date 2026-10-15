@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import type { FieldTheme } from "@openmarch/core";
 import { rgba01 } from "../fieldGeometry";
 import type { FieldMarchers } from "../fieldMarchers";
+import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
 import { useFieldViewStore } from "../fieldView";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
@@ -23,11 +24,14 @@ const CENTER_BASELINE = 0.35;
  */
 export default function LabelsLayer({
     marchers,
+    dimming,
     labels,
     theme,
     atlas,
 }: {
     marchers: FieldMarchers;
+    /** Marchers whose labels are drawn dimmed (#201). */
+    dimming: FieldDimming;
     /** Each marcher's drill number, by id. */
     labels: ReadonlyMap<number, string>;
     theme: FieldTheme;
@@ -44,6 +48,7 @@ export default function LabelsLayer({
         version: -1,
         idsVersion: -1,
         appearanceVersion: -1,
+        dimVersion: -1,
         labels,
         theme,
         shown: new Uint8Array(0) as Uint8Array,
@@ -87,15 +92,22 @@ export default function LabelsLayer({
             marchers.idsVersion !== last.idsVersion ||
             labels !== last.labels ||
             theme !== last.theme ||
-            shown !== last.shown;
+            shown !== last.shown ||
+            dimming.version !== last.dimVersion;
         if (newLayout) {
             const color = rgba01(theme.defaultMarcher.label);
+            const dimmed: typeof color = [
+                color[0],
+                color[1],
+                color[2],
+                color[3] * DIMMED_OPACITY,
+            ];
             text.setLabels(
                 marchers.ids.map((id, i) => ({
                     text: shown[i] ? (labels.get(id) ?? "") : "",
                     size: LABEL_SIZE,
                     baseline: CENTER_BASELINE,
-                    color,
+                    color: dimming.isDimmed(id) ? dimmed : color,
                 })),
             );
         }
@@ -105,6 +117,7 @@ export default function LabelsLayer({
             version: marchers.version,
             idsVersion: marchers.idsVersion,
             appearanceVersion: marchers.appearanceVersion,
+            dimVersion: dimming.version,
             labels,
             theme,
             shown,

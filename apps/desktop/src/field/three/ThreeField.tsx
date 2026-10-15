@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera, WebGLRenderer } from "three";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -16,6 +16,7 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import {
     allMarchersQueryOptions,
     fieldPropertiesQueryOptions,
+    moveMarchersInTargetMutationOptions,
 } from "@/hooks/queries";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useTimingObjects } from "@/hooks";
@@ -45,16 +46,28 @@ import { FieldEditor } from "@/field/editor/fieldEditor";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
+import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import { FieldMarchers } from "./fieldMarchers";
 import FieldOverlay from "./FieldOverlay";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, fitView, useFieldViewStore } from "./fieldView";
 import { GlyphAtlas } from "./sdfText";
+import { selectionBoxPadding } from "./selectionRing";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
 import LabelsLayer from "./layers/LabelsLayer";
+import OverlayLayer from "./layers/OverlayLayer";
+import { useTimelineVisuals } from "./useTimelineVisuals";
+import {
+    KeptMarksOverlay,
+    KeptMarksPlacer,
+    KeptMarkTooltipView,
+    useFieldKeptMarks,
+    useKeptMarkTooltip,
+    type KeptMarkElements,
+} from "./KeptMarks";
 import {
     currentFieldQuality,
     useFieldQuality,
@@ -73,6 +86,18 @@ const LABEL_FONT = 'bold "Courier New", monospace';
  */
 const NUMBER_FONT = '"Times New Roman"';
 const CHECKPOINT_FONT = '"mono"';
+/** `CollisionMarker`'s label font. */
+const COLLISION_FONT = "Arial";
+
+/**
+ * Where the timeline's layers sit among the field's (#201): the isolated move's
+ * scene and the page's pathways above the field text (1) and under the
+ * marchers (2), as Fabric stacks them; collision markers over the labels (3),
+ * as Fabric adds them after the marchers.
+ */
+const FOCUS_ORDER = 1.4;
+const PATHS_ORDER = 1.5;
+const COLLISIONS_ORDER = 4;
 
 /**
  * The three.js field, or an explanation in its place when its canvas can't get
@@ -109,7 +134,8 @@ export default function ThreeField() {
  * at the playhead, and installs the field test API. #199: each marcher in its
  * appearance at the playhead (the last flag crossed, `appearanceSteps`). #193: the
  * editor selects marchers by clicking them, with rings on the selected
- * marchers and a box around a multi-selection in the SVG overlay.
+ * marchers and a box around a multi-selection in the SVG overlay. #196:
+ * dragging marchers, and saving the drop through the timeline.
  *
  * Guard rails (ADR 0005 D-2): it draws only on demand (`frameloop="demand"`;
  * playback and changes invalidate), there's one component per layer, and
@@ -125,7 +151,7 @@ function ThreeFieldView() {
     const { selectedPage } = useSelectedPage()!;
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const { isPlaying } = useIsPlaying()!;
-    const { beats } = useTimingObjects()!;
+    const { beats, pages } = useTimingObjects()!;
     const { image: fieldImage } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
@@ -142,6 +168,9 @@ function ThreeFieldView() {
         [fieldProperties, fieldImage],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
+    const { mutateAsync: moveMarchers } = useMutation(
+        moveMarchersInTargetMutationOptions(),
+    );
 
     // Weak machines (#205): what draws WebGL here, known before the canvas mounts
     const [probed] = useState(
@@ -174,6 +203,7 @@ function ThreeFieldView() {
             label: new GlyphAtlas(LABEL_FONT),
             number: new GlyphAtlas(NUMBER_FONT),
             checkpoint: new GlyphAtlas(CHECKPOINT_FONT),
+            collision: new GlyphAtlas(COLLISION_FONT),
         }),
         [],
     );
@@ -182,6 +212,7 @@ function ThreeFieldView() {
             atlases.label.dispose();
             atlases.number.dispose();
             atlases.checkpoint.dispose();
+            atlases.collision.dispose();
         },
         [atlases],
     );
@@ -197,6 +228,34 @@ function ThreeFieldView() {
         selection.current = selectedIds;
     }, [selectedIds]);
 
+    // #201: the timeline's pathways, isolation scene, collisions, dimming and kept marks
+    const marcherIds = useMemo(
+        () => marcherRows?.map((marcher) => marcher.id),
+        [marcherRows],
+    );
+    const timeline = useTimelineVisuals({
+        isPlaying,
+        selectedPage,
+        pages,
+        marcherIds,
+        fieldProperties,
+    });
+    const { dimming } = timeline;
+    const keptMarks = useFieldKeptMarks({
+        enabled: timeline.ready,
+        isPlaying,
+        pages,
+        pageId: selectedPage?.id,
+        marcherIds,
+    });
+    const keptMarkElements = useRef<KeptMarkElements>(new Map());
+    const root = useRef<HTMLDivElement>(null);
+    const keptMarkTooltip = useKeptMarkTooltip({
+        target: root,
+        marks: keptMarks,
+        marchers,
+    });
+
     // The field test API and the editor read the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
     const renderer = useRef<WebGLRenderer | null>(null);
@@ -207,6 +266,7 @@ function ThreeFieldView() {
         pageId: selectedPage?.id ?? null,
         marcherRows,
         setSelectedMarchers,
+        moveMarchers,
         fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
     });
@@ -217,6 +277,7 @@ function ThreeFieldView() {
         theme: fieldProperties?.theme,
         marcherRows,
         setSelectedMarchers,
+        moveMarchers,
     };
 
     const editor = useMemo(
@@ -247,6 +308,16 @@ function ThreeFieldView() {
                             useTimelineSelectionStore.getState(),
                             id,
                         ),
+                    selectionBoxPadding: () =>
+                        selectionBoxPadding(useFieldViewStore.getState().zoom),
+                    showPositions: (positions) =>
+                        marchers.setOverrides(positions),
+                    // #196: drops go through the Fabric field's drop-to-timeline path, unchanged
+                    drop: (positions) =>
+                        dropMarchersOnTimeline(
+                            positions,
+                            latest.current.moveMarchers,
+                        ),
                 },
                 { isMac: isMacPlatform() },
             ),
@@ -271,13 +342,15 @@ function ThreeFieldView() {
                 activeGesture: () => editor.activeGesture(),
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
+                dimmed: (id) => dimming.isDimmed(id),
             }),
         );
         return () => installFieldTestApi(undefined);
-    }, [marchers, editor]);
+    }, [marchers, editor, dimming]);
 
     return (
         <div
+            ref={root}
             className="rounded-6 relative h-full w-full overflow-hidden"
             data-testid="threeField"
         >
@@ -347,19 +420,41 @@ function ThreeFieldView() {
                         image={fieldImage}
                         placement={fieldImagePlan}
                     />
+                    <OverlayLayer
+                        plan={timeline.focus}
+                        renderOrder={FOCUS_ORDER}
+                    />
+                    <OverlayLayer
+                        plan={timeline.paths}
+                        renderOrder={PATHS_ORDER}
+                    />
                     <MarchersLayer
                         marchers={marchers}
+                        dimming={dimming}
                         theme={fieldProperties.theme}
                     />
                     <LabelsLayer
                         marchers={marchers}
+                        dimming={dimming}
                         labels={labels}
                         theme={fieldProperties.theme}
                         atlas={atlases.label}
                     />
+                    <OverlayLayer
+                        plan={timeline.collisions}
+                        renderOrder={COLLISIONS_ORDER}
+                        atlas={atlases.collision}
+                    />
+                    <KeptMarksPlacer
+                        marks={keptMarks}
+                        marchers={marchers}
+                        elements={keptMarkElements}
+                    />
                 </Canvas>
             )}
             {fieldProperties && <FieldOverlay marchers={marchers} />}
+            <KeptMarksOverlay marks={keptMarks} elements={keptMarkElements} />
+            <KeptMarkTooltipView tooltip={keptMarkTooltip} />
         </div>
     );
 }
@@ -399,7 +494,8 @@ function FieldCamera({
 
 /**
  * Sends the pointer on the canvas to the editor, and marks the app's
- * selection on the marchers for their rings and the overlay's box.
+ * selection on the marchers for their rings and the overlay's box. Draws the
+ * marchers the editor moves.
  */
 function EditorInput({
     editor,
@@ -414,6 +510,8 @@ function EditorInput({
     const invalidate = useThree((s) => s.invalidate);
 
     useEffect(() => attachFieldPointerInput(canvas, editor), [canvas, editor]);
+    // A drag moves marchers outside the playhead's fills: draw them
+    useEffect(() => marchers.subscribe(invalidate), [marchers, invalidate]);
 
     useEffect(() => {
         marchers.setSelection(selectedIds);
