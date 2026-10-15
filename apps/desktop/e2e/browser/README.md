@@ -97,12 +97,17 @@ test("creates marchers", async ({ show }) => {
 - `await show.query(sql, ...params)` reads the show file, to assert on what was
   saved. Don't open the file yourself: under Electron a second process reading
   it makes the app's writes fail with "database is locked".
+- Each `show.query` is its own read, so the app can commit an edit between two
+  of them. When several reads must agree, run them in
+  `show.readSnapshot(async (query) => ...)`: it copies one committed state of
+  the file and reads that.
 - Don't rely on the window size or on a particular marcher being in view; the
   two targets lay out slightly differently.
 - `savedPositions(show, pageId)` (`positions.mts`) says where the file puts
   each marcher at the end of a page, the way the app reads it: the app's
-  `readTimelineTables` and the resolver at the page's end beat. It runs in the
-  host bundle, so it needs `pnpm run build:browser` for both targets.
+  `readTimelineTables` and the resolver at the page's end beat, on one
+  snapshot. It runs in the host bundle, so it needs `pnpm run build:browser`
+  for both targets.
 - Read the field only through the field test API, `window.fieldTest`
   (`src/field/fieldTestApi.ts`): the drawn marchers, the selection, the view,
   the selection handles, the gesture in progress and the field image. The helpers

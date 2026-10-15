@@ -65,6 +65,16 @@ import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
 import LabelsLayer from "./layers/LabelsLayer";
+import OverlayLayer from "./layers/OverlayLayer";
+import { useTimelineVisuals } from "./useTimelineVisuals";
+import {
+    KeptMarksOverlay,
+    KeptMarksPlacer,
+    KeptMarkTooltipView,
+    useFieldKeptMarks,
+    useKeptMarkTooltip,
+    type KeptMarkElements,
+} from "./KeptMarks";
 import {
     currentFieldQuality,
     useFieldQuality,
@@ -83,6 +93,18 @@ const LABEL_FONT = 'bold "Courier New", monospace';
  */
 const NUMBER_FONT = '"Times New Roman"';
 const CHECKPOINT_FONT = '"mono"';
+/** `CollisionMarker`'s label font. */
+const COLLISION_FONT = "Arial";
+
+/**
+ * Where the timeline's layers sit among the field's (#201): the isolated move's
+ * scene and the page's pathways above the field text (1) and under the
+ * marchers (2), as Fabric stacks them; collision markers over the labels (3),
+ * as Fabric adds them after the marchers.
+ */
+const FOCUS_ORDER = 1.4;
+const PATHS_ORDER = 1.5;
+const COLLISIONS_ORDER = 4;
 
 /**
  * The three.js field, or an explanation in its place when its canvas can't get
@@ -135,7 +157,7 @@ function ThreeFieldView() {
     const { selectedPage } = useSelectedPage()!;
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const { isPlaying } = useIsPlaying()!;
-    const { beats } = useTimingObjects()!;
+    const { beats, pages } = useTimingObjects()!;
     const isFullscreen = useFullscreenStore((s) => s.isFullscreen);
     const { image: fieldImage } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
@@ -185,6 +207,7 @@ function ThreeFieldView() {
             label: new GlyphAtlas(LABEL_FONT),
             number: new GlyphAtlas(NUMBER_FONT),
             checkpoint: new GlyphAtlas(CHECKPOINT_FONT),
+            collision: new GlyphAtlas(COLLISION_FONT),
         }),
         [],
     );
@@ -193,6 +216,7 @@ function ThreeFieldView() {
             atlases.label.dispose();
             atlases.number.dispose();
             atlases.checkpoint.dispose();
+            atlases.collision.dispose();
         },
         [atlases],
     );
@@ -207,6 +231,34 @@ function ThreeFieldView() {
     useLayoutEffect(() => {
         selection.current = selectedIds;
     }, [selectedIds]);
+
+    // #201: the timeline's pathways, isolation scene, collisions, dimming and kept marks
+    const marcherIds = useMemo(
+        () => marcherRows?.map((marcher) => marcher.id),
+        [marcherRows],
+    );
+    const timeline = useTimelineVisuals({
+        isPlaying,
+        selectedPage,
+        pages,
+        marcherIds,
+        fieldProperties,
+    });
+    const { dimming } = timeline;
+    const keptMarks = useFieldKeptMarks({
+        enabled: timeline.ready,
+        isPlaying,
+        pages,
+        pageId: selectedPage?.id,
+        marcherIds,
+    });
+    const keptMarkElements = useRef<KeptMarkElements>(new Map());
+    const root = useRef<HTMLDivElement>(null);
+    const keptMarkTooltip = useKeptMarkTooltip({
+        target: root,
+        marks: keptMarks,
+        marchers,
+    });
 
     // The field test API and the editor read the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
@@ -282,13 +334,13 @@ function ThreeFieldView() {
                 activeGesture: () => editor.activeGesture(),
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
+                dimmed: (id) => dimming.isDimmed(id),
             }),
         );
         return () => installFieldTestApi(undefined);
-    }, [marchers, editor]);
+    }, [marchers, editor, dimming]);
 
     // Navigation (#194): wheel, pan drags and touch anywhere on the field
-    const root = useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (!root.current) return;
         return attachFieldNavigation(
@@ -391,19 +443,41 @@ function ThreeFieldView() {
                         image={fieldImage}
                         placement={fieldImagePlan}
                     />
+                    <OverlayLayer
+                        plan={timeline.focus}
+                        renderOrder={FOCUS_ORDER}
+                    />
+                    <OverlayLayer
+                        plan={timeline.paths}
+                        renderOrder={PATHS_ORDER}
+                    />
                     <MarchersLayer
                         marchers={marchers}
+                        dimming={dimming}
                         theme={fieldProperties.theme}
                     />
                     <LabelsLayer
                         marchers={marchers}
+                        dimming={dimming}
                         labels={labels}
                         theme={fieldProperties.theme}
                         atlas={atlases.label}
                     />
+                    <OverlayLayer
+                        plan={timeline.collisions}
+                        renderOrder={COLLISIONS_ORDER}
+                        atlas={atlases.collision}
+                    />
+                    <KeptMarksPlacer
+                        marks={keptMarks}
+                        marchers={marchers}
+                        elements={keptMarkElements}
+                    />
                 </Canvas>
             )}
             {fieldProperties && <FieldOverlay marchers={marchers} />}
+            <KeptMarksOverlay marks={keptMarks} elements={keptMarkElements} />
+            <KeptMarkTooltipView tooltip={keptMarkTooltip} />
         </div>
     );
 }

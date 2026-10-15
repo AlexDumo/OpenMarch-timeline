@@ -157,8 +157,9 @@ they pass alone and in Electron.
   see them. Touch presses aren't pan presses (touch editing is out of scope).
 - The test API's `activeGesture()` is `"pan"` while `panning`, otherwise the
   editor's gesture.
-- `zoomAt`/`clampPan` are what "zoom to collisions" (#201) should use, with
-  `CanvasStore.zoomToCollisions`'s numbers.
+- App actions that move the view call `setView` from `fieldNavigation.ts`
+  (zoom and pan limits, and it counts as the user's navigation). "Zoom to
+  collisions" (#201, `field/zoomToCollisions.ts`) does.
 
 **Behavior notes.**
 

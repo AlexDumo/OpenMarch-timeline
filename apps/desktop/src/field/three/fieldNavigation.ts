@@ -34,8 +34,11 @@ function navigate(next: FieldView) {
     useFieldViewStore.setState(next);
 }
 
-/** Moves the view to `next` for the user, within the zoom and pan limits. */
-function setView(next: FieldView) {
+/**
+ * Moves the view to `next` for the user, within the zoom and pan limits. App
+ * actions that move the view (zoom to collisions) go through here too.
+ */
+export function setView(next: FieldView) {
     const { field } = view();
     const { width, height, zoom, panX, panY } = clampPan(
         { ...next, zoom: clampZoom(next.zoom) },

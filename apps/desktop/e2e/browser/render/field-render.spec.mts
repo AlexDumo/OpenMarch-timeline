@@ -9,6 +9,13 @@ import {
 } from "@openmarch/core";
 import { tsImport } from "tsx/esm/api";
 import { test, expect } from "../fixtures.mjs";
+import {
+    compose,
+    field,
+    setFabricView,
+    settle,
+    type View,
+} from "./compare.mjs";
 
 /**
  * Render comparisons of the field itself, Fabric against the new field
@@ -154,56 +161,6 @@ const SIZES = [
     { name: "large", width: 3600, height: 2200 },
 ] as const;
 
-type View = { zoom: number; pan: { x: number; y: number } };
-
-const field = (page: Page) => page.getByTestId("fieldCanvas").first();
-
-/** Waits for two frames, so the field has drawn what it was last given. */
-const settle = (page: Page) =>
-    page.evaluate(
-        () =>
-            new Promise<void>((resolve) =>
-                requestAnimationFrame(() =>
-                    requestAnimationFrame(() => resolve()),
-                ),
-            ),
-    );
-
-/**
- * Points the Fabric field at `view` (the field test API's units), through
- * Fabric itself: a capture tool, not a scenario.
- */
-async function setFabricView(page: Page, view: View) {
-    await page.evaluate((view) => {
-        const canvas = (
-            window as unknown as {
-                canvas: {
-                    getWidth(): number;
-                    upperCanvasEl: HTMLCanvasElement;
-                    setViewportTransform(vpt: number[]): void;
-                    requestRenderAll(): void;
-                };
-            }
-        ).canvas;
-        const css =
-            canvas.upperCanvasEl.getBoundingClientRect().width /
-            canvas.getWidth();
-        const zoom = view.zoom / css;
-        // The field test API's (0, 0) is half a grid line into Fabric's plane
-        canvas.setViewportTransform([
-            zoom,
-            0,
-            0,
-            zoom,
-            view.pan.x / css - zoom / 2,
-            view.pan.y / css - zoom / 2,
-        ]);
-        canvas.requestRenderAll();
-    }, view);
-    await settle(page);
-    await page.waitForTimeout(300);
-}
-
 async function setGridSettings(
     page: Page,
     gridLines: boolean,
@@ -226,113 +183,6 @@ async function setGridSettings(
     );
     await page.reload();
     await expect(field(page)).toBeVisible({ timeout: 20_000 });
-}
-
-/**
- * Builds `[Fabric | new field | diff]` in the page from two PNGs, and how
- * many pixels differ. The diff shows Fabric faded, with pixels that have no
- * match (within 24 in every channel) within one pixel in the other image in
- * red (new field darker) or blue (lighter).
- */
-async function compose(page: Page, fabric: Buffer, three: Buffer) {
-    const result = await page.evaluate(
-        async ([a, b]) => {
-            const load = async (b64: string) => {
-                const blob = await (
-                    await fetch(`data:image/png;base64,${b64}`)
-                ).blob();
-                return createImageBitmap(blob);
-            };
-            const [fa, th] = await Promise.all([load(a), load(b)]);
-            const w = Math.min(fa.width, th.width);
-            const h = Math.min(fa.height, th.height);
-            const read = (img: ImageBitmap) => {
-                const c = new OffscreenCanvas(w, h);
-                const g = c.getContext("2d")!;
-                g.drawImage(img, 0, 0);
-                return g.getImageData(0, 0, w, h);
-            };
-            const da = read(fa);
-            const db = read(th);
-            const diff = new ImageData(w, h);
-            const lum = (d: Uint8ClampedArray, i: number) =>
-                (d[i] + d[i + 1] + d[i + 2]) / 3;
-            const off = (
-                p: Uint8ClampedArray,
-                q: Uint8ClampedArray,
-                i: number,
-                j: number,
-            ) =>
-                Math.max(
-                    Math.abs(p[i] - q[j]),
-                    Math.abs(p[i + 1] - q[j + 1]),
-                    Math.abs(p[i + 2] - q[j + 2]),
-                );
-            /** Whether pixel `i` of `p` matches a pixel of `q` within one pixel of it. */
-            const near = (
-                p: Uint8ClampedArray,
-                q: Uint8ClampedArray,
-                x: number,
-                y: number,
-            ) => {
-                const i = (y * w + x) * 4;
-                for (let dy = -1; dy <= 1; dy++)
-                    for (let dx = -1; dx <= 1; dx++) {
-                        const nx = x + dx;
-                        const ny = y + dy;
-                        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-                        if (off(p, q, i, (ny * w + nx) * 4) <= 24) return true;
-                    }
-                return false;
-            };
-            let differing = 0;
-            for (let y = 0; y < h; y++)
-                for (let x = 0; x < w; x++) {
-                    const i = (y * w + x) * 4;
-                    const la = lum(da.data, i);
-                    // Antialiasing moves edges by up to a pixel: only count
-                    // pixels with no match within a pixel, either way
-                    if (
-                        !near(da.data, db.data, x, y) ||
-                        !near(db.data, da.data, x, y)
-                    ) {
-                        differing++;
-                        const darker = lum(db.data, i) < la;
-                        diff.data.set(
-                            darker ? [220, 0, 0, 255] : [0, 90, 255, 255],
-                            i,
-                        );
-                    } else {
-                        const v = 255 - (255 - la) * 0.25;
-                        diff.data.set([v, v, v, 255], i);
-                    }
-                }
-            const out = new OffscreenCanvas(w * 3, h);
-            const g = out.getContext("2d")!;
-            g.drawImage(fa, 0, 0);
-            g.drawImage(th, w, 0);
-            g.putImageData(diff, w * 2, 0);
-            g.font = "bold 20px sans-serif";
-            for (const [i, label] of ["Fabric", "three.js", "diff"].entries()) {
-                g.fillStyle = "rgba(255,255,255,0.85)";
-                g.fillRect(i * w + 8, 8, 110, 30);
-                g.fillStyle = "black";
-                g.fillText(label, i * w + 16, 30);
-            }
-            const png = await out.convertToBlob({ type: "image/png" });
-            const bytes = new Uint8Array(await png.arrayBuffer());
-            let binary = "";
-            for (let i = 0; i < bytes.length; i += 0x8000)
-                binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-            return {
-                png: btoa(binary),
-                differing,
-                total: w * h,
-            };
-        },
-        [fabric.toString("base64"), three.toString("base64")] as const,
-    );
-    return { ...result, png: Buffer.from(result.png, "base64") };
 }
 
 for (const c of CASES) {
