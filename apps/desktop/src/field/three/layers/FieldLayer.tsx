@@ -25,7 +25,10 @@ attribute vec4 aBounds; // minX, minY, maxX, maxY
 attribute vec4 aColor;
 uniform float uPixel;   // one device pixel in field units
 uniform float uMinCoverage;
+uniform float uEdge;    // room for antialiased edges, in device pixels
 varying vec4 vColor;
+varying vec2 vPos;
+varying vec4 vBounds;
 void main() {
     vec2 size = aBounds.zw - aBounds.xy;
     vec2 drawn = max(size, vec2(uPixel));
@@ -34,21 +37,54 @@ void main() {
         // Too faint to be worth drawing (low-quality mode): outside the view
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         vColor = vec4(0.0);
+        vPos = vec2(0.0);
+        vBounds = vec4(0.0);
         return;
     }
-    vec2 p = (aBounds.xy + aBounds.zw) * 0.5 + (position.xy - 0.5) * drawn;
+    vec2 center = (aBounds.xy + aBounds.zw) * 0.5;
+    vBounds = vec4(center - drawn * 0.5, center + drawn * 0.5);
+    vPos = center + (position.xy - 0.5) * (drawn + 2.0 * uEdge * uPixel);
     vColor = vec4(aColor.rgb, aColor.a * coverage);
-    gl_Position = projectionMatrix * viewMatrix * vec4(p, 0.0, 1.0);
+    gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 0.0, 1.0);
 }`;
 
-const FRAGMENT = /* glsl */ `
+/**
+ * Antialiased edges (#249): each pixel is covered by the share of it the
+ * rectangle covers, as Canvas2D draws, so a line keeps its width wherever its
+ * edges fall between pixels. Without it, edges snapped to whole pixels and
+ * lines of one width were drawn 1 or 2 px wide side by side.
+ */
+const FRAGMENT_EDGES = /* glsl */ `
+varying vec4 vColor;
+varying vec2 vPos;
+varying vec4 vBounds;
+void main() {
+    vec2 pixel = fwidth(vPos);
+    vec2 covered = min(vBounds.zw, vPos + pixel * 0.5)
+        - max(vBounds.xy, vPos - pixel * 0.5);
+    vec2 share = clamp(covered / pixel, 0.0, 1.0);
+    float alpha = vColor.a * share.x * share.y;
+    if (alpha <= 0.0) discard;
+    gl_FragColor = vec4(vColor.rgb, alpha);
+}`;
+
+/** Solid rectangles: the background, whose edges sit under the border. */
+const FRAGMENT_SOLID = /* glsl */ `
 varying vec4 vColor;
 void main() {
     gl_FragColor = vColor;
 }`;
 
-/** Rectangles in one instanced draw, with lines kept at least a device pixel wide. */
-function rectsMesh(rects: FieldRects, renderOrder: number) {
+/**
+ * Rectangles in one instanced draw, with lines kept at least a device pixel
+ * wide. Only lines antialias their edges: the background's fill would pay
+ * for it over the whole field.
+ */
+function rectsMesh(
+    rects: FieldRects,
+    renderOrder: number,
+    { edges }: { edges: boolean },
+) {
     const geometry = new InstancedBufferGeometry();
     geometry.setAttribute(
         "position",
@@ -71,8 +107,12 @@ function rectsMesh(rects: FieldRects, renderOrder: number) {
         geometry,
         new ShaderMaterial({
             vertexShader: VERTEX,
-            fragmentShader: FRAGMENT,
-            uniforms: { uPixel: { value: 1 }, uMinCoverage: { value: 0 } },
+            fragmentShader: edges ? FRAGMENT_EDGES : FRAGMENT_SOLID,
+            uniforms: {
+                uPixel: { value: 1 },
+                uMinCoverage: { value: 0 },
+                uEdge: { value: edges ? 1 : 0 },
+            },
             transparent: true,
             depthTest: false,
             depthWrite: false,
@@ -135,8 +175,8 @@ export default function FieldLayer({
             return text;
         };
         return {
-            background: rectsMesh(background, -2),
-            lines: rectsMesh(rects, 0),
+            background: rectsMesh(background, -2, { edges: false }),
+            lines: rectsMesh(rects, 0, { edges: true }),
             numbers: batch(numberAtlas, "number"),
             labels: batch(labelAtlas, "label"),
         };

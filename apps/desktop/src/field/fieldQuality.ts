@@ -161,8 +161,9 @@ export type QualitySettings = {
 };
 
 /**
- * MSAA is off in both: dots and text antialias in their shaders, and on
- * llvmpipe MSAA took 2,000-marcher playback from 56 to 34 fps (#192).
+ * MSAA is off in both: dots, text and field lines antialias in their shaders.
+ * On llvmpipe MSAA took 2,000-marcher playback from 56 to 34 fps (#192), and
+ * on SwiftShader it cost 385-marcher playback about 30% at DPR 2 (#249).
  */
 export const QUALITY_SETTINGS: Record<FieldQuality["mode"], QualitySettings> = {
     full: {

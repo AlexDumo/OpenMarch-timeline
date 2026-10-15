@@ -140,6 +140,35 @@ describe("fieldGeometry", () => {
     });
 });
 
+describe("fieldGeometry border", () => {
+    /** The border's sides: the only rectangles reaching outside the field. */
+    const sides = (field: FieldProperties) =>
+        rects(fieldGeometry(field)).filter(
+            (r) => r.minX < -1 || r.minY < -1 || r.maxX > field.width + 1,
+        );
+    const left = (all: ReturnType<typeof sides>) =>
+        all.find((r) => r.maxX - r.minX < 4 && r.minX < 0)!;
+    const top = (all: ReturnType<typeof sides>) =>
+        all.find((r) => r.maxY - r.minY < 4 && r.minY < 0)!;
+
+    it("runs an opaque border's sides through the corners, so no antialiased seam shows", () => {
+        const all = sides(fp);
+        expect(left(all).minY).toBeCloseTo(top(all).minY);
+    });
+
+    it("keeps a translucent border's sides apart, so its corners aren't darker", () => {
+        const translucent = new FieldProperties({
+            ...fp,
+            theme: {
+                ...fp.theme,
+                primaryStroke: { ...fp.theme.primaryStroke, a: 0.5 },
+            },
+        });
+        const all = sides(translucent);
+        expect(left(all).minY).toBeCloseTo(top(all).maxY);
+    });
+});
+
 describe("fieldGeometry variants", () => {
     it("draws the y checkpoints as lines across the field without hashes", () => {
         const noHashes = new FieldProperties({ ...fp, useHashes: false });
