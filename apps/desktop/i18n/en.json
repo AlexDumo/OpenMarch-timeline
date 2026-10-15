@@ -72,13 +72,15 @@
         "navigation": {
             "firstPage": "First page",
             "lastPage": "Last page",
+            "nextBeat": "Next beat",
             "nextPage": "Next page",
+            "previousBeat": "Previous beat",
             "previousPage": "Previous page"
         },
         "playback": {
             "pause": "Pause",
             "play": "Play",
-            "playPage": "Play page once",
+            "playPage": "Play from playhead",
             "playPause": "Play / stop",
             "toggleMetronome": "Toggle metronome",
             "toggleLoop": "Loop on / off"
@@ -114,6 +116,8 @@
             "hidePreviousPaths": "Hide previous page paths",
             "openCommandPalette": "Command palette",
             "openSettings": "Settings…",
+            "openView3d": "Open 3D View",
+            "openView3dKeywords": "3d three dimensional stadium venue window",
             "showShortcuts": "Keyboard shortcuts",
             "showNextPaths": "Show next page paths",
             "showPreviousPaths": "Show previous page paths",
@@ -220,6 +224,20 @@
         "title": "Command palette",
         "unavailable": "Not available right now"
     },
+    "convertShow": {
+        "backupFolder": "In {folder}",
+        "backupIntro": "Before converting, OpenMarch saves an untouched copy of it next to your show:",
+        "backupUse": "Your show is converted when you click Confirm. If you need to, you can open the copy in older versions of OpenMarch.",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "convertingTitle": "Converting “{fileName}”…",
+        "description": "“{fileName}” was made with an older version of OpenMarch. To open it, this version converts it to timelines. After that, older versions of OpenMarch can't open it.",
+        "progress": {
+            "backingUp": "Saving the copy…",
+            "converting": "Converting page {done} of {total}…"
+        },
+        "title": "Convert this show to timelines?"
+    },
     "coordinateRoundingSettings": {
         "custom": "Custom",
         "disableOffset": "Disable Offset",
@@ -300,18 +318,18 @@
         "fieldPropertiesRequired": "Field properties are required for export",
         "frontToBackHeader": "Front to Back",
         "funPhrase": {
-            "0": "Get ready to march a perfect 8 to 5! \uD83C\uDFBA",
-            "1": "Getting the files to cover down \uD83D\uDCCB",
-            "10": "Setting the tempo for success \uD83C\uDFBC",
-            "11": "Fine-tuning every step count \uD83D\uDD27",
-            "2": "Cleaning drill from the box \uD83E\uDDF9",
-            "3": "Making sure everyone's in step \uD83D\uDC5F",
-            "4": "Painting a perfect field \uD83D\uDD8C️",
-            "5": "Marching toward perfection! \uD83C\uDFAF",
+            "0": "Get ready to march a perfect 8 to 5! 🎺",
+            "1": "Getting the files to cover down 📋",
+            "10": "Setting the tempo for success 🎼",
+            "11": "Fine-tuning every step count 🔧",
+            "2": "Cleaning drill from the box 🧹",
+            "3": "Making sure everyone's in step 👟",
+            "4": "Painting a perfect field 🖌️",
+            "5": "Marching toward perfection! 🎯",
             "6": "Polishing those yard line markers ✨",
-            "7": "Counting off the perfect tempo \uD83E\uDD41",
-            "8": "Aligning the formation like a pro \uD83D\uDCD0",
-            "9": "Marching toward perfection! \uD83C\uDFAF"
+            "7": "Counting off the perfect tempo 🥁",
+            "8": "Aligning the formation like a pro 📐",
+            "9": "Marching toward perfection! 🎯"
         },
         "generatingPDF": " Generating PDF file for: {drillNumber}",
         "includeMeasures": "Include measures",
@@ -322,7 +340,6 @@
         "individualChartsTooltip": "Create customized drill chart PDFs for each individual marcher.",
         "individualChartsTooltipDescription": "If this is not checked, one overview drill chart PDF will be created.",
         "marcher": "Marcher: {status}",
-        "marcherPagesNotLoaded": "Marcher pages not loaded",
         "marcherPositionsMissing": "This marcher has no position on some pages, so its chart was skipped.",
         "marchersNotLoaded": "Marchers not loaded",
         "marchersWithoutPositions": "No positions found for {drillNumbers}.",
@@ -615,6 +632,7 @@
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
             "loading": "Loading marcher",
+            "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
             "minStepSize": "Smallest step size",
             "name": "Name",
@@ -657,6 +675,7 @@
             "measures": "Measures",
             "notes": "Notes",
             "notesPlaceholder": "Add notes for this page...",
+            "paused": "Pause to split this page or change its subset.",
             "splitPage": "Split page",
             "split": {
                 "success": "Page split successfully"
@@ -1053,12 +1072,56 @@
     "marchers": {
         "addMarcher": "Add",
         "addMarchers": "Add Marchers",
+        "addMethod": {
+            "manual": "Add manually",
+            "or": "or"
+        },
         "cancelDeleteButton": "Cancel",
         "createButton": "{quantity, plural, one {Create Marcher} other {Create Marchers}}",
         "createButtonWithSection": "{quantity, plural, one {Create {section} Marcher} other {Create {quantity} {section} Marchers}}",
         "created": "{count, plural, one {Marcher {drillNumbers} created successfully} other {Marchers {drillNumbers} created successfully}}",
         "createError": "{count, plural, one {Error creating marcher {drillNumbers}} other {Error creating marchers {drillNumbers}}}",
         "createInfo": "New marchers may not show up until a refresh",
+        "csv": {
+            "chooseFile": "Choose CSV file",
+            "copySections": "Copy",
+            "downloadExample": "Example CSV",
+            "error": {
+                "unknownSection": "Unknown section \"{value}\"",
+                "missingSection": "Missing section",
+                "missingDrillNumber": "Missing drill number",
+                "invalidDrillNumber": "\"{value}\" is not a drill number like F12",
+                "unknownPrefix": "No section uses the prefix \"{value}\"; add a section column",
+                "ambiguousPrefix": "The prefix \"{value}\" is shared by several sections; add a section column",
+                "duplicateInFile": "{value} appears more than once in the file",
+                "duplicateInShow": "{value} already exists in this show"
+            },
+            "ignoredColumns": "Ignoring columns: {columns}",
+            "importButton": "{count, plural, =0 {Import} one {Import 1 marcher} other {Import {count} marchers}}",
+            "info": "Name, year and notes are optional. Rows with errors are skipped; fix them and import again. Undo with [Ctrl/Cmd+Z].",
+            "line": "Line {line}",
+            "missingColumns": "The file needs a {columns} column",
+            "mode": {
+                "section": {
+                    "title": "By section",
+                    "help": "Give each marcher a section. Drill numbers are created automatically (F1, F2, …), skipping ones already in the show."
+                },
+                "drillNumber": {
+                    "title": "By drill number",
+                    "help": "Give each marcher a drill number such as F12. The section comes from the prefix, or from an optional section column."
+                }
+            },
+            "readError": "Could not read that file",
+            "result": {
+                "success": "{valid, plural, one {1 marcher is ready to import} other {All {valid} marchers are ready to import}}",
+                "partial": "{valid, plural, one {1 marcher is} other {{valid} marchers are}} ready to import. {invalid, plural, one {1 row has a problem and will be skipped:} other {{invalid} rows have problems and will be skipped:}}",
+                "failed": "None of the rows could be imported. Fix the problems below and choose the file again:",
+                "empty": "This file doesn't have any marchers in it"
+            },
+            "sections": "Sections and drill prefixes",
+            "sectionsHelp": "Use these section names (or prefixes) in the section column. Drill numbers start with the section's prefix, for example F12 for Flute 12.",
+            "title": "Import from CSV"
+        },
         "deleteButton": "Delete",
         "deleteDescription": "You are about to delete these section styles: {sections}. This can be undone with [Ctrl/Cmd+Z].",
         "deleteTitle": "Warning",
@@ -1363,7 +1426,13 @@
         "general.appearance.dark": "Dark",
         "general.appearance.light": "Light",
         "general.automaticUpdates": "Automatically download and install updates",
-        "general.description": "Language and other app-wide preferences.",
+        "general.description": "Editor mode, language and other app-wide preferences.",
+        "general.editorMode": "Editor mode",
+        "general.editorMode.basic": "Basic",
+        "general.editorMode.basic.description": "Pages, like a drill chart. Set each page; marchers hold until you move them again. Positions in the middle of a page are allowed.",
+        "general.editorMode.expert": "Expert",
+        "general.editorMode.expert.description": "The full timeline: moves that cross pages, overlapping moves, the start flag and loops.",
+        "general.editorMode.note": "Switching keeps your show as it is. Anything made in Expert that Basic can't edit stays, plays and is shown as locked in Basic.",
         "general.language": "Language",
         "general.openView3dWithShow": "Open 3D View when a show opens",
         "general.showFullDatabasePath": "Show full file path",
@@ -1439,6 +1508,15 @@
         "shortcuts.resetAll": "Reset all",
         "shortcuts.search": "Search shortcuts",
         "shortcuts.tapBeats": "Tap beats",
+        "timeline": "Timeline",
+        "timeline.description": "How the timeline looks.",
+        "timeline.waveformStyle": "Waveform",
+        "timeline.waveformStyle.hidden": "Hidden",
+        "timeline.waveformStyle.hidden.description": "No waveform on the timeline, so it takes less room. The music still plays.",
+        "timeline.waveformStyle.precise": "Precise",
+        "timeline.waveformStyle.precise.description": "Square bars locked to each beat, scaled in decibels so quiet passages show their detail.",
+        "timeline.waveformStyle.simplified": "Simplified",
+        "timeline.waveformStyle.simplified.description": "Rounded bars at an even spacing, scaled to the loudest moment, like a music player.",
         "title": "Settings",
         "tolgeeApiKeyPlaceholder": "Tolgee API Key",
         "tolgeeDevToolsToggle": "Tolgee In-Context Translating"
@@ -1493,7 +1571,7 @@
             "destinationShapeUnsuitable": "That destination doesn't fit the transition. A follow-the-leader transition can't end on a block, and a block needs at least as many places as the transition has slots.",
             "followLeaderBlock": "A follow-the-leader transition can't end on a block. Choose a line, curve, circle or box instead.",
             "followLeaderNeedsShape": "A follow-the-leader transition needs a shape to follow.",
-            "legacyConvertedTimeline": "This file was converted to timelines by an earlier development build, which put several page moves in one timeline, so it can't be edited. Convert it again: open its backup (the file saved next to it before the conversion), or run convertPages('{ replace: true }') from the developer console.",
+            "legacyConvertedTimeline": "This file was converted to timelines by an earlier development build, which put several page moves in one timeline, so it can't be edited. Convert it again: open its backup (the file saved next to it before the conversion).",
             "notReady": "The timeline is still loading. Try again in a moment.",
             "numberOutOfRange": "A number is out of range. Beats, layers, slot counts and positions must be whole or finite numbers within the allowed limits.",
             "pathParamsInvalid": "That path setting isn't valid. An arc's bulge can be at most half the distance between its ends, and waypoints must be points on the field.",
@@ -1522,23 +1600,33 @@
         "keep": {
             "chain": {
                 "ariaLabel": "Page {page}: {label}. {hint}",
-                "followHint": "Click to follow Page {from} again",
-                "followHintEarlier": "Click to follow earlier pages again",
-                "keep": "Keep {count} marchers on Page {page}",
-                "keepHint": "They won't follow Page {from} any more",
-                "keepHintEarlier": "They won't follow earlier pages any more",
-                "keepHintOne": "It won't follow Page {from} any more",
-                "keepNamed": "Keep {names} on Page {page}",
-                "keepOne": "Keep 1 marcher on Page {page}",
+                "changesEarlier": "Changes to earlier pages",
+                "changesPage": "Changes to Page {from}",
+                "follows": "{count} marchers hold {where} them",
+                "followsHint": "{changes} carry onto Page {page}. Click to keep them here instead",
+                "followsHintOne": "{changes} carry onto Page {page}. Click to keep it here instead",
+                "followsMenuHint": "{changes} carry onto Page {page}. Right-click the page to keep them here instead",
+                "followsMenuHintOne": "{changes} carry onto Page {page}. Right-click the page to keep it here instead",
+                "followsNamed": "{names} hold {where} them",
+                "followsNamedOne": "{names} holds {where} it",
+                "followsOne": "1 marcher holds {where} it",
                 "kept": "{count} marchers kept on Page {page}",
+                "keptHint": "Changes to Page {from} stop here. Click to follow Page {from} again",
+                "keptHintEarlier": "Changes to earlier pages stop here. Click to follow them again",
+                "keptMenuHint": "Changes to Page {from} stop here. Right-click the page to follow Page {from} again",
+                "keptMenuHintEarlier": "Changes to earlier pages stop here. Right-click the page to follow them again",
                 "keptNamed": "{names} kept on Page {page}",
                 "keptOne": "1 marcher kept on Page {page}",
                 "mixed": "{kept} of the {total} selected are kept on Page {page}",
-                "mixedHint": "Click to keep the other {count} too",
-                "mixedHintOne": "Click to keep the other one too",
                 "mixedNamed": "{kept} of the {total} selected are kept on Page {page} ({names})",
                 "mixedNamedOne": "1 of the {total} selected is kept on Page {page} ({names})",
-                "mixedOne": "1 of the {total} selected is kept on Page {page}"
+                "mixedOne": "1 of the {total} selected is kept on Page {page}",
+                "mixedRestHint": "The other {count} follow earlier pages. Click to keep them here too",
+                "mixedRestHintOne": "The other one follows earlier pages. Click to keep it here too",
+                "mixedRestMenuHint": "The other {count} follow earlier pages. Right-click the page to keep them here too",
+                "mixedRestMenuHintOne": "The other one follows earlier pages. Right-click the page to keep it here too",
+                "whereEarlier": "where earlier pages left",
+                "wherePage": "where Page {from} left"
             },
             "field": {
                 "kept": "Kept on Page {page} · won't follow Page {from}",
@@ -1792,9 +1880,30 @@
             "zoom": "Scroll"
         }
     },
+    "web": {
+        "download": "Download .dots",
+        "downloaded": "Downloaded {name}",
+        "fileMenu": "File",
+        "notDownloadedYet": "Changes since your last download are only in this browser"
+    },
     "welcome": {
         "description": "No files found. Create one, and make sure to check out the guides. Customize your theme and navigation in Settings.",
+        "examples": "Or open an example show",
         "title": "Welcome to OpenMarch"
+    },
+    "welcomeFlow": {
+        "back": "Back",
+        "continue": "Continue",
+        "dialogLabel": "Set up OpenMarch",
+        "mode": {
+            "note": "You can change this any time in Settings.",
+            "title": "How do you want to work?"
+        },
+        "step": "Step {current} of {total}",
+        "welcome": {
+            "description": "Let's set things up. This takes a few seconds.",
+            "title": "Welcome to OpenMarch"
+        }
     },
     "workspaceSettings": {
         "audioOffsetSeconds": "Audio Offset",

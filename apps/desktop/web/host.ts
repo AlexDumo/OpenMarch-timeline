@@ -50,6 +50,15 @@ const settings = loadSettings();
 // Test builds send no analytics, so don't ask.
 settings.set("optOutAnalytics", true);
 
+// Basic or Expert (UI-19): `?mode=basic|expert` chooses it and is remembered.
+// Without a choice the web build is Expert, so lab tests keep their behavior.
+const EDITOR_MODE_SETTING = "editorMode";
+const modeParam = new URLSearchParams(window.location.search).get("mode");
+if (modeParam === "basic" || modeParam === "expert") {
+    settings.set(EDITOR_MODE_SETTING, modeParam);
+    saveSettings();
+}
+
 function saveSettings() {
     try {
         localStorage.setItem(
@@ -93,7 +102,11 @@ export function registerHandlers({ onLeaveShow }: WebHostCallbacks) {
         "file:exists",
         (_, filePath: string) => filePath === SHOW_PATH,
     );
-    ipcMain.handle("settings:get", (_, key: string) => settings.get(key));
+    ipcMain.handle("settings:get", (_, key: string) =>
+        key === EDITOR_MODE_SETTING
+            ? (settings.get(key) ?? "expert")
+            : settings.get(key),
+    );
     ipcMain.on("settings:set", (_, values: Record<string, unknown>) => {
         for (const [key, value] of Object.entries(values))
             settings.set(key, value);
@@ -121,6 +134,8 @@ export function registerHandlers({ onLeaveShow }: WebHostCallbacks) {
     ipcMain.handle("recent-files:get", () => []);
     ipcMain.handle("newShow:getPending", () => false);
     ipcMain.handle("newShow:getDraftPath", () => null);
+    ipcMain.handle("conversion:getPending", () => null);
+    ipcMain.handle("load-file:takeRefusal", () => null);
     ipcMain.handle("plugins:list", () => []);
     ipcMain.handle("auth:get-state", () => ({
         isAuthenticated: false,
@@ -203,10 +218,10 @@ export type OpenResult =
 
 /**
  * Opens `bytes` as the show, or a new show when `bytes` is null, the way
- * `openShowDatabase` in `electron/main/openShow.ts` does with convert on open
- * turned on: check the version, migrate, then either set up the new file as a
- * timeline file or convert a page-era file to timelines. There is no backup
- * step, since the show only lives in this page.
+ * `openShowDatabase` in `electron/main/openShow.ts` does: check the version,
+ * then either set up a new file as a timeline file, convert a page-era file
+ * to timelines, or migrate a timeline file. There is no backup step and no
+ * question first, since the show only lives in this page.
  */
 export async function openShow(bytes: Uint8Array | null): Promise<OpenResult> {
     const isNewFile = bytes === null;
@@ -231,22 +246,32 @@ export async function openShow(bytes: Uint8Array | null): Promise<OpenResult> {
     const db = DatabaseServices.connect();
     try {
         const orm = getOrm(db);
-        const migrator = new DrizzleMigrationService(orm, db);
-        applyFileVersionDecision(db, isNewFile);
-        await migrator.applyPendingMigrations(MIGRATIONS_FOLDER);
-
         if (isNewFile) {
+            applyFileVersionDecision(db, true);
+            await new DrizzleMigrationService(orm, db).applyPendingMigrations(
+                MIGRATIONS_FOLDER,
+            );
             await DrizzleMigrationService.initializeDatabase(orm, db);
             initializeNewFileAsTimeline(db);
             return { ok: true, converted: false };
         }
 
-        if (checkConvertOnOpen(db, SHOW_PATH).action !== "convert")
+        const check = checkConvertOnOpen(db, SHOW_PATH);
+        if (check.action === "none") {
+            await new DrizzleMigrationService(orm, db).applyPendingMigrations(
+                MIGRATIONS_FOLDER,
+            );
             return { ok: true, converted: false };
+        }
+        // A page-era demo converts without asking: it only lives in this page.
         const result = await withMainProcessBridge(db, () =>
-            convertFileOnOpen(SHOW_PATH, db, {
-                backup: () => ({ ok: true, backupPath: "" }) as never,
-            }),
+            convertFileOnOpen(
+                SHOW_PATH,
+                db,
+                MIGRATIONS_FOLDER,
+                { backupPath: check.backupPath },
+                { backup: () => ({ ok: true, backupPath: "" }) as never },
+            ),
         );
         if (result.status === "conversion-failed") {
             console.error(result.error);

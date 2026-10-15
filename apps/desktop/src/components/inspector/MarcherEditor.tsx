@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import {
-    marcherPagesByPageQueryOptions,
     fieldPropertiesQueryOptions,
-    shapePageMarchersQueryByPageIdOptions,
     useUpdateSelectedMarchersOnSelectedPage,
     type MarcherCoordinate,
 } from "@/hooks/queries";
@@ -19,16 +17,15 @@ import {
     SelectItem,
     SelectTriggerCompact,
 } from "@openmarch/ui";
-import { StepSize } from "@/global/classes/StepSize";
 import MarcherRotationInput from "./marcher/MarcherRotationInput";
 import StepSizeWarningBadge from "./StepSizeWarningBadge";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useIsPlaying } from "@/context/IsPlayingContext";
 import { clsx } from "clsx";
 import { T } from "@tolgee/react";
 import { useQuery } from "@tanstack/react-query";
 import type { FieldProperties } from "@openmarch/core";
-import { useTimelineMode } from "@/hooks/queries/useWorkspaceSettings";
 import { usePositionAt } from "@/timeline/timelineStore";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
 import { useTimelineStepSizes } from "@/timeline/useTimelineStepSizes";
@@ -168,17 +165,13 @@ const evenlyDistributeVertically = ({
  * Component that renders all alignment, distribution, and transformation buttons
  * for multiple selected marchers
  */
-interface AlignmentButtonsProps {
-    editingDisabled: boolean;
-}
-
-function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
+function AlignmentButtons() {
     const [horizontalStepInterval, setHorizontalStepInterval] = useState("");
     const [verticalStepInterval, setVerticalStepInterval] = useState("");
     const { mutate: updateSelectedMarchers } =
         useUpdateSelectedMarchersOnSelectedPage();
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
-    const distributionDisabled = editingDisabled || !fieldProperties;
+    const distributionDisabled = !fieldProperties;
 
     const parseStepInterval = useCallback((value: string) => {
         const trimmed = value.trim();
@@ -261,7 +254,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
             <div className="flex gap-8">
                 <ActionButton
                     action="alignVertically"
-                    disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -274,7 +266,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                 </ActionButton>
                 <ActionButton
                     action="alignHorizontally"
-                    disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -288,7 +279,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
 
                 <ActionButton
                     action="flipHorizontal"
-                    disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -301,7 +291,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                 </ActionButton>
                 <ActionButton
                     action="flipVertical"
-                    disabled={editingDisabled}
                     className={clsx(
                         getButtonClassName({
                             variant: "secondary",
@@ -348,7 +337,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                         }
                         compact
                         className="w-8 flex-1 rounded border text-center text-xs"
-                        disabled={editingDisabled}
                     />
                 </div>
                 <div className="flex flex-1 items-center justify-center gap-4">
@@ -380,7 +368,6 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
                             setVerticalStepInterval(e.target.value)
                         }
                         className="w-8 flex-1 rounded border text-center text-xs"
-                        disabled={editingDisabled}
                     />
                 </div>
             </div>
@@ -423,48 +410,26 @@ function AlignmentButtons({ editingDisabled }: AlignmentButtonsProps) {
     );
 }
 
+/** No marchers, stable across renders */
+const NO_MARCHERS: readonly number[] = [];
+
 // eslint-disable-next-line max-lines-per-function
 function MarcherEditor() {
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
-    const selectedMarcherIds = useMemo(
-        () => new Set(selectedMarchers.map((marcher) => marcher.id)),
-        [selectedMarchers],
-    );
     const { selectedPage } = useSelectedPage()!;
-    const { data: marcherPages, isSuccess: marcherPagesLoaded } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.id),
-    );
-    const { data: previousMarcherPages } = useQuery(
-        marcherPagesByPageQueryOptions(selectedPage?.previousPageId!),
-    );
+    /**
+     * Playback (UI-19 review): the section keeps its place and shows a note instead of the
+     * selected marchers' values and controls. The selected page stays where playback started, so
+     * its values would be stale and its edits would land there. Nothing is read meanwhile.
+     */
+    const playing = useIsPlaying()?.isPlaying ?? false;
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
-    const timelineMode = useTimelineMode();
     // Isolation: the isolated move's plan at its end, where the canvas draws and edits it
     const isolationEnd = useTimelineSelectionStore((s) => s.isolation?.end);
     const timelinePosition = usePositionAt(
-        selectedMarchers.length === 1 ? selectedMarchers[0].id : -1,
+        !playing && selectedMarchers.length === 1 ? selectedMarchers[0].id : -1,
         isolationEnd ?? (selectedPage ? pageEndBeat(selectedPage) : 0),
     );
-    // Timeline mode has no shape locks (P7.11): moving a marcher whose slot is in a shape-backed
-    // transition switches that transition to individual points (P7.2), and shape pages are
-    // frozen page-era rows. So the shape page marchers aren't read there.
-    const { data: spmsForThisPage } = useQuery(
-        shapePageMarchersQueryByPageIdOptions(
-            timelineMode ? null : (selectedPage?.id ?? null),
-        ),
-    );
-    const editingDisabled = useMemo(() => {
-        if (timelineMode) return false;
-        return (
-            !marcherPagesLoaded ||
-            Object.values(marcherPages).some(
-                (marcherPage) =>
-                    marcherPage.isLocked &&
-                    selectedMarcherIds.has(marcherPage.marcher_id),
-            )
-        );
-    }, [timelineMode, marcherPagesLoaded, marcherPages, selectedMarcherIds]);
-
     const coordsFormRef = useRef<HTMLFormElement>(null);
     const xInputRef = useRef<HTMLInputElement>(null);
     const xDescriptionRef = useRef<HTMLSelectElement>(null);
@@ -484,54 +449,17 @@ function MarcherEditor() {
         // const fieldSide = form[fieldSideId].value;
     };
 
-    const createLineIsVisible = useCallback(() => {
-        // No shape locks in timeline mode (P7.11); the line tool applies positions (P7.2)
-        if (timelineMode) return true;
-        if (!spmsForThisPage) return false;
-        const marcherIdsWithShapes = new Set<number>(
-            spmsForThisPage.map((spm) => spm.marcher_id),
-        );
-        const selectedMarcherIds = selectedMarchers.map(
-            (marcher) => marcher.id,
-        );
-
-        return !selectedMarcherIds.some((marcherId) =>
-            marcherIdsWithShapes.has(marcherId),
-        );
-    }, [timelineMode, selectedMarchers, spmsForThisPage]);
-
+    // P7.2: show where the canvas draws the marcher
     const rCoords = useMemo(() => {
-        if (selectedMarchers.length !== 1) return undefined;
-        // Timeline mode (P7.2): show where the canvas draws the marcher. Checked before the
-        // marcher page lookup: marchers and pages made after the conversion have no marcher
-        // pages, which are frozen (P9.5)
-        if (timelineMode)
-            return timelinePosition
-                ? ReadableCoords.fromMarcherPage({
-                      x: timelinePosition[0],
-                      y: timelinePosition[1],
-                  })
-                : undefined;
-        if (!marcherPagesLoaded) return undefined;
-
-        const selectedMarcherPage = marcherPages[selectedMarchers[0].id];
-        if (!selectedMarcherPage) {
-            console.error(
-                `Selected marcher page not found for marcher ${selectedMarchers[0].id}`,
-            );
+        if (selectedMarchers.length !== 1 || !timelinePosition)
             return undefined;
-        }
-        const newRcoords = ReadableCoords.fromMarcherPage(selectedMarcherPage);
-        return newRcoords;
-    }, [
-        selectedMarchers,
-        marcherPagesLoaded,
-        marcherPages,
-        timelineMode,
-        timelinePosition,
-    ]);
+        return ReadableCoords.fromMarcherPage({
+            x: timelinePosition[0],
+            y: timelinePosition[1],
+        });
+    }, [selectedMarchers, timelinePosition]);
 
-    // Timeline mode (P7.10): step sizes from the resolver between page end beats, along the path
+    // P7.10: step sizes from the resolver between page end beats, along the path
     const { pages } = useTimingObjects()!;
     const selectedMarcherIdList = useMemo(
         () => selectedMarchers.map((marcher) => marcher.id),
@@ -543,86 +471,12 @@ function MarcherEditor() {
         () => pages.find((p) => p.id === selectedPage?.previousPageId) ?? null,
         [pages, selectedPage?.previousPageId],
     );
-    const timelineStepSizes = useTimelineStepSizes({
-        timelineMode,
-        marcherIds: selectedMarcherIdList,
+    const { stepSize, minMax: minMaxStepSize } = useTimelineStepSizes({
+        marcherIds: !playing ? selectedMarcherIdList : NO_MARCHERS,
         page: selectedPage,
         previousPage,
         fieldProperties,
     });
-
-    const stepSize = useMemo(() => {
-        if (timelineStepSizes.active) return timelineStepSizes.stepSize;
-        if (
-            selectedMarchers.length !== 1 ||
-            !marcherPagesLoaded ||
-            !previousMarcherPages ||
-            !selectedPage ||
-            !fieldProperties
-        )
-            return undefined;
-
-        const previousMarcherPage =
-            selectedPage?.previousPageId !== null
-                ? previousMarcherPages[selectedMarchers[0]?.id]
-                : undefined;
-
-        const selectedMarcherPage = marcherPages[selectedMarchers[0].id];
-        if (!selectedMarcherPage) {
-            // Timeline mode before the resolver is ready: marchers and pages made after the
-            // conversion have no marcher pages (P9.5), so there is no page-mode fallback
-            if (!timelineMode)
-                console.error(
-                    `Selected marcher page not found for marcher ${selectedMarchers[0].id}`,
-                );
-            return undefined;
-        }
-        return StepSize.createStepSizeForMarcher({
-            startingPage: previousMarcherPage,
-            endingPage: selectedMarcherPage,
-            page: selectedPage,
-            fieldProperties,
-        });
-    }, [
-        timelineStepSizes.active,
-        timelineStepSizes.stepSize,
-        selectedMarchers,
-        marcherPagesLoaded,
-        previousMarcherPages,
-        selectedPage,
-        fieldProperties,
-        marcherPages,
-        timelineMode,
-    ]);
-
-    const minMaxStepSize = useMemo(() => {
-        if (timelineStepSizes.active) return timelineStepSizes.minMax;
-        if (
-            selectedMarchers.length <= 1 ||
-            !marcherPagesLoaded ||
-            !previousMarcherPages ||
-            !selectedPage ||
-            !fieldProperties
-        )
-            return undefined;
-
-        return StepSize.getMinAndMaxStepSizesForMarchers({
-            marchers: selectedMarchers,
-            startingMarcherPages: previousMarcherPages,
-            endingMarcherPages: marcherPages,
-            page: selectedPage,
-            fieldProperties,
-        });
-    }, [
-        timelineStepSizes.active,
-        timelineStepSizes.minMax,
-        selectedMarchers,
-        marcherPagesLoaded,
-        previousMarcherPages,
-        selectedPage,
-        fieldProperties,
-        marcherPages,
-    ]);
 
     const selectMaxStepMarcher = useCallback(() => {
         if (!minMaxStepSize?.max) return;
@@ -680,13 +534,14 @@ function MarcherEditor() {
             </>
         );
 
-    if (!marcherPagesLoaded) {
-        return (
-            <>
-                <T keyName="inspector.marcher.loading" />
-            </>
-        );
-    }
+    const playingNote = (
+        <p
+            className="text-sub text-text/60 px-6"
+            data-testid="inspector-marcher-playing"
+        >
+            <T keyName="inspector.marcher.playing" />
+        </p>
+    );
 
     const xCheckpoint = (rCoords: ReadableCoords) =>
         rCoords.xCheckpoint.terseName ||
@@ -711,127 +566,137 @@ function MarcherEditor() {
                             }}
                             className="mt-12 flex flex-col gap-16"
                         >
-                            <p className="text-sub text-text/80 w-full px-6 font-mono">
-                                {selectedMarchers
-                                    .map((marcher) => marcher.drill_number)
-                                    .join(", ")}
-                            </p>
-                            {minMaxStepSize &&
-                                minMaxStepSize.min &&
-                                minMaxStepSize.max && (
-                                    <div className="w-full px-6">
-                                        <div className="">
-                                            <p className="w-full leading-none opacity-80">
-                                                <T keyName="inspector.marcher.minStepSize" />
-                                            </p>
-                                        </div>
-                                        <div className="mt-6 flex justify-between">
-                                            <button
-                                                className="text-body leading-none opacity-80 hover:underline"
-                                                onClick={selectMinStepMarcher}
-                                            >
-                                                {
-                                                    selectedMarchers.find(
-                                                        (marcher) =>
-                                                            marcher.id ===
-                                                            minMaxStepSize.min
-                                                                ?.marcher_id,
-                                                    )?.drill_number
-                                                }
-                                            </button>
-                                            <p className="text-body leading-none">
-                                                {minMaxStepSize.min.displayString()}
-                                            </p>
-                                        </div>
-                                        <div className="mt-12">
-                                            <p className="w-full leading-none opacity-80">
-                                                <T keyName="inspector.marcher.maxStepSize" />
-                                            </p>
-                                        </div>
-                                        <div className="flex justify-between pt-6">
-                                            <button
-                                                className="text-body leading-none opacity-80 hover:underline"
-                                                onClick={selectMaxStepMarcher}
-                                            >
-                                                {
-                                                    selectedMarchers.find(
-                                                        (marcher) =>
-                                                            marcher.id ===
-                                                            minMaxStepSize.max
-                                                                ?.marcher_id,
-                                                    )?.drill_number
-                                                }
-                                            </button>
-                                            <p className="text-body flex items-center gap-4 leading-none">
-                                                <StepSizeWarningBadge
-                                                    over={
-                                                        !!fieldProperties &&
-                                                        minMaxStepSize.max.exceedsThreshold(
-                                                            fieldProperties.stepSizeWarningThresholdInches,
-                                                        )
-                                                    }
-                                                />
-                                                {minMaxStepSize.max.displayString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-                            {/* Under the step sizes: hold or move on this page (UI-18) */}
-                            <TimelineHoldLine
-                                marcherIds={selectedMarcherIdList}
-                                nameOf={selectedNameOf}
-                            />
-                            {selectedMarchers.length === 2 && (
-                                <ActionButton
-                                    action="swapMarchers"
-                                    className={clsx(
-                                        getButtonClassName({
-                                            variant: "primary",
-                                            size: "compact",
-                                        }),
-                                        "enabled:hover:text-text-invert",
-                                    )}
-                                >
-                                    <T keyName="inspector.marcher.swapMarchers" />
-                                </ActionButton>
-                            )}
-                            {selectedMarchers.length >= 3 &&
-                                createLineIsVisible() && (
-                                    <ActionButton
-                                        className={clsx(
-                                            getButtonClassName({
-                                                variant: "primary",
-                                                size: "compact",
-                                            }),
-                                            "enabled:hover:text-text-invert",
+                            {playing ? (
+                                playingNote
+                            ) : (
+                                <>
+                                    <p className="text-sub text-text/80 w-full px-6 font-mono">
+                                        {selectedMarchers
+                                            .map(
+                                                (marcher) =>
+                                                    marcher.drill_number,
+                                            )
+                                            .join(", ")}
+                                    </p>
+                                    {minMaxStepSize &&
+                                        minMaxStepSize.min &&
+                                        minMaxStepSize.max && (
+                                            <div className="w-full px-6">
+                                                <div className="">
+                                                    <p className="w-full leading-none opacity-80">
+                                                        <T keyName="inspector.marcher.minStepSize" />
+                                                    </p>
+                                                </div>
+                                                <div className="mt-6 flex justify-between">
+                                                    <button
+                                                        className="text-body leading-none opacity-80 hover:underline"
+                                                        onClick={
+                                                            selectMinStepMarcher
+                                                        }
+                                                    >
+                                                        {
+                                                            selectedMarchers.find(
+                                                                (marcher) =>
+                                                                    marcher.id ===
+                                                                    minMaxStepSize
+                                                                        .min
+                                                                        ?.marcher_id,
+                                                            )?.drill_number
+                                                        }
+                                                    </button>
+                                                    <p className="text-body leading-none">
+                                                        {minMaxStepSize.min.displayString()}
+                                                    </p>
+                                                </div>
+                                                <div className="mt-12">
+                                                    <p className="w-full leading-none opacity-80">
+                                                        <T keyName="inspector.marcher.maxStepSize" />
+                                                    </p>
+                                                </div>
+                                                <div className="flex justify-between pt-6">
+                                                    <button
+                                                        className="text-body leading-none opacity-80 hover:underline"
+                                                        onClick={
+                                                            selectMaxStepMarcher
+                                                        }
+                                                    >
+                                                        {
+                                                            selectedMarchers.find(
+                                                                (marcher) =>
+                                                                    marcher.id ===
+                                                                    minMaxStepSize
+                                                                        .max
+                                                                        ?.marcher_id,
+                                                            )?.drill_number
+                                                        }
+                                                    </button>
+                                                    <p className="text-body flex items-center gap-4 leading-none">
+                                                        <StepSizeWarningBadge
+                                                            over={
+                                                                !!fieldProperties &&
+                                                                minMaxStepSize.max.exceedsThreshold(
+                                                                    fieldProperties.stepSizeWarningThresholdInches,
+                                                                )
+                                                            }
+                                                        />
+                                                        {minMaxStepSize.max.displayString()}
+                                                    </p>
+                                                </div>
+                                            </div>
                                         )}
-                                        action="alignmentEventLine"
-                                    >
-                                        <T keyName="inspector.marcher.createLine" />
-                                    </ActionButton>
-                                )}
+                                    {/* Under the step sizes: hold or move on this page (UI-18) */}
+                                    <TimelineHoldLine
+                                        marcherIds={selectedMarcherIdList}
+                                        nameOf={selectedNameOf}
+                                    />
+                                    {selectedMarchers.length === 2 && (
+                                        <ActionButton
+                                            action="swapMarchers"
+                                            className={clsx(
+                                                getButtonClassName({
+                                                    variant: "primary",
+                                                    size: "compact",
+                                                }),
+                                                "enabled:hover:text-text-invert",
+                                            )}
+                                        >
+                                            <T keyName="inspector.marcher.swapMarchers" />
+                                        </ActionButton>
+                                    )}
+                                    {selectedMarchers.length >= 3 && (
+                                        <ActionButton
+                                            className={clsx(
+                                                getButtonClassName({
+                                                    variant: "primary",
+                                                    size: "compact",
+                                                }),
+                                                "enabled:hover:text-text-invert",
+                                            )}
+                                            action="alignmentEventLine"
+                                        >
+                                            <T keyName="inspector.marcher.createLine" />
+                                        </ActionButton>
+                                    )}
 
-                            {/* Alignment, distribution, and transformation buttons */}
-                            <AlignmentButtons
-                                editingDisabled={editingDisabled}
-                            />
+                                    {/* Alignment, distribution, and transformation buttons */}
+                                    <AlignmentButtons />
 
-                            {/* Add rotation controls */}
-                            <div className="w-full">
-                                <MarcherRotationInput
-                                    disabled={editingDisabled}
-                                />
-                            </div>
+                                    {/* Add rotation controls */}
+                                    <div className="w-full">
+                                        <MarcherRotationInput />
+                                    </div>
 
-                            <TagButtons
-                                selectedMarcherIds={
-                                    new Set(
-                                        selectedMarchers.map(
-                                            (marcher) => marcher.id,
-                                        ),
-                                    )
-                                }
-                            />
+                                    <TagButtons
+                                        selectedMarcherIds={
+                                            new Set(
+                                                selectedMarchers.map(
+                                                    (marcher) => marcher.id,
+                                                ),
+                                            )
+                                        }
+                                    />
+                                </>
+                            )}
                         </InspectorCollapsible>
                     ) : (
                         // One marcher selected
@@ -846,280 +711,325 @@ function MarcherEditor() {
                             }}
                             className="mt-12 flex flex-col gap-24"
                         >
-                            {!rCoords ? (
-                                <p className="text-body text-red">
-                                    <T keyName="inspector.marcher.errorLoadingCoords" />
-                                </p>
+                            {playing ? (
+                                playingNote
                             ) : (
-                                <form
-                                    className="coords-editor edit-group flex flex-col gap-24"
-                                    ref={coordsFormRef}
-                                    onSubmit={handleCoordsSubmit}
-                                >
-                                    <div className="flex flex-col gap-8">
-                                        <label
-                                            htmlFor="xInput"
-                                            className="text-body mx-6 w-full leading-none opacity-80"
+                                <>
+                                    {!rCoords ? (
+                                        <p className="text-body text-red">
+                                            <T keyName="inspector.marcher.errorLoadingCoords" />
+                                        </p>
+                                    ) : (
+                                        <form
+                                            className="coords-editor edit-group flex flex-col gap-24"
+                                            ref={coordsFormRef}
+                                            onSubmit={handleCoordsSubmit}
                                         >
-                                            X
-                                        </label>
-                                        <div className="flex w-full flex-wrap gap-4">
-                                            {/* Maybe on change of all of the variables updating, but only when clicking off for the steps */}
-                                            <span className="w-[4.2rem]">
-                                                <Input
-                                                    compact
-                                                    disabled
-                                                    type="number"
-                                                    value={rCoords?.xSteps}
-                                                    className="disabled:placeholder-text w-full disabled:cursor-auto disabled:opacity-100"
-                                                />
-                                            </span>
-                                            <Select
-                                                disabled
-                                                value={rCoords.xDescription}
-                                            >
-                                                <SelectTriggerCompact
-                                                    label={rCoords.xDescription}
-                                                    className="disabled:cursor-auto disabled:opacity-100"
-                                                />
-                                                <SelectContent>
-                                                    <SelectItem
+                                            <div className="flex flex-col gap-8">
+                                                <label
+                                                    htmlFor="xInput"
+                                                    className="text-body mx-6 w-full leading-none opacity-80"
+                                                >
+                                                    X
+                                                </label>
+                                                <div className="flex w-full flex-wrap gap-4">
+                                                    {/* Maybe on change of all of the variables updating, but only when clicking off for the steps */}
+                                                    <span className="w-[4.2rem]">
+                                                        <Input
+                                                            compact
+                                                            disabled
+                                                            type="number"
+                                                            value={
+                                                                rCoords?.xSteps
+                                                            }
+                                                            className="disabled:placeholder-text w-full disabled:cursor-auto disabled:opacity-100"
+                                                        />
+                                                    </span>
+                                                    <Select
+                                                        disabled
                                                         value={
                                                             rCoords.xDescription
                                                         }
                                                     >
-                                                        {rCoords.xDescription}
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <Select
-                                                disabled
-                                                value={xCheckpoint(rCoords)}
-                                            >
-                                                <SelectTriggerCompact
-                                                    label={xCheckpoint(rCoords)}
-                                                    className="disabled:cursor-auto disabled:opacity-100"
-                                                />
-                                                <SelectContent>
-                                                    <SelectItem
+                                                        <SelectTriggerCompact
+                                                            label={
+                                                                rCoords.xDescription
+                                                            }
+                                                            className="disabled:cursor-auto disabled:opacity-100"
+                                                        />
+                                                        <SelectContent>
+                                                            <SelectItem
+                                                                value={
+                                                                    rCoords.xDescription
+                                                                }
+                                                            >
+                                                                {
+                                                                    rCoords.xDescription
+                                                                }
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Select
+                                                        disabled
                                                         value={xCheckpoint(
                                                             rCoords,
                                                         )}
                                                     >
-                                                        {xCheckpoint(rCoords)}
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <Select
-                                                disabled
-                                                value={rCoords.sideDescription}
-                                            >
-                                                <SelectTriggerCompact
-                                                    className="disabled:cursor-auto disabled:opacity-100"
-                                                    label={
-                                                        rCoords.sideDescription
-                                                    }
-                                                />
-                                                <SelectContent>
-                                                    <SelectItem
+                                                        <SelectTriggerCompact
+                                                            label={xCheckpoint(
+                                                                rCoords,
+                                                            )}
+                                                            className="disabled:cursor-auto disabled:opacity-100"
+                                                        />
+                                                        <SelectContent>
+                                                            <SelectItem
+                                                                value={xCheckpoint(
+                                                                    rCoords,
+                                                                )}
+                                                            >
+                                                                {xCheckpoint(
+                                                                    rCoords,
+                                                                )}
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Select
+                                                        disabled
                                                         value={
-                                                            fieldProperties
-                                                                .sideDescriptions
-                                                                .terseLeft
+                                                            rCoords.sideDescription
                                                         }
-                                                        key={1}
                                                     >
-                                                        {
-                                                            fieldProperties
-                                                                .sideDescriptions
-                                                                .terseLeft
-                                                        }
-                                                    </SelectItem>
-                                                    <SelectItem
-                                                        value={
-                                                            fieldProperties
-                                                                .sideDescriptions
-                                                                .terseRight
-                                                        }
-                                                        key={2}
-                                                    >
-                                                        {
-                                                            fieldProperties
-                                                                .sideDescriptions
-                                                                .terseRight
-                                                        }
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col gap-8">
-                                        <label
-                                            htmlFor="yInput"
-                                            className="text-body mx-6 w-full leading-none opacity-80"
-                                        >
-                                            Y
-                                        </label>
-                                        <div className="flex w-full flex-wrap gap-4">
-                                            <span className="w-[4.2rem]">
-                                                <Input
-                                                    compact
-                                                    disabled
-                                                    type="number"
-                                                    value={rCoords?.ySteps}
-                                                    className="disabled:placeholder-text w-full disabled:cursor-auto disabled:opacity-100"
-                                                />
-                                            </span>
-                                            <Select
-                                                disabled
-                                                value={rCoords.yDescription}
-                                            >
-                                                <SelectTriggerCompact
-                                                    label={rCoords.yDescription}
-                                                    className="disabled:cursor-auto disabled:opacity-100"
-                                                />
-                                                <SelectContent>
-                                                    <SelectItem
+                                                        <SelectTriggerCompact
+                                                            className="disabled:cursor-auto disabled:opacity-100"
+                                                            label={
+                                                                rCoords.sideDescription
+                                                            }
+                                                        />
+                                                        <SelectContent>
+                                                            <SelectItem
+                                                                value={
+                                                                    fieldProperties
+                                                                        .sideDescriptions
+                                                                        .terseLeft
+                                                                }
+                                                                key={1}
+                                                            >
+                                                                {
+                                                                    fieldProperties
+                                                                        .sideDescriptions
+                                                                        .terseLeft
+                                                                }
+                                                            </SelectItem>
+                                                            <SelectItem
+                                                                value={
+                                                                    fieldProperties
+                                                                        .sideDescriptions
+                                                                        .terseRight
+                                                                }
+                                                                key={2}
+                                                            >
+                                                                {
+                                                                    fieldProperties
+                                                                        .sideDescriptions
+                                                                        .terseRight
+                                                                }
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-8">
+                                                <label
+                                                    htmlFor="yInput"
+                                                    className="text-body mx-6 w-full leading-none opacity-80"
+                                                >
+                                                    Y
+                                                </label>
+                                                <div className="flex w-full flex-wrap gap-4">
+                                                    <span className="w-[4.2rem]">
+                                                        <Input
+                                                            compact
+                                                            disabled
+                                                            type="number"
+                                                            value={
+                                                                rCoords?.ySteps
+                                                            }
+                                                            className="disabled:placeholder-text w-full disabled:cursor-auto disabled:opacity-100"
+                                                        />
+                                                    </span>
+                                                    <Select
+                                                        disabled
                                                         value={
                                                             rCoords.yDescription
                                                         }
                                                     >
-                                                        {rCoords.yDescription}
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <Select
-                                                disabled
-                                                value={yCheckpoint(rCoords)}
-                                            >
-                                                <SelectTriggerCompact
-                                                    label={yCheckpoint(rCoords)}
-                                                    className="disabled:cursor-auto disabled:opacity-100"
-                                                />
-                                                <SelectContent>
-                                                    <SelectItem
+                                                        <SelectTriggerCompact
+                                                            label={
+                                                                rCoords.yDescription
+                                                            }
+                                                            className="disabled:cursor-auto disabled:opacity-100"
+                                                        />
+                                                        <SelectContent>
+                                                            <SelectItem
+                                                                value={
+                                                                    rCoords.yDescription
+                                                                }
+                                                            >
+                                                                {
+                                                                    rCoords.yDescription
+                                                                }
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Select
+                                                        disabled
                                                         value={yCheckpoint(
                                                             rCoords,
                                                         )}
                                                     >
-                                                        {yCheckpoint(rCoords)}
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col gap-12">
-                                        {stepSize !== undefined && (
-                                            <div className="flex justify-between px-6">
-                                                <label className="text-body leading-none opacity-80">
-                                                    <T keyName="inspector.marcher.stepSize" />
-                                                </label>
-
-                                                <p className="text-body flex items-center gap-4 bg-transparent leading-none">
-                                                    <StepSizeWarningBadge
-                                                        over={
-                                                            !!fieldProperties &&
-                                                            stepSize.exceedsThreshold(
-                                                                fieldProperties.stepSizeWarningThresholdInches,
-                                                            )
-                                                        }
-                                                    />
-                                                    {stepSize.displayString()}
-                                                </p>
+                                                        <SelectTriggerCompact
+                                                            label={yCheckpoint(
+                                                                rCoords,
+                                                            )}
+                                                            className="disabled:cursor-auto disabled:opacity-100"
+                                                        />
+                                                        <SelectContent>
+                                                            <SelectItem
+                                                                value={yCheckpoint(
+                                                                    rCoords,
+                                                                )}
+                                                            >
+                                                                {yCheckpoint(
+                                                                    rCoords,
+                                                                )}
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
                                             </div>
-                                        )}
-                                        {/* Under Step Size: hold or move on this page (UI-18) */}
-                                        <TimelineHoldLine
-                                            marcherIds={selectedMarcherIdList}
-                                            nameOf={selectedNameOf}
-                                        />
-                                    </div>
-                                    {/* This is here so the form submits when enter is pressed, does NOT need to be translated */}
-                                    <button
-                                        type="submit"
-                                        style={{ display: "none" }}
-                                    >
-                                        Submit
-                                    </button>
-                                </form>
-                            )}
-                            <form
-                                className="marcher-details-editor flex flex-col gap-24"
-                                ref={detailsFormRef}
-                            >
-                                <div className="flex items-center justify-between px-6">
-                                    <label
-                                        htmlFor="name-input"
-                                        className="text-body leading-none opacity-80"
-                                    >
-                                        <T keyName="inspector.marcher.name" />
-                                    </label>
+                                            <div className="flex flex-col gap-12">
+                                                {stepSize !== undefined && (
+                                                    <div className="flex justify-between px-6">
+                                                        <label className="text-body leading-none opacity-80">
+                                                            <T keyName="inspector.marcher.stepSize" />
+                                                        </label>
 
-                                    <span className="w-[7rem]">
-                                        <Input
-                                            compact
-                                            disabled
-                                            value={
-                                                selectedMarchers[0].name ===
-                                                    null ||
-                                                selectedMarchers[0].name ===
-                                                    " " ||
-                                                selectedMarchers[0].name
-                                                    .length < 1
-                                                    ? "-"
-                                                    : selectedMarchers[0].name
-                                            }
-                                            className="disabled:placeholder-text w-full disabled:cursor-auto disabled:opacity-100"
-                                        />
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between px-6">
-                                    <label
-                                        htmlFor="section-input"
-                                        className="text-body leading-none opacity-80"
+                                                        <p className="text-body flex items-center gap-4 bg-transparent leading-none">
+                                                            <StepSizeWarningBadge
+                                                                over={
+                                                                    !!fieldProperties &&
+                                                                    stepSize.exceedsThreshold(
+                                                                        fieldProperties.stepSizeWarningThresholdInches,
+                                                                    )
+                                                                }
+                                                            />
+                                                            {stepSize.displayString()}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {/* Under Step Size: hold or move on this page (UI-18) */}
+                                                <TimelineHoldLine
+                                                    marcherIds={
+                                                        selectedMarcherIdList
+                                                    }
+                                                    nameOf={selectedNameOf}
+                                                />
+                                            </div>
+                                            {/* This is here so the form submits when enter is pressed, does NOT need to be translated */}
+                                            <button
+                                                type="submit"
+                                                style={{ display: "none" }}
+                                            >
+                                                Submit
+                                            </button>
+                                        </form>
+                                    )}
+                                    <form
+                                        className="marcher-details-editor flex flex-col gap-24"
+                                        ref={detailsFormRef}
                                     >
-                                        <T keyName="inspector.marcher.section" />
-                                    </label>
-                                    <span className="w-[7rem]">
-                                        <Input
-                                            compact
-                                            disabled
-                                            value={selectedMarchers[0].section}
-                                            className="disabled:placeholder-text w-full disabled:cursor-auto disabled:opacity-100"
-                                        />
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between px-6">
-                                    <label
-                                        htmlFor="drill-number-input"
-                                        className="text-body leading-none opacity-80"
-                                    >
-                                        <T keyName="inspector.marcher.drillNumber" />
-                                    </label>
-                                    <span className="w-[7rem]">
-                                        <Input
-                                            compact
-                                            disabled
-                                            value={
-                                                selectedMarchers[0].drill_number
+                                        <div className="flex items-center justify-between px-6">
+                                            <label
+                                                htmlFor="name-input"
+                                                className="text-body leading-none opacity-80"
+                                            >
+                                                <T keyName="inspector.marcher.name" />
+                                            </label>
+
+                                            <span className="w-[7rem]">
+                                                <Input
+                                                    compact
+                                                    disabled
+                                                    value={
+                                                        selectedMarchers[0]
+                                                            .name === null ||
+                                                        selectedMarchers[0]
+                                                            .name === " " ||
+                                                        selectedMarchers[0].name
+                                                            .length < 1
+                                                            ? "-"
+                                                            : selectedMarchers[0]
+                                                                  .name
+                                                    }
+                                                    className="disabled:placeholder-text w-full disabled:cursor-auto disabled:opacity-100"
+                                                />
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between px-6">
+                                            <label
+                                                htmlFor="section-input"
+                                                className="text-body leading-none opacity-80"
+                                            >
+                                                <T keyName="inspector.marcher.section" />
+                                            </label>
+                                            <span className="w-[7rem]">
+                                                <Input
+                                                    compact
+                                                    disabled
+                                                    value={
+                                                        selectedMarchers[0]
+                                                            .section
+                                                    }
+                                                    className="disabled:placeholder-text w-full disabled:cursor-auto disabled:opacity-100"
+                                                />
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between px-6">
+                                            <label
+                                                htmlFor="drill-number-input"
+                                                className="text-body leading-none opacity-80"
+                                            >
+                                                <T keyName="inspector.marcher.drillNumber" />
+                                            </label>
+                                            <span className="w-[7rem]">
+                                                <Input
+                                                    compact
+                                                    disabled
+                                                    value={
+                                                        selectedMarchers[0]
+                                                            .drill_number
+                                                    }
+                                                    className="disabled:placeholder-text w-full disabled:cursor-auto disabled:opacity-100"
+                                                />
+                                            </span>
+                                        </div>
+                                        <TagButtons
+                                            selectedMarcherIds={
+                                                new Set([
+                                                    selectedMarchers[0].id,
+                                                ])
                                             }
-                                            className="disabled:placeholder-text w-full disabled:cursor-auto disabled:opacity-100"
                                         />
-                                    </span>
-                                </div>
-                                <TagButtons
-                                    selectedMarcherIds={
-                                        new Set([selectedMarchers[0].id])
-                                    }
-                                />
-                                {/* This is here so the form submits when enter is pressed, does NOT need to be translated */}
-                                <button
-                                    type="submit"
-                                    style={{ display: "none" }}
-                                >
-                                    Submit
-                                </button>
-                            </form>
+                                        {/* This is here so the form submits when enter is pressed, does NOT need to be translated */}
+                                        <button
+                                            type="submit"
+                                            style={{ display: "none" }}
+                                        >
+                                            Submit
+                                        </button>
+                                    </form>
+                                </>
+                            )}
                         </InspectorCollapsible>
                     )}
                 </div>

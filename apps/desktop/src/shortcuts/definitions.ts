@@ -1,3 +1,4 @@
+import { isWebBuild } from "@/utilities/webBuild";
 export type ActionScope = "global" | "canvas" | "timeline";
 export type ActionCategory =
     | "file"
@@ -152,13 +153,15 @@ const STATIC_ACTIONS = {
         labelKey: "actions.file.loadDialogue",
         category: "file",
         scope: "global",
-        defaultBindings: [],
+        // Electron binds this in the native menu; the web build has none.
+        defaultBindings: isWebBuild ? ["$mod+O"] : [],
     },
     launchSaveFileDialogue: {
         labelKey: "actions.file.saveDialogue",
         category: "file",
         scope: "global",
-        defaultBindings: [],
+        // Electron binds this in the native menu; the web build has none.
+        defaultBindings: isWebBuild ? ["$mod+S"] : [],
     },
     launchNewFileDialogue: {
         labelKey: "actions.file.newDialogue",
@@ -250,7 +253,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.navigation.lastPage",
         category: "navigation",
         scope: "global",
-        defaultBindings: ["Shift+E"],
+        defaultBindings: ["Alt+E", "End", "Alt+Shift+E"],
     },
     previousPage: {
         labelKey: "actions.navigation.previousPage",
@@ -260,6 +263,20 @@ const STATIC_ACTIONS = {
     },
     firstPage: {
         labelKey: "actions.navigation.firstPage",
+        category: "navigation",
+        scope: "global",
+        defaultBindings: ["Alt+Q", "Home", "Alt+Shift+Q"],
+    },
+    // Shift with Q and E steps the playhead a beat instead of a page; Alt (with or without Shift, as
+    // the transport's buttons read it) goes to the start or end
+    nextBeat: {
+        labelKey: "actions.navigation.nextBeat",
+        category: "navigation",
+        scope: "global",
+        defaultBindings: ["Shift+E"],
+    },
+    previousBeat: {
+        labelKey: "actions.navigation.previousBeat",
         category: "navigation",
         scope: "global",
         defaultBindings: ["Shift+Q"],
@@ -272,7 +289,7 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Space"],
     },
-    // UI-17: Shift+Space plays the page's move once, back to its set (timeline mode)
+    // Shift+Space plays on from the playhead (timeline mode); Space plays from the start flag
     playPage: {
         labelKey: "actions.playback.playPage",
         category: "playback",
@@ -382,7 +399,10 @@ const STATIC_ACTIONS = {
         labelKey: "actions.swap.swap",
         category: "alignment",
         scope: "canvas",
-        defaultBindings: ["$mod+S", "Control+S"],
+        // On the web, Cmd/Ctrl+S downloads the show (saving), so swap moves.
+        defaultBindings: isWebBuild
+            ? ["$mod+Shift+S"]
+            : ["$mod+S", "Control+S"],
     },
 
     // UI
@@ -420,6 +440,14 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["$mod+Comma"],
     },
+    // Opens the 3D View window, or focuses it (3D View UI-1). Unbound by default.
+    openView3d: {
+        labelKey: "actions.ui.openView3d",
+        keywordsKey: "actions.ui.openView3dKeywords",
+        category: "ui",
+        scope: "global",
+        defaultBindings: [],
+    },
     // UI-17 follow-up: ? lists every shortcut
     showShortcuts: {
         labelKey: "actions.ui.showShortcuts",
@@ -450,12 +478,6 @@ const STATIC_ACTIONS = {
         category: "cursor",
         scope: "canvas",
         defaultBindings: ["Shift+Enter"],
-    },
-    createMarcherShape: {
-        labelKey: "actions.shape.create",
-        category: "cursor",
-        scope: "canvas",
-        defaultBindings: ["Enter"],
     },
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",
