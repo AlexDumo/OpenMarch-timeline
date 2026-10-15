@@ -14,12 +14,18 @@ export function useFieldLineTool(editor: FieldEditor) {
         const sync = ({
             alignmentEvent,
             alignmentEventMarchers,
-        }: ReturnType<typeof useAlignmentEventStore.getState>) =>
+            setAlignmentEventNewMarcherPages,
+        }: ReturnType<typeof useAlignmentEventStore.getState>) => {
+            if (alignmentEvent !== "line") {
+                editor.setLineTool(null);
+                return;
+            }
+            // A fresh tool has no line: an earlier line's previews mustn't be applied
+            setAlignmentEventNewMarcherPages([]);
             editor.setLineTool(
-                alignmentEvent === "line"
-                    ? alignmentEventMarchers.map((marcher) => marcher.id)
-                    : null,
+                alignmentEventMarchers.map((marcher) => marcher.id),
             );
+        };
         sync(useAlignmentEventStore.getState());
         const unsubscribe = useAlignmentEventStore.subscribe((now, before) => {
             if (

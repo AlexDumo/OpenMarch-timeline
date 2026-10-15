@@ -276,6 +276,9 @@ describe("FieldEditor line tool", () => {
         click(editor, 0, 0);
         click(editor, 100, 0);
         expect(editor.pointerDown(at(50, 50, { button: 2 }))).toBe(false);
+        // Cleared on the release, not the press
+        expect(editor.lineToolShape()!.line).not.toBeNull();
+        editor.pointerUp(at(51, 50, { button: 2 }));
         // The finished line's previews stay until the next is finished, as on Fabric
         expect(editor.lineToolShape()).toMatchObject({
             line: null,
@@ -288,6 +291,34 @@ describe("FieldEditor line tool", () => {
         });
         click(editor, 100, 200);
         expect(previews).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps the line through a right-drag, which pans (story 5)", () => {
+        const { editor } = setup();
+        editor.setLineTool([1, 2]);
+        click(editor, 0, 0);
+        editor.pointerMove(at(100, 0));
+        // The release lands 4 screen px or more from the press: a pan, not a click
+        editor.pointerDown(at(50, 50, { button: 2 }));
+        editor.pointerUp(at(54, 50, { button: 2 }));
+        expect(editor.lineToolShape()!.line).toMatchObject({
+            start: { x: 0, y: 0 },
+            drawing: true,
+        });
+        editor.pointerMove(at(200, 0));
+        expect(editor.lineToolShape()!.line!.end).toEqual({ x: 200, y: 0 });
+    });
+
+    it("leaves the line alone on a Ctrl/Cmd+click, as Fabric does", () => {
+        const { editor, ports } = setup();
+        editor.setLineTool([1, 2]);
+        click(editor, 0, 0, { ctrl: true });
+        click(editor, 0, 0, { meta: true });
+        expect(editor.lineToolShape()!.line).toBeNull();
+        click(editor, 0, 0);
+        click(editor, 100, 0, { ctrl: true });
+        expect(editor.lineToolShape()!.line!.drawing).toBe(true);
+        expect(ports.selection.set).not.toHaveBeenCalled();
     });
 
     it("leaves a press the app takes (a held preview) to the app", () => {
@@ -342,7 +373,7 @@ describe("FieldEditor line tool", () => {
         editor.refreshLineTool();
         expect(previews).not.toHaveBeenCalled();
         click(editor, 100, 0);
-        editor.pointerDown(at(0, 0, { button: 2 }));
+        click(editor, 0, 0, { button: 2 });
         editor.refreshLineTool();
         expect(previews).toHaveBeenCalledTimes(1);
     });

@@ -99,8 +99,13 @@ actions, unchanged: one undo step through the timeline's rules.
 the first starts a line, the second finishes it, and later ones do nothing
 until a right-click clears the line. No press selects or drags anything, so
 #202's line-tool branch in `takeFieldPress.ts` is gone and its `change:`
-scenario passes through the editor. A right press clears the line in
-`pointerDown` and still returns false, so it also pans. The cursor is a
+scenario passes through the editor. Ctrl/Cmd+click doesn't touch the line.
+A right press is navigation's (it pans); the editor clears the line only on
+a right release within `CLICK_SLOP` of the press, so a right-drag pans to the
+line's far end and keeps it. Navigation captures right presses on the
+field's root, so `fieldPointerInput` hands the editor right releases from a
+document listener. Turning the tool on (again) empties the alignment event's
+previews, so Shift+Enter can't apply a line no longer drawn. The cursor is a
 crosshair. Ctrl/Cmd+A during the tool is unchanged.
 
 **Overlay.** `FieldOverlay`'s `LineToolPreview` draws Fabric's look in field
@@ -118,6 +123,8 @@ the new field. Scenarios: `e2e/browser/tests/line-tool.spec.mts`.
 - Once a line is finished, a click on a marcher selects nothing (rules
   table: Click target). Fabric makes the marchers selectable again then, and
   a press goes to its default listeners (marquee, select, drag).
+- A right-drag pans and keeps the line being drawn (story 5: pan to reach
+  the line's far end). Fabric clears the line on every right press.
 - Shift+Enter saves exactly where the previews are drawn (rules table: Dot
   position). Fabric saves the line half a field unit right of and below where
   it draws it (`MarcherLine`'s grid offset).

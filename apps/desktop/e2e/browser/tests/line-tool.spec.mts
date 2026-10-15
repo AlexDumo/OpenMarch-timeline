@@ -369,3 +369,45 @@ test("change: Shift+Enter saves the marchers exactly where the previews are draw
     await page.keyboard.press("Shift+Enter");
     await expectSaved(show, previews, 0.01);
 });
+
+test("change: a right-drag pans and keeps the line being drawn, so its end can be placed past the edge (user story 5)", async ({
+    show,
+    field,
+}) => {
+    test.fail(
+        field === "fabric",
+        "Fabric clears the line on every right press, a pan's included",
+    );
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    await startTool(page);
+    const a = await screenAt(page, SHALLOW.from);
+    await page.mouse.click(a.x, a.y);
+    const before = (await readField(page)).viewport.pan;
+
+    // Right-drag 120 screen px left
+    const from = await screenAt(page, { x: 700, y: 600 });
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down({ button: "right" });
+    await page.mouse.move(from.x - 120, from.y, { steps: 8 });
+    await page.mouse.up({ button: "right" });
+    await expect
+        .poll(async () => (await readField(page)).viewport.pan.x)
+        .toBeLessThan(before.x - 100);
+    const line = (await lineTool(page))!.line;
+    expect(line).toMatchObject({ drawing: true });
+    expect(near(line!.start, snapped(SHALLOW.from, grid))).toBe(true);
+
+    // The end still follows the pointer, and a click finishes the line
+    const b = await screenAt(page, SHALLOW.to);
+    await page.mouse.move(b.x, b.y, { steps: 5 });
+    await page.mouse.click(b.x, b.y);
+    await expectPreviews(
+        page,
+        spaced(
+            SHALLOW_ORDER,
+            snapped(SHALLOW.from, grid),
+            snapped(SHALLOW.to, grid),
+        ),
+    );
+});

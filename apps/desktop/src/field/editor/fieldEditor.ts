@@ -165,6 +165,8 @@ export class FieldEditor {
     private live: readonly MarcherPosition[] | null = null;
     /** The line tool, while it's on (#203). */
     private lineTool: LineTool | null = null;
+    /** A right press during the line tool, until its release: a click clears the line. */
+    private rightPress: FieldPointer | null = null;
     private readonly listeners = new Set<() => void>();
     private readonly now: () => number;
     private readonly areaPorts: AreaPorts;
@@ -191,8 +193,9 @@ export class FieldEditor {
      */
     pointerDown(pointer: FieldPointer): boolean {
         if (!this.isEditButton(pointer)) {
-            // A right-click clears the line tool's line; it still pans
-            if (pointer.button === 2) this.lineTool?.clear();
+            // Navigation pans with it; a right-click (no drag) clears the line tool's line
+            this.rightPress =
+                pointer.button === 2 && this.lineTool ? pointer : null;
             return false;
         }
         this.cancelGesture();
@@ -204,8 +207,10 @@ export class FieldEditor {
             this.press = null;
             this.lastClick = null;
             this.ignoredButton = pointer.button;
-            // The line tool's presses draw its line and never select (story 20)
-            if (!taken) this.lineTool?.press(pointer);
+            // The line tool's presses draw its line and never select (story 20).
+            // Ctrl/Cmd+click doesn't touch the line, as on Fabric
+            if (!taken && !pointer.ctrl && !pointer.meta)
+                this.lineTool?.press(pointer);
             return true;
         }
         const hit = this.marcherAt(pointer.field);
@@ -249,6 +254,13 @@ export class FieldEditor {
     }
 
     pointerUp(pointer: FieldPointer): void {
+        if (pointer.button === 2) {
+            const right = this.rightPress;
+            this.rightPress = null;
+            // A right-drag panned: the line stays, so the user can pan to its far end
+            if (right && !isPastSlop(right, pointer)) this.lineTool?.clear();
+            return;
+        }
         if (this.ignoredButton !== null) {
             if (pointer.button === this.ignoredButton)
                 this.ignoredButton = null;
