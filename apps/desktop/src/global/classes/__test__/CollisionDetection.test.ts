@@ -5,7 +5,6 @@ import {
     COLLISION_RADIUS,
     collisionWindow,
     detectCollisions,
-    getCollisionsForSelectedPage,
 } from "../CollisionDetection";
 
 type XY = { x: number; y: number };
@@ -202,24 +201,5 @@ describe("collisionWindow", () => {
             fromBeat: 7,
             toBeat: 7,
         });
-    });
-});
-
-describe("getCollisionsForSelectedPage", () => {
-    it("reads the selected page's collisions", () => {
-        const found = [
-            {
-                marcher1Id: 1,
-                marcher2Id: 2,
-                label: "1, 2",
-                x: 0,
-                y: 0,
-                distance: 0,
-            },
-        ];
-        const byPage = new Map([[11, found]]);
-        expect(getCollisionsForSelectedPage({ id: 11 }, byPage)).toBe(found);
-        expect(getCollisionsForSelectedPage({ id: 12 }, byPage)).toEqual([]);
-        expect(getCollisionsForSelectedPage(null, byPage)).toEqual([]);
     });
 });

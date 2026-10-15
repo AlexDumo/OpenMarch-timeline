@@ -90,7 +90,13 @@ export function detectCollisions(
     return sweep.collisions;
 }
 
-/** How far the marcher that moves most travels between two position buffers, in a straight line. */
+/**
+ * How far the marcher that moves most travels between two position buffers, in a straight line.
+ * Assumes a marcher moves along about that line within a beat: a path that curves or doubles back
+ * inside one beat travels further than this, so it is sampled more coarsely than the radius asks
+ * and a brief brush can be missed. So can anyone faster than 32 half-radii (160 field units) a
+ * beat, past `MAX_SAMPLES_PER_BEAT`, which bounds the cost of one teleporting marcher.
+ */
 function maxTravel(a: Float64Array, b: Float64Array): number {
     let max = 0;
     for (let i = 0; i < a.length; i += 2) {
@@ -168,9 +174,3 @@ class Sweep {
         });
     }
 }
-
-/** The collisions the store holds for the selected page, or none. */
-export const getCollisionsForSelectedPage = (
-    selectedPage: Pick<Page, "id"> | null,
-    pageCollisions: Map<number, CollisionData[]>,
-) => (selectedPage ? (pageCollisions.get(selectedPage.id) ?? []) : []);

@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     queryOptions,
+    skipToken,
     useQueries,
+    useQueryClient,
     type UseQueryResult,
 } from "@tanstack/react-query";
 import {
@@ -14,7 +16,7 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { timelineStoreSource } from "@/timeline/timelineCanvas";
+import type { PositionSource } from "@/timeline/positionBuffer";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { allMarchersQueryOptions } from "./queries";
 import { useTimingObjects } from "./useTimingObjects";
@@ -24,13 +26,30 @@ import { useTimingObjects } from "./useTimingObjects";
  * `useCollisionStore`, so both fields' markers and the Collisions tab show it.
  *
  * When it runs: for the selected page only (`collisionWindow`: its positions and the move to the
- * next page), once the page and the resolver version have held still for `SETTLE_MS`. A new
+ * next page), once the page and the resolver version have held still for `SETTLE_MS`, or at once
+ * when the cache already has the answer. A new
  * resolver version (any committed edit, undo or redo) is a new query key, so an edit asks again;
  * a drag's pending positions aren't committed, so it doesn't run mid-drag. It never runs per
  * frame, nor while playing or scrubbing, when the selected page follows the playhead and the
  * fields hide the markers anyway. Going back to a page and version already checked reads the
  * cache.
  */
+
+/**
+ * The open file's resolver, read directly: `timelineStore.positionsAt` would move the idle warm
+ * pass's focus to the beats checked, away from where the user is looking.
+ */
+const resolverSource: PositionSource = {
+    marcherIds: () =>
+        useTimelineResolverStore.getState().resolver?.marcherIds() ?? [],
+    positionsAt(beat, out) {
+        const { resolver } = useTimelineResolverStore.getState();
+        if (!resolver || out.length !== 2 * resolver.marcherIds().length)
+            return false;
+        resolver.positionsAt(beat, out);
+        return true;
+    },
+};
 
 /** How long the page and the resolver version must hold still before detection runs */
 const SETTLE_MS = 150;
@@ -58,19 +77,20 @@ export const collisionsQueryOptions = (request: CollisionRequest | null) =>
         queryKey: request
             ? collisionKeys.forRequest(request)
             : [...collisionKeys.all(), "none"],
-        queryFn: () => {
-            const start = performance.now();
-            const found = detectCollisions(
-                timelineStoreSource,
-                request!.fromBeat,
-                request!.toBeat,
-                new Map(),
-            );
-            // Its cost, for DevTools' performance panel and benchmarks
-            performance.measure("openmarch:collisions", { start });
-            return found;
-        },
-        enabled: request !== null,
+        queryFn: request
+            ? () => {
+                  const start = performance.now();
+                  const found = detectCollisions(
+                      resolverSource,
+                      request.fromBeat,
+                      request.toBeat,
+                      new Map(),
+                  );
+                  // Its cost, for DevTools' performance panel and benchmarks
+                  performance.measure("openmarch:collisions", { start });
+                  return found;
+              }
+            : skipToken,
         // The key holds the resolver version: an answer never goes stale, only unused
         staleTime: Infinity,
         gcTime: 60_000,
@@ -132,16 +152,26 @@ export function useCollisionDetection(): void {
     const version = useTimelineResolverStore((s) => s.version);
 
     const idle = ready && !isPlaying && !scrubbing;
-    const request = useSettled(
-        idle && selectedPage
-            ? {
-                  pageId: selectedPage.id,
-                  ...collisionWindow(selectedPage, pages),
-                  version,
-              }
-            : null,
-        SETTLE_MS,
+    const beats =
+        idle && selectedPage ? collisionWindow(selectedPage, pages) : null;
+    const pageId = selectedPage?.id;
+    // By value, so an unchanged request keeps its identity across renders
+    const live = useMemo<CollisionRequest | null>(
+        () =>
+            beats && pageId !== undefined
+                ? { pageId, ...beats, version }
+                : null,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [pageId, beats?.fromBeat, beats?.toBeat, version],
     );
+    const settled = useSettled(live, SETTLE_MS);
+    // An answer the cache has (going back to a page) needs no settling
+    const queryClient = useQueryClient();
+    const request =
+        live &&
+        queryClient.getQueryData(collisionKeys.forRequest(live)) !== undefined
+            ? live
+            : settled;
     const { collisions } = useQueries({
         queries: [allMarchersQueryOptions(), collisionsQueryOptions(request)],
         combine: _combineCollisions,
@@ -153,6 +183,6 @@ export function useCollisionDetection(): void {
         // An answer for a page no longer selected waits for the next request
         if (!collisions || !request || request.pageId !== selectedPageId)
             return;
-        setCollisions({ id: request.pageId }, collisions);
+        setCollisions({ id: request.pageId }, collisions, request.version);
     }, [collisions, request, selectedPageId, setCollisions]);
 }

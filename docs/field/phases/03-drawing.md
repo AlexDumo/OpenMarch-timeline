@@ -314,14 +314,21 @@ checks only its own positions. Unit tests in
 is a TanStack query keyed by the resolver version and the window, combined
 with the marchers query for drill-number labels (`_combineCollisions`). It runs
 for the selected page only, once the page and the version have held still for
-150 ms; an edit, undo or redo is a new version and so a new query. Never per
-frame, and never while playing or scrubbing (`scrubbing` in the timeline
-selection store), when the selected page follows the playhead. A drag's
-pending positions aren't committed, so it doesn't run mid-drag. Revisiting a
-page at the same version reads the cache. It writes `useCollisionStore`
-(`setCollisions(page, list)`), whose map is now keyed by the page the
-collisions were found for, not the next page. Both fields still hide the
-markers during playback.
+150 ms, or at once when the cache has the answer (going back to a page). An
+edit, undo or redo is a new version and so a new query. Never per frame, and
+never while playing or scrubbing (`scrubbing` in the timeline selection
+store), when the selected page follows the playhead. A drag's pending
+positions aren't committed, so it doesn't run mid-drag. It reads the resolver
+directly, not through `timelineStore.positionsAt`, so idle warming keeps
+starting where the user is looking.
+
+**The store.** `useCollisionStore` keeps each page's answer at the current
+version (`setCollisions(page, list, version)`; a new version drops the rest).
+`setCurrentCollision(page)` shows a known answer, and otherwise keeps showing
+the last one until detection answers: blanking it made the toolbar close the
+Collisions tab on every page change. The toolbar also doesn't close the tab
+while playing or scrubbing; it waits for the page the playhead stops on. Both
+fields still hide the markers during playback.
 
 **Cost** (production browser build, a 6-core desktop CPU; detection is CPU-only,
 so software GL doesn't matter here): 2,000 marchers in a 50 × 40 block moving
@@ -333,8 +340,10 @@ noticeable, chunk it over idle callbacks or move it to a worker with the
 resolver.
 
 **Scenario.** `e2e/browser/tests/collisions.spec.mts` drags T1 onto T2, checks
-the Collisions tab lists the pair and "Review" frames it, and that undo takes
-it away, on both fields.
+the Collisions tab lists the pair and "Review" frames it, that the next page
+(with a collision of its own) keeps the tab open and lists that pair, and that
+undo takes the first away, on both fields. Store rules:
+`stores/__test__/CollisionStore.test.ts`.
 
 **Open.** Two marchers on exactly the same spot have `distance` 0, so the
 marker disc (radius = distance, as Fabric's `CollisionMarker`) has no size;
