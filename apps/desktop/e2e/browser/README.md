@@ -109,6 +109,9 @@ test("creates marchers", async ({ show }) => {
   existing show with music, pages and positions: page 0's are the marchers'
   homes, and each later page is one timeline move (see
   `tests/existing-show.spec.mts`). Plain SQL works too.
+- `test.use({ uiSettings: {...} })` starts the app with those UI settings
+  (`src/stores/UiSettingsStore.ts`, merged over the defaults), for example
+  `{ mouseSettings: { trackpadMode: false } }` for mouse mode.
 - `addPageAt(page, measure)` adds a page flag at a measure with the timeline's
   Go to field and **+**.
 - A test fails if the page logs an error or throws. Allow a known message with

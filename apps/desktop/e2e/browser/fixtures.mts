@@ -44,6 +44,8 @@ export type Target = "browser" | "electron";
  */
 export type FieldDriver = FieldRenderer;
 const FIELD_STORAGE_KEY = "openmarch:dev:field";
+/** `UI_SETTINGS_STORAGE_KEY` in `src/stores/UiSettingsStore.ts`. */
+const UI_SETTINGS_STORAGE_KEY = "openmarch:uiSettings";
 const defaultField: FieldDriver =
     process.env.FIELD === "three" ? "three" : "fabric";
 
@@ -68,7 +70,7 @@ async function openInBrowser(
     browser: Browser,
     databasePath: string,
     appSettings: Record<string, unknown>,
-    field: FieldDriver,
+    storage: Record<string, string>,
 ): Promise<App> {
     const { openShow } = (await import(pathToFileURL(hostBundle).href)) as {
         openShow: typeof import("./host/index").openShow;
@@ -79,10 +81,9 @@ async function openInBrowser(
         settings: appSettings,
     });
     const context = await browser.newContext({ viewport: VIEWPORT });
-    await context.addInitScript(
-        ([key, value]) => localStorage.setItem(key, value),
-        [FIELD_STORAGE_KEY, field] as const,
-    );
+    await context.addInitScript((entries) => {
+        for (const [key, value] of entries) localStorage.setItem(key, value);
+    }, Object.entries(storage));
     const page = await context.newPage();
 
     await page.exposeFunction(
@@ -230,6 +231,12 @@ type Fixtures = {
     seedSql: string[];
     /** Messages matching any of these don't fail the test. */
     allowedPageErrors: RegExp[];
+    /**
+     * The renderer's UI settings (`openmarch:uiSettings` in its local
+     * storage), merged over the defaults when the app starts. Unset keeps the
+     * defaults.
+     */
+    uiSettings: Record<string, unknown> | undefined;
     show: Show;
 };
 
@@ -258,9 +265,18 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     appSettings: [{ optOutAnalytics: true }, { option: true }],
     seedSql: [[], { option: true }],
     allowedPageErrors: [[], { option: true }],
+    uiSettings: [undefined, { option: true }],
 
     show: async (
-        { target, field, chromium, appSettings, seedSql, allowedPageErrors },
+        {
+            target,
+            field,
+            chromium,
+            appSettings,
+            seedSql,
+            allowedPageErrors,
+            uiSettings,
+        },
         use,
         testInfo,
     ) => {
@@ -276,6 +292,11 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             }
         }
 
+        // The renderer's local storage when the app starts
+        const storage: Record<string, string> = { [FIELD_STORAGE_KEY]: field };
+        if (uiSettings)
+            storage[UI_SETTINGS_STORAGE_KEY] = JSON.stringify(uiSettings);
+
         let app: App;
         if (target === "electron") {
             requireBuilt(electronMain, "build");
@@ -290,25 +311,31 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 chromium!,
                 databasePath,
                 appSettings,
-                field,
+                storage,
             );
         }
         const { page } = app;
         if (target === "electron") {
             // The window is already loading when Playwright gets it: set the
-            // switch, then load again with it
+            // storage, then load again with it
             await page.waitForLoadState("domcontentloaded");
-            const current = await page.evaluate(
-                (key) => localStorage.getItem(key),
-                FIELD_STORAGE_KEY,
+            const changed = await page.evaluate(
+                ([entries, fieldKey]) => {
+                    let changed = false;
+                    for (const [key, value] of entries) {
+                        const current =
+                            localStorage.getItem(key) ??
+                            // No switch means Fabric
+                            (key === fieldKey ? "fabric" : null);
+                        if (current === value) continue;
+                        localStorage.setItem(key, value);
+                        changed = true;
+                    }
+                    return changed;
+                },
+                [Object.entries(storage), FIELD_STORAGE_KEY] as const,
             );
-            if ((current ?? "fabric") !== field) {
-                await page.evaluate(
-                    ([key, value]) => localStorage.setItem(key, value),
-                    [FIELD_STORAGE_KEY, field] as const,
-                );
-                await page.reload();
-            }
+            if (changed) await page.reload();
         }
 
         const pageErrors: string[] = [];

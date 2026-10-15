@@ -1,13 +1,13 @@
 import type { FieldTestApi, FieldTestMarcher } from "@/field/fieldTestApi";
 import type { FieldMarchers } from "./fieldMarchers";
-import { fieldToElement, type FieldView } from "./fieldView";
+import { fieldToElement, type FieldViewState } from "./fieldView";
 
 /** What the field test API reads from the new field. */
 export type ThreeFieldState = {
     marchers: FieldMarchers;
     /** Each marcher's drill number, by id. */
     labels(): ReadonlyMap<number, string>;
-    view(): FieldView;
+    view(): FieldViewState;
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
     pageId(): number | null;
@@ -15,7 +15,8 @@ export type ThreeFieldState = {
 
 /**
  * The field test API over the new field. Read-only. Selection, handles and
- * gestures come with the editor (#193 onward); until then the field has none.
+ * the editing gestures come with the editor (#193 onward); until then the
+ * only gesture is a pan.
  */
 export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
     return {
@@ -51,7 +52,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             return { zoom, pan: { x: panX, y: panY } };
         },
         handles: () => null,
-        activeGesture: () => null,
+        activeGesture: () => (field.view().panning ? "pan" : null),
         pageId: () => field.pageId(),
     };
 }

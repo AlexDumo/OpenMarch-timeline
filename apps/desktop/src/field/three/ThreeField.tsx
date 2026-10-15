@@ -1,10 +1,20 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import {
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    type RefObject,
+} from "react";
+import clsx from "clsx";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera } from "three";
 import { useQuery } from "@tanstack/react-query";
 import type { FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { useFullscreenStore } from "@/stores/FullscreenStore";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     allMarchersQueryOptions,
     fieldPropertiesQueryOptions,
@@ -25,7 +35,12 @@ import { playbackBeat } from "@/timeline/positionBuffer";
 import type { BeatTiming } from "@/timeline/timeMap";
 import { installFieldTestApi } from "@/field/fieldTestApi";
 import { FieldMarchers } from "./fieldMarchers";
-import { cameraBounds, fitView, useFieldViewStore } from "./fieldView";
+import { cameraBounds, useFieldViewStore } from "./fieldView";
+import {
+    attachFieldNavigation,
+    fitFullscreen,
+    resetView,
+} from "./fieldNavigation";
 import { GlyphAtlas } from "./sdfText";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
@@ -55,6 +70,7 @@ export default function ThreeField() {
     const { selectedPage } = useSelectedPage()!;
     const { isPlaying } = useIsPlaying()!;
     const { beats } = useTimingObjects()!;
+    const isFullscreen = useFullscreenStore((s) => s.isFullscreen);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
     const labels = useMemo(
@@ -99,9 +115,30 @@ export default function ThreeField() {
         return () => installFieldTestApi(undefined);
     }, [marchers]);
 
+    // Navigation (#194): wheel, pan drags and touch anywhere on the field
+    const root = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!root.current) return;
+        return attachFieldNavigation(
+            root.current,
+            () => element.current,
+            () => useUiSettingsStore.getState().uiSettings.mouseSettings,
+        );
+    }, []);
+    // The view opens as Fabric's canvas, which it creates once the field and a
+    // page are loaded
+    const ready = !!fieldProperties && !!selectedPage;
+    useFullscreenFit(root, isFullscreen, ready);
+
     return (
         <div
-            className="rounded-6 relative h-full w-full overflow-hidden"
+            ref={root}
+            // As the Fabric field: fullscreen leaves room above the field, and
+            // the field takes no input there
+            className={clsx(
+                "rounded-6 relative h-full w-full touch-none overflow-hidden",
+                isFullscreen && "pointer-events-none pt-128",
+            )}
             data-testid="threeField"
         >
             <TimelineIsolationBar />
@@ -134,7 +171,11 @@ export default function ThreeField() {
                         element.current = gl.domElement;
                     }}
                 >
-                    <FieldCamera fieldProperties={fieldProperties} />
+                    <FieldCamera
+                        fieldProperties={fieldProperties}
+                        root={root}
+                        ready={ready}
+                    />
                     <PlayheadDriver
                         marchers={marchers}
                         isPlaying={isPlaying}
@@ -161,23 +202,80 @@ export default function ThreeField() {
     );
 }
 
+/** How long the Fabric field waited for the fullscreen layout to settle. */
+const FULLSCREEN_SETTLE_MS = 250;
+
 /**
- * Fits the field to the canvas whenever its size changes (navigation is
- * #194), and points the camera at the view store's view.
+ * As the Fabric field: entering fullscreen fits the whole field and clears the
+ * selection, and leaving it centers the field at the base zoom again, once the
+ * layout has settled. The field also centers again that long after it's
+ * `ready`, as the app's panels finish laying out around it.
+ */
+function useFullscreenFit(
+    root: RefObject<HTMLDivElement | null>,
+    isFullscreen: boolean,
+    ready: boolean,
+) {
+    const { setSelectedMarchers } = useSelectedMarchers()!;
+    useEffect(() => {
+        if (!ready) return;
+        let frame = 0;
+        const timeout = setTimeout(() => {
+            frame = requestAnimationFrame(() => {
+                if (!isFullscreen) return resetView();
+                if (root.current)
+                    fitFullscreen({
+                        width: root.current.clientWidth,
+                        height: root.current.clientHeight,
+                    });
+                setSelectedMarchers([]);
+            });
+        }, FULLSCREEN_SETTLE_MS);
+        return () => {
+            clearTimeout(timeout);
+            cancelAnimationFrame(frame);
+        };
+    }, [isFullscreen, ready, root, setSelectedMarchers]);
+}
+
+/**
+ * Keeps the view store's size and field in step with the canvas, opens the
+ * show centered at the base zoom once it's `ready`, and points the camera at
+ * the store's view. A resize keeps the zoom and where the field sits from the
+ * top-left, as the Fabric field did; in fullscreen it fits the field again.
  */
 function FieldCamera({
     fieldProperties,
+    root,
+    ready,
 }: {
     fieldProperties: FieldProperties;
+    root: RefObject<HTMLDivElement | null>;
+    ready: boolean;
 }) {
     const width = useThree((s) => s.size.width);
     const height = useThree((s) => s.size.height);
     const camera = useThree((s) => s.camera) as OrthographicCamera;
     const invalidate = useThree((s) => s.invalidate);
+    const opened = useRef(false);
 
     useLayoutEffect(() => {
-        useFieldViewStore.setState(fitView(width, height, fieldProperties));
-    }, [width, height, fieldProperties]);
+        const field = {
+            width: fieldProperties.width,
+            height: fieldProperties.height,
+        };
+        useFieldViewStore.setState({ width, height, field });
+        if (width <= 0 || height <= 0 || !ready) return;
+        if (!opened.current) {
+            opened.current = true;
+            resetView();
+        } else if (useFullscreenStore.getState().isFullscreen && root.current) {
+            fitFullscreen({
+                width: root.current.clientWidth,
+                height: root.current.clientHeight,
+            });
+        }
+    }, [width, height, fieldProperties, root, ready]);
 
     useLayoutEffect(() => {
         const apply = () => {
