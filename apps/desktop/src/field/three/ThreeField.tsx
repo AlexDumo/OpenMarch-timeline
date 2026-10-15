@@ -4,6 +4,7 @@ import type { OrthographicCamera } from "three";
 import { useQuery } from "@tanstack/react-query";
 import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import {
     allMarchersQueryOptions,
@@ -20,6 +21,7 @@ import TimelineIsolationBar, {
 } from "@/components/timeline/TimelineIsolationBar";
 import {
     displayedBeat,
+    isMarcherDimmed,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
@@ -27,8 +29,13 @@ import { useIsolationPlanStore } from "@/timeline/timelineIsolationPlan";
 import { playbackBeat } from "@/timeline/positionBuffer";
 import type { BeatTiming } from "@/timeline/timeMap";
 import { installFieldTestApi } from "@/field/fieldTestApi";
+import { FieldEditor } from "@/field/editor/fieldEditor";
+import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
+import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
 import { FieldMarchers } from "./fieldMarchers";
+import FieldOverlay from "./FieldOverlay";
+import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, fitView, useFieldViewStore } from "./fieldView";
 import { GlyphAtlas } from "./sdfText";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
@@ -51,7 +58,9 @@ const CHECKPOINT_FONT = '"mono"';
  * The three.js field (ADR 0005), behind the dev switch in `fieldRenderer.ts`.
  * #192, the tracer bullet: it draws the field, and every marcher and its label
  * at the playhead, and installs the field test API. #199: each marcher in its
- * appearance at the playhead (the last flag crossed, `appearanceSteps`).
+ * appearance at the playhead (the last flag crossed, `appearanceSteps`). #193: the
+ * editor selects marchers by clicking them, with rings on the selected
+ * marchers and a box around a multi-selection in the SVG overlay.
  *
  * Guard rails (ADR 0005 D-2): it draws only on demand (`frameloop="demand"`;
  * playback and changes invalidate), there's one component per layer, and
@@ -65,6 +74,7 @@ export default function ThreeField() {
     );
     const { data: marcherRows } = useQuery(allMarchersQueryOptions());
     const { selectedPage } = useSelectedPage()!;
+    const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const { isPlaying } = useIsPlaying()!;
     const { beats } = useTimingObjects()!;
     const { image: fieldImage } = useFieldImage();
@@ -112,11 +122,24 @@ export default function ThreeField() {
         [atlases],
     );
 
-    // The field test API reads the latest of these, not the render they came from
+    const selectedIds = useMemo(
+        () => selectedMarchers.map((marcher) => marcher.id),
+        [selectedMarchers],
+    );
+    // The editor reads the selection it last wrote until React renders it, so
+    // a second click before then builds on the first
+    const selection = useRef<readonly number[]>(selectedIds);
+    useLayoutEffect(() => {
+        selection.current = selectedIds;
+    }, [selectedIds]);
+
+    // The field test API and the editor read the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
     const latest = useRef({
         labels,
         pageId: selectedPage?.id ?? null,
+        marcherRows,
+        setSelectedMarchers,
         fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
     });
@@ -125,7 +148,48 @@ export default function ThreeField() {
         pageId: selectedPage?.id ?? null,
         fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
+        marcherRows,
+        setSelectedMarchers,
     };
+
+    const editor = useMemo(
+        () =>
+            new FieldEditor(
+                {
+                    selection: {
+                        get: () => selection.current,
+                        set(ids) {
+                            const byId = new Map(
+                                (latest.current.marcherRows ?? []).map(
+                                    (marcher) => [marcher.id, marcher],
+                                ),
+                            );
+                            // Only marchers the app knows, as the context will hold them
+                            const selected = ids.flatMap(
+                                (id) => byId.get(id) ?? [],
+                            );
+                            selection.current = selected.map((m) => m.id);
+                            latest.current.setSelectedMarchers(selected);
+                        },
+                    },
+                    marchers: () => marchers,
+                    zoom: () => useFieldViewStore.getState().zoom,
+                    // UI-9: marchers dimmed outside the isolated move can't be selected or hit
+                    canSelect: (id) =>
+                        !isMarcherDimmed(
+                            useTimelineSelectionStore.getState(),
+                            id,
+                        ),
+                },
+                { isMac: isMacPlatform() },
+            ),
+        [marchers],
+    );
+    useEffect(() => {
+        setActiveFieldEditor(editor);
+        return () => setActiveFieldEditor(null);
+    }, [editor]);
+
     useEffect(() => {
         installFieldTestApi(
             createThreeFieldTestApi({
@@ -134,12 +198,14 @@ export default function ThreeField() {
                 view: () => useFieldViewStore.getState(),
                 element: () => element.current,
                 pageId: () => latest.current.pageId,
+                selection: () => selection.current,
+                activeGesture: () => editor.activeGesture(),
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
             }),
         );
         return () => installFieldTestApi(undefined);
-    }, [marchers]);
+    }, [marchers, editor]);
 
     return (
         <div
@@ -177,6 +243,11 @@ export default function ThreeField() {
                     }}
                 >
                     <FieldCamera fieldProperties={fieldProperties} />
+                    <EditorInput
+                        editor={editor}
+                        marchers={marchers}
+                        selectedIds={selectedIds}
+                    />
                     <PlayheadDriver
                         marchers={marchers}
                         isPlaying={isPlaying}
@@ -204,6 +275,7 @@ export default function ThreeField() {
                     />
                 </Canvas>
             )}
+            {fieldProperties && <FieldOverlay marchers={marchers} />}
         </div>
     );
 }
@@ -237,6 +309,32 @@ function FieldCamera({
         apply();
         return useFieldViewStore.subscribe(apply);
     }, [camera, invalidate]);
+
+    return null;
+}
+
+/**
+ * Sends the pointer on the canvas to the editor, and marks the app's
+ * selection on the marchers for their rings and the overlay's box.
+ */
+function EditorInput({
+    editor,
+    marchers,
+    selectedIds,
+}: {
+    editor: FieldEditor;
+    marchers: FieldMarchers;
+    selectedIds: readonly number[];
+}) {
+    const canvas = useThree((s) => s.gl.domElement);
+    const invalidate = useThree((s) => s.invalidate);
+
+    useEffect(() => attachFieldPointerInput(canvas, editor), [canvas, editor]);
+
+    useEffect(() => {
+        marchers.setSelection(selectedIds);
+        invalidate();
+    }, [marchers, selectedIds, invalidate]);
 
     return null;
 }

@@ -32,6 +32,9 @@ const resolverStore: PositionSource = {
  * It also holds each marcher's appearance at the beat drawn: the appearance of
  * the last flag crossed (`appearanceSteps`, as the Fabric field and the video
  * export), so layers restyle and hit testing skips hidden marchers.
+ *
+ * It also marks which of them are selected (`selected`, `selectionVersion`),
+ * from the app's selection, for the marchers layer's selection rings.
  */
 export class FieldMarchers {
     private readonly sampled: PositionBuffer;
@@ -43,6 +46,12 @@ export class FieldMarchers {
     version = 0;
     /** Goes up whenever `ids` changes: layers then resize their buffers. */
     idsVersion = 0;
+    /** 1 for each marcher in `ids` that's selected, else 0. */
+    selected: Uint8Array = new Uint8Array(0);
+    /** Goes up whenever `selected` changes. */
+    selectionVersion = 0;
+    private selectedIds: ReadonlySet<number> = new Set();
+    private readonly listeners = new Set<() => void>();
     /**
      * Each marcher's appearance stack (highest priority first) at the beat
      * drawn, by index in `ids`; null draws the field theme's default.
@@ -77,11 +86,13 @@ export class FieldMarchers {
         if (ids !== this.ids) {
             this.ids = ids;
             this.idsVersion++;
+            this.markSelected();
         }
         this.positions = this.sampled.buffer;
         this.version++;
         this.beat = beat;
         this.sampleAppearance(false);
+        this.emit();
         return true;
     }
 
@@ -118,5 +129,32 @@ export class FieldMarchers {
         });
         this.hidden = hidden;
         this.appearanceVersion++;
+    }
+
+    /** Marks the marchers in `ids` as selected, and every other one as not. */
+    setSelection(ids: Iterable<number>) {
+        this.selectedIds = new Set(ids);
+        this.markSelected();
+        this.emit();
+    }
+
+    /**
+     * Calls `listener` after every fill and selection change, for what draws
+     * outside the WebGL frame (the SVG overlay). Returns the unsubscribe.
+     */
+    subscribe = (listener: () => void): (() => void) => {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    };
+
+    private markSelected() {
+        this.selected = Uint8Array.from(this.ids, (id) =>
+            this.selectedIds.has(id) ? 1 : 0,
+        );
+        this.selectionVersion++;
+    }
+
+    private emit() {
+        for (const listener of this.listeners) listener();
     }
 }
