@@ -14,19 +14,19 @@ hardware.
 
 ## Summary
 
-| Gate item                                           | Result                                                                                                                                                     |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Scenario suite, browser, new field               | SCENARIO_BROWSER_THREE                                                                                                                                     |
-| 1. Scenario suite, browser, Fabric                  | SCENARIO_BROWSER_FABRIC                                                                                                                                    |
-| 1. Scenario suite, Electron, new field              | SCENARIO_ELECTRON_THREE                                                                                                                                    |
-| 1. Scenario suite, Electron, Fabric                 | SCENARIO_ELECTRON_FABRIC                                                                                                                                   |
-| 2. Render comparisons (3 shows × 3 zooms × 4 times) | Every difference explained ([below](#2-render-comparisons)). One isn't decided yet: labels draw over dots on the new field. Prerelease `field-render-208`. |
-| 3. Export diffs: drill charts and PDFs              | EXPORT_VERDICT                                                                                                                                             |
-| 3. Export diffs: video                              | VIDEO_VERDICT                                                                                                                                              |
-| 4. Owner's hands-on checklist                       | Not run yet: [parity-checklist.md](parity-checklist.md)                                                                                                    |
-| 5. Benchmark, software GL here                      | BENCH_VERDICT                                                                                                                                              |
-| 5. Benchmark, real hardware                         | Not run yet: [steps below](#benchmark-on-real-hardware)                                                                                                    |
-| Open issues                                         | OPEN_ISSUES                                                                                                                                                |
+| Gate item                                           | Result                                                                                                                                                                                        |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Scenario suite, browser, new field               | SCENARIO_BROWSER_THREE                                                                                                                                                                        |
+| 1. Scenario suite, browser, Fabric                  | SCENARIO_BROWSER_FABRIC                                                                                                                                                                       |
+| 1. Scenario suite, Electron, new field              | SCENARIO_ELECTRON_THREE                                                                                                                                                                       |
+| 1. Scenario suite, Electron, Fabric                 | SCENARIO_ELECTRON_FABRIC                                                                                                                                                                      |
+| 2. Render comparisons (3 shows × 3 zooms × 4 times) | Every difference explained ([below](#2-render-comparisons)). One unlisted difference found (labels over neighboring dots) and fixed in #245 by owner decision. Prerelease `field-render-208`. |
+| 3. Export diffs: drill charts and PDFs              | EXPORT_VERDICT                                                                                                                                                                                |
+| 3. Export diffs: video                              | VIDEO_VERDICT                                                                                                                                                                                 |
+| 4. Owner's hands-on checklist                       | Not run yet: [parity-checklist.md](parity-checklist.md)                                                                                                                                       |
+| 5. Benchmark, software GL here                      | BENCH_VERDICT                                                                                                                                                                                 |
+| 5. Benchmark, real hardware                         | Not run yet: [steps below](#benchmark-on-real-hardware)                                                                                                                                       |
+| Open issues                                         | OPEN_ISSUES                                                                                                                                                                                   |
 
 ## 5. Benchmark on this machine (software GL)
 
@@ -45,11 +45,11 @@ BENCHMARK_OUT=/tmp/bench FIELD=three pnpm exec playwright test --project=render 
 
 fps, Fabric / new field (p95 frame interval in ms in brackets):
 
-| Show            | play                    | scrub                  | zoom                   | pan                   |
-| --------------- | ----------------------- | ---------------------- | ---------------------- | --------------------- |
-| Part 1 (95)     | 60.0 / 59.8 (17 / 19)   | 59.7 / 51.6 (17 / 22)  | 53.8 / 60.0 (25 / 17)  | 4.4 / 60.0 (232 / 17) |
-| Daft Punk (385) | 60.0 / 27.9 (17 / 39)   | 60.0 / 26.8 (17 / 40)  | 27.9 / 37.6 (58 / 35)  | 4.2 / 30.9 (242 / 35) |
-| Stress (1,925)  | 19.1 / 5.5 (155 / 187)  | 16.5 / 5.5 (65 / 195)  | 5.7 / 8.0 (304 / 175)  | 3.5 / 5.7 (295 / 179) |
+| Show            | play                   | scrub                 | zoom                  | pan                   |
+| --------------- | ---------------------- | --------------------- | --------------------- | --------------------- |
+| Part 1 (95)     | 60.0 / 59.8 (17 / 19)  | 59.7 / 51.6 (17 / 22) | 53.8 / 60.0 (25 / 17) | 4.4 / 60.0 (232 / 17) |
+| Daft Punk (385) | 60.0 / 27.9 (17 / 39)  | 60.0 / 26.8 (17 / 40) | 27.9 / 37.6 (58 / 35) | 4.2 / 30.9 (242 / 35) |
+| Stress (1,925)  | 19.1 / 5.5 (155 / 187) | 16.5 / 5.5 (65 / 195) | 5.7 / 8.0 (304 / 175) | 3.5 / 5.7 (295 / 179) |
 
 Main-thread time per frame: the new field 0.2–1.2 ms; Fabric 0.7–47 ms for
 play and scrub and 9–283 ms for zoom and pan. Drag isn't measured yet.
@@ -160,6 +160,35 @@ between frames in ms (lower is better).
 The gate passes when no new-field row is slower than its Fabric row, and the
 new field holds about 60 fps on play and scrub where the GPU is real.
 
+## 1. The scenario suite
+
+146 scenarios in 31 files (`e2e/browser/tests/`), each run three times
+(`--repeat-each=3`) in the browser and twice in Electron, on both fields.
+On Fabric, 22 scenarios are expected to fail (`test.fail`): the 19 `change:`
+scenarios, the rules-table changes, plus 3 where Fabric has a known bug the
+new field fixes. Skips are opt-in capture specs and target- or field-only
+scenarios.
+
+```sh
+# from apps/desktop, after pnpm run build:browser
+FIELD=three  pnpm exec playwright test --project=browser --workers=4 --repeat-each=3
+FIELD=fabric pnpm exec playwright test --project=browser --workers=4 --repeat-each=3
+# Electron (after pnpm run build), headless in Docker + Xvfb
+FIELD=three  ~/om-capture/e2e --repo <worktree> --project=electron-scenarios --workers=3 --repeat-each=2
+FIELD=fabric ~/om-capture/e2e --repo <worktree> --project=electron-scenarios --workers=3 --repeat-each=2
+```
+
+| Target, field       | Quiet machine                                                   | Under load           |
+| ------------------- | --------------------------------------------------------------- | -------------------- |
+| Browser, new field  | 411 passed, 0 failed, 27 skipped                                | LOAD_BROWSER_THREE   |
+| Browser, Fabric     | 381 passed (66 of them expected failures), 0 failed, 57 skipped | LOAD_BROWSER_FABRIC  |
+| Electron, new field | ELECTRON_THREE                                                  | ELECTRON_LOAD_THREE  |
+| Electron, Fabric    | ELECTRON_FABRIC                                                 | ELECTRON_LOAD_FABRIC |
+
+### Failures and their causes
+
+FAILURE_LIST
+
 ## 2. Render comparisons
 
 `e2e/browser/render/corpus-render.spec.mts` (project `render`): the Part 1
@@ -193,15 +222,15 @@ stand in the same places at every time in every case, mid-move included.
 
 Every difference, and where it's decided:
 
-| Difference                                                                                        | Where it's decided                                                                                                                                                                                                                                    |
-| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Grid, dots and labels half a grid line up and left of Fabric's                                    | Rules table, Dot position (#199, #200)                                                                                                                                                                                                                |
-| Lines pixel-snapped where Fabric smooths them over two pixels                                     | #200                                                                                                                                                                                                                                                  |
-| Yard numbers centered on their yard line, not 22 units left of it                                 | Export improvements (#206), #200                                                                                                                                                                                                                      |
-| Marcher labels in SDF glyphs (Courier New bold): about a pixel different                          | #192, #199                                                                                                                                                                                                                                            |
-| Labels fade out below a readable size (on Fabric they shrink to a smear)                          | Rules table, Labels                                                                                                                                                                                                                                   |
-| Dots at least 1.5 CSS px in radius at very low zooms                                              | #192                                                                                                                                                                                                                                                  |
-| **Labels draw over neighboring dots; on Fabric (and in the export) every dot covers every label** | **Not decided.** Visible only where marchers crowd: the stress show, and the Daft Punk front line at 6×. The new field draws all labels in one batch above all dots (render order 3 over 2). On the [checklist](parity-checklist.md) (items 14, 111). |
+| Difference                                                                                    | Where it's decided                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Grid, dots and labels half a grid line up and left of Fabric's                                | Rules table, Dot position (#199, #200)                                                                                                                                                                            |
+| Lines pixel-snapped where Fabric smooths them over two pixels                                 | #200                                                                                                                                                                                                              |
+| Yard numbers centered on their yard line, not 22 units left of it                             | Export improvements (#206), #200                                                                                                                                                                                  |
+| Marcher labels in SDF glyphs (Courier New bold): about a pixel different                      | #192, #199                                                                                                                                                                                                        |
+| Labels fade out below a readable size (on Fabric they shrink to a smear)                      | Rules table, Labels                                                                                                                                                                                               |
+| Dots at least 1.5 CSS px in radius at very low zooms                                          | #192                                                                                                                                                                                                              |
+| Labels drew over neighboring dots; on Fabric (and in the export) every dot covers every label | Owner decision 2026-10-15: match Fabric. Fixed in #245 (labels at render order 1.9, under the dots); `label-stacking.spec.mts` pins it. The stress-show cases in `field-render-208` were captured before the fix. |
 
 The timeline drawing (pathways, isolation, kept marks, collisions) and every
 theme, variant and field image were compared in #201 and #200 (prereleases

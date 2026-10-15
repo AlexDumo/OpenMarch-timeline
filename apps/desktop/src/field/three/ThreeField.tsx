@@ -91,7 +91,7 @@ import { FieldUnavailable, useFieldQualityNotice } from "./FieldQualityNotice";
 import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
 import { threeFieldView } from "@/field/benchmark/fieldScenarios";
-import { r3fFrames } from "@/field/benchmark/runFieldBenchmark";
+import { r3fFrames } from "./benchmarkFrames";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -102,8 +102,8 @@ import {
 /**
  * Where the timeline's layers sit among the field's (#201): the isolated move's
  * scene and the page's pathways above the field text (1) and under the
- * marchers (2), as Fabric stacks them; collision markers over the labels (3),
- * as Fabric adds them after the marchers.
+ * labels (1.9) and marchers (2), as Fabric stacks them; collision markers over
+ * the marchers, as Fabric adds them after the marchers.
  */
 const FOCUS_ORDER = 1.4;
 const PATHS_ORDER = 1.5;

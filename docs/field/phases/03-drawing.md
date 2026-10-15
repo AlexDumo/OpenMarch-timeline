@@ -113,7 +113,8 @@ gained `letterSpacing` (em, between characters) for the yard numbers'
 image). Placement is `planFieldImage`, Fabric's fit/fill rule; like Fabric a
 filled image isn't cropped to the field. Render order so far: background -2,
 image -1, lines 0, field text 1, marchers 2, labels 3. **#201**: put timeline
-overlays between 1 and 2, or above 3, as they sit in Fabric.
+overlays between 1 and 2, or above 3, as they sit in Fabric. (Since #208 the
+labels are at 1.9, under the dots: see the phase 5 notes.)
 
 **The image moves 0.5 field units relative to the lines, vs Fabric** (about
 12 px at the maximum zoom of 25). Fabric draws its lines, background and
@@ -175,10 +176,11 @@ glyph atlases' textures) is re-uploaded by three on its own; keep CPU-side
 copies of anything you upload.
 
 **Desktop.** `ignore-gpu-blocklist` and the `gpu:crashed` /
-`gpu:process-gone` channels: see ADR 0005 D-3, "How #205 built it".
+`gpu:process-gone` channels: see ADR 0005 D-3, "How #205 built it". The app-wide switch was confirmed by the owner on 2026-10-15
+(#208), including its effect on Fabric and the 3D View.
 
-**Benchmark.** "Run field benchmark" in the command palette (only with the
-new field) opens `src/field/benchmark/FieldBenchmark.tsx`; scripts call
+**Benchmark.** "Run field benchmark" in the command palette (on both fields
+since #208) opens `src/field/benchmark/FieldBenchmark.tsx`; scripts call
 `await window.fieldBenchmark.run()` for the same report as JSON
 (`benchmarkMarkdown` turns it into the table). Each scenario runs 4 s and
 measures every drawn frame through R3F's `addEffect`/`addAfterEffect`.

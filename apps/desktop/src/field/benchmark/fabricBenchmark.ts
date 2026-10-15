@@ -51,7 +51,7 @@ export function fabricFrames(canvas: () => FabricCanvas | null): FrameProbe {
             };
         },
         // Canvas2D has no draw calls to count
-        drawCalls: () => 0,
+        drawCalls: () => null,
     };
 }
 

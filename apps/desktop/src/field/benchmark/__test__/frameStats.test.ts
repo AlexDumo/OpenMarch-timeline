@@ -128,10 +128,24 @@ describe("benchmarkMarkdown", () => {
                 userAgent: "Chrome/140",
                 date: "2026-10-15T00:00:00.000Z",
             },
-            results: [],
+            results: [
+                {
+                    kind: "play",
+                    stats: summarizeFrames({
+                        frameEnds: framesEvery(Array(10).fill(20)),
+                        cpu: Array(16).fill(1.5),
+                        seconds: 4,
+                        drawCalls: null,
+                    }),
+                },
+            ],
         });
         expect(markdown).toContain(
             "| Field | Fabric, Canvas2D, 1200 × 700 CSS px at 2× |",
+        );
+        // Canvas2D has no draw calls to count
+        expect(markdown).toContain(
+            "| play | 50.0 | 20.0 | 20.0 | 20.0 | 0/10 | 1.50 | 1.50 | n/a |",
         );
     });
 });

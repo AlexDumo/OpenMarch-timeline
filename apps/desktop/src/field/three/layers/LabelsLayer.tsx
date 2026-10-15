@@ -41,7 +41,10 @@ export default function LabelsLayer({
     const text = useMemo(() => {
         const batch = new TextBatch(atlas);
         batch.setOffset(0, -LABEL_LIFT);
-        batch.mesh.renderOrder = 3;
+        // Under the dots, over the pathways: every dot covers every label, as
+        // on Fabric and in the drill chart export, so a crowded neighbor's dot
+        // hides a number rather than a number hiding a dot (#208)
+        batch.mesh.renderOrder = 1.9;
         return batch;
     }, [atlas]);
     const drawn = useRef({

@@ -38,7 +38,7 @@ numbers) is in [parity-gate-results.md](parity-gate-results.md).
 11. Look at the yard numbers → centered on their yard line. **(change)** Fabric put them 22 units left of it, so their place depended on the font.
 12. Add a field image (Field settings), fit, then fill, then lower its opacity → it draws as on Fabric (story 14).
 13. With the image on, zoom far in on a line → the image sits exactly on the lines. **(change)** Fabric drew it half a field unit up and left of its lines (about 12 px at the maximum zoom).
-14. Make a dense spot (several marchers almost on top of each other) and look at their numbers → the numbers draw over the neighboring dots. On Fabric, and in the drill chart export, every dot covers every number. **Not decided yet:** keep it (numbers stay readable) or match Fabric? (found by #208's render comparison)
+14. Make a dense spot (several marchers almost on top of each other) and look at their numbers → every dot covers the neighboring numbers, as on Fabric and in the drill chart export (owner decision 2026-10-15; fixed in #245).
 
 ## Navigating
 
@@ -160,8 +160,8 @@ numbers) is in [parity-gate-results.md](parity-gate-results.md).
 109. Open a show with no WebGL → video export says it needs WebGL and Export is disabled. **(change)** It drew on Canvas2D before.
 110. The new-show wizard's field step and the launch page → field previews show (story 69).
 
-## Owner decisions still open
+## Owner decisions
 
-111. Labels over dots on the new field vs dots over labels on Fabric and in exports (item 14).
-112. The handle look: filled squares vs Fabric's outlines (item 70).
-113. `ignore-gpu-blocklist` is app-wide, so it also affects Fabric (until #209) and the 3D View's compositing on drivers Chromium blocks (#205).
+111. Settled: dots cover drill numbers, as on Fabric (item 14; owner 2026-10-15).
+112. Open: the handle look, filled squares vs Fabric's outlines (item 70).
+113. Settled: `ignore-gpu-blocklist` is app-wide, so it also affects Fabric (until #209) and the 3D View's compositing on drivers Chromium blocks (#205; owner confirmed 2026-10-15).
