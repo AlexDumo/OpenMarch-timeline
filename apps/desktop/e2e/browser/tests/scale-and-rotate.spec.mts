@@ -74,10 +74,27 @@ async function selectAll(page: Page) {
         .toEqual([1, 2, 3, 4]);
 }
 
+/**
+ * Where `handle` is drawn, once it has stopped moving: the view can still
+ * settle just after the show opens, and a press read before that misses.
+ */
 async function handleAt(page: Page, handle: FieldTestHandle) {
-    const { handles } = await readField(page);
-    if (!handles) throw new Error("The selection has no handles");
-    return handles[handle];
+    const read = async () => {
+        const { handles } = await readField(page);
+        if (!handles) throw new Error("The selection has no handles");
+        return handles[handle];
+    };
+    let at = await read();
+    await expect
+        .poll(async () => {
+            await page.waitForTimeout(150);
+            const now = await read();
+            const still = now.x === at.x && now.y === at.y;
+            at = now;
+            return still;
+        })
+        .toBe(true);
+    return at;
 }
 
 /**
