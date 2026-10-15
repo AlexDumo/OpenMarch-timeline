@@ -66,7 +66,7 @@ export async function waitForSettledField(page: Page) {
                 last = now;
                 return still >= 3;
             },
-            { timeout: 20_000 },
+            { intervals: [0], timeout: 20_000 },
         )
         .toBe(true);
 }

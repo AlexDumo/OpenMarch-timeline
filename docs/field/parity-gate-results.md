@@ -30,14 +30,13 @@ compare on real hardware.
 
 ## 1. The scenario suite
 
-146 scenarios in 31 files (`e2e/browser/tests/`), on both fields, in the
+147 scenarios in 32 files (`e2e/browser/tests/`), on both fields, in the
 browser three times each (`--repeat-each=3`) and in Electron twice. On
 Fabric, 22 scenarios are expected to fail (`test.fail`): the 19 `change:`
 scenarios (the rules table's decided changes) and 3 Fabric bugs the new field
 fixes; they count as passed. Skips are opt-in captures and scenarios for one
 field or target. All counts are on `field-renderer` 92ce5c033 with #208's
-fixes, except that the browser runs predate the last fix (a 20 s limit on the
-settle wait for big shows), which none of the suite's shows needed.
+fixes.
 
 ```sh
 # apps/desktop, after pnpm run build:browser (browser) or pnpm run build (Electron)
@@ -60,9 +59,10 @@ workers built and tested), the failures were app-start timeouts, not
 scenario results.
 Electron counts are with one worker per om-capture container, so each
 Electron window has its own X display. Electron under load means several
-workers on one display: 3 workers ×2 failed 10 of 292 on the new field, all
-the #236 kind below (before the settle fix). The browser counts were run
-just before the settle wait got its 20 s limit for big shows; nothing in the
+workers on one display: an earlier run with 3 workers ×2 (146 scenarios
+then, 292 runs, before #245 added one and before the settle fix) failed 10
+on the new field, all the #236 kind below. The browser counts were run just
+before the settle wait got its 20 s limit for big shows; nothing in the
 suite needed it.
 
 ### Fixed test races
@@ -281,15 +281,23 @@ and open each with the app's Open file, so both builds open the same files:
    2–3 on the same show.
 5. Repeat for the three shows. Run each one twice if the numbers look odd.
 
-#### Laptop with integrated graphics: the desktop app
+#### Laptop with integrated graphics
 
-The desktop app needs a production build of `field-renderer`:
+The quickest way needs no setup: the lab build in Chrome or Edge on the
+laptop, exactly as on the Chromebook above (steps 1–5:
+<https://lab.openmarch.com/x/field-renderer/>, then `?field=three`; Ctrl/Cmd+K,
+"Run field benchmark", **Run**, **Copy as Markdown**). That measures the
+field in the browser, which is the same drawing code as the desktop app.
+
+To measure the desktop app itself (developer setup):
 
 1. `git fetch timeline field-renderer && git switch --detach timeline/field-renderer`
-2. `pnpm install && pnpm --filter @openmarch/desktop build:electron`
-3. Start the app from `apps/desktop/release/<version>/` (the unpacked app
-   for your platform, e.g. `win-unpacked/OpenMarch.exe` or
-   `mac/OpenMarch.app`).
+2. `pnpm install && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm --filter @openmarch/desktop build:electron`
+   (an unpacked build with no code signing, as the nightly workflow builds
+   without a certificate).
+3. Start the app from `apps/desktop/release/<version>/`: `win-unpacked/OpenMarch.exe`
+   on Windows, `mac-arm64/OpenMarch.app` on an Apple Silicon Mac,
+   `mac/OpenMarch.app` on an Intel Mac, the app in `linux-unpacked/` on Linux.
 4. Fabric: open the show, Ctrl/Cmd+K, "field benchmark", **Run**, then
    **Copy as Markdown**.
 5. New field: View › Toggle Developer Tools, Console, run
@@ -297,9 +305,10 @@ The desktop app needs a production build of `field-renderer`:
    Reload. Repeat step 4. To go back to Fabric, run
    `localStorage.removeItem("openmarch:dev:field")` and reload.
 6. Also time a video export of the Daft Punk show (Export › Video, 1080p,
-   30 fps) on each field, from pressing Export to "Export completed!". Here
-   (software GL) the new field took 2.8–3.7× as long as Fabric; the
-   question is whether that holds with a real GPU.
+   30 fps) on each field, from pressing Export to "Export completed!" (the
+   lab build exports video too). Here (software GL) the new field took
+   2.8–3.7× as long as Fabric; the question is whether that holds with a
+   real GPU.
 
 #### Results to fill in
 

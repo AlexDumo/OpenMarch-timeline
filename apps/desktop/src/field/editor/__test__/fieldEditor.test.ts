@@ -1215,6 +1215,13 @@ describe("FieldEditor a pointer lost mid-gesture (#208)", () => {
             const { editor, state } = setup({ selected });
             start(editor);
             expect(editor.activeGesture()).toBe(kind);
+            // The gesture is drawn: the dragged marchers, the area, or the
+            // turning box
+            if (kind === "marquee" || kind === "lasso")
+                expect(editor.areaShape()).not.toBeNull();
+            else expect(state.shown).not.toBeNull();
+            if (kind === "rotate")
+                expect(editor.rotationFrame()).not.toBeNull();
             const selectedBefore = state.selected;
 
             editor.pointerCancel();
