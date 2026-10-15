@@ -128,6 +128,9 @@ describe("roundToStep", () => {
 // 10-unit step grid from (0, 0).
 function setup({ takePress = () => false } = {}) {
     let selected: readonly number[] = [];
+    const positions = Float64Array.from([
+        100, 100, 200, 120, 300, 100, 400, 140,
+    ]);
     const previews = vi.fn<(positions: readonly MarcherPosition[]) => void>();
     const ports: FieldEditorPorts = {
         selection: {
@@ -138,23 +141,21 @@ function setup({ takePress = () => false } = {}) {
         },
         marchers: () => ({
             ids: [1, 2, 3, 4],
-            positions: Float64Array.from([
-                100, 100, 200, 120, 300, 100, 400, 140,
-            ]),
+            positions,
         }),
         zoom: () => 1,
         canSelect: () => true,
         takePress,
         showPositions: vi.fn(),
         drop: vi.fn(),
-        linePreviews: previews,
+        lineFinished: previews,
         stepGrid: () => ({
             centerFrontPoint: { xPixels: 0, yPixels: 0 },
             pixelsPerStep: 10,
         }),
     };
     const editor = new FieldEditor(ports);
-    return { editor, ports, previews, selection: () => selected };
+    return { editor, ports, previews, positions, selection: () => selected };
 }
 
 const at = (
@@ -311,6 +312,39 @@ describe("FieldEditor line tool", () => {
         click(editor, 0, 0);
         editor.setLineTool([1, 2, 3]);
         expect(editor.lineToolShape()!.line).toBeNull();
+    });
+
+    it("lines the marchers up again from where they're drawn now, as on a page change", () => {
+        const { editor, previews, positions } = setup();
+        editor.setLineTool([1, 2, 3]);
+        click(editor, 0, 0);
+        click(editor, 200, 0);
+        editor.refreshLineTool();
+        expect(previews).toHaveBeenCalledTimes(1);
+        // Marcher 1 now stands right of marcher 3: the order changes
+        positions[0] = 350;
+        editor.refreshLineTool();
+        expect(previews).toHaveBeenLastCalledWith([
+            { id: 2, x: 0, y: 0 },
+            { id: 3, x: 100, y: 0 },
+            { id: 1, x: 200, y: 0 },
+        ]);
+        expect(editor.lineToolShape()!.previews[2].from).toEqual({
+            x: 350,
+            y: 100,
+        });
+    });
+
+    it("doesn't line up again while the line is drawn, or once it's cleared", () => {
+        const { editor, previews } = setup();
+        editor.setLineTool([1, 2]);
+        click(editor, 0, 0);
+        editor.refreshLineTool();
+        expect(previews).not.toHaveBeenCalled();
+        click(editor, 100, 0);
+        editor.pointerDown(at(0, 0, { button: 2 }));
+        editor.refreshLineTool();
+        expect(previews).toHaveBeenCalledTimes(1);
     });
 
     it("tells its listeners about each change", () => {

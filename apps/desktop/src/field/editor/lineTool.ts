@@ -108,8 +108,8 @@ export type LineToolPorts = {
     marchers(): MarcherPosition[];
     /** The step grid, or null (no field yet): points aren't rounded. */
     grid(): StepGrid | null;
-    /** The finished line's positions, for the app to apply. */
-    previews(positions: readonly MarcherPosition[]): void;
+    /** A line was finished: where it puts the marchers, for the app to apply. */
+    finished(targets: readonly MarcherPosition[]): void;
     /** The shape changed. */
     changed(): void;
 };
@@ -163,6 +163,15 @@ export class LineTool {
         this.update(this.snapshot.previews);
     }
 
+    /**
+     * The marchers are drawn somewhere else (a page change, playback): a
+     * finished line lines them up again from there, as Fabric's
+     * `refreshMarchers` does.
+     */
+    refresh() {
+        if (this.line && !this.drawing) this.finish();
+    }
+
     shape(): LineToolShape {
         return this.snapshot;
     }
@@ -176,14 +185,19 @@ export class LineTool {
         }
         const targets = lineUp(now, this.line);
         const from = new Map(now.map((m) => [m.id, m]));
-        this.update(
-            targets.map(({ id, x, y }) => ({
-                id,
-                from: { x: from.get(id)!.x, y: from.get(id)!.y },
-                to: { x, y },
-            })),
-        );
-        this.ports.previews(targets);
+        const previews = targets.map(({ id, x, y }) => {
+            const start = from.get(id)!;
+            return { id, from: { x: start.x, y: start.y }, to: { x, y } };
+        });
+        const before = this.snapshot.previews;
+        // A refresh that moves nothing changes nothing
+        if (
+            this.snapshot.line?.drawing === false &&
+            samePreviews(before, previews)
+        )
+            return;
+        this.update(previews);
+        if (!sameTargets(before, previews)) this.ports.finished(targets);
     }
 
     private pointAt(pointer: FieldPointer): FieldPoint {
@@ -201,3 +215,14 @@ export class LineTool {
         this.ports.changed();
     }
 }
+
+const samePoint = (a: FieldPoint, b: FieldPoint) => a.x === b.x && a.y === b.y;
+
+/** The same marchers going to the same spots. */
+const sameTargets = (a: readonly LinePreview[], b: readonly LinePreview[]) =>
+    a.length === b.length &&
+    a.every((p, i) => p.id === b[i].id && samePoint(p.to, b[i].to));
+
+/** The same targets, from the same places. */
+const samePreviews = (a: readonly LinePreview[], b: readonly LinePreview[]) =>
+    sameTargets(a, b) && a.every((p, i) => samePoint(p.from, b[i].from));

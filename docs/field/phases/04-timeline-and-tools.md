@@ -80,3 +80,57 @@ object last under the pointer (the field grid, or a marcher), and
 `useTimelineKeptMarks` hides only when there is none. The scenario is
 `test.fail` on Fabric; the new field hides it when the pointer leaves its element. On the #208
 list.
+
+### #203 Line tool
+
+**Files.** `src/field/editor/lineTool.ts`: the pure rules (`lineOrder`,
+`orderAlongLine`, `spacedAlong`, `lineUp`, `roundToStep`, which uses
+`getRoundCoordinates2` at whole steps, as #197 does) and `LineTool`, the
+tool's state (no line, drawing, finished). `FieldEditor.setLineTool(ids |
+null)` turns it on and off; `lineToolShape()` is the snapshot the overlay
+and the test API read. `src/field/fieldLineTool.ts` keeps it in step with the
+app's alignment event (`useFieldLineTool`) and gives the finished line's
+positions back to it (`publishLinePreviews`), so Shift+Enter
+(`applyQuickShape`) and Escape (`cancelAlignmentUpdates`) are the app's
+actions, unchanged: one undo step through the timeline's rules.
+
+**Presses.** While the tool is on, every edit press is the tool's (after
+`takePress`, so the first press after a held preview still only clears it):
+the first starts a line, the second finishes it, and later ones do nothing
+until a right-click clears the line. No press selects or drags anything, so
+#202's line-tool branch in `takeFieldPress.ts` is gone and its `change:`
+scenario passes through the editor. A right press clears the line in
+`pointerDown` and still returns false, so it also pans. The cursor is a
+crosshair. Ctrl/Cmd+A during the tool is unchanged.
+
+**Overlay.** `FieldOverlay`'s `LineToolPreview` draws Fabric's look in field
+units (it scales with the field): the line in the theme's shape color, dashed
+pathways in `tempPath` with a midpoint and an endpoint, and a dashed square
+outline around each of the tool's marchers.
+
+**Test API.** `lineTool()` (optional on `FieldTestApi`): the tool's
+marchers, its line (`drawing` while the end follows the pointer) and the
+previews' positions, over Fabric (read from `LineListeners`, read-only) and
+the new field. Scenarios: `e2e/browser/tests/line-tool.spec.mts`.
+
+**Decided changes (`change:` scenarios, on the #208 checklist).**
+
+- Once a line is finished, a click on a marcher selects nothing (rules
+  table: Click target). Fabric makes the marchers selectable again then, and
+  a press goes to its default listeners (marquee, select, drag).
+- Shift+Enter saves exactly where the previews are drawn (rules table: Dot
+  position). Fabric saves the line half a field unit right of and below where
+  it draws it (`MarcherLine`'s grid offset).
+
+**Kept as Fabric (for the #208 checklist).** A right-click clears the line,
+but a finished line's previews stay, and Shift+Enter still applies them,
+until the next line is finished. The second click finishes the line at that
+click's point (Fabric used the last move's; the same unless the pointer
+jumped). A finished line lines its marchers up again whenever they're drawn
+somewhere else (a page change or playback mid-tool), as Fabric's
+`refreshMarchers` does: `FieldEditor.refreshLineTool` on every
+`FieldMarchers` fill, publishing only when the targets change. That has unit
+tests only; the line-tool scenarios use a one-page show. The previews and
+outlines draw above the dots (the overlay is over the canvas); Fabric drew
+its marchers on top. Ctrl/Cmd+click during the tool does nothing, where
+Fabric selected with it (same rule as the first `change:`).

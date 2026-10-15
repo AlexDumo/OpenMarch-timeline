@@ -38,16 +38,14 @@ export function useFieldLineTool(editor: FieldEditor) {
 /**
  * Gives the line's positions to the alignment event, which the
  * `applyQuickShape` action (Shift+Enter) saves through the timeline's rules,
- * in one undo step, as it does Fabric's. The page id is ignored there.
+ * in one undo step, as it does Fabric's. It ignores page ids (timeline
+ * writes edit where the selection edits), so none is given.
  */
-export function publishLinePreviews(
-    positions: readonly MarcherPosition[],
-    pageId: number | null,
-) {
+export function publishLinePreviews(positions: readonly MarcherPosition[]) {
     useAlignmentEventStore.getState().setAlignmentEventNewMarcherPages(
         positions.map(({ id, x, y }) => ({
             marcher_id: id,
-            page_id: pageId ?? -1,
+            page_id: -1,
             x,
             y,
         })),

@@ -267,6 +267,7 @@ function LineToolPreview({
                             cx={(a.x + b.x) / 2}
                             cy={(a.y + b.y) / 2}
                             r={PATH_DOT_RADIUS * z}
+                            // Fabric's midpoints are white whatever the theme
                             fill="white"
                             stroke={path}
                             strokeWidth={PATH_WIDTH * z}

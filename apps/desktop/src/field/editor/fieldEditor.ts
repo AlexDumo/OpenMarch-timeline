@@ -84,10 +84,10 @@ export type FieldEditorPorts = {
      */
     drop(positions: readonly MarcherPosition[]): Promise<DropResult>;
     /**
-     * The line tool's finished line (#203): where it puts its marchers, for
+     * The line tool finished a line (#203): where it puts its marchers, for
      * the app to apply (Shift+Enter).
      */
-    linePreviews?(positions: readonly MarcherPosition[]): void;
+    lineFinished?(targets: readonly MarcherPosition[]): void;
     /** The step grid line points round to; null before the field loads. */
     stepGrid?(): StepGrid | null;
 };
@@ -329,10 +329,15 @@ export class FieldEditor {
         this.lineTool = new LineTool(ids, {
             marchers: () => this.drawnPositions(ids),
             grid: () => this.ports.stepGrid?.() ?? null,
-            previews: (positions) => this.ports.linePreviews?.(positions),
+            finished: (targets) => this.ports.lineFinished?.(targets),
             changed: () => this.emit(),
         });
         this.emit();
+    }
+
+    /** The marchers were drawn again: a finished line lines them up from where they are now. */
+    refreshLineTool(): void {
+        this.lineTool?.refresh();
     }
 
     /** The line tool's line, previews and marchers, or null when it's off. */

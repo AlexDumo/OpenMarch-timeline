@@ -336,8 +336,7 @@ function ThreeFieldView() {
                             latest.current.moveMarchers,
                         ),
                     // #203: the line tool's previews are the alignment event's, which Shift+Enter applies
-                    linePreviews: (positions) =>
-                        publishLinePreviews(positions, latest.current.pageId),
+                    lineFinished: publishLinePreviews,
                     stepGrid: () => latest.current.fieldProperties ?? null,
                 },
                 {
@@ -362,6 +361,11 @@ function ThreeFieldView() {
         return () => setActiveFieldEditor(null);
     }, [editor]);
     useFieldLineTool(editor);
+    // As Fabric's line tool, a finished line follows its marchers to another page
+    useEffect(
+        () => marchers.subscribe(() => editor.refreshLineTool()),
+        [marchers, editor],
+    );
 
     useEffect(() => {
         installFieldTestApi(
