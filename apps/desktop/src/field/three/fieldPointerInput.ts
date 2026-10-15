@@ -51,6 +51,14 @@ export function attachFieldPointerInput(
         if (event.pointerType === "touch") return;
         editor.pointerUp(pointer(event));
     };
+    // Navigation captures right presses on the field's root, so their release
+    // doesn't reach the canvas: the editor hears it here (a right-click
+    // clears the line tool's line, #203)
+    const rightUp = (event: PointerEvent) => {
+        if (event.pointerType === "touch" || event.button !== 2) return;
+        if (event.target === element) return;
+        editor.pointerUp(pointer(event));
+    };
     const cancel = (event: PointerEvent) => {
         if (event.pointerId !== captured) return;
         captured = null;
@@ -70,6 +78,7 @@ export function attachFieldPointerInput(
     // After a release, too, when the editor has nothing left to cancel
     element.addEventListener("lostpointercapture", cancel);
     element.addEventListener("pointerleave", leave);
+    document.addEventListener("pointerup", rightUp, true);
     const unsubscribe = editor.subscribe(showCursor);
     showCursor();
     return () => {
@@ -79,6 +88,7 @@ export function attachFieldPointerInput(
         element.removeEventListener("pointercancel", cancel);
         element.removeEventListener("lostpointercapture", cancel);
         element.removeEventListener("pointerleave", leave);
+        document.removeEventListener("pointerup", rightUp, true);
         unsubscribe();
         editor.pointerCancel();
         element.style.cursor = "";

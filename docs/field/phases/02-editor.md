@@ -380,7 +380,8 @@ That's a `change:`: Fabric's input shows the selection's angle since it
 was made, and a typed value sets that angle. Whether the input is enabled
 comes from the app's selection, which the editor's ref only catches up with
 after render. A typed rotation is refused while the line tool is on
-(`FieldEditorPorts.toolActive`), and is dropped unsaved when the selection
+(#203's `lineTool`, which also takes every press first, so the handles are
+inert and not drawn then), and is dropped unsaved when the selection
 or page changes, when the input unmounts without a blur, or when a drop it
 was typed over is refused. Transforms that change nothing (a whole turn, an
 axis scaled by 1) return the positions exactly as they were, so they save

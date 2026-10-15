@@ -1024,6 +1024,16 @@ describe("FieldEditor scale and rotate handles (#198)", () => {
         expect(state.selected).toEqual(ALL);
     });
 
+    it("does nothing with its handles while the line tool is on (#203)", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.setLineTool(ALL);
+        editor.pointerMove(at(HANDLE.e.x, HANDLE.e.y));
+        expect(editor.cursor()).not.toBe("ew-resize");
+        drag(editor, HANDLE.e, { x: 560, y: 100 });
+        expect(editor.activeGesture()).toBe("line");
+        expect(state.drops).toEqual([]);
+    });
+
     it("has no handles around a single marcher", () => {
         const { editor, state } = setup({ selected: [1] });
         editor.pointerDown(at(90, 90));
@@ -1108,9 +1118,9 @@ describe("FieldEditor rotation typed into the inspector (user story 54)", () => 
         expect(editor.rotationVersion()).toBe(version + 1);
     });
 
-    it("refuses while a field tool is on", () => {
-        const { editor, state, ports } = setup({ selected: ALL });
-        ports.toolActive = () => true;
+    it("refuses while the line tool is on", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.setLineTool(ALL);
         editor.rotateSelection(90);
         expect(state.shown).toBeNull();
         expect(editor.typedRotation()).toBe(0);

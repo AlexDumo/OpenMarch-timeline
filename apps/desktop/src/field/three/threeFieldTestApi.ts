@@ -11,6 +11,7 @@ import type {
     ScreenPoint,
 } from "@/field/fieldTestApi";
 import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
+import type { LineToolShape } from "@/field/editor/lineTool";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, type FieldViewState } from "./fieldView";
 import type { CurrentFieldQuality } from "./useFieldQuality";
@@ -36,6 +37,8 @@ export type ThreeFieldState = {
     activeGesture(): FieldTestGesture | null;
     /** The selection box's handles as drawn, in field units, or null with no box (#198). */
     handles(): Record<FieldTestHandle, FieldPoint> | null;
+    /** The editor's line tool, or null when it's off (#203). */
+    lineTool(): LineToolShape | null;
 };
 
 /**
@@ -79,22 +82,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             const { zoom, panX, panY } = field.view();
             return { zoom, pan: { x: panX, y: panY } };
         },
-        handles() {
-            const element = field.element();
-            const handles = field.handles();
-            if (!element || !handles) return null;
-            const rect = element.getBoundingClientRect();
-            const view = field.view();
-            const screen = {} as Record<FieldTestHandle, ScreenPoint>;
-            for (const [id, at] of Object.entries(handles)) {
-                const { x, y } = fieldToElement(view, at.x, at.y);
-                screen[id as FieldTestHandle] = {
-                    x: rect.x + x,
-                    y: rect.y + y,
-                };
-            }
-            return screen;
-        },
+        handles: () => handlesOnScreen(field),
         activeGesture: () =>
             field.view().panning ? "pan" : field.activeGesture(),
         pageId: () => field.pageId(),
@@ -112,6 +100,22 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             };
         },
         fieldImage: () => field.fieldImage(),
+        lineTool() {
+            const tool = field.lineTool();
+            if (!tool) return null;
+            const { line } = tool;
+            return {
+                marchers: [...tool.marchers].sort((a, b) => a - b),
+                line: line && {
+                    start: { ...line.start },
+                    end: { ...line.end },
+                    drawing: line.drawing,
+                },
+                previews: tool.previews
+                    .map(({ id, to }) => ({ id, ...to }))
+                    .sort((a, b) => a.id - b.id),
+            };
+        },
     };
 }
 
@@ -139,4 +143,21 @@ function lookOf(
         fill: rgbaToString(look.fill),
         outline: rgbaToString(look.outline),
     };
+}
+
+/** The selection box's handles as drawn, in viewport CSS px, or null with none. */
+function handlesOnScreen(
+    field: ThreeFieldState,
+): Record<FieldTestHandle, ScreenPoint> | null {
+    const element = field.element();
+    const handles = field.handles();
+    if (!element || !handles) return null;
+    const rect = element.getBoundingClientRect();
+    const view = field.view();
+    const screen = {} as Record<FieldTestHandle, ScreenPoint>;
+    for (const [id, at] of Object.entries(handles)) {
+        const { x, y } = fieldToElement(view, at.x, at.y);
+        screen[id as FieldTestHandle] = { x: rect.x + x, y: rect.y + y };
+    }
+    return screen;
 }

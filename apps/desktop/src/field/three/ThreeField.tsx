@@ -49,8 +49,8 @@ import {
 import { FieldEditor } from "@/field/editor/fieldEditor";
 import { ruledMove } from "@/field/editor/moveRules";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
-import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import { takeFieldPress } from "@/field/takeFieldPress";
+import { publishLinePreviews, useFieldLineTool } from "@/field/fieldLineTool";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
@@ -320,9 +320,6 @@ function ThreeFieldView() {
                             id,
                         ),
                     takePress: takeFieldPress,
-                    toolActive: () =>
-                        useAlignmentEventStore.getState().alignmentEvent ===
-                        "line",
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
                     showPositions: (positions) =>
@@ -333,6 +330,9 @@ function ThreeFieldView() {
                             positions,
                             latest.current.moveMarchers,
                         ),
+                    // #203: the line tool's previews are the alignment event's, which Shift+Enter applies
+                    lineFinished: publishLinePreviews,
+                    stepGrid: () => latest.current.fieldProperties ?? null,
                 },
                 {
                     isMac: isMacPlatform(),
@@ -360,6 +360,12 @@ function ThreeFieldView() {
     useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
+    useFieldLineTool(editor);
+    // As Fabric's line tool, a finished line follows its marchers to another page
+    useEffect(
+        () => marchers.subscribe(() => editor.refreshLineTool()),
+        [marchers, editor],
+    );
 
     useEffect(() => {
         installFieldTestApi(
@@ -380,6 +386,7 @@ function ThreeFieldView() {
                         selectionHandles(box, useFieldViewStore.getState().zoom)
                     );
                 },
+                lineTool: () => editor.lineToolShape(),
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
                 dimmed: (id) => dimming.isDimmed(id),

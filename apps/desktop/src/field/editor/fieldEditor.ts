@@ -17,6 +17,7 @@ import {
     type SelectionFrame,
 } from "./groupTransform";
 import { hitRadius, marcherAt, type DrawnMarchers } from "./hitTest";
+import { LineTool, type LineToolShape, type StepGrid } from "./lineTool";
 import {
     MoveGesture,
     type MarcherPosition,
@@ -78,11 +79,6 @@ export type FieldEditorPorts = {
      */
     takePress?(): boolean;
     /**
-     * True while a field tool owns the field (the line tool): the selection
-     * can't be rotated from the inspector then.
-     */
-    toolActive?(): boolean;
-    /**
      * How far the selection box drawn around a multi-selection reaches past
      * its outermost marchers, in field units. A drag from inside it moves the
      * selection, and its handles (#198) sit on it. 0 when omitted.
@@ -99,6 +95,13 @@ export type FieldEditorPorts = {
      * nothing was saved (the reason has been shown).
      */
     drop(positions: readonly MarcherPosition[]): Promise<DropResult>;
+    /**
+     * The line tool finished a line (#203): where it puts its marchers, for
+     * the app to apply (Shift+Enter).
+     */
+    lineFinished?(targets: readonly MarcherPosition[]): void;
+    /** The step grid line points round to; null before the field loads. */
+    stepGrid?(): StepGrid | null;
 };
 
 export type DropResult = "saved" | "refused";
@@ -156,6 +159,7 @@ type LastClick = { time: number; screen: FieldPoint; hit: number | null };
 export type FieldCursor =
     | "default"
     | "pointer"
+    | "crosshair"
     | ReturnType<typeof handleCursor>;
 
 /** A rotation typed into the inspector (user story 54), until it's saved. */
@@ -187,6 +191,10 @@ export class FieldEditor {
     private typed: TypedRotation | null = null;
     /** Counts typed rotations ended, saved or not, so the inspector's input starts over after each. */
     private rotationsEnded = 0;
+    /** The line tool, while it's on (#203). */
+    private lineTool: LineTool | null = null;
+    /** A right press during the line tool, until its release: a click clears the line. */
+    private rightPress: FieldPointer | null = null;
     private readonly listeners = new Set<() => void>();
     private readonly now: () => number;
     private readonly areaPorts: AreaPorts;
@@ -212,19 +220,29 @@ export class FieldEditor {
      * here; false leaves it to navigation (right, middle, Ctrl on a Mac).
      */
     pointerDown(pointer: FieldPointer): boolean {
-        if (!this.isEditButton(pointer)) return false;
+        if (!this.isEditButton(pointer)) {
+            // Navigation pans with it; a right-click (no drag) clears the line tool's line
+            this.rightPress =
+                pointer.button === 2 && this.lineTool ? pointer : null;
+            return false;
+        }
         this.cancelGesture();
-        // A press on the field saves a rotation typed in the inspector first
-        this.endRotation();
         this.ignoredButton = null;
-        if (this.ports.takePress?.()) {
+        const taken = this.ports.takePress?.() ?? false;
+        if (taken || this.lineTool) {
             // Captured all the same, so its moves and release do nothing either.
             // Nor is it half of a double-click: the next press can't start a lasso
             this.press = null;
             this.lastClick = null;
             this.ignoredButton = pointer.button;
+            // The line tool's presses draw its line and never select (story 20).
+            // Ctrl/Cmd+click doesn't touch the line, as on Fabric
+            if (!taken && !pointer.ctrl && !pointer.meta)
+                this.lineTool?.press(pointer);
             return true;
         }
+        // A press on the field saves a rotation typed in the inspector first
+        this.endRotation();
         const handle = this.handleAt(pointer.field);
         const hit = handle ? null : this.marcherAt(pointer.field);
         this.press = {
@@ -237,6 +255,10 @@ export class FieldEditor {
     }
 
     pointerMove(pointer: FieldPointer): void {
+        if (this.lineTool) {
+            this.lineTool.move(pointer);
+            return;
+        }
         if (this.gesture) {
             this.gesture.move(pointer);
             return;
@@ -269,6 +291,13 @@ export class FieldEditor {
     }
 
     pointerUp(pointer: FieldPointer): void {
+        if (pointer.button === 2) {
+            const right = this.rightPress;
+            this.rightPress = null;
+            // A right-drag panned: the line stays, so the user can pan to its far end
+            if (right && !isPastSlop(right, pointer)) this.lineTool?.clear();
+            return;
+        }
         if (this.ignoredButton !== null) {
             if (pointer.button === this.ignoredButton)
                 this.ignoredButton = null;
@@ -333,7 +362,41 @@ export class FieldEditor {
 
     /** The gesture in progress, for the field test API and the overlay; a press that's still a click has none. */
     activeGesture(): FieldTestGesture | null {
+        if (this.lineTool) return "line";
         return this.gesture?.kind ?? null;
+    }
+
+    /**
+     * Turns the line tool on for `ids` (the app's alignment event, L), or
+     * off with null. Turning it on ends any press or gesture.
+     */
+    setLineTool(ids: readonly number[] | null): void {
+        if (ids === null) {
+            if (!this.lineTool) return;
+            this.lineTool = null;
+            this.emit();
+            return;
+        }
+        this.cancelGesture();
+        this.press = null;
+        this.lastClick = null;
+        this.lineTool = new LineTool(ids, {
+            marchers: () => this.drawnPositions(ids),
+            grid: () => this.ports.stepGrid?.() ?? null,
+            finished: (targets) => this.ports.lineFinished?.(targets),
+            changed: () => this.emit(),
+        });
+        this.emit();
+    }
+
+    /** The marchers were drawn again: a finished line lines them up from where they are now. */
+    refreshLineTool(): void {
+        this.lineTool?.refresh();
+    }
+
+    /** The line tool's line, previews and marchers, or null when it's off. */
+    lineToolShape(): LineToolShape | null {
+        return this.lineTool?.shape() ?? null;
     }
 
     /** The marquee or lasso being drawn, for the overlay; null during any other gesture. */
@@ -376,11 +439,11 @@ export class FieldEditor {
      * Turns the selection `degrees` clockwise about its box's center, from
      * where it was when the typing started, as the rotate handle does (user
      * story 54). Drawn until {@link endRotation} saves it. Refused during a
-     * drag and while a field tool is on. Over a drop still saving it starts
+     * drag and while the line tool is on. Over a drop still saving it starts
      * from where that drop is drawn, and is dropped if that drop is refused.
      */
     rotateSelection(degrees: number): void {
-        if (this.gesture || this.ports.toolActive?.()) return;
+        if (this.gesture || this.lineTool) return;
         if (!this.typed) {
             const starts = this.drawnPositions(this.ports.selection.get());
             const box = boundsOf(starts);
@@ -437,7 +500,7 @@ export class FieldEditor {
 
     /** The cursor the field shows. */
     cursor(): FieldCursor {
-        return this.hover;
+        return this.lineTool ? "crosshair" : this.hover;
     }
 
     /** Calls `listener` whenever the gesture or cursor changes. Returns the unsubscribe. */
