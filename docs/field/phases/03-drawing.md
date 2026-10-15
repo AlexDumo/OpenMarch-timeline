@@ -146,7 +146,8 @@ WebGL renderer string (`hardware`, `software` or `none`), decides the mode
 Performance mode setting) and holds what low quality changes in one table,
 `QUALITY_SETTINGS`: DPR 1 instead of `[1, 2]`, labels hidden below 8 CSS px
 per em instead of 4 (and not drawn at all when hidden), and field lines under
-30% of a device pixel skipped instead of faded. MSAA is off in both modes.
+30% of a device pixel skipped instead of faded. MSAA is off in both modes
+(field lines antialias in their shader since #249).
 `src/field/three/useFieldQuality.ts` has `useFieldQuality()` for React and
 `currentFieldQuality()` for frame hooks.
 
@@ -349,3 +350,30 @@ undo takes the first away, on both fields. Store rules:
 **Open.** Two marchers on exactly the same spot have `distance` 0, so the
 marker disc (radius = distance, as Fabric's `CollisionMarker`) has no size;
 only the label shows. The tab's "steps" are field units. Both predate #226.
+
+### #249 Line widths
+
+**Field lines antialias in their shader.** `FieldLayer`'s line rectangles are
+drawn one device pixel wider on each side, and the fragment shader covers each
+pixel by the share of it the rectangle covers (the screen-space derivative of the field
+position), as Canvas2D does. Lines of one width now draw at one width at every
+zoom; before, edges snapped to whole pixels, so yard lines were 1 or 2 px wide
+side by side. Lines under a device pixel are still drawn a pixel wide and
+faded by coverage (and skipped under `minLineCoverage` in low quality). The
+field background keeps the plain shader, since its fill would pay for the
+edge math over the whole field. The video export draws through the same
+layer, so its frames get the same lines with no export change.
+
+**Why not MSAA.** Both fix the widths (worst spread in a zoom sweep: 0.25 px
+with MSAA, 0.2 px with the shader, 1 px before). On SwiftShader, MSAA cost
+385-marcher playback about 10% at DPR 1 and 30% at DPR 2; the shader about 5%
+at DPR 2 and nothing measurable at DPR 1. Those are software-GL numbers, and
+MSAA is usually much cheaper on a real GPU: the shader was chosen because it
+fixes the lines at about no cost, touches only the lines, and leaves marchers,
+labels and the export alone. MSAA stays off (`fieldQuality.ts`).
+
+**Scenario.** `e2e/browser/tests/line-widths.spec.mts` (both fields) turns the
+grid and half lines off, zooms in from the fit in steps up to 6×, and checks
+that the yard lines across the field's middle row have the same ink (the sum
+of how dark their pixels are) within 0.5 px, and about zoom × DPR each. Any
+new line drawing (pathways, shape outlines) can be checked the same way.
