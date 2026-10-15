@@ -72,13 +72,15 @@
         "navigation": {
             "firstPage": "First page",
             "lastPage": "Last page",
+            "nextBeat": "Next beat",
             "nextPage": "Next page",
+            "previousBeat": "Previous beat",
             "previousPage": "Previous page"
         },
         "playback": {
             "pause": "Pause",
             "play": "Play",
-            "playPage": "Play page once",
+            "playPage": "Play from playhead",
             "playPause": "Play / stop",
             "toggleMetronome": "Toggle metronome",
             "toggleLoop": "Loop on / off"
@@ -131,6 +133,33 @@
         "title": "Help Us Improve OpenMarch",
         "whenYouOptIn": "When you opt-in",
         "whenYouOptOut": "When you opt-out"
+    },
+    "assets": {
+        "credits": {
+            "license": {
+                "proprietary": "All rights reserved",
+                "unknown": "Unknown license"
+            },
+            "none": "Nothing in this show needs a credit.",
+            "shareNote": {
+                "badge": "Share note",
+                "detail": "Some items have an unknown license. You may not have the right to share them with this show.",
+                "export": "This show has items with an unknown license. You may not have the right to share them."
+            },
+            "title": "Credits",
+            "uncredited": "{count, plural, one {# more item is CC0 or built in and needs no credit.} other {# more items are CC0 or built in and need no credit.}}"
+        },
+        "show": {
+            "addFailed": "Couldn't add {name} to your Library.",
+            "added": "Added {name} to your Library.",
+            "addToLibrary": "Add to my Library",
+            "empty": "This show doesn't use any assets yet.",
+            "emptyHint": "Imports are copied into the show you have open.",
+            "title": "This show",
+            "updateDetails": "Its details changed in your Library.",
+            "updateVersion": "A newer version is in your Library."
+        },
+        "title": "Assets"
     },
     "audio": {
         "beats": {
@@ -222,6 +251,20 @@
         "title": "Command palette",
         "unavailable": "Not available right now"
     },
+    "convertShow": {
+        "backupFolder": "In {folder}",
+        "backupIntro": "Before converting, OpenMarch saves an untouched copy of it next to your show:",
+        "backupUse": "Your show is converted when you click Confirm. If you need to, you can open the copy in older versions of OpenMarch.",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "convertingTitle": "Converting “{fileName}”…",
+        "description": "“{fileName}” was made with an older version of OpenMarch. To open it, this version converts it to timelines. After that, older versions of OpenMarch can't open it.",
+        "progress": {
+            "backingUp": "Saving the copy…",
+            "converting": "Converting page {done} of {total}…"
+        },
+        "title": "Convert this show to timelines?"
+    },
     "coordinateRoundingSettings": {
         "custom": "Custom",
         "disableOffset": "Disable Offset",
@@ -302,18 +345,18 @@
         "fieldPropertiesRequired": "Field properties are required for export",
         "frontToBackHeader": "Front to Back",
         "funPhrase": {
-            "0": "Get ready to march a perfect 8 to 5! \uD83C\uDFBA",
-            "1": "Getting the files to cover down \uD83D\uDCCB",
-            "10": "Setting the tempo for success \uD83C\uDFBC",
-            "11": "Fine-tuning every step count \uD83D\uDD27",
-            "2": "Cleaning drill from the box \uD83E\uDDF9",
-            "3": "Making sure everyone's in step \uD83D\uDC5F",
-            "4": "Painting a perfect field \uD83D\uDD8C️",
-            "5": "Marching toward perfection! \uD83C\uDFAF",
+            "0": "Get ready to march a perfect 8 to 5! 🎺",
+            "1": "Getting the files to cover down 📋",
+            "10": "Setting the tempo for success 🎼",
+            "11": "Fine-tuning every step count 🔧",
+            "2": "Cleaning drill from the box 🧹",
+            "3": "Making sure everyone's in step 👟",
+            "4": "Painting a perfect field 🖌️",
+            "5": "Marching toward perfection! 🎯",
             "6": "Polishing those yard line markers ✨",
-            "7": "Counting off the perfect tempo \uD83E\uDD41",
-            "8": "Aligning the formation like a pro \uD83D\uDCD0",
-            "9": "Marching toward perfection! \uD83C\uDFAF"
+            "7": "Counting off the perfect tempo 🥁",
+            "8": "Aligning the formation like a pro 📐",
+            "9": "Marching toward perfection! 🎯"
         },
         "generatingPDF": " Generating PDF file for: {drillNumber}",
         "includeMeasures": "Include measures",
@@ -324,7 +367,6 @@
         "individualChartsTooltip": "Create customized drill chart PDFs for each individual marcher.",
         "individualChartsTooltipDescription": "If this is not checked, one overview drill chart PDF will be created.",
         "marcher": "Marcher: {status}",
-        "marcherPagesNotLoaded": "Marcher pages not loaded",
         "marcherPositionsMissing": "This marcher has no position on some pages, so its chart was skipped.",
         "marchersNotLoaded": "Marchers not loaded",
         "marchersWithoutPositions": "No positions found for {drillNumbers}.",
@@ -617,6 +659,7 @@
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
             "loading": "Loading marcher",
+            "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
             "minStepSize": "Smallest step size",
             "name": "Name",
@@ -659,6 +702,7 @@
             "measures": "Measures",
             "notes": "Notes",
             "notesPlaceholder": "Add notes for this page...",
+            "paused": "Pause to split this page or change its subset.",
             "splitPage": "Split page",
             "split": {
                 "success": "Page split successfully"
@@ -1052,15 +1096,384 @@
         },
         "title": "Launch Page"
     },
+    "library": {
+        "browser": {
+            "title": "Library",
+            "search": "Search by name",
+            "empty": "Your Library is empty.",
+            "emptyHint": "Use Import… to add models and artwork.",
+            "noMatches": "Nothing in the Library matches “{query}”.",
+            "loadFailed": "Couldn't load the Library ({code}).",
+            "groups": {
+                "silks": "Silks",
+                "floors": "Floors",
+                "props": "Props",
+                "equipment": "Equipment",
+                "uniforms": "Uniforms",
+                "other": "Other"
+            }
+        },
+        "templates": {
+            "menu": "Artwork templates",
+            "menuHint": "Full size, one file per click",
+            "groups": {
+                "silk": "Silk Cuts",
+                "floor": "Base floors",
+                "floorProp": "Floor props",
+                "prop": "Prop panels",
+                "uniform": "Uniform panels"
+            },
+            "withSag": "{name}, {sag} sag",
+            "saggingBottom": "{name}, sagging bottom",
+            "propFace": {
+                "top": "Top, {name}",
+                "front": "Front, {name}",
+                "back": "Back, {name}"
+            },
+            "uniformPart": {
+                "top": "Top",
+                "bottoms": "Bottoms",
+                "overlay": "Overlay (cape)"
+            },
+            "uniformSide": {
+                "front": "{part}, front",
+                "back": "{part}, back"
+            },
+            "download": "Download {name} as {format}",
+            "saved": "Saved {filename}",
+            "saveFailed": "Couldn't save the template"
+        },
+        "import": {
+            "entry": "Import…",
+            "library": "Library",
+            "title": "Import",
+            "back": "Back to the Library",
+            "picking": "Choose files in the dialog…",
+            "fileCount": "{count, plural, one {# file} other {# files}}",
+            "fromPicker": "From the {kind} picker",
+            "fromSlot": "For a {surface} slot",
+            "pageN": "Page {n}",
+            "pageOf": "page {index} of {count}",
+            "showPage": "Show {label}",
+            "cancel": "Cancel",
+            "close": "Done",
+            "importMore": "Import more…",
+            "tryAgain": "Try again",
+            "chooseAgain": "Choose files again",
+            "cancelKeeps": "Pages already added stay in your Library if you cancel.",
+            "cancelled": "Cancelled. Anything already added stays in your Library.",
+            "clean": "Ready to add. Nothing needs your choice.",
+            "starterKit": "The OpenMarch Blender starter kit exports models that import cleanly.",
+            "groups": {
+                "cantImport": "Can't import",
+                "needsChoice": "Needs your choice",
+                "fixed": "Fixed for you",
+                "notes": "Notes"
+            },
+            "kind": {
+                "title": "What is it?",
+                "hint": "Required. Size range and triangle caps are checked after.",
+                "from": {
+                    "picker": "Set by the picker",
+                    "stamp": "From the starter kit stamp"
+                }
+            },
+            "kinds": {
+                "prop": "Prop",
+                "equipment": "Equipment",
+                "garment": "Garment",
+                "floorProp": "Floor prop",
+                "baseFloor": "Base floor"
+            },
+            "surfaces": {
+                "silk": "Silk",
+                "baseFloor": "Base floor",
+                "floorProp": "Floor prop",
+                "propSlot": "Prop",
+                "uniformPart": "Uniform"
+            },
+            "stages": {
+                "reading": "Reading the file…",
+                "validating": "Checking the file…",
+                "decoding": "Decoding…",
+                "checking": "Checking sizes and caps…",
+                "converting": "Converting…",
+                "writing": "Writing…",
+                "rendering-pdf": "Rendering PDF pages…",
+                "saving": "Adding to your Library…"
+            },
+            "refused": {
+                "unsupported": "Not a format OpenMarch imports. Use GLB or glTF for models, and PNG, JPG, SVG or PDF for artwork.",
+                "tooLarge": {
+                    "model": "Over the 200 MB limit for a model with its files.",
+                    "artwork": "Over the 300 MB limit for an artwork file."
+                }
+            },
+            "match": {
+                "kitTitle": "New version of {name}",
+                "filenameTitle": "Already in your Library as {name}",
+                "detail": "Shows that use it get “update available”; nothing changes until they accept.",
+                "builtInDetail": "{name} is built in, so this becomes your own copy.",
+                "newVersionOf": "New version of {name}",
+                "update": "Update {name}",
+                "copyOf": "Your copy of {name}",
+                "addNew": "Add as new"
+            },
+            "choices": {
+                "suggested": "suggested",
+                "units": {
+                    "title": "Units",
+                    "detail": "It measures {largest} at its largest as exported, outside the size range for its kind.",
+                    "none": "As exported",
+                    "cm": "Centimeters ({factor})",
+                    "in": "Inches ({factor})",
+                    "ft": "Feet ({factor})"
+                },
+                "rotate": {
+                    "title": "Rotate to Y-up",
+                    "detail": "Exported Z-up; it would lie on its side."
+                },
+                "simplify": {
+                    "title": "Simplify to {cap} triangles",
+                    "detail": "{triangles} triangles, over the {kind} cap of {cap}."
+                },
+                "before": "Before {triangles}",
+                "after": "After {triangles}",
+                "grip": {
+                    "title": "Set the grip",
+                    "detail": "No OM_grip_R in the file: a point a quarter of the way along its longest side is pre-set. Click the model to move it.",
+                    "misnamed": "Found {names}, which doesn’t match OM_grip_R. Pre-set to its longest side; click the model to move it.",
+                    "manual": "Set by your click on the model.",
+                    "pick": "Click a point on the model",
+                    "picking": "Clicking… (Esc to stop)"
+                },
+                "surface": {
+                    "title": "Artwork surface",
+                    "detail": "The file marks no surface for artwork. Pick the one artwork prints on, or none; hover one to see it on the model.",
+                    "none": "None",
+                    "unnamed": "Material {index}",
+                    "size": "About {width} × {height}",
+                    "noUVs": "no UVs, so artwork can’t map onto it"
+                }
+            },
+            "rows": {
+                "unreadable": "The file can’t be read",
+                "missingResource": "A file it needs is missing",
+                "externalUri": "It loads a file from the internet",
+                "resourceOutsideFolder": "It points at a file outside its folder",
+                "validatorErrors": "{count, plural, one {# glTF error} other {# glTF errors}}",
+                "requiredExtension": "Needs an extension OpenMarch can’t load",
+                "noGeometry": "There’s no geometry in it",
+                "overTriangleCap": "{triangles} triangles: over the limit of {limit}",
+                "overTriangleCapDetail": "More than 4× the {kind} cap of {cap}. Reduce it before exporting.",
+                "rigNotAllowed": "A {kind} can’t have a rig",
+                "garmentNotRigged": "A Garment needs the v4 rig",
+                "garmentJointsNotV4": "The rig isn’t the v4 skeleton",
+                "missingJoints": "Missing {names}",
+                "unexpectedJoints": "Extra {names}",
+                "garmentRestPoseMismatch": "The rig’s rest pose doesn’t match v4",
+                "garmentQuantized": "Skinned meshes are quantized",
+                "garmentTransformsNotApplied": "Transforms aren’t applied",
+                "garmentNoPartPaint": "No _PART paint: it would render as skin",
+                "garmentNoMedianFit": "No fit for the median body",
+                "garmentUnknownFit": "A fit names an unknown body type",
+                "texturesDownsized": "{count, plural, one {# texture} other {# textures}} downsized to {cap} px",
+                "dracoDecoded": "Draco compression decoded",
+                "meshOptimizerDecoded": "Mesh optimizer compression decoded",
+                "instancesExpanded": "Instances expanded",
+                "extensionsStripped": "Unused extensions removed",
+                "extrasStripped": "Unused extras removed",
+                "contentStripped": "Content OpenMarch doesn’t use removed",
+                "contentStrippedDetail": "Animations {animations} · cameras {cameras} · morph targets {morphTargets} · extra scenes {scenes}",
+                "influencesRenormalized": "Bone weights renormalized on {vertices} vertices",
+                "validatorWarnings": "{count, plural, one {# glTF warning} other {# glTF warnings}}",
+                "sizeOutOfRange": "{size} at its largest",
+                "sizeOutOfRangeDetail": "Outside the usual {min} to {max} for its kind. Check the units.",
+                "noStretchZones": "No stretch zones",
+                "noStretchZonesDetail": "It keeps its modeled size, or takes a uniform scale.",
+                "customPropertiesOff": "Looks like custom properties were off",
+                "customPropertiesOffDetail": "Re-export with the OpenMarch preset to keep grips and slots.",
+                "stillOverTriangleCap": "Still {triangles} triangles, over the cap of {cap}",
+                "slotWithoutUVs": "Artwork slot {slot} has no UVs",
+                "slotDropped": "Artwork slot {slot} was dropped",
+                "invalidOpenMarchData": "OpenMarch data on {where} was ignored",
+                "unknownStampKind": "The stamp names an unknown kind: {value}",
+                "missingFits": "Missing fits",
+                "duplicateFits": "More than one mesh has the same fit",
+                "wgiEquipmentUnderMinimum": "WGI: equipment under 24 in",
+                "wgiFloorOverMaximum": "WGI: floor over 78 × 106 ft"
+            },
+            "size": {
+                "title": "How big is it?",
+                "members": "{selected} of {count} {count, plural, one {page} other {pages}}",
+                "fromFile": "From file: {size}",
+                "width": "Width",
+                "height": "Height",
+                "locked": "Aspect locked: artwork is never stretched",
+                "needed": "Choose a size: this file doesn’t say how big it prints.",
+                "printsOn": "Prints on",
+                "fitted": "Fitted to your image’s shape; the standard {surface} is {size}."
+            },
+            "details": {
+                "name": "Name",
+                "namesFromFiles": "Each file keeps its own name.",
+                "tags": "Tags, comma separated",
+                "toggle": "Author, license and source",
+                "unknown": "Unknown",
+                "author": "Author",
+                "license": "License",
+                "licensePlaceholder": "License, such as CC-BY-4.0",
+                "source": "Source URL",
+                "emptyIsUnknown": "Empty means Unknown, never free to share.",
+                "rights": "Only import artwork and models you have the rights to use."
+            },
+            "add": {
+                "one": "Add to Library",
+                "many": "Add {count} to Library",
+                "newVersion": "Add new version",
+                "cantImport": "Can't import"
+            },
+            "done": {
+                "added": "{count, plural, one {Added # item to your Library} other {Added # items to your Library}}",
+                "newVersion": "Added a new version of {name}",
+                "notImported": "Not imported"
+            },
+            "stage": {
+                "label": "Import preview · 3D View unchanged",
+                "loading": "Loading the preview…",
+                "empty": "Nothing to preview",
+                "needsKind": "Choose what it is to see the preview.",
+                "rejected": "Can't import, so there’s no preview.",
+                "previewFailed": "Couldn’t load the preview.",
+                "noArtwork": "No page to preview.",
+                "triangles": "{triangles} triangles",
+                "trianglesCap": "{triangles} triangles · cap {cap}",
+                "tall": "{height} tall",
+                "before": "Before",
+                "after": "After",
+                "vector": "vector",
+                "views": "Views",
+                "view": {
+                    "front": "Front",
+                    "side": "Side",
+                    "top": "Top"
+                },
+                "pickGrip": "Click a point on the model to set the grip · Esc to stop",
+                "surface": "Artwork surface: {name}"
+            },
+            "errors": {
+                "mixed-selection": {
+                    "title": "Import models and artwork separately",
+                    "body": "Pick one model, or any number of artwork files, at a time."
+                },
+                "session-expired": {
+                    "title": "This import timed out",
+                    "body": "Imports close after 30 minutes without use. Choose the files again."
+                },
+                "unknown-file": {
+                    "title": "That file isn’t in this import",
+                    "body": "Choose the files again."
+                },
+                "too-large": {
+                    "title": "Too many files",
+                    "body": "Pick at most 50 files at a time."
+                },
+                "unreadable": {
+                    "title": "The file couldn’t be read",
+                    "body": "It may have moved, or another app may have it open."
+                },
+                "busy": {
+                    "title": "Another import step is still running",
+                    "body": "Wait for it to finish, then try again."
+                },
+                "timeout": {
+                    "title": "The importer took too long",
+                    "body": "Large or complex files can time out. Try again, or simplify the file before exporting."
+                },
+                "worker-crashed": {
+                    "title": "The importer stopped while reading the file",
+                    "body": "Your file wasn’t changed. Try again; if it happens again, the file may be damaged."
+                },
+                "pdf-unavailable": {
+                    "title": "PDF pages couldn’t be rendered",
+                    "body": "Try again. If it keeps happening, export the artwork as PNG or SVG."
+                },
+                "write-failed": {
+                    "title": "Couldn’t save to your Library",
+                    "body": "Check there’s free disk space, then try again."
+                },
+                "read-only": {
+                    "title": "That item can’t be changed",
+                    "body": "Built-in items are read-only. Add it as new instead."
+                },
+                "corrupt": {
+                    "title": "Your Library has a damaged entry",
+                    "body": "Try again. The rest of your Library is unaffected."
+                },
+                "cancelled": {
+                    "title": "Cancelled",
+                    "body": "Nothing more was imported."
+                },
+                "other": {
+                    "title": "Something went wrong",
+                    "body": "Try again."
+                }
+            }
+        }
+    },
     "marchers": {
         "addMarcher": "Add",
         "addMarchers": "Add Marchers",
+        "addMethod": {
+            "manual": "Add manually",
+            "or": "or"
+        },
         "cancelDeleteButton": "Cancel",
         "createButton": "{quantity, plural, one {Create Marcher} other {Create Marchers}}",
         "createButtonWithSection": "{quantity, plural, one {Create {section} Marcher} other {Create {quantity} {section} Marchers}}",
         "created": "{count, plural, one {Marcher {drillNumbers} created successfully} other {Marchers {drillNumbers} created successfully}}",
         "createError": "{count, plural, one {Error creating marcher {drillNumbers}} other {Error creating marchers {drillNumbers}}}",
         "createInfo": "New marchers may not show up until a refresh",
+        "csv": {
+            "chooseFile": "Choose CSV file",
+            "copySections": "Copy",
+            "downloadExample": "Example CSV",
+            "error": {
+                "unknownSection": "Unknown section \"{value}\"",
+                "missingSection": "Missing section",
+                "missingDrillNumber": "Missing drill number",
+                "invalidDrillNumber": "\"{value}\" is not a drill number like F12",
+                "unknownPrefix": "No section uses the prefix \"{value}\"; add a section column",
+                "ambiguousPrefix": "The prefix \"{value}\" is shared by several sections; add a section column",
+                "duplicateInFile": "{value} appears more than once in the file",
+                "duplicateInShow": "{value} already exists in this show"
+            },
+            "ignoredColumns": "Ignoring columns: {columns}",
+            "importButton": "{count, plural, =0 {Import} one {Import 1 marcher} other {Import {count} marchers}}",
+            "info": "Name, year and notes are optional. Rows with errors are skipped; fix them and import again. Undo with [Ctrl/Cmd+Z].",
+            "line": "Line {line}",
+            "missingColumns": "The file needs a {columns} column",
+            "mode": {
+                "section": {
+                    "title": "By section",
+                    "help": "Give each marcher a section. Drill numbers are created automatically (F1, F2, …), skipping ones already in the show."
+                },
+                "drillNumber": {
+                    "title": "By drill number",
+                    "help": "Give each marcher a drill number such as F12. The section comes from the prefix, or from an optional section column."
+                }
+            },
+            "readError": "Could not read that file",
+            "result": {
+                "success": "{valid, plural, one {1 marcher is ready to import} other {All {valid} marchers are ready to import}}",
+                "partial": "{valid, plural, one {1 marcher is} other {{valid} marchers are}} ready to import. {invalid, plural, one {1 row has a problem and will be skipped:} other {{invalid} rows have problems and will be skipped:}}",
+                "failed": "None of the rows could be imported. Fix the problems below and choose the file again:",
+                "empty": "This file doesn't have any marchers in it"
+            },
+            "sections": "Sections and drill prefixes",
+            "sectionsHelp": "Use these section names (or prefixes) in the section column. Drill numbers start with the section's prefix, for example F12 for Flute 12.",
+            "title": "Import from CSV"
+        },
         "deleteButton": "Delete",
         "deleteDescription": "You are about to delete these section styles: {sections}. This can be undone with [Ctrl/Cmd+Z].",
         "deleteTitle": "Warning",
@@ -1365,7 +1778,13 @@
         "general.appearance.dark": "Dark",
         "general.appearance.light": "Light",
         "general.automaticUpdates": "Automatically download and install updates",
-        "general.description": "Language and other app-wide preferences.",
+        "general.description": "Editor mode, language and other app-wide preferences.",
+        "general.editorMode": "Editor mode",
+        "general.editorMode.basic": "Basic",
+        "general.editorMode.basic.description": "Pages, like a drill chart. Set each page; marchers hold until you move them again. Positions in the middle of a page are allowed.",
+        "general.editorMode.expert": "Expert",
+        "general.editorMode.expert.description": "The full timeline: moves that cross pages, overlapping moves, the start flag and loops.",
+        "general.editorMode.note": "Switching keeps your show as it is. Anything made in Expert that Basic can't edit stays, plays and is shown as locked in Basic.",
         "general.language": "Language",
         "general.openView3dWithShow": "Open 3D View when a show opens",
         "general.showFullDatabasePath": "Show full file path",
@@ -1441,6 +1860,15 @@
         "shortcuts.resetAll": "Reset all",
         "shortcuts.search": "Search shortcuts",
         "shortcuts.tapBeats": "Tap beats",
+        "timeline": "Timeline",
+        "timeline.description": "How the timeline looks.",
+        "timeline.waveformStyle": "Waveform",
+        "timeline.waveformStyle.hidden": "Hidden",
+        "timeline.waveformStyle.hidden.description": "No waveform on the timeline, so it takes less room. The music still plays.",
+        "timeline.waveformStyle.precise": "Precise",
+        "timeline.waveformStyle.precise.description": "Square bars locked to each beat, scaled in decibels so quiet passages show their detail.",
+        "timeline.waveformStyle.simplified": "Simplified",
+        "timeline.waveformStyle.simplified.description": "Rounded bars at an even spacing, scaled to the loudest moment, like a music player.",
         "title": "Settings",
         "tolgeeApiKeyPlaceholder": "Tolgee API Key",
         "tolgeeDevToolsToggle": "Tolgee In-Context Translating"
@@ -1495,7 +1923,7 @@
             "destinationShapeUnsuitable": "That destination doesn't fit the transition. A follow-the-leader transition can't end on a block, and a block needs at least as many places as the transition has slots.",
             "followLeaderBlock": "A follow-the-leader transition can't end on a block. Choose a line, curve, circle or box instead.",
             "followLeaderNeedsShape": "A follow-the-leader transition needs a shape to follow.",
-            "legacyConvertedTimeline": "This file was converted to timelines by an earlier development build, which put several page moves in one timeline, so it can't be edited. Convert it again: open its backup (the file saved next to it before the conversion), or run convertPages('{ replace: true }') from the developer console.",
+            "legacyConvertedTimeline": "This file was converted to timelines by an earlier development build, which put several page moves in one timeline, so it can't be edited. Convert it again: open its backup (the file saved next to it before the conversion).",
             "notReady": "The timeline is still loading. Try again in a moment.",
             "numberOutOfRange": "A number is out of range. Beats, layers, slot counts and positions must be whole or finite numbers within the allowed limits.",
             "pathParamsInvalid": "That path setting isn't valid. An arc's bulge can be at most half the distance between its ends, and waypoints must be points on the field.",
@@ -1524,23 +1952,33 @@
         "keep": {
             "chain": {
                 "ariaLabel": "Page {page}: {label}. {hint}",
-                "followHint": "Click to follow Page {from} again",
-                "followHintEarlier": "Click to follow earlier pages again",
-                "keep": "Keep {count} marchers on Page {page}",
-                "keepHint": "They won't follow Page {from} any more",
-                "keepHintEarlier": "They won't follow earlier pages any more",
-                "keepHintOne": "It won't follow Page {from} any more",
-                "keepNamed": "Keep {names} on Page {page}",
-                "keepOne": "Keep 1 marcher on Page {page}",
+                "changesEarlier": "Changes to earlier pages",
+                "changesPage": "Changes to Page {from}",
+                "follows": "{count} marchers hold {where} them",
+                "followsHint": "{changes} carry onto Page {page}. Click to keep them here instead",
+                "followsHintOne": "{changes} carry onto Page {page}. Click to keep it here instead",
+                "followsMenuHint": "{changes} carry onto Page {page}. Right-click the page to keep them here instead",
+                "followsMenuHintOne": "{changes} carry onto Page {page}. Right-click the page to keep it here instead",
+                "followsNamed": "{names} hold {where} them",
+                "followsNamedOne": "{names} holds {where} it",
+                "followsOne": "1 marcher holds {where} it",
                 "kept": "{count} marchers kept on Page {page}",
+                "keptHint": "Changes to Page {from} stop here. Click to follow Page {from} again",
+                "keptHintEarlier": "Changes to earlier pages stop here. Click to follow them again",
+                "keptMenuHint": "Changes to Page {from} stop here. Right-click the page to follow Page {from} again",
+                "keptMenuHintEarlier": "Changes to earlier pages stop here. Right-click the page to follow them again",
                 "keptNamed": "{names} kept on Page {page}",
                 "keptOne": "1 marcher kept on Page {page}",
                 "mixed": "{kept} of the {total} selected are kept on Page {page}",
-                "mixedHint": "Click to keep the other {count} too",
-                "mixedHintOne": "Click to keep the other one too",
                 "mixedNamed": "{kept} of the {total} selected are kept on Page {page} ({names})",
                 "mixedNamedOne": "1 of the {total} selected is kept on Page {page} ({names})",
-                "mixedOne": "1 of the {total} selected is kept on Page {page}"
+                "mixedOne": "1 of the {total} selected is kept on Page {page}",
+                "mixedRestHint": "The other {count} follow earlier pages. Click to keep them here too",
+                "mixedRestHintOne": "The other one follows earlier pages. Click to keep it here too",
+                "mixedRestMenuHint": "The other {count} follow earlier pages. Right-click the page to keep them here too",
+                "mixedRestMenuHintOne": "The other one follows earlier pages. Right-click the page to keep it here too",
+                "whereEarlier": "where earlier pages left",
+                "wherePage": "where Page {from} left"
             },
             "field": {
                 "kept": "Kept on Page {page} · won't follow Page {from}",
@@ -1794,9 +2232,30 @@
             "zoom": "Scroll"
         }
     },
+    "web": {
+        "download": "Download .dots",
+        "downloaded": "Downloaded {name}",
+        "fileMenu": "File",
+        "notDownloadedYet": "Changes since your last download are only in this browser"
+    },
     "welcome": {
         "description": "No files found. Create one, and make sure to check out the guides. Customize your theme and navigation in Settings.",
+        "examples": "Or open an example show",
         "title": "Welcome to OpenMarch"
+    },
+    "welcomeFlow": {
+        "back": "Back",
+        "continue": "Continue",
+        "dialogLabel": "Set up OpenMarch",
+        "mode": {
+            "note": "You can change this any time in Settings.",
+            "title": "How do you want to work?"
+        },
+        "step": "Step {current} of {total}",
+        "welcome": {
+            "description": "Let's set things up. This takes a few seconds.",
+            "title": "Welcome to OpenMarch"
+        }
     },
     "workspaceSettings": {
         "audioOffsetSeconds": "Audio Offset",

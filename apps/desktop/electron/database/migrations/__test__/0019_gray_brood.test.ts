@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { getOrm } from "../../db";
 import {
     DrizzleMigrationService,
+    FIRST_TIMELINE_MIGRATION_TAG,
     FORK_3D_VENUE_MIGRATION_MS,
 } from "../../services/DrizzleMigrationService";
 
@@ -88,7 +89,7 @@ describe(`Migration ${VENUE_MIGRATION.tag}`, () => {
     it("creates the venue table on a file from before it", async () => {
         await migrateAll();
         expect(tableNames()).toContain("view3d_venue");
-        expect(recordedMs().at(-1)).toBe(VENUE_MIGRATION.when);
+        expect(recordedMs()).toContain(VENUE_MIGRATION.when);
     });
 
     it("runs the timeline migrations on a file a 3d-async build opened, and keeps its venue", async () => {
@@ -121,7 +122,12 @@ describe(`Migration ${VENUE_MIGRATION.tag}`, () => {
                 "view3d_venue",
             ]),
         );
-        expect(recordedMs()).toEqual(entries.map((e) => e.when));
+        // A page-era file: everything up to the timeline-only migrations, which its conversion runs
+        expect(recordedMs()).toEqual(
+            entries
+                .filter((e) => e.tag < FIRST_TIMELINE_MIGRATION_TAG)
+                .map((e) => e.when),
+        );
         expect(db.prepare("SELECT json_data FROM view3d_venue").all()).toEqual([
             { json_data: VENUE_JSON },
         ]);

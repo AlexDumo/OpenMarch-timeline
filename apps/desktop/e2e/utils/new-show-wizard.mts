@@ -101,7 +101,15 @@ export async function completeNewShowWizard(
             level: 2,
         }),
     ).toBeVisible();
+    // Saving the show reloads the window (main's setActiveDb). The ruler can
+    // already show before that reload on a slow machine, so wait for the
+    // reload itself; otherwise it destroys the page under the next step.
+    const reloaded = page.waitForEvent("load", { timeout: 15000 });
     await dialog.getByRole("button", { name: "Create show" }).click();
+    await reloaded;
 
-    await expect(page.getByText("Timeline")).toBeVisible({ timeout: 15000 });
+    // The editor opens with the timeline's page ruler
+    await expect(page.getByTestId("timeline-page-ruler")).toBeVisible({
+        timeout: 15000,
+    });
 }
