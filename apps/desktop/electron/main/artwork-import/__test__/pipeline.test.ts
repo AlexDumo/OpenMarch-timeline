@@ -571,6 +571,74 @@ describe("refusals", () => {
             notes: [{ group: "cant-import", code: "unreadable" }],
         });
     });
+
+    it("reports a page whose pixels can't be decoded and imports the rest", async () => {
+        // The header reads, so inspection passes; decoding fails.
+        const whole = await sharp({
+            create: {
+                width: 200,
+                height: 300,
+                channels: 3,
+                noise: { type: "gaussian", mean: 128, sigma: 40 },
+            },
+        })
+            .png()
+            .toBuffer();
+        const cut = {
+            filename: "cut.png",
+            bytes: new Uint8Array(whole.subarray(0, whole.length / 2)),
+        };
+        expect((await inspectArtwork(cut)).ok).toBe(true);
+        expect(
+            await importArtwork(store, {
+                file: cut,
+                surface: "silk",
+                size: silk36x54,
+            }),
+        ).toMatchObject({
+            imported: [],
+            notImported: [
+                {
+                    page: 0,
+                    notes: [{ group: "cant-import", code: "unreadable" }],
+                },
+            ],
+        });
+        expect(await renderArtworkPreview(cut, 0, 256)).toMatchObject({
+            ok: false,
+            notes: [{ group: "cant-import", code: "unreadable" }],
+        });
+
+        const badSecondPage: PdfRenderer = {
+            async open(bytes) {
+                const doc = await fakePdfRenderer.open(bytes);
+                return {
+                    ...doc,
+                    async renderPage(index, size) {
+                        if (index === 1) throw new Error("bad page");
+                        return doc.renderPage(index, size);
+                    },
+                };
+            },
+        };
+        const report = await importArtwork(
+            store,
+            { file: await twoPagePdf(), surface: "propSlot" },
+            { pdfRenderer: badSecondPage },
+        );
+        expect(report.imported.map((p) => p.page)).toEqual([0]);
+        expect(report.notImported).toMatchObject([
+            {
+                page: 1,
+                notes: [
+                    {
+                        code: "unreadable",
+                        message: expect.stringMatching(/bad page/),
+                    },
+                ],
+            },
+        ]);
+    });
 });
 
 // ------------------------------------------------------------ Library

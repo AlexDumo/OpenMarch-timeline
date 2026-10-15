@@ -8,10 +8,9 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
 import {
-    jumpTimelinePages,
-    navigateTimelinePages,
+    navigateTimeline,
     loopBounds,
-    selectedPageBox,
+    playTimelinePage,
     seekTimeline,
     toggleTimelinePlayback,
 } from "@/timeline/timelineTransport";
@@ -26,15 +25,15 @@ interface PlaybackState {
     readonly pages: readonly Page[];
     readonly isPlaying: boolean;
     readonly setIsPlaying: (isPlaying: boolean) => void;
-    readonly liveIndex: number | null;
-    readonly playheadBeat: number;
 }
 
 /** The playback commands, reading the latest state, so they keep their identity across beats */
-const playbackCommands = (
-    latest: { readonly current: PlaybackState },
-    liveBeat: () => number | null,
-): Pick<TimelinePlayback, "onSeek" | "onNavigate" | "onPlayingChange"> => ({
+const playbackCommands = (latest: {
+    readonly current: PlaybackState;
+}): Pick<
+    TimelinePlayback,
+    "onSeek" | "onNavigate" | "onPlayingChange" | "onPlayFromPlayhead"
+> => ({
     // UI-12: while playing, a click or page button jumps playback there, and a scrub suspends it
     // until it ends (`seekTimeline`), which says where a scrub's seek landed
     onSeek: (beatIndex, options) => {
@@ -42,24 +41,26 @@ const playbackCommands = (
         return seekTimeline(beats, beatIndex, options?.gesture, {
             isPlaying,
             setIsPlaying,
+            line: options?.line,
         });
     },
     onNavigate: (direction) => {
-        const { beats, pages, isPlaying, liveIndex, playheadBeat } =
-            latest.current;
-        if (!isPlaying) navigateTimelinePages(pages, direction);
-        else
-            jumpTimelinePages(
-                beats,
-                pages,
-                Math.floor(liveBeat() ?? liveIndex ?? playheadBeat),
-                direction,
-            );
+        const { beats, pages, isPlaying } = latest.current;
+        navigateTimeline(beats, pages, isPlaying, direction);
     },
     onPlayingChange: (next) => {
         const { beats, isPlaying, setIsPlaying } = latest.current;
         if (next === isPlaying) return;
         toggleTimelinePlayback({
+            isPlaying,
+            showEndBeat: beats.length,
+            setIsPlaying,
+        });
+    },
+    // Shift+click on Play, as Shift+Space
+    onPlayFromPlayhead: () => {
+        const { beats, isPlaying, setIsPlaying } = latest.current;
+        playTimelinePage({
             isPlaying,
             showEndBeat: beats.length,
             setIsPlaying,
@@ -97,10 +98,6 @@ export function useTimelinePlayback({
     const playheadBeat = useTimelineSelectionStore(displayedBeat);
     // UI-17: with looping on (or a move isolated), Play loops
     const playLoops = useTimelineSelectionStore((s) => loopBounds(s) !== null);
-    // UI-17: what an unpinned Play does next, for the Play button's words
-    const playNext = useTimelineSelectionStore((s) =>
-        selectedPageBox(s) ? ("page" as const) : undefined,
-    );
     // Shift+Space's once-through, which stops back on the page's set
     const playingOnce = useTimelineSelectionStore(
         (s) => s.playback?.kind === "preview" && s.playback.once === true,
@@ -136,15 +133,10 @@ export function useTimelinePlayback({
         pages,
         isPlaying,
         setIsPlaying,
-        liveIndex,
-        playheadBeat,
     };
     const latest = useRef(state);
     latest.current = state;
-    const commands = useMemo(
-        () => playbackCommands(latest, liveBeat),
-        [liveBeat],
-    );
+    const commands = useMemo(() => playbackCommands(latest), []);
 
     return useMemo<TimelinePlayback>(
         () => ({
@@ -153,7 +145,6 @@ export function useTimelinePlayback({
                 isPlaying && liveIndex != null ? liveIndex : playheadBeat,
             isPlaying,
             playLoops,
-            playNext,
             playingOnce,
             ...commands,
         }),
@@ -164,7 +155,6 @@ export function useTimelinePlayback({
             liveIndex,
             playheadBeat,
             playLoops,
-            playNext,
             playingOnce,
         ],
     );

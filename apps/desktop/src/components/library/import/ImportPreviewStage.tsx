@@ -61,6 +61,7 @@ function ModelStage({ store }: { store: ImportReviewStore }) {
     const cancelGripPick = useStore(store, (s) => s.cancelGripPick);
     const setCapture = useStore(store, (s) => s.setThumbnailCapture);
     const retryPreview = useStore(store, (s) => s.retryPreview);
+    const beforeFailed = useStore(store, (s) => s.beforeFailed);
     const [view, setView] = useState<PreviewView>("front");
     const [nonce, setNonce] = useState(0);
     const [bounds, setBounds] = useState<Bounds | null>(null);
@@ -157,6 +158,7 @@ function ModelStage({ store }: { store: ImportReviewStore }) {
                     onBounds={setBounds}
                     onCaptureReady={onCaptureReady}
                     onError={() => setLoadFailed(true)}
+                    onBeforeError={beforeFailed}
                 />
             </Suspense>
             <div className="pointer-events-none absolute top-8 left-10 flex flex-col gap-4">
