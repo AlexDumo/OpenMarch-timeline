@@ -44,6 +44,22 @@ pnpm run e2e:scenarios:electron   # needs a display (Xvfb on a headless machine)
 Each launch gets its own `--user-data-dir`, so these run in parallel too. Run
 them before merging a change to the harness, the preload or the main process.
 
+## Choosing the field renderer
+
+The scenarios run against the Fabric field by default. `FIELD=three` runs the
+same scenarios against the three.js field instead (ADR 0005), through its dev
+switch (`src/field/fieldRenderer.ts`):
+
+```bash
+FIELD=three pnpm run e2e:browser
+FIELD=three pnpm run e2e:scenarios:electron
+```
+
+The fixture checks that the field asked for is the one on screen. For
+Electron it also passes Chromium's software GL switches, since a machine with
+no GPU (Xvfb in a container) otherwise has no WebGL. Until the editor tickets
+land, the scenarios that select or drag marchers fail on the new field.
+
 ## What belongs in the Electron suite instead
 
 A channel the host doesn't register rejects with Electron's own "No handler

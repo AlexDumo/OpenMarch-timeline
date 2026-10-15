@@ -1,4 +1,6 @@
 import Canvas from "@/components/canvas/Canvas";
+import ThreeField from "@/field/three/ThreeField";
+import { fieldRenderer } from "@/field/fieldRenderer";
 import Toolbar from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
 import SidebarModal from "@/components/sidebar/SidebarModal";
@@ -338,11 +340,16 @@ function App() {
                                                                 <SidebarModal />
                                                             </>
                                                         )}
-                                                        <Canvas
-                                                            onCanvasReady={
-                                                                setAppCanvas
-                                                            }
-                                                        />
+                                                        {fieldRenderer() ===
+                                                        "three" ? (
+                                                            <ThreeField />
+                                                        ) : (
+                                                            <Canvas
+                                                                onCanvasReady={
+                                                                    setAppCanvas
+                                                                }
+                                                            />
+                                                        )}
                                                         <CanvasZoomControls
                                                             canvas={appCanvas}
                                                         />
