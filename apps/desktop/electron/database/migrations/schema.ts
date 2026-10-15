@@ -9,12 +9,13 @@ import {
     unique,
     customType,
     sqliteView,
+    primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 /*************** COMMON COLUMNS ***************/
 
-const timestamps = {
+export const timestamps = {
     created_at: text()
         .notNull()
         .default(sql`(CURRENT_TIMESTAMP)`),
@@ -170,101 +171,6 @@ export const marchers = sqliteTable(
     ],
 );
 
-export const pathways = sqliteTable("pathways", {
-    id: integer().primaryKey(),
-    path_data: text().notNull(),
-    notes: text(),
-    ...timestamps,
-});
-
-/**
- * A MarcherPage is used to represent a Marcher's position on a Page.
- * MarcherPages can/should not be created or deleted directly, but are created and deleted when a Marcher or Page is.
- * There should be a MarcherPage for every Marcher and Page combination (M * P).
- */
-export const marcher_pages = sqliteTable(
-    "marcher_pages",
-    {
-        /** The id of the MarcherPage in the database */
-        id: integer().primaryKey(),
-        /** The id of the Marcher the MarcherPage is associated with */
-        marcher_id: integer()
-            .notNull()
-            .references(() => marchers.id, { onDelete: "cascade" }),
-        /** The id of the Page the MarcherPage is associated with */
-        page_id: integer()
-            .notNull()
-            .references(() => pages.id, { onDelete: "cascade" }),
-        /** X coordinate of the MarcherPage in pixels */
-        x: real().notNull(),
-        /** Y coordinate of the MarcherPage in pixels */
-        y: real().notNull(),
-        ...timestamps,
-        /** The ID of the pathway data */
-        path_data_id: integer().references(() => pathways.id, {
-            onDelete: "set null",
-        }),
-        /**
-         * The position along the pathway (0-1).
-         * This is the position in the pathway the marcher starts at for this coordinate.
-         * If this is null, then it is assumed to be 0 (the start of the pathway).
-         */
-        path_start_position: real(),
-        /**
-         * The position along the pathway (0-1).
-         * This is the position in the pathway the marcher ends up at for this coordinate.
-         * If this is null, then it is assumed to be 1 (the end of the pathway).
-         */
-        path_end_position: real(),
-        /** Any notes about the MarcherPage. Optional - currently not implemented */
-        notes: text(),
-        rotation_degrees: real().notNull().default(0),
-        ...appearance_columns,
-    },
-    (table) => [
-        check(
-            "marcher_pages_path_data_position_check",
-            sql`path_start_position >= 0 AND path_start_position <= 1 AND path_end_position >= 0 AND path_end_position <= 1`,
-        ),
-        index("index_marcher_pages_on_page_id").on(table.page_id),
-        index("index_marcher_pages_on_marcher_id").on(table.marcher_id),
-        unique().on(table.marcher_id, table.page_id),
-    ],
-);
-
-export const midsets = sqliteTable(
-    "midsets",
-    {
-        id: integer().primaryKey(),
-        /** The ID of the marcher page this midset is going to */
-        mp_id: integer()
-            .notNull()
-            .references(() => marcher_pages.id, { onDelete: "cascade" }),
-        x: real().notNull(),
-        y: real().notNull(),
-        /** The progress placement of the midset on the marcher page */
-        progress_placement: real().notNull(),
-        ...timestamps,
-        path_data_id: integer().references(() => pathways.id, {
-            onDelete: "set null",
-        }),
-        path_start_position: real(),
-        path_end_position: real(),
-        notes: text(),
-    },
-    (table) => [
-        check(
-            "midsets_path_data_position_check",
-            sql`path_start_position >= 0 AND path_start_position <= 1 AND path_end_position >= 0 AND path_end_position <= 1`,
-        ),
-        check(
-            "placement_check",
-            sql`progress_placement > 0 AND progress_placement < 1`,
-        ),
-        unique().on(table.mp_id, table.progress_placement),
-    ],
-);
-
 export const field_properties = sqliteTable(
     "field_properties",
     {
@@ -283,52 +189,6 @@ export const audio_files = sqliteTable("audio_files", {
     selected: integer().default(0).notNull(),
     ...timestamps,
 });
-
-export const shapes = sqliteTable("shapes", {
-    id: integer().primaryKey(),
-    name: text(),
-    ...timestamps,
-    notes: text(),
-});
-
-export const shape_pages = sqliteTable(
-    "shape_pages",
-    {
-        id: integer().primaryKey(),
-        shape_id: integer()
-            .notNull()
-            .references(() => shapes.id, { onDelete: "cascade" }),
-        page_id: integer()
-            .notNull()
-            .references(() => pages.id, { onDelete: "cascade" }),
-        svg_path: text().notNull(),
-        ...timestamps,
-        notes: text(),
-    },
-    (table) => [unique().on(table.page_id, table.shape_id)],
-);
-
-export const shape_page_marchers = sqliteTable(
-    "shape_page_marchers",
-    {
-        id: integer().primaryKey(),
-        shape_page_id: integer()
-            .notNull()
-            .references(() => shape_pages.id, { onDelete: "cascade" }),
-        marcher_id: integer()
-            .notNull()
-            .references(() => marchers.id, { onDelete: "cascade" }),
-        position_order: integer().notNull(),
-        ...timestamps,
-        notes: text(),
-    },
-    (table) => [
-        index("idx-spm-marcher_id").on(table.marcher_id),
-        index("idx-spm-shape_page_id").on(table.shape_page_id),
-        unique().on(table.shape_page_id, table.marcher_id),
-        unique().on(table.shape_page_id, table.position_order),
-    ],
-);
 
 export const section_appearances = sqliteTable("section_appearances", {
     id: integer().primaryKey(),
@@ -862,6 +722,64 @@ export const page_performer_settings = sqliteTable(
         check(
             "page_performer_settings_dot_mode_check",
             sql`dot_mode IN ('foot', 'body')`,
+        ),
+    ],
+);
+
+/* ======================= SHOW LIBRARY ======================== */
+/*
+ * The show's copies of the Library items it uses (ADR 0002 D-12, props-spec.md section 2,
+ * package C1.11). Following `audio_files` and `field_properties.image`, the bytes live in the
+ * show file, so a show renders on a machine whose local Library is empty. Neither table has
+ * history triggers: embedding and pruning are not undoable edits.
+ */
+
+/** Content-addressed bytes, deduped across every embedded Version. */
+export const library_blobs = sqliteTable(
+    "library_blobs",
+    {
+        /** sha256 of `data`, lowercase hex */
+        hash: text().primaryKey(),
+        data: browserSafeBinaryBlob().notNull(),
+    },
+    (_table) => [
+        check("library_blobs_hash_check", sql`length(hash) = 64`),
+        check("library_blobs_data_type_check", sql`typeof(data) = 'blob'`),
+    ],
+);
+
+/** One embedded Version of a Library item. A show may keep several Versions of one item. */
+export const library_items = sqliteTable(
+    "library_items",
+    {
+        item_id: text().notNull(),
+        version_hash: text().notNull(),
+        kind: text().notNull(),
+        name: text().notNull(),
+        /** Built-ins are embedded too, so app updates never change old shows */
+        built_in: integer().notNull().default(0),
+        /** JSON object, part role to `library_blobs.hash` */
+        parts: text().notNull(),
+        /** JSON array of `{ itemId, versionHash }` this Version pins, such as a Uniform's Garments */
+        pins: text().notNull().default("[]"),
+        /** JSON snapshot of the item's metadata (tags, license, dates) when it was embedded */
+        metadata: text().notNull(),
+        /** A model's sidecar JSON, so the show reads it at open without a blob read */
+        sidecar: text(),
+        embedded_at: text()
+            .notNull()
+            .default(sql`(CURRENT_TIMESTAMP)`),
+    },
+    (table) => [
+        primaryKey({ columns: [table.item_id, table.version_hash] }),
+        check(
+            "library_items_kind_check",
+            sql`kind IN ('model', 'artwork', 'uniform')`,
+        ),
+        check("library_items_built_in_check", sql`built_in IN (0, 1)`),
+        check(
+            "library_items_version_hash_check",
+            sql`length(version_hash) = 64`,
         ),
     ],
 );
