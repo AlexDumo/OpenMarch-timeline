@@ -11,6 +11,7 @@ import {
 } from "@/hooks/queries";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useTimingObjects } from "@/hooks";
+import { useFieldImage } from "@/view3d/window/useFieldImage";
 import { getLivePlaybackPosition } from "@/components/timeline/audio/AudioPlayer";
 import TimelineIsolationBar, {
     TimelineFromStartBadge,
@@ -24,17 +25,25 @@ import { useIsolationPlanStore } from "@/timeline/timelineIsolationPlan";
 import { playbackBeat } from "@/timeline/positionBuffer";
 import type { BeatTiming } from "@/timeline/timeMap";
 import { installFieldTestApi } from "@/field/fieldTestApi";
+import { planFieldImage } from "@/field/fieldPlan";
 import { FieldMarchers } from "./fieldMarchers";
 import { cameraBounds, fitView, useFieldViewStore } from "./fieldView";
 import { GlyphAtlas } from "./sdfText";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
+import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
 import LabelsLayer from "./layers/LabelsLayer";
 
-/** fabric's fonts: the marcher and checkpoint labels' monospace, and its default for yard numbers. */
+/** fabric's fonts: the marcher labels'. */
 const LABEL_FONT = 'bold "Courier New", monospace';
-const NUMBER_FONT = '"Times New Roman", serif';
+/**
+ * The field's fonts, named as fabric names them (`createFieldGrid`): its
+ * default for yard numbers, and "mono" for checkpoint labels, a family that
+ * doesn't exist, so the platform's fallback draws them in both fields.
+ */
+const NUMBER_FONT = '"Times New Roman"';
+const CHECKPOINT_FONT = '"mono"';
 
 /**
  * The three.js field (ADR 0005), behind the dev switch in `fieldRenderer.ts`.
@@ -55,6 +64,7 @@ export default function ThreeField() {
     const { selectedPage } = useSelectedPage()!;
     const { isPlaying } = useIsPlaying()!;
     const { beats } = useTimingObjects()!;
+    const { image: fieldImage } = useFieldImage();
 
     const marchers = useMemo(() => new FieldMarchers(), []);
     const labels = useMemo(
@@ -71,6 +81,7 @@ export default function ThreeField() {
         () => ({
             label: new GlyphAtlas(LABEL_FONT),
             number: new GlyphAtlas(NUMBER_FONT),
+            checkpoint: new GlyphAtlas(CHECKPOINT_FONT),
         }),
         [],
     );
@@ -78,14 +89,32 @@ export default function ThreeField() {
         () => () => {
             atlases.label.dispose();
             atlases.number.dispose();
+            atlases.checkpoint.dispose();
         },
         [atlases],
     );
 
     // The field test API reads the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
-    const latest = useRef({ labels, pageId: selectedPage?.id ?? null });
-    latest.current = { labels, pageId: selectedPage?.id ?? null };
+    const fieldImagePlan =
+        fieldProperties &&
+        planFieldImage(
+            fieldProperties,
+            fieldImage && {
+                width: fieldImage.width,
+                height: fieldImage.height,
+            },
+        );
+    const latest = useRef({
+        labels,
+        pageId: selectedPage?.id ?? null,
+        fieldImage: fieldImagePlan ?? null,
+    });
+    latest.current = {
+        labels,
+        pageId: selectedPage?.id ?? null,
+        fieldImage: fieldImagePlan ?? null,
+    };
     useEffect(() => {
         installFieldTestApi(
             createThreeFieldTestApi({
@@ -94,6 +123,7 @@ export default function ThreeField() {
                 view: () => useFieldViewStore.getState(),
                 element: () => element.current,
                 pageId: () => latest.current.pageId,
+                fieldImage: () => latest.current.fieldImage,
             }),
         );
         return () => installFieldTestApi(undefined);
@@ -143,7 +173,11 @@ export default function ThreeField() {
                     <FieldLayer
                         fieldProperties={fieldProperties}
                         numberAtlas={atlases.number}
-                        labelAtlas={atlases.label}
+                        labelAtlas={atlases.checkpoint}
+                    />
+                    <BackgroundImageLayer
+                        fieldProperties={fieldProperties}
+                        image={fieldImage}
                     />
                     <MarchersLayer
                         marchers={marchers}

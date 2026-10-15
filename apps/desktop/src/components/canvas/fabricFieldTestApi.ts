@@ -1,8 +1,10 @@
+import { fabric } from "fabric";
 import { FieldProperties } from "@openmarch/core";
 import type {
     FieldTestApi,
     FieldTestGesture,
     FieldTestHandle,
+    FieldTestImage,
     ScreenPoint,
 } from "@/field/fieldTestApi";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
@@ -27,6 +29,7 @@ const HANDLE_CONTROLS: Record<FieldTestHandle, string> = {
 type FabricInternals = {
     _currentTransform?: { action?: string } | null;
     _groupSelector?: unknown;
+    _backgroundImage?: fabric.Image | null;
 };
 
 /**
@@ -115,6 +118,31 @@ export function createFabricFieldTestApi(
         pageId() {
             return canvas.currentPage?.id ?? null;
         },
+
+        fieldImage: () => drawnFieldImage(canvas),
+    };
+}
+
+/** Where the Fabric field draws its image, in the field test API's units. */
+function drawnFieldImage(canvas: OpenMarchCanvas): FieldTestImage | null {
+    const image = (canvas as unknown as FabricInternals)._backgroundImage;
+    // Drawn only as part of the field grid, when the field shows it
+    if (!image || !canvas.staticGridRef.contains(image)) return null;
+    // The image's center is relative to the grid group's; move it into the canvas plane
+    const center = fabric.util.transformPoint(
+        image.getCenterPoint(),
+        canvas.staticGridRef.calcTransformMatrix(),
+    );
+    const width = image.getScaledWidth();
+    const height = image.getScaledHeight();
+    // Field (0, 0) is half a grid line into Fabric's plane (see `viewport`)
+    const offset = FieldProperties.GRID_STROKE_WIDTH / 2;
+    return {
+        x: center.x - width / 2 - offset,
+        y: center.y - height / 2 - offset,
+        width,
+        height,
+        opacity: image.opacity ?? 1,
     };
 }
 

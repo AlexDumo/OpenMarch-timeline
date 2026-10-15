@@ -70,7 +70,7 @@ export function useFieldImage(): FieldImageState {
             })
             .catch((error: unknown) => {
                 settled = true;
-                console.error("3D View couldn't decode the field image", error);
+                console.error("Couldn't decode the field image", error);
                 if (!cancelled) setState({ image: null, loaded: true });
             });
         return () => {

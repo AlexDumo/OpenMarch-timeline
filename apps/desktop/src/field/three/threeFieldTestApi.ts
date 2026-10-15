@@ -1,4 +1,8 @@
-import type { FieldTestApi, FieldTestMarcher } from "@/field/fieldTestApi";
+import type {
+    FieldTestApi,
+    FieldTestImage,
+    FieldTestMarcher,
+} from "@/field/fieldTestApi";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, type FieldView } from "./fieldView";
 
@@ -11,6 +15,8 @@ export type ThreeFieldState = {
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
     pageId(): number | null;
+    /** The field image as `BackgroundImageLayer` draws it, or null. */
+    fieldImage(): FieldTestImage | null;
 };
 
 /**
@@ -53,5 +59,6 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
         handles: () => null,
         activeGesture: () => null,
         pageId: () => field.pageId(),
+        fieldImage: () => field.fieldImage(),
     };
 }

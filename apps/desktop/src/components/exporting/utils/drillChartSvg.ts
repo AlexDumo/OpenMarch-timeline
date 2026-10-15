@@ -1,13 +1,15 @@
-import {
-    FieldProperties,
-    type Checkpoint,
-    type FieldTheme,
-    type RgbaColor,
-} from "@openmarch/core";
+import type { FieldProperties, FieldTheme, RgbaColor } from "@openmarch/core";
 import {
     resolveAppearanceFromStack,
     type AppearanceComponentOptional,
 } from "@/entity-components/appearance";
+import {
+    BASELINE_BELOW_CENTER,
+    fieldImagePlacement,
+    planField2d,
+    textCenterY,
+    type FieldPlanText,
+} from "@/field/fieldPlan";
 
 /**
  * Drill chart SVGs drawn straight from show data, with no canvas (field renderer migration,
@@ -19,6 +21,8 @@ import {
  * - Centered text is centered by the SVG renderer (`text-anchor`), so it doesn't depend on the
  *   font measured where the export ran. Yard numbers are centered on their yard line.
  * - The border is one closed outline around the field.
+ *
+ * The field's layout is `planField2d` (`src/field/fieldPlan.ts`), which the new field draws too.
  *
  * The output is plain SVG 1.1 that `svg-to-pdfkit` (the PDF export) and browsers both draw.
  */
@@ -54,18 +58,9 @@ export interface DrillChartPath {
 }
 
 export const DOT_RADIUS = 5;
-const GRID_STROKE = FieldProperties.GRID_STROKE_WIDTH;
 const PATHWAY_STROKE = 2;
 const PATH_POINT_RADIUS = 3;
-/** Fabric's text box is 1.13 font sizes tall, with the baseline 0.778 of the way down */
-const TEXT_BOX = 1.13;
-const BASELINE_FROM_TOP = TEXT_BOX * (1 - 0.222);
-const BASELINE_BELOW_CENTER = BASELINE_FROM_TOP - TEXT_BOX / 2;
-const LABEL_FONT_SIZE = 20;
 const MARCHER_LABEL_FONT_SIZE = 14;
-/** Yard numbers: Fabric `charSpacing` 160, in thousandths of an em */
-const YARD_NUMBER_SPACING = 0.16;
-const HASH_WIDTH = 20;
 
 const num = (n: number) => String(Math.round(n * 1000) / 1000);
 
@@ -119,297 +114,53 @@ const text = ({
 }) =>
     `<text x="${num(x)}" y="${num(y)}" font-family="${fontFamily}" font-size="${num(fontSize)}" font-weight="${bold ? "bold" : "normal"}" text-anchor="${anchor}" ${paint("fill", color)}${extra} xml:space="preserve">${escapeXml(content)}</text>`;
 
-/** Where the y grid starts (as in `createFieldGrid`) */
-const gridStartY = (fieldProperties: FieldProperties): number => {
-    const { yCheckpoints, centerFrontPoint, pixelsPerStep } = fieldProperties;
-    if (yCheckpoints.length === 0) return centerFrontPoint.yPixels;
-    const sorted = [...yCheckpoints].sort(
-        (a, b) => b.stepsFromCenterFront - a.stepsFromCenterFront,
-    );
-    const firstVisible = yCheckpoints.reduce(
-        (prev, curr) =>
-            curr.visible &&
-            curr.stepsFromCenterFront > prev.stepsFromCenterFront
-                ? curr
-                : prev,
-        sorted[sorted.length - 1]!,
-    );
-    const start =
-        firstVisible.stepsFromCenterFront !== 0 &&
-        firstVisible.stepsFromCenterFront % 1 !== 0
-            ? firstVisible
-            : sorted[0]!;
-    return (
-        centerFrontPoint.yPixels + start.stepsFromCenterFront * pixelsPerStep
-    );
-};
+export { fieldImagePlacement };
 
-const checkpointX = (fp: FieldProperties, c: Checkpoint) =>
-    fp.centerFrontPoint.xPixels + c.stepsFromCenterFront * fp.pixelsPerStep;
-const checkpointY = (fp: FieldProperties, c: Checkpoint) =>
-    fp.centerFrontPoint.yPixels + c.stepsFromCenterFront * fp.pixelsPerStep;
-
-/** Lines every `interval` px from `from`, both ways, on the field: `from` itself in [0, `end`) */
-const linesFrom = (from: number, interval: number, end: number): number[] => {
-    const out: number[] = [];
-    for (let i = from; i < end; i += interval) if (i >= 0) out.push(i);
-    for (let i = from - interval; i > 0; i -= interval) out.push(i);
-    return out;
-};
-
-/** Where a field image goes, fit or fill (`OpenMarchCanvas.refreshBackgroundImageValues`) */
-export const fieldImagePlacement = (
-    fieldProperties: Pick<
-        FieldProperties,
-        "width" | "height" | "imageFillOrFit"
-    >,
-    image: Pick<DrillChartFieldImage, "width" | "height">,
-) => {
-    const { width, height } = fieldProperties;
-    const fieldWider = image.width / image.height <= width / height;
-    // "fill" covers the field; anything else fits inside it
-    const byHeight =
-        fieldProperties.imageFillOrFit === "fill" ? !fieldWider : fieldWider;
-    const scale = byHeight ? height / image.height : width / image.width;
-    return {
-        x: (width - image.width * scale) / 2,
-        y: (height - image.height * scale) / 2,
-        width: image.width * scale,
-        height: image.height * scale,
-    };
-};
-
-// eslint-disable-next-line max-lines-per-function
 export function fieldSvg(
     fieldProperties: FieldProperties,
     { gridLines, halfLines, image }: DrillChartFieldOptions,
 ): string {
-    const fp = fieldProperties;
-    const { width, height, pixelsPerStep, centerFrontPoint, theme } = fp;
+    const plan = planField2d(fieldProperties, { gridLines, halfLines, image });
     const out: string[] = [];
 
     out.push(
-        `<rect x="0" y="0" width="${num(width)}" height="${num(height)}" ${paint("fill", theme.background)} />`,
+        `<rect x="0" y="0" width="${num(plan.width)}" height="${num(plan.height)}" ${paint("fill", plan.background)} />`,
     );
-
-    if (fp.showFieldImage && image) {
-        // An image whose size is unknown (it didn't decode) is stretched over the field
-        const at =
-            image.width > 0 && image.height > 0
-                ? fieldImagePlacement(fp, image)
-                : { x: 0, y: 0, width, height };
+    if (plan.image && image) {
+        const at = plan.image;
         out.push(
-            `<image x="${num(at.x)}" y="${num(at.y)}" width="${num(at.width)}" height="${num(at.height)}" preserveAspectRatio="none" opacity="${num(fp.backgroundImageOpacity)}" xlink:href="${escapeXml(image.href)}" />`,
+            `<image x="${num(at.x)}" y="${num(at.y)}" width="${num(at.width)}" height="${num(at.height)}" preserveAspectRatio="none" opacity="${num(at.opacity)}" xlink:href="${escapeXml(image.href)}" />`,
         );
     }
+    for (const l of plan.lines)
+        out.push(line(l.x1, l.y1, l.x2, l.y2, l.color, l.width));
+    for (const t of plan.texts) out.push(fieldTextSvg(t));
 
-    const startY = gridStartY(fp);
-    // Fabric's y loops start on the start line and only go back
-    const backFrom = (from: number, interval: number) => {
-        const out: number[] = [];
-        for (let i = from; i > 0; i -= interval) out.push(i);
-        return out;
-    };
-
-    if (gridLines) {
-        for (const x of linesFrom(
-            centerFrontPoint.xPixels,
-            pixelsPerStep,
-            width,
-        ))
-            out.push(line(x, 0, x, height, theme.tertiaryStroke, GRID_STROKE));
-        for (const y of backFrom(startY, pixelsPerStep))
-            out.push(line(0, y, width, y, theme.tertiaryStroke, GRID_STROKE));
-    }
-
-    if (halfLines) {
-        if (fp.halfLineXInterval) {
-            const interval = pixelsPerStep * fp.halfLineXInterval;
-            for (const x of linesFrom(
-                centerFrontPoint.xPixels,
-                interval,
-                width,
-            ))
-                out.push(
-                    line(x, 0, x, height, theme.secondaryStroke, GRID_STROKE),
-                );
-        }
-        if (fp.halfLineYInterval) {
-            const interval = pixelsPerStep * fp.halfLineYInterval;
-            for (const y of backFrom(startY - interval, interval))
-                out.push(
-                    line(0, y, width, y, theme.secondaryStroke, GRID_STROKE),
-                );
-        }
-    }
-
-    // Yard lines and hashes
-    for (const xCheckpoint of fp.xCheckpoints) {
-        if (!xCheckpoint.visible) continue;
-        const x = checkpointX(fp, xCheckpoint);
-        out.push(line(x, 0, x, height, theme.primaryStroke, GRID_STROKE));
-        if (!fp.useHashes) continue;
-        for (const yCheckpoint of fp.yCheckpoints) {
-            if (!yCheckpoint.visible) continue;
-            const y = checkpointY(fp, yCheckpoint);
-            // As wide as Fabric's (the hash width plus the yard line), clipped to the field
-            const half = (HASH_WIDTH + GRID_STROKE) / 2;
-            out.push(
-                yCheckpoint.useAsReference
-                    ? line(
-                          Math.max(x - half, 0),
-                          y,
-                          Math.min(x + half, width),
-                          y,
-                          theme.primaryStroke,
-                          GRID_STROKE * 3,
-                      )
-                    : line(
-                          Math.max(x - half, 0),
-                          y,
-                          Math.min(x + half, width),
-                          y,
-                          theme.secondaryStroke,
-                          GRID_STROKE * 2,
-                      ),
-            );
-        }
-    }
-    if (!fp.useHashes)
-        for (const yCheckpoint of fp.yCheckpoints) {
-            if (!yCheckpoint.visible) continue;
-            const y = checkpointY(fp, yCheckpoint);
-            out.push(line(0, y, width, y, theme.primaryStroke, GRID_STROKE));
-        }
-
-    // Checkpoint labels outside the field
-    const label = (
-        content: string,
-        x: number,
-        baseline: number,
-        anchor: "start" | "middle" | "end",
-    ) =>
-        text({
-            content,
-            x,
-            y: baseline,
-            fontSize: LABEL_FONT_SIZE,
-            fontFamily: "mono",
-            color: theme.externalLabel,
-            anchor,
-        });
-    const labelBaselineBelowTop = BASELINE_FROM_TOP * LABEL_FONT_SIZE;
-    for (const xCheckpoint of fp.xCheckpoints) {
-        if (!xCheckpoint.visible) continue;
-        const x = checkpointX(fp, xCheckpoint);
-        if (fp.bottomLabelsVisible)
-            out.push(
-                label(
-                    xCheckpoint.terseName,
-                    x,
-                    centerFrontPoint.yPixels + 5 + labelBaselineBelowTop,
-                    "middle",
-                ),
-            );
-        if (fp.topLabelsVisible)
-            out.push(
-                label(
-                    xCheckpoint.terseName,
-                    x,
-                    -25 + labelBaselineBelowTop,
-                    "middle",
-                ),
-            );
-    }
-    const sidePadding = 10;
-    for (const yCheckpoint of fp.yCheckpoints) {
-        if (!yCheckpoint.visible) continue;
-        const baseline =
-            checkpointY(fp, yCheckpoint) +
-            BASELINE_BELOW_CENTER * LABEL_FONT_SIZE;
-        if (fp.leftLabelsVisible)
-            out.push(
-                label(yCheckpoint.terseName, -sidePadding, baseline, "end"),
-            );
-        if (fp.rightLabelsVisible)
-            out.push(
-                label(
-                    yCheckpoint.terseName,
-                    width + sidePadding,
-                    baseline,
-                    "start",
-                ),
-            );
-    }
-
-    out.push(...yardNumbersSvg(fp));
-
-    // Border: three grid lines wide, just outside the field's edge
-    const borderWidth = GRID_STROKE * 3;
-    const inset = (borderWidth - GRID_STROKE) / 2;
+    const { border } = plan;
     out.push(
-        `<rect x="${num(-inset)}" y="${num(-inset)}" width="${num(width + 2 * inset)}" height="${num(height + 2 * inset)}" fill="none" ${paint("stroke", theme.primaryStroke)} stroke-width="${num(borderWidth)}" />`,
+        `<rect x="${num(border.x)}" y="${num(border.y)}" width="${num(border.width)}" height="${num(border.height)}" fill="none" ${paint("stroke", border.color)} stroke-width="${num(border.strokeWidth)}" />`,
     );
 
     return out.join("\n");
 }
 
-/** Yard numbers on the field, centered on their yard line; the away side's upside down */
-function yardNumbersSvg(fp: FieldProperties): string[] {
-    const { homeStepsFromFrontToInside, homeStepsFromFrontToOutside } =
-        fp.yardNumberCoordinates;
-    if (
-        homeStepsFromFrontToInside === undefined ||
-        homeStepsFromFrontToOutside === undefined
-    )
-        return [];
-    const { pixelsPerStep, centerFrontPoint, theme } = fp;
-    const fontSize =
-        (homeStepsFromFrontToInside - homeStepsFromFrontToOutside) *
-        pixelsPerStep;
-    const spacing = YARD_NUMBER_SPACING * fontSize;
-    const away = fp.yardNumberCoordinates.awayStepsFromFrontToOutside;
-    const out: string[] = [];
-    const number = (content: string, x: number, top: number, flip: boolean) => {
-        const centerY = top + (TEXT_BOX * fontSize) / 2;
+/** A checkpoint label or yard number */
+function fieldTextSvg(t: FieldPlanText): string {
+    const spacing = t.letterSpacing;
+    const svg = text({
+        content: t.text,
         // letter-spacing also follows the last character, so shift by half of it to center
-        const svg = text({
-            content,
-            x: x + spacing / 2,
-            y: centerY + BASELINE_BELOW_CENTER * fontSize,
-            fontSize,
-            fontFamily: "Times New Roman",
-            color: theme.fieldLabel,
-            anchor: "middle",
-            extra: ` letter-spacing="${num(spacing)}"`,
-        });
-        return flip
-            ? `<g transform="matrix(-1 0 0 -1 ${num(2 * x)} ${num(2 * centerY)})">${svg}</g>`
-            : svg;
-    };
-    for (const xCheckpoint of fp.xCheckpoints) {
-        if (!xCheckpoint.fieldLabel) continue;
-        const x = checkpointX(fp, xCheckpoint);
-        out.push(
-            number(
-                xCheckpoint.fieldLabel,
-                x,
-                centerFrontPoint.yPixels -
-                    homeStepsFromFrontToInside * pixelsPerStep,
-                false,
-            ),
-        );
-        if (away !== undefined)
-            out.push(
-                number(
-                    xCheckpoint.fieldLabel,
-                    x,
-                    centerFrontPoint.yPixels - away * pixelsPerStep,
-                    true,
-                ),
-            );
-    }
-    return out;
+        x: spacing && t.anchor === "middle" ? t.x + spacing / 2 : t.x,
+        y: t.y,
+        fontSize: t.fontSize,
+        fontFamily: t.fontFamily,
+        color: t.color,
+        anchor: t.anchor,
+        extra: spacing ? ` letter-spacing="${num(spacing)}"` : "",
+    });
+    if (!t.flipped) return svg;
+    const centerY = textCenterY(t);
+    return `<g transform="matrix(-1 0 0 -1 ${num(2 * t.x)} ${num(2 * centerY)})">${svg}</g>`;
 }
 
 /** A dot's look, resolved as `CanvasMarcher.setAppearance` does */
