@@ -96,3 +96,24 @@ option), a lost context restored and one never restored (simulated with
 palette. The fixture now marks the software-GL notice as already shown,
 unless a test sets `fieldQualityNotice: true`, so the toast covers nothing
 in other scenarios.
+
+**First numbers** (2026-10-15, the in-app benchmark through
+`window.fieldBenchmark.run()`, production browser build, headless Chromium,
+SwiftShader, low-quality mode, 1206 × 699 CSS px at 1×, seeded shows of 8
+pages, while four other agents loaded the machine). fps for play / scrub /
+zoom / pan:
+
+| Marchers | CPU       | fps                   | CPU ms per frame |
+| -------- | --------- | --------------------- | ---------------- |
+| 95       | 1×        | 50 / 33 / 54 / 55     | 0.2–0.4          |
+| 95       | 4× slower | 31 / 26 / 41 / 38     | 0.9–1.5          |
+| 385      | 1×        | 19 / 20 / 25 / 22     | 0.2–0.8          |
+| 385      | 4× slower | 14 / 14 / 23 / 18     | 0.8–2.7          |
+| 1,925    | 1×        | 4.9 / 4.9 / 7.1 / 5.4 | 0.3–1.6          |
+| 1,925    | 4× slower | 3.5 / 4.2 / 7.2 / 5.2 | 0.7–4.9          |
+
+Main-thread time stays under 5 ms a frame, so single-threaded software
+drawing is the limit, as in the prototype (its 385-marcher SwiftShader
+row: 29 / 26 fps). Low quality's cuts so far (DPR, labels, faint lines) don't
+change that much: the marcher dots and labels at readable zooms are the fill
+cost. #208's real-hardware rows are the ones that count.
