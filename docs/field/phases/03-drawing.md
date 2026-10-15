@@ -81,6 +81,6 @@ It needs Pillow (`pip install pillow`, in a virtual environment). The fixture's 
 `showFile` option starts a test from any show file. **#200 and #208** can add
 regions or shows there. Differences it shows that aren't #199's: the grid sits
 half a line off on Fabric (the dropped offset), yard numbers and label glyphs
-differ by about a pixel (SDF fonts, #200), and Fabric's view differs until
-#194. At very low zooms the new field's dots are larger than Fabric's, because
+differ by about a pixel (SDF fonts, #200). Since #194 both fields open at
+the same view. At very low zooms the new field's dots are larger than Fabric's, because
 of #192's 1.5 CSS px minimum dot radius (Fabric has none).
