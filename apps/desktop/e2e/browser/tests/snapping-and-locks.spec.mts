@@ -271,6 +271,24 @@ test("change: rounding on: a dragged group moves in whole rounding steps and kee
     await expectCanvasMatchesShow(show);
 });
 
+test("rounding on: Shift pressed just before the release still drops where the marcher is drawn (user stories 41, 42)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await roundToSteps(show);
+    const grid = await fieldGrid(show);
+    const start = startOf(2);
+    const by = offGridDrag(start, { x: 3, y: 2 }, grid);
+    const expected = snapped(plus(start, by), grid);
+
+    // Shift goes down with the pointer still: no pointer event between
+    await dragLegs(page, "T2", [{ by }], () => page.keyboard.down("Shift"));
+    await page.keyboard.up("Shift");
+
+    await expectSaved(show, withMarcherAt(2, expected));
+    await expectCanvasMatchesShow(show);
+});
+
 test("rounding on: Shift during a drag turns snapping off", async ({
     show,
 }) => {

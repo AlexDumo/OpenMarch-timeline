@@ -94,6 +94,22 @@ describe("ruledMove snapping (user stories 36 and 37)", () => {
         ]);
     });
 
+    it("keeps float noise out of a group's positions", () => {
+        const moved = ruledMove(() =>
+            rules({
+                rounding: { nearestXSteps: 0.1, nearestYSteps: 0 },
+                grid: { ...GRID, pixelsPerStep: 11.25 },
+            }),
+        )({ x: 3.4, y: 0.1 + 0.2 }, pointer(), [
+            { id: 1, x: 0.1, y: 0.2 },
+            { id: 2, x: 10, y: 10 },
+        ]);
+        expect(moved).toEqual([
+            { id: 1, x: 3.475, y: 0.5 },
+            { id: 2, x: 13.375, y: 10.3 },
+        ]);
+    });
+
     it("moves a group in multiples of each axis's step size", () => {
         expect(
             move(

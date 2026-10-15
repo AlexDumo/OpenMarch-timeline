@@ -511,6 +511,44 @@ describe("FieldEditor moving marchers", () => {
         expect(state.drops[0].positions).toEqual([{ id: 1, x: 120, y: 110 }]);
     });
 
+    // Snaps to tens, except with Shift or Alt
+    const snapToTens: MoveTransform = (delta, pointer, starts) =>
+        starts.map((s) => ({
+            id: s.id,
+            x:
+                pointer.alt || pointer.shift
+                    ? s.x + delta.x
+                    : s.x + Math.round(delta.x / 10) * 10,
+            y: s.y + delta.y,
+        }));
+
+    it("drops where the marcher is drawn when Alt comes up before a release that doesn't move", () => {
+        const { editor, state } = setup({ moveTransform: snapToTens });
+        editor.pointerDown(at(100, 100, { alt: true }));
+        editor.pointerMove(at(112, 100, { alt: true }));
+        expect(shown(state)).toEqual({ 1: { x: 103, y: 100 } });
+        // Alt up fires no pointer event; the release reports it up
+        editor.pointerUp(at(112, 100));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 103, y: 100 }]);
+    });
+
+    it("drops where the marcher is drawn when Shift goes down before a release that doesn't move", () => {
+        const { editor, state } = setup({ moveTransform: snapToTens });
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(137, 100));
+        expect(shown(state)).toEqual({ 1: { x: 140, y: 100 } });
+        editor.pointerUp(at(137, 100, { shift: true }));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 140, y: 100 }]);
+    });
+
+    it("drops by the release's modifiers when the release moved the pointer", () => {
+        const { editor, state } = setup({ moveTransform: snapToTens });
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(137, 100));
+        editor.pointerUp(at(138, 100, { shift: true }));
+        expect(state.drops[0].positions).toEqual([{ id: 1, x: 138, y: 100 }]);
+    });
+
     it("goes on slowly from the snapped spot when Alt is pressed during a snapped drag", () => {
         // Snaps to tens, except with Alt
         const moveTransform: MoveTransform = (delta, pointer, starts) =>

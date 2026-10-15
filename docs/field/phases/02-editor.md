@@ -321,7 +321,10 @@ transform gets the slowed delta (the seam's "raw delta" is that now). Pressing
 Alt re-anchors on where the first marcher is drawn (`anchorAt`), so a snapped
 drag goes on from the grid point with no jump. Releasing Alt keeps the lag
 and snaps again. A modifier pressed while the pointer stands still applies at
-the next pointer move: the renderer reports pointer events only.
+the next pointer move: the renderer reports pointer events only. So a release
+where the last move left the pointer drops the positions last drawn (Alt up
+or Shift down just before letting go doesn't change the drop); a release
+that moved evaluates the rules with its own modifiers.
 
 **Scenarios.** `e2e/browser/tests/snapping-and-locks.spec.mts`. The rounding
 ones set `coordinateRounding` through localStorage and reload; the grid comes

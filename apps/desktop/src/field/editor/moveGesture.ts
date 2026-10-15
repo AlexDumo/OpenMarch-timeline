@@ -46,8 +46,17 @@ export class MoveGesture implements FieldGesture {
     readonly kind: FieldTestGesture = "move";
     private track = PRECISION_START;
     private alt: boolean;
-    /** How far the first marcher was drawn from its start, at the last event. */
+    /**
+     * How far the first marcher was drawn from its start, at the last event.
+     * On a locked axis it's 0, so unlocking mid-drag with Alt down trails the
+     * pointer by the whole distance dragged along that axis.
+     */
     private drawn: FieldPoint = { x: 0, y: 0 };
+    /** The last positions shown, and where the pointer was for them. */
+    private shown: {
+        at: FieldPoint;
+        positions: MarcherPosition[];
+    } | null = null;
 
     constructor(
         private readonly origin: FieldPointer,
@@ -59,11 +68,25 @@ export class MoveGesture implements FieldGesture {
     }
 
     move(pointer: FieldPointer): void {
-        this.host.show(this.positionsAt(pointer));
+        const positions = this.positionsAt(pointer);
+        this.shown = { at: pointer.field, positions };
+        this.host.show(positions);
     }
 
+    /**
+     * Drops the marchers. A release where the last move left the pointer
+     * drops them where they're drawn: a key pressed or released since then
+     * (Alt up, Shift down) fires no pointer event, and mustn't change the drop
+     * (user stories 41 and 42).
+     */
     end(pointer: FieldPointer): void {
-        this.host.drop(this.positionsAt(pointer));
+        const still =
+            this.shown !== null &&
+            this.shown.at.x === pointer.field.x &&
+            this.shown.at.y === pointer.field.y;
+        this.host.drop(
+            still ? this.shown!.positions : this.positionsAt(pointer),
+        );
     }
 
     cancel(): void {

@@ -67,9 +67,17 @@ export function ruledMove(rules: () => MoveRules): MoveTransform {
             x: wholeSteps(locked.x, rounding?.nearestXSteps, grid),
             y: wholeSteps(locked.y, rounding?.nearestYSteps, grid),
         };
-        return followPointer(stepped, pointer, starts);
+        // As getRoundCoordinates2 does, so float noise never reaches a save
+        return followPointer(stepped, pointer, starts).map(({ id, x, y }) => ({
+            id,
+            x: thousandths(x),
+            y: thousandths(y),
+        }));
     };
 }
+
+/** `value` to three decimal places, the precision rounding saves. */
+const thousandths = (value: number) => Math.round(value * 1000) / 1000;
 
 /** `distance` rounded to whole multiples of `steps` steps; unchanged when `steps` is off. */
 function wholeSteps(
