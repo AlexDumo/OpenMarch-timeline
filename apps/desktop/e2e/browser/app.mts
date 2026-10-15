@@ -29,6 +29,44 @@ export type DrawnMarcher = {
 export const waitForField = (page: Page) =>
     page.waitForFunction(() => window.fieldTest?.pageId() != null);
 
+/**
+ * Waits until the field holds still on screen: its view, and where its
+ * element sits. As a show opens, the field centers its view again once the
+ * panels around it have settled (250 ms after it's ready, later on a slow
+ * start), so a scenario that reads the zoom or where a marcher is drawn
+ * before then works from the wrong view.
+ */
+export async function waitForSettledField(page: Page) {
+    const read = () =>
+        page.evaluate(() => {
+            const box = document
+                .querySelector('[data-testid="fieldCanvas"]')
+                ?.getBoundingClientRect();
+            let view: unknown = null;
+            try {
+                view = window.fieldTest?.viewport() ?? null;
+            } catch {
+                // No field drawn (no WebGL): only the element can move
+            }
+            return JSON.stringify([
+                view,
+                box ? [box.x, box.y, box.width, box.height] : null,
+            ]);
+        });
+    let last = await read();
+    let still = 0;
+    // The same three reads in a row, 150 ms apart: past the 250 ms settle
+    await expect
+        .poll(async () => {
+            await page.waitForTimeout(150);
+            const now = await read();
+            still = now === last ? still + 1 : 0;
+            last = now;
+            return still >= 3;
+        })
+        .toBe(true);
+}
+
 /** Reads the marchers drawn on the field. */
 export const drawnMarchers = (page: Page): Promise<DrawnMarcher[]> =>
     page.evaluate(() =>
