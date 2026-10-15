@@ -150,6 +150,7 @@ function listenForWheel(
     settings: () => NavigationSettings,
 ) {
     const onWheel = (event: WheelEvent) => {
+        if (onControl(event)) return;
         event.preventDefault();
         const current = view();
         if (current.width <= 0) return;

@@ -176,6 +176,8 @@ async function openInElectron(
     // Every load starts with the storage asked for. The window is already
     // loading by now, so the fixture reloads it once; the app saves its
     // settings while it starts, which would overwrite storage set later.
+    // This runs on every load, so a scenario that changes a setting and then
+    // reloads gets the fixture's storage back, not its own.
     await app.context().addInitScript((entries) => {
         for (const [key, value] of entries) localStorage.setItem(key, value);
     }, Object.entries(storage));

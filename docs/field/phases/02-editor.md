@@ -85,10 +85,13 @@ Append notes the next tickets need: file locations, seams, surprises.
   250 ms later, as Fabric's canvas does: the panels around the field settle
   after it mounts. A resize keeps the zoom and the top-left anchor; in
   fullscreen it fits again.
-- The new field applies the pan limit after every navigation. Fabric skipped
-  it for right-drag, the zoom buttons and touch pinch (a right-drag could take
-  the field off screen until the next wheel event). Flagged on the PR for the
-  owner.
+- **Decided (for the #208 checklist):** the new field applies the pan limit
+  after every navigation. Fabric skipped it for right-drag, the zoom buttons
+  and touch pinch (a right-drag could take the field off screen until the
+  next wheel event). Accepted as a fix.
+- **Decided (for the #208 checklist):** on a Mac, Ctrl+click without a drag
+  no longer selects: it's a pan press (Ctrl-drag pans, per the rules table,
+  and Ctrl+click is the Mac's secondary click). Accepted.
 - The resize and the zoom buttons' limits are Fabric's as is: a resize
   doesn't re-apply the pan limit, and the buttons disable by the percentage
   (relative to the base zoom), so they can stay enabled at the real limits.
