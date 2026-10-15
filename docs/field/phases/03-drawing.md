@@ -263,11 +263,10 @@ them in a frame hook from the drawn positions and the view store. The hover
 tooltip listens for pointer moves on the field's root element, hit-tests in
 field units (`keptMarkAt`), and uses the same test id as Fabric's.
 
-**Collisions.** Collision detection is off app-wide since upstream commit
-b61834d8b ("TODO - make collisions a query and put this back" in
-`useAnimation.ts`; `setCollisions` has no caller), so neither field shows any
-to a user today. It isn't a timeline or field regression. The scenarios put some on the page through
-`window.openmarchCollisions`, which exists only in Playwright sessions.
+**Collisions.** Collision detection was off app-wide from upstream commit
+b61834d8b until #226 (below). The scenarios that need a collision at a known
+spot put one on the page through `window.openmarchCollisions`, which exists
+only in Playwright sessions and stops detection from replacing it.
 Fabric draws every collision marker and label at the field's top-left corner
 (its objects hold the right coordinates; Fabric places them wrong). The new
 field draws them where they are. "Zoom to collisions" goes through
@@ -295,3 +294,57 @@ video export can draw the same plans; `OverlayLayer` needs only a plan and a
 render order. **For #209:** `planPathOverlay` imports the step-size rules from
 `global/classes/canvasObjects/stepSizeWarning.ts` (no Fabric in it): move that
 file out of `canvasObjects/` before deleting the folder.
+
+### #226 Collision detection
+
+**Where.** `global/classes/CollisionDetection.ts` is pure: `detectCollisions`
+samples a `PositionSource` (the resolver, as the fields' `PositionBuffer` does)
+between two beats and sweeps the marchers sorted by x, once per pair, where
+they first come within `COLLISION_RADIUS` (10 field units, as before). Each
+beat is sampled so the marcher moving most in it travels at most half the
+radius between samples (1 to 32 samples a beat), so two marchers passing
+through each other are caught. A collision's x and y are now the point
+between the pair (it was one marcher's spot). `collisionWindow` is what the
+selected page reports: from its positions (its end beat) through the move to
+the next page, as the tab's "on the next page" always meant; the last page
+checks only its own positions. Unit tests in
+`global/classes/__test__/CollisionDetection.test.ts`.
+
+**When.** `hooks/useCollisionDetection.ts`, mounted in `TimelineResolverHost`,
+is a TanStack query keyed by the resolver version and the window, combined
+with the marchers query for drill-number labels (`_combineCollisions`). It runs
+for the selected page only, once the page and the version have held still for
+150 ms, or at once when the cache has the answer (going back to a page). An
+edit, undo or redo is a new version and so a new query. Never per frame, and
+never while playing or scrubbing (`scrubbing` in the timeline selection
+store), when the selected page follows the playhead. A drag's pending
+positions aren't committed, so it doesn't run mid-drag. It reads the resolver
+directly, not through `timelineStore.positionsAt`, so idle warming keeps
+starting where the user is looking.
+
+**The store.** `useCollisionStore` keeps each page's answer at the current
+version (`setCollisions(page, list, version)`; a new version drops the rest).
+`setCurrentCollision(page)` shows a known answer, and otherwise keeps showing
+the last one until detection answers: blanking it made the toolbar close the
+Collisions tab on every page change. The toolbar also doesn't close the tab
+while playing or scrubbing; it waits for the page the playhead stops on. Both
+fields still hide the markers during playback.
+
+**Cost** (production browser build, a 6-core desktop CPU; detection is CPU-only,
+so software GL doesn't matter here): 2,000 marchers in a 50 × 40 block moving
+10 units a beat over a 16-beat page took 26 to 39 ms (20 units apart) and 34
+to 38 ms (12 apart) per page, 1.5 to 2 ms on the last page. That's one long
+task after a page change or an edit. The performance panel shows each run as
+the `openmarch:collisions` measure. If shows with longer pages make it
+noticeable, chunk it over idle callbacks or move it to a worker with the
+resolver.
+
+**Scenario.** `e2e/browser/tests/collisions.spec.mts` drags T1 onto T2, checks
+the Collisions tab lists the pair and "Review" frames it, that the next page
+(with a collision of its own) keeps the tab open and lists that pair, and that
+undo takes the first away, on both fields. Store rules:
+`stores/__test__/CollisionStore.test.ts`.
+
+**Open.** Two marchers on exactly the same spot have `distance` 0, so the
+marker disc (radius = distance, as Fabric's `CollisionMarker`) has no size;
+only the label shows. The tab's "steps" are field units. Both predate #226.
