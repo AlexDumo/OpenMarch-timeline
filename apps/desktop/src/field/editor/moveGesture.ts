@@ -1,13 +1,15 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
+import { PRECISION_START, anchorAt, precisionDelta } from "./moveRules";
 
 /** A marcher's position, in field units. */
 export type MarcherPosition = { id: number; x: number; y: number };
 
 /**
  * Where the dragged marchers go for a pointer delta, in field units. The seam
- * for snapping, Alt precision and Lock X/Y (#197): it gets the raw delta from
- * the press to the pointer, the pointer (its modifiers) and where the marchers
+ * for snapping and Lock X/Y (#197, `ruledMove` in `moveRules.ts`): it gets the
+ * delta from the press to the pointer (slowed while Alt is down, see
+ * `precisionDelta`), the pointer (its modifiers) and where the marchers
  * started, and returns their positions. {@link followPointer} moves them by
  * the delta as it is. It must return one position per start, in the same
  * order: a drop compares them by index to tell whether anything moved.
@@ -35,17 +37,26 @@ export type MoveGestureHost = {
 /**
  * Dragging marchers (#196, user story 34): they follow the pointer from where
  * the press started, through {@link MoveTransform}, and are dropped where it's
- * released. The editor saves the drop and owns what's drawn meanwhile.
+ * released. The editor saves the drop and owns what's drawn meanwhile. While
+ * Alt is down they move at a quarter of the pointer's speed (#197, user story
+ * 39), carrying on from where they're drawn when Alt is pressed (snapped,
+ * when rounding is on) or released.
  */
 export class MoveGesture implements FieldGesture {
     readonly kind: FieldTestGesture = "move";
+    private track = PRECISION_START;
+    private alt: boolean;
+    /** How far the first marcher was drawn from its start, at the last event. */
+    private drawn: FieldPoint = { x: 0, y: 0 };
 
     constructor(
         private readonly origin: FieldPointer,
         private readonly starts: readonly MarcherPosition[],
         private readonly host: MoveGestureHost,
         private readonly transform: MoveTransform = followPointer,
-    ) {}
+    ) {
+        this.alt = origin.alt;
+    }
 
     move(pointer: FieldPointer): void {
         this.host.show(this.positionsAt(pointer));
@@ -60,10 +71,24 @@ export class MoveGesture implements FieldGesture {
     }
 
     private positionsAt(pointer: FieldPointer) {
-        const delta = {
-            x: pointer.field.x - this.origin.field.x,
-            y: pointer.field.y - this.origin.field.y,
+        // Alt pressed: the slow drag starts from where the marchers are drawn
+        if (pointer.alt && !this.alt)
+            this.track = anchorAt(this.track, this.drawn);
+        this.alt = pointer.alt;
+        const moved = precisionDelta(
+            this.track,
+            {
+                x: pointer.field.x - this.origin.field.x,
+                y: pointer.field.y - this.origin.field.y,
+            },
+            pointer.alt,
+        );
+        this.track = moved.track;
+        const positions = this.transform(moved.delta, pointer, this.starts);
+        this.drawn = {
+            x: positions[0].x - this.starts[0].x,
+            y: positions[0].y - this.starts[0].y,
         };
-        return this.transform(delta, pointer, this.starts);
+        return positions;
     }
 }

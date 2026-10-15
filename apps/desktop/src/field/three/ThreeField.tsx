@@ -43,6 +43,8 @@ import {
     useFieldQualityStore,
 } from "@/field/fieldQuality";
 import { FieldEditor } from "@/field/editor/fieldEditor";
+import { ruledMove } from "@/field/editor/moveRules";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
@@ -269,6 +271,7 @@ function ThreeFieldView() {
         moveMarchers,
         fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
+        fieldProperties,
     });
     latest.current = {
         labels,
@@ -278,6 +281,7 @@ function ThreeFieldView() {
         marcherRows,
         setSelectedMarchers,
         moveMarchers,
+        fieldProperties,
     };
 
     const editor = useMemo(
@@ -319,7 +323,20 @@ function ThreeFieldView() {
                             latest.current.moveMarchers,
                         ),
                 },
-                { isMac: isMacPlatform() },
+                {
+                    isMac: isMacPlatform(),
+                    // #197: snapping, Shift, Alt and Lock X/Y, read as they are on each move
+                    moveTransform: ruledMove(() => {
+                        const { coordinateRounding, lockX, lockY } =
+                            useUiSettingsStore.getState().uiSettings;
+                        return {
+                            rounding: coordinateRounding,
+                            lockX,
+                            lockY,
+                            grid: latest.current.fieldProperties ?? null,
+                        };
+                    }),
+                },
             ),
         [marchers],
     );
