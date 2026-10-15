@@ -1,6 +1,8 @@
+import { wheelScrollsSideways } from "./timelineWheel";
 import {
     memo,
     useCallback,
+    useContext,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -9,19 +11,27 @@ import {
     type MouseEvent,
 } from "react";
 import { TimelineLoopBar } from "./TimelineLoopBar";
+import { AddPageFlagMenu } from "./AddPageFlagMenu";
+import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import { flushSync } from "react-dom";
-import { PlusIcon } from "@phosphor-icons/react";
+import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react";
+import { useTimelineFollow, type FollowZoomAnchor } from "./useTimelineFollow";
 import clsx from "clsx";
 import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     beatToX,
     clamp,
     getPageSnapBeats,
     getWindowCountLabel,
+    isPastLastFlag,
     getSelectionRange,
+    getTimelineRows,
     getTrackRange,
     sameRange,
     packTimelineTracks,
+    TIMELINE_PAGE_ROW_BOTTOM,
+    TIMELINE_PAGE_ROW_TOP,
 } from "./TimelineGeometry";
 import {
     TIMELINE_MAX_PX_PER_BEAT,
@@ -37,11 +47,13 @@ import {
     TimelineShell,
     TimelineTrackClip,
     TimelineTransport,
+    useElementHeight,
     useElementWidth,
     useScrubFollow,
     useTimelinePointer,
 } from "./TimelinePrimitives";
 import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
+import { addPageFlagLeft } from "./PageKeepChain";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import { useLatestCallback } from "./useLatestCallback";
 import {
@@ -56,11 +68,24 @@ import type {
     TimelineTarget,
     TimelineTrackId,
 } from "./TimelineViewModel";
+import {
+    TimelineBasicBodies,
+    TimelineBasicExpertMarks,
+    TimelineBasicPoints,
+} from "./TimelineBasicLayers";
 
-type TimelineDensity = "expanded" | "collapsed";
+type TimelineDensity = "expanded" | "collapsed" | "basic";
 
 /** Timeline's starting zoom, and the least a second Fit zooms in to when it can't go back */
 const TIMELINE_DEFAULT_PX_PER_BEAT = 16;
+
+/**
+ * Room after the show's last beat: **+** (UI-9) is drawn just after the playhead, so with the
+ * playhead on the last beat past the last flag (a page ending at the show's end) it needs this
+ * much to stay on screen and clickable, fitted or scrolled to the end. The button's 8px gap, its
+ * 16px, and 8px to spare.
+ */
+export const TIMELINE_END_INSET = 32;
 
 /** How far above the fitted zoom a remembered zoom must be for a second Fit to go back to it */
 const FIT_BACK_MARGIN = 1.05;
@@ -99,25 +124,32 @@ const useTimelineZoom = ({
     pixelsPerBeat,
     beatCount,
     leadingInset,
+    trailingInset,
     playheadBeat,
     onPixelsPerBeatChange,
     fitted: rememberedFitted,
     onFittedChange,
+    followAnchor,
 }: {
     viewportRef: React.RefObject<HTMLDivElement | null>;
     pixelsPerBeat: number;
     beatCount: number;
     leadingInset: number;
+    /** Room after the last beat (`TIMELINE_END_INSET`), left out of the fit */
+    trailingInset: number;
     playheadBeat: number;
     onPixelsPerBeatChange?: (pixelsPerBeat: number) => void;
     fitted?: boolean;
     onFittedChange?: (fitted: boolean) => void;
+    /** While the view follows the playhead, the playhead to zoom about instead of the pointer */
+    followAnchor?: () => FollowZoomAnchor | null;
 }) => {
     const viewportWidth = useElementWidth(viewportRef);
     const fitValue =
         beatCount > 0 && viewportWidth > 0
             ? clamp(
-                  Math.max(0, viewportWidth - leadingInset) / beatCount,
+                  Math.max(0, viewportWidth - leadingInset - trailingInset) /
+                      beatCount,
                   TIMELINE_MIN_PX_PER_BEAT,
                   TIMELINE_MAX_PX_PER_BEAT,
               )
@@ -209,18 +241,19 @@ const useTimelineZoom = ({
                     const wheel = pendingWheel.current;
                     pendingWheel.current = null;
                     if (!wheel) return;
+                    // Following, the playhead stays put on screen (UI-23)
+                    const follow = followAnchor?.();
                     zoomTo(
                         latest.current.pixelsPerBeat * wheel.factor,
-                        wheel.anchorPx,
+                        follow?.anchorPx ?? wheel.anchorPx,
+                        follow?.anchorBeat,
                     );
                 });
                 return;
             }
-            // A vertical scroll or swipe scrolls the timeline sideways; it has no rows to scroll
-            if (
-                Math.abs(event.deltaY) > Math.abs(event.deltaX) &&
-                viewport.scrollWidth > viewport.clientWidth
-            ) {
+            // A vertical scroll or swipe scrolls the timeline sideways, unless the tracks overflow
+            // the pane and have rows to scroll
+            if (wheelScrollsSideways(viewport, event.deltaX, event.deltaY)) {
                 event.preventDefault();
                 viewport.scrollLeft +=
                     event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
@@ -232,7 +265,7 @@ const useTimelineZoom = ({
             cancelAnimationFrame(frame.current);
             frame.current = 0;
         };
-    }, [viewportRef, zoomTo]);
+    }, [followAnchor, viewportRef, zoomTo]);
 
     // Never smaller than the show: a remembered zoom from a longer show, a wider window, or a
     // remembered Fit fits this one
@@ -301,18 +334,22 @@ const useTimelineZoom = ({
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [fit, onPixelsPerBeatChange]);
 
-    return { fit, fitted: isFitted };
+    return { fit, fitted: isFitted, viewportWidth };
 };
 
 const navigateToPage = ({
     direction,
     currentBeat,
     pages,
+    beatCount,
 }: {
     direction: TimelineNavigation;
     currentBeat: number;
     pages: TimelineCommonProps["model"]["pages"];
+    beatCount: number;
 }) => {
+    if (direction === "previous-beat") return Math.max(currentBeat - 1, 0);
+    if (direction === "next-beat") return Math.min(currentBeat + 1, beatCount);
     if (pages.length === 0) return 0;
     const timedPages = pages.filter((page) => !page.isInitial);
     const ordered = [...(timedPages.length > 0 ? timedPages : pages)].sort(
@@ -341,6 +378,7 @@ const transportNavigation = (props: TimelineCommonProps) =>
                       direction,
                       currentBeat: props.positionBeat,
                       pages: props.model.pages,
+                      beatCount: props.model.beatCount,
                   }),
               )
         : undefined);
@@ -376,6 +414,9 @@ const TimelineWaveformLane = memo(function TimelineWaveformLane({
     scrubLine?: TimelineLiveValue<number | null>;
 }) {
     const playedRef = useRef<HTMLDivElement>(null);
+    const waveformStyle = useUiSettingsStore(
+        (state) => state.uiSettings.timelineWaveformStyle,
+    );
     useLayoutEffect(() => {
         const played = playedRef.current;
         if (!played) return;
@@ -416,6 +457,7 @@ const TimelineWaveformLane = memo(function TimelineWaveformLane({
                 pixelsPerBeat={pixelsPerBeat}
                 viewportRef={viewportRef}
                 layerLeft={layerLeft}
+                waveformStyle={waveformStyle}
                 tone="rest"
             />
             <div
@@ -429,6 +471,7 @@ const TimelineWaveformLane = memo(function TimelineWaveformLane({
                     pixelsPerBeat={pixelsPerBeat}
                     viewportRef={viewportRef}
                     layerLeft={layerLeft}
+                    waveformStyle={waveformStyle}
                     tone="played"
                 />
             </div>
@@ -480,9 +523,12 @@ const TimelineSelectionActions = memo(function TimelineSelectionActions({
         ? displayedRange.startBeatIndex > 0
         : displayedRange.endBeatIndex >= model.beatCount;
     // UI-13: the window's count shows while a handle is dragged, or when the window starts off a
-    // page line; from a page line, it is the playhead's count, which the transport already shows
+    // page line; from a page line, it is the playhead's count, which the transport already shows.
+    // Past the last flag it shows anyway: the designer reads off how long the next page would be
     const showWindowCount =
-        dragging || !snapBeats.includes(displayedRange.startBeatIndex);
+        dragging ||
+        !snapBeats.includes(displayedRange.startBeatIndex) ||
+        isPastLastFlag(model, displayedRange.endBeatIndex);
     const showCreateTrack = createTrackTarget != null && !dragging;
     return (
         <div
@@ -495,7 +541,7 @@ const TimelineSelectionActions = memo(function TimelineSelectionActions({
                         : displayedRange.endBeatIndex) *
                         pixelsPerBeat +
                     (countRendersToLeft ? -6 : 6),
-                top: expanded ? 31 : 29,
+                top: TIMELINE_PAGE_ROW_BOTTOM + (expanded ? 3 : 1),
                 alignItems: countRendersToLeft ? "flex-end" : "flex-start",
                 transform: countRendersToLeft ? "translateX(-100%)" : undefined,
             }}
@@ -532,6 +578,45 @@ const TimelineSelectionActions = memo(function TimelineSelectionActions({
     );
 });
 
+/**
+ * Shown at the edge the playhead is off (UI-23), playing or stopped: a click brings the view back
+ * to it, and following resumes.
+ */
+const TimelinePlayheadChip = memo(function TimelinePlayheadChip({
+    side,
+    top,
+    onClick,
+}: {
+    side: "left" | "right";
+    top: number;
+    onClick: () => void;
+}) {
+    const Caret = side === "left" ? CaretLeftIcon : CaretRightIcon;
+    return (
+        <button
+            type="button"
+            data-testid="timeline-playhead-chip"
+            data-side={side}
+            aria-label="Show the playhead"
+            title="Show the playhead"
+            // As the transport's buttons: a click doesn't take keyboard focus, so Space after it
+            // is still the app's Play, not a second press of the chip
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={onClick}
+            className={clsx(
+                "bg-bg-1 border-stroke text-text hover:text-accent focus-visible:ring-accent absolute z-[70] flex items-center gap-2 rounded-full border px-8 py-2 text-[11px] leading-none whitespace-nowrap shadow-sm outline-hidden focus-visible:ring-2",
+                side === "left"
+                    ? "left-12 flex-row"
+                    : "right-12 flex-row-reverse",
+            )}
+            style={{ top }}
+        >
+            <Caret size={10} weight="bold" />
+            Playhead
+        </button>
+    );
+});
+
 const TimelineSurface = memo(function TimelineSurface({
     density,
     ...props
@@ -545,13 +630,15 @@ const TimelineSurface = memo(function TimelineSurface({
         showTransport = true,
         className,
     } = props;
-    const expanded = density === "expanded";
+    // UI-19 Basic: one row of page boxes with the music inside them; sized as expanded
+    const basic = density === "basic";
+    const expanded = density !== "collapsed";
     const viewportRef = useRef<HTMLDivElement>(null);
     const playheadRef = useRef<HTMLButtonElement>(null);
     const addPageFlagRef = useRef<HTMLButtonElement>(null);
     const rows = useMemo(
-        () => packTimelineTracks(model.tracks),
-        [model.tracks],
+        () => (basic ? [] : packTimelineTracks(model.tracks)),
+        [basic, model.tracks],
     );
     const snapBeats = useMemo(
         () =>
@@ -565,23 +652,52 @@ const TimelineSurface = memo(function TimelineSurface({
     const initialPageWidth = model.pages.some((page) => page.isInitial)
         ? TIMELINE_INITIAL_PAGE_WIDTH
         : 0;
-    const surfaceWidth = width + initialPageWidth;
-    // UI-12: the ruler (28px) and the measure row; then the waveform, when audio is loaded, so it
-    // stays put as clips come and go; then the clip rows, one always kept (with no chrome), so the
-    // first off-page clip doesn't move the ruler right after the drag that made it
-    const railHeight = expanded ? 20 : 17;
+    const surfaceWidth = width + initialPageWidth + TIMELINE_END_INSET;
     const showWaveform = model.waveform.peaksByBeat.some(
         (peaks) => peaks.length > 0,
     );
-    const waveformHeight = expanded ? 32 : 12;
-    const audioTop = 28 + railHeight + 2;
-    const trackTop = showWaveform ? audioTop + waveformHeight + 4 : audioTop;
-    const rowPitch = expanded ? 22 : 12;
-    const trackHeight = expanded ? 14 : 6;
-    // Compact bars sit in a hit area as tall as their row, so rows never share a click
-    const clipHitHeight = expanded ? trackHeight : rowPitch;
-    const trackBandHeight = Math.max(rows.length, 1) * rowPitch;
-    const timelineHeight = trackTop + trackBandHeight + (expanded ? 2 : 0);
+    const rowsLayout = getTimelineRows({
+        expanded,
+        showWaveform,
+        rowCount: rows.length,
+    });
+    // Basic (UI-19): under each box's header (the page row) its body: the measure numbers, the
+    // waveform, then the count ticks along the bottom. With no waveform (no audio, or hidden in
+    // settings) the body is just the measure numbers and the ticks, so it is shorter
+    const basicBodyHeight = showWaveform ? 60 : 30;
+    const basicMeasureRow = 18;
+    const basicAudioTop = TIMELINE_PAGE_ROW_BOTTOM + basicMeasureRow;
+    const basicWaveformHeight = basicBodyHeight - basicMeasureRow - 12;
+    const { rowPitch, trackHeight, clipHitHeight } = rowsLayout;
+    // The measure row under the page boxes (as `getTimelineRows`), where the simple-defaults
+    // study's mid-page ticks sit
+    const railHeight = expanded ? 20 : 17;
+    const audioTop = basic ? basicAudioTop : rowsLayout.audioTop;
+    const waveformHeight = basic
+        ? basicWaveformHeight
+        : rowsLayout.waveformHeight;
+    const trackTop = basic
+        ? showWaveform
+            ? basicAudioTop + basicWaveformHeight + 4
+            : basicAudioTop
+        : rowsLayout.trackTop;
+    const timelineHeight = basic
+        ? TIMELINE_PAGE_ROW_BOTTOM + basicBodyHeight
+        : rowsLayout.timelineHeight;
+    // The pane can be taller than the tracks (the splitter): the grid, page lines and playhead
+    // fill it, the track rows keep their height. Only a pane with its own height: a fitted pane
+    // is as tall as the surface (`TimelinePaneStretchContext`)
+    const viewportHeight = useElementHeight(viewportRef);
+    const stretch = useContext(TimelinePaneStretchContext);
+    const surfaceHeight = stretch
+        ? Math.max(timelineHeight, viewportHeight)
+        : timelineHeight;
+    // The ruler, measure row and the layers spanning the pane stay pinned at the viewport's top
+    // while the tracks scroll under them, so they are as tall as the visible pane
+    const pinnedHeight =
+        viewportHeight > 0
+            ? Math.min(viewportHeight, surfaceHeight)
+            : surfaceHeight;
     const selectionRange = getSelectionRange(selection);
     // A dragged start flag's range: only the window's count reads it (`TimelineSelectionActions`)
     const [selectionInteraction] = useState(() =>
@@ -599,28 +715,51 @@ const TimelineSurface = memo(function TimelineSurface({
         selectionRange?.endBeatIndex,
         selectionRange?.startBeatIndex,
     ]);
+    // The follow below needs the zoom's viewport width, and the zoom asks the follow where to
+    // anchor; this stable callback breaks the cycle, and is only called once both exist
+    const followAnchor = useLatestCallback(() => follow.zoomAnchor())!;
     const zoom = useTimelineZoom({
         viewportRef,
         pixelsPerBeat,
         beatCount: model.beatCount,
         leadingInset: initialPageWidth,
+        trailingInset: TIMELINE_END_INSET,
         playheadBeat: positionBeat,
         onPixelsPerBeatChange: props.onPixelsPerBeatChange,
         fitted: props.zoomFitted,
         onFittedChange: props.onZoomFittedChange,
+        followAnchor,
+    });
+    // UI-23: the view follows the playhead
+    const follow = useTimelineFollow({
+        viewportRef,
+        viewportWidth: zoom.viewportWidth,
+        contentWidth: surfaceWidth,
+        pixelsPerBeat,
+        inset: initialPageWidth,
+        pages: model.pages,
+        beatCount: model.beatCount,
+        isPlaying: props.isPlaying,
+        positionBeat,
+        livePositionBeat: props.livePositionBeat,
+        loop: props.playLoops ? (props.loop ?? null) : null,
+        selectionRange,
     });
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
-    // UI-12: clicks and scrubs land on a nearby downbeat or page line
+    // UI-12: clicks and scrubs land on a nearby downbeat or page line; Basic's on any count
+    // (UI-19: a mid-page edit happens at a count)
     const seekSnapBeats = useMemo(
         () =>
-            [
-                ...new Set([
-                    ...snapBeats,
-                    ...model.measures.map((measure) => measure.atBeat),
-                ]),
-            ].sort((a, b) => a - b),
-        [model.measures, snapBeats],
+            basic
+                ? Array.from({ length: model.beatCount + 1 }, (_, b) => b)
+                : [
+                      ...new Set([
+                          ...snapBeats,
+                          ...model.measures.map((measure) => measure.atBeat),
+                      ]),
+                  ].sort((a, b) => a - b),
+        [basic, model.beatCount, model.measures, snapBeats],
     );
     // A dragged page flag also lands on the playhead when near; read when a drag starts, so the
     // ruler doesn't re-render as the playhead moves
@@ -628,10 +767,12 @@ const TimelineSurface = memo(function TimelineSurface({
     const pointer = useTimelinePointer({
         seekSnapBeats,
         onSeek: props.onSeek,
-        onRangeSelect: onSelectionChange
-            ? (range) =>
-                  onSelectionChange({ kind: "range", range, drawn: true })
-            : undefined,
+        // Basic draws no ranges: every drag scrubs
+        onRangeSelect:
+            onSelectionChange && !basic
+                ? (range) =>
+                      onSelectionChange({ kind: "range", range, drawn: true })
+                : undefined,
         pixelsPerBeat,
         beatCount: model.beatCount,
         snapBeats,
@@ -691,7 +832,9 @@ const TimelineSurface = memo(function TimelineSurface({
         resolveRange: (event: MouseEvent<HTMLElement>) => {
             const marked = markedRangeAt(event.target);
             if (marked) return marked;
-            if (selection?.kind !== "range" || !selectionRange) return null;
+            // Basic (UI-19): only page boxes have a menu; the window isn't drawn
+            if (basic || selection?.kind !== "range" || !selectionRange)
+                return null;
             const surface = event.currentTarget.querySelector(
                 '[data-testid="timeline-pointer-surface"]',
             );
@@ -710,6 +853,16 @@ const TimelineSurface = memo(function TimelineSurface({
         <TimelineShell
             viewportRef={viewportRef}
             className={className}
+            pinnedHeight={audioTop}
+            overlay={
+                follow.offscreen && (
+                    <TimelinePlayheadChip
+                        side={follow.offscreen}
+                        top={TIMELINE_PAGE_ROW_TOP + 4}
+                        onClick={follow.revealPlayhead}
+                    />
+                )
+            }
             transport={
                 showTransport ? (
                     <TimelineTransport
@@ -724,8 +877,8 @@ const TimelineSurface = memo(function TimelineSurface({
                         isPlaying={props.isPlaying}
                         onPlayingChange={props.onPlayingChange}
                         playLoops={props.playLoops}
-                        playNext={props.playNext}
                         playingOnce={props.playingOnce}
+                        onPlayFromPlayhead={props.onPlayFromPlayhead}
                         onNavigate={onNavigate}
                         onFit={
                             props.onPixelsPerBeatChange ? zoom.fit : undefined
@@ -737,7 +890,7 @@ const TimelineSurface = memo(function TimelineSurface({
         >
             <div
                 className="relative"
-                style={{ width: surfaceWidth, height: timelineHeight }}
+                style={{ width: surfaceWidth, height: surfaceHeight }}
                 onContextMenu={rangeMenu.onContextMenu}
                 onDoubleClick={(event) => {
                     const marked = markedRangeAt(event.target);
@@ -751,206 +904,315 @@ const TimelineSurface = memo(function TimelineSurface({
                     style={{
                         left: initialPageWidth,
                         width,
-                        height: timelineHeight,
+                        height: surfaceHeight,
                     }}
                 >
-                    <TimelineGridCanvas
-                        width={width}
-                        height={timelineHeight}
-                        pixelsPerBeat={pixelsPerBeat}
-                        viewportRef={viewportRef}
-                        layerLeft={initialPageWidth}
-                        measures={model.measures}
-                        lineTop={28}
-                        topTickY={34}
-                        // UI-12: one row of beat ticks, in the measure row
-                        bottomTickY={null}
-                    />
-                    <TimelinePageLines
-                        pages={model.pages}
-                        pixelsPerBeat={pixelsPerBeat}
-                        height={timelineHeight}
-                    />
-                    <TimelineRuler
-                        pages={model.pages}
-                        measures={model.measures}
-                        beatCount={model.beatCount}
-                        pixelsPerBeat={pixelsPerBeat}
-                        selection={selection}
-                        onSelectionChange={onSelectionChange}
-                        onSeek={props.onSeek}
-                        initialPageWidth={initialPageWidth}
-                        showMeasures={expanded}
-                        seekSnapBeats={seekSnapBeats}
-                        scrubLine={pointer.scrubLine}
-                        pageFlagMove={
-                            props.isPlaying ? undefined : props.pageFlagMove
-                        }
-                        height={timelineHeight}
-                        flagSnapPlayhead={playheadAt}
-                        // Only a show without measures numbers the playhead page's counts
-                        positionBeat={
-                            expanded && model.measures.length === 0
-                                ? positionBeat
-                                : undefined
-                        }
-                        holdMarks={props.holdMarks}
-                        keepChains={props.keepChains}
-                    />
-                    {rows.flatMap((row, rowIndex) =>
-                        row.map((track) => (
-                            <TimelineTrackClip
-                                key={track.id}
-                                track={track}
-                                pixelsPerBeat={pixelsPerBeat}
-                                top={
-                                    trackTop +
-                                    rowIndex * rowPitch -
-                                    (clipHitHeight - trackHeight) / 2
-                                }
-                                height={clipHitHeight}
-                                barHeight={expanded ? undefined : trackHeight}
-                                // A clip is its timeline: it shows selected when its range is
-                                // the selection, and clicking it selects that range (UI-12)
-                                selected={sameRange(
-                                    getTrackRange(track),
-                                    selectionRange,
-                                )}
-                                onSelect={selectTrack}
-                                onRangeCommit={props.onTimelineRangeCommit}
-                                resize={props.clipResize}
-                                downbeats={seekSnapBeats}
-                                snapPlayhead={playheadAt}
-                                beatCount={model.beatCount}
-                                snapBeats={snapBeats}
-                                micro={!expanded}
-                                moveCommands={moveCommands}
-                                renaming={renaming === String(track.id)}
-                                onRenameStart={startRename}
-                                onRenameEnd={endRename}
-                            />
-                        )),
+                    {basic && (
+                        <TimelineBasicBodies
+                            top={TIMELINE_PAGE_ROW_BOTTOM}
+                            height={timelineHeight - TIMELINE_PAGE_ROW_BOTTOM}
+                            width={width}
+                        />
                     )}
-                    {showWaveform && (
-                        <TimelineWaveformLane
-                            waveform={model.waveform}
+                    {/* The grid and page lines under the tracks, pinned to the viewport's top
+                        so they always fill the visible pane (UI-19 sticky ruler) */}
+                    <div
+                        data-testid="timeline-pinned-grid"
+                        aria-hidden="true"
+                        className="pointer-events-none sticky top-0 z-0 h-0"
+                    >
+                        <TimelineGridCanvas
+                            width={width}
+                            height={pinnedHeight}
+                            pixelsPerBeat={pixelsPerBeat}
                             viewportRef={viewportRef}
                             layerLeft={initialPageWidth}
-                            top={audioTop}
-                            width={width}
-                            height={waveformHeight}
+                            measures={model.measures}
+                            lineTop={TIMELINE_PAGE_ROW_BOTTOM}
+                            // The beat ticks are in the header's own canvas; Basic's along the
+                            // floor of the box bodies (UI-19), below the header
+                            topTickY={timelineHeight - 7}
+                            showBeatTicks={basic}
+                            bottomTickY={null}
+                        />
+                        <TimelinePageLines
+                            pages={model.pages}
                             pixelsPerBeat={pixelsPerBeat}
+                            height={pinnedHeight}
+                        />
+                    </div>
+                    {/* The tracks: the waveform and the clip rows, the only part that scrolls
+                        vertically, under the pinned ruler */}
+                    <div
+                        data-testid="timeline-tracks"
+                        className="absolute inset-x-0 top-0 z-[1]"
+                        style={{ height: surfaceHeight }}
+                    >
+                        {/* The waveform first, so a clip's resize tag above the first row paints
+                            over it */}
+                        {showWaveform && (
+                            <TimelineWaveformLane
+                                waveform={model.waveform}
+                                viewportRef={viewportRef}
+                                layerLeft={initialPageWidth}
+                                top={audioTop}
+                                width={width}
+                                height={waveformHeight}
+                                pixelsPerBeat={pixelsPerBeat}
+                                positionBeat={positionBeat}
+                                livePositionBeat={
+                                    props.isPlaying
+                                        ? props.livePositionBeat
+                                        : undefined
+                                }
+                                scrubLine={pointer.scrubLine}
+                            />
+                        )}
+                        {rows.flatMap((row, rowIndex) =>
+                            row.map((track) => (
+                                <TimelineTrackClip
+                                    key={track.id}
+                                    track={track}
+                                    pixelsPerBeat={pixelsPerBeat}
+                                    top={
+                                        trackTop +
+                                        rowIndex * rowPitch -
+                                        (clipHitHeight - trackHeight) / 2
+                                    }
+                                    height={clipHitHeight}
+                                    barHeight={
+                                        expanded ? undefined : trackHeight
+                                    }
+                                    // A clip is its timeline: it shows selected when its range is
+                                    // the selection, and clicking it selects that range (UI-12)
+                                    selected={sameRange(
+                                        getTrackRange(track),
+                                        selectionRange,
+                                    )}
+                                    onSelect={selectTrack}
+                                    onRangeCommit={props.onTimelineRangeCommit}
+                                    resize={props.clipResize}
+                                    downbeats={seekSnapBeats}
+                                    snapPlayhead={playheadAt}
+                                    beatCount={model.beatCount}
+                                    snapBeats={snapBeats}
+                                    micro={!expanded}
+                                    moveCommands={moveCommands}
+                                    renaming={renaming === String(track.id)}
+                                    onRenameStart={startRename}
+                                    onRenameEnd={endRename}
+                                />
+                            )),
+                        )}
+                    </div>
+                    {/* Pinned to the viewport's top, over the tracks: the ruler and the measure
+                        row, which hide the tracks scrolled under them, and the layers that span
+                        the pane (playhead, flags, the window and the loop) */}
+                    <div
+                        data-testid="timeline-pinned"
+                        className="sticky top-0 z-[2] h-0"
+                    >
+                        <div
+                            data-testid="timeline-pinned-header"
+                            // Opaque, so the tracks scrolled under it don't show through: the card's
+                            // fg-1 is a translucent tint over bg-1. Basic has no tracks, and its
+                            // box bodies show through
+                            className={clsx(
+                                "absolute top-0 left-0",
+                                !basic && "bg-bg-1 bg-fg-1",
+                            )}
+                            style={{ width, height: audioTop }}
+                        >
+                            <TimelineGridCanvas
+                                width={width}
+                                height={audioTop}
+                                pixelsPerBeat={pixelsPerBeat}
+                                viewportRef={viewportRef}
+                                layerLeft={initialPageWidth}
+                                measures={model.measures}
+                                lineTop={TIMELINE_PAGE_ROW_BOTTOM}
+                                topTickY={TIMELINE_PAGE_ROW_BOTTOM + 6}
+                                // UI-12: one row of beat ticks, in the measure row; Basic's are
+                                // in the grid under the header
+                                showBeatTicks={!basic}
+                                bottomTickY={null}
+                            />
+                            <TimelinePageLines
+                                pages={model.pages}
+                                pixelsPerBeat={pixelsPerBeat}
+                                height={audioTop}
+                            />
+                        </div>
+                        <TimelineRuler
+                            pages={model.pages}
+                            measures={model.measures}
+                            beatCount={model.beatCount}
+                            pixelsPerBeat={pixelsPerBeat}
+                            selection={selection}
+                            onSelectionChange={onSelectionChange}
+                            onSeek={props.onSeek}
+                            initialPageWidth={initialPageWidth}
+                            showMeasures={expanded}
+                            seekSnapBeats={seekSnapBeats}
+                            scrubLine={pointer.scrubLine}
+                            pageFlagMove={
+                                props.isPlaying ? undefined : props.pageFlagMove
+                            }
+                            height={pinnedHeight}
+                            flagSnapPlayhead={playheadAt}
+                            // Only a show without measures numbers the playhead page's counts
+                            positionBeat={
+                                expanded &&
+                                !basic &&
+                                model.measures.length === 0
+                                    ? positionBeat
+                                    : undefined
+                            }
+                            holdMarks={props.holdMarks}
+                            keepChains={props.keepChains}
+                        />
+                        <TimelineRehearsalMarkers
+                            model={model}
+                            pixelsPerBeat={pixelsPerBeat}
+                            // Basic's measure row is at the top of the box bodies, as expanded's
+                            top={TIMELINE_PAGE_ROW_BOTTOM + (expanded ? 2 : 1)}
+                            compact={!expanded}
+                            onSeek={props.onSeek}
+                        />
+                        {basic && props.expertMarks && (
+                            <TimelineBasicExpertMarks
+                                pages={model.pages}
+                                marks={props.expertMarks}
+                                pixelsPerBeat={pixelsPerBeat}
+                            />
+                        )}
+                        {props.basicPoints && (
+                            <TimelineBasicPoints
+                                points={props.basicPoints}
+                                // In the box bodies (Basic), else across the measure row
+                                top={TIMELINE_PAGE_ROW_BOTTOM}
+                                height={
+                                    basic
+                                        ? timelineHeight -
+                                          TIMELINE_PAGE_ROW_BOTTOM
+                                        : railHeight
+                                }
+                                pixelsPerBeat={pixelsPerBeat}
+                                onSeek={props.onSeek}
+                                onRemove={props.onRemoveBasicPoint}
+                            />
+                        )}
+                        <TimelinePlayhead
+                            model={model}
                             positionBeat={positionBeat}
                             livePositionBeat={
                                 props.isPlaying
                                     ? props.livePositionBeat
                                     : undefined
                             }
+                            pixelsPerBeat={pixelsPerBeat}
+                            height={pinnedHeight}
+                            beatCount={model.beatCount}
+                            anchorRef={playheadRef}
+                            onSeek={props.onSeek}
+                            isPlaying={props.isPlaying}
                             scrubLine={pointer.scrubLine}
                         />
-                    )}
-                    <TimelineRehearsalMarkers
-                        model={model}
-                        pixelsPerBeat={pixelsPerBeat}
-                        top={expanded ? 30 : 29}
-                        compact={!expanded}
-                        onSeek={props.onSeek}
-                    />
-                    <TimelinePlayhead
-                        model={model}
-                        positionBeat={positionBeat}
-                        livePositionBeat={
-                            props.isPlaying ? props.livePositionBeat : undefined
-                        }
-                        pixelsPerBeat={pixelsPerBeat}
-                        height={timelineHeight}
-                        beatCount={model.beatCount}
-                        anchorRef={playheadRef}
-                        onSeek={props.onSeek}
-                        isPlaying={props.isPlaying}
-                        scrubLine={pointer.scrubLine}
-                        // UI-14: below the ruler and measure rows (over the waveform and the clip
-                        // rows) the playhead is drawn, not grabbed
-                        hitHeight={audioTop}
-                    />
-                    {props.onAddPageFlag && !props.isPlaying && (
-                        <button
-                            ref={addPageFlagRef}
-                            type="button"
-                            data-testid="timeline-add-page-flag"
-                            data-timeline-interactive="true"
-                            aria-label="Add a page flag here"
-                            title="Add a page flag here"
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={props.onAddPageFlag}
-                            className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute top-6 z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
-                            style={{
-                                left: beatToX(positionBeat, pixelsPerBeat) + 8,
-                            }}
-                        >
-                            <PlusIcon size={10} weight="bold" />
-                        </button>
-                    )}
-                    <TimelineRangePreview
-                        preview={pointer.rangePreview}
-                        pixelsPerBeat={pixelsPerBeat}
-                        height={timelineHeight}
-                    />
-                    {props.loop && (
-                        <TimelineLoopBar
-                            loop={props.loop}
-                            beatCount={model.beatCount}
+                        {props.onAddPageFlag && !props.isPlaying && (
+                            <AddPageFlagMenu
+                                onAddPage={props.onAddPageFlag}
+                                onAddSubsetPage={props.onAddSubsetPage}
+                                names={props.addPageNames}
+                            >
+                                <button
+                                    ref={addPageFlagRef}
+                                    type="button"
+                                    data-testid="timeline-add-page-flag"
+                                    data-timeline-interactive="true"
+                                    aria-label="Add a page flag here"
+                                    title="Add a page flag here"
+                                    onPointerDown={(event) =>
+                                        event.stopPropagation()
+                                    }
+                                    onClick={props.onAddPageFlag}
+                                    className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
+                                    // Past the playhead's box's keep chain, if it would cover it
+                                    style={{
+                                        left: addPageFlagLeft({
+                                            pages: model.pages,
+                                            beatCount: model.beatCount,
+                                            positionBeat,
+                                            pixelsPerBeat,
+                                            keepChains: props.keepChains,
+                                        }),
+                                        top: TIMELINE_PAGE_ROW_TOP + 6,
+                                    }}
+                                >
+                                    <PlusIcon size={10} weight="bold" />
+                                </button>
+                            </AddPageFlagMenu>
+                        )}
+                        <TimelineRangePreview
+                            preview={pointer.rangePreview}
                             pixelsPerBeat={pixelsPerBeat}
-                            snapBeats={snapBeats}
-                            onChange={props.onLoopChange}
+                            height={pinnedHeight}
                         />
-                    )}
-                    {selectionRange && (
-                        <TimelineSelectionRange
-                            range={selectionRange}
-                            startFlagBeatIndex={
-                                selection?.kind === "range"
-                                    ? selection.startFlagBeatIndex
-                                    : undefined
-                            }
-                            startPinned={
-                                selection?.kind === "range" &&
-                                selection.startPinned === true
-                            }
-                            onUnpin={props.onUnpinStart}
-                            pinTop={expanded ? 29 : 28}
-                            pinSize={expanded ? 18 : 14}
-                            beatCount={model.beatCount}
-                            pixelsPerBeat={pixelsPerBeat}
-                            height={timelineHeight}
-                            // UI-14: below the ruler and measure rows the flags are drawn, not
-                            // grabbed, so a Ctrl+drag or a short clip there isn't taken by a flag
-                            // (round-2 review: the waveform row took it)
-                            hitHeight={audioTop}
-                            snapBeats={snapBeats}
-                            onCommit={commitSelection}
-                            onInteractionChange={selectionInteraction.set}
-                            positionBeat={positionBeat}
-                            scrubLine={pointer.scrubLine}
-                        />
-                    )}
-                    {selectionRange && (
-                        <TimelineSelectionActions
-                            model={model}
-                            range={selectionRange}
-                            interaction={selectionInteraction}
-                            pixelsPerBeat={pixelsPerBeat}
-                            expanded={expanded}
-                            snapBeats={snapBeats}
-                            createTrackTarget={
-                                selection?.kind === "range" &&
-                                props.onCreateTrack != null
-                                    ? selectedTarget
-                                    : null
-                            }
-                            onCreateTrack={props.onCreateTrack}
-                        />
-                    )}
+                        {props.loop && (
+                            <TimelineLoopBar
+                                loop={props.loop}
+                                beatCount={model.beatCount}
+                                pixelsPerBeat={pixelsPerBeat}
+                                snapBeats={snapBeats}
+                                onChange={props.onLoopChange}
+                            />
+                        )}
+                        {selectionRange && !basic && (
+                            <TimelineSelectionRange
+                                range={selectionRange}
+                                startFlagBeatIndex={
+                                    selection?.kind === "range"
+                                        ? selection.startFlagBeatIndex
+                                        : undefined
+                                }
+                                startPinned={
+                                    selection?.kind === "range" &&
+                                    selection.startPinned === true
+                                }
+                                onUnpin={props.onUnpinStart}
+                                pinTop={
+                                    TIMELINE_PAGE_ROW_BOTTOM +
+                                    (expanded ? 1 : 0)
+                                }
+                                pinSize={expanded ? 18 : 14}
+                                beatCount={model.beatCount}
+                                pixelsPerBeat={pixelsPerBeat}
+                                height={pinnedHeight}
+                                snapBeats={snapBeats}
+                                onCommit={commitSelection}
+                                onLineDrag={props.onSeek}
+                                onInteractionChange={selectionInteraction.set}
+                                positionBeat={positionBeat}
+                                scrubLine={pointer.scrubLine}
+                            />
+                        )}
+                        {selectionRange && !basic && (
+                            <TimelineSelectionActions
+                                model={model}
+                                range={selectionRange}
+                                interaction={selectionInteraction}
+                                pixelsPerBeat={pixelsPerBeat}
+                                expanded={expanded}
+                                snapBeats={snapBeats}
+                                createTrackTarget={
+                                    selection?.kind === "range" &&
+                                    props.onCreateTrack != null
+                                        ? selectedTarget
+                                        : null
+                                }
+                                onCreateTrack={props.onCreateTrack}
+                            />
+                        )}
+                    </div>
                 </div>
                 {rangeMenu.element}
             </div>
@@ -962,6 +1224,13 @@ export const ExpandedTimeline = memo(function ExpandedTimeline(
     props: TimelineCommonProps,
 ) {
     return <TimelineSurface {...props} density="expanded" />;
+});
+
+/** UI-19 Basic: one row of page boxes with the music inside them (research/basic-mode) */
+export const BasicTimeline = memo(function BasicTimeline(
+    props: TimelineCommonProps,
+) {
+    return <TimelineSurface {...props} density="basic" />;
 });
 
 export const CollapsedTimeline = memo(function CollapsedTimeline(

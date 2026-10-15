@@ -279,6 +279,14 @@ function refused(
 const noSuchPage = (index: number): ImportNote =>
     note("cant-import", "no-such-page", `This file has no page ${index + 1}.`);
 
+/** A page whose header read but whose pixels didn't, such as a cut-off PNG. */
+const unreadablePage = (pageCount: number, error: unknown): ImportNote =>
+    note(
+        "cant-import",
+        "unreadable",
+        `${pageCount > 1 ? "This page" : "This file"} can't be read: ${errorText(error)}`,
+    );
+
 function inspectionNotes(pages: readonly ArtworkPage[]): ImportNote[] {
     const notes: ImportNote[] = [];
     if (pages.length > 1) {
@@ -655,7 +663,14 @@ export async function renderArtworkPreview(
                 .toBuffer();
         } catch (error) {
             checkCancelled(file, signal);
-            throw error;
+            return {
+                ok: false,
+                filename: file.filename,
+                page: info.index,
+                notes: [
+                    unreadablePage(opened.probe.inspection.pages.length, error),
+                ],
+            };
         }
         checkCancelled(file, signal);
         return {
@@ -801,9 +816,16 @@ export async function importArtwork(
                 notImported.push({ page: index, notes: [size.note] });
                 continue;
             }
-            imported.push(
-                await importPage(store, request, probed, page, size, signal),
+            const added = await importPage(
+                store,
+                request,
+                probed,
+                page,
+                size,
+                signal,
             );
+            if (added.ok) imported.push(added.page);
+            else notImported.push({ page: index, notes: [added.note] });
         }
         onProgress?.(unique.length, unique.length);
         return soFar();
@@ -861,19 +883,30 @@ function displayNotes(
 
 /**
  * The display texture in sRGB: PNG when it can be transparent (vectors,
- * images with alpha), else JPEG. sharp drops all metadata on output.
+ * images with alpha), else JPEG. sharp drops all metadata on output. A page
+ * that won't decode, such as a cut-off PNG, comes back as its error so the
+ * other pages still import.
  */
 async function renderDisplay(
     probed: Probe,
     page: ArtworkPage,
     target: PixelSize,
     signal: AbortSignal | undefined,
-): Promise<{ bytes: Uint8Array; format: "png" | "jpeg" }> {
-    const result = await encodeDisplay(probed, page, target);
+): Promise<
+    | { ok: true; bytes: Uint8Array; format: "png" | "jpeg" }
+    | { ok: false; error: unknown }
+> {
+    let result;
+    try {
+        result = await encodeDisplay(probed, page, target);
+    } catch (error) {
+        signal?.throwIfAborted();
+        return { ok: false, error };
+    }
     // A render in flight finishes; once cancelled, its result isn't stored
     // (`importArtwork` turns the abort into `ArtworkImportCancelled`).
     signal?.throwIfAborted();
-    return result;
+    return { ok: true, ...result };
 }
 
 async function encodeDisplay(
@@ -920,13 +953,18 @@ async function importPage(
     page: ArtworkPage,
     size: ResolvedSize,
     signal: AbortSignal | undefined,
-): Promise<ArtworkImportedPage> {
+): Promise<
+    { ok: true; page: ArtworkImportedPage } | { ok: false; note: ImportNote }
+> {
     const { file, surface } = request;
     const { inspection } = probed;
     const pageCount = inspection.pages.length;
 
     const target = displayTarget(surface, page, size);
     const display = await renderDisplay(probed, page, target, signal);
+    if (!display.ok) {
+        return { ok: false, note: unreadablePage(pageCount, display.error) };
+    }
 
     const dpi = page.pixels
         ? nativeDpi(page.pixels.width, size.width.m)
@@ -982,11 +1020,14 @@ async function importPage(
         source: { filename: file.filename, bytes: file.bytes },
     });
     return {
-        page: page.index,
-        outcome: added.outcome,
-        item: added.item,
-        version: added.version,
-        sidecar,
+        ok: true,
+        page: {
+            page: page.index,
+            outcome: added.outcome,
+            item: added.item,
+            version: added.version,
+            sidecar,
+        },
     };
 }
 

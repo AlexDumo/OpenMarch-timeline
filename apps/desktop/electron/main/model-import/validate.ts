@@ -25,7 +25,7 @@ export async function validateModel(
         maxIssues: 0,
         writeTimestamp: false,
         externalResourceFunction: (uri) => {
-            const data = resources[uri] ?? resources[decodeURIComponent(uri)];
+            const data = resources[uri] ?? resources[decodedOrSelf(uri)];
             return data
                 ? Promise.resolve(data)
                 : Promise.reject(new Error(`missing resource ${uri}`));
@@ -44,4 +44,13 @@ export async function validateModel(
         errorCount: report.issues.numErrors,
         warningCount: report.issues.numWarnings,
     };
+}
+
+/** `uri` percent-decoded, or as written when it isn't valid encoding. */
+function decodedOrSelf(uri: string): string {
+    try {
+        return decodeURIComponent(uri);
+    } catch {
+        return uri;
+    }
 }
