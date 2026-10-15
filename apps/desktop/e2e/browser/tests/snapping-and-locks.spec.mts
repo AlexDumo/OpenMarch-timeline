@@ -74,6 +74,12 @@ const ROUND_TO_STEPS = {
     coordinateRounding: { nearestXSteps: 1, nearestYSteps: 1 },
 };
 
+/** Turns coordinate rounding to whole steps on. */
+async function roundToSteps(show: Show) {
+    await setUiSettings(show.page, ROUND_TO_STEPS);
+    await expectCanvasMatchesShow(show);
+}
+
 /** `value` on the step grid through `origin`, the way rounding puts it. */
 const onGrid = (value: number, origin: number, grid: FieldGrid) =>
     origin +
@@ -87,8 +93,8 @@ const snapped = (point: { x: number; y: number }, grid: FieldGrid) => ({
 
 /**
  * A drag, in field units, that takes `from` to `steps` whole steps away and
- * then 0.4 of a step further, so a snapped and a free drop are 0.4 of a step
- * (several field units) apart.
+ * then a quarter of a step further, so a snapped and a free drop are a
+ * quarter of a step (about 3 field units) apart.
  */
 const offGridDrag = (
     from: { x: number; y: number },
@@ -98,8 +104,8 @@ const offGridDrag = (
     const base = snapped(from, grid);
     const step = grid.pixelsPerStep;
     return {
-        x: base.x + (steps.x + 0.4) * step - from.x,
-        y: base.y + (steps.y + 0.4) * step - from.y,
+        x: base.x + (steps.x + 0.25) * step - from.x,
+        y: base.y + (steps.y + 0.25) * step - from.y,
     };
 };
 
@@ -148,11 +154,14 @@ async function dragLegs(
     for (const key of held.reverse()) await page.keyboard.up(key);
 }
 
-/** Within a field unit on both axes (Fabric draws dots half a unit off). */
+/**
+ * Within 1.5 field units on both axes: Fabric draws dots half a unit off, and
+ * the mouse lands on whole screen pixels (over a unit apart when zoomed out).
+ */
 const near = (a: { x: number; y: number }, b: { x: number; y: number }) =>
-    Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1;
+    Math.abs(a.x - b.x) < 1.5 && Math.abs(a.y - b.y) < 1.5;
 
-/** Waits until the home page saves `expected`, each within a field unit. */
+/** Waits until the home page saves `expected`, each {@link near} it. */
 async function expectSaved(show: Show, expected: Position[]) {
     await expect
         .poll(async () => {
@@ -186,130 +195,123 @@ test.beforeEach(async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
 
-test.describe("with coordinate rounding on", () => {
-    test.beforeEach(async ({ show }) => {
-        await setUiSettings(show.page, ROUND_TO_STEPS);
-        await expectCanvasMatchesShow(show);
+test("rounding on: a dragged marcher snaps onto the rounding grid, and the drop saves where it's drawn", async ({
+    show,
+}) => {
+    const { page } = show;
+    await roundToSteps(show);
+    const grid = await fieldGrid(show);
+    const start = startOf(2);
+    const by = offGridDrag(start, { x: 3, y: 2 }, grid);
+    const expected = snapped(plus(start, by), grid);
+
+    let drawn: { x: number; y: number } | null = null;
+    await dragLegs(page, "T2", [{ by }], async () => {
+        drawn = await drawnPosition(page, "T2");
     });
 
-    test("a dragged marcher snaps onto the rounding grid, and the drop saves where it's drawn", async ({
-        show,
-    }) => {
-        const { page } = show;
-        const grid = await fieldGrid(show);
-        const start = startOf(2);
-        const by = offGridDrag(start, { x: 3, y: 2 }, grid);
-        const expected = snapped(plus(start, by), grid);
+    expect(near(drawn!, expected), JSON.stringify({ drawn, expected })).toBe(
+        true,
+    );
+    await expectSaved(show, withMarcherAt(2, expected));
+    await expectCanvasMatchesShow(show);
+});
 
-        let drawn: { x: number; y: number } | null = null;
-        await dragLegs(page, "T2", [{ by }], async () => {
-            drawn = await drawnPosition(page, "T2");
-        });
+test("change: rounding on: a dragged group moves in whole rounding steps and keeps each marcher's offset from the grid", async ({
+    show,
+    field,
+}) => {
+    test.fail(field === "fabric", "Fabric doesn't snap a group drag");
+    const { page } = show;
+    await roundToSteps(show);
+    // T3 is on the top edge of the selection's box, clear of Fabric's handles
+    await clickMarcher(page, "T1");
+    await clickMarcher(page, "T3", { add: true });
+    await clickMarcher(page, "T4", { add: true });
+    await expect
+        .poll(() => selectedDrillNumbers(page))
+        .toEqual(["T1", "T3", "T4"]);
 
-        expect(
-            near(drawn!, expected),
-            JSON.stringify({ drawn, expected }),
-        ).toBe(true);
-        await expectSaved(show, withMarcherAt(2, expected));
-        await expectCanvasMatchesShow(show);
-    });
+    const grid = await fieldGrid(show);
+    const step = grid.pixelsPerStep;
+    // 3¼ steps across and 2¼ down from where T3 started
+    const by = { x: 3.25 * step, y: 2.25 * step };
+    await dragLegs(page, "T3", [{ by }]);
 
-    test("change: a dragged group moves in whole rounding steps and keeps each marcher's offset from the grid", async ({
-        show,
-        field,
-    }) => {
-        test.fail(field === "fabric", "Fabric doesn't snap a group drag");
-        const { page } = show;
-        // T3 is on the top edge of the selection's box, clear of Fabric's handles
-        await clickMarcher(page, "T1");
-        await clickMarcher(page, "T3", { add: true });
-        await clickMarcher(page, "T4", { add: true });
-        await expect
-            .poll(() => selectedDrillNumbers(page))
-            .toEqual(["T1", "T3", "T4"]);
+    await expectSaved(show, movedBy([1, 3, 4], { x: 3 * step, y: 2 * step }));
+    await expectCanvasMatchesShow(show);
+});
 
-        const grid = await fieldGrid(show);
-        const step = grid.pixelsPerStep;
-        // 3.4 steps across and 2.4 down from where T3 started
-        const by = { x: 3.4 * step, y: 2.4 * step };
-        await dragLegs(page, "T3", [{ by }]);
+test("rounding on: Shift during a drag turns snapping off", async ({
+    show,
+}) => {
+    const { page } = show;
+    await roundToSteps(show);
+    const grid = await fieldGrid(show);
+    const start = startOf(2);
+    const by = offGridDrag(start, { x: 3, y: 2 }, grid);
+    const half = { x: by.x / 2, y: by.y / 2 };
 
-        await expectSaved(
-            show,
-            movedBy([1, 3, 4], { x: 3 * step, y: 2 * step }),
+    await dragLegs(page, "T2", [{ by: half }, { by: half, hold: ["Shift"] }]);
+
+    await expectSaved(show, withMarcherAt(2, plus(start, by)));
+    await expectCanvasMatchesShow(show);
+});
+
+test("change: rounding on: Alt during a drag moves the marcher at a quarter of the pointer's speed, with snapping off", async ({
+    show,
+    field,
+}) => {
+    test.fail(field === "fabric", "Fabric has no precision drag");
+    const { page } = show;
+    await roundToSteps(show);
+    const grid = await fieldGrid(show);
+    const start = startOf(2);
+    // The marcher should end a quarter of a step off the grid
+    const moved = offGridDrag(start, { x: 1, y: 1 }, grid);
+    const pointer = { x: moved.x * 4, y: moved.y * 4 };
+
+    await dragLegs(page, "T2", [{ by: pointer, hold: ["Alt"] }]);
+
+    await expectSaved(show, withMarcherAt(2, plus(start, moved)));
+    await expectCanvasMatchesShow(show);
+});
+
+test("change: rounding on: pressing Alt mid-drag goes on slowly from where the marcher is drawn, without a jump", async ({
+    show,
+    field,
+}) => {
+    test.fail(field === "fabric", "Fabric has no precision drag");
+    const { page } = show;
+    await roundToSteps(show);
+    const grid = await fieldGrid(show);
+    const start = startOf(2);
+    const first = offGridDrag(start, { x: 2, y: 1 }, grid);
+    const onTheGrid = snapped(plus(start, first), grid);
+    const slow = { x: 8, y: -6 };
+
+    let drawnAtAlt: { x: number; y: number } | null = null;
+    await dragLegs(page, "T2", [{ by: first }], async () => {
+        await page.keyboard.down("Alt");
+        // A pointer move with Alt down and no distance: no jump
+        const at = await screenOf(page, "T2");
+        await page.mouse.move(at.x, at.y);
+        drawnAtAlt = await drawnPosition(page, "T2");
+        const scale = await canvasScale(page);
+        await page.mouse.move(
+            at.x + slow.x * 4 * scale,
+            at.y + slow.y * 4 * scale,
+            { steps: 8 },
         );
-        await expectCanvasMatchesShow(show);
     });
+    await page.keyboard.up("Alt");
 
-    test("Shift during a drag turns snapping off", async ({ show }) => {
-        const { page } = show;
-        const grid = await fieldGrid(show);
-        const start = startOf(2);
-        const by = offGridDrag(start, { x: 3, y: 2 }, grid);
-        const half = { x: by.x / 2, y: by.y / 2 };
-
-        await dragLegs(page, "T2", [
-            { by: half },
-            { by: half, hold: ["Shift"] },
-        ]);
-
-        await expectSaved(show, withMarcherAt(2, plus(start, by)));
-        await expectCanvasMatchesShow(show);
-    });
-
-    test("change: Alt during a drag moves the marcher at a quarter of the pointer's speed, with snapping off", async ({
-        show,
-        field,
-    }) => {
-        test.fail(field === "fabric", "Fabric has no precision drag");
-        const { page } = show;
-        const grid = await fieldGrid(show);
-        const start = startOf(2);
-        // The marcher should end 0.4 of a step off the grid
-        const moved = offGridDrag(start, { x: 1, y: 1 }, grid);
-        const pointer = { x: moved.x * 4, y: moved.y * 4 };
-
-        await dragLegs(page, "T2", [{ by: pointer, hold: ["Alt"] }]);
-
-        await expectSaved(show, withMarcherAt(2, plus(start, moved)));
-        await expectCanvasMatchesShow(show);
-    });
-
-    test("change: pressing Alt mid-drag goes on slowly from where the marcher is drawn, without a jump", async ({
-        show,
-        field,
-    }) => {
-        test.fail(field === "fabric", "Fabric has no precision drag");
-        const { page } = show;
-        const grid = await fieldGrid(show);
-        const start = startOf(2);
-        const first = offGridDrag(start, { x: 2, y: 1 }, grid);
-        const onTheGrid = snapped(plus(start, first), grid);
-        const slow = { x: 8, y: -6 };
-
-        let drawnAtAlt: { x: number; y: number } | null = null;
-        await dragLegs(page, "T2", [{ by: first }], async () => {
-            await page.keyboard.down("Alt");
-            // A pointer move with Alt down and no distance: no jump
-            const at = await screenOf(page, "T2");
-            await page.mouse.move(at.x, at.y);
-            drawnAtAlt = await drawnPosition(page, "T2");
-            const scale = await canvasScale(page);
-            await page.mouse.move(
-                at.x + slow.x * 4 * scale,
-                at.y + slow.y * 4 * scale,
-                { steps: 8 },
-            );
-        });
-        await page.keyboard.up("Alt");
-
-        expect(
-            near(drawnAtAlt!, onTheGrid),
-            JSON.stringify({ drawnAtAlt, onTheGrid }),
-        ).toBe(true);
-        await expectSaved(show, withMarcherAt(2, plus(onTheGrid, slow)));
-        await expectCanvasMatchesShow(show);
-    });
+    expect(
+        near(drawnAtAlt!, onTheGrid),
+        JSON.stringify({ drawnAtAlt, onTheGrid }),
+    ).toBe(true);
+    await expectSaved(show, withMarcherAt(2, plus(onTheGrid, slow)));
+    await expectCanvasMatchesShow(show);
 });
 
 test("Lock X keeps a dragged marcher's X", async ({ show }) => {
