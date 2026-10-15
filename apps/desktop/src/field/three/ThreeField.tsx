@@ -27,6 +27,8 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useIsolationPlanStore } from "@/timeline/timelineIsolationPlan";
+import { useTimelineFocusRender } from "@/timeline/useTimelineFocusRender";
+import { db } from "@/global/database/db";
 import { playbackBeat } from "@/timeline/positionBuffer";
 import type { BeatTiming } from "@/timeline/timeMap";
 import { installFieldTestApi } from "@/field/fieldTestApi";
@@ -100,6 +102,16 @@ export default function ThreeField() {
     const { mutateAsync: moveMarchers } = useMutation(
         moveMarchersInTargetMutationOptions(),
     );
+    // Publishes the isolated move's plan (isolation, docs/timeline/research/ownership/09-isolation.md):
+    // its members are drawn, and drops edit, where it puts them. Draws nothing here (#201 draws
+    // the scene it returns)
+    const resolverReady = useTimelineResolverStore((s) => s.status === "ready");
+    useTimelineFocusRender({
+        canvas: null,
+        database: db,
+        enabled: resolverReady,
+        theme: undefined,
+    });
 
     const marchers = useMemo(() => new FieldMarchers(), []);
     const labels = useMemo(
