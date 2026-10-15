@@ -1,5 +1,6 @@
 import Canvas from "@/components/canvas/Canvas";
 import { fieldRenderer } from "@/field/fieldRenderer";
+import { threeZoomControls } from "@/field/three/fieldNavigation";
 import Toolbar from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
 import SidebarModal from "@/components/sidebar/SidebarModal";
@@ -355,7 +356,12 @@ function App() {
                                                             />
                                                         )}
                                                         <CanvasZoomControls
-                                                            canvas={appCanvas}
+                                                            canvas={
+                                                                fieldRenderer() ===
+                                                                "three"
+                                                                    ? threeZoomControls
+                                                                    : appCanvas
+                                                            }
                                                         />
                                                     </div>
                                                     {focussedComponent ===

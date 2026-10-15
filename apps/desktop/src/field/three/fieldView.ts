@@ -1,56 +1,25 @@
 import { create } from "zustand";
+import type { FieldSize, FieldView } from "@/field/editor/view";
+
+export type { FieldView } from "@/field/editor/view";
 
 /**
- * The new field's view: how field units map to the field element's CSS
- * pixels. The one shared view store (ADR 0005 D-2.4): the WebGL camera, the
- * field test API and, later, the SVG overlay all read it, so they can't drift
- * apart.
- *
- * Field units are the timeline's (x right, y toward the front sideline). A
- * field point (x, y) sits at `(panX + x * zoom, panY + y * zoom)` CSS pixels
- * from the element's top-left corner.
- *
- * #192 only fits the field to the element. Zooming and panning (#194) write
- * the same state.
+ * The new field's view store: the one shared view (ADR 0005 D-2.4). The WebGL
+ * camera, the field test API and the SVG overlay all read it, so they can't
+ * drift apart. Navigation (`fieldNavigation.ts`) writes it, following the
+ * rules in `src/field/editor/view.ts`.
  */
-export type FieldView = {
-    /** The field element's size in CSS pixels. */
-    width: number;
-    height: number;
-    /** CSS pixels per field unit. */
-    zoom: number;
-    /** Where field (0, 0) sits, in CSS pixels from the element's top-left. */
-    panX: number;
-    panY: number;
+export type FieldViewState = FieldView & {
+    /**
+     * The zoom shown as 100% in the zoom controls: the zoom the field was last
+     * centered at. Kept, so resizing the panes doesn't change the percentage.
+     */
+    baseZoom: number;
+    /** A right- or middle-drag pan is in progress. */
+    panning: boolean;
+    /** The size of the field shown, in field units, for the pan limit. */
+    field: FieldSize;
 };
-
-/** Field units of margin kept around the field when fitting, for its edge labels. */
-export const FIT_MARGIN = 60;
-
-/**
- * The view that shows the whole field, centered, with `margin` field units
- * around it.
- */
-export function fitView(
-    width: number,
-    height: number,
-    field: { width: number; height: number },
-    margin = FIT_MARGIN,
-): FieldView {
-    const w = field.width + margin * 2;
-    const h = field.height + margin * 2;
-    const zoom =
-        width > 0 && height > 0 && w > 0 && h > 0
-            ? Math.min(width / w, height / h)
-            : 1;
-    return {
-        width,
-        height,
-        zoom,
-        panX: (width - field.width * zoom) / 2,
-        panY: (height - field.height * zoom) / 2,
-    };
-}
 
 /** A field point's position in the element, in CSS pixels. */
 export function fieldToElement(
@@ -84,10 +53,13 @@ export function cameraBounds(view: FieldView) {
     };
 }
 
-export const useFieldViewStore = create<FieldView>(() => ({
+export const useFieldViewStore = create<FieldViewState>(() => ({
     width: 0,
     height: 0,
     zoom: 1,
     panX: 0,
     panY: 0,
+    baseZoom: 1,
+    panning: false,
+    field: { width: 0, height: 0 },
 }));

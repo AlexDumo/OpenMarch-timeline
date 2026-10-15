@@ -9,7 +9,7 @@ import type {
 } from "@/field/fieldTestApi";
 import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
 import type { FieldMarchers } from "./fieldMarchers";
-import { fieldToElement, type FieldView } from "./fieldView";
+import { fieldToElement, type FieldViewState } from "./fieldView";
 import type { CurrentFieldQuality } from "./useFieldQuality";
 
 /** What the field test API reads from the new field. */
@@ -17,7 +17,7 @@ export type ThreeFieldState = {
     marchers: FieldMarchers;
     /** Each marcher's drill number, by id. */
     labels(): ReadonlyMap<number, string>;
-    view(): FieldView;
+    view(): FieldViewState;
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
     pageId(): number | null;
@@ -35,7 +35,8 @@ export type ThreeFieldState = {
 
 /**
  * The field test API over the new field. Read-only. Selection and gestures
- * come from the editor (#193); handles come with #198.
+ * come from the editor (#193), and a pan from navigation (#194); handles come
+ * with #198.
  */
 export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
     return {
@@ -74,7 +75,8 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             return { zoom, pan: { x: panX, y: panY } };
         },
         handles: () => null,
-        activeGesture: () => field.activeGesture(),
+        activeGesture: () =>
+            field.view().panning ? "pan" : field.activeGesture(),
         pageId: () => field.pageId(),
         quality() {
             const { mode, reason, settings } = field.quality();

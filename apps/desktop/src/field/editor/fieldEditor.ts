@@ -6,6 +6,7 @@ import {
     type MoveTransform,
 } from "./moveGesture";
 import { selectionAfterClick } from "./selectionRules";
+import { isPanButton } from "./view";
 
 /**
  * The field editor (ADR 0005 D-1): what a press, click or drag on the field
@@ -393,8 +394,15 @@ export class FieldEditor {
         );
     }
 
+    /** The primary button, unless the press pans (navigation's rule, `isPanButton`). */
     private isEditButton(pointer: FieldPointer) {
-        return pointer.button === 0 && !(this.options.isMac && pointer.ctrl);
+        return (
+            pointer.button === 0 &&
+            !isPanButton(
+                { button: pointer.button, ctrlKey: pointer.ctrl },
+                this.options.isMac ?? false,
+            )
+        );
     }
 
     private cancelGesture() {
