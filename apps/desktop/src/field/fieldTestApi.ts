@@ -11,6 +11,8 @@
  * events.
  */
 
+import type { GlKind, LowQualityReason } from "./fieldQuality";
+
 /** A point in viewport CSS pixels. */
 export type ScreenPoint = { x: number; y: number };
 
@@ -51,6 +53,24 @@ export type FieldTestGesture =
     | "pan"
     | "line";
 
+/** How the field draws on this machine (the new field only, #205). */
+export type FieldTestQuality = {
+    /** `low` in low-quality mode. */
+    mode: "full" | "low";
+    /** Why it's in low-quality mode, or null at full quality. */
+    reason: LowQualityReason | null;
+    /** What draws WebGL: a GPU, software, or nothing; null before it's known. */
+    gl: GlKind | null;
+    /** The WebGL renderer string, when there's WebGL. */
+    renderer: string | null;
+    /** Device pixels per CSS pixel the field draws at; null with no canvas. */
+    pixelRatio: number | null;
+    /** Marcher labels are hidden below this many CSS pixels per em. */
+    labelsHiddenBelow: number;
+    /** The field's WebGL context is lost and not yet recovered. */
+    contextLost: boolean;
+};
+
 export interface FieldTestApi {
     /** Every marcher drawn on the field. */
     marchers(): FieldTestMarcher[];
@@ -67,6 +87,8 @@ export interface FieldTestApi {
     activeGesture(): FieldTestGesture | null;
     /** The id of the page the field shows, or null before one is shown. */
     pageId(): number | null;
+    /** How the field draws on this machine. Only the new field has quality modes. */
+    quality?(): FieldTestQuality;
 }
 
 declare global {

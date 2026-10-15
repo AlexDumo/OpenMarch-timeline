@@ -33,6 +33,11 @@ words:
   - frameless
   - headlessly
   - llvmpipe
+  - softpipe
+  - jank
+  - janky
+  - webglcontextlost
+  - webglcontextrestored
   - libvips
   - libuv
   - sandboxed
