@@ -1193,8 +1193,6 @@ function VideoExport() {
     const { pages, measures, beats } = useTimingObjects()!;
     // Positions come from the resolver (P7.8)
     const storeResolver = useTimelineResolverStore((s) => s.resolver);
-    // The store's resolver is updated in place; a new version redraws the preview
-    const resolverVersion = useTimelineResolverStore((s) => s.version);
     const { data: fieldProperties } = useQuery(fieldPropertiesQueryOptions());
     const { data: marchers, isSuccess: marchersLoaded } = useQuery(
         allMarchersQueryOptions(),
@@ -1229,8 +1227,11 @@ function VideoExport() {
     );
     const [fieldRenderContext, setFieldRenderContext] =
         useState<VideoRenderContext | null>(null);
-    // The new field couldn't start off screen: this machine has no WebGL
-    const [noWebGL, setNoWebGL] = useState(false);
+    // Why the new field couldn't start off screen for the preview, if it couldn't
+    const [previewError, setPreviewError] = useState<
+        "noWebGL" | "failed" | null
+    >(null);
+    const noWebGL = previewError === "noWebGL";
     const [isLoading, setIsLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [currentStep, setCurrentStep] = useState("");
@@ -1244,8 +1245,9 @@ function VideoExport() {
             storeResolver
                 ? new ResolverFrameSampler(storeResolver, beats)
                 : null,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [storeResolver, resolverVersion, beats],
+        // The off-screen field reads the store's resolver at each frame, so an
+        // update in place needs no new preview (a new field costs a WebGL context)
+        [storeResolver, beats],
     );
 
     const durationSeconds = useMemo(() => showEndTime(beats), [beats]);
@@ -1274,7 +1276,8 @@ function VideoExport() {
                 !marchers?.length ||
                 pages.length < 1 ||
                 !previewSampler ||
-                !fieldImage.loaded
+                !fieldImage.loaded ||
+                !appearanceSteps
             ) {
                 return;
             }
@@ -1294,14 +1297,15 @@ function VideoExport() {
                     ctx.dispose();
                     return;
                 }
-                setNoWebGL(false);
+                setPreviewError(null);
                 setFieldRenderContext(ctx);
             } catch (error) {
-                if (error instanceof NoWebGLError) {
-                    if (!cancelled) setNoWebGL(true);
-                    return;
-                }
-                console.error("Failed to initialize video preview:", error);
+                if (!cancelled)
+                    setPreviewError(
+                        error instanceof NoWebGLError ? "noWebGL" : "failed",
+                    );
+                if (!(error instanceof NoWebGLError))
+                    console.error("Failed to initialize video preview:", error);
             }
         }
 
@@ -1377,6 +1381,8 @@ function VideoExport() {
         marchers &&
         marchers.length > 0 &&
         fieldImage.loaded &&
+        // The video would draw every marcher in the theme's default look
+        appearanceSteps &&
         !noWebGL
     );
 
@@ -1593,7 +1599,7 @@ function VideoExport() {
                     durationSeconds={Math.max(durationSeconds, 0.001)}
                     isLoading={previewLoading}
                     loadingLabel={t(
-                        noWebGL
+                        previewError
                             ? "exportCoordinates.exportNotAvailable"
                             : "exportCoordinates.videoPreviewLoading",
                     )}

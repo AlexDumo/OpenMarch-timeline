@@ -31,6 +31,7 @@ let handlersRegistered = false;
 const settings = new Map<string, unknown>();
 /** Where the open show's video export is written: the save dialog's answer. */
 let videoExportPath: string | null = null;
+let videoSessionCount = 0;
 const videoSessions = new Map<
     string,
     { file: fs.promises.FileHandle; path: string }
@@ -106,7 +107,7 @@ function registerHandlers() {
 function registerVideoExportHandlers() {
     ipcMain.handle("export:videoStart", async () => {
         if (!videoExportPath) return null;
-        const sessionId = String(videoSessions.size + 1);
+        const sessionId = String(++videoSessionCount);
         const file = await fs.promises.open(videoExportPath, "w");
         videoSessions.set(sessionId, { file, path: videoExportPath });
         return { sessionId, filePath: videoExportPath };

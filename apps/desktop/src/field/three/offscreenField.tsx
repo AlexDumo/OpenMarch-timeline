@@ -1,10 +1,16 @@
 import { useEffect, useLayoutEffect, type ReactNode } from "react";
-import { advance, createRoot, useThree } from "@react-three/fiber";
+import {
+    advance,
+    createRoot,
+    unmountComponentAtNode,
+    useThree,
+} from "@react-three/fiber";
 import type { OrthographicCamera } from "three";
 import { createStore, type StoreApi } from "zustand";
 import type { FieldProperties } from "@openmarch/core";
 import {
     NoWebGLError,
+    probeWebGL,
     QUALITY_SETTINGS,
     type QualitySettings,
 } from "@/field/fieldQuality";
@@ -16,15 +22,11 @@ import { FieldDrawContext, type FieldDraw } from "./fieldDrawContext";
 import { FieldMarchers } from "./fieldMarchers";
 import { cameraBounds, type FieldView } from "./fieldView";
 import { GlyphAtlas } from "./sdfText";
+import { CHECKPOINT_FONT, LABEL_FONT, NUMBER_FONT } from "./fieldFonts";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
 import LabelsLayer from "./layers/LabelsLayer";
-
-/** The on-screen field's fonts (`ThreeField.tsx`). */
-const LABEL_FONT = 'bold "Courier New", monospace';
-const NUMBER_FONT = '"Times New Roman"';
-const CHECKPOINT_FONT = '"mono"';
 
 export interface OffscreenFieldArgs {
     fieldProperties: FieldProperties;
@@ -97,7 +99,9 @@ export async function createOffscreenField(
         });
     } catch (error) {
         root.unmount();
-        throw new NoWebGLError(error);
+        // Only a context that can't be created means no WebGL; anything else is a bug to report
+        if (probeWebGL().kind === "none") throw new NoWebGLError(error);
+        throw error;
     }
 
     const view = createStore<FieldView>(() => ({
@@ -190,11 +194,13 @@ export async function createOffscreenField(
             if (disposed) return;
             disposed = true;
             // Also disposes the renderer and loses its context, so exports and
-            // previews don't pile up contexts until they're collected
-            root.unmount();
-            atlases.label.dispose();
-            atlases.number.dispose();
-            atlases.checkpoint.dispose();
+            // previews don't pile up contexts. The atlases go once the layers
+            // drawing with them have unmounted.
+            unmountComponentAtNode(canvas, () => {
+                atlases.label.dispose();
+                atlases.number.dispose();
+                atlases.checkpoint.dispose();
+            });
         },
     };
 }
