@@ -181,7 +181,7 @@ const SPEED_HINT = (
 
 /**
  * Playback speed, as a video player has it. A click steps through 0.25×, 0.5×, 1×, 1.5×, 2× and
- * 4× (Shift+click steps back); a right-click opens a slider from 0.1× to 4× with the common
+ * 4× (Shift+click steps back); a right-click opens a slider from 0.1× to 8× with the common
  * speeds as chips. Held, `]` plays at double the speed and `[` at half. Lit off 1×; while a key
  * is held it shows the held speed. The music keeps its pitch (`timeStretch.ts`).
  */

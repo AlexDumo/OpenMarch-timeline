@@ -21,6 +21,8 @@ const HOP = STRETCH_WINDOW / 2;
 const TOLERANCE = 512;
 /** A click plays at most this many samples, or until the next beat's */
 const MAX_CLICK = 8192;
+/** A click cut short by the next one fades out over this many samples, so the cut doesn't pop */
+const CLICK_FADE = 64;
 
 // Periodic Hann, which sums to exactly 1 at a half-window hop
 const HANN = (() => {
@@ -55,7 +57,7 @@ export class StretchPlayer {
     private emitted = HOP;
     private lastStart: number | null = null;
 
-    private clicks: { at: number; left: number }[] = [];
+    private clicks: { at: number; left: number; cut: boolean }[] = [];
     private nextOnset = 0;
 
     setMusic(channels: Float32Array[]): void {
@@ -254,16 +256,24 @@ export class StretchPlayer {
             ) {
                 const at = onsets[this.nextOnset];
                 const next = onsets[this.nextOnset + 1] ?? Infinity;
+                // Until the next beat's click starts, in output samples: faster than 1× the
+                // next click comes sooner than its beat's gap in the track, and they'd pile up
+                const gap = Math.floor((next - at) / Math.max(1, this.rate));
                 this.clicks.push({
                     at: Math.floor(at),
-                    left: Math.min(MAX_CLICK, Math.floor(next - at)),
+                    left: Math.min(MAX_CLICK, gap),
+                    cut: gap < MAX_CLICK && this.rate > 1,
                 });
                 this.nextOnset++;
             }
             let sample = 0;
             for (const click of this.clicks) {
                 if (click.left <= 0) continue;
-                sample += track[click.at] ?? 0;
+                const fade =
+                    click.cut && click.left < CLICK_FADE
+                        ? click.left / CLICK_FADE
+                        : 1;
+                sample += (track[click.at] ?? 0) * fade;
                 click.at++;
                 click.left--;
             }

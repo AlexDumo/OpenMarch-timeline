@@ -47,8 +47,8 @@ describe("StretchPlayer", () => {
     });
 
     it("keeps the pitch at other speeds, and covers the show at their rate", () => {
-        const source = sine(12, 440);
-        for (const rate of [0.5, 2]) {
+        const source = sine(20, 440);
+        for (const rate of [0.5, 2, 8]) {
             const player = new StretchPlayer();
             player.setMusic([source]);
             player.schedule({ kind: "play", frame: 0, position: 0, rate });
@@ -90,6 +90,22 @@ describe("StretchPlayer", () => {
             expect(clicks[start + 200]).toBeCloseTo(0.5, 5);
             expect(clicks[start + 400]).toBe(0);
         }
+    });
+
+    it("at 8× cuts each click where the next starts, so they never pile up", () => {
+        const click = new Float32Array(3000).fill(0.9);
+        const beat = RATE / 2;
+        const onsets = Float64Array.from({ length: 40 }, (_, b) => b * beat);
+        const track = new Float32Array(21 * RATE);
+        for (const at of onsets) track.set(click, at);
+        const player = new StretchPlayer();
+        player.setMusic([new Float32Array(21 * RATE)]);
+        player.setMetronome(track, onsets);
+        player.schedule({ kind: "play", frame: 0, position: 0, rate: 8 });
+        const { clicks } = render(player, RATE);
+        // A beat every 2756 output samples, each click 3000 long: never two at once
+        expect(Math.max(...clicks)).toBeCloseTo(0.9, 5);
+        expect(clicks[Math.floor(beat / 8) - 1]).toBeLessThan(0.05);
     });
 
     it("is silent once stopped", () => {

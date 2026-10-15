@@ -3,7 +3,8 @@ import { create } from "zustand";
 /** The speeds a click on the speed button steps through, in order; it wraps from the last */
 export const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 1.5, 2, 4] as const;
 export const MIN_PLAYBACK_SPEED = 0.1;
-export const MAX_PLAYBACK_SPEED = 4;
+// Holding ] at 4× doubles to this
+export const MAX_PLAYBACK_SPEED = 8;
 
 /** A held speed key: `]` plays at double the speed while held, `[` at half */
 export type PlaybackSpeedHold = "faster" | "slower";

@@ -37,8 +37,13 @@ describe("PlaybackSpeedStore", () => {
         );
         setSpeed(4);
         expect(effectivePlaybackSpeed(usePlaybackSpeedStore.getState())).toBe(
-            4,
+            8,
         );
+        setSpeed(8);
+        expect(effectivePlaybackSpeed(usePlaybackSpeedStore.getState())).toBe(
+            8,
+        );
+        setSpeed(4);
         setHold("slower");
         expect(effectivePlaybackSpeed(usePlaybackSpeedStore.getState())).toBe(
             2,
@@ -51,7 +56,7 @@ describe("PlaybackSpeedStore", () => {
 
     it("clamps and formats", () => {
         usePlaybackSpeedStore.getState().setSpeed(10);
-        expect(usePlaybackSpeedStore.getState().speed).toBe(4);
+        expect(usePlaybackSpeedStore.getState().speed).toBe(8);
         expect(formatPlaybackSpeed(1)).toBe("1×");
         expect(formatPlaybackSpeed(0.25)).toBe("0.25×");
         expect(formatPlaybackSpeed(1.5)).toBe("1.5×");
