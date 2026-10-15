@@ -71,6 +71,6 @@ both fields.
 see its README) captures every template, theme and variant on both fields at
 the same view and writes side-by-side and diff PNGs. **#208** can extend its
 case list to the demo shows and marchers. Differences it shows, all expected:
-lines are pixel-snapped on the new field where Fabric antialiases them over
+lines are pixel-snapped on the new field where Fabric smooths them over
 two pixels; yard numbers are centered on their yard line (the export's rule)
 where Fabric left-aligns them 22 units left of it.
