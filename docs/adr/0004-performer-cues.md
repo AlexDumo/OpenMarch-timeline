@@ -1,9 +1,12 @@
 # 0004: Performer cues in the show file
 
-- Status: proposed
+- Status: Accepted by the owner on 2026-10-15 for D-1 to D-6. D-7 (ADR 0002
+  amendments) is pending the owner's review of the planner (#119) and the
+  layered renderer (#120).
 - Date: 2026-10-10
 - Amended: 2026-10-11, approved by the owner: Carry, Silk and Uniform
-  channels, and item tables beside cues (see the amendment at the end)
+  channels, and item tables beside cues; 2026-10-15: timelines only (see the
+  amendments at the end)
 
 ## Context
 
@@ -377,3 +380,26 @@ and item Placement changes under their page with their count. Behavior cues
   in history and repair.
 - E2E: a Silk cue in Visuals mode swaps the silk in the 3D window at its
   count without reopening.
+
+## Amendment 2026-10-15: timelines only
+
+- Amends: D-5, D-6 Positions (in D-7) and D-7 Sync, after main dropped page
+  mode
+
+Page mode is gone: main's `0020_drop_page_era` removes the page-era tables,
+and a page-era file converts to a timeline when it opens.
+
+- **D-5:** "the tables behave the same in page mode and timeline mode" no
+  longer holds. The cue migration is **0022**, after the timeline and
+  Library migrations, not "after 0017 and 0018". A page-era file gets the cue
+  tables, and their undo triggers, only when it converts on open; until then
+  the history triggers and cue cleanup skip the tables the file lacks.
+- **D-7, ADR 0002 D-6 Positions:** "page mode keeps `marcher_pages`" is moot.
+  `view3d/positions.ts` on main already builds the window's own resolver
+  from the timeline tables. It samples it at any show time (a time becomes
+  a beat through the tempo map), not only at count boundaries.
+- **D-7, ADR 0002 D-4 Sync:** already on main, with one difference: after
+  each batch of committed timeline changes the editor relays
+  `VIEW3D_TIMELINE_QUERY_KEY` (`["view3d_timeline"]`, the window's resolver
+  query) on `view3d:invalidate`, not a synthetic `["timeline"]` key. No new
+  channel. The `selection` payload still carries `selectedPageId`.
