@@ -6,18 +6,13 @@ import type { FieldMarchers } from "../fieldMarchers";
 import { useFieldViewStore } from "../fieldView";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
+import { currentQualitySettings } from "../useFieldQuality";
 
 /** fabric's marcher label: 14 field units, its center 2.2 dot radii above the dot. */
 const LABEL_SIZE = 14;
 const LABEL_LIFT = 5 * 2.2;
 /** The baseline's offset below the label's center, in em. */
 const CENTER_BASELINE = 0.35;
-/**
- * Labels scale with the field and fade out when they'd be too small to read:
- * fully drawn from `FADE_TO` CSS pixels per em, gone under `FADE_FROM`.
- */
-const FADE_FROM = 4;
-const FADE_TO = 7;
 
 /**
  * Every marcher's label (drill number) in one instanced draw of SDF glyphs,
@@ -64,13 +59,20 @@ export default function LabelsLayer({
 
     useFrame(() => {
         const { zoom } = useFieldViewStore.getState();
-        text.opacity = Math.min(
+        // Labels scale with the field and fade out when they'd be too small to read
+        // (`QUALITY_SETTINGS`: low-quality mode hides them sooner)
+        const { labelFadeFrom, labelFadeTo } = currentQualitySettings();
+        const opacity = Math.min(
             1,
             Math.max(
                 0,
-                (LABEL_SIZE * zoom - FADE_FROM) / (FADE_TO - FADE_FROM),
+                (LABEL_SIZE * zoom - labelFadeFrom) /
+                    (labelFadeTo - labelFadeFrom),
             ),
         );
+        text.opacity = opacity;
+        // Hidden labels cost nothing to draw, which matters most in software GL
+        text.mesh.visible = opacity > 0;
         const last = drawn.current;
         let shown = last.shown;
         if (
