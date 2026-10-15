@@ -6,7 +6,7 @@ export type { FieldView } from "@/field/editor/view";
 /**
  * The new field's view store: the one shared view (ADR 0005 D-2.4). The WebGL
  * camera, the field test API and the SVG overlay all read it, so they can't
- * drift apart. Navigation (`useFieldNavigation`) writes it, following the
+ * drift apart. Navigation (`fieldNavigation.ts`) writes it, following the
  * rules in `src/field/editor/view.ts`.
  */
 export type FieldViewState = FieldView & {

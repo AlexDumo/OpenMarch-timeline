@@ -54,7 +54,7 @@ Append notes the next tickets need: file locations, seams, surprises.
   both), `pinchStep` (touch) and `isPanButton`. Unit tests in
   `editor/__test__/view.test.ts`.
 - `apps/desktop/src/field/three/fieldNavigation.ts`: the thin DOM side.
-  `attachFieldNavigation(surface, settings)` listens on the field's surface;
+  `attachFieldNavigation(surface, field, settings)`, `isPanPress`,
   `resetView` and `fitFullscreen`; `threeZoomControls`, which the existing
   `CanvasZoomControls` drives (its prop is now the `ZoomControlsCanvas`
   interface, which `OpenMarchCanvas` already satisfies; no Fabric behavior
@@ -65,13 +65,15 @@ Append notes the next tickets need: file locations, seams, surprises.
 
 **Seams for the editor tickets.**
 
-- **Put the SVG overlay inside the surface div** in `ThreeField.tsx` (the one
-  with `touch-none` around the `Canvas`), so wheel, pan drags and touch reach
-  the navigation over it.
-- Pan presses (right, middle, Ctrl+left on a Mac) are taken in the capture
-  phase on the surface and stopped there, so **#193+ pointer handlers never
-  see them** and only need to handle the left button. Touch presses are left
-  alone (touch editing is out of scope).
+- Navigation listens on `ThreeField`'s root div (the one with
+  `data-testid="threeField"`), so it reaches the SVG overlay too. It
+  measures from the canvas element, and leaves presses on controls
+  (buttons, links, inputs, menus, dialogs) to them.
+- **Field pointer handlers (#193+) skip pan presses**: call `isPanPress(event)`
+  from `fieldNavigation.ts` (right, middle, Ctrl+left on a Mac) and only
+  handle the rest. Navigation doesn't stop their propagation, so
+  document-level "pointer down outside" handlers still see them. Touch
+  presses aren't pan presses (touch editing is out of scope).
 - `activeGesture()` returns `"pan"` while `panning`; editor gestures should
   combine with it rather than replace it.
 - `zoomAt`/`clampPan` are what "zoom to collisions" (#201) should use, with
@@ -79,14 +81,17 @@ Append notes the next tickets need: file locations, seams, surprises.
 
 **Behavior notes.**
 
-- The opening view is set at the first size and again 250 ms after the field
-  and a page are loaded, as Fabric's canvas does: the panels around the field
-  settle after it mounts. A resize keeps the zoom and the top-left anchor; in
+- The view opens once the field and a page are loaded, and centers again
+  250 ms later, as Fabric's canvas does: the panels around the field settle
+  after it mounts. A resize keeps the zoom and the top-left anchor; in
   fullscreen it fits again.
 - The new field applies the pan limit after every navigation. Fabric skipped
   it for right-drag, the zoom buttons and touch pinch (a right-drag could take
   the field off screen until the next wheel event). Flagged on the PR for the
   owner.
+- The resize and the zoom buttons' limits are Fabric's as is: a resize
+  doesn't re-apply the pan limit, and the buttons disable by the percentage
+  (relative to the base zoom), so they can stay enabled at the real limits.
 - Fullscreen fit is Fabric's as is, including that it measures the room with
   the 128 px above the field, so a height-limited fit runs the field's back
   edge up to about 40 px off the bottom (1600 × 1000 window). The

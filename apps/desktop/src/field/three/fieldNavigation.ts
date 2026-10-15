@@ -2,6 +2,7 @@ import {
     baseZoom,
     centerAtBase,
     clampPan,
+    clampZoom,
     fullscreenFit,
     isPanButton,
     panBy,
@@ -13,6 +14,7 @@ import {
     type NavigationSettings,
 } from "@/field/editor/view";
 import type { ZoomControlsCanvas } from "@/components/canvas/CanvasZoomControls";
+import { isMacPlatform } from "@/shortcuts/platform";
 import { useFieldViewStore } from "./fieldView";
 
 /**
@@ -23,10 +25,13 @@ import { useFieldViewStore } from "./fieldView";
 
 const view = () => useFieldViewStore.getState();
 
-/** Moves the view to `next`, within the pan limit. */
+/** Moves the view to `next`, within the zoom and pan limits. */
 function setView(next: FieldView) {
     const { field } = view();
-    const { width, height, zoom, panX, panY } = clampPan(next, field);
+    const { width, height, zoom, panX, panY } = clampPan(
+        { ...next, zoom: clampZoom(next.zoom) },
+        field,
+    );
     useFieldViewStore.setState({ width, height, zoom, panX, panY });
 }
 
@@ -75,9 +80,22 @@ export const threeZoomControls: ZoomControlsCanvas = {
     requestRenderAll: () => {},
 };
 
-const isMac = () =>
-    typeof navigator !== "undefined" &&
-    navigator.platform.toUpperCase().includes("MAC");
+/**
+ * Whether a press pans the field: right, middle, or Ctrl+left on a Mac. The
+ * field's other pointer handling (selection, gestures) skips these.
+ */
+export const isPanPress = (event: PointerEvent) =>
+    event.pointerType !== "touch" && isPanButton(event, isMacPlatform());
+
+/**
+ * Presses on the field's own controls (the isolation bar, badges, buttons in
+ * the overlay) are theirs, not navigation.
+ */
+const onControl = (event: Event) =>
+    event.target instanceof Element &&
+    event.target.closest(
+        "button, a, input, select, textarea, [role='button'], [role='menu'], [role='dialog']",
+    ) !== null;
 
 type Local = (clientX: number, clientY: number) => ElementPoint;
 
@@ -103,10 +121,11 @@ function listen(
  *
  * - Wheel: zooms at the pointer (mouse mode) or pans (trackpad mode); a pinch
  *   or Ctrl/Cmd+wheel zooms in either mode.
- * - Right-drag (Ctrl-drag on a Mac) and middle-drag pan, one to one. These
- *   presses are taken in the capture phase and stopped, so the field's own
- *   pointer handling (selection, gestures) never sees them.
+ * - Right-drag (Ctrl-drag on a Mac) and middle-drag pan, one to one. The
+ *   field's other pointer handling skips these presses (`isPanPress`).
  * - Touch: one finger pans, two pinch.
+ *
+ * Presses on the field's own controls are left to them.
  */
 export function attachFieldNavigation(
     surface: HTMLElement,
@@ -154,10 +173,8 @@ function listenForWheel(
 function listenForPanDrags(surface: HTMLElement) {
     let pan: { pointerId: number; x: number; y: number } | null = null;
     const onPointerDown = (event: PointerEvent) => {
-        if (event.pointerType === "touch") return;
-        if (!isPanButton(event, isMac())) return;
+        if (!isPanPress(event) || onControl(event)) return;
         event.preventDefault();
-        event.stopPropagation();
         if (pan) return;
         pan = {
             pointerId: event.pointerId,
@@ -169,7 +186,6 @@ function listenForPanDrags(surface: HTMLElement) {
     };
     const onPointerMove = (event: PointerEvent) => {
         if (!pan || event.pointerId !== pan.pointerId) return;
-        event.stopPropagation();
         const dx = event.clientX - pan.x;
         const dy = event.clientY - pan.y;
         pan.x = event.clientX;
@@ -178,7 +194,6 @@ function listenForPanDrags(surface: HTMLElement) {
     };
     const endPan = (event: PointerEvent) => {
         if (!pan || event.pointerId !== pan.pointerId) return;
-        event.stopPropagation();
         pan = null;
         useFieldViewStore.setState({ panning: false });
     };
@@ -193,9 +208,12 @@ function listenForPanDrags(surface: HTMLElement) {
             // The browser's own use of these presses: middle-click autoscroll,
             // and the context menu at the end of a right-drag
             mousedown: (event: MouseEvent) => {
-                if (event.button === 1) event.preventDefault();
+                if (event.button === 1 && !onControl(event))
+                    event.preventDefault();
             },
-            contextmenu: (event: MouseEvent) => event.preventDefault(),
+            contextmenu: (event: MouseEvent) => {
+                if (!onControl(event)) event.preventDefault();
+            },
         },
         { capture: true },
     );
@@ -221,16 +239,20 @@ function listenForTouch(
         touches.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
 
     const onTouchStart = (event: TouchEvent) => {
+        // A tap on a control must still click it
+        if (onControl(event)) return;
         event.preventDefault();
         Array.from(event.touches).forEach(remember);
         if (event.touches.length === 2) pinchDistance = distance(event.touches);
     };
     const onTouchMove = (event: TouchEvent) => {
+        if (touches.size === 0) return;
         event.preventDefault();
+        const previous = new Map(touches);
+        Array.from(event.touches).forEach(remember);
         if (event.touches.length === 1) {
             const touch = event.touches[0];
-            const last = touches.get(touch.identifier);
-            remember(touch);
+            const last = previous.get(touch.identifier);
             if (!last) return;
             const speed = settings().trackpadPanSensitivity;
             setView(

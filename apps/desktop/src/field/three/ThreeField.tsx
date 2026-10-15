@@ -3,6 +3,7 @@ import {
     useLayoutEffect,
     useMemo,
     useRef,
+    useState,
     type RefObject,
 } from "react";
 import clsx from "clsx";
@@ -139,8 +140,9 @@ export default function ThreeField() {
         );
     }, []);
     // The view opens as Fabric's canvas, which it creates once the field and a
-    // page are loaded
-    const ready = !!fieldProperties && !!selectedPage;
+    // page are loaded. Latched: a page briefly unselected mustn't reset the view
+    const [ready, setReady] = useState(false);
+    if (!ready && fieldProperties && selectedPage) setReady(true);
     useFullscreenFit(root, isFullscreen, ready);
 
     return (

@@ -329,9 +329,15 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
         const { page } = app;
         if (target === "electron") {
             // The window was already loading when the storage was set up
-            // (`openInElectron`): load it again with it
+            // (`openInElectron`): load it again with it, unless only the
+            // field switch was asked for and that already took
             await page.waitForLoadState("domcontentloaded");
-            await page.reload();
+            const current = await page.evaluate(
+                (key) => localStorage.getItem(key),
+                FIELD_STORAGE_KEY,
+            );
+            if (uiSettings || (current ?? "fabric") !== field)
+                await page.reload();
         }
 
         const pageErrors: string[] = [];
