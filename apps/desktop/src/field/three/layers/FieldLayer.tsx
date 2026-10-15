@@ -9,7 +9,8 @@ import {
     ShaderMaterial,
 } from "three";
 import type { FieldProperties } from "@openmarch/core";
-import { CAP_HEIGHT, fieldGeometry, parseRgba } from "../fieldGeometry";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { fieldGeometry, rgba01, type FieldRects } from "../fieldGeometry";
 import { useFieldViewStore } from "../fieldView";
 import { TextBatch, type GlyphAtlas, type TextLabel } from "../sdfText";
 
@@ -39,13 +40,50 @@ void main() {
     gl_FragColor = vColor;
 }`;
 
-/** The baseline's offset below a text's center, in em: half of fabric's cap height. */
-const CENTER_BASELINE = CAP_HEIGHT / 2;
+/** Rectangles in one instanced draw, with lines kept at least a device pixel wide. */
+function rectsMesh(rects: FieldRects, renderOrder: number) {
+    const geometry = new InstancedBufferGeometry();
+    geometry.setAttribute(
+        "position",
+        new BufferAttribute(
+            new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]),
+            3,
+        ),
+    );
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+    geometry.setAttribute(
+        "aBounds",
+        new InstancedBufferAttribute(rects.bounds, 4),
+    );
+    geometry.setAttribute(
+        "aColor",
+        new InstancedBufferAttribute(rects.colors, 4),
+    );
+    geometry.instanceCount = rects.count;
+    const mesh = new Mesh(
+        geometry,
+        new ShaderMaterial({
+            vertexShader: VERTEX,
+            fragmentShader: FRAGMENT,
+            uniforms: { uPixel: { value: 1 } },
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            side: DoubleSide,
+        }),
+    );
+    mesh.frustumCulled = false;
+    mesh.renderOrder = renderOrder;
+    return mesh;
+}
 
 /**
  * The field: background, grid, half lines, yard lines, hashes, the border,
- * yard numbers and the checkpoint labels around it. Rebuilt only when the
- * field properties change.
+ * yard numbers and the checkpoint labels around it, as `planField2d` lays
+ * them out. The background draws under the field image
+ * (`BackgroundImageLayer`, render order -1), everything else over it.
+ * Rebuilt only when the field properties or the grid and half line settings
+ * change.
  */
 export default function FieldLayer({
     fieldProperties,
@@ -53,47 +91,21 @@ export default function FieldLayer({
     labelAtlas,
 }: {
     fieldProperties: FieldProperties;
+    /** Fabric's yard number font. */
     numberAtlas: GlyphAtlas;
+    /** Fabric's checkpoint label font. */
     labelAtlas: GlyphAtlas;
 }) {
     const invalidate = useThree((s) => s.invalidate);
     const dpr = useThree((s) => s.viewport.dpr);
+    const gridLines = useUiSettingsStore((s) => s.uiSettings.gridLines);
+    const halfLines = useUiSettingsStore((s) => s.uiSettings.halfLines);
 
     const layer = useMemo(() => {
-        const { rects, texts } = fieldGeometry(fieldProperties);
-        const geometry = new InstancedBufferGeometry();
-        geometry.setAttribute(
-            "position",
-            new BufferAttribute(
-                new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]),
-                3,
-            ),
-        );
-        geometry.setIndex([0, 1, 2, 0, 2, 3]);
-        geometry.setAttribute(
-            "aBounds",
-            new InstancedBufferAttribute(rects.bounds, 4),
-        );
-        geometry.setAttribute(
-            "aColor",
-            new InstancedBufferAttribute(rects.colors, 4),
-        );
-        geometry.instanceCount = rects.count;
-        const lines = new Mesh(
-            geometry,
-            new ShaderMaterial({
-                vertexShader: VERTEX,
-                fragmentShader: FRAGMENT,
-                uniforms: { uPixel: { value: 1 } },
-                transparent: true,
-                depthTest: false,
-                depthWrite: false,
-                side: DoubleSide,
-            }),
-        );
-        lines.frustumCulled = false;
-        lines.renderOrder = 0;
-
+        const { background, rects, texts } = fieldGeometry(fieldProperties, {
+            gridLines,
+            halfLines,
+        });
         const batch = (atlas: GlyphAtlas, font: "number" | "label") => {
             const chosen = texts.filter((text) => text.font === font);
             const text = new TextBatch(atlas);
@@ -101,11 +113,12 @@ export default function FieldLayer({
                 chosen.map(
                     (t): TextLabel => ({
                         text: t.text,
-                        size: t.capHeight / CAP_HEIGHT,
+                        size: t.size,
                         rotation: t.rotation,
                         align: t.align,
-                        baseline: CENTER_BASELINE,
-                        color: parseRgba(t.color),
+                        baseline: t.baseline,
+                        letterSpacing: t.letterSpacing,
+                        color: rgba01(t.color),
                     }),
                 ),
             );
@@ -114,17 +127,20 @@ export default function FieldLayer({
             return text;
         };
         return {
-            lines,
+            background: rectsMesh(background, -2),
+            lines: rectsMesh(rects, 0),
             numbers: batch(numberAtlas, "number"),
             labels: batch(labelAtlas, "label"),
         };
-    }, [fieldProperties, numberAtlas, labelAtlas]);
+    }, [fieldProperties, gridLines, halfLines, numberAtlas, labelAtlas]);
 
     useEffect(() => {
         invalidate();
         return () => {
-            layer.lines.geometry.dispose();
-            layer.lines.material.dispose();
+            for (const mesh of [layer.background, layer.lines]) {
+                mesh.geometry.dispose();
+                mesh.material.dispose();
+            }
             layer.numbers.dispose();
             layer.labels.dispose();
         };
@@ -132,11 +148,14 @@ export default function FieldLayer({
 
     useFrame(() => {
         const { zoom } = useFieldViewStore.getState();
-        layer.lines.material.uniforms.uPixel.value = 1 / (zoom * dpr);
+        const pixel = 1 / (zoom * dpr);
+        layer.background.material.uniforms.uPixel.value = pixel;
+        layer.lines.material.uniforms.uPixel.value = pixel;
     });
 
     return (
         <>
+            <primitive object={layer.background} />
             <primitive object={layer.lines} />
             <primitive object={layer.numbers.mesh} />
             <primitive object={layer.labels.mesh} />

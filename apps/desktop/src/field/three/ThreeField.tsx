@@ -11,6 +11,7 @@ import {
 } from "@/hooks/queries";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useTimingObjects } from "@/hooks";
+import { useFieldImage } from "@/view3d/window/useFieldImage";
 import { useMarcherAppearanceSteps } from "@/hooks/useMarcherAppearanceSteps";
 import type { AppearanceStepsByMarcherId } from "@/services/appearance/appearanceSteps";
 import { getLivePlaybackPosition } from "@/components/timeline/audio/AudioPlayer";
@@ -26,17 +27,25 @@ import { useIsolationPlanStore } from "@/timeline/timelineIsolationPlan";
 import { playbackBeat } from "@/timeline/positionBuffer";
 import type { BeatTiming } from "@/timeline/timeMap";
 import { installFieldTestApi } from "@/field/fieldTestApi";
+import { planFieldImage } from "@/field/fieldPlan";
 import { FieldMarchers } from "./fieldMarchers";
 import { cameraBounds, fitView, useFieldViewStore } from "./fieldView";
 import { GlyphAtlas } from "./sdfText";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
+import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
 import LabelsLayer from "./layers/LabelsLayer";
 
-/** fabric's fonts: the marcher and checkpoint labels' monospace, and its default for yard numbers. */
+/** fabric's fonts: the marcher labels'. */
 const LABEL_FONT = 'bold "Courier New", monospace';
-const NUMBER_FONT = '"Times New Roman", serif';
+/**
+ * The field's fonts, named as fabric names them (`createFieldGrid`): its
+ * default for yard numbers, and "mono" for checkpoint labels, a family that
+ * doesn't exist, so the platform's fallback draws them in both fields.
+ */
+const NUMBER_FONT = '"Times New Roman"';
+const CHECKPOINT_FONT = '"mono"';
 
 /**
  * The three.js field (ADR 0005), behind the dev switch in `fieldRenderer.ts`.
@@ -58,6 +67,21 @@ export default function ThreeField() {
     const { selectedPage } = useSelectedPage()!;
     const { isPlaying } = useIsPlaying()!;
     const { beats } = useTimingObjects()!;
+    const { image: fieldImage } = useFieldImage();
+    // Planned once, for the layer that draws it and the field test API
+    const fieldImagePlan = useMemo(
+        () =>
+            fieldProperties
+                ? planFieldImage(
+                      fieldProperties,
+                      fieldImage && {
+                          width: fieldImage.width,
+                          height: fieldImage.height,
+                      },
+                  )
+                : null,
+        [fieldProperties, fieldImage],
+    );
     const appearanceSteps = useMarcherAppearanceSteps(true);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
@@ -75,6 +99,7 @@ export default function ThreeField() {
         () => ({
             label: new GlyphAtlas(LABEL_FONT),
             number: new GlyphAtlas(NUMBER_FONT),
+            checkpoint: new GlyphAtlas(CHECKPOINT_FONT),
         }),
         [],
     );
@@ -82,6 +107,7 @@ export default function ThreeField() {
         () => () => {
             atlases.label.dispose();
             atlases.number.dispose();
+            atlases.checkpoint.dispose();
         },
         [atlases],
     );
@@ -91,11 +117,13 @@ export default function ThreeField() {
     const latest = useRef({
         labels,
         pageId: selectedPage?.id ?? null,
+        fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
     });
     latest.current = {
         labels,
         pageId: selectedPage?.id ?? null,
+        fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
     };
     useEffect(() => {
@@ -106,6 +134,7 @@ export default function ThreeField() {
                 view: () => useFieldViewStore.getState(),
                 element: () => element.current,
                 pageId: () => latest.current.pageId,
+                fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
             }),
         );
@@ -157,7 +186,11 @@ export default function ThreeField() {
                     <FieldLayer
                         fieldProperties={fieldProperties}
                         numberAtlas={atlases.number}
-                        labelAtlas={atlases.label}
+                        labelAtlas={atlases.checkpoint}
+                    />
+                    <BackgroundImageLayer
+                        image={fieldImage}
+                        placement={fieldImagePlan}
                     />
                     <MarchersLayer
                         marchers={marchers}

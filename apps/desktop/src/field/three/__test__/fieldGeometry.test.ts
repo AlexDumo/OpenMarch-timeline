@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { rgbaToString, type FieldProperties } from "@openmarch/core";
+import { FieldProperties } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
-import { fieldGeometry, parseRgba } from "../fieldGeometry";
+import { fieldGeometry, rgba01 } from "../fieldGeometry";
 
 const fp: FieldProperties =
     FieldPropertiesTemplates.HIGH_SCHOOL_FOOTBALL_FIELD_NO_END_ZONES;
@@ -24,17 +24,58 @@ describe("fieldGeometry", () => {
     const geometry = fieldGeometry(fp);
     const all = rects(geometry);
 
-    it("keeps every rectangle on the field", () => {
+    it("keeps every rectangle on the field but the border, just outside it", () => {
+        // The border is three grid lines wide, from 2.5 outside the edge to 0.5 inside
         for (const r of all) {
-            expect(r.minX).toBeGreaterThanOrEqual(-1e-3);
-            expect(r.minY).toBeGreaterThanOrEqual(-1e-3);
-            expect(r.maxX).toBeLessThanOrEqual(fp.width + 1e-3);
-            expect(r.maxY).toBeLessThanOrEqual(fp.height + 1e-3);
+            expect(r.minX).toBeGreaterThanOrEqual(-2.5 - 1e-3);
+            expect(r.minY).toBeGreaterThanOrEqual(-2.5 - 1e-3);
+            expect(r.maxX).toBeLessThanOrEqual(fp.width + 2.5 + 1e-3);
+            expect(r.maxY).toBeLessThanOrEqual(fp.height + 2.5 + 1e-3);
         }
+        // Lines on the edges hang half a stroke over them; only the border goes further
+        const over = 0.5 + 1e-3;
+        const outside = all.filter(
+            (r) =>
+                r.minX < -over ||
+                r.minY < -over ||
+                r.maxX > fp.width + over ||
+                r.maxY > fp.height + over,
+        );
+        expect(outside).toHaveLength(4);
+    });
+
+    it("draws the background under everything, over the whole field", () => {
+        expect(Array.from(geometry.background.bounds)).toEqual(
+            [0, 0, fp.width, fp.height].map(Math.fround),
+        );
+        expect(Array.from(geometry.background.colors)).toEqual(
+            rgba01(fp.theme.background).map(Math.fround),
+        );
+    });
+
+    it("leaves out grid lines and half lines when the settings hide them", () => {
+        const color = (c: number[]) => (r: { color: number[] }) =>
+            r.color.every((v, i) => Math.abs(v - c[i]) < 1e-6);
+        const tertiary = color(rgba01(fp.theme.tertiaryStroke));
+        const secondary = color(rgba01(fp.theme.secondaryStroke));
+        const count = (gridLines: boolean, halfLines: boolean) => {
+            const r = rects(fieldGeometry(fp, { gridLines, halfLines }));
+            return {
+                grid: r.filter(tertiary).length,
+                // Half lines and the side-line hashes share the secondary color
+                secondary: r.filter(secondary).length,
+            };
+        };
+        const both = count(true, true);
+        expect(both.grid).toBeGreaterThan(0);
+        expect(count(false, true).grid).toBe(0);
+        expect(count(false, true).secondary).toBe(both.secondary);
+        expect(count(true, false).grid).toBe(both.grid);
+        expect(count(true, false).secondary).toBeLessThan(both.secondary);
     });
 
     it("centers each yard line on its checkpoint, where a dot on it is drawn", () => {
-        const primary = parseRgba(rgbaToString(fp.theme.primaryStroke));
+        const primary = rgba01(fp.theme.primaryStroke);
         const fullHeight = all.filter(
             (r) =>
                 r.maxY - r.minY > fp.height - 1e-3 &&
@@ -68,6 +109,8 @@ describe("fieldGeometry", () => {
             );
             expect(at.map((t) => t.rotation).sort()).toEqual([0, Math.PI]);
         }
+        // Fabric's charSpacing 160
+        for (const t of numbers) expect(t.letterSpacing).toBeCloseTo(0.16);
         // Home numbers are between the front sideline and the field's middle
         for (const t of numbers.filter((n) => n.rotation === 0)) {
             expect(t.y).toBeGreaterThan(yPixels / 2);
@@ -94,5 +137,30 @@ describe("fieldGeometry", () => {
                 true,
             );
         }
+    });
+});
+
+describe("fieldGeometry variants", () => {
+    it("draws the y checkpoints as lines across the field without hashes", () => {
+        const noHashes = new FieldProperties({ ...fp, useHashes: false });
+        const lines = rects(fieldGeometry(noHashes)).filter(
+            (r) => r.maxX - r.minX >= fp.width - 1e-3 && r.maxY - r.minY < 2,
+        );
+        const visibleYs = fp.yCheckpoints.filter((c) => c.visible).length;
+        // Plus the border's top and bottom
+        expect(lines.length).toBeGreaterThanOrEqual(visibleYs);
+    });
+
+    it("drops the checkpoint labels a side hides", () => {
+        const hidden = new FieldProperties({
+            ...fp,
+            topLabelsVisible: false,
+            bottomLabelsVisible: false,
+            leftLabelsVisible: false,
+            rightLabelsVisible: false,
+        });
+        expect(
+            fieldGeometry(hidden).texts.filter((t) => t.font === "label"),
+        ).toHaveLength(0);
     });
 });
