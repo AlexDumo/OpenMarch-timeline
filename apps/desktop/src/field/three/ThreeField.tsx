@@ -65,6 +65,7 @@ import {
 } from "./fieldNavigation";
 import { GlyphAtlas } from "./sdfText";
 import { selectionBoxPadding } from "./selectionRing";
+import { drawnSelectionBox, selectionHandles } from "./selectionFrame";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
@@ -369,6 +370,13 @@ function ThreeFieldView() {
                 contextLost: () => useFieldQualityStore.getState().contextLost,
                 selection: () => selection.current,
                 activeGesture: () => editor.activeGesture(),
+                handles() {
+                    const box = drawnSelectionBox(marchers, editor);
+                    return (
+                        box &&
+                        selectionHandles(box, useFieldViewStore.getState().zoom)
+                    );
+                },
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
                 dimmed: (id) => dimming.isDimmed(id),

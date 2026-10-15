@@ -6,13 +6,25 @@ import {
     type AreaPorts,
     type AreaShape,
 } from "./areaGestures";
+import {
+    boundsOf,
+    centerOf,
+    handleAt,
+    handleCursor,
+    handlePoints,
+    rotatePositions,
+    type HandleId,
+    type SelectionFrame,
+} from "./groupTransform";
 import { hitRadius, marcherAt, type DrawnMarchers } from "./hitTest";
 import {
     MoveGesture,
     type MarcherPosition,
     type MoveTransform,
 } from "./moveGesture";
+import type { FieldRect } from "./selectionArea";
 import { selectionAfterClick } from "./selectionRules";
+import { RotateGesture, ScaleGesture } from "./transformGestures";
 import { isPanButton } from "./view";
 
 /**
@@ -68,7 +80,7 @@ export type FieldEditorPorts = {
     /**
      * How far the selection box drawn around a multi-selection reaches past
      * its outermost marchers, in field units. A drag from inside it moves the
-     * selection. 0 when omitted.
+     * selection, and its handles (#198) sit on it. 0 when omitted.
      */
     selectionBoxPadding?(): number;
     /**
@@ -125,8 +137,10 @@ export interface FieldGesture {
 /** A primary-button press that hasn't become a drag (yet). */
 export type FieldPress = {
     start: FieldPointer;
-    /** The marcher pressed on, or null on empty field. */
+    /** The marcher pressed on, or null on empty field or a handle. */
     hit: number | null;
+    /** The selection box's handle pressed on (#198), which wins over a marcher under it. */
+    handle: HandleId | null;
     /** The second press of a double-click on empty field. */
     double: boolean;
 };
@@ -134,7 +148,17 @@ export type FieldPress = {
 /** The last click, for telling a double-click. */
 type LastClick = { time: number; screen: FieldPoint; hit: number | null };
 
-export type FieldCursor = "default" | "pointer";
+export type FieldCursor =
+    | "default"
+    | "pointer"
+    | ReturnType<typeof handleCursor>;
+
+/** A rotation typed into the inspector (user story 54), until it's saved. */
+type TypedRotation = {
+    starts: readonly MarcherPosition[];
+    center: FieldPoint;
+    degrees: number;
+};
 
 export class FieldEditor {
     private press: FieldPress | null = null;
@@ -155,6 +179,7 @@ export class FieldEditor {
     private drops = 0;
     /** Where the marchers being dragged are drawn, or null with no drag. */
     private live: readonly MarcherPosition[] | null = null;
+    private typed: TypedRotation | null = null;
     private readonly listeners = new Set<() => void>();
     private readonly now: () => number;
     private readonly areaPorts: AreaPorts;
@@ -182,6 +207,8 @@ export class FieldEditor {
     pointerDown(pointer: FieldPointer): boolean {
         if (!this.isEditButton(pointer)) return false;
         this.cancelGesture();
+        // A press on the field saves a rotation typed in the inspector first
+        this.endRotation();
         this.ignoredButton = null;
         if (this.ports.takePress?.()) {
             // Captured all the same, so its moves and release do nothing either.
@@ -191,11 +218,13 @@ export class FieldEditor {
             this.ignoredButton = pointer.button;
             return true;
         }
-        const hit = this.marcherAt(pointer.field);
+        const handle = this.handleAt(pointer.field);
+        const hit = handle ? null : this.marcherAt(pointer.field);
         this.press = {
             start: pointer,
             hit,
-            double: hit === null && this.isDoubleClick(pointer),
+            handle,
+            double: hit === null && !handle && this.isDoubleClick(pointer),
         };
         return true;
     }
@@ -208,8 +237,13 @@ export class FieldEditor {
         if (this.ignoredButton !== null) return;
         const press = this.press;
         if (!press) {
+            const handle = this.handleAt(pointer.field);
             this.setHover(
-                this.marcherAt(pointer.field) === null ? "default" : "pointer",
+                handle
+                    ? handleCursor(handle)
+                    : this.marcherAt(pointer.field) === null
+                      ? "default"
+                      : "pointer",
             );
             return;
         }
@@ -251,6 +285,11 @@ export class FieldEditor {
             const gesture = this.startDrag(press, pointer);
             gesture?.move(pointer);
             gesture?.end(pointer);
+            return;
+        }
+        // A click on a handle does nothing, and is no half of a double-click
+        if (press.handle) {
+            this.lastClick = null;
             return;
         }
         // A double-click's second click starts no third
@@ -297,6 +336,62 @@ export class FieldEditor {
             : null;
     }
 
+    /**
+     * The selection box while a rotation is being dragged: the box at the
+     * press, turned by the angle drawn. The overlay draws it so until the
+     * release, then the box fits the marchers again. Null otherwise.
+     */
+    rotationFrame(): { box: FieldRect; angle: number } | null {
+        return this.gesture instanceof RotateGesture
+            ? { box: this.gesture.box, angle: this.gesture.angle() }
+            : null;
+    }
+
+    /** Whether the selection can be scaled and rotated: two or more marchers drawn. */
+    canTransform(): boolean {
+        return this.drawnPositions(this.ports.selection.get()).length >= 2;
+    }
+
+    /** The rotation typed into the inspector and not yet saved, in degrees; 0 with none. */
+    typedRotation(): number {
+        return this.typed?.degrees ?? 0;
+    }
+
+    /**
+     * Turns the selection `degrees` clockwise about its box's center, from
+     * where it was when the typing started, as the rotate handle does (user
+     * story 54). Drawn until {@link endRotation} saves it.
+     */
+    rotateSelection(degrees: number): void {
+        if (this.gesture) return;
+        if (!this.typed) {
+            const starts = this.drawnPositions(this.ports.selection.get());
+            const box = boundsOf(starts);
+            if (starts.length < 2 || !box) return;
+            this.typed = { starts, center: centerOf(box), degrees: 0 };
+        }
+        this.typed.degrees = degrees;
+        this.showLive(
+            rotatePositions(this.typed.starts, this.typed.center, degrees),
+        );
+        this.emit();
+    }
+
+    /**
+     * Saves the rotation typed into the inspector, through the same drop as a
+     * handle. One left unchanged (or back at 0) saves nothing (user story 54).
+     */
+    endRotation(): void {
+        const typed = this.typed;
+        if (!typed) return;
+        this.typed = null;
+        this.drop(
+            typed.starts,
+            rotatePositions(typed.starts, typed.center, typed.degrees),
+        );
+        this.emit();
+    }
+
     /** The cursor the field shows. */
     cursor(): FieldCursor {
         return this.hover;
@@ -310,14 +405,56 @@ export class FieldEditor {
 
     /**
      * The gesture a press becomes once it moves past the click slop, or null
-     * when the press does nothing more. A move starts from a marcher, or from
+     * when the press does nothing more. A handle of the selection box scales
+     * or rotates the selection (#198). A move starts from a marcher, or from
      * empty field inside a multi-selection's box (owner decision, #196);
      * marquee and lasso (#195) start from the rest of the empty field: a lasso
      * after a double-click, else a marquee.
      */
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     protected startDrag(press: FieldPress, pointer: FieldPointer) {
-        return this.startMove(press) ?? this.startArea(press);
+        return (
+            this.startTransform(press) ??
+            this.startMove(press) ??
+            this.startArea(press)
+        );
+    }
+
+    /** Scaling or rotating the selection from one of its box's handles (#198). */
+    private startTransform(press: FieldPress): FieldGesture | null {
+        if (!press.handle) return null;
+        const starts = this.drawnPositions(this.ports.selection.get());
+        const box = boundsOf(starts);
+        if (starts.length < 2 || !box) return null;
+        const host = {
+            show: (positions: readonly MarcherPosition[]) =>
+                this.showLive(positions),
+            drop: (positions: readonly MarcherPosition[]) =>
+                this.drop(starts, positions),
+            cancel: () => this.endLive(),
+        };
+        return press.handle === "rot"
+            ? new RotateGesture(press.start, starts, host, box)
+            : new ScaleGesture(press.start, starts, host, press.handle, box);
+    }
+
+    /**
+     * The selection box's frame, for its handles: around the selected
+     * marchers as drawn, or null with fewer than two.
+     */
+    private selectionFrame(): SelectionFrame | null {
+        const starts = this.drawnPositions(this.ports.selection.get());
+        const box = boundsOf(starts);
+        if (starts.length < 2 || !box) return null;
+        return { box, pad: this.ports.selectionBoxPadding?.() ?? 0, angle: 0 };
+    }
+
+    /** The handle of the selection box at `point`, or null. */
+    private handleAt(point: FieldPoint): HandleId | null {
+        const frame = this.selectionFrame();
+        if (!frame) return null;
+        const zoom = this.ports.zoom();
+        return handleAt(handlePoints(frame, zoom), point, zoom);
     }
 
     /** A marquee, or a lasso after a double-click, from empty field. */

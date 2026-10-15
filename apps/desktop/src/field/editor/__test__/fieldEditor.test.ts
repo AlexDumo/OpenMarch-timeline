@@ -939,3 +939,166 @@ describe("FieldEditor lasso", () => {
         expect(editor.activeGesture()).toBe("move");
     });
 });
+
+describe("FieldEditor scale and rotate handles (#198)", () => {
+    // Marchers 1 to 4 selected: the box runs from (100, 100) to (400, 100),
+    // 10 units out, and the rotate handle is 40 screen px (20 units) above it
+    const ALL = [1, 2, 3, 4];
+    const HANDLE = {
+        e: { x: 410, y: 100 },
+        se: { x: 410, y: 110 },
+        rot: { x: 250, y: 70 },
+    };
+
+    it("scales one axis from the opposite side with a middle handle, as a scale gesture", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.pointerDown(at(HANDLE.e.x, HANDLE.e.y));
+        editor.pointerMove(at(485, 130));
+        expect(editor.activeGesture()).toBe("scale");
+        editor.pointerMove(at(560, 160));
+        editor.pointerUp(at(560, 160));
+        expect(editor.activeGesture()).toBeNull();
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 100, y: 100 },
+            { id: 2, x: 250, y: 100 },
+            { id: 3, x: 400, y: 100 },
+            { id: 4, x: 550, y: 100 },
+        ]);
+    });
+
+    it("ignores Shift on a middle handle", () => {
+        const plain = setup({ selected: ALL });
+        drag(plain.editor, HANDLE.e, { x: 560, y: 160 });
+        const shifted = setup({ selected: ALL });
+        drag(shifted.editor, HANDLE.e, { x: 560, y: 160 }, { shift: true });
+        expect(shifted.state.drops[0].positions).toEqual(
+            plain.state.drops[0].positions,
+        );
+    });
+
+    it("scales from the opposite corner with a corner handle", () => {
+        const { editor, state } = setup({ selected: ALL });
+        drag(editor, HANDLE.se, { x: 560, y: 180 });
+        expect(state.drops[0].positions.map((p) => p.x)).toEqual([
+            100, 250, 400, 550,
+        ]);
+    });
+
+    it("rotates about the box's center with the rotate handle", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.pointerDown(at(HANDLE.rot.x, HANDLE.rot.y));
+        editor.pointerMove(at(270, 75));
+        expect(editor.activeGesture()).toBe("rotate");
+        // A quarter turn clockwise about (250, 100)
+        editor.pointerMove(at(280, 100));
+        expect(editor.rotationFrame()).toEqual({
+            box: { left: 100, top: 100, right: 400, bottom: 100 },
+            angle: 90,
+        });
+        editor.pointerUp(at(280, 100));
+        expect(editor.rotationFrame()).toBeNull();
+        expect(state.drops[0].positions).toEqual([
+            { id: 1, x: 250, y: -50 },
+            { id: 2, x: 250, y: 50 },
+            { id: 3, x: 250, y: 150 },
+            { id: 4, x: 250, y: 250 },
+        ]);
+    });
+
+    it("leaves the locks and the move rules out of handles (rules table: Lock X / Lock Y)", () => {
+        const moveTransform = vi.fn<MoveTransform>();
+        const { editor, state } = setup({ selected: ALL, moveTransform });
+        drag(editor, HANDLE.e, { x: 560, y: 100 });
+        expect(moveTransform).not.toHaveBeenCalled();
+        expect(state.drops).toHaveLength(1);
+    });
+
+    it("does nothing on a click on a handle: the selection stays", () => {
+        const { editor, state, ports } = setup({ selected: ALL });
+        editor.pointerDown(at(HANDLE.se.x, HANDLE.se.y));
+        editor.pointerMove(at(HANDLE.se.x + 1, HANDLE.se.y));
+        editor.pointerUp(at(HANDLE.se.x + 1, HANDLE.se.y));
+        click(editor, HANDLE.rot.x, HANDLE.rot.y);
+        expect(ports.selection.set).not.toHaveBeenCalled();
+        expect(state.drops).toEqual([]);
+        expect(state.selected).toEqual(ALL);
+    });
+
+    it("has no handles around a single marcher", () => {
+        const { editor, state } = setup({ selected: [1] });
+        editor.pointerDown(at(90, 90));
+        editor.pointerMove(at(60, 60));
+        expect(editor.activeGesture()).toBe("marquee");
+        editor.pointerUp(at(60, 60));
+        expect(state.drops).toEqual([]);
+    });
+
+    it("shows each handle's cursor on hover", () => {
+        const { editor } = setup({ selected: ALL });
+        editor.pointerMove(at(HANDLE.e.x, HANDLE.e.y));
+        expect(editor.cursor()).toBe("ew-resize");
+        editor.pointerMove(at(HANDLE.se.x, HANDLE.se.y));
+        expect(editor.cursor()).toBe("nwse-resize");
+        editor.pointerMove(at(HANDLE.rot.x, HANDLE.rot.y));
+        expect(editor.cursor()).toBe("crosshair");
+        editor.pointerMove(at(250, 300));
+        expect(editor.cursor()).toBe("default");
+    });
+
+    it("drops a handle drag through the same pending save as a move", async () => {
+        const { editor, state } = setup({ selected: ALL });
+        drag(editor, HANDLE.e, { x: 560, y: 100 });
+        expect(shown(state)?.[4]).toEqual({ x: 550, y: 100 });
+        state.drops[0].answer("refused");
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(state.shown).toBeNull();
+    });
+});
+
+describe("FieldEditor rotation typed into the inspector (user story 54)", () => {
+    const ALL = [1, 2, 3, 4];
+
+    it("rotates the selection about its box's center while typed, and saves it once", () => {
+        const { editor, state } = setup({ selected: ALL });
+        expect(editor.canTransform()).toBe(true);
+        editor.rotateSelection(9);
+        editor.rotateSelection(90);
+        expect(editor.typedRotation()).toBe(90);
+        expect(shown(state)?.[1]).toEqual({ x: 250, y: -50 });
+        expect(state.drops).toEqual([]);
+        editor.endRotation();
+        expect(editor.typedRotation()).toBe(0);
+        expect(state.drops).toHaveLength(1);
+        expect(state.drops[0].positions[3]).toEqual({ id: 4, x: 250, y: 250 });
+        editor.endRotation();
+        expect(state.drops).toHaveLength(1);
+    });
+
+    it("saves nothing when left unchanged, or turned back to 0", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.endRotation();
+        editor.rotateSelection(0);
+        editor.endRotation();
+        editor.rotateSelection(45);
+        editor.rotateSelection(0);
+        editor.endRotation();
+        expect(state.drops).toEqual([]);
+        expect(state.shown).toBeNull();
+    });
+
+    it("can't rotate a single marcher", () => {
+        const { editor, state } = setup({ selected: [2] });
+        expect(editor.canTransform()).toBe(false);
+        editor.rotateSelection(90);
+        editor.endRotation();
+        expect(state.drops).toEqual([]);
+    });
+
+    it("saves a typed rotation before a press on the field", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.rotateSelection(90);
+        editor.pointerDown(at(250, 300));
+        expect(state.drops).toHaveLength(1);
+    });
+});
