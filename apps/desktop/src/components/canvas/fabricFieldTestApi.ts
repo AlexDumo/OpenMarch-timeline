@@ -3,6 +3,7 @@ import type {
     FieldTestApi,
     FieldTestGesture,
     FieldTestHandle,
+    FieldTestLook,
     ScreenPoint,
 } from "@/field/fieldTestApi";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
@@ -61,6 +62,7 @@ export function createFabricFieldTestApi(
                         screen.x < rect.right &&
                         screen.y > rect.top &&
                         screen.y < rect.bottom,
+                    look: lookOf(marcher),
                 };
             });
         },
@@ -115,6 +117,40 @@ export function createFabricFieldTestApi(
         pageId() {
             return canvas.currentPage?.id ?? null;
         },
+    };
+}
+
+/** How a marcher is drawn, read from its Fabric objects. */
+function lookOf(marcher: CanvasMarcher): FieldTestLook {
+    const dot = marcher.dotObject;
+    const label = {
+        visible: marcher.visible !== false,
+        labelVisible:
+            marcher.visible !== false && marcher.textLabel.visible !== false,
+        labelColor: String(marcher.textLabel.fill),
+    };
+    // An X is a group of two lines in one color
+    if (dot.type === "group") {
+        const [line] = (
+            dot as unknown as { getObjects(): { stroke?: string }[] }
+        ).getObjects();
+        return {
+            ...label,
+            shape: "x",
+            fill: String(line?.stroke),
+            outline: null,
+        };
+    }
+    return {
+        ...label,
+        shape:
+            dot.type === "rect"
+                ? "square"
+                : dot.type === "triangle"
+                  ? "triangle"
+                  : "circle",
+        fill: String(dot.fill),
+        outline: String(dot.stroke),
     };
 }
 
