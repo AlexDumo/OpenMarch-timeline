@@ -59,7 +59,11 @@ Under the heavier load of earlier runs (load average around 80, while other
 workers built and tested), the failures were app-start timeouts, not
 scenario results.
 Electron counts are with one worker per om-capture container, so each
-Electron window has its own X display; see the parallel-window flake below.
+Electron window has its own X display. Electron under load means several
+workers on one display: 3 workers ×2 failed 10 of 292 on the new field, all
+the #236 kind below (before the settle fix). The browser counts were run
+just before the settle wait got its 20 s limit for big shows; nothing in the
+suite needed it.
 
 ### Fixed test races
 
@@ -77,11 +81,11 @@ retry or a longer timeout.
 
 | Flake                                                                        | Where                                                                    | Cause                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #236: a click, drag, lasso or hover on the new field that never takes effect | Electron, new field, only with several Electron windows on one X display | Not CPU load: one worker under a heavy CPU load passed 50/50; four workers on a quiet machine failed 5 in 126. The traces show the whole gesture sent and ignored. Each test opens its own window on the shared display, and a new window takes activation; the new field cancels a press when it loses pointer capture, and Fabric uses no capture. Likely cause, not proven. Real users can lose capture too (Alt+Tab mid-drag): now unit-tested (nothing left behind) and on the checklist (item 69). Details on #236. |
+| #236: a click, drag, lasso or hover on the new field that never takes effect | Electron, new field, only with several Electron windows on one X display | Not CPU load: one worker under a heavy CPU load passed 50/50; four workers on a quiet machine failed 5 in 126. The traces show the whole gesture sent and ignored. Each test opens its own window on the shared display, and a new window takes activation; the new field cancels a press when it loses pointer capture, and Fabric uses no capture. Likely cause, not proven. Real users can lose capture too (Alt+Tab mid-drag): now unit-tested (nothing left behind) and on the checklist (item 70). Details on #236. |
 | Opening view a panel-row off the fit (navigation scenarios)                  | Browser, new field, only under heavy CPU load (10 busy loops)            | The view re-centers on resizes only within 250 ms of opening; under heavy load the panels settle later. Same 250 ms rule as Fabric. #246.                                                                                                                                                                                                                                                                                                                                                                                 |
 | "Playback draws the marchers where the show puts them"                       | Browser, both fields, with parallel workers (1–3 in 12)                  | The clock and the field each read the stepping audio clock (`getLivePlaybackPosition`) at a different moment. Headless Chromium's fake audio output steps every 43 ms; failures are about 87 ms (2.1–2.2 units) apart, over the 2-unit tolerance. Equal on both fields, so not a parity difference. A race-free version needs a test API reading of the time each field drew: #250.                                                                                                                                       |
 | Fabric "undo and redo a move", edit-positions undo steps                     | (earlier reports)                                                        | Fixed by #223 (presses were dropped); not seen in these runs.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| #196's "quick 19 px flick" in Electron, weak-machines Electron context loss  | (earlier reports)                                                        | Not seen in these runs; both are covered by the opening-view and context-state fixes above.                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| #196's "quick 19 px flick" in Electron, weak-machines Electron context loss  | (earlier reports)                                                        | Not reproduced: no failures in the 566 Electron runs above. No separate root cause found; the opening-view and context-state fixes are the likeliest, but that's unproven.                                                                                                                                                                                                                                                                                                                                                |
 
 ## 2. Render comparisons
 
@@ -91,7 +95,9 @@ by `render/stressShow.mts`, the prototype's script), at three zooms (`fit`,
 the opening view; `near`, 2.5×; `close`, 6×, pinched in at the marchers'
 center) and four times (the first page, page 4, four beats into the next
 move, and two beats past page 8): 36 cases. The new field picks the view and
-Fabric is pointed at the same one, so the pairs line up in field units. Side
+Fabric is pointed at the same one, so the pairs line up in field units. They
+run in the browser only: Electron draws with the same renderer code, and the
+Electron scenarios check what it draws through the test API. Side
 by sides, diffs and `summary.tsv` are in the fork prerelease
 [`field-render-208`](https://github.com/AlexDumo/OpenMarch-timeline/releases/tag/field-render-208).
 
@@ -179,11 +185,11 @@ step 6).
 
 ## 4. The owner's hands-on checklist
 
-[parity-checklist.md](parity-checklist.md): 114 one-line items, by area,
+[parity-checklist.md](parity-checklist.md): 116 one-line items, by area,
 in the lab build (`?field=three` for the new field). It covers every user
 story in #189, every decided change (marked **(change)**), every "for #208"
 item from the phase notes, and the owner decisions still open (the handle
-look). Settled on 2026-10-15: drill numbers under the dots (#245) and the
+look, and whether a drag should survive losing the pointer). Settled on 2026-10-15: drill numbers under the dots (#245) and the
 app-wide `ignore-gpu-blocklist`.
 
 ## 5. Benchmark

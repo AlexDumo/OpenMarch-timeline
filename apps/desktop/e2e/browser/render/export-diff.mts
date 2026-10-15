@@ -31,11 +31,18 @@ import PDFDocument from "pdfkit";
 // @ts-expect-error svg-to-pdfkit has no types
 import SVGtoPDF from "svg-to-pdfkit";
 
-const [folder, beforeLabel = "before", afterLabel = "after", nArg = "3"] =
-    process.argv.slice(2);
+const [
+    folder,
+    beforeLabel = "before",
+    afterLabel = "after",
+    marchersArg = "3",
+] = process.argv.slice(2);
 if (!folder)
-    throw new Error("usage: export-diff.mts <folder> [before] [after]");
-const individual = Number(nArg);
+    throw new Error(
+        "usage: export-diff.mts <folder> [before] [after] [marchers]",
+    );
+/** How many marchers' individual charts to compare. */
+const individualCount = Number(marchersArg);
 const out = path.join(folder, "diff");
 fs.mkdirSync(out, { recursive: true });
 const FIELD_IMAGE = `data:image/png;base64,${fs
@@ -207,7 +214,7 @@ for (const show of fs.readdirSync(path.join(folder, afterLabel))) {
                 .map((f) => f.split("-")[0]!),
         ),
     ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    const chosen = new Set(["MAIN", ...drill.slice(0, individual)]);
+    const chosen = new Set(["MAIN", ...drill.slice(0, individualCount)]);
     for (const file of files.sort()) {
         if (!chosen.has(file.split("-")[0]!)) continue;
         const before = path.join(dir(beforeLabel), file);

@@ -86,83 +86,89 @@ numbers) is in [parity-gate-results.md](parity-gate-results.md).
 50. Shift+click empty field → the selection stays. **(change)** Fabric cleared it.
 51. Ctrl/Cmd+A, then Ctrl/Cmd+A again → everything stays selected. **(change)** Fabric's second press cleared it (story 31).
 52. Hover a marcher → pointer cursor (story 33).
+53. Zoom far out and click just beside a small dot → it still selects (a click target is never under 5 screen px); with two dots overlapping, the nearer one is selected (rules table: Click target).
 
 ## Moving
 
-53. Drag a marcher, then drag one of a selected group → the marcher or the whole group moves (story 34).
-54. Press a marcher and move under 4 px, however long you hold → a click; nothing moves (story 35).
-55. Quickly flick a marcher about 20 px and let go → it moves. **(change)** Fabric's "under 300 ms and 20 px" rule made that a click.
-56. Rounding on: drag one marcher → it snaps to the rounding grid (story 36).
-57. Rounding on: drag a group whose marchers are off the grid → it moves in whole steps and keeps its shape. **(change)** On Fabric each marcher snapped (story 37).
-58. Rounding on: hold Shift while dragging → no snapping (story 38).
-59. Hold Alt while dragging → a quarter speed, no snapping. **(change)** Alt panned on Fabric (story 39).
-60. Press Alt mid-drag, then let go of it → slows down from where the marcher is, with no jump; full speed and snapping again after.
-61. Lock X, then Lock Y, and drag → the locked axis doesn't change (story 40).
-62. Shift+press an unselected marcher and drag → it's added and the whole selection moves (as Fabric).
-63. Drop on a page with a timeline range selected → the drop creates or joins that range's move (story 41).
-64. In isolation, drop a marcher → it edits the isolated move's end and the playhead moves to the end (story 41).
-65. Drop where the timeline refuses it (Basic mode, past the last page) → a toast, and the marchers snap back (stories 41, 42).
-66. Drop on a page with later pages → "Move them too" appears and works (story 43).
-67. Arrow keys and WASD with their modifiers → nudges as on Fabric (story 44).
-68. Undo a drag → one Ctrl/Cmd+Z undoes it all (story 45).
-69. Start dragging a marcher, then switch windows (Alt+Tab, or Cmd+Tab on a Mac) before letting go → the drag is cancelled and the marcher goes back; nothing is saved, and the next press works. **(change)** Fabric kept the drag going. The same goes for a box, lasso or handle drag.
+54. Drag a marcher, then drag one of a selected group → the marcher or the whole group moves (story 34).
+55. Press a marcher and move under 4 px, however long you hold → a click; nothing moves (story 35).
+56. Quickly flick a marcher about 20 px and let go → it moves. **(change)** Fabric's "under 300 ms and 20 px" rule made that a click.
+57. Rounding on: drag one marcher → it snaps to the rounding grid (story 36).
+58. Rounding on: drag a group whose marchers are off the grid → it moves in whole steps and keeps its shape. **(change)** On Fabric each marcher snapped (story 37).
+59. Rounding on: hold Shift while dragging → no snapping (story 38).
+60. Hold Alt while dragging → a quarter speed, no snapping. **(change)** Alt panned on Fabric (story 39).
+61. Press Alt mid-drag, then let go of it → slows down from where the marcher is, with no jump; full speed and snapping again after.
+62. Lock X, then Lock Y, and drag → the locked axis doesn't change (story 40).
+63. Shift+press an unselected marcher and drag → it's added and the whole selection moves (as Fabric).
+64. Drop on a page with a timeline range selected → the drop creates or joins that range's move (story 41).
+65. In isolation, drop a marcher → it edits the isolated move's end and the playhead moves to the end (story 41).
+66. Drop where the timeline refuses it (Basic mode, past the last page) → a toast, and the marchers snap back (stories 41, 42).
+67. Drop on a page with later pages → "Move them too" appears and works (story 43).
+68. Arrow keys and WASD with their modifiers → nudges as on Fabric (story 44).
+69. Undo a drag → one Ctrl/Cmd+Z undoes it all (story 45).
+70. Start dragging a marcher, then switch windows (Alt+Tab, or Cmd+Tab on a Mac) before letting go → the drag is cancelled and the marcher goes back; nothing is saved, and the next press works. **Not decided yet:** the new field has done this since #193; Fabric kept the drag going. The same goes for a box, lasso or handle drag. Keep it?
 
 ## Scaling and rotating
 
-70. Select several marchers → a box with corner, middle and rotate handles (story 46).
-71. Look at the handles → filled squares. **(change, look)** Fabric draws outlined squares. Keep?
-72. Select one marcher → no box, no handles (story 47).
-73. Drag a corner → scales uniformly from the opposite corner; with Shift, freely (story 48).
-74. Drag a middle handle → one axis; hold Shift → still one axis. **(change)** Fabric cancelled the scale while Shift was down (story 49).
-75. Rotate → snaps to 15°; with Shift, free (story 50).
-76. Hold Alt on any handle → a quarter speed, no snapping. **(change)** Alt panned on Fabric (story 51).
-77. Drag a handle far past the opposite side → no flip; the marchers stack about 1% of their spread apart, in order. Fabric held the last valid scale instead (story 52).
-78. Press a handle, hold over 300 ms and move under 4 px → nothing changes. **(change)** Fabric transformed.
-79. While scaling or rotating → dots and labels stay upright and the same size (story 53).
-80. Type a rotation in the inspector, then leave the field → the selection rotates the same way; leaving it unchanged saves nothing (story 54).
-81. After typing a rotation and leaving → the input shows 0 again. **(change)** Fabric showed the selection's angle since it was made.
-82. Lock X / Lock Y on, then use the handles → the locks don't hold them (as Fabric).
-83. After any transform → the box fits the marchers again (story 55).
+71. Select several marchers → a box with corner, middle and rotate handles (story 46).
+72. Look at the handles → filled squares. **(change, look)** Fabric draws outlined squares. Keep?
+73. Select one marcher → no box, no handles (story 47).
+74. Drag a corner → scales uniformly from the opposite corner; with Shift, freely (story 48).
+75. Drag a middle handle → one axis; hold Shift → still one axis. **(change)** Fabric cancelled the scale while Shift was down (story 49).
+76. Rotate → snaps to 15°; with Shift, free (story 50).
+77. Hold Alt on any handle → a quarter speed, no snapping. **(change)** Alt panned on Fabric (story 51).
+78. Drag a handle far past the opposite side → no flip; the marchers stack about 1% of their spread apart, in order. Fabric held the last valid scale instead (story 52).
+79. Press a handle, hold over 300 ms and move under 4 px → nothing changes. **(change)** Fabric transformed.
+80. While scaling or rotating → dots and labels stay upright and the same size (story 53).
+81. Type a rotation in the inspector, then leave the field → the selection rotates the same way; leaving it unchanged saves nothing (story 54).
+82. After typing a rotation and leaving → the input shows 0 again. **(change)** Fabric showed the selection's angle since it was made.
+83. Lock X / Lock Y on, then use the handles → the locks don't hold them (as Fabric).
+84. After any transform → the box fits the marchers again (story 55).
 
 ## Tools
 
-84. Select at least two marchers and press L → the line tool; the cursor is a crosshair (story 56).
-85. Click to start the line, move, click to finish → the end follows the pointer; dashed previews and outlined marchers show (stories 56, 57).
-86. Finish a line without Shift, then with Shift → whole steps, then free (story 56).
-87. Draw lines in different directions → marchers order along the line and space evenly (story 56).
-88. Shift+Enter → saves exactly where the previews are drawn. **(change)** Fabric saved the line half a unit right of and below where it drew it.
-89. Escape → cancels the tool (story 56).
-90. Right-click → clears the line, but the finished line's previews stay, and Shift+Enter still applies them until the next line (as Fabric).
-91. Right-drag while drawing a line → pans and keeps the line. **(change)** Fabric cleared it on every right press.
-92. After the line is finished, click a marcher → nothing is selected. **(change)** Fabric made marchers selectable again.
-93. With the line tool on, Ctrl/Cmd+click a marcher → nothing. **(change)** Fabric selected.
-94. With the line tool on in isolation, let a marcher stop being dimmed → it still can't be selected until the tool ends. **(change)** Fabric's known gap.
-95. Escape in isolation → leaves isolation; with the line tool on, Escape only cancels the tool; with a dialog open, only closes the dialog (story 59).
-96. Scrub over playback, let go to hold a preview frame, then click the field → the click only clears the preview (story 60).
-97. Hold a preview frame, then right-drag or middle-drag → pans and leaves the preview held. **(change)** Fabric swallowed that press too.
-98. Hold a preview frame and click a popover's outside → the popover closes (a press the field takes still reaches the app).
-99. Hold a preview frame while a show's stored moves finish loading → the app drops the held frame (#202: found while testing; check it doesn't surprise).
-100.  Align, distribute, flip, swap, circle, keep, and set to previous or next page → as on Fabric (story 61).
-101.  The box shape tool (story 58) is on hold (#204) and not in this gate. The inspector's spec-shape handles (P7.11) are dropped when Fabric is deleted (owner decision).
+85. Select at least two marchers and press L → the line tool; the cursor is a crosshair (story 56).
+86. Click to start the line, move, click to finish → the end follows the pointer; dashed previews and outlined marchers show (stories 56, 57).
+87. Finish a line without Shift, then with Shift → whole steps, then free (story 56).
+88. Draw lines in different directions → marchers order along the line and space evenly (story 56).
+89. Shift+Enter → saves exactly where the previews are drawn. **(change)** Fabric saved the line half a unit right of and below where it drew it.
+90. Escape → cancels the tool (story 56).
+91. Right-click → clears the line, but the finished line's previews stay, and Shift+Enter still applies them until the next line (as Fabric).
+92. Right-drag while drawing a line → pans and keeps the line. **(change)** Fabric cleared it on every right press.
+93. After the line is finished, click a marcher → nothing is selected. **(change)** Fabric made marchers selectable again.
+94. With the line tool on, Ctrl/Cmd+click a marcher → nothing. **(change)** Fabric selected.
+95. With the line tool on in isolation, let a marcher stop being dimmed → it still can't be selected until the tool ends. **(change)** Fabric's known gap.
+96. Escape in isolation → leaves isolation; with the line tool on, Escape only cancels the tool; with a dialog open, only closes the dialog (story 59).
+97. Scrub over playback, let go to hold a preview frame, then click the field → the click only clears the preview (story 60).
+98. Hold a preview frame, then right-drag or middle-drag → pans and leaves the preview held. **(change)** Fabric swallowed that press too.
+99. Hold a preview frame and click a popover's outside → the popover closes (a press the field takes still reaches the app).
+100.  Hold a preview frame while a show's stored moves finish loading → the app drops the held frame (#202: found while testing; check it doesn't surprise).
+101.  Align, distribute, flip, swap, circle, keep, and set to previous or next page → as on Fabric (story 61).
+102.  The box shape tool (story 58) is on hold (#204) and not in this gate. The inspector's spec-shape handles (P7.11) are dropped when Fabric is deleted (owner decision).
 
 ## Weak machines and reliability
 
-102. On a machine with software graphics (or Chrome's acceleration off) → low-quality mode and its one-time note (story 63).
-103. Settings, Appearance, Performance mode on → low-quality mode by hand (story 64).
-104. Desktop app on a GPU that Chromium blocks but that works → the fast field; if the GPU process crashes, low-quality mode and a note (story 65).
-105. Sleep the computer with a show open and wake it → the field draws again by itself (story 66).
-106. Run "Run field benchmark" from the command palette (Ctrl/Cmd+K) on both fields → see [the benchmark steps](parity-gate-results.md#benchmark-on-real-hardware) (stories 21, 62, 74).
+103. On a machine with software graphics (or Chrome's acceleration off) → low-quality mode and its one-time note (story 63).
+104. Settings, Appearance, Performance mode on → low-quality mode by hand (story 64).
+105. Desktop app on a GPU that Chromium blocks but that works → the fast field; if the GPU process crashes, low-quality mode and a note (story 65).
+106. Sleep the computer with a show open and wake it → the field draws again by itself (story 66).
+107. Run "Run field benchmark" from the command palette (Ctrl/Cmd+K) on both fields → see [the benchmark steps](parity-gate-results.md#benchmark-on-real-hardware) (stories 21, 62, 74).
 
 ## Exports
 
-107. Export coordinate sheets → same content and layout as Fabric's (story 67).
-108. Export drill charts (full and individual) → same content; the listed export improvements show (centered labels, closed border, no half-pixel offset) (story 67).
-109. Export a video → plays, marchers where they should be, quality as before or better; time it on real hardware (story 68).
-110. Open a show with no WebGL → video export says it needs WebGL and Export is disabled. **(change)** It drew on Canvas2D before.
-111. The new-show wizard's field step and the launch page → field previews show (story 69).
+108. Export coordinate sheets → same content and layout as Fabric's (story 67).
+109. Export drill charts (full and individual) → same content; the listed export improvements show (centered labels, closed border, no half-pixel offset) (story 67).
+110. Export a video → plays, marchers where they should be, quality as before or better; time it on real hardware (story 68).
+111. Open a show with no WebGL → video export says it needs WebGL and Export is disabled. **(change)** It drew on Canvas2D before.
+112. The new-show wizard's field step and the launch page → field previews show (story 69).
+
+Stories 70–75 are maintainers' (editor modules, the parity suite, draw calls,
+shared geometry, the benchmark, deleting Fabric): they're checked by code and
+the automated half, not by hand.
 
 ## Owner decisions
 
-112. Settled: dots cover drill numbers, as on Fabric (item 14; owner 2026-10-15).
-113. Open: the handle look, filled squares vs Fabric's outlines (item 71).
-114. Settled: `ignore-gpu-blocklist` is app-wide, so it also affects Fabric (until #209) and the 3D View's compositing on drivers Chromium blocks (#205; owner confirmed 2026-10-15).
+113. Settled: dots cover drill numbers, as on Fabric (item 14; owner 2026-10-15).
+114. Open: the handle look, filled squares vs Fabric's outlines (item 72).
+115. Open: a drag cancelled when the window loses the pointer (Alt+Tab mid-drag), where Fabric kept it (item 70).
+116. Settled: `ignore-gpu-blocklist` is app-wide, so it also affects Fabric (until #209) and the 3D View's compositing on drivers Chromium blocks (#205; owner confirmed 2026-10-15).
