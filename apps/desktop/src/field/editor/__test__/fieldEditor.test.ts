@@ -1157,3 +1157,86 @@ describe("FieldEditor rotation typed into the inspector (user story 54)", () => 
         expect(state.drops).toEqual([]);
     });
 });
+
+describe("FieldEditor a pointer lost mid-gesture (#208)", () => {
+    // The renderer cancels the press when its pointer capture is lost: an OS
+    // dialog, a notification or switching windows mid-drag. Fabric kept the
+    // drag going; the new field drops it and leaves nothing behind.
+    const ALL = [1, 2, 3, 4];
+    const GESTURES = [
+        {
+            kind: "move",
+            selected: [] as number[],
+            start: (editor: FieldEditor) => {
+                editor.pointerDown(at(100, 100));
+                editor.pointerMove(at(100, 150));
+            },
+        },
+        {
+            kind: "marquee",
+            selected: [2],
+            start: (editor: FieldEditor) => {
+                editor.pointerDown(at(EMPTY.x, EMPTY.y));
+                editor.pointerMove(at(EMPTY.x + 60, EMPTY.y + 60));
+            },
+        },
+        {
+            kind: "lasso",
+            selected: [2],
+            start: (editor: FieldEditor) => {
+                click(editor, EMPTY.x, EMPTY.y, { shift: true });
+                editor.pointerDown(at(EMPTY.x, EMPTY.y, { shift: true }));
+                editor.pointerMove(
+                    at(EMPTY.x + 60, EMPTY.y + 60, { shift: true }),
+                );
+            },
+        },
+        {
+            kind: "scale",
+            selected: ALL,
+            start: (editor: FieldEditor) => {
+                editor.pointerDown(at(410, 100));
+                editor.pointerMove(at(485, 130));
+            },
+        },
+        {
+            kind: "rotate",
+            selected: ALL,
+            start: (editor: FieldEditor) => {
+                editor.pointerDown(at(250, 70));
+                editor.pointerMove(at(280, 100));
+            },
+        },
+    ];
+
+    it.each(GESTURES)(
+        "drops a $kind and leaves no trace: nothing drawn, saved or selected by it, and the next press works",
+        ({ kind, selected, start }) => {
+            const { editor, state } = setup({ selected });
+            start(editor);
+            expect(editor.activeGesture()).toBe(kind);
+            const selectedBefore = state.selected;
+
+            editor.pointerCancel();
+            expect(editor.activeGesture()).toBeNull();
+            expect(editor.areaShape()).toBeNull();
+            expect(editor.rotationFrame()).toBeNull();
+            expect(state.shown).toBeNull();
+            // The rest of the drag and its release do nothing
+            editor.pointerMove(at(EMPTY.x + 90, EMPTY.y + 90));
+            editor.pointerUp(at(EMPTY.x + 90, EMPTY.y + 90));
+            expect(editor.activeGesture()).toBeNull();
+            expect(state.shown).toBeNull();
+            expect(state.drops).toEqual([]);
+            expect(state.selected).toEqual(selectedBefore);
+
+            // The next press is a press like any other
+            click(editor, 300, 100);
+            expect(state.selected).toEqual([3]);
+            drag(editor, { x: 300, y: 100 }, { x: 300, y: 160 });
+            expect(state.drops.map((d) => d.positions)).toEqual([
+                [{ id: 3, x: 300, y: 160 }],
+            ]);
+        },
+    );
+});
