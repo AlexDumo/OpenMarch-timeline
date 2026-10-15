@@ -13,7 +13,6 @@ import * as mockDataBeats from "./mock-data/beats.mjs";
 import { SQLiteTransaction, BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { SqliteRemoteResult } from "drizzle-orm/sqlite-proxy";
 import { createAllUndoTriggers, dropAllUndoTriggers } from "@/db-functions";
-import { createPageEraUndoTriggers } from "./pageEraUndoTriggers";
 import {
     handleSqlProxyWithDbBetterSqlite,
     handleSqlProxyWithDbSqlJs,
@@ -127,7 +126,7 @@ const loadSqlIntoDatabase = async (
     // drop all triggers
     await dropAllUndoTriggers(orm as unknown as any);
     for (const file of loaded) await db.exec(fs.readFileSync(file, "utf-8"));
-    await createPageEraUndoTriggers(orm as unknown as any);
+    await createAllUndoTriggers(orm as unknown as any);
     const updatedDbBuffer = db.export();
     fs.writeFileSync(dbPath, updatedDbBuffer);
     db.close();

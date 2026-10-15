@@ -410,6 +410,13 @@ export const deleteEmptySetCuesInTransaction = async ({
 }: {
     tx: DbTransaction;
 }): Promise<number[]> => {
+    // A page-era file gets the cue tables when it converts; until then it has no set cues
+    const hasCues = await tx
+        .select({ n: sql<number>`count(*)` })
+        .from(sql`sqlite_schema`)
+        .where(sql`type = 'table' AND name = 'cues'`)
+        .get();
+    if (!hasCues?.n) return [];
     const deleted = await tx
         .delete(schema.cues)
         .where(

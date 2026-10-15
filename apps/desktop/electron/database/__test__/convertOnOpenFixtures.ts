@@ -34,13 +34,6 @@ const showSql = fs.readFileSync(
 export const sha256 = (filePath: string) =>
     createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 
-/** The undo triggers a page-era release created on open (see `createPageEraUndoTriggers`). */
-async function createPageEraUndoTriggers(db: DatabaseSync) {
-    const { createPageEraUndoTriggers: create } =
-        await import("@/test/pageEraUndoTriggers");
-    await create(getOrm(db) as never);
-}
-
 /** Runs `fn` on a fresh connection to `filePath`. */
 export function withDb<T>(filePath: string, fn: (db: DatabaseSync) => T): T {
     const db = new DatabaseSync(filePath);
@@ -183,7 +176,9 @@ export async function createPageShow(
         db.exec(showSql);
         if (undoTriggers) {
             // The renderer creates the undo triggers on every open.
-            await createPageEraUndoTriggers(db);
+            const { createAllUndoTriggers } =
+                await import("@/db-functions/history");
+            await createAllUndoTriggers(getOrm(db) as never);
         }
         db.exec(
             "INSERT INTO history_undo (history_group, sql) VALUES (1, 'SELECT 1')",
@@ -243,7 +238,9 @@ export async function createLargePageShow(
                 );
         }
         db.exec("COMMIT");
-        await createPageEraUndoTriggers(db);
+        const { createAllUndoTriggers } =
+            await import("@/db-functions/history");
+        await createAllUndoTriggers(getOrm(db) as never);
     } finally {
         db.close();
     }

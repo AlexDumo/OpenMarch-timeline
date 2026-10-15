@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { drizzle as sqliteProxyDrizzle } from "drizzle-orm/sqlite-proxy";
 import { schema, type DbConnection } from "@/test/base";
 import { handleSqlProxyWithDbBetterSqlite } from "@/test/sqlProxyTestUtil";
-import { createPageEraUndoTriggers } from "@/test/pageEraUndoTriggers";
+import { createAllUndoTriggers } from "@/db-functions";
 import { resetTimelineChangeLog } from "@/db-functions/history";
 import { setDbPath, connect } from "@/../electron/database/database.services";
 import { getOrm } from "@/../electron/database/db";
@@ -123,7 +123,7 @@ describe.skipIf(CORPUS.length === 0)("conversion corpus (opt-in)", () => {
                             ),
                         { schema, casing: "snake_case" },
                     ) as unknown as DbConnection;
-                    await createPageEraUndoTriggers(db);
+                    await createAllUndoTriggers(db);
                     await resetTimelineChangeLog(db);
                     const started = Date.now();
                     // The page-era rows stay for the comparison
