@@ -95,7 +95,7 @@ export function detectCollisions(
  * Assumes a marcher moves along about that line within a beat: a path that curves or doubles back
  * inside one beat travels further than this, so it is sampled more coarsely than the radius asks
  * and a brief brush can be missed. So can anyone faster than 32 half-radii (160 field units) a
- * beat, past `MAX_SAMPLES_PER_BEAT`, which bounds the cost of one teleporting marcher.
+ * beat, past `MAX_SAMPLES_PER_BEAT`, which bounds the cost of one marcher that jumps across the field.
  */
 function maxTravel(a: Float64Array, b: Float64Array): number {
     let max = 0;
