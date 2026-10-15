@@ -121,3 +121,44 @@ times in 3 on Fabric in the browser, on `field-renderer` before #193 too.
 With `FIELD=three` under parallel load, the undo steps of `edit-positions`
 ("select all, then align", "copy every position") fail, also on the base;
 they pass alone and in Electron.
+
+### #195 Marquee and lasso
+
+**Files.** `editor/selectionArea.ts` holds the pure rules: `lassoCloses`
+(under `LASSO_CLOSE_DISTANCE`, 50 screen px, measured as field distance times
+the current zoom), `pointInPolygon`, `marchersInRect`, `marchersInPolygon`,
+`selectionAfterArea` and `boundsOf`. `editor/areaGestures.ts` has the two
+`FieldGesture`s, `startMarquee` and `startLasso`; each exposes `shape()`, a
+stable snapshot the overlay reads through `FieldEditor.areaShape()`.
+`three/selectionBox.ts` is the selection box's geometry (bounds plus the ring
+padding), shared by `FieldOverlay` and the editor.
+
+**`startDrag` now.** From a hit: null (#196's move). From empty field inside
+the multi-selection box (the new `FieldEditorPorts.selectionBox()`, in field
+units, as drawn): null, for #196's move (owner decision). Otherwise a lasso if
+the press is a double-click, else a marquee. **#196:** replace the two
+`return null` lines in `FieldEditor.startDrag`; the box test is
+`isInsideSelectionBox`. `area-selection.spec.mts` already pins that such a drag
+draws no marquee and keeps the selection.
+
+**Double-click.** The editor keeps the last click (time, screen point, hit). A
+press within `DOUBLE_CLICK_MS` (500) and `DOUBLE_CLICK_SLOP` (8 screen px) of a
+click on empty field is a double press; dragged, it's a lasso; released, it's
+a plain click, and starts no triple. The clock is `FieldEditorOptions.now`.
+`pointerCancel` keeps the last click: `fieldPointerInput` cancels on
+`lostpointercapture` after every release.
+
+**Rules as built.** The marquee takes every marcher whose dot it touches (its
+click target, `hitRadius`), as Fabric's marquee touches objects; the lasso
+takes centers. Both skip hidden and dimmed marchers, like a click and Ctrl+A.
+Shift at the press adds; a marquee over nothing clears (Shift keeps). A lasso
+released 50 px or more from its start changes nothing. The overlay draws the
+marquee in the theme's shape color at 20% fill, the lasso dashed in
+`primaryStroke`, and `nextPath` green while a release would close it.
+
+**Scenarios.** `e2e/browser/tests/area-selection.spec.mts`: marquee scenarios
+on both fields; one `change:` (Shift+drag is a marquee that adds, not
+Fabric's lasso) is `test.fail` on Fabric; lasso scenarios skip on Fabric. The
+green cue and the drawn shapes are checked by eye (the test API has no reading
+for overlay shapes). The closing rule at other zooms is unit-tested only:
+the new field can't zoom until #194 lands.

@@ -414,6 +414,15 @@ describe("FieldEditor lasso", () => {
         expect(editor.activeGesture()).toBe("lasso");
     });
 
+    it("starts after a click the renderer cancelled once released (lost pointer capture)", () => {
+        const { editor } = setup();
+        click(editor, 150, 50);
+        editor.pointerCancel();
+        editor.pointerDown(at(150, 50));
+        editor.pointerMove(at(250, 50));
+        expect(editor.activeGesture()).toBe("lasso");
+    });
+
     it("replaces the selection with the marchers inside it", () => {
         const { editor, state } = setup({ selected: [4] });
         lasso(editor, AROUND_2_AND_3);

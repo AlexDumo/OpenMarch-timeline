@@ -208,8 +208,8 @@ export class FieldEditor {
 
     /** The pointer was lost (capture lost, the window lost focus): nothing is clicked or dropped. */
     pointerCancel(): void {
+        // The last click stays: the renderer also cancels after every release
         this.press = null;
-        this.lastClick = null;
         this.ignoredButton = null;
         this.cancelGesture();
     }
