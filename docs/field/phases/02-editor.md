@@ -96,11 +96,11 @@ Shift+click on empty field keeps the selection; a second Ctrl+A keeps
 everything selected. **#196:** pressing a selected marcher and dragging must
 still move the whole selection: the narrowing happens only on a click.
 
-**Open for #195 and #196.** A drag that starts on empty field inside a
-multi-selection's box: by the spec (Marquee row) it's a marquee, but Fabric
-moves the group. The owner is being asked; #196 pins the answer with a
-scenario. The editor's `startDrag` gets `press.hit === null` there either way,
-so the box test belongs in `startDrag`.
+**Decided for #195 and #196.** A drag that starts on empty field inside a
+multi-selection's box moves the selection, as Fabric does (owner decision); a
+plain click there still clears it. #196 pins this with a scenario. The editor's
+`startDrag` gets `press.hit === null` there, so the box test belongs in
+`startDrag`: inside the box it's a move, outside it's a marquee or lasso.
 
 **For #202.** A first press on the field during a paused preview selects on
 the new field, where Fabric only clears the preview (story 60). #202 needs a

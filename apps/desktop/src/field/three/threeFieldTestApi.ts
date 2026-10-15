@@ -3,6 +3,7 @@ import { resolveMarcherLook } from "@/entity-components/appearance";
 import type {
     FieldTestApi,
     FieldTestGesture,
+    FieldTestImage,
     FieldTestLook,
     FieldTestMarcher,
 } from "@/field/fieldTestApi";
@@ -18,6 +19,8 @@ export type ThreeFieldState = {
     /** The element the field draws into, or null before it mounts. */
     element(): HTMLElement | null;
     pageId(): number | null;
+    /** The field image as `BackgroundImageLayer` draws it, or null. */
+    fieldImage(): FieldTestImage | null;
     theme(): FieldTheme;
     /** The app's selection, as the editor reads it. */
     selection(): readonly number[];
@@ -66,6 +69,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
         handles: () => null,
         activeGesture: () => field.activeGesture(),
         pageId: () => field.pageId(),
+        fieldImage: () => field.fieldImage(),
     };
 }
 

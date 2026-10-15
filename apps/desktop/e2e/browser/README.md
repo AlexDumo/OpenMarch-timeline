@@ -60,6 +60,13 @@ Electron it also passes Chromium's software GL switches, since a machine with
 no GPU (Xvfb in a container) otherwise has no WebGL. Until the editor tickets
 land, the scenarios that select or drag marchers fail on the new field.
 
+## Render comparisons
+
+`e2e/browser/render/` captures the field itself on Fabric and on the new
+field at the same view, and writes side-by-side and diff images to review.
+It's its own Playwright project (`render`), not part of the scenarios; see
+`render/README.md`.
+
 ## What belongs in the Electron suite instead
 
 A channel the host doesn't register rejects with Electron's own "No handler
@@ -98,7 +105,7 @@ test("creates marchers", async ({ show }) => {
   host bundle, so it needs `pnpm run build:browser` for both targets.
 - Read the field only through the field test API, `window.fieldTest`
   (`src/field/fieldTestApi.ts`): the drawn marchers, the selection, the view,
-  the selection handles and the gesture in progress. The helpers
+  the selection handles, the gesture in progress and the field image. The helpers
   (`drawnMarchers`, `readField`, `selectedDrillNumbers`) wrap it. Never reach
   into the renderer (`window.canvas`, Fabric objects): the same scenarios must
   run against the new field renderer (#189).
