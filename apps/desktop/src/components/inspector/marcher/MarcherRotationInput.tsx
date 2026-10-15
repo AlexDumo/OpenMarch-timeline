@@ -27,7 +27,9 @@ function MarcherRotationInput() {
     );
 
     useEffect(() => {
-        const canvas: OpenMarchCanvas = window.canvas;
+        const canvas: OpenMarchCanvas | undefined = window.canvas;
+        // The new field (dev switch, #192) has no Fabric canvas; its rotation comes in #198
+        if (!canvas) return;
 
         const handleGroupSelection = (e: fabric.IEvent) => {
             const group = (e as any).group as fabric.Group | null;

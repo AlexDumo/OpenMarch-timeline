@@ -10,6 +10,11 @@ words:
   - lods
   - Sketchfab
   - gltf
+  - glsl
+  - MSAA
+  - Felzenszwalb
+  - Huttenlocher
+  - swiftshader
   - marktime
   - stepoff
   - prefs

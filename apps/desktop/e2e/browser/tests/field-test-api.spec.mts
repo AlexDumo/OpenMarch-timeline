@@ -103,7 +103,7 @@ test("reads the view", async ({ show }) => {
     const t2 = await marcher(page, "T2");
     expect(t2.screen.x - t1.screen.x).toBeCloseTo((t2.x - t1.x) * zoom, 1);
     expect(t2.screen.y - t1.screen.y).toBeCloseTo((t2.y - t1.y) * zoom, 1);
-    const field = await page.locator("canvas.upper-canvas").boundingBox();
+    const field = await page.getByTestId("fieldCanvas").boundingBox();
     const origin = {
         x: t1.screen.x - t1.x * zoom - field!.x,
         y: t1.screen.y - t1.y * zoom - field!.y,

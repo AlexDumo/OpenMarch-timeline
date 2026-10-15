@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { waitForField } from "./app.mjs";
+import type { FieldRenderer } from "../../src/field/fieldRenderer";
 
 const desktopDir = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -36,6 +37,16 @@ const requireBuilt = (file: string, script: string) => {
 /** Where the scenarios run. Set per Playwright project. */
 export type Target = "browser" | "electron";
 
+/**
+ * Which field renderer the app draws with (the dev switch in
+ * `src/field/fieldRenderer.ts`). Fabric unless `FIELD=three` is set, so the
+ * same scenarios run on either: `FIELD=three pnpm run e2e:browser`.
+ */
+export type FieldDriver = FieldRenderer;
+const FIELD_STORAGE_KEY = "openmarch:dev:field";
+const defaultField: FieldDriver =
+    process.env.FIELD === "three" ? "three" : "fabric";
+
 type Query = <T = Record<string, unknown>>(
     sql: string,
     ...params: SQLInputValue[]
@@ -57,6 +68,7 @@ async function openInBrowser(
     browser: Browser,
     databasePath: string,
     appSettings: Record<string, unknown>,
+    field: FieldDriver,
 ): Promise<App> {
     const { openShow } = (await import(pathToFileURL(hostBundle).href)) as {
         openShow: typeof import("./host/index").openShow;
@@ -67,6 +79,10 @@ async function openInBrowser(
         settings: appSettings,
     });
     const context = await browser.newContext({ viewport: VIEWPORT });
+    await context.addInitScript(
+        ([key, value]) => localStorage.setItem(key, value),
+        [FIELD_STORAGE_KEY, field] as const,
+    );
     const page = await context.newPage();
 
     await page.exposeFunction(
@@ -122,6 +138,7 @@ async function openInElectron(
     databasePath: string,
     appSettings: Record<string, unknown>,
     userDataDir: string,
+    field: FieldDriver,
 ): Promise<App> {
     // The app's settings store (electron-store) reads this file at startup.
     fs.mkdirSync(userDataDir, { recursive: true });
@@ -142,6 +159,11 @@ async function openInElectron(
             "--no-audio",
             "--disable-audio-output",
             "--disable-audio-input",
+            // The new field needs WebGL. A machine with no GPU (Xvfb in a
+            // container) only has it through Chromium's software GL
+            ...(field === "three"
+                ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+                : []),
         ],
         env: {
             ...process.env,
@@ -213,12 +235,15 @@ type Fixtures = {
 
 type WorkerFixtures = {
     target: Target;
+    /** The field renderer; from the `FIELD` environment variable by default. */
+    field: FieldDriver;
     /** One Chromium per worker for the browser target; unused for Electron. */
     chromium: Browser | undefined;
 };
 
 export const test = base.extend<Fixtures, WorkerFixtures>({
     target: ["browser", { option: true, scope: "worker" }],
+    field: [defaultField, { option: true, scope: "worker" }],
     chromium: [
         async ({ target, playwright }, use) => {
             if (target !== "browser") return use(undefined);
@@ -235,7 +260,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     allowedPageErrors: [[], { option: true }],
 
     show: async (
-        { target, chromium, appSettings, seedSql, allowedPageErrors },
+        { target, field, chromium, appSettings, seedSql, allowedPageErrors },
         use,
         testInfo,
     ) => {
@@ -258,11 +283,33 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 databasePath,
                 appSettings,
                 testInfo.outputPath("user-data"),
+                field,
             );
         } else {
-            app = await openInBrowser(chromium!, databasePath, appSettings);
+            app = await openInBrowser(
+                chromium!,
+                databasePath,
+                appSettings,
+                field,
+            );
         }
         const { page } = app;
+        if (target === "electron") {
+            // The window is already loading when Playwright gets it: set the
+            // switch, then load again with it
+            await page.waitForLoadState("domcontentloaded");
+            const current = await page.evaluate(
+                (key) => localStorage.getItem(key),
+                FIELD_STORAGE_KEY,
+            );
+            if ((current ?? "fabric") !== field) {
+                await page.evaluate(
+                    ([key, value]) => localStorage.setItem(key, value),
+                    [FIELD_STORAGE_KEY, field] as const,
+                );
+                await page.reload();
+            }
+        }
 
         const pageErrors: string[] = [];
         // Closing the app is not part of a scenario; Electron's close flow
@@ -284,6 +331,10 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 timeout: 20_000,
             });
             await waitForField(page);
+            // The switch took: the field on screen is the one asked for
+            await expect(page.getByTestId("threeField")).toHaveCount(
+                field === "three" ? 1 : 0,
+            );
             await use({ page, databasePath, pageErrors, query: app.query });
         } catch (error) {
             failed = true;
