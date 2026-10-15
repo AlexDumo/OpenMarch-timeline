@@ -38,6 +38,7 @@ words:
   - janky
   - webglcontextlost
   - webglcontextrestored
+  - WEBGL
   - libvips
   - libuv
   - sandboxed
