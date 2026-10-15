@@ -36,10 +36,8 @@ const PAGES = [0, 1, 2];
 test.use({
     // A random edit can be one the timeline refuses (it says why in a toast
     // and logs it); the walk still checks the canvas and the undo history.
-    // "transition N not found": a pre-existing resolver race in Electron (#212);
-    // remove it from here once that's fixed.
     // One pattern: Playwright reads a two-item array here as [value, options].
-    allowedPageErrors: [/TimelineWriteError: E-ARGS|transition \d+ not found/],
+    allowedPageErrors: [/TimelineWriteError: E-ARGS/],
     seedSql: seedShowSql({
         beats: 48,
         pageStarts: [16, 32],
