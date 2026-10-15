@@ -1,6 +1,6 @@
 import type { FieldProperties, FieldTheme, RgbaColor } from "@openmarch/core";
 import {
-    resolveAppearanceFromStack,
+    resolveMarcherLook,
     type AppearanceComponentOptional,
 } from "@/entity-components/appearance";
 import {
@@ -163,28 +163,9 @@ function fieldTextSvg(t: FieldPlanText): string {
     return `<g transform="matrix(-1 0 0 -1 ${num(2 * t.x)} ${num(2 * centerY)})">${svg}</g>`;
 }
 
-/** A dot's look, resolved as `CanvasMarcher.setAppearance` does */
-export function resolveDotLook(
-    appearances: AppearanceComponentOptional[],
-    theme: FieldTheme,
-) {
-    const resolved = resolveAppearanceFromStack(appearances, theme);
-    const first = <K extends "fill_color" | "outline_color">(key: K) =>
-        appearances.find((a) => a[key] != null)?.[key] ?? null;
-    const outlineValue = first("outline_color");
-    return {
-        visible: resolved.visible,
-        labelVisible: resolved.textVisible,
-        shape: resolved.shape,
-        fill: first("fill_color") || theme.defaultMarcher.fill,
-        outline: outlineValue || theme.defaultMarcher.outline,
-        outlineValue,
-    };
-}
-
 /** One dot's shape, centered on its coordinate */
 export function dotSvg(dot: DrillChartDot, theme: FieldTheme): string {
-    const look = resolveDotLook(dot.appearances, theme);
+    const look = resolveMarcherLook(dot.appearances, theme);
     if (!look.visible) return "";
     const r = DOT_RADIUS;
     const colors = `${paint("fill", look.fill)} ${paint("stroke", look.outline)} stroke-width="1"`;
@@ -210,13 +191,8 @@ export function dotSvg(dot: DrillChartDot, theme: FieldTheme): string {
             return `<polygon ${attrs} points="${points}" ${colors} />`;
         }
         case "cross": {
-            // Drawn in the fill color unless the outline is visible: an X has no fill area
-            const color =
-                look.outlineValue && look.outlineValue.a > 0.1
-                    ? look.outline
-                    : look.fill;
             const s = r * 1.2;
-            return `<g ${attrs}>${line(-s, -s, s, s, color, 2)}${line(-s, s, s, -s, color, 2)}</g>`;
+            return `<g ${attrs}>${line(-s, -s, s, s, look.crossColor, 2)}${line(-s, s, s, -s, look.crossColor, 2)}</g>`;
         }
         default:
             return `<circle ${attrs} cx="0" cy="0" r="${num(r)}" ${colors} />`;
@@ -225,7 +201,7 @@ export function dotSvg(dot: DrillChartDot, theme: FieldTheme): string {
 
 /** A dot's drill number above it, or nothing when its label is hidden */
 export function dotLabelSvg(dot: DrillChartDot, theme: FieldTheme): string {
-    const look = resolveDotLook(dot.appearances, theme);
+    const look = resolveMarcherLook(dot.appearances, theme);
     if (!look.labelVisible) return "";
     return text({
         content: dot.label,

@@ -25,6 +25,24 @@ export type FieldTestMarcher = {
     screen: ScreenPoint;
     /** False when the dot is scrolled out of the visible field. */
     onScreen: boolean;
+    /** How the marcher is drawn: its appearance at the beat shown. */
+    look: FieldTestLook;
+};
+
+/**
+ * A marcher's look on the field. Colors are `rgba(r, g, b, a)` as
+ * `rgbaToString` writes them.
+ */
+export type FieldTestLook = {
+    /** False for a hidden marcher: neither its dot nor its label is drawn. */
+    visible: boolean;
+    labelVisible: boolean;
+    shape: "circle" | "square" | "triangle" | "x";
+    /** The dot's fill; an X's line color. */
+    fill: string;
+    /** The dot's outline; null for an X, which is lines only. */
+    outline: string | null;
+    labelColor: string;
 };
 
 export type FieldTestHandle =
@@ -52,7 +70,7 @@ export type FieldTestGesture =
     | "line";
 
 export interface FieldTestApi {
-    /** Every marcher drawn on the field. */
+    /** Every marcher on the field, hidden ones included (`look.visible`). */
     marchers(): FieldTestMarcher[];
     /** The ids of the selected marchers, ascending. */
     selection(): number[];

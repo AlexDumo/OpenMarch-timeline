@@ -31,6 +31,60 @@ weak machines.
 
 Append notes the next tickets need: file locations, seams, surprises.
 
+### #199 Marcher appearance
+
+**Resolution is shared, not re-implemented.** `resolveMarcherLook` in
+`src/entity-components/appearance.ts` (on top of `resolveAppearanceFromStack`)
+is the one place a stack becomes fill, outline, shape, visible, label visible
+and the X's line color. The drill-chart export (`drillChartSvg.ts`) and the new
+field both call it. Which stack applies at a beat is the timeline rule in
+`services/appearance/appearanceSteps.ts` (the last flag crossed), through
+`useMarcherAppearanceSteps`, the same steps the Fabric field and
+`SelectedMarchersContext` use.
+
+**Where it lives on the new field:**
+
+- `FieldMarchers` samples the appearance with the positions. After each
+  `fill(beat)` it holds `stacks` (per index in `ids`, null for the theme's
+  default), `hidden` (a `Uint8Array`, 1 per hidden marcher) and
+  `appearanceVersion`. It re-samples only when the ids change or the beat
+  crosses an appearance change (`changeIndexAtBeat`), so playback costs a
+  binary search per frame. `ThreeField` hands it the steps
+  (`setAppearanceSteps`) from `PlayheadDriver`.
+- `marcherLooks.ts` writes the per-instance buffers (`writeMarcherLooks`) and
+  which labels show (`labelsShown`).
+- `MarchersLayer`: `aFill`, `aOutline` (rgba 0–1) and `aShape` (`MARCHER_SHAPE`,
+  -1 hidden) per instance. Every shape is a signed distance in the fragment
+  shader, sized as Fabric and the export draw them; the 1-unit outline
+  straddles the edge with mitered corners, as Fabric strokes. Hidden instances
+  collapse to a point off screen. **#201**: dimming can be one more
+  per-instance attribute here (an opacity), written the same way.
+- `LabelsLayer`: a hidden label lays out as no glyphs. All labels take the
+  theme's label color, as on Fabric (no appearance sets a label color).
+
+**For #193 (hit testing):** skip marchers with `fieldMarchers.hidden[i] === 1`.
+The scenario `marcher-appearance` › "a click goes through a hidden marcher"
+(hidden F2 stands on F1; a click selects F1) passes on Fabric and waits on
+#193 on the new field.
+
+**Field test API:** each marcher has a `look` (shape, fill, outline, label
+color, visible, label visible), read from Fabric's objects and from the new
+field's stacks. Hidden marchers stay in `marchers()` with `look.visible` false.
+
+**Render comparisons** (`e2e/browser/tests/render-compare.spec.mts`, opt-in
+with `RENDER_COMPARE=<folder>`, then `e2e/browser/render-compare.py <folder>`):
+captures the converted demo shows from `view3d-web/public/demos` (the page-era
+copies in `web/public/demos` open with every marcher at 0, 0 in the harness)
+plus a part 1 variant with every shape, outlines, a hidden section and hidden
+labels, at two window sizes and three times, and pairs them in field units.
+It needs Pillow (`pip install pillow`, in a virtual environment). The fixture's new
+`showFile` option starts a test from any show file. **#200 and #208** can add
+regions or shows there. Differences it shows that aren't #199's: the grid sits
+half a line off on Fabric (the dropped offset), yard numbers and label glyphs
+differ by about a pixel (SDF fonts, #200), and Fabric's view differs until
+#194. At very low zooms the new field's dots are larger than Fabric's, because
+of #192's 1.5 CSS px minimum dot radius (Fabric has none).
+
 ### #200 Field themes and background image
 
 **One 2D field plan.** `apps/desktop/src/field/fieldPlan.ts` (`planField2d`)
