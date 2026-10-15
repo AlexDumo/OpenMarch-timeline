@@ -53,9 +53,12 @@ export function KindPicker({
     model,
     contextKind,
     actions,
+    disabled = false,
 }: {
     model: ModelState;
     contextKind: string | undefined;
+    /** Outside review (a commit running), nothing can change. */
+    disabled?: boolean;
     actions: Actions;
 }) {
     const { t } = useTranslate();
@@ -84,7 +87,7 @@ export function KindPicker({
                     <Chip
                         key={kind}
                         on={current === kind}
-                        disabled={model.inspecting}
+                        disabled={model.inspecting || disabled}
                         testId={`import-kind-${kind}`}
                         onClick={() => {
                             if (current !== kind || kindRow)
@@ -137,15 +140,17 @@ function Choice({
     model,
     actions,
     t,
+    disabled,
 }: {
     row: ChoiceRow;
     model: ModelState;
     actions: Actions;
     t: Translate;
+    disabled: boolean;
 }) {
     const k = (key: string, params?: Record<string, string | number>) =>
         t(`library.import.choices.${key}`, params);
-    const busy = model.inspecting;
+    const busy = model.inspecting || disabled;
     const kind = model.inspection?.report.kind ?? null;
     switch (row.code) {
         case "kind":
@@ -369,16 +374,18 @@ function ArtworkSurfaceChoice({
     model,
     actions,
     t,
+    disabled,
 }: {
     model: ModelState;
     actions: Actions;
     t: Translate;
+    disabled: boolean;
 }) {
     const k = (key: string, params?: Record<string, string | number>) =>
         t(`library.import.choices.surface.${key}`, params);
     const report = model.inspection!.report;
     const picked = pickedSurface(model);
-    const busy = model.inspecting;
+    const busy = model.inspecting || disabled;
     const hover = (index: number | null) => (hovered: boolean) =>
         actions.hoverMaterial(hovered ? index : null);
     return (
@@ -427,9 +434,12 @@ function ArtworkSurfaceChoice({
 export function ModelReportView({
     model,
     actions,
+    disabled = false,
 }: {
     model: ModelState;
     actions: Actions;
+    /** Outside review (a commit running), nothing can change. */
+    disabled?: boolean;
 }) {
     const { t } = useTranslate();
     const report = model.inspection?.report;
@@ -473,6 +483,7 @@ export function ModelReportView({
                         model={model}
                         actions={actions}
                         t={t}
+                        disabled={disabled}
                     />
                 ))}
                 {asksSurface && (
@@ -480,6 +491,7 @@ export function ModelReportView({
                         model={model}
                         actions={actions}
                         t={t}
+                        disabled={disabled}
                     />
                 )}
             </ReportGroup>

@@ -32,6 +32,8 @@ import {
     SRGBColorSpace,
     type Object3D,
     type PerspectiveCamera,
+    type Scene,
+    type WebGLRenderer,
 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -72,6 +74,8 @@ export interface ImportPreviewCanvasProps {
         capture: (() => Promise<Uint8Array<ArrayBuffer> | null>) | null,
     ) => void;
     onError?: () => void;
+    /** The before model failed to load; the after model stays. */
+    onBeforeError?: () => void;
 }
 
 const FIGURE_RADIUS = 0.18;
@@ -185,6 +189,7 @@ function Floor({ size }: { size: Vec3 }) {
         const material = helper.material as LineBasicMaterial;
         material.transparent = true;
         material.opacity = 0.5;
+        helper.userData.previewHelper = true;
         return helper;
     }, [size]);
     useEffect(
@@ -225,7 +230,11 @@ function ReferenceFigure({ x }: { x: number }) {
     );
     const bodyHeight = CLASS_HEIGHT_M * 0.78;
     return (
-        <group position={[x, 0, 0]} name="reference-figure">
+        <group
+            position={[x, 0, 0]}
+            name="reference-figure"
+            userData={{ previewHelper: true }}
+        >
             <mesh
                 geometry={parts.body}
                 material={parts.material}
@@ -262,6 +271,7 @@ function GripMarker({ position }: { position: Vec3 }) {
     return (
         <mesh
             name="grip-marker"
+            userData={{ previewHelper: true }}
             geometry={parts.geometry}
             material={parts.material}
             position={position}
@@ -288,6 +298,9 @@ function Controls({
         [camera, gl],
     );
     useEffect(() => {
+        // StrictMode replays effects on the same memoized controls, and the
+        // cleanup's dispose() disconnects them: connect again on every run.
+        controls.connect(gl.domElement);
         controls.enableDamping = false;
         controls.maxPolarAngle = Math.PI / 2 - 0.01;
         const change = () => invalidate();
@@ -296,7 +309,7 @@ function Controls({
             controls.removeEventListener("change", change);
             controls.dispose();
         };
-    }, [controls, invalidate]);
+    }, [controls, gl, invalidate]);
     useEffect(() => {
         const cam = camera as PerspectiveCamera;
         const placed = viewCamera(
@@ -322,38 +335,89 @@ function Controls({
     return null;
 }
 
-function Capture({
-    onCaptureReady,
-}: {
-    onCaptureReady?: ImportPreviewCanvasProps["onCaptureReady"];
-}) {
-    const { gl, scene, camera } = useThree();
-    useEffect(() => {
-        if (!onCaptureReady) return;
-        onCaptureReady(async () => {
-            gl.render(scene, camera);
-            const source = gl.domElement;
-            const target = thumbnailSize(source.width, source.height, 256);
-            const canvas = document.createElement("canvas");
-            canvas.width = target.width;
-            canvas.height = target.height;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) return null;
-            ctx.drawImage(source, 0, 0, target.width, target.height);
-            const blob = await new Promise<Blob | null>((resolve) =>
-                canvas.toBlob(resolve, "image/png"),
-            );
-            return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
-        });
-        return () => onCaptureReady(null);
-    }, [gl, scene, camera, onCaptureReady]);
-    return null;
+/** What a thumbnail capture shows, read when the capture runs. */
+interface CaptureState {
+    after: Object3D | null;
+    shown: Object3D | null;
+    holder: Group | null;
+    highlight: number | null;
+    size: Vec3 | null;
+}
+
+/**
+ * Draws the Library thumbnail (Q50) into a 2D canvas: the after model alone,
+ * unlit by the surface highlight and framed from the front, whatever the
+ * stage shows. The grid, reference figure and grip marker are hidden for
+ * that one frame, then everything is put back.
+ */
+function drawThumbnail(
+    gl: WebGLRenderer,
+    scene: Scene,
+    camera: PerspectiveCamera,
+    state: CaptureState,
+    accent: Color,
+): HTMLCanvasElement | null {
+    const { after, shown, holder, highlight, size } = state;
+    if (!after || !shown || !holder || !size) return null;
+    const hidden: Object3D[] = [];
+    scene.traverse((o) => {
+        if (o.userData.previewHelper && o.visible) {
+            o.visible = false;
+            hidden.push(o);
+        }
+    });
+    const swapped = shown !== after;
+    if (swapped) {
+        shown.visible = false;
+        holder.add(after);
+    }
+    highlightMaterials(after, null, accent);
+    const saved = {
+        position: camera.position.clone(),
+        quaternion: camera.quaternion.clone(),
+        up: camera.up.clone(),
+    };
+    const source = gl.domElement;
+    try {
+        const placed = viewCamera(
+            size,
+            [0, size[1] / 2, 0],
+            "front",
+            camera.fov,
+            source.width / Math.max(1, source.height),
+        );
+        camera.up.set(...placed.up);
+        camera.position.set(...placed.position);
+        camera.lookAt(...placed.target);
+        camera.updateMatrixWorld();
+        gl.render(scene, camera);
+        const target = thumbnailSize(source.width, source.height, 256);
+        const canvas = document.createElement("canvas");
+        canvas.width = target.width;
+        canvas.height = target.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+        ctx.drawImage(source, 0, 0, target.width, target.height);
+        return canvas;
+    } finally {
+        camera.position.copy(saved.position);
+        camera.quaternion.copy(saved.quaternion);
+        camera.up.copy(saved.up);
+        camera.updateMatrixWorld();
+        if (swapped) {
+            holder.remove(after);
+            shown.visible = true;
+        }
+        for (const o of hidden) o.visible = true;
+        highlightMaterials(shown, highlight, accent);
+        gl.render(scene, camera);
+    }
 }
 
 function PreviewScene(props: ImportPreviewCanvasProps) {
-    const { invalidate } = useThree();
+    const { invalidate, gl, scene, camera } = useThree();
     const after = useGltf(props.url, props.onError);
-    const before = useGltf(props.beforeUrl, props.onError);
+    const before = useGltf(props.beforeUrl, props.onBeforeError);
     const shown = props.showBefore && before ? before : after;
     const [bounds, setBounds] = useState<Bounds | null>(null);
     const holder = useRef<Group>(null);
@@ -378,6 +442,41 @@ function PreviewScene(props: ImportPreviewCanvasProps) {
         highlightMaterials(shown, highlight, accent);
         invalidate();
     }, [shown, highlight, accent, invalidate]);
+
+    const captureState = useRef<CaptureState>({
+        after: null,
+        shown: null,
+        holder: null,
+        highlight: null,
+        size: null,
+    });
+    captureState.current = {
+        after,
+        shown,
+        holder: holder.current,
+        highlight,
+        size: bounds ? boundsSize(bounds) : null,
+    };
+    const { onCaptureReady } = props;
+    useEffect(() => {
+        if (!onCaptureReady) return;
+        onCaptureReady(async () => {
+            const canvas = drawThumbnail(
+                gl,
+                scene,
+                camera as PerspectiveCamera,
+                // The holder mounts after the first render: read it now.
+                { ...captureState.current, holder: holder.current },
+                accent,
+            );
+            if (!canvas) return null;
+            const blob = await new Promise<Blob | null>((resolve) =>
+                canvas.toBlob(resolve, "image/png"),
+            );
+            return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
+        });
+        return () => onCaptureReady(null);
+    }, [gl, scene, camera, accent, onCaptureReady]);
 
     if (!shown || !bounds) return null;
     const offset = placementOffset(bounds);
@@ -435,7 +534,6 @@ export default function ImportPreviewCanvas(props: ImportPreviewCanvasProps) {
         >
             <Lighting />
             <PreviewScene {...props} />
-            <Capture onCaptureReady={props.onCaptureReady} />
         </Canvas>
     );
 }

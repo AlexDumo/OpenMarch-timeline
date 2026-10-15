@@ -20,7 +20,8 @@ export default function Sidebar() {
                 <FieldModal />
                 <MetronomeModal />
                 <AppearanceModal />
-                <AssetsModal />
+                {/* The Library lives in main; the web build has no Library IPC. */}
+                {!isWebBuild && <AssetsModal />}
             </div>
             <div className="flex flex-col gap-16">
                 {/* Uploading to the mobile app needs sign-in, which needs Electron. */}
