@@ -42,3 +42,23 @@ first:
 FIELD=three pnpm exec playwright test --project=render timeline-render
 FIELD=fabric pnpm exec playwright test --project=render timeline-render
 ```
+
+## Video export comparisons
+
+`video-compare.spec.mts` (#207) exports converted demo shows through the
+export dialog at 1080p and 30 fps: part 1 with every dot shape, outlines, a
+hidden section and hidden labels; part 1 with a fitted field image; and the
+385-marcher Daft Punk show. It only runs with `VIDEO_COMPARE=<folder>`, and
+saves each video to `<folder>/<VIDEO_COMPARE_LABEL>/` (default `after`). Run
+it on two checkouts (a detached worktree for the base, with this harness
+copied in), then pair their frames:
+
+```bash
+VIDEO_COMPARE=/tmp/vc VIDEO_COMPARE_LABEL=before pnpm exec playwright test --project=render video-compare
+VIDEO_COMPARE=/tmp/vc VIDEO_COMPARE_LABEL=after pnpm exec playwright test --project=render video-compare
+e2e/browser/render/video-compare.sh /tmp/vc before after
+```
+
+The script writes, to `<folder>/frames`, each pair of frames at 2%, 25%, 50%,
+75% and 98% of the video, a before | after | difference (×4) image per pair,
+and `summary.tsv` with each pair's PSNR. It needs ffmpeg.
