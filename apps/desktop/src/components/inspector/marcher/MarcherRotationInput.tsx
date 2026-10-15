@@ -16,6 +16,7 @@ import {
     subscribeActiveFieldEditor,
 } from "@/field/editor/activeFieldEditor";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 
 /** Rotates the selection on the field on screen: the new field's editor, or Fabric's group. */
 function MarcherRotationInput() {
@@ -34,25 +35,27 @@ function MarcherRotationInput() {
  * The new field's rotation (#198, user story 54): typing or dragging turns
  * the selection about its box's center through the editor, as the rotate
  * handle does, and leaving the input saves it through the same drop. Left
- * unchanged, it saves nothing. It shows the turn not yet saved: after a save
- * the selection's box fits it again, at 0°, as Fabric's group does.
+ * unchanged, it saves nothing. It shows what's typed until the save, then 0
+ * again, as Fabric's group does: the selection's box fits it again.
  */
 function FieldRotationInput({ editor }: { editor: FieldEditor }) {
-    const subscribe = useCallback(
-        (listener: () => void) => editor.subscribe(listener),
-        [editor],
-    );
-    const angle = useSyncExternalStore(subscribe, () => editor.typedRotation());
-    // The selection comes from the app, which renders the inspector again when it changes
-    const canRotate = editor.canTransform();
-    const save = () => editor.endRotation();
+    // Each save starts the input over at 0. Its value isn't the editor's, so
+    // typing "22." isn't rewritten as "22" mid-number
+    const [saves, setSaves] = useState(0);
+    // The context holds no hidden marchers, as the editor's handles skip them
+    const canRotate = useSelectedMarchers()!.selectedMarchers.length >= 2;
+    const save = () => {
+        if (editor.typedRotation() !== 0) setSaves((count) => count + 1);
+        editor.endRotation();
+    };
 
     return (
         <div className="flex flex-col gap-8">
             <DragInput
+                key={saves}
                 dragSensitivity={0.5}
                 dragSensitivityWithShift={0.1}
-                value={Math.round(angle) % 360}
+                value={0}
                 roundToNearest={15}
                 roundToNearestWithShift={1}
                 onDragChange={(value) => editor.rotateSelection(value)}

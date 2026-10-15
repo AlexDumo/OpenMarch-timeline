@@ -393,15 +393,21 @@ test("dragging a handle past the opposite side doesn't flip the formation", asyn
     await expectCanvasMatchesShow(show);
 });
 
-test("a press on a handle that moves under 4 px changes nothing", async ({
+test("change: a press on a handle that moves under 4 px changes nothing, however long it's held", async ({
     show,
+    field,
 }) => {
+    test.fail(
+        field === "fabric",
+        "Fabric's click is under 300 ms: a slower small press transforms",
+    );
     const { page } = show;
     await selectAll(page);
     const steps = await undoSteps(show);
 
-    await dragHandle(page, "se", { x: 2, y: 1 }, { steps: 2 });
-    await dragHandle(page, "rot", { x: -2, y: 2 }, { steps: 2 });
+    const hold = () => page.waitForTimeout(400);
+    await dragHandle(page, "se", { x: 2, y: 1 }, { beforeRelease: hold });
+    await dragHandle(page, "rot", { x: -2, y: 2 }, { beforeRelease: hold });
     await waitForIdle(page);
 
     expect(await savedPositions(show, 0)).toEqual(asPositions(PAGE_0));

@@ -198,6 +198,32 @@ describe("scaleFor: no flipping (user story 52)", () => {
     });
 });
 
+describe("transforms that change nothing (user story 54)", () => {
+    // Saved off the thousandths grid, as an unsnapped drag leaves them
+    const loose: MarcherPosition[] = [
+        { id: 1, x: 100.12345, y: 200.98765 },
+        { id: 2, x: 210.5555, y: 230.4444 },
+    ];
+    const box = boundsOf(loose)!;
+
+    it("leave every position exactly as it was after whole turns", () => {
+        expect(rotatePositions(loose, { x: 0, y: 0 }, 0)).toEqual(loose);
+        expect(rotatePositions(loose, { x: 0, y: 0 }, 360)).toEqual(loose);
+        expect(rotatePositions(loose, { x: 0, y: 0 }, -720)).toEqual(loose);
+    });
+
+    it("leave the axis a middle handle doesn't scale exactly as it was", () => {
+        const scaled = scalePositions(
+            loose,
+            scaleFor("e", box, { x: 20, y: 0 }, false),
+        );
+        expect(scaled.map((p) => p.y)).toEqual(loose.map((p) => p.y));
+        expect(
+            scalePositions(loose, scaleFor("se", box, { x: 0, y: 0 }, false)),
+        ).toEqual(loose);
+    });
+});
+
 describe("rotation (user story 50)", () => {
     const center = { x: 0, y: 0 };
 

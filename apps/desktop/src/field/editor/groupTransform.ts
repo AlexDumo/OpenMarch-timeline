@@ -196,15 +196,19 @@ export function scaleFor(
     return { anchor, x: uniform, y: uniform };
 }
 
-/** `starts` scaled by `scale`, to three decimal places (as coordinate rounding saves). */
+/**
+ * `starts` scaled by `scale`, to three decimal places (as coordinate rounding
+ * saves). An axis scaled by 1 is left exactly as it was, so a transform that
+ * changes nothing saves nothing.
+ */
 export function scalePositions(
     starts: readonly MarcherPosition[],
     { anchor, x, y }: Scale,
 ): MarcherPosition[] {
     return starts.map((start) => ({
         id: start.id,
-        x: thousandths(anchor.x + (start.x - anchor.x) * x),
-        y: thousandths(anchor.y + (start.y - anchor.y) * y),
+        x: x === 1 ? start.x : thousandths(anchor.x + (start.x - anchor.x) * x),
+        y: y === 1 ? start.y : thousandths(anchor.y + (start.y - anchor.y) * y),
     }));
 }
 
@@ -234,12 +238,16 @@ export function turnBetween(
 export const snapRotation = (degrees: number, free: boolean) =>
     free ? degrees : Math.round(degrees / ROTATION_SNAP) * ROTATION_SNAP + 0;
 
-/** `starts` turned `degrees` clockwise about `center`, to three decimal places. */
+/**
+ * `starts` turned `degrees` clockwise about `center`, to three decimal
+ * places. Whole turns leave them exactly as they were, so they save nothing.
+ */
 export function rotatePositions(
     starts: readonly MarcherPosition[],
     center: FieldPoint,
     degrees: number,
 ): MarcherPosition[] {
+    if (degrees % 360 === 0) return starts.map((start) => ({ ...start }));
     return starts.map((start) => {
         const { x, y } = rotatePoint(start, center, degrees);
         return { id: start.id, x: thousandths(x), y: thousandths(y) };
