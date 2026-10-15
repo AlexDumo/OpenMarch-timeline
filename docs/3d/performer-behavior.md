@@ -549,11 +549,10 @@ timeline's migrations.
 
 ## 10. Build order (for writing-plans)
 
-Each item is one or more PRs into AlexDumo `3d-async`, each on its own
-branch off `3d-async`. The timeline comes in by merging `main` (once
-`timeline-try-2` has landed there) into `3d-async`, in one commit that
-renumbers the 3D migration after the timeline's; no rebase of the 3D history.
-Items 1, 3 and 5 don't need the timeline; 2, 4, 8 and 9 wait for that merge.
+Each item is one or more PRs into AlexDumo `main`, each on its own branch
+off `main`. The timeline and `3d-async` have both landed on `main`; bring a
+branch up to date by merging `main` into it (no rebase), and regenerate a
+migration with the repo scripts if `main` gained one first.
 
 1. **Measure** (section 8.5). Done for the M1 Pro: per-vertex composition
    failed, the compose pass passed (branches `3d/cue-layering-measure`,
