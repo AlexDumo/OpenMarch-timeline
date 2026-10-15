@@ -90,6 +90,8 @@ import {
 import { FieldUnavailable, useFieldQualityNotice } from "./FieldQualityNotice";
 import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
+import { threeFieldView } from "@/field/benchmark/fieldScenarios";
+import { r3fFrames } from "@/field/benchmark/runFieldBenchmark";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -268,7 +270,15 @@ function ThreeFieldView() {
     // The field test API and the editor read the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
     const renderer = useRef<WebGLRenderer | null>(null);
-    const benchRenderer = useCallback(() => renderer.current, []);
+    const benchFrames = useMemo(() => r3fFrames(() => renderer.current), []);
+    const benchElement = useCallback(
+        () => renderer.current?.domElement ?? null,
+        [],
+    );
+    const benchView = useMemo(
+        () => threeFieldView(benchElement),
+        [benchElement],
+    );
     const benchMarchers = useCallback(() => marchers.ids.length, [marchers]);
     const latest = useRef({
         labels,
@@ -429,7 +439,10 @@ function ThreeFieldView() {
             <TimelineIsolationBar />
             <TimelineFromStartBadge />
             <FieldBenchmark
-                renderer={benchRenderer}
+                field="three"
+                frames={benchFrames}
+                view={benchView}
+                element={benchElement}
                 marcherCount={benchMarchers}
             />
             {quality.reason === "noWebGL" && (

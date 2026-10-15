@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WebGLRenderer } from "three";
 import { T, useTranslate } from "@tolgee/react";
 import {
     Button,
@@ -11,7 +10,11 @@ import {
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { runAction } from "@/shortcuts/registry";
-import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
+import {
+    canvasPixelRatio,
+    probeWebGL,
+    useFieldQualityStore,
+} from "@/field/fieldQuality";
 import { currentFieldQuality } from "@/field/three/useFieldQuality";
 import {
     BENCHMARK_KINDS,
@@ -21,8 +24,12 @@ import {
     type BenchmarkReport,
     type BenchmarkResult,
 } from "./frameStats";
-import { fieldBenchmarkScenarios, pausePlayback } from "./fieldScenarios";
-import { measureScenario } from "./runFieldBenchmark";
+import {
+    fieldBenchmarkScenarios,
+    pausePlayback,
+    type BenchmarkView,
+} from "./fieldScenarios";
+import { measureScenario, type FrameProbe } from "./runFieldBenchmark";
 
 declare global {
     // eslint-disable-next-line no-unused-vars
@@ -43,14 +50,24 @@ const isProduction = import.meta.env.PROD;
  * The in-app field benchmark (ADR 0005 D-6.5, #205), ported from the
  * prototype: plays, scrubs, zooms and pans the open show for a few seconds
  * each and reports frame times, with what drew them. "Run field benchmark" in
- * the command palette opens it. Only the new field has it.
+ * the command palette opens it. Both fields have it until #209, so the parity
+ * gate (#208) can compare them on the same machine.
  */
 export default function FieldBenchmark({
-    renderer,
+    field,
+    frames,
+    view,
+    element,
     marcherCount,
 }: {
-    /** The field's renderer, once its canvas is up. */
-    renderer: () => WebGLRenderer | null;
+    /** Which field this is. */
+    field: "three" | "fabric";
+    /** How the benchmark sees the field draw. */
+    frames: FrameProbe;
+    /** The field's view, which the zoom and pan scenarios move. */
+    view: BenchmarkView;
+    /** The element the field draws in, once it's up. */
+    element: () => Element | null;
     /** How many marchers the field draws. */
     marcherCount: () => number;
 }) {
@@ -66,16 +83,25 @@ export default function FieldBenchmark({
     const busy = useRef(false);
 
     const environment = useCallback((): BenchmarkEnvironment => {
-        const gl = useFieldQualityStore.getState().gl;
+        // Fabric draws with Canvas2D; the GPU still says what the machine has
+        const gl =
+            field === "three"
+                ? useFieldQualityStore.getState().gl
+                : probeWebGL();
         const quality = currentFieldQuality();
-        const canvas = renderer()?.domElement;
+        const canvas = element();
         const rect = canvas?.getBoundingClientRect();
         const pixelRatio = canvasPixelRatio(canvas);
         return {
+            field,
             renderer: gl?.renderer ?? null,
             gl: gl?.kind ?? null,
             quality:
-                quality.mode === "low" ? `low (${quality.reason})` : "full",
+                field === "fabric"
+                    ? "Canvas2D"
+                    : quality.mode === "low"
+                      ? `low (${quality.reason})`
+                      : "full",
             pixelRatio,
             width: Math.round(rect?.width ?? 0),
             height: Math.round(rect?.height ?? 0),
@@ -84,7 +110,7 @@ export default function FieldBenchmark({
             userAgent: navigator.userAgent,
             date: new Date().toISOString(),
         };
-    }, [renderer, marcherCount]);
+    }, [field, element, marcherCount]);
 
     const run = useCallback(
         async (kinds: readonly BenchmarkKind[] = BENCHMARK_KINDS) => {
@@ -99,12 +125,13 @@ export default function FieldBenchmark({
                 if (wasPlaying) await pausePlayback(() => playing.current);
                 const scenarios = fieldBenchmarkScenarios({
                     isPlaying: () => playing.current,
+                    view,
                 });
                 const results: BenchmarkResult[] = [];
                 for (const kind of kinds) {
                     setRunning(kind);
                     results.push(
-                        await measureScenario(scenarios[kind], renderer),
+                        await measureScenario(scenarios[kind], frames),
                     );
                 }
                 const done = { environment: environment(), results };
@@ -117,7 +144,7 @@ export default function FieldBenchmark({
                 setOpen(true);
             }
         },
-        [renderer, environment],
+        [frames, view, environment],
     );
 
     useActionHandler("runFieldBenchmark", () => setOpen(true), {
@@ -131,7 +158,9 @@ export default function FieldBenchmark({
         };
     }, [run]);
 
-    const gl = useFieldQualityStore((s) => s.gl?.kind);
+    const storeGl = useFieldQualityStore((s) => s.gl?.kind);
+    // Fabric doesn't probe WebGL; a run does
+    const gl = field === "three" ? storeGl : report?.environment.gl;
 
     return (
         <>
@@ -199,6 +228,7 @@ function BenchmarkTable({ report }: { report: BenchmarkReport }) {
     return (
         <div className="flex flex-col gap-8 overflow-x-auto">
             <p className="text-sub text-text-subtitle font-mono">
+                {env.field === "fabric" ? "Fabric" : "new field"} ·{" "}
                 {env.renderer ?? "no WebGL"} · {env.gl} · {env.quality} ·{" "}
                 {env.width}×{env.height} @ {env.pixelRatio ?? "?"}× ·{" "}
                 {env.marchers} marchers · {env.build}

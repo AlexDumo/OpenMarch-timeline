@@ -440,8 +440,8 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["$mod+Comma"],
     },
-    // Measures the new field's frame rate on this machine (ADR 0005, #205); only the new field
-    // registers it. Unbound
+    // Measures the field's frame rate on this machine (ADR 0005, #205); both fields register it
+    // until #209. Unbound
     runFieldBenchmark: {
         labelKey: "actions.ui.runFieldBenchmark",
         keywordsKey: "actions.ui.runFieldBenchmarkKeywords",

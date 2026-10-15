@@ -46,3 +46,20 @@ otherwise (box v1 #181 deletes them too). Move the Fabric-free helpers out of
 (`stepSizeWarning.ts`, see #201's notes). #182 mounts `TapTheBeatPanel` in
 Fabric's `Canvas.tsx`; whichever of #182 and #209 lands second moves it
 beside the field.
+
+**From #208 (labels under dots).** The render comparison found the new field
+drawing drill numbers over neighboring dots, where Fabric and the drill
+chart export draw every dot over every number. Owner decision: match Fabric.
+`LabelsLayer` is at render order 1.9 now (pathways 1.5, marchers 2), which
+also applies to the video export; `label-stacking.spec.mts` pins it on both
+fields by screen pixels.
+
+**From #208 (benchmark on both fields).** "Run field benchmark" and
+`window.fieldBenchmark` work on the Fabric field too, so real hardware can
+compare the two until #209 (`FabricFieldBenchmark.tsx`, mounted beside
+Fabric's `Canvas` in `App.tsx`; `fabricBenchmark.ts` reads Fabric through
+`window.canvas` and its render events). The runner takes a `FrameProbe` and
+a `BenchmarkView` per field; zoom is a pinch (Ctrl+wheel) through each
+field's own input, since Fabric draws its grid from a cache while it
+zooms. Reports carry `environment.field`. **#209:** delete
+`FabricFieldBenchmark.tsx` and `fabricBenchmark.ts` with Fabric.

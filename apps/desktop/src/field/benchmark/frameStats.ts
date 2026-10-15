@@ -45,10 +45,12 @@ export type BenchmarkResult =
 
 /** The machine and field a run measured, so numbers can be compared. */
 export type BenchmarkEnvironment = {
+    /** Which field was measured: the new field or Fabric (until #209). */
+    field: "three" | "fabric";
     /** The WebGL renderer string, e.g. "ANGLE (Intel, … UHD Graphics 620 …)". */
     renderer: string | null;
     gl: GlKind | null;
-    /** The field's quality mode, and why it's low. */
+    /** The new field's quality mode, and why it's low; "Canvas2D" on Fabric. */
     quality: string;
     /** Device pixels per CSS pixel the field draws at. */
     pixelRatio: number | null;
@@ -127,7 +129,7 @@ export function benchmarkMarkdown({
         "| | |",
         "| --- | --- |",
         `| Renderer | ${env.renderer ?? "none"} (${env.gl ?? "unknown"}) |`,
-        `| Field | ${env.quality}, ${env.width} × ${env.height} CSS px at ${env.pixelRatio ?? "?"}× |`,
+        `| Field | ${env.field === "fabric" ? "Fabric" : "new field"}, ${env.quality}, ${env.width} × ${env.height} CSS px at ${env.pixelRatio ?? "?"}× |`,
         `| Marchers | ${env.marchers} |`,
         `| Build | ${env.build} |`,
         `| Browser | ${env.userAgent} |`,
