@@ -11,6 +11,7 @@ import {
 } from "three";
 import type { FieldTheme } from "@openmarch/core";
 import type { FieldMarchers } from "../fieldMarchers";
+import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
 import { useFieldViewStore } from "../fieldView";
 import { writeMarcherLooks } from "../marcherLooks";
 import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
@@ -35,6 +36,7 @@ attribute vec2 aPos;
 attribute vec4 aFill;
 attribute vec4 aOutline;
 attribute float aShape;
+attribute float aOpacity;
 attribute float aSelected;
 uniform float uScale;
 uniform float uMargin;
@@ -43,11 +45,13 @@ varying vec2 vLocal;
 varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
+varying float vOpacity;
 varying float vSelected;
 void main() {
     vSelected = aSelected;
     vFill = aFill;
     vOutline = aOutline;
+    vOpacity = aOpacity;
     vShape = aShape;
     if (aShape < -0.5) {
         // Hidden: every corner on one point outside the view draws nothing
@@ -65,6 +69,7 @@ varying vec2 vLocal;
 varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
+varying float vOpacity;
 varying float vSelected;
 uniform vec4 uRing;
 uniform float uRingInner;
@@ -109,15 +114,17 @@ void main() {
         * (smoothstep(uRingInner - aa, uRingInner + aa, d)
             - smoothstep(uRingOuter - aa, uRingOuter + aa, d));
     float a = dotA + ringA * (1.0 - dotA);
-    if (a < 0.004) discard;
+    if (a * vOpacity < 0.004) discard;
     vec3 rgb = dotRgb + uRing.rgb * ringA * (1.0 - dotA);
-    gl_FragColor = vec4(rgb / a, a);
+    // A dimmed marcher (#201) fades as a whole, as Fabric sets its opacity
+    gl_FragColor = vec4(rgb / a, a * vOpacity);
 }`;
 
 type Drawn = {
     version: number;
     idsVersion: number;
     appearanceVersion: number;
+    dimVersion: number;
     selectionVersion: number;
     theme: FieldTheme | null;
 };
@@ -125,9 +132,12 @@ type Drawn = {
 /** The marchers' dots, each in its appearance at the beat drawn, with a ring on each selected one. */
 export default function MarchersLayer({
     marchers,
+    dimming,
     theme,
 }: {
     marchers: FieldMarchers;
+    /** Marchers drawn dimmed (#201). */
+    dimming: FieldDimming;
     theme: FieldTheme;
 }) {
     const invalidate = useThree((s) => s.invalidate);
@@ -135,6 +145,7 @@ export default function MarchersLayer({
         version: -1,
         idsVersion: -1,
         appearanceVersion: -1,
+        dimVersion: -1,
         selectionVersion: -1,
         theme: null,
     });
@@ -175,6 +186,8 @@ export default function MarchersLayer({
 
     // A new theme restyles the dots on the next frame
     useEffect(() => invalidate(), [theme, invalidate]);
+    // New dimming redraws them on the next frame
+    useEffect(() => dimming.subscribe(invalidate), [dimming, invalidate]);
 
     useEffect(
         () => () => {
@@ -201,11 +214,13 @@ export default function MarchersLayer({
             resized ||
             marchers.appearanceVersion !== last.appearanceVersion ||
             theme !== last.theme;
+        const dimChanged = resized || dimming.version !== last.dimVersion;
         const reselected =
             resized || marchers.selectionVersion !== last.selectionVersion;
         if (
             !resized &&
             !restyled &&
+            !dimChanged &&
             !reselected &&
             marchers.version === last.version
         )
@@ -227,6 +242,7 @@ export default function MarchersLayer({
                 dynamic(new Float32Array(n * 4), 4),
             );
             geometry.setAttribute("aShape", dynamic(new Float32Array(n), 1));
+            geometry.setAttribute("aOpacity", dynamic(new Float32Array(n), 1));
             geometry.setAttribute("aSelected", dynamic(new Float32Array(n), 1));
             geometry.instanceCount = n;
         }
@@ -245,6 +261,14 @@ export default function MarchersLayer({
             outline.needsUpdate = true;
             shape.needsUpdate = true;
         }
+        if (dimChanged) {
+            const opacity = instanced("aOpacity");
+            const array = opacity.array as Float32Array;
+            marchers.ids.forEach((id, i) => {
+                array[i] = dimming.isDimmed(id) ? DIMMED_OPACITY : 1;
+            });
+            opacity.needsUpdate = true;
+        }
         if (reselected) {
             const selected = instanced("aSelected");
             (selected.array as Float32Array).set(marchers.selected);
@@ -257,6 +281,7 @@ export default function MarchersLayer({
             version: marchers.version,
             idsVersion: marchers.idsVersion,
             appearanceVersion: marchers.appearanceVersion,
+            dimVersion: dimming.version,
             selectionVersion: marchers.selectionVersion,
             theme,
         };
