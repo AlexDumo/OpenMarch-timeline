@@ -80,10 +80,12 @@ export function startMarquee(
 }
 
 /**
- * A lasso: a freehand line from the press. Released within 50 screen px of
- * its start it closes, and replaces the selection with every marcher whose
- * center is inside it (Shift at the press adds them). Released farther away,
- * it selects nothing and leaves the selection alone.
+ * A lasso: a freehand line from the press. Released within
+ * `LASSO_CLOSE_DISTANCE` (50) screen px of its start it closes, and replaces
+ * the selection with every marcher whose center is inside it (Shift at the
+ * press adds them). Released farther away, it selects nothing and changes
+ * nothing; the double-click's first click has already cleared the selection,
+ * unless Shift was held.
  */
 export function startLasso(
     ports: AreaPorts,

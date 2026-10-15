@@ -7,7 +7,7 @@ import {
     type AreaShape,
 } from "./areaGestures";
 import { hitRadius, marcherAt, type DrawnMarchers } from "./hitTest";
-import type { FieldRect } from "./selectionArea";
+import { rectContains, type FieldRect } from "./selectionArea";
 import { selectionAfterClick } from "./selectionRules";
 
 /**
@@ -261,23 +261,12 @@ export class FieldEditor {
         pointer: FieldPointer,
     ): FieldGesture | null {
         if (press.hit !== null) return null; // #196: moves the marcher or the selection
-        if (this.isInsideSelectionBox(press.start.field)) return null; // #196: moves the selection
+        const box = this.ports.selectionBox();
+        if (box && rectContains(box, press.start.field)) return null; // #196: moves the selection
         this.area = press.double
             ? startLasso(this.areaPorts, press.start, pointer)
             : startMarquee(this.areaPorts, press.start, pointer);
         return this.area;
-    }
-
-    /** True when `point` is inside the box drawn around a multi-selection. */
-    protected isInsideSelectionBox(point: FieldPoint): boolean {
-        const box = this.ports.selectionBox();
-        return (
-            box !== null &&
-            point.x >= box.left &&
-            point.x <= box.right &&
-            point.y >= box.top &&
-            point.y <= box.bottom
-        );
     }
 
     private isDoubleClick(pointer: FieldPointer) {

@@ -311,7 +311,8 @@ test.describe("lasso", () => {
     }) => {
         const { page } = show;
         const rect = await around(page, ["T2", "T3"], 20);
-        // Too slow for a double-click: the second press is a marquee
+        // Too slow for a double-click (`DOUBLE_CLICK_MS`, 500): the second
+        // press is a marquee
         await page.mouse.click(rect.left, rect.top);
         await page.waitForTimeout(700);
         const gesture = await marquee(page, rect);

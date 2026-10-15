@@ -2,6 +2,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type { FieldEditor } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
+import type { FieldRect } from "@/field/editor/selectionArea";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 import { SELECTION_COLOR } from "./selectionRing";
@@ -53,7 +54,7 @@ export default function FieldOverlay({
             className="pointer-events-none absolute inset-0 h-full w-full"
             data-testid="fieldOverlay"
         >
-            <SelectionBox box={JSON.parse(box) as Bounds | null} />
+            <SelectionBox box={JSON.parse(box) as FieldRect | null} />
             {area?.kind === "marquee" && (
                 <Marquee rect={area.rect} theme={theme} />
             )}
@@ -62,10 +63,8 @@ export default function FieldOverlay({
     );
 }
 
-type Bounds = { left: number; top: number; right: number; bottom: number };
-
 /** The box around a multi-selection, clear of the selection rings. */
-function SelectionBox({ box }: { box: Bounds | null }) {
+function SelectionBox({ box }: { box: FieldRect | null }) {
     const view = useFieldViewStore();
     if (!box) return null;
     const pad = boxPadding(view.zoom) * view.zoom;
@@ -85,7 +84,7 @@ function SelectionBox({ box }: { box: Bounds | null }) {
 }
 
 /** The marquee, in Fabric's colors: the theme's shape color, filled at 20%. */
-function Marquee({ rect, theme }: { rect: Bounds; theme: FieldTheme }) {
+function Marquee({ rect, theme }: { rect: FieldRect; theme: FieldTheme }) {
     const view = useFieldViewStore();
     const topLeft = fieldToElement(view, rect.left, rect.top);
     const bottomRight = fieldToElement(view, rect.right, rect.bottom);

@@ -127,18 +127,17 @@ they pass alone and in Electron.
 **Files.** `editor/selectionArea.ts` holds the pure rules: `lassoCloses`
 (under `LASSO_CLOSE_DISTANCE`, 50 screen px, measured as field distance times
 the current zoom), `pointInPolygon`, `marchersInRect`, `marchersInPolygon`,
-`selectionAfterArea` and `boundsOf`. `editor/areaGestures.ts` has the two
+`selectionAfterArea` and `rectContains`. `editor/areaGestures.ts` has the two
 `FieldGesture`s, `startMarquee` and `startLasso`; each exposes `shape()`, a
 stable snapshot the overlay reads through `FieldEditor.areaShape()`.
-`three/selectionBox.ts` is the selection box's geometry (bounds plus the ring
+`three/selectionBox.ts` is the selection box geometry (bounds plus the ring
 padding), shared by `FieldOverlay` and the editor.
 
 **`startDrag` now.** From a hit: null (#196's move). From empty field inside
 the multi-selection box (the new `FieldEditorPorts.selectionBox()`, in field
-units, as drawn): null, for #196's move (owner decision). Otherwise a lasso if
+units, as drawn, tested with `rectContains`): null, for #196's move (owner decision). Otherwise a lasso if
 the press is a double-click, else a marquee. **#196:** replace the two
-`return null` lines in `FieldEditor.startDrag`; the box test is
-`isInsideSelectionBox`. `area-selection.spec.mts` already pins that such a drag
+`return null` lines in `FieldEditor.startDrag`. `area-selection.spec.mts` already pins that such a drag
 draws no marquee and keeps the selection.
 
 **Double-click.** The editor keeps the last click (time, screen point, hit). A
@@ -162,3 +161,8 @@ Fabric's lasso) is `test.fail` on Fabric; lasso scenarios skip on Fabric. The
 green cue and the drawn shapes are checked by eye (the test API has no reading
 for overlay shapes). The closing rule at other zooms is unit-tested only:
 the new field can't zoom until #194 lands.
+
+**Open for the #208 checklist.** Without Shift, the first click of a
+double-click on empty field clears the selection, so a lasso that doesn't
+close leaves nothing selected (with Shift, the selection is kept). "Within 50
+screen px" is strict: exactly 50 doesn't close.

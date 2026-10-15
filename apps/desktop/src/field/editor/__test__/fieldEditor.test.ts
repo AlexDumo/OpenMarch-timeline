@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { boundsOf } from "../selectionArea";
 import {
     CLICK_SLOP,
     DOUBLE_CLICK_MS,
@@ -39,10 +38,16 @@ function setup({
         zoom: () => 2,
         canSelect: (id) => !dimmed.includes(id),
         // The bounds of the selection, with no padding, around two or more marchers
-        selectionBox: () =>
-            state.selected.length < 2
-                ? null
-                : boundsOf(ports.marchers(), state.selected),
+        selectionBox: () => {
+            if (state.selected.length < 2) return null;
+            const xs = state.selected.map((id) => 100 * id);
+            return {
+                left: Math.min(...xs),
+                right: Math.max(...xs),
+                top: 100,
+                bottom: 100,
+            };
+        },
     };
     const editor = new FieldEditor(ports, { isMac, now: () => clock.now });
     return { editor, state, ports, clock };
