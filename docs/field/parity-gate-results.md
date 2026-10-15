@@ -28,6 +28,47 @@ hardware.
 | 5. Benchmark, real hardware                         | Not run yet: [steps below](#benchmark-on-real-hardware)                                                                                                    |
 | Open issues                                         | OPEN_ISSUES                                                                                                                                                |
 
+## 5. Benchmark on this machine (software GL)
+
+`e2e/browser/render/benchmark.spec.mts` runs the in-app benchmark
+(`window.fieldBenchmark.run()`) on the corpus, on a production browser build
+in headless Chromium, 1600 × 1000 window (field 1206 × 699 CSS px at 1×), on
+a quiet machine. **WebGL here is SwiftShader (software)**, so the new field
+runs in low-quality mode, and Fabric's Canvas2D is software too. These are
+lower bounds; they don't predict real hardware, where the prototype measured
+the opposite (WebGL 60 fps at 1,925 marchers where Fabric managed about 1).
+
+```sh
+BENCHMARK_OUT=/tmp/bench FIELD=fabric pnpm exec playwright test --project=render benchmark
+BENCHMARK_OUT=/tmp/bench FIELD=three pnpm exec playwright test --project=render benchmark
+```
+
+fps, Fabric / new field (p95 frame interval in ms in brackets):
+
+| Show            | play                    | scrub                  | zoom                   | pan                   |
+| --------------- | ----------------------- | ---------------------- | ---------------------- | --------------------- |
+| Part 1 (95)     | 60.0 / 59.8 (17 / 19)   | 59.7 / 51.6 (17 / 22)  | 53.8 / 60.0 (25 / 17)  | 4.4 / 60.0 (232 / 17) |
+| Daft Punk (385) | 60.0 / 27.9 (17 / 39)   | 60.0 / 26.8 (17 / 40)  | 27.9 / 37.6 (58 / 35)  | 4.2 / 30.9 (242 / 35) |
+| Stress (1,925)  | 19.1 / 5.5 (155 / 187)  | 16.5 / 5.5 (65 / 195)  | 5.7 / 8.0 (304 / 175)  | 3.5 / 5.7 (295 / 179) |
+
+Main-thread time per frame: the new field 0.2–1.2 ms; Fabric 0.7–47 ms for
+play and scrub and 9–283 ms for zoom and pan. Drag isn't measured yet.
+
+What it shows: with no GPU, the new field is limited by single-threaded
+SwiftShader filling pixels (its main thread is nearly idle), while Fabric
+plays and scrubs from cached sprites and so wins on mid-size shows, as the
+prototype found (385 marchers on SwiftShader: Fabric 60, prototype 29).
+Fabric's pan is about 4 fps here because every pan frame redraws its grid
+(its real trackpad pan measures the same). On real hardware the new field
+should hold 60 fps; the rows below decide the gate.
+
+How each field is measured: the frames each field draws (R3F's render on the
+new field; Fabric's `before:render` to `after:render`), during the same
+scenarios. Play and scrub drive the app's playhead; zoom is a pinch
+(Ctrl+wheel) through each field's own input, so Fabric uses the grid cache
+it keeps while zooming; pan moves each field's view as its trackpad pan
+does.
+
 ## Benchmark on real hardware
 
 Gate item 5: the in-app benchmark on a real low-end Chromebook (the lab web

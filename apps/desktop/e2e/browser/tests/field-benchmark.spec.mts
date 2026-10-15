@@ -81,7 +81,8 @@ test("the field benchmark runs from the command palette and puts the field back"
     await expect(dialog).toContainText(
         field === "fabric" ? "Fabric · " : "new field · ",
     );
-    await expect(dialog).toContainText(/swiftshader/i);
+    // Software GL here: SwiftShader, or llvmpipe for Fabric in Electron
+    await expect(dialog).toContainText(/swiftshader|llvmpipe/i);
     await expect(dialog).toContainText("lower bound");
     // Measured on a production build: no warning that the numbers don't count
     await expect(dialog).not.toContainText("development build");
