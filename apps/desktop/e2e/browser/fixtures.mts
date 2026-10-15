@@ -267,6 +267,28 @@ type Fixtures = {
     show: Show;
 };
 
+/** `Show.readSnapshot`: each read copies the file to `outputPath` and reads the copy. */
+function snapshotReader(
+    app: App,
+    outputPath: (name: string) => string,
+): Show["readSnapshot"] {
+    let snapshots = 0;
+    return async (read) => {
+        const file = outputPath(`snapshot-${++snapshots}.db`);
+        await app.copyTo(file);
+        const reader = new DatabaseSync(file, { readOnly: true });
+        try {
+            return await read(
+                async <R,>(sql: string, ...params: SQLInputValue[]) =>
+                    reader.prepare(sql).all(...params) as R[],
+            );
+        } finally {
+            reader.close();
+            fs.rmSync(file, { force: true });
+        }
+    };
+}
+
 type WorkerFixtures = {
     target: Target;
     /** The field renderer; from the `FIELD` environment variable by default. */
@@ -378,29 +400,14 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             await expect(page.getByTestId("threeField")).toHaveCount(
                 field === "three" ? 1 : 0,
             );
-            let snapshots = 0;
-            const readSnapshot = async <T,>(
-                read: (query: Query) => Promise<T>,
-            ): Promise<T> => {
-                const file = testInfo.outputPath(`snapshot-${++snapshots}.db`);
-                await app.copyTo(file);
-                const reader = new DatabaseSync(file, { readOnly: true });
-                try {
-                    return await read(
-                        async <R,>(sql: string, ...params: SQLInputValue[]) =>
-                            reader.prepare(sql).all(...params) as R[],
-                    );
-                } finally {
-                    reader.close();
-                    fs.rmSync(file, { force: true });
-                }
-            };
             await use({
                 page,
                 databasePath,
                 pageErrors,
                 query: app.query,
-                readSnapshot,
+                readSnapshot: snapshotReader(app, (name) =>
+                    testInfo.outputPath(name),
+                ),
             });
         } catch (error) {
             failed = true;
