@@ -8,6 +8,8 @@ export type StretchMessage =
     | { type: "play"; at: number; from: number; rate: number }
     /** Changes speed at context time `at`, keeping the show's position */
     | { type: "rate"; at: number; rate: number }
-    | { type: "stop"; at: number };
+    | { type: "stop"; at: number }
+    /** The node is gone: the processor ends and lets go of the music */
+    | { type: "dispose" };
 
 export const TIME_STRETCH_PROCESSOR = "om-time-stretch";

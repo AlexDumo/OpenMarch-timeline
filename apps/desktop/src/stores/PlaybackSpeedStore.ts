@@ -12,11 +12,14 @@ export type PlaybackSpeedHold = "faster" | "slower";
 interface PlaybackSpeedStore {
     /** The chosen speed, 1 = as written */
     speed: number;
-    hold: PlaybackSpeedHold | null;
+    /** The speed keys held down, the last pressed last; it's the one that counts */
+    held: readonly PlaybackSpeedHold[];
     setSpeed: (speed: number) => void;
     /** To the next speed in `PLAYBACK_SPEEDS` (or the previous one with `back`) */
     stepSpeed: (back?: boolean) => void;
-    setHold: (hold: PlaybackSpeedHold | null) => void;
+    pressHold: (hold: PlaybackSpeedHold) => void;
+    /** Letting go of one key goes back to the other if it's still held */
+    releaseHold: (hold: PlaybackSpeedHold) => void;
 }
 
 export const clampPlaybackSpeed = (speed: number): number =>
@@ -35,10 +38,11 @@ export function nextPlaybackSpeed(speed: number, back = false): number {
 /** The speed playing now: the chosen one, doubled or halved while a speed key is held */
 export function effectivePlaybackSpeed(state: {
     speed: number;
-    hold: PlaybackSpeedHold | null;
+    held: readonly PlaybackSpeedHold[];
 }): number {
-    if (state.hold === "faster") return clampPlaybackSpeed(state.speed * 2);
-    if (state.hold === "slower") return clampPlaybackSpeed(state.speed / 2);
+    const hold = state.held[state.held.length - 1];
+    if (hold === "faster") return clampPlaybackSpeed(state.speed * 2);
+    if (hold === "slower") return clampPlaybackSpeed(state.speed / 2);
     return state.speed;
 }
 
@@ -52,9 +56,14 @@ export const formatPlaybackSpeed = (speed: number): string =>
  */
 export const usePlaybackSpeedStore = create<PlaybackSpeedStore>((set) => ({
     speed: 1,
-    hold: null,
+    held: [],
     setSpeed: (speed) => set({ speed: clampPlaybackSpeed(speed) }),
     stepSpeed: (back) =>
         set((state) => ({ speed: nextPlaybackSpeed(state.speed, back) })),
-    setHold: (hold) => set({ hold }),
+    pressHold: (hold) =>
+        set((state) => ({
+            held: [...state.held.filter((h) => h !== hold), hold],
+        })),
+    releaseHold: (hold) =>
+        set((state) => ({ held: state.held.filter((h) => h !== hold) })),
 }));

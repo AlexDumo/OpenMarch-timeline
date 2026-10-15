@@ -20,6 +20,7 @@ declare class AudioWorkletProcessor {
 
 class TimeStretchProcessor extends AudioWorkletProcessor {
     private player = new StretchPlayer();
+    private disposed = false;
 
     constructor() {
         super();
@@ -57,11 +58,17 @@ class TimeStretchProcessor extends AudioWorkletProcessor {
                         frame: frame(message.at),
                     });
                     break;
+                case "dispose":
+                    this.disposed = true;
+                    this.player = new StretchPlayer();
+                    break;
             }
         };
     }
 
+    // Returning false lets the browser end the processor once its node is disconnected
     process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+        if (this.disposed) return false;
         this.player.process(outputs[0] ?? [], outputs[1]?.[0], currentFrame);
         return true;
     }

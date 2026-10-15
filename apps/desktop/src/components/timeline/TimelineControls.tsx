@@ -187,7 +187,7 @@ const SPEED_HINT = (
  */
 export function TimelineSpeedButton() {
     const speed = usePlaybackSpeedStore((s) => s.speed);
-    const held = usePlaybackSpeedStore((s) => s.hold !== null);
+    const held = usePlaybackSpeedStore((s) => s.held.length > 0);
     const playing = usePlaybackSpeedStore(effectivePlaybackSpeed);
     const setSpeed = usePlaybackSpeedStore((s) => s.setSpeed);
     const stepSpeed = usePlaybackSpeedStore((s) => s.stepSpeed);

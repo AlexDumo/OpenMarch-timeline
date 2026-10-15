@@ -11,15 +11,15 @@ function sine(seconds: number, hz: number): Float32Array {
     return out;
 }
 
-// Renders `frames` output frames from frame 0, in render quanta, as the worklet does
-function render(player: StretchPlayer, frames: number) {
+// Renders `frames` output frames from frame `start`, in render quanta, as the worklet does
+function render(player: StretchPlayer, frames: number, start = 0) {
     const music = new Float32Array(frames);
     const clicks = new Float32Array(frames);
     for (let f = 0; f < frames; f += QUANTUM) {
         const left = new Float32Array(QUANTUM);
         const right = new Float32Array(QUANTUM);
         const metronome = new Float32Array(QUANTUM);
-        player.process([left, right], metronome, f);
+        player.process([left, right], metronome, start + f);
         music.set(left.subarray(0, Math.min(QUANTUM, frames - f)), f);
         clicks.set(metronome.subarray(0, Math.min(QUANTUM, frames - f)), f);
     }
@@ -106,6 +106,56 @@ describe("StretchPlayer", () => {
         // A beat every 2756 output samples, each click 3000 long: never two at once
         expect(Math.max(...clicks)).toBeCloseTo(0.9, 5);
         expect(clicks[Math.floor(beat / 8) - 1]).toBeLessThan(0.05);
+    });
+
+    it("a new click track while playing clicks from the next beat, not every beat since play", () => {
+        const click = Float32Array.from({ length: 400 }, (_, i) => 1 - i / 400);
+        const beat = RATE / 2;
+        const onsets = Float64Array.from({ length: 20 }, (_, b) => b * beat);
+        const track = new Float32Array(11 * RATE);
+        for (const at of onsets) track.set(click, at);
+        const player = new StretchPlayer();
+        player.setMusic([new Float32Array(11 * RATE)]);
+        player.setMetronome(track, onsets);
+        player.schedule({ kind: "play", frame: 0, position: 0, rate: 1 });
+        // Up to the quantum just before beat 8: eight beats have passed
+        const now = Math.floor((4 * RATE) / QUANTUM) * QUANTUM;
+        render(player, now);
+        // The new track mustn't play them all at once
+        player.setMetronome(track.slice(), onsets.slice());
+        const { clicks } = render(player, RATE, now);
+        expect(Math.max(...clicks)).toBeCloseTo(1, 5);
+        expect(clicks[4 * RATE - now]).toBeCloseTo(1, 5);
+        expect(clicks[4 * RATE - now + beat]).toBeCloseTo(1, 5);
+    });
+
+    it("new music while playing carries on from where the show is", () => {
+        const source = sine(4, 330).map((v, i) => v * Math.cos(i / 900));
+        const player = new StretchPlayer();
+        player.setMusic([source]);
+        player.schedule({ kind: "play", frame: 0, position: 0, rate: 1 });
+        const now = 345 * QUANTUM;
+        render(player, now);
+        player.setMusic([source.slice()]);
+        const { music } = render(player, RATE, now);
+        for (let i = STRETCH_WINDOW / 2; i < RATE; i += 97)
+            expect(music[i]).toBeCloseTo(source[now + i], 5);
+    });
+
+    it("a stop before a queued play starts keeps it stopped", () => {
+        const player = new StretchPlayer();
+        player.setMusic([sine(2, 440)]);
+        // Play is pressed, then Stop before the play's start lands
+        player.schedule({
+            kind: "play",
+            frame: RATE / 10,
+            position: 0,
+            rate: 1,
+        });
+        player.schedule({ kind: "stop", frame: RATE / 100 });
+        const { music } = render(player, RATE / 2);
+        expect(Math.max(...music.map(Math.abs))).toBe(0);
+        expect(player.isPlaying).toBe(false);
     });
 
     it("is silent once stopped", () => {

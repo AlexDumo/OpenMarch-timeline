@@ -34,6 +34,14 @@ const HANN = (() => {
 
 const EMPTY = new Float32Array(0);
 
+/** A click playing: it reads its own track, so a new click track doesn't cut it */
+interface Click {
+    track: Float32Array;
+    at: number;
+    left: number;
+    cut: boolean;
+}
+
 export type StretchEvent =
     | { kind: "play"; frame: number; position: number; rate: number }
     | { kind: "rate"; frame: number; rate: number }
@@ -57,25 +65,40 @@ export class StretchPlayer {
     private emitted = HOP;
     private lastStart: number | null = null;
 
-    private clicks: { at: number; left: number; cut: boolean }[] = [];
+    private clicks: Click[] = [];
     private nextOnset = 0;
+    // The next output frame to render: where a change between quanta takes effect
+    private frame = 0;
 
+    /** New music; while playing it carries on from where the show is now */
     setMusic(channels: Float32Array[]): void {
         this.music = channels;
+        this.accFrame = this.frame;
         this.restartSynthesis();
     }
 
-    /** The click track and its beats' samples, ascending */
+    /**
+     * The click track and its beats' samples, ascending. While playing, the clicks already
+     * sounding finish and the next beat clicks from the new track.
+     */
     setMetronome(track: Float32Array, onsets: Float64Array): void {
         this.clickTrack = track;
         this.onsets = onsets;
-        this.clicks = [];
         if (this.playing)
-            this.nextOnset = firstAtOrAfter(onsets, this.anchorPosition);
+            this.nextOnset = firstAtOrAfter(
+                onsets,
+                this.positionAt(this.frame),
+            );
     }
 
-    /** Queues an event; one in the past applies at the next frame, as if it had applied on time */
+    /**
+     * Queues an event; one in the past applies at the next frame, as if it had applied on time.
+     * A stop drops what was queued for its frame or later, so a play still waiting to start
+     * doesn't start after it.
+     */
     schedule(event: StretchEvent): void {
+        if (event.kind === "stop")
+            this.events = this.events.filter((e) => e.frame < event.frame);
         const at = this.events.findIndex((e) => e.frame > event.frame);
         if (at === -1) this.events.push(event);
         else this.events.splice(at, 0, event);
@@ -115,6 +138,7 @@ export class StretchPlayer {
             }
             i = end;
         }
+        this.frame = frame + length;
     }
 
     private apply(event: StretchEvent, now: number): void {
@@ -208,22 +232,9 @@ export class StretchPlayer {
             return natural;
         let best = nominal;
         let bestScore = -Infinity;
-        const score = (start: number, step: number) => {
-            let dot = 0;
-            let energy = 1e-9;
-            // The first channel stands for the rest, so a long show isn't copied again
-            const x = this.music[0] ?? EMPTY;
-            for (let i = 0; i < HOP; i += step) {
-                const a = x[natural + i] ?? 0;
-                const b = x[start + i] ?? 0;
-                dot += a * b;
-                energy += b * b;
-            }
-            return dot / Math.sqrt(energy);
-        };
         // Coarse, then fine around the coarse best
         for (let d = -TOLERANCE; d <= TOLERANCE; d += 8) {
-            const s = score(nominal + d, 4);
+            const s = this.score(natural, nominal + d, 4);
             if (s > bestScore) {
                 bestScore = s;
                 best = nominal + d;
@@ -231,13 +242,29 @@ export class StretchPlayer {
         }
         const coarse = best;
         for (let d = -7; d <= 7; d++) {
-            const s = score(coarse + d, 1);
+            const s = this.score(natural, coarse + d, 1);
             if (s > bestScore) {
                 bestScore = s;
                 best = coarse + d;
             }
         }
         return best;
+    }
+
+    // How well the window at `start` continues the one at `natural`. A method, not a closure,
+    // so the audio thread doesn't allocate one per window
+    private score(natural: number, start: number, step: number): number {
+        let dot = 0;
+        let energy = 1e-9;
+        // The first channel stands for the rest, so a long show isn't copied again
+        const x = this.music[0] ?? EMPTY;
+        for (let i = 0; i < HOP; i += step) {
+            const a = x[natural + i] ?? 0;
+            const b = x[start + i] ?? 0;
+            dot += a * b;
+            energy += b * b;
+        }
+        return dot / Math.sqrt(energy);
     }
 
     private renderClicks(
@@ -260,6 +287,7 @@ export class StretchPlayer {
                 // next click comes sooner than its beat's gap in the track, and they'd pile up
                 const gap = Math.floor((next - at) / Math.max(1, this.rate));
                 this.clicks.push({
+                    track,
                     at: Math.floor(at),
                     left: Math.min(MAX_CLICK, gap),
                     cut: gap < MAX_CLICK && this.rate > 1,
@@ -273,15 +301,22 @@ export class StretchPlayer {
                     click.cut && click.left < CLICK_FADE
                         ? click.left / CLICK_FADE
                         : 1;
-                sample += (track[click.at] ?? 0) * fade;
+                sample += (click.track[click.at] ?? 0) * fade;
                 click.at++;
                 click.left--;
             }
             out[i] = sample;
             if (this.clicks.length && this.clicks[0].left <= 0)
-                this.clicks = this.clicks.filter((c) => c.left > 0);
+                removeFinished(this.clicks);
         }
     }
+}
+
+// In place, so the audio thread doesn't allocate a new list per click
+function removeFinished(clicks: Click[]): void {
+    let kept = 0;
+    for (const click of clicks) if (click.left > 0) clicks[kept++] = click;
+    clicks.length = kept;
 }
 
 function firstAtOrAfter(sorted: Float64Array, value: number): number {

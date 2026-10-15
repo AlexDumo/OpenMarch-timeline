@@ -6,7 +6,7 @@ import {
     usePlaybackSpeedStore,
 } from "../PlaybackSpeedStore";
 
-beforeEach(() => usePlaybackSpeedStore.setState({ speed: 1, hold: null }));
+beforeEach(() => usePlaybackSpeedStore.setState({ speed: 1, held: [] }));
 
 describe("PlaybackSpeedStore", () => {
     it("a click steps through the common speeds and wraps", () => {
@@ -26,8 +26,9 @@ describe("PlaybackSpeedStore", () => {
     });
 
     it("a held key doubles or halves the chosen speed, within the limits", () => {
-        const { setSpeed, setHold } = usePlaybackSpeedStore.getState();
-        setHold("faster");
+        const { setSpeed, pressHold, releaseHold } =
+            usePlaybackSpeedStore.getState();
+        pressHold("faster");
         expect(effectivePlaybackSpeed(usePlaybackSpeedStore.getState())).toBe(
             2,
         );
@@ -44,14 +45,33 @@ describe("PlaybackSpeedStore", () => {
             8,
         );
         setSpeed(4);
-        setHold("slower");
+        releaseHold("faster");
+        pressHold("slower");
         expect(effectivePlaybackSpeed(usePlaybackSpeedStore.getState())).toBe(
             2,
         );
-        setHold(null);
+        releaseHold("slower");
         expect(effectivePlaybackSpeed(usePlaybackSpeedStore.getState())).toBe(
             4,
         );
+    });
+
+    it("letting go of the last key pressed goes back to the other one still held", () => {
+        const { pressHold, releaseHold } = usePlaybackSpeedStore.getState();
+        const speed = () =>
+            effectivePlaybackSpeed(usePlaybackSpeedStore.getState());
+        pressHold("faster");
+        pressHold("slower");
+        expect(speed()).toBe(0.5);
+        releaseHold("slower");
+        expect(speed()).toBe(2);
+        releaseHold("faster");
+        expect(speed()).toBe(1);
+        // Released in the order pressed, the later key keeps its hold
+        pressHold("faster");
+        pressHold("slower");
+        releaseHold("faster");
+        expect(speed()).toBe(0.5);
     });
 
     it("clamps and formats", () => {

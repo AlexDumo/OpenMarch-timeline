@@ -116,6 +116,14 @@ function rampGain(gain: GainNode, value: number, from: number, to: number) {
     gain.gain.linearRampToValueAtTime(value, to);
 }
 
+// A volume or mute change while playing. Before the start lands it replaces the gain set for the
+// start, which would otherwise undo it then; the fade-out of a restart isn't cut short
+function setLiveGain(gain: GainNode, value: number, now: number) {
+    const at = Math.max(now, playbackStartInfoRef.current?.playStartTime ?? 0);
+    gain.gain.cancelScheduledValues(at);
+    gain.gain.setValueAtTime(value, at);
+}
+
 // The metronome's gain for the current settings
 function metronomeGainValue(audioVolume: number): number {
     const masterVolume = calculateMasterVolume(audioVolume, false);
@@ -242,6 +250,8 @@ export default function AudioPlayer() {
             });
         return () => {
             cancelled = true;
+            // Ends the processor, which would otherwise run on holding the show's music
+            created?.send({ type: "dispose" });
             created?.node.disconnect();
             created?.musicGain.disconnect();
             created?.metronomeGain.disconnect();
@@ -532,17 +542,22 @@ export default function AudioPlayer() {
 
     // Update metronome on/off state and volume
     useEffect(() => {
-        if (engine && playbackStartInfoRef.current)
-            engine.metronomeGain.gain.value = metronomeGainValue(audioVolume);
-    }, [engine, audioVolume, isMetronomeOn, volume]);
+        if (audioContext && engine && playbackStartInfoRef.current)
+            setLiveGain(
+                engine.metronomeGain,
+                metronomeGainValue(audioVolume),
+                audioContext.currentTime,
+            );
+    }, [audioContext, engine, audioVolume, isMetronomeOn, volume]);
 
     useEffect(() => {
-        if (engine && playbackStartInfoRef.current)
-            engine.musicGain.gain.value = calculateMasterVolume(
-                audioVolume,
-                audioMuted,
+        if (audioContext && engine && playbackStartInfoRef.current)
+            setLiveGain(
+                engine.musicGain,
+                calculateMasterVolume(audioVolume, audioMuted),
+                audioContext.currentTime,
             );
-    }, [engine, audioMuted, audioVolume]);
+    }, [audioContext, engine, audioMuted, audioVolume]);
 
     if (!contextsReady) {
         console.warn(

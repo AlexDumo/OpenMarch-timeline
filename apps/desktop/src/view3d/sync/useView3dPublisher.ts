@@ -25,6 +25,7 @@ import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import {
     getLivePlaybackPosition,
+    getLivePlaybackRate,
     playbackStartInfoRef,
 } from "@/components/timeline/audio/AudioPlayer";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
@@ -174,10 +175,9 @@ export function useView3dPublisher() {
             playing,
             anchorShowMs: currentAnchorShowMs(playing, b, beat),
             anchorWallMs: wallNowMs(),
-            // The window's clock runs at the playback speed too
-            rate: playing
-                ? effectivePlaybackSpeed(usePlaybackSpeedStore.getState())
-                : 1,
+            // The window's clock runs at the speed the audio plays at, which takes a speed
+            // change when the audio does (1 until playback has started)
+            rate: playing ? getLivePlaybackRate() : 1,
         };
         window.electron.publishToView3d(VIEW3D_CLOCK_CHANNEL, clock);
     }, []);
@@ -246,9 +246,16 @@ export function useView3dPublisher() {
         if (!windowOpen) return;
         sendClock();
         if (!isPlaying) return;
+        // Again after the audio player's effects in this commit, so a speed change has reached
+        // the live clock
+        let current = true;
+        queueMicrotask(() => {
+            if (current) sendClock();
+        });
         const settle = setTimeout(sendClock, PLAY_SETTLE_MS);
         const heartbeat = setInterval(sendClock, CLOCK_HEARTBEAT_MS);
         return () => {
+            current = false;
             clearTimeout(settle);
             clearInterval(heartbeat);
         };

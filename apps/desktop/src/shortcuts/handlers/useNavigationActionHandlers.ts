@@ -66,15 +66,11 @@ export function useNavigationActionHandlers() {
     useActionHandler("toggleMetronome", () => toggleMetronome());
     // Playback speed: ] and [ last while held
     const speed = usePlaybackSpeedStore.getState;
-    // Letting go of one key leaves the other's hold if it was pressed since
-    const letGo = (hold: "faster" | "slower") => () => {
-        if (speed().hold === hold) speed().setHold(null);
-    };
-    useActionHandler("holdFasterPlayback", () => speed().setHold("faster"), {
-        onRelease: letGo("faster"),
+    useActionHandler("holdFasterPlayback", () => speed().pressHold("faster"), {
+        onRelease: () => speed().releaseHold("faster"),
     });
-    useActionHandler("holdSlowerPlayback", () => speed().setHold("slower"), {
-        onRelease: letGo("slower"),
+    useActionHandler("holdSlowerPlayback", () => speed().pressHold("slower"), {
+        onRelease: () => speed().releaseHold("slower"),
     });
     useActionHandler("nextPlaybackSpeed", () => speed().stepSpeed());
     useActionHandler("resetPlaybackSpeed", () => speed().setSpeed(1));
