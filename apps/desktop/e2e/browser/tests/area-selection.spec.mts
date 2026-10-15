@@ -102,6 +102,8 @@ async function dragThrough(
     return gesture;
 }
 
+type Rect = Awaited<ReturnType<typeof around>>;
+
 /** A marquee from the top-left of `rect` to its bottom-right. */
 const marquee = (page: Page, rect: Rect, options?: { shift?: boolean }) =>
     dragThrough(
@@ -116,8 +118,6 @@ const marquee = (page: Page, rect: Rect, options?: { shift?: boolean }) =>
         ],
         options,
     );
-
-type Rect = Awaited<ReturnType<typeof around>>;
 
 /**
  * A lasso around `rect`, clockwise from its top-left corner, released `gap`

@@ -146,7 +146,7 @@ press within `DOUBLE_CLICK_MS` (500) and `DOUBLE_CLICK_SLOP` (8 screen px) of a
 click on empty field is a double press; dragged, it's a lasso; released, it's
 a plain click, and starts no triple. The clock is `FieldEditorOptions.now`.
 `pointerCancel` keeps the last click: `fieldPointerInput` cancels on
-`lostpointercapture` after every release.
+a lost pointer capture after every release.
 
 **Rules as built.** The marquee takes every marcher whose dot it touches (its
 click target, `hitRadius`), as Fabric's marquee touches objects; the lasso
