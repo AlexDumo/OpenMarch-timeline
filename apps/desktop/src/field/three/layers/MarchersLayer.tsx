@@ -12,7 +12,7 @@ import {
 import type { FieldTheme } from "@openmarch/core";
 import type { FieldMarchers } from "../fieldMarchers";
 import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
-import { useFieldViewStore } from "../fieldView";
+import { useFieldDraw } from "../fieldDrawContext";
 import { writeMarcherLooks } from "../marcherLooks";
 import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
 
@@ -141,6 +141,7 @@ export default function MarchersLayer({
     theme: FieldTheme;
 }) {
     const invalidate = useThree((s) => s.invalidate);
+    const draw = useFieldDraw();
     const drawn = useRef<Drawn>({
         version: -1,
         idsVersion: -1,
@@ -198,7 +199,7 @@ export default function MarchersLayer({
     );
 
     useFrame(() => {
-        const { zoom } = useFieldViewStore.getState();
+        const { zoom } = draw.view.getState();
         const { scale, ringGap, ringWidth } = dotSizes(zoom);
         const { uniforms } = mesh.material;
         uniforms.uScale.value = scale;

@@ -95,6 +95,7 @@ async function openInBrowser(
     appSettings: Record<string, unknown>,
     storage: Record<string, string>,
     initScript: string | null,
+    videoExportPath: string,
 ): Promise<App> {
     const { openShow } = (await import(pathToFileURL(hostBundle).href)) as {
         openShow: typeof import("./host/index").openShow;
@@ -103,6 +104,7 @@ async function openInBrowser(
         databasePath,
         migrationsFolder,
         settings: appSettings,
+        videoExportPath,
     });
     const context = await browser.newContext({ viewport: VIEWPORT });
     await context.addInitScript((storage) => {
@@ -169,8 +171,9 @@ async function openInElectron(
     databasePath: string,
     appSettings: Record<string, unknown>,
     userDataDir: string,
-    field: FieldDriver,
+    softwareGL: boolean,
     storage: Record<string, string>,
+    videoExportPath: string,
 ): Promise<App> {
     // The app's settings store (electron-store) reads this file at startup.
     fs.mkdirSync(userDataDir, { recursive: true });
@@ -193,7 +196,7 @@ async function openInElectron(
             "--disable-audio-input",
             // The new field needs WebGL. A machine with no GPU (Xvfb in a
             // container) only has it through Chromium's software GL
-            ...(field === "three"
+            ...(softwareGL
                 ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
                 : []),
         ],
@@ -201,6 +204,8 @@ async function openInElectron(
             ...process.env,
             NODE_ENV: "development",
             PLAYWRIGHT_SESSION: "true",
+            // The video export's save dialog answers this file
+            PLAYWRIGHT_VIDEO_EXPORT_PATH: videoExportPath,
         },
     });
     // Every load starts with the storage asked for. The window is already
@@ -292,6 +297,8 @@ export type Show = {
     pageErrors: string[];
     /** Kills the app's GPU process, as a driver crash would. Electron only. */
     killGpuProcess?: () => Promise<void>;
+    /** Where a video export is saved: the save dialog picks this file. */
+    videoExportPath: string;
 };
 
 type Fixtures = {
@@ -325,6 +332,12 @@ type Fixtures = {
      * only, e.g. to take WebGL away.
      */
     initScript: string | null;
+    /**
+     * Gives Electron WebGL in software on a machine without a GPU, as the new
+     * field always gets, for scenarios that need WebGL on the Fabric field
+     * too (the video export, #207).
+     */
+    webgl: boolean;
     show: Show;
 };
 
@@ -381,6 +394,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     uiSettings: [undefined, { option: true }],
     fieldQualityNotice: [false, { option: true }],
     initScript: [null, { option: true }],
+    webgl: [false, { option: true }],
 
     show: async (
         {
@@ -394,11 +408,14 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             uiSettings,
             fieldQualityNotice,
             initScript,
+            webgl,
         },
         use,
         testInfo,
     ) => {
         const databasePath = testInfo.outputPath("show.dots");
+        // No extension: the app picks MP4 or WebM by what this machine can encode
+        const videoExportPath = testInfo.outputPath("exported-video");
         fs.copyFileSync(showFile ?? blankShow, databasePath);
         if (seedSql.length > 0) {
             const writer = new DatabaseSync(databasePath);
@@ -423,8 +440,9 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 databasePath,
                 appSettings,
                 testInfo.outputPath("user-data"),
-                field,
+                field === "three" || webgl,
                 storage,
+                videoExportPath,
             );
         } else {
             app = await openInBrowser(
@@ -433,6 +451,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                 appSettings,
                 storage,
                 initScript,
+                videoExportPath,
             );
         }
         const { page } = app;
@@ -490,6 +509,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
                     testInfo.outputPath(name),
                 ),
                 killGpuProcess: app.killGpuProcess,
+                videoExportPath,
             });
         } catch (error) {
             failed = true;

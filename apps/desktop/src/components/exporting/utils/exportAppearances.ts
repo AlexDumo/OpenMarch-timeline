@@ -28,8 +28,8 @@ function resolveTagAppearancesForPage(
 
 /**
  * Each page's appearance stack per marcher: tag, then section and field theme (there are no
- * per-marcher-page overrides, P7.14). Positions are not part of appearances; the video export
- * samples them from the resolver (`ResolverFrameSampler`).
+ * per-marcher-page overrides, P7.14), for the drill charts. The video export draws the field's
+ * appearance steps instead (`appearanceSteps.ts`), the same rule by flag beat.
  */
 export function buildMarcherAppearancesByPageId({
     sortedPages,
@@ -70,40 +70,4 @@ export function buildMarcherAppearancesByPageId({
     }
 
     return appearancesByPageId;
-}
-
-/**
- * Resolves which page's appearances apply at a playback timestamp.
- * Matches the interval logic used during live animation in useAnimation.
- */
-export function getPlaybackPageForTimeMs(
-    sortedPages: Page[],
-    timeMs: number,
-): Page {
-    if (sortedPages.length === 0) {
-        throw new Error("Cannot resolve playback page without pages");
-    }
-
-    const pagesById = Object.fromEntries(
-        sortedPages.map((page) => [page.id, page]),
-    );
-    const firstPage = sortedPages[0];
-    const firstPageEndMs = (firstPage.timestamp + firstPage.duration) * 1000;
-
-    if (timeMs < firstPageEndMs) {
-        return firstPage;
-    }
-
-    const currentPage = sortedPages.find((page) => {
-        const nextPage = page.nextPageId ? pagesById[page.nextPageId] : null;
-        if (nextPage == null) return false;
-        return (
-            timeMs >= (page.timestamp + page.duration) * 1000 &&
-            timeMs < (nextPage.timestamp + nextPage.duration) * 1000
-        );
-    });
-
-    if (currentPage) return currentPage;
-
-    return sortedPages[sortedPages.length - 1];
 }
