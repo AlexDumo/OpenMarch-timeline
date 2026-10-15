@@ -10,52 +10,105 @@ import {
     ShaderMaterial,
 } from "three";
 import type { FieldTheme } from "@openmarch/core";
-import { rgba01 } from "../fieldGeometry";
 import type { FieldMarchers } from "../fieldMarchers";
 import { useFieldViewStore } from "../fieldView";
+import { writeMarcherLooks } from "../marcherLooks";
 
 /**
  * Every marcher's dot in one instanced draw, shaded in the fragment shader so
- * edges are smooth without MSAA (ADR 0005 D-2). Dots sit exactly on their
+ * edges are smooth without MSAA (ADR 0005 D-2). Each instance carries its look
+ * (fill, outline, shape; `marcherLooks.ts`). Dots sit exactly on their
  * positions: no half-grid-line offset.
+ *
+ * Shapes are signed distances in field units, sized as `CanvasMarcher` and the
+ * drill-chart export draw them (`drillChartSvg.ts`'s `dotSvg`): a circle of
+ * radius 5, a square of side 5·√π·1.2, an equilateral triangle 12 wide, and an
+ * X of two 2-wide lines out to ±6. The 1-unit outline straddles the edge, and
+ * corners are mitered, as Fabric strokes them.
  */
 const VERTEX = /* glsl */ `
 attribute vec2 aPos;
-uniform float uRadius;
+attribute vec4 aFill;
+attribute vec4 aOutline;
+attribute float aShape;
+uniform float uScale;
+uniform float uMargin;
 varying vec2 vLocal;
-varying float vRadius;
+varying vec4 vFill;
+varying vec4 vOutline;
+varying float vShape;
 void main() {
-    vRadius = uRadius;
-    // A margin around the dot for its antialiased edge.
-    vLocal = position.xy * uRadius * 1.25;
-    gl_Position = projectionMatrix * viewMatrix * vec4(aPos + vLocal, 0.0, 1.0);
+    vFill = aFill;
+    vOutline = aOutline;
+    vShape = aShape;
+    if (aShape < -0.5) {
+        // Hidden: every corner on one point outside the view draws nothing
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        return;
+    }
+    // The largest shape (the X's line ends), plus a margin for the antialiased edge
+    vLocal = position.xy * (7.0 + uMargin);
+    gl_Position = projectionMatrix * viewMatrix * vec4(aPos + vLocal * uScale, 0.0, 1.0);
 }`;
 
 const FRAGMENT = /* glsl */ `
-uniform vec4 uFill;
-uniform vec4 uOutline;
-uniform float uOutlineWidth;
+#define DOT_R 5.0
 varying vec2 vLocal;
-varying float vRadius;
+varying vec4 vFill;
+varying vec4 vOutline;
+varying float vShape;
+
+float square(vec2 p) {
+    vec2 q = abs(p);
+    return max(q.x, q.y) - DOT_R * sqrt(3.14159265) * 0.6;
+}
+float triangle(vec2 p) {
+    // Corners (-hw, hh), (0, -hh), (hw, hh), y down
+    float hw = DOT_R * 1.2;
+    float hh = hw * sqrt(3.0) * 0.5;
+    float side = dot(vec2(abs(p.x), p.y + hh), normalize(vec2(2.0 * hh, -hw)));
+    return max(side, p.y - hh);
+}
+float xMark(vec2 p) {
+    // Both lines folded onto one: from the center out to (s, s), 1 unit either side
+    vec2 q = abs(p);
+    float s = DOT_R * 1.2;
+    float along = (q.x + q.y) * 0.70710678;
+    float across = abs(q.x - q.y) * 0.70710678;
+    return max(along - s * 1.41421356, across - 1.0);
+}
+
 void main() {
-    float d = length(vLocal);
-    float aa = fwidth(d);
-    float inside = 1.0 - smoothstep(vRadius - aa, vRadius + aa, d);
-    float edge = smoothstep(vRadius - uOutlineWidth - aa, vRadius - uOutlineWidth + aa, d);
-    vec4 color = mix(uFill, uOutline, edge * uOutline.a);
-    float a = inside * max(color.a, uFill.a);
-    if (a < 0.01) discard;
-    gl_FragColor = vec4(color.rgb, a);
+    float d;
+    if (vShape < 0.5) d = length(vLocal) - DOT_R;
+    else if (vShape < 1.5) d = square(vLocal);
+    else if (vShape < 2.5) d = triangle(vLocal);
+    else d = xMark(vLocal);
+    float aa = 0.5 * fwidth(d);
+    float fill = 1.0 - smoothstep(-aa, aa, d);
+    // An X is its lines only; the others are a fill with the outline drawn over it
+    float stroke = vShape > 2.5 ? 0.0 : 1.0 - smoothstep(0.5 - aa, 0.5 + aa, abs(d));
+    float fillA = vFill.a * fill;
+    float strokeA = vOutline.a * stroke;
+    float a = strokeA + fillA * (1.0 - strokeA);
+    if (a < 0.004) discard;
+    vec3 rgb = vOutline.rgb * strokeA + vFill.rgb * fillA * (1.0 - strokeA);
+    gl_FragColor = vec4(rgb / a, a);
 }`;
 
 /** A dot's radius in field units, as fabric's `DOT_RADIUS`. */
 const DOT_RADIUS = 5;
 /** A dot never gets smaller than this on screen, in CSS pixels, so a zoomed-out show stays visible. */
 const MIN_SCREEN_RADIUS = 1.5;
-/** Fabric's dot outline width, in field units. */
-const OUTLINE_WIDTH = 1;
 
-/** The marchers' dots. Appearance per marcher (#199) replaces the theme's default colors. */
+type Drawn = {
+    version: number;
+    idsVersion: number;
+    appearanceVersion: number;
+    theme: FieldTheme | null;
+};
+
+/** The marchers' dots, each in its appearance at the beat drawn. */
 export default function MarchersLayer({
     marchers,
     theme,
@@ -64,7 +117,12 @@ export default function MarchersLayer({
     theme: FieldTheme;
 }) {
     const invalidate = useThree((s) => s.invalidate);
-    const drawn = useRef({ version: -1, idsVersion: -1 });
+    const drawn = useRef<Drawn>({
+        version: -1,
+        idsVersion: -1,
+        appearanceVersion: -1,
+        theme: null,
+    });
 
     const mesh = useMemo(() => {
         const geometry = new InstancedBufferGeometry();
@@ -83,10 +141,8 @@ export default function MarchersLayer({
                 vertexShader: VERTEX,
                 fragmentShader: FRAGMENT,
                 uniforms: {
-                    uRadius: { value: DOT_RADIUS },
-                    uFill: { value: [0, 0, 0, 1] },
-                    uOutline: { value: [0, 0, 0, 0] },
-                    uOutlineWidth: { value: OUTLINE_WIDTH },
+                    uScale: { value: 1 },
+                    uMargin: { value: 1 },
                 },
                 transparent: true,
                 depthTest: false,
@@ -99,12 +155,8 @@ export default function MarchersLayer({
         return dots;
     }, []);
 
-    useEffect(() => {
-        const { uniforms } = mesh.material;
-        uniforms.uFill.value = rgba01(theme.defaultMarcher.fill);
-        uniforms.uOutline.value = rgba01(theme.defaultMarcher.outline);
-        invalidate();
-    }, [mesh, theme, invalidate]);
+    // A new theme restyles the dots on the next frame
+    useEffect(() => invalidate(), [theme, invalidate]);
 
     useEffect(
         () => () => {
@@ -116,31 +168,67 @@ export default function MarchersLayer({
 
     useFrame(() => {
         const { zoom } = useFieldViewStore.getState();
-        mesh.material.uniforms.uRadius.value = Math.max(
-            DOT_RADIUS,
-            MIN_SCREEN_RADIUS / zoom,
-        );
-        if (marchers.version === drawn.current.version) return;
+        const scale = Math.max(1, MIN_SCREEN_RADIUS / (DOT_RADIUS * zoom));
+        const { uniforms } = mesh.material;
+        uniforms.uScale.value = scale;
+        // One CSS pixel, in the shape's own units
+        uniforms.uMargin.value = 1 / (zoom * scale);
+
+        const last = drawn.current;
+        const resized = marchers.idsVersion !== last.idsVersion;
+        const restyled =
+            resized ||
+            marchers.appearanceVersion !== last.appearanceVersion ||
+            theme !== last.theme;
+        if (!resized && !restyled && marchers.version === last.version) return;
         const geometry = mesh.geometry;
-        let attribute = geometry.getAttribute("aPos") as
-            | InstancedBufferAttribute
-            | undefined;
-        if (marchers.idsVersion !== drawn.current.idsVersion || !attribute) {
+        if (resized || !geometry.getAttribute("aPos")) {
             // Frees the old buffers; three uploads the new ones on the next draw
             geometry.dispose();
-            attribute = new InstancedBufferAttribute(
-                new Float32Array(marchers.ids.length * 2),
-                2,
+            const n = marchers.ids.length;
+            const attribute = (array: Float32Array, size: number) => {
+                const a = new InstancedBufferAttribute(array, size);
+                a.setUsage(DynamicDrawUsage);
+                return a;
+            };
+            geometry.setAttribute(
+                "aPos",
+                attribute(new Float32Array(n * 2), 2),
             );
-            attribute.setUsage(DynamicDrawUsage);
-            geometry.setAttribute("aPos", attribute);
-            geometry.instanceCount = marchers.ids.length;
+            geometry.setAttribute(
+                "aFill",
+                attribute(new Float32Array(n * 4), 4),
+            );
+            geometry.setAttribute(
+                "aOutline",
+                attribute(new Float32Array(n * 4), 4),
+            );
+            geometry.setAttribute("aShape", attribute(new Float32Array(n), 1));
+            geometry.instanceCount = n;
         }
-        (attribute.array as Float32Array).set(marchers.positions);
-        attribute.needsUpdate = true;
+        const attribute = (name: string) =>
+            geometry.getAttribute(name) as InstancedBufferAttribute;
+        if (restyled) {
+            const fill = attribute("aFill");
+            const outline = attribute("aOutline");
+            const shape = attribute("aShape");
+            writeMarcherLooks(marchers.stacks, theme, {
+                fill: fill.array as Float32Array,
+                outline: outline.array as Float32Array,
+                shape: shape.array as Float32Array,
+            });
+            fill.needsUpdate = true;
+            outline.needsUpdate = true;
+            shape.needsUpdate = true;
+        }
+        const positions = attribute("aPos");
+        (positions.array as Float32Array).set(marchers.positions);
+        positions.needsUpdate = true;
         drawn.current = {
             version: marchers.version,
             idsVersion: marchers.idsVersion,
+            appearanceVersion: marchers.appearanceVersion,
+            theme,
         };
     });
 

@@ -246,3 +246,39 @@ export function resolveAppearanceFromStack(
         shape: shapeTypeToSchemaShape(shapeType ?? "circle"),
     };
 }
+
+/** How a marcher is drawn on the field: its resolved appearance with the colors as values. */
+export type MarcherLook = {
+    visible: boolean;
+    labelVisible: boolean;
+    shape: ResolvedPerformerAppearance["shape"];
+    fill: RgbaColor;
+    outline: RgbaColor;
+    /** An X has no fill area: it's drawn in the outline color when that shows, else the fill */
+    crossColor: RgbaColor;
+};
+
+/**
+ * A marcher's look from its appearance stack (highest priority first), resolved by
+ * {@link resolveAppearanceFromStack} as `CanvasMarcher.setAppearance` draws it. Shared by the
+ * drill-chart export and the three.js field, so both draw what the Fabric field draws.
+ */
+export function resolveMarcherLook(
+    appearances: AppearanceComponentOptional[],
+    fieldTheme: FieldTheme,
+): MarcherLook {
+    const resolved = resolveAppearanceFromStack(appearances, fieldTheme);
+    const outlineValue = getFirstAppearanceValue(appearances, "outline_color");
+    const fill =
+        getFirstAppearanceValue(appearances, "fill_color") ||
+        fieldTheme.defaultMarcher.fill;
+    const outline = outlineValue || fieldTheme.defaultMarcher.outline;
+    return {
+        visible: resolved.visible,
+        labelVisible: resolved.textVisible,
+        shape: resolved.shape,
+        fill,
+        outline,
+        crossColor: outlineValue && outlineValue.a > 0.1 ? outline : fill,
+    };
+}
