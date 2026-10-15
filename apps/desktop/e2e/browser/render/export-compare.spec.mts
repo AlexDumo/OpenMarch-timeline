@@ -54,7 +54,8 @@ for (const show of SHOWS)
             });
 
             test("exports drill charts", async ({ show: app }, testInfo) => {
-                test.setTimeout(600_000);
+                // Fabric draws 385 individual charts in about ten minutes
+                test.setTimeout(1_800_000);
                 const { page } = app;
                 await waitForField(page);
                 await page.getByRole("tab", { name: "File" }).click();
@@ -76,7 +77,7 @@ for (const show of SHOWS)
                     .click();
                 await expect(
                     page.getByText("Successfully exported as PDF!"),
-                ).toBeVisible({ timeout: 540_000 });
+                ).toBeVisible({ timeout: 1_700_000 });
                 const from = testInfo.outputPath("exported-drill-charts");
                 const to = path.join(out!, label, show.name);
                 fs.mkdirSync(to, { recursive: true });

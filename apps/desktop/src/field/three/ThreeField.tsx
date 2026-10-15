@@ -275,6 +275,10 @@ function ThreeFieldView() {
         () => renderer.current?.domElement ?? null,
         [],
     );
+    const benchView = useMemo(
+        () => threeFieldView(benchElement),
+        [benchElement],
+    );
     const benchMarchers = useCallback(() => marchers.ids.length, [marchers]);
     const latest = useRef({
         labels,
@@ -437,7 +441,7 @@ function ThreeFieldView() {
             <FieldBenchmark
                 field="three"
                 frames={benchFrames}
-                view={threeFieldView}
+                view={benchView}
                 element={benchElement}
                 marcherCount={benchMarchers}
             />

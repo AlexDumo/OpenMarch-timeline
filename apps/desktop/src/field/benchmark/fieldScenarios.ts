@@ -69,13 +69,18 @@ function scrubScenario(ms: number): BenchmarkScenario {
 export type BenchmarkView = {
     get(): FieldView;
     set(view: Pick<FieldView, "zoom" | "panX" | "panY">): void;
+    /** The element the field's wheel input lands on, once it's up. */
+    element(): Element | null;
 };
 
 /** The new field's view: its one view store. */
-export const threeFieldView: BenchmarkView = {
+export const threeFieldView = (
+    element: () => Element | null,
+): BenchmarkView => ({
     get: () => useFieldViewStore.getState(),
     set: (view) => useFieldViewStore.setState(view),
-};
+    element,
+});
 
 /** A scenario that moves the field's view each frame, then puts it back. */
 function viewScenario(
@@ -98,21 +103,45 @@ function viewScenario(
     };
 }
 
-/** In to 8× and back out at the center, every 3 s. */
-const zoomScenario = (view: BenchmarkView) =>
-    viewScenario("zoom", view, (now, start, elapsed) => {
-        const zoom =
-            start.zoom *
-            Math.pow(8, (1 - Math.cos((elapsed / 1500) * Math.PI)) / 2);
-        const cx = now.width / 2;
-        const cy = now.height / 2;
-        return {
-            ...now,
-            zoom,
-            panX: cx - ((cx - now.panX) * zoom) / now.zoom,
-            panY: cy - ((cy - now.panY) * zoom) / now.zoom,
-        };
-    });
+/**
+ * In to 8× and back out at the center, every 3 s, through the field's own
+ * pinch zoom: a Ctrl+wheel event each frame, which both fields take as a
+ * pinch in either mouse mode. Each event steers the zoom toward the curve, so
+ * both fields follow it whatever their zoom speed. Fabric draws its grid from
+ * a cache while a zoom is in progress; writing its view directly would skip
+ * that.
+ */
+function zoomScenario(view: BenchmarkView): BenchmarkScenario {
+    let start: FieldView | null = null;
+    return {
+        kind: "zoom",
+        start() {
+            start = { ...view.get() };
+        },
+        step(elapsed) {
+            const target = view.element();
+            if (!target || !start) return;
+            const goal =
+                start.zoom *
+                Math.pow(8, (1 - Math.cos((elapsed / 1500) * Math.PI)) / 2);
+            const ratio = Math.log(goal / view.get().zoom);
+            const box = target.getBoundingClientRect();
+            target.dispatchEvent(
+                new WheelEvent("wheel", {
+                    deltaY: Math.max(-40, Math.min(40, -ratio * 200)),
+                    ctrlKey: true,
+                    clientX: box.left + box.width / 2,
+                    clientY: box.top + box.height / 2,
+                    bubbles: true,
+                    cancelable: true,
+                }),
+            );
+        },
+        stop() {
+            if (start) view.set(start);
+        },
+    };
+}
 
 /** Round and round, a few pixels a frame. */
 const panScenario = (view: BenchmarkView) =>

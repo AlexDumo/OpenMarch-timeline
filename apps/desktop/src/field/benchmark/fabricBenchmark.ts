@@ -13,6 +13,7 @@ type FabricCanvas = {
     getWidth(): number;
     getHeight(): number;
     viewportTransform: number[];
+    upperCanvasEl?: Element;
     setViewportTransform(transform: number[]): void;
     requestRenderAll(): void;
     getCanvasMarchers?(): unknown[];
@@ -56,7 +57,9 @@ export function fabricFrames(canvas: () => FabricCanvas | null): FrameProbe {
 
 /**
  * Fabric's view in its own canvas pixels: the zoom and pan of its viewport
- * transform. The scenarios only move it relative to where it started.
+ * transform. The scenarios only move it relative to where it started. A pan
+ * moves the transform in place, as Fabric's own trackpad pan does; a zoom
+ * goes through its wheel input (`element`).
  */
 export function fabricView(canvas: () => FabricCanvas | null): BenchmarkView {
     return {
@@ -74,9 +77,14 @@ export function fabricView(canvas: () => FabricCanvas | null): BenchmarkView {
         set({ zoom, panX, panY }) {
             const target = canvas();
             if (!target) return;
-            target.setViewportTransform([zoom, 0, 0, zoom, panX, panY]);
+            const vpt = target.viewportTransform;
+            if (vpt[0] === zoom) {
+                vpt[4] = panX;
+                vpt[5] = panY;
+            } else target.setViewportTransform([zoom, 0, 0, zoom, panX, panY]);
             target.requestRenderAll();
         },
+        element: () => canvas()?.upperCanvasEl ?? null,
     };
 }
 
