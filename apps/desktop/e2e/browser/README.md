@@ -113,7 +113,9 @@ test("creates marchers", async ({ show }) => {
   the selection handles, the gesture in progress and the field image. The helpers
   (`drawnMarchers`, `readField`, `selectedDrillNumbers`) wrap it. Never reach
   into the renderer (`window.canvas`, Fabric objects): the same scenarios must
-  run against the new field renderer (#189).
+  run against the new field renderer (#189). The one exception is simulating
+  a lost WebGL context (`weak-machines.spec.mts`), which needs the canvas's
+  `WEBGL_lose_context` extension.
 - `expectCanvasMatchesShow(show)` waits until every marcher is drawn where
   `savedPositions` puts it. Call it after any step that moves marchers or
   changes page.
@@ -125,6 +127,11 @@ test("creates marchers", async ({ show }) => {
   Go to field and **+**.
 - A test fails if the page logs an error or throws. Allow a known message with
   `test.use({ allowedPageErrors: [/.../] })`.
+- The new field explains its low-quality mode once, in a toast, on machines
+  with software GL (all of ours). The fixture marks it as already explained;
+  `test.use({ fieldQualityNotice: true })` lets it show.
+- `test.use({ initScript: "..." })` runs a script in the page before the app
+  on every load, e.g. to take WebGL away. Browser target only.
 - `await waitForIdle(page)` waits until the app's writes have finished. Use it
   before a step that must not overlap the previous one.
 - Put steps a user takes (fill a form, drag a dot) in `app.mts` so specs read
