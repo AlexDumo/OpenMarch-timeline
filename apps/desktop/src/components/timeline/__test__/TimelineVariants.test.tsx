@@ -308,7 +308,7 @@ describe("timeline views", () => {
             />,
         );
         expect(
-            screen.getByRole("button", { name: "Stop" }),
+            screen.getByRole("button", { name: "Stop and go back" }),
         ).toBeInTheDocument();
         rerender(
             <ExpandedTimeline
@@ -1793,6 +1793,45 @@ describe("a calmer timeline (UI-12)", () => {
         expect(rows().map((row) => row.active)).toEqual([false, true]);
         fireEvent.keyUp(window, { key: "Shift" });
         expect(play).toHaveAccessibleName("Play from the start flag");
+    });
+
+    it("guides Stop and Pause while playing, and swaps to Pause while Shift is held (UI-24)", async () => {
+        const onPlayingChange = vi.fn();
+        const onPlayFromPlayhead = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                isPlaying
+                showTransport
+                onPlayingChange={onPlayingChange}
+                onPlayFromPlayhead={onPlayFromPlayhead}
+            />,
+        );
+        const stop = screen.getByTestId("timeline-play");
+        act(() => stop.focus());
+        await screen.findByRole("tooltip");
+        const rows = () =>
+            [
+                ...document.querySelector(
+                    '[data-testid="timeline-stop-guide"]',
+                )!.children,
+            ].map((row) => ({
+                text: row.textContent,
+                active: row.hasAttribute("data-active"),
+            }));
+        expect(rows()).toEqual([
+            { text: "Stop and go backSpace", active: true },
+            { text: "Pause hereShift+Space", active: false },
+        ]);
+        fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
+        expect(stop).toHaveAccessibleName("Pause here");
+        expect(rows().map((row) => row.active)).toEqual([false, true]);
+        fireEvent.click(stop, { shiftKey: true });
+        expect(onPlayFromPlayhead).toHaveBeenCalledOnce();
+        fireEvent.keyUp(window, { key: "Shift" });
+        expect(stop).toHaveAccessibleName("Stop and go back");
+        fireEvent.click(stop);
+        expect(onPlayingChange).toHaveBeenCalledWith(false);
     });
 
     it("keeps page navigation live while playing, where it jumps playback", () => {

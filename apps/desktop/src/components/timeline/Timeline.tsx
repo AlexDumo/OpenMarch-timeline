@@ -117,8 +117,6 @@ export interface TimelinePlayback {
     readonly onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops (UI-17): the button says so */
     readonly playLoops?: boolean;
-    /** Shift+Space's once-through of the loop is playing (UI-17) */
-    readonly playingOnce?: boolean;
     /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     readonly onPlayFromPlayhead?: () => void;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
@@ -749,7 +747,6 @@ export function Timeline(props: TimelineProps) {
         onSeek: seekToBeat,
         onPlayingChange: useLatestCallback(playback.onPlayingChange),
         playLoops: playback.playLoops,
-        playingOnce: playback.playingOnce,
         onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),

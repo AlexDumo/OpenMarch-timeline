@@ -226,8 +226,6 @@ export interface TimelineInteractionProps {
     readonly onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops (UI-17) */
     readonly playLoops?: boolean;
-    /** Shift+Space's once-through is playing (UI-17) */
-    readonly playingOnce?: boolean;
     /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     readonly onPlayFromPlayhead?: () => void;
     readonly onNavigate?: (direction: TimelineNavigation) => void;

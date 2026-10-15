@@ -84,8 +84,8 @@ const playbackCommands = (latest: {
  *   instead and leave the playhead alone (UI-12, `jumpTimelinePlayback`); a scrub suspends
  *   playback until it ends, then plays on from there once (`seekTimeline`, UI-12 review).
  * - Play (`toggleTimelinePlayback`, UI-17) loops the loop region while looping is on, wherever the
- *   playhead is, and returns to the playhead when it stops; otherwise it plays on from the
- *   playhead and stops in place.
+ *   playhead is; otherwise it plays on from the start flag. Stop goes back to where Play was
+ *   pressed, and Shift+Space pauses where it is instead (UI-24).
  */
 export function useTimelinePlayback({
     beats,
@@ -98,10 +98,6 @@ export function useTimelinePlayback({
     const playheadBeat = useTimelineSelectionStore(displayedBeat);
     // UI-17: with looping on (or a move isolated), Play loops
     const playLoops = useTimelineSelectionStore((s) => loopBounds(s) !== null);
-    // Shift+Space's once-through, which stops back on the page's set
-    const playingOnce = useTimelineSelectionStore(
-        (s) => s.playback?.kind === "preview" && s.playback.once === true,
-    );
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 
     useEffect(() => {
@@ -145,17 +141,8 @@ export function useTimelinePlayback({
                 isPlaying && liveIndex != null ? liveIndex : playheadBeat,
             isPlaying,
             playLoops,
-            playingOnce,
             ...commands,
         }),
-        [
-            commands,
-            isPlaying,
-            liveBeat,
-            liveIndex,
-            playheadBeat,
-            playLoops,
-            playingOnce,
-        ],
+        [commands, isPlaying, liveBeat, liveIndex, playheadBeat, playLoops],
     );
 }
