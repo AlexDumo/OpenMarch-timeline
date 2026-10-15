@@ -8,6 +8,7 @@ import type {
     FieldTestMarcher,
 } from "@/field/fieldTestApi";
 import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
+import type { LineToolShape } from "@/field/editor/lineTool";
 import type { FieldMarchers } from "./fieldMarchers";
 import { fieldToElement, type FieldViewState } from "./fieldView";
 import type { CurrentFieldQuality } from "./useFieldQuality";
@@ -31,6 +32,8 @@ export type ThreeFieldState = {
     /** The app's selection, as the editor reads it. */
     selection(): readonly number[];
     activeGesture(): FieldTestGesture | null;
+    /** The editor's line tool, or null when it's off (#203). */
+    lineTool(): LineToolShape | null;
 };
 
 /**
@@ -92,6 +95,22 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             };
         },
         fieldImage: () => field.fieldImage(),
+        lineTool() {
+            const tool = field.lineTool();
+            if (!tool) return null;
+            const { line } = tool;
+            return {
+                marchers: [...tool.marchers].sort((a, b) => a - b),
+                line: line && {
+                    start: { ...line.start },
+                    end: { ...line.end },
+                    drawing: line.drawing,
+                },
+                previews: tool.previews
+                    .map(({ id, to }) => ({ id, ...to }))
+                    .sort((a, b) => a.id - b.id),
+            };
+        },
     };
 }
 

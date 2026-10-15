@@ -5,11 +5,13 @@ import type {
     FieldTestGesture,
     FieldTestHandle,
     FieldTestImage,
+    FieldTestLineTool,
     FieldTestLook,
     ScreenPoint,
 } from "@/field/fieldTestApi";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import CanvasMarcher from "@/global/classes/canvasObjects/CanvasMarcher";
+import type MarcherLine from "@/global/classes/canvasObjects/MarcherLine";
 import DefaultListeners from "./listeners/DefaultListeners";
 import LineListeners from "./listeners/LineListeners";
 
@@ -123,6 +125,46 @@ export function createFabricFieldTestApi(
         },
 
         fieldImage: () => drawnFieldImage(canvas),
+
+        lineTool: () => lineTool(canvas),
+    };
+}
+
+/** `LineListeners` internals the API reads. It never writes to them. */
+type LineInternals = {
+    _isDrawing: boolean;
+    _activeLine: MarcherLine | null;
+    _endpoints: Map<number, fabric.Object>;
+};
+
+/** The line tool's state, read from its listeners (#203). */
+function lineTool(canvas: OpenMarchCanvas): FieldTestLineTool | null {
+    const listeners = canvas.listeners;
+    if (!(listeners instanceof LineListeners)) return null;
+    const internals = listeners as unknown as LineInternals;
+    // Field (0, 0) is half a grid line into Fabric's plane (see `viewport`)
+    const offset = FieldProperties.GRID_STROKE_WIDTH / 2;
+    const active = internals._activeLine;
+    // `getCoordinates` takes the half grid line off already
+    const line = active?.getCoordinates();
+    return {
+        marchers: canvas.eventMarchers
+            .map((marcher) => marcher.marcherObj.id)
+            .sort((a, b) => a - b),
+        line: line
+            ? {
+                  start: { x: line.x1, y: line.y1 },
+                  end: { x: line.x2, y: line.y2 },
+                  drawing: internals._isDrawing,
+              }
+            : null,
+        previews: [...internals._endpoints]
+            .map(([id, endpoint]) => ({
+                id,
+                x: (endpoint.left ?? 0) - offset,
+                y: (endpoint.top ?? 0) - offset,
+            }))
+            .sort((a, b) => a.id - b.id),
     };
 }
 

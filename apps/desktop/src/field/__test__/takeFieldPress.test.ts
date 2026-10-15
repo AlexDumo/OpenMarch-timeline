@@ -30,14 +30,8 @@ describe("takeFieldPress (#202)", () => {
         expect(timeline().cursorBeat).toBe(5);
     });
 
-    it("takes every press while the line tool is on", () => {
+    it("leaves the line tool's presses to the editor (#203)", () => {
         useAlignmentEventStore.getState().setAlignmentEvent("line");
-        expect(takeFieldPress()).toBe(true);
-        expect(takeFieldPress()).toBe(true);
-    });
-
-    it("leaves presses to the editor in the other alignment events", () => {
-        useAlignmentEventStore.getState().setAlignmentEvent("lasso");
         expect(takeFieldPress()).toBe(false);
     });
 });
