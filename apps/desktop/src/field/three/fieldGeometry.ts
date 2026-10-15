@@ -88,18 +88,21 @@ export function fieldGeometry(
                   ];
         return { rect, color: l.color };
     });
-    // The border's four sides, not overlapping, so a translucent stroke stays even
+    // The border's four sides. A translucent stroke's sides don't overlap, so
+    // it stays even; an opaque one's left and right sides run the full height,
+    // so no antialiased seam shows where they meet the top and bottom (#249).
     const { border } = plan;
     const sw = border.strokeWidth;
     const x0 = border.x - sw / 2;
     const y0 = border.y - sw / 2;
     const x1 = border.x + border.width + sw / 2;
     const y1 = border.y + border.height + sw / 2;
+    const inset = border.color.a < 1 ? sw : 0;
     const sides: Rect[] = [
         [x0, y0, x1, y0 + sw],
         [x0, y1 - sw, x1, y1],
-        [x0, y0 + sw, x0 + sw, y1 - sw],
-        [x1 - sw, y0 + sw, x1, y1 - sw],
+        [x0, y0 + inset, x0 + sw, y1 - inset],
+        [x1 - sw, y0 + inset, x1, y1 - inset],
     ];
     for (const rect of sides) rects.push({ rect, color: border.color });
 
