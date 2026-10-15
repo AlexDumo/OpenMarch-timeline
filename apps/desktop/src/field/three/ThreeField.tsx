@@ -50,6 +50,7 @@ import { FieldEditor } from "@/field/editor/fieldEditor";
 import { ruledMove } from "@/field/editor/moveRules";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
+import { publishLinePreviews, useFieldLineTool } from "@/field/fieldLineTool";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
@@ -334,6 +335,10 @@ function ThreeFieldView() {
                             positions,
                             latest.current.moveMarchers,
                         ),
+                    // #203: the line tool's previews are the alignment event's, which Shift+Enter applies
+                    linePreviews: (positions) =>
+                        publishLinePreviews(positions, latest.current.pageId),
+                    stepGrid: () => latest.current.fieldProperties ?? null,
                 },
                 {
                     isMac: isMacPlatform(),
@@ -356,6 +361,7 @@ function ThreeFieldView() {
         setActiveFieldEditor(editor);
         return () => setActiveFieldEditor(null);
     }, [editor]);
+    useFieldLineTool(editor);
 
     useEffect(() => {
         installFieldTestApi(
@@ -369,6 +375,7 @@ function ThreeFieldView() {
                 contextLost: () => useFieldQualityStore.getState().contextLost,
                 selection: () => selection.current,
                 activeGesture: () => editor.activeGesture(),
+                lineTool: () => editor.lineToolShape(),
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
                 dimmed: (id) => dimming.isDimmed(id),

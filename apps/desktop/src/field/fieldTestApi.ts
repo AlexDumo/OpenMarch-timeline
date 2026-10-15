@@ -117,7 +117,29 @@ export interface FieldTestApi {
      * null when none is shown (no image, hidden, or not loaded yet).
      */
     fieldImage(): FieldTestImage | null;
+    /** The line tool (L) while it's on, or null when it's off (#203). */
+    lineTool?(): FieldTestLineTool | null;
 }
+
+/** The line tool as the field shows it. Positions are in field units. */
+export type FieldTestLineTool = {
+    /** The marchers it lines up (outlined on the field), ascending. */
+    marchers: number[];
+    /**
+     * The line drawn, or null before the first click and after a right-click.
+     * `drawing` while its end follows the pointer, before the second click.
+     */
+    line: {
+        start: { x: number; y: number };
+        end: { x: number; y: number };
+        drawing: boolean;
+    } | null;
+    /**
+     * Where the dashed previews put each marcher, by ascending id: what
+     * Shift+Enter applies. Empty until a line is finished.
+     */
+    previews: { id: number; x: number; y: number }[];
+};
 
 export type FieldTestImage = {
     x: number;
