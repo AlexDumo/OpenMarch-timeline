@@ -9,9 +9,7 @@ import {
 } from "../app.mjs";
 import { savedPosition } from "../positions.mjs";
 
-// Still failing on the three.js field (#209 rechecked): after the reload, the first marcher is drawn
-// away from where page 1 saved it. Needs a look before it's turned back on.
-test.fixme("a show built in the app looks the same after a reload", async ({
+test("a show built in the app looks the same after a reload", async ({
     show,
 }) => {
     const { page } = show;
@@ -54,8 +52,11 @@ test.fixme("a show built in the app looks the same after a reload", async ({
     await waitForField(page);
 
     await expect.poll(timeline).toEqual(before);
+    // A reopened show starts at the show's start (page 0)
     await expectCanvasMatchesShow(show);
-    await page.keyboard.press("Shift+E");
+    // To page 1's end with End (last page). Not Shift+E: since #178 it steps one beat, which stops
+    // partway through page 1's move, where the saved end-of-page spots don't apply (#256)
+    await page.keyboard.press("End");
     await expect(page.getByRole("heading", { name: "Page 1" })).toBeVisible();
     await expectCanvasMatchesShow(show);
 });
