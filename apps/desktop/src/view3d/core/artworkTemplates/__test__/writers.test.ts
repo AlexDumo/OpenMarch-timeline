@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { lengthOf, toMeters } from "../../sizes/units";
 import {
     artworkTemplateFiles,
+    DEFAULT_TEMPLATE_POLICY,
     floorPropSurface,
     layoutTemplate,
     lineSegments,
@@ -12,6 +13,7 @@ import {
     propSurface,
     resolveTemplate,
     TEMPLATE_COLORS,
+    TEMPLATE_DOWNLOADS,
     TEMPLATE_SURFACES,
     templatePdf,
     templatePng,
@@ -169,6 +171,19 @@ describe("layoutTemplate", () => {
         ).toContainEqual(
             expect.objectContaining({ type: "text", text: "AUDIENCE SIDE" }),
         );
+    });
+
+    it("ends every info line inside the trim", () => {
+        // Helvetica digits, which these lines are full of, are 0.556 em wide.
+        for (const { surface } of TEMPLATE_DOWNLOADS) {
+            const d = drawingOf(surface, DEFAULT_TEMPLATE_POLICY);
+            for (const shape of d.shapes)
+                if (shape.type === "text" && shape.fill === "text")
+                    expect(
+                        shape.x + shape.text.length * shape.sizeM * 0.556,
+                        `${surface.id}: ${shape.text}`,
+                    ).toBeLessThan(d.trim.x + d.trim.width);
+        }
     });
 
     it("keeps OpenMarch's name out of the CC0 templates", () => {

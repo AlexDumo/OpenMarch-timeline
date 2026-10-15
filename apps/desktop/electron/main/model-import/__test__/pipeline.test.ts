@@ -7,6 +7,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { Document, NodeIO } from "@gltf-transform/core";
 import type { SkinnedMesh } from "three";
 import { describe, expect, it } from "vitest";
 import { parseContainer, readModelFile } from "../container";
@@ -55,6 +56,34 @@ const note = <C extends NoteRow["code"]>(r: ModelImportResult, code: C) =>
 function expectRejected(r: ModelImportResult) {
     expect(r.report.status).toBe("rejected");
     expect(r.output).toBeNull();
+}
+
+/** A fixture GLB with its JSON chunk edited (for deliberately bad files). */
+async function editedGlb(
+    name: string,
+    edit: (json: Record<string, any>) => void,
+): Promise<Uint8Array> {
+    const glb = new Uint8Array(await readFile(fixture(name)));
+    const view = new DataView(glb.buffer, glb.byteOffset, glb.byteLength);
+    const jsonLength = view.getUint32(12, true);
+    const json = JSON.parse(
+        new TextDecoder().decode(glb.subarray(20, 20 + jsonLength)),
+    );
+    edit(json);
+    let text = JSON.stringify(json);
+    while (new TextEncoder().encode(text).length % 4) text += " ";
+    const jsonBytes = new TextEncoder().encode(text);
+    const rest = glb.subarray(20 + jsonLength);
+    const out = new Uint8Array(20 + jsonBytes.length + rest.length);
+    const outView = new DataView(out.buffer);
+    outView.setUint32(0, 0x46546c67, true);
+    outView.setUint32(4, 2, true);
+    outView.setUint32(8, out.length, true);
+    outView.setUint32(12, jsonBytes.length, true);
+    outView.setUint32(16, 0x4e4f534a, true);
+    out.set(jsonBytes, 20);
+    out.set(rest, 20 + jsonBytes.length);
+    return out;
 }
 
 /** The normalized GLB's raw JSON. */
@@ -147,12 +176,24 @@ describe("clean files", () => {
         ).toBe(true);
     });
 
+    it("gives the same parts for the same file under another name", async () => {
+        const bytes = new Uint8Array(
+            await readFile(fixture("equipment-clean-kit.glb")),
+        );
+        const a = await importModel({ filename: "flag.glb", bytes });
+        const b = await importModel({ filename: "flag (1).glb", bytes });
+        expect(
+            Buffer.from(a.output!.sidecarBytes).equals(
+                Buffer.from(b.output!.sidecarBytes),
+            ),
+        ).toBe(true);
+    });
+
     it("imports a .gltf with an external .bin and .png", async () => {
         const r = await run("model.gltf");
         expect(r.report.kind).toBe("prop");
         expect(r.report.cantImport).toEqual([]);
         expect(r.report.needsChoice).toEqual([]);
-        expect(r.output!.sidecar.metadata.sourceFilename).toBe("model.gltf");
         expect(r.report.output!.textures).toHaveLength(1);
         const gltf = await expectLoadsBare(r);
         expect(gltf.parser.json.textures).toHaveLength(1);
@@ -199,6 +240,27 @@ describe("Can't import", () => {
         expect(rejection(r, "externalUri")?.uri).toBe(
             "https://example.com/model.bin",
         );
+    });
+
+    it("refuses a GLB's URIs without reading them", async () => {
+        const cases = [
+            ["../secret.png", "resourceOutsideFolder"],
+            ["file:///etc/hosts", "externalUri"],
+            ["%E0%A4%A.png", "resourceOutsideFolder"],
+            ["logo.png", "missingResource"],
+        ] as const;
+        for (const [uri, code] of cases) {
+            const bytes = await editedGlb("prop-no-extras.glb", (json) => {
+                json.images = [{ uri }];
+                json.textures = [{ source: 0 }];
+            });
+            const r = await importModel(
+                { filename: "prop.glb", bytes },
+                { kind: "prop" },
+            );
+            expectRejected(r);
+            expect(r.report.cantImport).toEqual([{ code, uri }]);
+        }
     });
 
     it("blocks on validator errors", async () => {
@@ -649,6 +711,58 @@ describe("quiet notes", () => {
         );
         expect(note(r, "unknownStampKind")?.value).toBe("hat");
         expect(r.report.status).toBe("needs-kind");
+    });
+
+    it("keeps a slot on one of two identical meshes", async () => {
+        const doc = new Document();
+        const buffer = doc.createBuffer();
+        const position = doc
+            .createAccessor()
+            .setType("VEC3")
+            .setBuffer(buffer)
+            .setArray(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]));
+        const uv = doc
+            .createAccessor()
+            .setType("VEC2")
+            .setBuffer(buffer)
+            .setArray(new Float32Array([0, 0, 1, 0, 0, 1]));
+        const material = doc.createMaterial("Panel");
+        const panel = (name: string) =>
+            doc
+                .createMesh(name)
+                .addPrimitive(
+                    doc
+                        .createPrimitive()
+                        .setAttribute("POSITION", position)
+                        .setAttribute("TEXCOORD_0", uv)
+                        .setMaterial(material),
+                );
+        const plain = panel("Back");
+        const slotted = panel("Front").setExtras({
+            openmarch: {
+                artworkSlot: { id: "front", widthM: 1, heightM: 1 },
+            },
+        });
+        const scene = doc.createScene();
+        scene.addChild(doc.createNode("Back").setMesh(plain));
+        scene.addChild(
+            doc.createNode("Front").setMesh(slotted).setTranslation([2, 0, 0]),
+        );
+        const r = await importModel(
+            {
+                filename: "panels.glb",
+                bytes: await new NodeIO().writeBinary(doc),
+            },
+            { kind: "prop" },
+        );
+        expect(note(r, "slotDropped")).toBeUndefined();
+        const slot = r.output!.sidecar.artworkSlots[0];
+        expect(slot.id).toBe("front");
+        const json = outputJson(r);
+        const mesh = json.meshes[(slot.target as { mesh: number }).mesh];
+        expect(mesh.name).toBe("Front");
+        // The geometry is still shared.
+        expect(json.accessors.length).toBeLessThan(4);
     });
 
     it("notes a slot without UVs, and drops one that points nowhere", async () => {
