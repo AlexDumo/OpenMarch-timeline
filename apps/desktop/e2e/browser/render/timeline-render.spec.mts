@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { test, expect, type Show } from "../fixtures.mjs";
 import { waitForField } from "../app.mjs";
+import { pressKeep } from "../timeline.mjs";
 import {
     compose,
     field,
@@ -171,7 +172,7 @@ const CASES: Case[] = [
             if ((await kept()) === 0) {
                 await page.mouse.click(field.x + 12, field.y + 12);
                 await page.keyboard.press("ControlOrMeta+a");
-                await page.keyboard.press("k");
+                await pressKeep(page);
                 await expect.poll(kept).toBe(91);
                 await page.mouse.click(field.x + 12, field.y + 12);
             }
