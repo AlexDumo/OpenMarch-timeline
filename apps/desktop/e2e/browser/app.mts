@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import type { Show } from "./fixtures.mjs";
 import { savedPositions } from "./positions.mjs";
-import type {} from "../../src/field/fieldTestApi";
+import type { FieldTestLook } from "../../src/field/fieldTestApi";
 
 /** Steps a user takes in the app, shared between specs. */
 
@@ -15,6 +15,8 @@ export type DrawnMarcher = {
     screen: { x: number; y: number };
     /** False when the dot is scrolled out of the visible field. */
     onScreen: boolean;
+    /** How it's drawn: shape, colors, and whether it and its label show. */
+    look: FieldTestLook;
 };
 
 // Helpers read the field only through the field test API

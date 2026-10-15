@@ -236,6 +236,8 @@ type Fixtures = {
      * from an existing show instead of building one through the UI.
      */
     seedSql: string[];
+    /** A show file to start from instead of the blank show; it's copied first. */
+    showFile: string | undefined;
     /** Messages matching any of these don't fail the test. */
     allowedPageErrors: RegExp[];
     /**
@@ -271,6 +273,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     ],
     appSettings: [{ optOutAnalytics: true }, { option: true }],
     seedSql: [[], { option: true }],
+    showFile: [undefined, { option: true }],
     allowedPageErrors: [[], { option: true }],
     uiSettings: [undefined, { option: true }],
 
@@ -281,6 +284,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             chromium,
             appSettings,
             seedSql,
+            showFile,
             allowedPageErrors,
             uiSettings,
         },
@@ -288,7 +292,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
         testInfo,
     ) => {
         const databasePath = testInfo.outputPath("show.dots");
-        fs.copyFileSync(blankShow, databasePath);
+        fs.copyFileSync(showFile ?? blankShow, databasePath);
         if (seedSql.length > 0) {
             const writer = new DatabaseSync(databasePath);
             try {
