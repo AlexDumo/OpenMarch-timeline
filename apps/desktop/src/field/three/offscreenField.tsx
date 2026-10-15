@@ -3,7 +3,11 @@ import { advance, createRoot, useThree } from "@react-three/fiber";
 import type { OrthographicCamera } from "three";
 import { createStore, type StoreApi } from "zustand";
 import type { FieldProperties } from "@openmarch/core";
-import { NoWebGLError, QUALITY_SETTINGS } from "@/field/fieldQuality";
+import {
+    NoWebGLError,
+    QUALITY_SETTINGS,
+    type QualitySettings,
+} from "@/field/fieldQuality";
 import { planFieldImage } from "@/field/fieldPlan";
 import type { PositionSource } from "@/timeline/positionBuffer";
 import type { AppearanceStepsByMarcherId } from "@/services/appearance/appearanceSteps";
@@ -41,7 +45,8 @@ export interface OffscreenFieldArgs {
  * export's frames and its preview. It mounts the on-screen field's layers
  * (field, image, marchers, labels) in their own React Three Fiber root, on a
  * canvas that's never in the page, with its own view and always at full
- * quality: an export looks the same on a software-GL machine as on a GPU.
+ * quality (`EXPORT_QUALITY`): an export looks the same on a software-GL
+ * machine as on a GPU.
  *
  * Frames are drawn only when asked (`frameloop: "never"`). `draw(beat)`
  * samples the marchers, runs the layers' frame hooks and renders, all
@@ -102,7 +107,7 @@ export async function createOffscreenField(
         panX: 0,
         panY: 0,
     }));
-    const draw: FieldDraw = { view, quality: () => QUALITY_SETTINGS.full };
+    const draw: FieldDraw = { view, quality: () => EXPORT_QUALITY };
     const marchers = new FieldMarchers(args.source);
     marchers.setAppearanceSteps(args.appearanceSteps);
     const atlases = {
@@ -193,6 +198,16 @@ export async function createOffscreenField(
         },
     };
 }
+
+/**
+ * Full quality, whatever the machine. Labels never fade: an export draws them
+ * at every size, as Fabric's did, and its preview shows what the video will.
+ */
+const EXPORT_QUALITY: QualitySettings = {
+    ...QUALITY_SETTINGS.full,
+    labelFadeFrom: -1,
+    labelFadeTo: 0,
+};
 
 /** How long the layers may take to mount. */
 const MOUNT_TIMEOUT_MS = 20_000;
