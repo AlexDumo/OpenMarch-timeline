@@ -74,6 +74,7 @@ describe("benchmarkMarkdown", () => {
     it("writes the environment and a row per scenario", () => {
         const report: BenchmarkReport = {
             environment: {
+                field: "three",
                 renderer: "Google SwiftShader",
                 gl: "software",
                 quality: "low (software)",
@@ -102,10 +103,35 @@ describe("benchmarkMarkdown", () => {
         expect(markdown).toContain(
             "| Renderer | Google SwiftShader (software) |",
         );
+        expect(markdown).toContain(
+            "| Field | new field, low (software), 1200 × 700 CSS px at 1× |",
+        );
         expect(markdown).toContain("| Marchers | 385 |");
         expect(markdown).toContain(
             "| play | 50.0 | 20.0 | 20.0 | 20.0 | 0/10 | 1.50 | 1.50 | 9 |",
         );
         expect(markdown).toContain("| drag | skipped: needs #196 |");
+    });
+
+    it("names the Fabric field, which draws with Canvas2D", () => {
+        const markdown = benchmarkMarkdown({
+            environment: {
+                field: "fabric",
+                renderer: "ANGLE (Intel, UHD Graphics 620)",
+                gl: "hardware",
+                quality: "Canvas2D",
+                pixelRatio: 2,
+                width: 1200,
+                height: 700,
+                marchers: 95,
+                build: "production",
+                userAgent: "Chrome/140",
+                date: "2026-10-15T00:00:00.000Z",
+            },
+            results: [],
+        });
+        expect(markdown).toContain(
+            "| Field | Fabric, Canvas2D, 1200 × 700 CSS px at 2× |",
+        );
     });
 });

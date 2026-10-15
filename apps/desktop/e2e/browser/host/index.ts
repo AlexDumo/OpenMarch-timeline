@@ -12,6 +12,7 @@
  * a test that needs real Electron fails loudly instead of passing on a fake.
  */
 import fs from "node:fs";
+import path from "node:path";
 import * as DatabaseServices from "@om-electron/database/database.services";
 import { getOrm } from "@om-electron/database/db";
 import { DrizzleMigrationService } from "@om-electron/database/services/DrizzleMigrationService";
@@ -101,6 +102,45 @@ function registerHandlers() {
     }));
     ipcMain.handle("auth:get-access-token", () => ({ token: null }));
     registerVideoExportHandlers();
+    registerDrillChartExportHandlers();
+}
+
+/**
+ * The drill chart export's two calls, writing each chart's SVG pages (the
+ * PDF's input) beside the video export's file, in `exported-drill-charts/`:
+ * `<drill number or MAIN>-<page index>.svg`. No PDF is made.
+ */
+function registerDrillChartExportHandlers() {
+    ipcMain.handle("export:createExportDirectory", async () => {
+        if (!videoExportPath) throw new Error("No test output folder");
+        const exportDir = path.join(
+            path.dirname(videoExportPath),
+            "exported-drill-charts",
+        );
+        await fs.promises.mkdir(exportDir, { recursive: true });
+        return { exportName: "show", exportDir };
+    });
+    ipcMain.handle(
+        "export:generateDocForMarcher",
+        async (
+            _,
+            args: {
+                svgPages: string[];
+                drillNumber: string;
+                exportDir: string;
+            },
+        ) => {
+            for (const [i, svg] of args.svgPages.entries())
+                await fs.promises.writeFile(
+                    path.join(
+                        args.exportDir,
+                        `${args.drillNumber}-${String(i).padStart(2, "0")}.svg`,
+                    ),
+                    svg,
+                );
+            return { success: true };
+        },
+    );
 }
 
 /** Restated from `VideoExportService`, with the test's file for the save dialog's answer. */

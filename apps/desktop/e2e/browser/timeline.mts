@@ -1,3 +1,4 @@
+// cspell:ignore keyshortcuts
 import { expect, type Page } from "@playwright/test";
 
 /** Timeline steps on a show whose pages are moves, shared between specs. */
@@ -53,4 +54,17 @@ export async function isolate(page: Page, startBeat: number) {
 export async function emptyField(page: Page) {
     const box = (await page.getByTestId("fieldCanvas").first().boundingBox())!;
     return { x: box.x + 12, y: box.y + 12 };
+}
+
+/**
+ * Presses K (keep, or follow again). K acts on the app's selection and the
+ * stored moves, which can settle after the field shows the selection; the
+ * timeline marks the page chain K would change (its tooltip says "(K)") once
+ * they have, so this waits for that mark first.
+ */
+export async function pressKeep(page: Page) {
+    await expect(
+        page.locator('[data-testid="page-keep-chain"][aria-keyshortcuts="K"]'),
+    ).toHaveCount(1);
+    await page.keyboard.press("k");
 }

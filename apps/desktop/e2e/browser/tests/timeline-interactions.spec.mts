@@ -9,7 +9,7 @@ import {
     waitForIdle,
     type DrawnMarcher,
 } from "../app.mjs";
-import { emptyField, goToPage, isolate } from "../timeline.mjs";
+import { emptyField, goToPage, isolate, pressKeep } from "../timeline.mjs";
 
 // The timeline's interactions on the field (#202; #189 user stories 18, 20,
 // 59): the kept-mark tooltip's rules, Escape leaving isolation (and when it
@@ -78,7 +78,7 @@ async function keptMarcher(page: Page, query: Show["query"]) {
     const empty = await emptyField(page);
     await page.mouse.click(empty.x, empty.y);
     await selectAll(page, 95);
-    await page.keyboard.press("k");
+    await pressKeep(page);
     await expect
         .poll(
             async () =>
