@@ -55,6 +55,34 @@ describe("FieldMarchers", () => {
         expect(marchers.ids).toEqual([1]);
         expect(Array.from(marchers.positions)).toEqual([12, 100]);
     });
+
+    it("marks the selected marchers, and keeps them marked when the marchers change", () => {
+        const { state, positionSource } = source([1, 2, 3]);
+        const marchers = new FieldMarchers(positionSource);
+        marchers.fill(0);
+        const { selectionVersion } = marchers;
+        marchers.setSelection([3, 1]);
+        expect(Array.from(marchers.selected)).toEqual([1, 0, 1]);
+        expect(marchers.selectionVersion).toBe(selectionVersion + 1);
+
+        state.ids = [2, 3, 4];
+        marchers.fill(0);
+        expect(Array.from(marchers.selected)).toEqual([0, 1, 0]);
+        expect(marchers.selectionVersion).toBe(selectionVersion + 2);
+    });
+
+    it("tells subscribers about fills and selection changes", () => {
+        const { positionSource } = source([1]);
+        const marchers = new FieldMarchers(positionSource);
+        let calls = 0;
+        const unsubscribe = marchers.subscribe(() => calls++);
+        marchers.fill(0);
+        marchers.setSelection([1]);
+        expect(calls).toBe(2);
+        unsubscribe();
+        marchers.fill(1);
+        expect(calls).toBe(2);
+    });
 });
 
 const RED: AppearanceComponentOptional = {
