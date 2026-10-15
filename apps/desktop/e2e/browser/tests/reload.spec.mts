@@ -5,6 +5,7 @@ import {
     createTempoGroup,
     drawnMarchers,
     expectCanvasMatchesShow,
+    waitForField,
 } from "../app.mjs";
 import { savedPosition } from "../positions.mjs";
 
@@ -49,7 +50,7 @@ test.fixme("a show built in the app looks the same after a reload", async ({
     const before = await timeline();
     expect(before).toContain("Page 1");
     await page.reload();
-    await page.waitForFunction(() => !!window.canvas);
+    await waitForField(page);
 
     await expect.poll(timeline).toEqual(before);
     await expectCanvasMatchesShow(show);

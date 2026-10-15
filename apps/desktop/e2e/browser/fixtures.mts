@@ -10,6 +10,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { waitForField } from "./app.mjs";
 
 const desktopDir = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -282,7 +283,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             await expect(page.locator("canvas").first()).toBeVisible({
                 timeout: 20_000,
             });
-            await page.waitForFunction(() => !!window.canvas);
+            await waitForField(page);
             await use({ page, databasePath, pageErrors, query: app.query });
         } catch (error) {
             failed = true;

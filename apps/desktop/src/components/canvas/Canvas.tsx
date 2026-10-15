@@ -14,6 +14,8 @@ import OpenMarchCanvas from "../../global/classes/canvasObjects/OpenMarchCanvas"
 import DefaultListeners from "./listeners/DefaultListeners";
 import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import LineListeners from "./listeners/LineListeners";
+import { createFabricFieldTestApi } from "./fabricFieldTestApi";
+import { installFieldTestApi } from "@/field/fieldTestApi";
 import { CircleNotchIcon } from "@phosphor-icons/react";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import clsx from "clsx";
@@ -169,10 +171,15 @@ export default function Canvas({
         canvas.requestRenderAll();
     }, [canvas, fieldProperties, isFullscreen]);
 
+    useEffect(() => () => installFieldTestApi(undefined), []);
+
     /* Initialize the canvas */
     useEffect(() => {
         if (canvas || !selectedPage || !fieldProperties) {
             window.canvas = canvas;
+            installFieldTestApi(
+                canvas ? createFabricFieldTestApi(canvas) : undefined,
+            );
             return;
         } // If the canvas is already initialized, or the selected page is not set, return
 
@@ -191,6 +198,7 @@ export default function Canvas({
         setCanvas(newCanvasInstance);
         setCanvasStore(newCanvasInstance);
         window.canvas = newCanvasInstance;
+        installFieldTestApi(createFabricFieldTestApi(newCanvasInstance));
         if (onCanvasReady) {
             onCanvasReady(newCanvasInstance);
         }

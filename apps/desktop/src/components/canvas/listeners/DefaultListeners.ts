@@ -37,6 +37,13 @@ export default class DefaultListeners implements CanvasListeners {
         this.handleBeforeTransform = this.handleBeforeTransform.bind(this);
     }
 
+    /** The lasso or pan these listeners are running, for the field test API. */
+    get activeGesture(): "lasso" | "pan" | null {
+        if (this.isLassoDrawing) return "lasso";
+        if (this.isMiddleMouseDown) return "pan";
+        return null;
+    }
+
     initiateListeners = () => {
         this.canvas.on("object:modified", this.handleObjectModified);
         this.canvas.on("mouse:down", this.handleMouseDown);
