@@ -136,3 +136,16 @@ tickets (#204, #214, and the features in
   `page-cascade.mjs`, `perf/scenarios/play-layer-probe*.mjs`,
   `scrub-parity.mjs` and others) read Fabric through `window.canvas` and need
   the field test API before they work again.
+
+**From #256 (reload scenario).** Not a field bug. `reload.spec.mts` pressed
+Shift+E to go to the last page, but #178 rebound Shift+E to step one beat
+(last page is End, Alt+E or Alt+Shift+E now). After a reload the app opens at
+the show's start (page 0, playhead 0), so one beat forward stopped partway
+through page 1's move. The field drew marcher 1 there correctly, and
+`expectCanvasMatchesShow` compared it with page 1's end. Fabric
+(`field-renderer-pre-209`) failed the same way. Two things to know for later
+scenarios: `expectCanvasMatchesShow` compares end-of-page spots for the page
+`fieldTest.pageId()` reports, so it only holds with the playhead on a page
+flag, never mid-move. A reopened show doesn't restore the page or playhead
+it was left on, so a scenario that reloads has to navigate back itself.
+Whether it should restore them is an open product question.
