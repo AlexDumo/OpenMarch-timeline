@@ -113,7 +113,8 @@ gained `letterSpacing` (em, between characters) for the yard numbers'
 image). Placement is `planFieldImage`, Fabric's fit/fill rule; like Fabric a
 filled image isn't cropped to the field. Render order so far: background -2,
 image -1, lines 0, field text 1, marchers 2, labels 3. **#201**: put timeline
-overlays between 1 and 2, or above 3, as they sit in Fabric.
+overlays between 1 and 2, or above 3, as they sit in Fabric. (Since #208 the
+labels are at 1.9, under the dots: see the phase 5 notes.)
 
 **The image moves 0.5 field units relative to the lines, vs Fabric** (about
 12 px at the maximum zoom of 25). Fabric draws its lines, background and

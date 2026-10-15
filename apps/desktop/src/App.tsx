@@ -26,6 +26,7 @@ import { TooltipProvider } from "@radix-ui/react-tooltip";
 import TitleBar from "@/components/titlebar/TitleBar";
 import { useUiSettingsStore } from "./stores/UiSettingsStore";
 import CanvasZoomControls from "@/components/canvas/CanvasZoomControls";
+import FabricFieldBenchmark from "@/field/benchmark/FabricFieldBenchmark";
 import OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import Plugin from "./global/classes/Plugin";
 import Sidebar from "@/components/sidebar/Sidebar";
@@ -349,11 +350,14 @@ function App() {
                                                                 <ThreeField />
                                                             </Suspense>
                                                         ) : (
-                                                            <Canvas
-                                                                onCanvasReady={
-                                                                    setAppCanvas
-                                                                }
-                                                            />
+                                                            <>
+                                                                <Canvas
+                                                                    onCanvasReady={
+                                                                        setAppCanvas
+                                                                    }
+                                                                />
+                                                                <FabricFieldBenchmark />
+                                                            </>
                                                         )}
                                                         <CanvasZoomControls
                                                             canvas={

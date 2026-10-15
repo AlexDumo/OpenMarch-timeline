@@ -62,81 +62,126 @@ function scrubScenario(ms: number): BenchmarkScenario {
     };
 }
 
+/**
+ * The field's view, as the zoom and pan scenarios move it: read and written
+ * directly, past the navigation limits. One per field.
+ */
+export type BenchmarkView = {
+    get(): FieldView;
+    set(view: Pick<FieldView, "zoom" | "panX" | "panY">): void;
+    /** The element the field's wheel input lands on, once it's up. */
+    element(): Element | null;
+};
+
+/** The new field's view: its one view store. */
+export const threeFieldView = (
+    element: () => Element | null,
+): BenchmarkView => ({
+    get: () => useFieldViewStore.getState(),
+    set: (view) => useFieldViewStore.setState(view),
+    element,
+});
+
 /** A scenario that moves the field's view each frame, then puts it back. */
 function viewScenario(
     kind: BenchmarkKind,
-    move: (now: FieldView, start: FieldView, elapsed: number) => void,
+    view: BenchmarkView,
+    move: (now: FieldView, start: FieldView, elapsed: number) => FieldView,
 ): BenchmarkScenario {
     let start: FieldView | null = null;
     return {
         kind,
         start() {
-            start = { ...useFieldViewStore.getState() };
+            start = { ...view.get() };
         },
         step(elapsed) {
-            move(useFieldViewStore.getState(), start!, elapsed);
+            view.set(move(view.get(), start!, elapsed));
         },
         stop() {
-            if (start) useFieldViewStore.setState(start);
+            if (start) view.set(start);
         },
     };
 }
 
-/** In to 8× and back out at the center, every 3 s. */
-const zoomScenario = () =>
-    viewScenario("zoom", (now, start, elapsed) => {
-        const zoom =
-            start.zoom *
-            Math.pow(8, (1 - Math.cos((elapsed / 1500) * Math.PI)) / 2);
-        const cx = now.width / 2;
-        const cy = now.height / 2;
-        useFieldViewStore.setState({
-            zoom,
-            panX: cx - ((cx - now.panX) * zoom) / now.zoom,
-            panY: cy - ((cy - now.panY) * zoom) / now.zoom,
-        });
-    });
+/**
+ * In to 8× and back out at the center, every 3 s, through the field's own
+ * pinch zoom: a Ctrl+wheel event each frame, which both fields take as a
+ * pinch in either mouse mode. Each event steers the zoom toward the curve, so
+ * both fields follow it whatever their zoom speed. Fabric draws its grid from
+ * a cache while a zoom is in progress; writing its view directly would skip
+ * that.
+ */
+function zoomScenario(view: BenchmarkView): BenchmarkScenario {
+    let start: FieldView | null = null;
+    return {
+        kind: "zoom",
+        start() {
+            start = { ...view.get() };
+        },
+        step(elapsed) {
+            const target = view.element();
+            if (!target || !start) return;
+            const goal =
+                start.zoom *
+                Math.pow(8, (1 - Math.cos((elapsed / 1500) * Math.PI)) / 2);
+            const ratio = Math.log(goal / view.get().zoom);
+            const box = target.getBoundingClientRect();
+            target.dispatchEvent(
+                new WheelEvent("wheel", {
+                    deltaY: Math.max(-40, Math.min(40, -ratio * 200)),
+                    ctrlKey: true,
+                    clientX: box.left + box.width / 2,
+                    clientY: box.top + box.height / 2,
+                    bubbles: true,
+                    cancelable: true,
+                }),
+            );
+        },
+        stop() {
+            if (start) view.set(start);
+        },
+    };
+}
 
 /** Round and round, a few pixels a frame. */
-const panScenario = () =>
-    viewScenario("pan", (now, _start, elapsed) => {
-        useFieldViewStore.setState({
-            panX: now.panX + Math.cos(elapsed / 400) * 12,
-            panY: now.panY + Math.sin(elapsed / 400) * 6,
-        });
-    });
+const panScenario = (view: BenchmarkView) =>
+    viewScenario("pan", view, (now, _start, elapsed) => ({
+        ...now,
+        panX: now.panX + Math.cos(elapsed / 400) * 12,
+        panY: now.panY + Math.sin(elapsed / 400) * 6,
+    }));
 
 /**
  * The benchmark's scenarios on the open show, as the prototype's: playback,
  * a scrub back and forth across the whole show, a zoom in and out at the
  * center, and a circular pan. Each puts back what it changed.
  *
- * They drive the app the way a user's input does: Play is the Play action, a
- * scrub moves the timeline's playhead, and zoom and pan write the field's view
- * store (#194 adds navigation input; these keep writing the store). Dragging
- * marchers comes with #196.
+ * They drive the app the way a user's input does: Play is the Play action and
+ * a scrub moves the timeline's playhead. Zoom and pan write the field's view
+ * (`view`), the same moves on either field. Dragging marchers isn't measured
+ * yet.
  */
 export function fieldBenchmarkScenarios({
     isPlaying,
+    view,
     ms = SCENARIO_MS,
 }: {
     /** Whether the app is playing now. */
     isPlaying: () => boolean;
+    view: BenchmarkView;
     ms?: number;
 }): Record<BenchmarkKind, BenchmarkScenario> {
     return {
         play: playScenario(isPlaying),
         scrub: scrubScenario(ms),
-        zoom: zoomScenario(),
-        pan: panScenario(),
+        zoom: zoomScenario(view),
+        pan: panScenario(view),
         drag: {
             kind: "drag",
-            // TODO(#196): select all and drag them in a circle through the editor's move
-            // gesture, as the prototype's `bench("drag")`, then undo
+            // Not measured yet: select all and drag them in a circle with real pointer
+            // input, as the prototype's `bench("drag")`, then undo
             start() {
-                throw new ScenarioSkipped(
-                    "needs dragging marchers on the new field (#196)",
-                );
+                throw new ScenarioSkipped("not measured yet");
             },
             step: () => false,
             stop() {},

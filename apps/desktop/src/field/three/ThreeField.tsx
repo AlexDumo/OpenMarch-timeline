@@ -90,6 +90,8 @@ import {
 import { FieldUnavailable, useFieldQualityNotice } from "./FieldQualityNotice";
 import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
+import { threeFieldView } from "@/field/benchmark/fieldScenarios";
+import { r3fFrames } from "./benchmarkFrames";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -100,8 +102,8 @@ import {
 /**
  * Where the timeline's layers sit among the field's (#201): the isolated move's
  * scene and the page's pathways above the field text (1) and under the
- * marchers (2), as Fabric stacks them; collision markers over the labels (3),
- * as Fabric adds them after the marchers.
+ * labels (1.9) and marchers (2), as Fabric stacks them; collision markers over
+ * the marchers, as Fabric adds them after the marchers.
  */
 const FOCUS_ORDER = 1.4;
 const PATHS_ORDER = 1.5;
@@ -268,7 +270,15 @@ function ThreeFieldView() {
     // The field test API and the editor read the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
     const renderer = useRef<WebGLRenderer | null>(null);
-    const benchRenderer = useCallback(() => renderer.current, []);
+    const benchFrames = useMemo(() => r3fFrames(() => renderer.current), []);
+    const benchElement = useCallback(
+        () => renderer.current?.domElement ?? null,
+        [],
+    );
+    const benchView = useMemo(
+        () => threeFieldView(benchElement),
+        [benchElement],
+    );
     const benchMarchers = useCallback(() => marchers.ids.length, [marchers]);
     const latest = useRef({
         labels,
@@ -429,7 +439,10 @@ function ThreeFieldView() {
             <TimelineIsolationBar />
             <TimelineFromStartBadge />
             <FieldBenchmark
-                renderer={benchRenderer}
+                field="three"
+                frames={benchFrames}
+                view={benchView}
+                element={benchElement}
                 marcherCount={benchMarchers}
             />
             {quality.reason === "noWebGL" && (
