@@ -48,7 +48,6 @@ import {
 } from "@/field/fieldQuality";
 import { FieldEditor } from "@/field/editor/fieldEditor";
 import { ruledMove } from "@/field/editor/moveRules";
-import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
