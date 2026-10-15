@@ -10,12 +10,17 @@ import {
 import {
     beatToX,
     canvasWindowCovers,
-    clamp,
     getBeatsInSpan,
     getCanvasWindow,
     type TimelineSpan,
 } from "./TimelineGeometry";
 import type { TimelineMarker, TimelineWaveform } from "./TimelineViewModel";
+import {
+    forEachWaveformBar,
+    waveformBarHalfHeight,
+    waveformBarRadius,
+    type WaveformStyle,
+} from "@/timeline/timelineWaveform";
 
 /*
  * The timeline's canvases are layers as wide as the show, but each draws only a window of it: what
@@ -380,14 +385,19 @@ export const TimelineGridCanvas = memo(function TimelineGridCanvas({
 
 interface TimelineWaveformCanvasProps extends TimelineCanvasLayerProps {
     waveform: TimelineWaveform;
+    /** Rounded bars at a fixed pitch, or square bars locked to each beat on a dB scale */
+    waveformStyle: WaveformStyle;
     /** Which color the bars are drawn in: the played part is the accent (UI-12) */
     tone: "played" | "rest";
 }
 
 /**
- * The waveform as filled bars, a slice of a beat each, centered on a baseline that runs only as
- * far as the audio does. Drawn in one tone; the timeline lays the played tone over the rest and
- * clips it at the playhead, so playing never redraws the canvas.
+ * The waveform, centered on a baseline that runs only as far as the audio does. Simplified, it is
+ * rounded bars at a fixed pixel pitch (the old WaveSurfer look) on a linear scale; precise, it is
+ * square bars locked to each beat on a decibel scale (UI-12). Each bar is the loudest audio it
+ * covers, and any sound at all keeps a sliver, so a quiet entrance never reads as silence. Drawn
+ * in one tone; the timeline lays the played tone over the rest and clips it at the playhead, so
+ * playing never redraws the canvas.
  */
 export const TimelineWaveformCanvas = memo(function TimelineWaveformCanvas({
     waveform,
@@ -396,6 +406,7 @@ export const TimelineWaveformCanvas = memo(function TimelineWaveformCanvas({
     pixelsPerBeat,
     viewportRef,
     layerLeft,
+    waveformStyle,
     tone,
 }: TimelineWaveformCanvasProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -417,52 +428,36 @@ export const TimelineWaveformCanvas = memo(function TimelineWaveformCanvas({
                           "rgba(208, 208, 208, 0.6)",
                       );
             const centerY = height / 2;
-            const firstBeat = Math.max(
-                0,
-                Math.floor(span.left / pixelsPerBeat),
-            );
-            const lastBeat = Math.min(
-                waveform.peaksByBeat.length,
-                Math.ceil(width / pixelsPerBeat),
-                Math.ceil(spanEnd / pixelsPerBeat),
+            const audioEndX = Math.min(
+                width,
+                Math.max(0, beatToX(audioEnd, pixelsPerBeat)),
             );
 
             context.globalAlpha = 0.25;
-            context.fillRect(
-                0,
-                Math.round(centerY),
-                Math.max(0, beatToX(audioEnd, pixelsPerBeat)),
-                1,
-            );
+            context.fillRect(0, Math.round(centerY), audioEndX, 1);
             context.globalAlpha = 1;
-            for (let beat = firstBeat; beat < lastBeat; beat++) {
-                const peaks = waveform.peaksByBeat[beat];
-                if (!peaks || peaks.length === 0) continue;
-                const beatX = beatToX(beat, pixelsPerBeat);
-                const sampleWidth = pixelsPerBeat / peaks.length;
-                // A gap between bars only once they're wide enough; narrower, they read as one shape
-                const barWidth =
-                    sampleWidth >= 3
-                        ? sampleWidth - 1
-                        : Math.max(1, sampleWidth);
-                for (let index = 0; index < peaks.length; index++) {
-                    const x = beatX + index * sampleWidth;
-                    if (x + barWidth < 0 || x > width) continue;
-                    if (x + barWidth < span.left || x > spanEnd) continue;
-                    const magnitude = Math.max(
-                        0.5,
-                        clamp(Math.abs(peaks[index]!), 0, 1) * (height / 2 - 1),
-                    );
-                    context.fillRect(
+            const radius = waveformBarRadius(waveformStyle);
+            context.beginPath();
+            forEachWaveformBar(
+                waveform.peaksByBeat,
+                waveformStyle,
+                pixelsPerBeat,
+                span.left,
+                Math.min(spanEnd, audioEndX),
+                (x, barWidth, level) => {
+                    const magnitude = waveformBarHalfHeight(level, height);
+                    context.roundRect(
                         x,
                         centerY - magnitude,
                         barWidth,
                         magnitude * 2,
+                        radius,
                     );
-                }
-            }
+                },
+            );
+            context.fill();
         },
-        [audioEnd, height, pixelsPerBeat, tone, waveform, width],
+        [audioEnd, height, pixelsPerBeat, tone, waveform, waveformStyle, width],
     );
 
     useViewportCanvas({

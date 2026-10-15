@@ -5,7 +5,7 @@
 - Status: approved by the owner on 2026-10-11, with the ADR amendments
 - Date: 2026-10-11
 - Decisions: [ADR 0002](../adr/0002-3d-view.md) amendment of 2026-10-11
-  (D-9 to D-22) and the [ADR 0004 amendment draft](../adr/0004-amendment-draft.md)
+  (D-9 to D-22) and the [ADR 0004](../adr/0004-performer-cues.md) amendment of 2026-10-11
 - Work: the customization track (C1 to C5) in [phases/](phases/)
 
 This spec compiles the 25 resolved tickets of the 3D customization map and the
@@ -65,7 +65,10 @@ phases [26.24].
 - Artwork embeds the original as imported plus the display texture. The print
   master is rendered from the original at export time, never stored.
 - Save prunes Library items nothing references (cues, Item tables, uniforms,
-  other Library items), then blobs no Version points at. While a cue uses a
+  other Library items, undo and redo history), then blobs no Version points
+  at. The app autosaves, so prune runs when the show closes and before Save
+  Copy. History counts because it lives in the show file: undoing an old edit
+  after reopening must find the item it used. While a cue uses a
   Library item, the show's copy can't be deleted; deleting it offers "Replace with…" and lists
   the uses [26.10].
 - The item table loads at open; blobs are read lazily by hash for the current

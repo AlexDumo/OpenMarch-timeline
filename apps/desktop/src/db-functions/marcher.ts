@@ -1,14 +1,12 @@
-import { FieldProperties } from "@openmarch/core";
 import { eq } from "drizzle-orm";
 import { DbConnection, DbTransaction } from "./types";
 import { schema } from "@/global/database/db";
 import { transactionWithHistory, createAllUndoTriggers } from "./history";
-import { ModifiedMarcherPageArgs } from "@/db-functions";
 import {
     giveNewMarchersHomesInTransaction,
     removeDeletedMarchersFromTimelinesInTransaction,
 } from "./timelineMarchers";
-import { timelineModeInTransaction } from "./timelineRipple";
+import { deleteEmptySetCuesInTransaction } from "./cues";
 
 type DatabaseMarcher = typeof schema.marchers.$inferSelect;
 
@@ -40,22 +38,6 @@ export interface ModifiedMarcherArgs {
     notes?: string | null;
 }
 
-type StartingData = {
-    point: {
-        x: number;
-        y: number;
-    };
-    spacing: number;
-};
-
-const DEFAULT_STARTING_DATA: StartingData = {
-    point: {
-        x: 100,
-        y: 100,
-    },
-    spacing: 25,
-};
-
 const undoTriggersReadyMap = new WeakMap<DbConnection, Promise<void>>();
 
 const ensureUndoTriggers = async (db: DbConnection) => {
@@ -68,62 +50,6 @@ const ensureUndoTriggers = async (db: DbConnection) => {
         undoTriggersReadyMap.set(db, undoTriggersReady);
     }
     await undoTriggersReady;
-};
-
-const calculateStartingData = async (
-    tx: DbTransaction,
-    currentPageId: number,
-): Promise<StartingData> => {
-    const fieldPropertiesResult = await tx.query.field_properties.findFirst();
-    if (!fieldPropertiesResult) {
-        console.warn(
-            "Field properties not found, using default starting point",
-        );
-        return DEFAULT_STARTING_DATA;
-    }
-    const fieldProperties = new FieldProperties(
-        JSON.parse(fieldPropertiesResult.json_data),
-    );
-    const pixelsPerStep = fieldProperties.pixelsPerStep;
-    const _stepInterval = 2;
-    const intervalInPixels = _stepInterval * pixelsPerStep;
-
-    // start 4 steps in front of and inside the top left corner of the field
-    let startingPoint = {
-        x: 8 * pixelsPerStep,
-        y: 8 * pixelsPerStep,
-    };
-
-    const getExistingMarcherPageWithCoordinates = async (startingPoint: {
-        x: number;
-        y: number;
-    }) =>
-        await tx.query.marcher_pages.findFirst({
-            where: (table, { and, eq }) =>
-                and(
-                    eq(table.page_id, currentPageId),
-                    eq(table.x, startingPoint.x),
-                    eq(table.y, startingPoint.y),
-                ),
-            columns: {
-                id: true,
-            },
-        });
-    let existingMarcherPageWithCoordinates =
-        await getExistingMarcherPageWithCoordinates(startingPoint);
-    while (
-        existingMarcherPageWithCoordinates &&
-        existingMarcherPageWithCoordinates?.id != null
-    ) {
-        startingPoint.y += pixelsPerStep * 2;
-        existingMarcherPageWithCoordinates =
-            await getExistingMarcherPageWithCoordinates(startingPoint);
-    }
-
-    return {
-        point: startingPoint,
-        spacing: intervalInPixels,
-    };
 };
 
 /**
@@ -159,35 +85,6 @@ export async function createMarchersInTransaction({
         throw new Error("Failed to create marchers");
     }
 
-    // Timeline mode: marcher pages are frozen page-era data (P9.5), so new marchers get none.
-    // Their positions come from their home and timeline slots (`createMarchers`).
-    if (await timelineModeInTransaction(tx)) return createdMarchers;
-
-    // Create a marcherPage for each marcher and page
-    const allPages = await tx.query.pages.findMany();
-
-    // Create a marcherPage for each marcher
-    const newMarcherPages: ModifiedMarcherPageArgs[] = [];
-
-    for (const page of allPages) {
-        const startingData = await calculateStartingData(tx, page.id);
-        for (const [index, marcher] of createdMarchers.entries()) {
-            newMarcherPages.push({
-                marcher_id: marcher.id,
-                page_id: page.id,
-                x: startingData.point.x + index * startingData.spacing,
-                y: startingData.point.y,
-            });
-        }
-    }
-    const marcherPagePromises: Promise<unknown>[] = [];
-    for (const marcherPage of newMarcherPages) {
-        marcherPagePromises.push(
-            tx.insert(schema.marcher_pages).values(marcherPage),
-        );
-    }
-    await Promise.all(marcherPagePromises);
-
     return createdMarchers;
 }
 
@@ -197,10 +94,8 @@ export async function createMarchersInTransaction({
  * THIS SHOULD ALWAYS BE CALLED RATHER THAN 'db.insert' DIRECTLY.
  *
  *
- * In timeline mode (the file's flag, read inside the edit), the new marchers also get a home in
- * the same edit and no moves, so they stand at home until moved
- * (`giveNewMarchersHomesInTransaction`, P7.3 and UI-9), and no `marcher_pages` rows, which are
- * frozen in timeline mode (P9.5).
+ * The new marchers also get a home in the same edit and no moves, so they stand at home until
+ * moved (`giveNewMarchersHomesInTransaction`, P7.3 and UI-9).
  *
  * @param newMarchers Array of NewMarcherArgs containing the marcher data to create
  * @param db The database connection
@@ -222,11 +117,10 @@ export async function createMarchers({
                 newMarchers,
                 tx,
             });
-            if (await timelineModeInTransaction(tx))
-                await giveNewMarchersHomesInTransaction({
-                    tx,
-                    marcherIds: created.map((m) => m.id),
-                });
+            await giveNewMarchersHomesInTransaction({
+                tx,
+                marcherIds: created.map((m) => m.id),
+            });
             return created;
         },
     );
@@ -303,6 +197,10 @@ const deleteMarchersInTransaction = async ({
                 `Marcher with id ${marcherId} not found. Ignoring deletion`,
             );
     }
+    // The marchers left their hand-picked sets through the cascade; a set left empty deletes
+    // its cue in the same edit (ADR 0004 D-2)
+    if (deletedMarchers.length > 0)
+        await deleteEmptySetCuesInTransaction({ tx });
     return deletedMarchers;
 };
 
@@ -332,11 +230,10 @@ export async function deleteMarchers({
         db,
         "deleteMarchers",
         async (tx) => {
-            if (await timelineModeInTransaction(tx))
-                await removeDeletedMarchersFromTimelinesInTransaction({
-                    tx,
-                    marcherIds: [...marcherIds],
-                });
+            await removeDeletedMarchersFromTimelinesInTransaction({
+                tx,
+                marcherIds: [...marcherIds],
+            });
             return await deleteMarchersInTransaction({
                 marcherIds,
                 tx,

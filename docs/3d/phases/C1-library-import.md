@@ -240,9 +240,9 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C1.11: Show embedding and `library_blobs`
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c1-show-embedding)
+- Status: in-review
+- PR: #148
 - Parallel: yes
 - Depends on: C1.3, C1.6
 
@@ -253,6 +253,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 **Tickets:** 06, 11, 16.
 
 **Done when:** a show opened on a machine with an empty Library renders from its embedded copies, and save leaves no orphan blobs.
+
+**Narrowed (owner, 2026-10-13):** nothing renders Library items or names them before C2 and C4, so C1.11 is done when a show's own file rebuilds every embedded Version with a matching hash (with an empty Library) and the prune plan leaves no orphan blobs in tests. Prune is built but not wired; see the handoff notes.
 
 **Checks:** schema and migration tests (page-mode and converted files); history tests showing both tables outside history; type-check, lint, format, spellcheck.
 
@@ -276,9 +278,9 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C1.13: Starter kit
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c1-starter-kit)
+- Status: in-review
+- PR: #155
 - Parallel: yes
 - Depends on: C1.7, C1.12
 
@@ -301,7 +303,17 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ## Handoff notes
 
-Nothing yet.
+- **Prune isn't wired yet (owner, 2026-10-13).** `pruneShowLibraryInTransaction`
+  is built and tested, but nothing calls it. Nothing names a Library item
+  before C2's Item tables and C3's cues, and embedding writes no undo row, so
+  the keep set would be empty and pruning on close would drop every import.
+  C2.1 hooks it to show close and before Save Copy, passing the Item tables'
+  references as `keep`; C3 adds the cue references.
+- **No UI yet for "update available" or "Add to my Library".**
+  `findLibraryUpdates` and `buildAddFromShowRequest` are built and tested;
+  their UI belongs in the Assets area's This show section (Q78–Q82).
+- **No built-ins exist yet**, so none are embedded. The embed path takes any
+  Version, so built-ins go through it when C5.8 adds them.
 
 ## Progress log
 
@@ -693,3 +705,106 @@ Nothing yet.
   for 2D; Assets gets This show and Library sections. Planned as follow-up
   PRs after the C1 stack, starting with C1.11; details in props-spec.md
   "Base floor". Needs an ADR 0002 amendment.
+
+### 2026-10-13 · trevor (3d/c1-starter-kit) · C1.13
+
+- **Built:** the kit in `apps/desktop/starter-kit/`, bundled through
+  electron-builder `files`.
+  - The "OpenMarch Tools" add-on (`addons/openmarch_tools/`,
+    GPL-3.0-or-later). It installs as a 4.2 extension (`blender_manifest.toml`)
+    or as a legacy add-on (`bl_info`). Its sidebar tab sets the kind, adds
+    `OM_grip_R`, `OM_grip_L` and `OM_<name>` empties, declares artwork slots
+    with real sizes and sets stretch zones. A pre-flight check predicts the
+    import review's groups, and "Export for OpenMarch" stamps `itemId` (a
+    new UUID on first export, kept after that), `kind`, `kitVersion` and
+    `license` ("All rights reserved", `LicenseRef-Proprietary`, pre-selected
+    in preferences) into the scene's `extras.openmarch`, then exports a GLB
+    (Y-up, custom properties on, modifiers applied, no Draco, no
+    animations, cameras, lights or morph targets). The add-on stores nothing
+    but the `openmarch` custom properties: its properties use getters and
+    setters, so the export carries no stray extras. Stretch zones are edited
+    on Blender's axes and stored on the exported Y-up axes. The pre-flight's
+    numbers are in `rules.json`, which a test keeps equal to `rules.ts` and
+    `sizes/checks.ts`.
+  - `templates/` (equipment flag pole, prop flat, floor prop panel, at real
+    size; no item id, so each model made from one gets its own),
+    `examples/` (the templates exported by the add-on, stamped CC0-1.0 with
+    fixed item ids) and the glTF export preset. All are CC0, with a
+    `LICENSE` in each folder.
+  - `README.md`: the one-page guide.
+  - `pnpm --filter @openmarch/desktop run kit:build` runs
+    `scripts/starter-kit/build_kit.py` and `preflight_cases.py` in headless
+    Blender. Each template must pass its pre-flight with no rows at all. The
+    cases script exports seven broken models (no kind, centimeters, lying
+    down, no grip, dense, rigged, standing floor prop) with the add-on's
+    predictions to `electron/main/starter-kit/__test__/fixtures/`. The
+    `.blend` files and the flag pole's finial vertex data aren't
+    byte-reproducible between runs; their contents are.
+  - Help ‣ Get the Blender starter kit… (`application-menu.ts`, loading
+    `electron/main/starter-kit/save.ts` lazily) saves
+    `OpenMarch-Blender-Starter-Kit-<version>.zip` through a save dialog,
+    built by `kit.ts`. The zip holds the kit folder, an installable
+    `openmarch_tools-<version>.zip`, and the C1.12 Artwork templates as SVG
+    and PDF, made by the same code as the template menu. Uniform panels are
+    left out, since they're sized from the om-pose median body.
+- **Not built:** the reference scene and the uniform section (v4u bodies, v4
+  rig, `_PART` palette, Garment `fit` tagging), which wait on C1.2 and
+  om-pose's license. The add-on offers no Garment kind. Also not built: a
+  Base floor template, the website mirror, extensions.blender.org, and the
+  importer's "outdated `kitVersion`" note.
+- **Decisions for the owner:**
+  - The license goes in as `extras.openmarch.license` (an SPDX id) beside
+    the kit stamp, and the author as glTF `asset.copyright`.
+  - Examples are stamped CC0-1.0, not the user default.
+  - Templates carry no `itemId`.
+  - The front faces Blender's −Y (Front view).
+  - A grip's −Y axis runs along the pole, because Blender's Y-up export maps
+    it to the importer's +Z.
+  - Slot ids `front`, `back` and `top`.
+  - The kit's root works as a Blender script directory (`addons/`,
+    `presets/`).
+- **Checks:** `npx tsc --noEmit -p .` in `apps/desktop` (pass); vitest
+  `electron/main/starter-kit` and `electron/main/model-import` (131
+  passed), and `electron/main/__test__/mainBundle.test.ts` (pass); eslint
+  and prettier on the changed files; cspell on the changed files. In
+  Blender 4.2.3 LTS on macOS arm64: `kit:build`, the manifest checked with
+  `blender --command extension validate`, and install from the add-on zip
+  as an extension and as a legacy add-on. A headless run of the operators
+  (slot size from geometry, new item id, check, export, disable and
+  re-enable) also passed. Not run: the panel's drawing in a UI session, a
+  packaged build's menu item, Windows and Linux.
+- **Minimum Blender:** 4.2 LTS (4.2.3 tested). Older versions are untested,
+  and the manifest and `bl_info` both say 4.2.0. The spec's "the LTS om-pose
+  exports with" isn't confirmed upstream yet.
+- **Next:** C1.7 and C1.10 can read `extras.openmarch.license` to pre-fill
+  the license field (the importer ignores it today). Shipping waits for
+  C1.2.
+- **Resume from:** nothing pushed; local commits on `3d/c1-starter-kit`.
+
+### 2026-10-13 · 3d worker (3d/c1-show-embedding) · C1.11
+
+- **Done:** migration 0021 (`library_blobs`, `library_items`, both outside
+  undo history); embed with a hash check; the prune plan (keeps what the
+  show's tables, pins and undo or redo rows name); a lazy, byte-bounded blob
+  cache that never reads originals for rendering; update detection and
+  add-from-show requests that never write to the Library; `read-parts`
+  serves an Artwork's original. Rebased onto the Assets tab (#146): the
+  import review's `onImported` reaches `AssetsHost`, which embeds each
+  import in the open show even after the Assets panel closes.
+- **Checks:** type-check; desktop vitest (4999 passed, 27 skipped); history
+  and timeline-history runs of the showLibrary and migration tests (118
+  passed each); desktop lint (0 errors), format and spellcheck.
+- **Not done (owner, 2026-10-13):** prune wiring moves to C2.1; the update
+  and Add to my Library UI moves to the Assets This show section. See the
+  handoff notes.
+
+- 2026-10-13, 3d worker (3d/assets-this-show): the Assets panel's **This
+  show** section (Q81), built ahead of the floor-as-field-image change since
+  it adds no stored data: Assets gets This show and Library tabs; This show
+  lists the embedded items grouped like the Library, offers "Add to my
+  Library" for items the Library lacks (from the show's own bytes, through
+  `library:add-from-show`), and notes a newer Version or changed details in
+  the Library without applying them. Credits (C5.7) moved into it. Not built:
+  applying an update (no references to swap until C2), thumbnails for items
+  the Library lacks, and the floor-as-field-image change (ADR 0002 amendment
+  first).

@@ -10,12 +10,17 @@ import {
     getPlayheadReadout,
     getVisiblePageCounts,
     getWindowCountLabel,
+    isPastLastFlag,
     getSelectionRange,
+    getTimelineRows,
     isPageSnapDisabled,
     packTimelineTracks,
     sameRange,
     snapBoundary,
     snapRangeOffset,
+    TIMELINE_HEADROOM_HEIGHT,
+    TIMELINE_PAGE_ROW_BOTTOM,
+    TIMELINE_PAGE_ROW_TOP,
     TIMELINE_PAGE_SNAP_PX,
     validateTimelineViewModel,
 } from "../TimelineGeometry";
@@ -26,6 +31,44 @@ import {
 import { getDraggedRange } from "../TimelinePrimitives";
 
 describe("timeline geometry", () => {
+    it("stacks the headroom strip, the page row and the rows below it (UI-20)", () => {
+        expect(TIMELINE_HEADROOM_HEIGHT).toBeGreaterThan(0);
+        expect(TIMELINE_PAGE_ROW_TOP).toBe(TIMELINE_HEADROOM_HEIGHT);
+        expect(TIMELINE_PAGE_ROW_BOTTOM).toBe(TIMELINE_PAGE_ROW_TOP + 28);
+        // Strip 14, page row 28, measure row 20 and a 2px gap; then the waveform and one row
+        expect(
+            getTimelineRows({
+                expanded: true,
+                showWaveform: true,
+                rowCount: 0,
+            }),
+        ).toEqual({
+            audioTop: 64,
+            waveformHeight: 32,
+            trackTop: 100,
+            rowPitch: 22,
+            trackHeight: 14,
+            clipHitHeight: 14,
+            timelineHeight: 124,
+        });
+        // Compact: a 17px measure row, no waveform, and clips hit as tall as their row
+        expect(
+            getTimelineRows({
+                expanded: false,
+                showWaveform: false,
+                rowCount: 3,
+            }),
+        ).toEqual({
+            audioTop: 61,
+            waveformHeight: 12,
+            trackTop: 61,
+            rowPitch: 12,
+            trackHeight: 6,
+            clipHitHeight: 12,
+            timelineHeight: 97,
+        });
+    });
+
     it("packs touching tracks together and separates overlaps", () => {
         const rows = packTimelineTracks(timelineStoryTracks);
 
@@ -366,6 +409,42 @@ describe("getWindowCountLabel (UI-13)", () => {
                 endBeatIndex: 16,
             }),
         ).toBe("12 counts");
+    });
+});
+
+describe("counts past the last flag", () => {
+    const lastFlag = 12;
+    const model = {
+        pages: [
+            { ...timelineStoryModel.pages[0], isInitial: true, atBeat: 0 },
+            {
+                ...timelineStoryModel.pages[0],
+                isInitial: false,
+                atBeat: 4,
+                endBeat: lastFlag,
+            },
+        ],
+    };
+
+    it("counts from the last flag to the window's end", () => {
+        expect(
+            getWindowCountLabel(model, {
+                startBeatIndex: lastFlag,
+                endBeatIndex: lastFlag + 5,
+            }),
+        ).toBe("5 counts");
+        expect(
+            getWindowCountLabel(model, {
+                startBeatIndex: lastFlag + 2,
+                endBeatIndex: lastFlag + 3,
+            }),
+        ).toBe("3 counts");
+    });
+
+    it("shows the badge from a page line only past the last flag", () => {
+        expect(isPastLastFlag(model, lastFlag + 1)).toBe(true);
+        expect(isPastLastFlag(model, lastFlag)).toBe(false);
+        expect(isPastLastFlag(model, 3)).toBe(false);
     });
 });
 
