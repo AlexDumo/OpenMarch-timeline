@@ -42,6 +42,29 @@ describe("planFieldImage", () => {
         });
     });
 
+    // Taller than the field
+    const tall = { width, height: height * 2 };
+
+    it("fits a tall image to the field's height, centered horizontally", () => {
+        expect(planFieldImage(withImage("fit"), tall)).toEqual({
+            x: width / 4,
+            y: 0,
+            width: width / 2,
+            height,
+            opacity: 0.4,
+        });
+    });
+
+    it("fills the field with a tall image, overflowing top and bottom", () => {
+        expect(planFieldImage(withImage("fill"), tall)).toEqual({
+            x: 0,
+            y: -height / 2,
+            width,
+            height: height * 2,
+            opacity: 0.4,
+        });
+    });
+
     it("stretches an image whose size is unknown over the field", () => {
         expect(
             planFieldImage(withImage("fit"), { width: 0, height: 0 }),

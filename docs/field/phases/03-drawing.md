@@ -115,10 +115,16 @@ filled image isn't cropped to the field. Render order so far: background -2,
 image -1, lines 0, field text 1, marchers 2, labels 3. **#201**: put timeline
 overlays between 1 and 2, or above 3, as they sit in Fabric.
 
+**The image moves 0.5 field units relative to the lines, vs Fabric** (about
+12 px at the maximum zoom of 25). Fabric draws its lines, background and
+marchers half a grid line down and right in its plane, but not the image; the
+new field draws all of them exactly on their coordinates, as the export does
+(the spec's no-offset rule; accepted in review). Listed for the owner's
+hands-on checklist (#208).
+
 **Field test API.** `fieldImage()` returns where the image is drawn (field
-units) and its opacity, or null. The Fabric reading is half a field unit up
-and left of the new field's: Fabric draws its lines half a grid line into its
-plane but not the image. `field-image.spec.mts` pins fit, fill and hidden on
+units) and its opacity, or null. Because of the shift above, the Fabric
+reading is half a field unit up and left of the new field's. `field-image.spec.mts` pins fit, fill and hidden on
 both fields.
 
 **Render comparisons.** `e2e/browser/render/` (Playwright project `render`;
@@ -127,4 +133,6 @@ the same view and writes side-by-side and diff PNGs. **#208** can extend its
 case list to the demo shows and marchers. Differences it shows, all expected:
 lines are pixel-snapped on the new field where Fabric smooths them over
 two pixels; yard numbers are centered on their yard line (the export's rule)
-where Fabric left-aligns them 22 units left of it.
+where Fabric left-aligns them 22 units left of it; with a translucent
+border color, Fabric's corners are darker, because its four border lines
+overlap there and the new field's don't.

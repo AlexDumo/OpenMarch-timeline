@@ -68,6 +68,20 @@ export default function ThreeField() {
     const { isPlaying } = useIsPlaying()!;
     const { beats } = useTimingObjects()!;
     const { image: fieldImage } = useFieldImage();
+    // Planned once, for the layer that draws it and the field test API
+    const fieldImagePlan = useMemo(
+        () =>
+            fieldProperties
+                ? planFieldImage(
+                      fieldProperties,
+                      fieldImage && {
+                          width: fieldImage.width,
+                          height: fieldImage.height,
+                      },
+                  )
+                : null,
+        [fieldProperties, fieldImage],
+    );
     const appearanceSteps = useMarcherAppearanceSteps(true);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
@@ -100,25 +114,16 @@ export default function ThreeField() {
 
     // The field test API reads the latest of these, not the render they came from
     const element = useRef<HTMLElement | null>(null);
-    const fieldImagePlan =
-        fieldProperties &&
-        planFieldImage(
-            fieldProperties,
-            fieldImage && {
-                width: fieldImage.width,
-                height: fieldImage.height,
-            },
-        );
     const latest = useRef({
         labels,
         pageId: selectedPage?.id ?? null,
-        fieldImage: fieldImagePlan ?? null,
+        fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
     });
     latest.current = {
         labels,
         pageId: selectedPage?.id ?? null,
-        fieldImage: fieldImagePlan ?? null,
+        fieldImage: fieldImagePlan,
         theme: fieldProperties?.theme,
     };
     useEffect(() => {
@@ -184,8 +189,8 @@ export default function ThreeField() {
                         labelAtlas={atlases.checkpoint}
                     />
                     <BackgroundImageLayer
-                        fieldProperties={fieldProperties}
                         image={fieldImage}
+                        placement={fieldImagePlan}
                     />
                     <MarchersLayer
                         marchers={marchers}

@@ -83,6 +83,16 @@ const CASES: Case[] = [
         }),
     },
     {
+        name: "theme-translucent-lines",
+        fieldProperties: variant(hs, {
+            theme: createFieldTheme({
+                primaryStroke: { r: 0, g: 0, b: 160, a: 0.5 },
+                secondaryStroke: { r: 200, g: 0, b: 0, a: 0.4 },
+                tertiaryStroke: { r: 0, g: 120, b: 0, a: 0.25 },
+            }),
+        }),
+    },
+    {
         name: "variant-no-hashes",
         fieldProperties: variant(hs, { useHashes: false }),
     },

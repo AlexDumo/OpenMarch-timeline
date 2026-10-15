@@ -9,22 +9,22 @@ import {
     PlaneGeometry,
     Texture,
 } from "three";
-import type { FieldProperties } from "@openmarch/core";
-import { planFieldImage } from "@/field/fieldPlan";
+import type { FieldPlanImage } from "@/field/fieldPlan";
 
 /**
  * The show's field image, between the field's background and its lines
- * (render order -1), placed with its fit or fill setting and drawn at its
- * opacity, as `planFieldImage` (and so the export) places it. Like Fabric,
- * a filled image isn't cropped to the field.
+ * (render order -1), where `planFieldImage` (and so the export) places it:
+ * its fit or fill setting, at its opacity. Like Fabric, a filled image isn't
+ * cropped to the field.
  */
 export default function BackgroundImageLayer({
-    fieldProperties,
     image,
+    placement,
 }: {
-    fieldProperties: FieldProperties;
     /** The decoded image (`useFieldImage`), or null when the show has none. */
     image: ImageBitmap | null;
+    /** `planFieldImage` for this image, or null when it isn't shown. */
+    placement: FieldPlanImage | null;
 }) {
     const invalidate = useThree((s) => s.invalidate);
 
@@ -41,17 +41,13 @@ export default function BackgroundImageLayer({
     }, [image]);
 
     const mesh = useMemo(() => {
-        const placed = planFieldImage(
-            fieldProperties,
-            image && { width: image.width, height: image.height },
-        );
-        if (!placed || !texture) return null;
+        if (!placement || !texture) return null;
         const mesh = new Mesh(
             new PlaneGeometry(1, 1),
             new MeshBasicMaterial({
                 map: texture,
                 transparent: true,
-                opacity: placed.opacity,
+                opacity: placement.opacity,
                 depthTest: false,
                 depthWrite: false,
                 // The camera's y runs down the screen, so the plane faces away from it
@@ -59,15 +55,15 @@ export default function BackgroundImageLayer({
             }),
         );
         mesh.position.set(
-            placed.x + placed.width / 2,
-            placed.y + placed.height / 2,
+            placement.x + placement.width / 2,
+            placement.y + placement.height / 2,
             0,
         );
-        mesh.scale.set(placed.width, placed.height, 1);
+        mesh.scale.set(placement.width, placement.height, 1);
         mesh.frustumCulled = false;
         mesh.renderOrder = -1;
         return mesh;
-    }, [fieldProperties, image, texture]);
+    }, [placement, texture]);
 
     useEffect(() => {
         invalidate();
