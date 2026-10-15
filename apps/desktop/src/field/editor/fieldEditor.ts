@@ -1,4 +1,11 @@
 import type { FieldTestGesture } from "@/field/fieldTestApi";
+import {
+    startLasso,
+    startMarquee,
+    type AreaGesture,
+    type AreaPorts,
+    type AreaShape,
+} from "./areaGestures";
 import { hitRadius, marcherAt, type DrawnMarchers } from "./hitTest";
 import {
     MoveGesture,
@@ -82,6 +89,8 @@ export type DropResult = "saved" | "refused";
 export type FieldEditorOptions = {
     /** On a Mac, Ctrl+press is a right-click, which pans (navigation's, not the editor's). */
     isMac?: boolean;
+    /** The time in milliseconds, for double-clicks. Defaults to `performance.now`. */
+    now?: () => number;
     /** Where a drag puts the marchers for a pointer delta; snapping and locks are #197's. */
     moveTransform?: MoveTransform;
 };
@@ -94,6 +103,13 @@ export const CLICK_SLOP = 4;
 
 /** How long a drop may take to save before the editor logs that it hasn't settled. */
 const DROP_SETTLE_WARNING_MS = 30_000;
+
+/**
+ * A press within this many milliseconds and screen pixels of a click on empty
+ * field is its double-click: dragged, it draws a lasso (rules table: Lasso).
+ */
+export const DOUBLE_CLICK_MS = 500;
+export const DOUBLE_CLICK_SLOP = 8;
 
 /**
  * A gesture the editor runs once a press becomes a drag: marquee, lasso
@@ -111,7 +127,12 @@ export type FieldPress = {
     start: FieldPointer;
     /** The marcher pressed on, or null on empty field. */
     hit: number | null;
+    /** The second press of a double-click on empty field. */
+    double: boolean;
 };
+
+/** The last click, for telling a double-click. */
+type LastClick = { time: number; screen: FieldPoint; hit: number | null };
 
 export type FieldCursor = "default" | "pointer";
 
@@ -122,6 +143,9 @@ export class FieldEditor {
     private gesture: FieldGesture | null = null;
     private gestureButton = 0;
     private hover: FieldCursor = "default";
+    private lastClick: LastClick | null = null;
+    /** The marquee or lasso last started, which the overlay draws while it's the gesture. */
+    private area: AreaGesture | null = null;
     /**
      * Dropped marchers whose save hasn't settled: they're drawn where they
      * were dropped until it has (user story 42). `drop` counts drops, so only
@@ -132,11 +156,23 @@ export class FieldEditor {
     /** Where the marchers being dragged are drawn, or null with no drag. */
     private live: readonly MarcherPosition[] | null = null;
     private readonly listeners = new Set<() => void>();
+    private readonly now: () => number;
+    private readonly areaPorts: AreaPorts;
 
     constructor(
         private readonly ports: FieldEditorPorts,
         private readonly options: FieldEditorOptions = {},
-    ) {}
+    ) {
+        this.now = options.now ?? (() => performance.now());
+        this.areaPorts = {
+            marchers: () => ports.marchers(),
+            zoom: () => ports.zoom(),
+            canSelect: (id) => ports.canSelect(id),
+            selection: () => ports.selection.get(),
+            select: (ids) => this.write(ids),
+            changed: () => this.emit(),
+        };
+    }
 
     /**
      * A button went down on the field. Returns true when the editor takes the
@@ -148,12 +184,19 @@ export class FieldEditor {
         this.cancelGesture();
         this.ignoredButton = null;
         if (this.ports.takePress?.()) {
-            // Captured all the same, so its moves and release do nothing either
+            // Captured all the same, so its moves and release do nothing either.
+            // Nor is it half of a double-click: the next press can't start a lasso
             this.press = null;
+            this.lastClick = null;
             this.ignoredButton = pointer.button;
             return true;
         }
-        this.press = { start: pointer, hit: this.marcherAt(pointer.field) };
+        const hit = this.marcherAt(pointer.field);
+        this.press = {
+            start: pointer,
+            hit,
+            double: hit === null && this.isDoubleClick(pointer),
+        };
         return true;
     }
 
@@ -173,6 +216,7 @@ export class FieldEditor {
         if (!isPastSlop(press.start, pointer)) return;
         // A drag: the press is no longer a click, whatever comes of it
         this.press = null;
+        this.lastClick = null;
         this.gesture = this.startDrag(press, pointer);
         this.gestureButton = press.start.button;
         if (!this.gesture) {
@@ -203,16 +247,26 @@ export class FieldEditor {
         // Over the slop since the last move event: a drag, not a click, that
         // ends where it starts
         if (isPastSlop(press.start, pointer)) {
+            this.lastClick = null;
             const gesture = this.startDrag(press, pointer);
             gesture?.move(pointer);
             gesture?.end(pointer);
             return;
         }
+        // A double-click's second click starts no third
+        this.lastClick = press.double
+            ? null
+            : {
+                  time: this.now(),
+                  screen: press.start.screen,
+                  hit: press.hit,
+              };
         this.click(press, pointer.shift);
     }
 
     /** The pointer was lost (capture lost, the window lost focus): nothing is clicked or dropped. */
     pointerCancel(): void {
+        // The last click stays: the renderer also cancels after every release
         this.press = null;
         this.ignoredButton = null;
         this.cancelGesture();
@@ -236,6 +290,13 @@ export class FieldEditor {
         return this.gesture?.kind ?? null;
     }
 
+    /** The marquee or lasso being drawn, for the overlay; null during any other gesture. */
+    areaShape(): AreaShape | null {
+        return this.area && this.gesture === this.area
+            ? this.area.shape()
+            : null;
+    }
+
     /** The cursor the field shows. */
     cursor(): FieldCursor {
         return this.hover;
@@ -251,11 +312,33 @@ export class FieldEditor {
      * The gesture a press becomes once it moves past the click slop, or null
      * when the press does nothing more. A move starts from a marcher, or from
      * empty field inside a multi-selection's box (owner decision, #196);
-     * marquee and lasso (#195) start from the rest of the empty field.
+     * marquee and lasso (#195) start from the rest of the empty field: a lasso
+     * after a double-click, else a marquee.
      */
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     protected startDrag(press: FieldPress, pointer: FieldPointer) {
-        return this.startMove(press);
+        return this.startMove(press) ?? this.startArea(press);
+    }
+
+    /** A marquee, or a lasso after a double-click, from empty field. */
+    private startArea(press: FieldPress): FieldGesture {
+        this.area = press.double
+            ? startLasso(this.areaPorts, press.start)
+            : startMarquee(this.areaPorts, press.start);
+        return this.area;
+    }
+
+    private isDoubleClick(pointer: FieldPointer) {
+        const last = this.lastClick;
+        return (
+            last !== null &&
+            last.hit === null &&
+            this.now() - last.time <= DOUBLE_CLICK_MS &&
+            Math.hypot(
+                pointer.screen.x - last.screen.x,
+                pointer.screen.y - last.screen.y,
+            ) <= DOUBLE_CLICK_SLOP
+        );
     }
 
     /**

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
     CLICK_SLOP,
+    DOUBLE_CLICK_MS,
     FieldEditor,
     type DropResult,
     type FieldEditorPorts,
@@ -21,6 +22,7 @@ function setup({
     takePress = undefined as (() => boolean) | undefined,
     moveTransform = undefined as MoveTransform | undefined,
 } = {}) {
+    const clock = { now: 1000 };
     const state = {
         selected: [...selected] as readonly number[],
         /** What the field draws instead of the show, as the editor last said */
@@ -61,8 +63,12 @@ function setup({
                 }),
         ),
     };
-    const editor = new FieldEditor(ports, { isMac, moveTransform });
-    return { editor, state, ports };
+    const editor = new FieldEditor(ports, {
+        isMac,
+        moveTransform,
+        now: () => clock.now,
+    });
+    return { editor, state, ports, clock };
 }
 
 const ZOOM = 2;
@@ -165,12 +171,13 @@ describe("FieldEditor click vs drag", () => {
     });
 
     it("doesn't click once a press has moved 4 screen px, even if it comes back", () => {
-        const { editor, state, ports } = setup({ selected: [2] });
-        editor.pointerDown(at(EMPTY.x, EMPTY.y));
-        editor.pointerMove(at(EMPTY.x + slop, EMPTY.y));
-        editor.pointerMove(at(EMPTY.x, EMPTY.y));
-        editor.pointerUp(at(EMPTY.x, EMPTY.y));
-        expect(state.selected).toEqual([2]);
+        // A click on 1 would narrow the selection to it (user story 23)
+        const { editor, state, ports } = setup({ selected: [1, 2] });
+        editor.pointerDown(at(100, 100));
+        editor.pointerMove(at(100 + slop, 100));
+        editor.pointerMove(at(100, 100));
+        editor.pointerUp(at(100, 100));
+        expect(state.selected).toEqual([1, 2]);
         expect(ports.selection.set).not.toHaveBeenCalled();
     });
 
@@ -194,10 +201,11 @@ describe("FieldEditor click vs drag", () => {
         ]);
     });
 
-    it("leaves the cursor alone while a drag that does nothing is held", () => {
+    it("leaves the cursor alone while a drag is held", () => {
         const { editor } = setup();
-        editor.pointerDown(at(EMPTY.x, EMPTY.y));
-        editor.pointerMove(at(EMPTY.x + slop, EMPTY.y));
+        // From a marcher: a move (#196)
+        editor.pointerDown(at(400, 100));
+        editor.pointerMove(at(400 + slop, 100));
         editor.pointerMove(at(100, 100));
         expect(editor.cursor()).toBe("default");
         editor.pointerUp(at(100, 100));
@@ -316,6 +324,28 @@ describe("FieldEditor presses the app takes (#202)", () => {
         editor.pointerDown(at(100, 100));
         editor.pointerMove(at(150, 100));
         expect(startDrag).toHaveBeenCalledTimes(1);
+    });
+
+    it("doesn't count a press it takes as half of a double-click: no lasso starts", () => {
+        let take = false;
+        const { editor } = setup({ takePress: () => take });
+        click(editor, 150, 50);
+        take = true;
+        click(editor, 150, 50);
+        take = false;
+        editor.pointerDown(at(150, 50));
+        editor.pointerMove(at(250, 50));
+        expect(editor.activeGesture()).toBe("marquee");
+    });
+
+    it("starts no lasso from a double-click-and-drag whose drag the app takes", () => {
+        let take = false;
+        const { editor } = setup({ takePress: () => take });
+        click(editor, 150, 50);
+        take = true;
+        editor.pointerDown(at(150, 50));
+        editor.pointerMove(at(250, 50));
+        expect(editor.activeGesture()).toBeNull();
     });
 
     it("doesn't ask about presses that are navigation's", () => {
@@ -539,5 +569,292 @@ describe("FieldEditor drops waiting to be saved", () => {
             error.mockRestore();
             vi.useRealTimers();
         }
+    });
+});
+
+/** Presses at the first point, moves through the rest and releases at the last, with the press's modifiers. */
+const dragThrough = (
+    editor: FieldEditor,
+    points: readonly (readonly [number, number])[],
+    modifiers?: Parameters<typeof at>[2],
+) => {
+    const [first, ...rest] = points;
+    editor.pointerDown(at(first[0], first[1], modifiers));
+    for (const [x, y] of rest.slice(0, -1))
+        editor.pointerMove(at(x, y, modifiers));
+    const [x, y] = rest[rest.length - 1];
+    editor.pointerMove(at(x, y, modifiers));
+    editor.pointerUp(at(x, y, modifiers));
+};
+
+describe("FieldEditor marquee", () => {
+    it("replaces the selection with the marchers it covers", () => {
+        const { editor, state } = setup({ selected: [4] });
+        dragThrough(editor, [
+            [150, 50],
+            [250, 150],
+        ]);
+        expect(state.selected).toEqual([2]);
+    });
+
+    it("adds to the selection with Shift", () => {
+        const { editor, state } = setup({ selected: [1] });
+        dragThrough(
+            editor,
+            [
+                [250, 50],
+                [350, 150],
+            ],
+            { shift: true },
+        );
+        expect(state.selected).toEqual([1, 3]);
+    });
+
+    it("takes a marcher whose dot it touches", () => {
+        // The dot reaches 6 field units at zoom 2 (its click target)
+        const touching = setup();
+        dragThrough(touching.editor, [
+            [250, 50],
+            [295, 150],
+        ]);
+        expect(touching.state.selected).toEqual([3]);
+        const clear = setup();
+        dragThrough(clear.editor, [
+            [250, 50],
+            [293, 150],
+        ]);
+        expect(clear.state.selected).toEqual([]);
+    });
+
+    it("never takes a hidden or dimmed marcher", () => {
+        const { editor, state } = setup({ hidden: [1], dimmed: [3] });
+        dragThrough(editor, [
+            [50, 50],
+            [450, 150],
+        ]);
+        expect(state.selected).toEqual([2, 4]);
+    });
+
+    it("clears the selection when it covers nothing, and keeps it with Shift", () => {
+        const plain = setup({ selected: [1] });
+        dragThrough(plain.editor, [
+            [150, 200],
+            [250, 300],
+        ]);
+        expect(plain.state.selected).toEqual([]);
+        const shift = setup({ selected: [1] });
+        dragThrough(
+            shift.editor,
+            [
+                [150, 200],
+                [250, 300],
+            ],
+            { shift: true },
+        );
+        expect(shift.state.selected).toEqual([1]);
+    });
+
+    it("is the gesture in progress, with its rectangle, until released", () => {
+        const { editor, state } = setup();
+        const listener = vi.fn();
+        editor.subscribe(listener);
+        editor.pointerDown(at(150, 50));
+        editor.pointerMove(at(200, 120));
+        expect(editor.activeGesture()).toBe("marquee");
+        editor.pointerMove(at(250, 150));
+        expect(editor.areaShape()).toEqual({
+            kind: "marquee",
+            rect: { left: 150, top: 50, right: 250, bottom: 150 },
+        });
+        // Selects only on release
+        expect(state.selected).toEqual([]);
+        // The gesture starting, its first point, and the move
+        expect(listener).toHaveBeenCalledTimes(3);
+        editor.pointerUp(at(250, 150));
+        expect(editor.activeGesture()).toBeNull();
+        expect(editor.areaShape()).toBeNull();
+        expect(state.selected).toEqual([2]);
+    });
+
+    it("selects nothing when the pointer is lost", () => {
+        const { editor, state } = setup({ selected: [4] });
+        editor.pointerDown(at(150, 50));
+        editor.pointerMove(at(250, 150));
+        editor.pointerCancel();
+        editor.pointerUp(at(250, 150));
+        expect(editor.activeGesture()).toBeNull();
+        expect(state.selected).toEqual([4]);
+    });
+
+    it("doesn't start inside a multi-selection's box: that drag moves the selection (#196)", () => {
+        const { editor, state, ports } = setup({ selected: [1, 3] });
+        // On empty field between 2 and 3, inside the box from 1 to 3
+        editor.pointerDown(at(250, 100));
+        editor.pointerMove(at(250, 200));
+        expect(editor.activeGesture()).toBe("move");
+        editor.pointerUp(at(250, 200));
+        expect(state.selected).toEqual([1, 3]);
+        expect(ports.selection.set).not.toHaveBeenCalled();
+    });
+
+    it("starts outside a multi-selection's box", () => {
+        const { editor, state } = setup({ selected: [1, 3] });
+        dragThrough(editor, [
+            [350, 50],
+            [450, 150],
+        ]);
+        expect(state.selected).toEqual([4]);
+    });
+
+    it("selects at once on a quick flick released past the slop with no move in between", () => {
+        const { editor, state } = setup({ selected: [4] });
+        editor.pointerDown(at(150, 50));
+        editor.pointerUp(at(250, 150));
+        expect(state.selected).toEqual([2]);
+        expect(editor.activeGesture()).toBeNull();
+        expect(editor.areaShape()).toBeNull();
+    });
+
+    it("is a marquee, not a lasso, with Shift held (rules table: Shift)", () => {
+        const { editor } = setup();
+        editor.pointerDown(at(150, 50, { shift: true }));
+        editor.pointerMove(at(250, 150, { shift: true }));
+        expect(editor.activeGesture()).toBe("marquee");
+    });
+});
+
+/** A lasso square around marchers 2 and 3, from (150, 50), back to 10 field units (20 screen px) from its start. */
+const AROUND_2_AND_3 = [
+    [150, 50],
+    [350, 50],
+    [350, 150],
+    [150, 150],
+    [150, 60],
+] as const;
+
+/** A click and then a double-click-and-drag through `points`. */
+const lasso = (
+    editor: FieldEditor,
+    points: readonly (readonly [number, number])[],
+    modifiers?: Parameters<typeof at>[2],
+) => {
+    click(editor, points[0][0], points[0][1], modifiers);
+    dragThrough(editor, points, modifiers);
+};
+
+describe("FieldEditor lasso", () => {
+    it("starts on a double-click-and-drag on empty field", () => {
+        const { editor } = setup();
+        click(editor, 150, 50);
+        editor.pointerDown(at(150, 50));
+        editor.pointerMove(at(250, 50));
+        expect(editor.activeGesture()).toBe("lasso");
+    });
+
+    it("starts after a click the renderer cancelled once released (lost pointer capture)", () => {
+        const { editor } = setup();
+        click(editor, 150, 50);
+        editor.pointerCancel();
+        editor.pointerDown(at(150, 50));
+        editor.pointerMove(at(250, 50));
+        expect(editor.activeGesture()).toBe("lasso");
+    });
+
+    it("replaces the selection with the marchers inside it", () => {
+        const { editor, state } = setup({ selected: [4] });
+        lasso(editor, AROUND_2_AND_3);
+        expect(state.selected).toEqual([2, 3]);
+    });
+
+    it("adds to the selection with Shift", () => {
+        const { editor, state } = setup({ selected: [1] });
+        lasso(editor, AROUND_2_AND_3, { shift: true });
+        expect(state.selected).toEqual([1, 2, 3]);
+    });
+
+    it("never takes a hidden or dimmed marcher", () => {
+        const { editor, state } = setup({ hidden: [2], dimmed: [3] });
+        lasso(editor, [
+            [50, 50],
+            [450, 50],
+            [450, 150],
+            [50, 150],
+            [50, 60],
+        ]);
+        expect(state.selected).toEqual([1, 4]);
+    });
+
+    it("selects nothing, and keeps the selection, when released 50 screen px or more from its start", () => {
+        const { editor, state, ports } = setup({ selected: [4] });
+        // 25 field units is 50 screen px at zoom 2. With Shift, so the
+        // double-click's first click keeps the selection too
+        lasso(editor, [...AROUND_2_AND_3.slice(0, -1), [150, 75]], {
+            shift: true,
+        });
+        expect(state.selected).toEqual([4]);
+        expect(ports.selection.set).not.toHaveBeenCalled();
+    });
+
+    it("says when releasing would close it (the green cue)", () => {
+        const { editor } = setup();
+        click(editor, 150, 50);
+        editor.pointerDown(at(150, 50));
+        editor.pointerMove(at(160, 50));
+        // Still near the start
+        expect(editor.areaShape()).toMatchObject({
+            kind: "lasso",
+            closes: true,
+        });
+        editor.pointerMove(at(350, 50));
+        expect(editor.areaShape()).toMatchObject({ closes: false });
+        editor.pointerMove(at(150, 74));
+        expect(editor.areaShape()).toMatchObject({ closes: true });
+        expect(editor.areaShape()).toMatchObject({
+            points: [
+                { x: 150, y: 50 },
+                { x: 160, y: 50 },
+                { x: 350, y: 50 },
+                { x: 150, y: 74 },
+            ],
+        });
+    });
+
+    it("is a marquee when the second press comes too late or too far from the click", () => {
+        const late = setup();
+        click(late.editor, 150, 50);
+        late.clock.now += DOUBLE_CLICK_MS + 1;
+        late.editor.pointerDown(at(150, 50));
+        late.editor.pointerMove(at(250, 50));
+        expect(late.editor.activeGesture()).toBe("marquee");
+
+        const far = setup();
+        click(far.editor, 150, 50);
+        // 10 field units is 20 screen px
+        far.editor.pointerDown(at(160, 50));
+        far.editor.pointerMove(at(260, 50));
+        expect(far.editor.activeGesture()).toBe("marquee");
+    });
+
+    it("is a marquee after a click on a marcher, and after a double-click", () => {
+        const afterMarcher = setup();
+        click(afterMarcher.editor, 100, 100);
+        afterMarcher.editor.pointerDown(at(100, 110));
+        afterMarcher.editor.pointerMove(at(100, 150));
+        expect(afterMarcher.editor.activeGesture()).toBe("marquee");
+
+        const triple = setup();
+        click(triple.editor, 150, 50);
+        click(triple.editor, 150, 50);
+        triple.editor.pointerDown(at(150, 50));
+        triple.editor.pointerMove(at(250, 50));
+        expect(triple.editor.activeGesture()).toBe("marquee");
+    });
+
+    it("doesn't start inside a multi-selection's box", () => {
+        const { editor } = setup({ selected: [1, 3] });
+        click(editor, 250, 100, { shift: true });
+        editor.pointerDown(at(250, 100, { shift: true }));
+        editor.pointerMove(at(250, 200, { shift: true }));
+        expect(editor.activeGesture()).toBe("move");
     });
 });

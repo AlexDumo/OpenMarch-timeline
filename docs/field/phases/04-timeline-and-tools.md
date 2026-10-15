@@ -38,7 +38,8 @@ its moves and release do nothing either). The new field passes
 null`): it clears the cursor and takes the press, as Fabric's `Canvas.tsx`
   swallow does (story 60). **#196:** this is what keeps a drag during a held
   frame from writing held-frame positions; no change needed in the move
-  gesture. Only edit presses are checked: a right- or middle-press after a
+  gesture. A taken press also forgets the last click, so it can't be the
+  first half of #195's double-click lasso. Only edit presses are checked: a right- or middle-press after a
   held preview pans on the new field and leaves the preview held, where
   Fabric swallowed it too (its pan listens to the same mouse events). On the
   #208 list.
