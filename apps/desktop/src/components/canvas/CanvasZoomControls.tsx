@@ -2,14 +2,33 @@ import React, { useState, useEffect } from "react";
 import clsx from "clsx";
 import { PlusIcon, MinusIcon } from "@phosphor-icons/react";
 import { Slider } from "@openmarch/ui";
-import OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import {
     FullscreenButton,
     PerspectiveButton,
 } from "@/components/timeline/PerspectiveSlider";
 
+/**
+ * What the zoom controls call on the field: the Fabric canvas
+ * (`OpenMarchCanvas`), or the new field's view (`threeZoomControls`).
+ */
+export interface ZoomControlsCanvas {
+    width?: number;
+    height?: number;
+    fieldProperties?: { width: number; height: number };
+    getWidth(): number;
+    getHeight(): number;
+    getZoom(): number;
+    getBaseZoom?(): number;
+    zoomToPoint(point: { x: number; y: number }, zoom: number): unknown;
+    setZoom(zoom: number): unknown;
+    setViewportTransform(transform: number[]): unknown;
+    centerAtBaseZoom?(): void;
+    resetCSSTransform?(): void;
+    requestRenderAll(): unknown;
+}
+
 interface CanvasZoomControlsProps {
-    canvas: OpenMarchCanvas | undefined;
+    canvas: ZoomControlsCanvas | undefined;
 }
 
 export default function CanvasZoomControls({

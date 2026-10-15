@@ -123,6 +123,73 @@ With `FIELD=three` under parallel load, the undo steps of `edit-positions`
 ("select all, then align", "copy every position") fail, also on the base;
 they pass alone and in Electron.
 
+### #194 Navigation
+
+**Files.**
+
+- `apps/desktop/src/field/editor/view.ts`: the view rules as plain
+  functions, with Fabric's numbers: zoom limits (0.2 to 25), `zoomAt` (keeps
+  the point under the cursor), `clampPan` (the field scrolls at most one element's size past an edge),
+  `baseZoom` and `centerAtBase` (the opening and Reset view), `fullscreenFit`,
+  `wheel` (mouse mode zooms, trackpad mode pans, Ctrl/Cmd or a pinch zooms in
+  both), `pinchStep` (touch) and `isPanButton`. Unit tests in
+  `editor/__test__/view.test.ts`.
+- `apps/desktop/src/field/three/fieldNavigation.ts`: the thin DOM side.
+  `attachFieldNavigation(surface, field, settings)`, `isPanPress`,
+  `resetView` and `fitFullscreen`; `threeZoomControls`, which the existing
+  `CanvasZoomControls` drives (its prop is now the `ZoomControlsCanvas`
+  interface, which `OpenMarchCanvas` already satisfies; no Fabric behavior
+  changed).
+- `fieldView.ts`: the store now also holds `baseZoom` (100% in the zoom
+  controls), `panning` and the `field` size. `fitView` is gone; the field
+  opens at `centerAtBase`, as Fabric's.
+
+**Seams for the editor tickets.**
+
+- Navigation listens on `ThreeField`'s root div (the one with
+  `data-testid="threeField"`), so it reaches the SVG overlay too. It
+  measures from the canvas element, and leaves presses on controls
+  (buttons, links, inputs, menus, dialogs) to them.
+- **One pan-button rule:** `isPanButton` in `editor/view.ts` (right, middle,
+  Ctrl+left on a Mac). `FieldEditor.isEditButton` uses it, so the editor
+  skips exactly the presses navigation pans with; DOM code can use
+  `isPanPress(event)` from `fieldNavigation.ts`. Navigation doesn't stop
+  their propagation, so document-level "pointer down outside" handlers still
+  see them. Touch presses aren't pan presses (touch editing is out of scope).
+- The test API's `activeGesture()` is `"pan"` while `panning`, otherwise the
+  editor's gesture.
+- App actions that move the view call `setView` from `fieldNavigation.ts`
+  (zoom and pan limits, and it counts as the user's navigation). "Zoom to
+  collisions" (#201, `field/zoomToCollisions.ts`) does.
+
+**Behavior notes.**
+
+- The view opens once the field and a page are loaded, and centers again on
+  each resize until 250 ms later, as the panels around the field settle (Fabric
+  centers once more at 250 ms). Unlike Fabric, none of that undoes a zoom or
+  pan the user has already made. A resize keeps the zoom and the top-left anchor; in
+  fullscreen it fits again.
+- **Decided (for the #208 checklist):** the new field applies the pan limit
+  after every navigation. Fabric skipped it for right-drag, the zoom buttons
+  and touch pinch (a right-drag could take the field off screen until the
+  next wheel event). Accepted as a fix.
+- **Decided (for the #208 checklist):** on a Mac, Ctrl+click without a drag
+  no longer selects: it's a pan press (Ctrl-drag pans, per the rules table,
+  and Ctrl+click is the Mac's secondary click). Accepted.
+- The resize and the zoom buttons' limits are Fabric's as is: a resize
+  doesn't re-apply the pan limit, and the buttons disable by the percentage
+  (relative to the base zoom), so they can stay enabled at the real limits.
+- Fullscreen fit is Fabric's as is, including that it measures the room with
+  the 128 px above the field, so a height-limited fit runs the field's back
+  edge up to about 40 px off the bottom (1600 × 1000 window). The
+  `navigation` scenario pins this; fixing it is a separate decision.
+- The fullscreen perspective tilt (`PerspectiveButton`) isn't on the new
+  field yet; it isn't navigation.
+- Scenarios: `e2e/browser/tests/navigation.spec.mts`. The fixture option
+  `uiSettings` starts the app with given UI settings (mouse mode is
+  `{ mouseSettings: { trackpadMode: false } }`). Touch goes through CDP
+  `Input.dispatchTouchEvent`, one session per gesture.
+
 ### #196 Move and drop
 
 **Files.** `src/field/editor/moveGesture.ts`: `MoveGesture`, the drag. It

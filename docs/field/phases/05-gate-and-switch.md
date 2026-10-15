@@ -21,3 +21,15 @@ and [the README](../README.md).
 ## Handoff notes
 
 Append notes the next tickets need: file locations, seams, surprises.
+
+**From #223 (undo/redo shortcuts dropped).** The undo and redo scenarios
+(move-marchers "undo and redo a move", edit-positions' undo steps) failed
+because the shortcut handler dropped presses, not because of the field. It
+gated on the `canUndo`/`canRedo` queries, which refetch only after a write
+commits, and on an in-flight flag that stayed set until the previous action's
+queries were fetched again. A press right after an edit, or a redo right after an
+undo, was ignored. Now presses queue in order (`historyPressQueue.ts`), and
+`performHistoryAction` reports `nothingToDo` from inside its lock turn. For
+#208: scenarios can press Ctrl+Z or Ctrl+Shift+Z as soon as the saved data
+shows the previous step, with no wait for the history queries. On the new
+field, move-marchers still fails at the drag until #196.

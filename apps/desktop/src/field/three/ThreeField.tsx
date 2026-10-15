@@ -5,7 +5,9 @@ import {
     useMemo,
     useRef,
     useState,
+    type RefObject,
 } from "react";
+import clsx from "clsx";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera, WebGLRenderer } from "three";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -13,6 +15,8 @@ import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
+import { useFullscreenStore } from "@/stores/FullscreenStore";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     allMarchersQueryOptions,
     fieldPropertiesQueryOptions,
@@ -51,7 +55,13 @@ import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import { FieldMarchers } from "./fieldMarchers";
 import FieldOverlay from "./FieldOverlay";
 import { attachFieldPointerInput } from "./fieldPointerInput";
-import { cameraBounds, fitView, useFieldViewStore } from "./fieldView";
+import { cameraBounds, useFieldViewStore } from "./fieldView";
+import {
+    attachFieldNavigation,
+    fitFullscreen,
+    resetView,
+    settleView,
+} from "./fieldNavigation";
 import { GlyphAtlas } from "./sdfText";
 import { selectionBoxPadding } from "./selectionRing";
 import { createThreeFieldTestApi } from "./threeFieldTestApi";
@@ -153,6 +163,7 @@ function ThreeFieldView() {
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const { isPlaying } = useIsPlaying()!;
     const { beats, pages } = useTimingObjects()!;
+    const isFullscreen = useFullscreenStore((s) => s.isFullscreen);
     const { image: fieldImage } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
@@ -350,10 +361,35 @@ function ThreeFieldView() {
         return () => installFieldTestApi(undefined);
     }, [marchers, editor, dimming]);
 
+    // Navigation (#194): wheel, pan drags and touch anywhere on the field
+    useEffect(() => {
+        if (!root.current) return;
+        return attachFieldNavigation(
+            root.current,
+            () => element.current,
+            () => useUiSettingsStore.getState().uiSettings.mouseSettings,
+        );
+    }, []);
+    // The view opens as Fabric's canvas, which it creates once the field and a
+    // page are loaded. Latched: a page briefly unselected mustn't reset the view
+    const [ready, setReady] = useState(false);
+    if (!ready && fieldProperties && selectedPage) setReady(true);
+    // Until the layout settles, the view is still the opening view
+    const settled = useRef(false);
+    // Here, not in the camera: a canvas started over after a lost context
+    // keeps the view
+    const opened = useRef(false);
+    useFullscreenFit(root, isFullscreen, ready, settled);
+
     return (
         <div
             ref={root}
-            className="rounded-6 relative h-full w-full overflow-hidden"
+            // As the Fabric field: fullscreen leaves room above the field, and
+            // the field takes no input there
+            className={clsx(
+                "rounded-6 relative h-full w-full touch-none overflow-hidden",
+                isFullscreen && "pointer-events-none pt-128",
+            )}
             data-testid="threeField"
         >
             <TimelineIsolationBar />
@@ -401,7 +437,13 @@ function ThreeFieldView() {
                     }}
                 >
                     <ContextLossGuard onGiveUp={startOver} />
-                    <FieldCamera fieldProperties={fieldProperties} />
+                    <FieldCamera
+                        fieldProperties={fieldProperties}
+                        root={root}
+                        ready={ready}
+                        opened={opened}
+                        settled={settled}
+                    />
                     <EditorInput
                         editor={editor}
                         marchers={marchers}
@@ -461,14 +503,75 @@ function ThreeFieldView() {
     );
 }
 
+/** How long the Fabric field waited for the fullscreen layout to settle. */
+const FULLSCREEN_SETTLE_MS = 250;
+
 /**
- * Fits the field to the canvas whenever its size changes (navigation is
- * #194), and points the camera at the view store's view.
+ * As the Fabric field: entering fullscreen fits the whole field and clears the
+ * selection, and leaving it centers the field at the base zoom again, once the
+ * layout has settled. The field also centers again that long after it's
+ * `ready`, as the app's panels finish laying out around it, and marks the
+ * view `settled`.
+ */
+function useFullscreenFit(
+    root: RefObject<HTMLDivElement | null>,
+    isFullscreen: boolean,
+    ready: boolean,
+    settled: RefObject<boolean>,
+) {
+    const { setSelectedMarchers } = useSelectedMarchers()!;
+    // Read when it runs: the effect follows fullscreen and readiness only
+    const clearSelection = useRef(() => setSelectedMarchers([]));
+    clearSelection.current = () => setSelectedMarchers([]);
+    const opening = useRef(true);
+    useEffect(() => {
+        if (!ready) return;
+        // Until it has run once, it's the show opening; then fullscreen changes
+        const first = opening.current;
+        let frame = 0;
+        const timeout = setTimeout(() => {
+            frame = requestAnimationFrame(() => {
+                opening.current = false;
+                settled.current = true;
+                if (!isFullscreen) {
+                    if (first) settleView();
+                    else resetView();
+                    return;
+                }
+                if (root.current)
+                    fitFullscreen({
+                        width: root.current.clientWidth,
+                        height: root.current.clientHeight,
+                    });
+                clearSelection.current();
+            });
+        }, FULLSCREEN_SETTLE_MS);
+        return () => {
+            clearTimeout(timeout);
+            cancelAnimationFrame(frame);
+        };
+    }, [isFullscreen, ready, root, settled]);
+}
+
+/**
+ * Keeps the view store's size and field in step with the canvas, opens the
+ * show centered at the base zoom once it's `ready`, and points the camera at
+ * the store's view. Until the view has `settled`, a resize centers it again.
+ * After that a resize keeps the zoom and where the field sits from the
+ * top-left, as the Fabric field did; in fullscreen it fits the field again.
  */
 function FieldCamera({
     fieldProperties,
+    root,
+    ready,
+    opened,
+    settled,
 }: {
     fieldProperties: FieldProperties;
+    root: RefObject<HTMLDivElement | null>;
+    ready: boolean;
+    opened: RefObject<boolean>;
+    settled: RefObject<boolean>;
 }) {
     const width = useThree((s) => s.size.width);
     const height = useThree((s) => s.size.height);
@@ -476,8 +579,24 @@ function FieldCamera({
     const invalidate = useThree((s) => s.invalidate);
 
     useLayoutEffect(() => {
-        useFieldViewStore.setState(fitView(width, height, fieldProperties));
-    }, [width, height, fieldProperties]);
+        const field = {
+            width: fieldProperties.width,
+            height: fieldProperties.height,
+        };
+        useFieldViewStore.setState({ width, height, field });
+        if (width <= 0 || height <= 0 || !ready) return;
+        if (!opened.current) {
+            opened.current = true;
+            resetView();
+        } else if (useFullscreenStore.getState().isFullscreen && root.current) {
+            fitFullscreen({
+                width: root.current.clientWidth,
+                height: root.current.clientHeight,
+            });
+        } else if (!settled.current) {
+            settleView();
+        }
+    }, [width, height, fieldProperties, root, ready, opened, settled]);
 
     useLayoutEffect(() => {
         const apply = () => {
