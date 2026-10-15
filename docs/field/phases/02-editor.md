@@ -104,7 +104,8 @@ plain click there still clears it. #196 pins this with a scenario. The editor's
 
 **For #202.** A first press on the field during a paused preview selects on
 the new field, where Fabric only clears the preview (story 60). #202 needs a
-hook at the start of `FieldEditor.pointerDown` that can swallow the press.
+hook at the start of `FieldEditor.pointerDown` that can swallow the press
+(done: `FieldEditorPorts.takePress`).
 
 **Not covered yet.** The scenarios check the field's selection against the
 inspector and the toolbar's Select tab, not the timeline (it reads the same
@@ -185,5 +186,6 @@ Fabric); for the #208 checklist.
 
 **For #202.** Fabric swallows the first press on the field while a paused
 preview frame is held (`Canvas.tsx`, the preview-swallowing effect, story 60);
-the new field doesn't yet, so a press there selects or drags. The hook belongs
-at the start of `FieldEditor.pointerDown` (see #193's note).
+#202 added the same on the new field: `FieldEditorPorts.takePress` at the
+start of `FieldEditor.pointerDown` (see #202's notes in
+`04-timeline-and-tools.md`).
