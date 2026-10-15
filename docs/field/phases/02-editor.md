@@ -164,18 +164,28 @@ was refused ("still loading"). `ThreeField` calls it with `canvas: null`
 **Scenarios.** `e2e/browser/tests/move-and-drop.spec.mts` (group drag and one
 undo, box drag, unselected marcher, the 19 px flick as a `change:`, page and
 home drops, Move them too, pending, isolation with the playhead moving to the
-end, a refusal while the plan loads, Basic's past-the-last-page refusal) and
+end, a pending drop in isolation, Basic's past-the-last-page refusal) and
 `field-actions.spec.mts` (nudges with every modifier on the step grid,
 distribute, flip, circle, keep, set to next page). `app.mts` gained
 `dragFrom`, `dragMarcher`, `goTo` and `selectPage`. Fabric draws dots half a
 unit off, so drop expectations allow a field unit. Fabric's handles sit on a
 two-marcher selection's corners: pick a pressed marcher clear of them.
 
+The pending scenarios record where the dot is drawn on every frame from the
+release (`recordDrawn`): `window.electron` can't be patched in Electron, so
+the database can't be held. A drop that settles before the resolver has the
+save fails both. The editor logs an error if a drop hasn't settled in 30 s.
+
 **Not covered / open.** The timeline's "nothing selected" state isn't
-reachable from the UI any more; the refusal scenarios use "still loading" and
-Basic's "past the last page", through the same toast and snap-back. In
+reachable from the UI any more; the refusal scenario uses Basic's "past the
+last page", through the same toast and snap-back. In
 isolation with the playhead before the move's end, a pending drop is drawn at
 the dragged spot (at the end beat) until the save lands, then moves by the
 plan's offset: the writer doesn't return the positions it writes. Shift+press
 on an unselected marcher and drag adds it and moves the selection (as
 Fabric); for the #208 checklist.
+
+**For #202.** Fabric swallows the first press on the field while a paused
+preview frame is held (`Canvas.tsx`, the preview-swallowing effect, story 60);
+the new field doesn't yet, so a press there selects or drags. The hook belongs
+at the start of `FieldEditor.pointerDown` (see #193's note).

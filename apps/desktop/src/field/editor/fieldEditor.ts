@@ -84,6 +84,9 @@ export type FieldEditorOptions = {
  */
 export const CLICK_SLOP = 4;
 
+/** How long a drop may take to save before the editor logs that it hasn't settled. */
+const DROP_SETTLE_WARNING_MS = 30_000;
+
 /**
  * A gesture the editor runs once a press becomes a drag: marquee, lasso
  * (#195), move (#196), scale and rotate (#198), line (#203).
@@ -348,7 +351,17 @@ export class FieldEditor {
         this.pending = pending;
         const drop = ++this.drops;
         this.ports.showPositions(pending);
+        // The port must settle on every path; say so if it doesn't, since the
+        // marchers stay drawn where they were dropped until it does
+        const unsettled = setTimeout(
+            () =>
+                console.error(
+                    "A drop hasn't settled after 30 s: its marchers stay where they were dropped",
+                ),
+            DROP_SETTLE_WARNING_MS,
+        );
         const settle = () => {
+            clearTimeout(unsettled);
             // A later drop is still saving: its answer clears both
             if (drop !== this.drops) return;
             this.pending = null;

@@ -9,7 +9,8 @@ export type MarcherPosition = { id: number; x: number; y: number };
  * for snapping, Alt precision and Lock X/Y (#197): it gets the raw delta from
  * the press to the pointer, the pointer (its modifiers) and where the marchers
  * started, and returns their positions. {@link followPointer} moves them by
- * the delta as it is.
+ * the delta as it is. It must return one position per start, in the same
+ * order: a drop compares them by index to tell whether anything moved.
  */
 export type MoveTransform = (
     delta: FieldPoint,

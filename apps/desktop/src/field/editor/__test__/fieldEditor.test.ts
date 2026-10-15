@@ -475,4 +475,21 @@ describe("FieldEditor drops waiting to be saved", () => {
         editor.pointerCancel();
         expect(shown(state)).toEqual({ 1: { x: 100, y: 150 } });
     });
+
+    it("logs a drop that hasn't settled after 30 s, and keeps it drawn", () => {
+        vi.useFakeTimers();
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+            const { editor, state } = setup();
+            drag(editor, { x: 100, y: 100 }, { x: 100, y: 150 });
+            vi.advanceTimersByTime(29_000);
+            expect(error).not.toHaveBeenCalled();
+            vi.advanceTimersByTime(2_000);
+            expect(error).toHaveBeenCalledTimes(1);
+            expect(shown(state)).toEqual({ 1: { x: 100, y: 150 } });
+        } finally {
+            error.mockRestore();
+            vi.useRealTimers();
+        }
+    });
 });

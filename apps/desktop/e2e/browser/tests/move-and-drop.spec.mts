@@ -115,6 +115,39 @@ const inField = async (page: Page, by: { x: number; y: number }) => {
     return { x: by.x / scale, y: by.y / scale };
 };
 
+/** Within a field unit on both axes. */
+const near = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1;
+
+/**
+ * Records where marcher `id` is drawn on every frame, from `start` (which can
+ * run mid-drag) until `stop`, through the field test API.
+ */
+async function recordDrawn(page: Page, id: number) {
+    return {
+        start: () =>
+            page.evaluate((marcherId) => {
+                const frames: { x: number; y: number }[] = [];
+                (window as any).__drawnFrames = frames;
+                const record = () => {
+                    const drawn = window
+                        .fieldTest!.marchers()
+                        .find((m) => m.id === marcherId);
+                    if (drawn) frames.push({ x: drawn.x, y: drawn.y });
+                    if ((window as any).__drawnFrames === frames)
+                        requestAnimationFrame(record);
+                };
+                record();
+            }, id),
+        stop: (): Promise<{ x: number; y: number }[]> =>
+            page.evaluate(() => {
+                const frames = (window as any).__drawnFrames;
+                (window as any).__drawnFrames = null;
+                return frames;
+            }),
+    };
+}
+
 test.beforeEach(async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
@@ -289,36 +322,39 @@ test("marchers stay where they were dropped while the save is pending", async ({
     const drag = { x: 100, y: 100 };
     const by = await inField(page, drag);
 
-    // Where T2 is drawn on every frame from the release until it's saved
-    const startRecording = () =>
-        page.evaluate((id) => {
-            const frames: { x: number; y: number }[] = [];
-            (window as any).__t2Frames = frames;
-            const record = () => {
-                const t2 = window
-                    .fieldTest!.marchers()
-                    .find((m) => m.id === id);
-                if (t2) frames.push({ x: t2.x, y: t2.y });
-                if ((window as any).__t2Frames === frames)
-                    requestAnimationFrame(record);
-            };
-            record();
-        }, 2);
-    await dragMarcher(page, "T2", drag, { beforeRelease: startRecording });
+    const recording = await recordDrawn(page, 2);
+    await dragMarcher(page, "T2", drag, { beforeRelease: recording.start });
     await expectSaved(show, 0, movedBy(PAGE_0, [2], by));
-    const frames: { x: number; y: number }[] = await page.evaluate(() => {
-        const recorded = (window as any).__t2Frames;
-        (window as any).__t2Frames = null;
-        return recorded;
-    });
+    const frames = await recording.stop();
 
     // Never drawn back where it started: it stays where it was dropped
     expect(frames.length).toBeGreaterThan(0);
-    const backHome = frames.filter(
-        (f) => Math.abs(f.x - before.x) < 1 && Math.abs(f.y - before.y) < 1,
-    );
-    expect(backHome).toEqual([]);
+    expect(frames.filter((f) => near(f, before))).toEqual([]);
     await expectCanvasMatchesShow(show);
+});
+
+test("in isolation, a dropped marcher stays where it was dropped until the move is saved", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectPage(show, "Page 1");
+    await page.getByTestId("timeline-clip").first().dblclick();
+    await expect(page.getByTestId("timeline-isolation-bar")).toBeVisible();
+    await waitForIdle(page);
+    const [, endX, endY] = PAGE_1[3];
+
+    const drag = { x: 60, y: -60 };
+    const by = await inField(page, drag);
+    const recording = await recordDrawn(page, 4);
+    await dragMarcher(page, "T4", drag, { beforeRelease: recording.start });
+    await expectSaved(show, 1, movedBy(PAGE_1, [4], by));
+    // The isolated move's plan is rebuilt after the save: keep watching
+    await waitForIdle(page);
+    await page.waitForTimeout(300);
+    const frames = await recording.stop();
+
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames.filter((f) => near(f, { x: endX, y: endY }))).toEqual([]);
 });
 
 test("a drop inside an isolated move edits the move's end", async ({
@@ -368,13 +404,24 @@ test.describe("in Basic mode", () => {
         const before = await savedPositions(show, 2);
         const t1 = await drawnPosition(page, "T1");
 
-        await dragMarcher(page, "T1", { x: 60, y: 60 });
+        const recording = await recordDrawn(page, 1);
+        await dragMarcher(
+            page,
+            "T1",
+            { x: 60, y: 60 },
+            {
+                beforeRelease: recording.start,
+            },
+        );
         await expect(
             page.locator("[data-sonner-toast]", {
                 hasText: "There's no page here yet",
             }),
         ).toBeVisible();
         await expect.poll(() => drawnPosition(page, "T1")).toEqual(t1);
+        // It was drawn where it was dragged before it snapped back
+        const frames = await recording.stop();
+        expect(frames.some((f) => !near(f, t1))).toBe(true);
         await waitForIdle(page);
         expect(await savedPositions(show, 2)).toEqual(before);
     });
