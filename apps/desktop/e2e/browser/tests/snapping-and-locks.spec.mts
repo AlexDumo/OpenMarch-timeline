@@ -58,15 +58,44 @@ const startOf = (id: number) => {
     return { x, y };
 };
 
-/** Changes UI settings (localStorage), then reloads so the app reads them. */
+/**
+ * Changes UI settings (localStorage), then reloads so the app reads them. The
+ * app can save its settings while it starts, over the change: until the
+ * reloaded app has them, it writes them again.
+ */
 async function setUiSettings(page: Page, settings: Record<string, unknown>) {
-    await page.evaluate((settings) => {
-        const key = "openmarch:uiSettings";
-        const stored = JSON.parse(localStorage.getItem(key) ?? "{}");
-        localStorage.setItem(key, JSON.stringify({ ...stored, ...settings }));
-    }, settings);
-    await page.reload();
-    await waitForField(page);
+    const write = () =>
+        page.evaluate((settings) => {
+            const key = "openmarch:uiSettings";
+            const stored = JSON.parse(localStorage.getItem(key) ?? "{}");
+            localStorage.setItem(
+                key,
+                JSON.stringify({ ...stored, ...settings }),
+            );
+        }, settings);
+    const applied = () =>
+        page.evaluate((settings) => {
+            const stored = JSON.parse(
+                localStorage.getItem("openmarch:uiSettings") ?? "{}",
+            );
+            return Object.entries(settings).every(
+                ([key, value]) =>
+                    JSON.stringify(stored[key]) === JSON.stringify(value),
+            );
+        }, settings);
+    await expect
+        .poll(
+            async () => {
+                await write();
+                await page.reload();
+                await waitForField(page);
+                // Long enough for the app's start-up saves
+                await page.waitForTimeout(500);
+                return applied();
+            },
+            { intervals: [0], timeout: 30_000 },
+        )
+        .toBe(true);
 }
 
 /** Coordinate rounding to the nearest step on both axes, from center front. */
