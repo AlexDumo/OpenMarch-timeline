@@ -86,6 +86,7 @@ export function createFakeLibrary(): FakeLibrary {
         list: invoke("list"),
         readParts: invoke("readParts"),
         thumbnails: invoke("thumbnails"),
+        addFromShow: invoke("addFromShow"),
         onChanged: (cb: (c: LibraryChanged) => void) => {
             changeListeners.add(cb);
             return () => changeListeners.delete(cb);
@@ -161,7 +162,7 @@ export function modelReport(
         source: measurements(6412),
         output: measurements(2000),
         materials: [],
-        metadata: { generator: null, copyright: null },
+        metadata: { generator: null, copyright: null, license: null },
         ...overrides,
     };
 }
