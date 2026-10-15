@@ -145,7 +145,25 @@ export async function createOffscreenField(
             </Mounted>
         </FieldDrawContext.Provider>,
     );
-    await ready;
+    // A layer that fails to mount never reports it: give up rather than wait forever
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+        await Promise.race([
+            ready,
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(
+                    () =>
+                        reject(new Error("The field didn't start off screen")),
+                    MOUNT_TIMEOUT_MS,
+                );
+            }),
+        ]);
+    } catch (error) {
+        root.unmount();
+        throw error;
+    } finally {
+        clearTimeout(timer);
+    }
     const state = store.getState();
     state.gl.setClearColor(0x000000, 0);
 
@@ -166,17 +184,18 @@ export async function createOffscreenField(
         dispose() {
             if (disposed) return;
             disposed = true;
-            const { gl } = store.getState();
+            // Also disposes the renderer and loses its context, so exports and
+            // previews don't pile up contexts until they're collected
             root.unmount();
             atlases.label.dispose();
             atlases.number.dispose();
             atlases.checkpoint.dispose();
-            gl.dispose();
-            // Frees the context now, not when it's collected: exports and previews make many
-            gl.forceContextLoss();
         },
     };
 }
+
+/** How long the layers may take to mount. */
+const MOUNT_TIMEOUT_MS = 20_000;
 
 /** Nobody is dimmed in an export. */
 const NO_DIMMING = new FieldDimming();
