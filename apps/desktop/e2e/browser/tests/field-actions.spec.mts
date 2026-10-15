@@ -2,9 +2,10 @@ import type { Page } from "@playwright/test";
 import { test, expect, type Show } from "../fixtures.mjs";
 import {
     clickMarcher,
-    drawnMarchers,
+    dragMarcher,
     expectCanvasMatchesShow,
     selectedDrillNumbers,
+    selectPage,
     waitForIdle,
 } from "../app.mjs";
 import { savedPosition, savedPositions, type Position } from "../positions.mjs";
@@ -85,17 +86,6 @@ async function expectAt(
 async function press(page: Page, key: string) {
     await waitForIdle(page);
     await page.keyboard.press(key);
-}
-
-/** Selects a page's box on the timeline: actions edit that page's move. */
-async function selectPage(show: Show, pageName: string) {
-    await show.page
-        .getByRole("button", { name: pageName, exact: true })
-        .click();
-    await expect(
-        show.page.getByRole("heading", { name: pageName }),
-    ).toBeVisible();
-    await expectCanvasMatchesShow(show);
 }
 
 async function selectAll(page: Page) {
@@ -244,11 +234,7 @@ test("keep a marcher on a page, then drag it on the page before", async ({
     await selectPage(show, "Page 1");
     await clickMarcher(page, "T3");
     await clickMarcher(page, "T4", { add: true });
-    const t3 = (await drawnMarchers(page)).find((m) => m.drillNumber === "T3")!;
-    await page.mouse.move(t3.screen.x, t3.screen.y);
-    await page.mouse.down();
-    await page.mouse.move(t3.screen.x + 60, t3.screen.y - 50, { steps: 10 });
-    await page.mouse.up();
+    await dragMarcher(page, "T3", { x: 60, y: -50 });
     await expect
         .poll(async () => (await savedPosition(show, 3, 1)).x)
         .not.toBe(PAGE_1[2][1]);

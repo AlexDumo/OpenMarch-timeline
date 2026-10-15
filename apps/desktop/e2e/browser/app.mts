@@ -218,13 +218,67 @@ export async function waitForIdle(page: Page, quietMs = 250) {
  * runs from that beat to the next flag (or the show's last page counts).
  */
 export async function addPageAt(page: Page, measure: number) {
+    await goTo(page, `m${measure}`);
+    await page.getByTestId("timeline-add-page-flag").click();
+}
+
+/** Moves the playhead with the timeline's Go to field ("m6" is measure 6). */
+export async function goTo(page: Page, where: string) {
     await page.getByTestId("timeline-readout").click();
-    const goTo = page.getByRole("textbox", {
+    const field = page.getByRole("textbox", {
         name: "Go to a page, measure or rehearsal mark",
     });
-    await goTo.fill(`m${measure}`);
-    await goTo.press("Enter");
-    await page.getByTestId("timeline-add-page-flag").click();
+    await field.fill(where);
+    await field.press("Enter");
+}
+
+/**
+ * Selects a page's box on the timeline ("Page 1"): the edit window is that
+ * page's move, so drops and actions edit it.
+ */
+export async function selectPage(show: Show, pageName: string) {
+    await show.page
+        .getByRole("button", { name: pageName, exact: true })
+        .click();
+    await expect(
+        show.page.getByRole("heading", { name: pageName }),
+    ).toBeVisible();
+    await expectCanvasMatchesShow(show);
+}
+
+/**
+ * Presses at a point in the viewport, drags by `by` screen pixels in `steps`
+ * moves, and releases; `beforeRelease` runs with the button still down.
+ */
+export async function dragFrom(
+    page: Page,
+    from: { x: number; y: number },
+    by: { x: number; y: number },
+    {
+        steps = 10,
+        beforeRelease,
+    }: { steps?: number; beforeRelease?: () => Promise<unknown> } = {},
+) {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + by.x, from.y + by.y, { steps });
+    await beforeRelease?.();
+    await page.mouse.up();
+}
+
+/** Drags a marcher's dot by `by` screen pixels (see `dragFrom`). */
+export async function dragMarcher(
+    page: Page,
+    drillNumber: string,
+    by: { x: number; y: number },
+    options?: Parameters<typeof dragFrom>[3],
+) {
+    const marcher = (await drawnMarchers(page)).find(
+        (drawn) => drawn.drillNumber === drillNumber,
+    );
+    if (!marcher?.onScreen)
+        throw new Error(`${drillNumber} is not visible on the field`);
+    await dragFrom(page, marcher.screen, by, options);
 }
 
 /**

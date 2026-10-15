@@ -121,3 +121,61 @@ times in 3 on Fabric in the browser, on `field-renderer` before #193 too.
 With `FIELD=three` under parallel load, the undo steps of `edit-positions`
 ("select all, then align", "copy every position") fail, also on the base;
 they pass alone and in Electron.
+
+### #196 Move and drop
+
+**Files.** `src/field/editor/moveGesture.ts`: `MoveGesture`, the drag. It
+moves the marchers by the pointer's delta from the press (so a dot keeps its
+offset from the pointer) through a `MoveTransform`. `FieldEditor.startMove`
+decides what a drag moves: a selected marcher moves the selection (no
+narrowing), another marcher is selected first (Shift adds it, then the whole
+selection moves), and empty field inside a multi-selection's box moves the
+selection (`selectionBoxPadding` port, the box the overlay draws). Elsewhere
+on empty field `startDrag` returns null: **#195** adds the marquee and lasso
+there, after the `startMove` call. A release past the slop with no move event
+in between still drags (start, move and end at once).
+
+**The seam for #197.** `FieldEditorOptions.moveTransform` gets the raw
+delta in field units, the pointer (its modifiers) and where the marchers
+started, and returns their positions. `followPointer` is today's: snapping,
+Alt at ¼ speed and Lock X/Y replace it. Nothing else changes.
+
+**Live, pending and snap-back** are the editor's. It writes positions through
+the `showPositions` port, which `ThreeField` maps to
+`FieldMarchers.setOverrides`: overridden marchers are drawn there through
+every fill (the playhead, isolation), with no React state; marchers dropped
+from the map are sampled again. A drop calls the `drop` port and keeps the
+marchers where they were dropped until it settles ("saved" once the write
+reached the resolver, "refused" otherwise); only the last drop's answer
+clears, and a drag in progress stays under the pointer. Hit testing and the
+next drag start from the drawn positions, overrides included.
+
+**Drops** go through `src/field/fieldDrop.ts`, which calls Fabric's
+`canvasCoordinateWriter` and `moveMarchersInTargetMutationOptions` unchanged
+(range, home, isolation, refusals, Move them too, one undo step). Its promise
+must settle on every path, or marchers stay pinned.
+
+**Isolation plan.** Only Fabric's canvas mounted `useTimelineFocusRender`,
+which publishes the isolated move's plan; without it every drop in isolation
+was refused ("still loading"). `ThreeField` calls it with `canvas: null`
+(draws nothing). **#201** splits out `useTimelineFocusScene` and calls it from
+`useTimelineVisuals`: whichever merges second keeps only that call.
+
+**Scenarios.** `e2e/browser/tests/move-and-drop.spec.mts` (group drag and one
+undo, box drag, unselected marcher, the 19 px flick as a `change:`, page and
+home drops, Move them too, pending, isolation with the playhead moving to the
+end, a refusal while the plan loads, Basic's past-the-last-page refusal) and
+`field-actions.spec.mts` (nudges with every modifier on the step grid,
+distribute, flip, circle, keep, set to next page). `app.mts` gained
+`dragFrom`, `dragMarcher`, `goTo` and `selectPage`. Fabric draws dots half a
+unit off, so drop expectations allow a field unit. Fabric's handles sit on a
+two-marcher selection's corners: pick a pressed marcher clear of them.
+
+**Not covered / open.** The timeline's "nothing selected" state isn't
+reachable from the UI any more; the refusal scenarios use "still loading" and
+Basic's "past the last page", through the same toast and snap-back. In
+isolation with the playhead before the move's end, a pending drop is drawn at
+the dragged spot (at the end beat) until the save lands, then moves by the
+plan's offset: the writer doesn't return the positions it writes. Shift+press
+on an unselected marcher and drag adds it and moves the selection (as
+Fabric); for the #208 checklist.

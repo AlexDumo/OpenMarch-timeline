@@ -3,9 +3,13 @@ import { test, expect, type Show } from "../fixtures.mjs";
 import {
     canvasScale,
     clickMarcher,
+    dragFrom,
+    dragMarcher,
     drawnMarchers,
     expectCanvasMatchesShow,
+    goTo,
     selectedDrillNumbers,
+    selectPage,
     waitForIdle,
 } from "../app.mjs";
 import { savedPosition, savedPositions, type Position } from "../positions.mjs";
@@ -73,26 +77,6 @@ const drawnPosition = async (page: Page, drillNumber: string) => {
     return { x: drawn.x, y: drawn.y };
 };
 
-/** Presses at a point on screen, drags by `by` screen pixels, and releases. */
-async function dragFrom(
-    page: Page,
-    from: { x: number; y: number },
-    by: { x: number; y: number },
-    { steps = 10 }: { steps?: number } = {},
-) {
-    await page.mouse.move(from.x, from.y);
-    await page.mouse.down();
-    await page.mouse.move(from.x + by.x, from.y + by.y, { steps });
-    await page.mouse.up();
-}
-
-const dragMarcher = async (
-    page: Page,
-    drillNumber: string,
-    by: { x: number; y: number },
-    options?: { steps?: number },
-) => dragFrom(page, await screenOf(page, drillNumber), by, options);
-
 /** Each position in `rows`, moved by `by` field units for the marchers in `ids`. */
 const movedBy = (
     rows: readonly SeedPosition[],
@@ -130,27 +114,6 @@ const inField = async (page: Page, by: { x: number; y: number }) => {
     const scale = await canvasScale(page);
     return { x: by.x / scale, y: by.y / scale };
 };
-
-/** Moves the playhead with the timeline's Go to field ("m6" is measure 6). */
-async function goTo(page: Page, where: string) {
-    await page.getByTestId("timeline-readout").click();
-    const field = page.getByRole("textbox", {
-        name: "Go to a page, measure or rehearsal mark",
-    });
-    await field.fill(where);
-    await field.press("Enter");
-}
-
-/** Selects a page's box on the timeline: drops edit that page's move. */
-async function selectPage(show: Show, pageName: string) {
-    await show.page
-        .getByRole("button", { name: pageName, exact: true })
-        .click();
-    await expect(
-        show.page.getByRole("heading", { name: pageName }),
-    ).toBeVisible();
-    await expectCanvasMatchesShow(show);
-}
 
 /**
  * Holds the app's database calls from `start` until `release`, as a slow disk
@@ -354,12 +317,7 @@ test("marchers stay where they were dropped while the save is pending", async ({
     const drag = { x: 100, y: 100 };
     const by = await inField(page, drag);
 
-    const t2 = await screenOf(page, "T2");
-    await page.mouse.move(t2.x, t2.y);
-    await page.mouse.down();
-    await page.mouse.move(t2.x + drag.x, t2.y + drag.y, { steps: 10 });
-    await hold.start();
-    await page.mouse.up();
+    await dragMarcher(page, "T2", drag, { beforeRelease: hold.start });
 
     // Saved nowhere yet, and still drawn where it was dropped
     await page.waitForTimeout(500);
@@ -429,5 +387,35 @@ test.describe("a refused drop", () => {
         await hold.release();
         await waitForIdle(page);
         expect(await savedPositions(show, 1)).toEqual(before);
+    });
+});
+
+test.describe("in Basic mode", () => {
+    test.use({
+        appSettings: { optOutAnalytics: true, editorMode: "basic" },
+        // The refusal is logged as well as shown
+        allowedPageErrors: [/TimelineEditRefusedError/],
+    });
+
+    test("a drop past the last page is refused with a toast, and the marcher snaps back", async ({
+        show,
+    }) => {
+        const { page } = show;
+        // Page 2 ends at beat 40: measure 11 is past its flag
+        await goTo(page, "m11");
+        await expect(page.getByTestId("timeline-readout")).toContainText("m11");
+        await waitForIdle(page);
+        const before = await savedPositions(show, 2);
+        const t1 = await drawnPosition(page, "T1");
+
+        await dragMarcher(page, "T1", { x: 60, y: 60 });
+        await expect(
+            page.locator("[data-sonner-toast]", {
+                hasText: "There's no page here yet",
+            }),
+        ).toBeVisible();
+        await expect.poll(() => drawnPosition(page, "T1")).toEqual(t1);
+        await waitForIdle(page);
+        expect(await savedPositions(show, 2)).toEqual(before);
     });
 });

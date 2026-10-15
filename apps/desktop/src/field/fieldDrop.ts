@@ -17,7 +17,8 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
  *
  * Resolves "saved" once the write has reached the resolver, so the field can
  * draw the show with the drop in it; "refused" when nothing was saved (the
- * write's own failure toast, or the refusal's).
+ * write's own failure toast, or the refusal's). It must settle on every path:
+ * the field draws the marchers where they were dropped until it does.
  */
 export function dropMarchersOnTimeline(
     positions: readonly MarcherPosition[],

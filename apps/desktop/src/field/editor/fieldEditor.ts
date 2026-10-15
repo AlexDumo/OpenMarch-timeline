@@ -273,10 +273,7 @@ export class FieldEditor {
             {
                 show: (positions) => this.showLive(positions),
                 drop: (positions) => this.drop(starts, positions),
-                cancel: () => {
-                    this.live = null;
-                    this.ports.showPositions(this.pending);
-                },
+                cancel: () => this.endLive(),
             },
             this.options.moveTransform,
         );
@@ -323,6 +320,12 @@ export class FieldEditor {
         this.ports.showPositions(withPositions(this.pending, positions));
     }
 
+    /** The drag is over with nothing dropped: only drops still saving are drawn. */
+    private endLive() {
+        this.live = null;
+        this.ports.showPositions(this.pending);
+    }
+
     /**
      * Saves a drop. The marchers stay where they were dropped until the save
      * settles, then the field draws the show again: with the drop in it, or
@@ -333,14 +336,14 @@ export class FieldEditor {
         starts: readonly MarcherPosition[],
         positions: readonly MarcherPosition[],
     ) {
-        this.live = null;
         const moved = positions.some(
             (p, i) => p.x !== starts[i].x || p.y !== starts[i].y,
         );
         if (!moved) {
-            this.ports.showPositions(this.pending);
+            this.endLive();
             return;
         }
+        this.live = null;
         const pending = withPositions(this.pending, positions);
         this.pending = pending;
         const drop = ++this.drops;
