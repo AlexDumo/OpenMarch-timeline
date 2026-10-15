@@ -1095,10 +1095,55 @@ describe("FieldEditor rotation typed into the inspector (user story 54)", () => 
         expect(state.drops).toEqual([]);
     });
 
-    it("saves a typed rotation before a press on the field", () => {
+    it("saves a typed rotation before a press on the field, and says it ended", () => {
         const { editor, state } = setup({ selected: ALL });
+        const version = editor.rotationVersion();
         editor.rotateSelection(90);
         editor.pointerDown(at(250, 300));
         expect(state.drops).toHaveLength(1);
+        expect(editor.typedRotation()).toBe(0);
+        // The input starts over even though the blur that follows finds nothing to save
+        expect(editor.rotationVersion()).toBe(version + 1);
+        editor.endRotation();
+        expect(editor.rotationVersion()).toBe(version + 1);
+    });
+
+    it("refuses while a field tool is on", () => {
+        const { editor, state, ports } = setup({ selected: ALL });
+        ports.toolActive = () => true;
+        editor.rotateSelection(90);
+        expect(state.shown).toBeNull();
+        expect(editor.typedRotation()).toBe(0);
+    });
+
+    it("starts over a drop still saving, and is dropped if that drop is refused", async () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.rotateSelection(90);
+        editor.endRotation();
+        editor.rotateSelection(90);
+        expect(editor.typedRotation()).toBe(90);
+        state.drops[0].answer("refused");
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(editor.typedRotation()).toBe(0);
+        expect(state.drops).toHaveLength(1);
+    });
+
+    it("drops a typed rotation, unsaved, when the selection changes or it's cancelled", () => {
+        const { editor, state } = setup({ selected: ALL });
+        editor.rotateSelection(90);
+        editor.selectionChanged();
+        expect(editor.typedRotation()).toBe(90);
+        state.selected = [1, 2];
+        editor.selectionChanged();
+        expect(editor.typedRotation()).toBe(0);
+        expect(state.shown).toBeNull();
+
+        editor.rotateSelection(45);
+        const version = editor.rotationVersion();
+        editor.cancelRotation();
+        expect(editor.rotationVersion()).toBe(version + 1);
+        expect(state.shown).toBeNull();
+        expect(state.drops).toEqual([]);
     });
 });

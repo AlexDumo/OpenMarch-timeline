@@ -373,12 +373,18 @@ drawn.
 field on screen through `subscribeActiveFieldEditor`. On the new field it
 calls `FieldEditor.rotateSelection(degrees)` while typing or dragging, and
 `endRotation()` on blur or drag end; a rotation left at 0 saves nothing.
-It shows what's typed until the save, then 0 again (it remounts), as
-Fabric's group does after its save; whether it's enabled comes from the
-app's selection, which the editor's ref only catches up with after render.
-Transforms that change nothing (a whole turn, an axis scaled by 1) return
-the positions exactly as they were, so they save nothing even off the
-thousandths grid. During a handle rotation it doesn't follow the angle live (Fabric
+It shows what's typed until the rotation ends, then 0 again: the input
+remounts on `FieldEditor.rotationVersion()`, which goes up whether a blur
+or a press on the field saved it (the press saves first, before the blur).
+That's a `change:`: Fabric's input shows the selection's angle since it
+was made, and a typed value sets that angle. Whether the input is enabled
+comes from the app's selection, which the editor's ref only catches up with
+after render. A typed rotation is refused while the line tool is on
+(`FieldEditorPorts.toolActive`), and is dropped unsaved when the selection
+or page changes, when the input unmounts without a blur, or when a drop it
+was typed over is refused. Transforms that change nothing (a whole turn, an
+axis scaled by 1) return the positions exactly as they were, so they save
+nothing even off the thousandths grid. During a handle rotation it doesn't follow the angle live (Fabric
 did): that would re-render the inspector on every pointer move.
 
 **Decided changes** (`change:` in `scale-and-rotate.spec.mts`, `test.fail`
@@ -397,6 +403,11 @@ scales from the outermost marchers and rotates about their bounds' center.
 Scenarios compare within those few units. Fabric snaps the group's angle
 since the selection was made; the new field snaps each drag's angle, which
 is the same thing since Fabric's selection is rebuilt after every save.
+
+**No flip, in numbers.** Dragged far past the opposite side, a handle
+stops at `MIN_SCALE` (1%): the marchers stack about 1% of their spread
+apart, in order. Fabric's `lockScalingFlip` holds the last valid scale
+instead, wherever the pointer crossed. On the #208 checklist.
 
 **For #204.** The box tool's own handles can reuse `handlePoints`,
 `handleAt` and the gesture base in `transformGestures.ts`. Lock X / Lock Y

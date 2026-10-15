@@ -35,24 +35,30 @@ function MarcherRotationInput() {
  * The new field's rotation (#198, user story 54): typing or dragging turns
  * the selection about its box's center through the editor, as the rotate
  * handle does, and leaving the input saves it through the same drop. Left
- * unchanged, it saves nothing. It shows what's typed until the save, then 0
- * again, as Fabric's group does: the selection's box fits it again.
+ * unchanged, it saves nothing. It shows what's typed until the rotation
+ * ends, then 0 again, as Fabric's group does: the selection's box fits it
+ * again. A press on the field saves it before the blur does.
  */
 function FieldRotationInput({ editor }: { editor: FieldEditor }) {
-    // Each save starts the input over at 0. Its value isn't the editor's, so
-    // typing "22." isn't rewritten as "22" mid-number
-    const [saves, setSaves] = useState(0);
+    const subscribe = useCallback(
+        (listener: () => void) => editor.subscribe(listener),
+        [editor],
+    );
+    // Each ended rotation starts the input over at 0. Its value isn't the
+    // editor's, so typing "22." isn't rewritten as "22" mid-number
+    const ended = useSyncExternalStore(subscribe, () =>
+        editor.rotationVersion(),
+    );
     // The context holds no hidden marchers, as the editor's handles skip them
     const canRotate = useSelectedMarchers()!.selectedMarchers.length >= 2;
-    const save = () => {
-        if (editor.typedRotation() !== 0) setSaves((count) => count + 1);
-        editor.endRotation();
-    };
+    const save = () => editor.endRotation();
+    // Gone without a blur: nothing typed stays drawn and unsaved
+    useEffect(() => () => editor.cancelRotation(), [editor]);
 
     return (
         <div className="flex flex-col gap-8">
             <DragInput
-                key={saves}
+                key={ended}
                 dragSensitivity={0.5}
                 dragSensitivityWithShift={0.1}
                 value={0}

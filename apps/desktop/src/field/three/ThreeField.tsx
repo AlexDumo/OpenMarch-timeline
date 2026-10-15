@@ -49,6 +49,7 @@ import {
 import { FieldEditor } from "@/field/editor/fieldEditor";
 import { ruledMove } from "@/field/editor/moveRules";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
+import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import { takeFieldPress } from "@/field/takeFieldPress";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
@@ -319,6 +320,9 @@ function ThreeFieldView() {
                             id,
                         ),
                     takePress: takeFieldPress,
+                    toolActive: () =>
+                        useAlignmentEventStore.getState().alignmentEvent ===
+                        "line",
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
                     showPositions: (positions) =>
@@ -351,6 +355,11 @@ function ThreeFieldView() {
         setActiveFieldEditor(editor);
         return () => setActiveFieldEditor(null);
     }, [editor]);
+    // A rotation typed into the inspector belongs to its selection and page:
+    // when either changes before it's saved, it's dropped (#198)
+    useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
+    const pageId = selectedPage?.id;
+    useEffect(() => editor.cancelRotation(), [editor, pageId]);
 
     useEffect(() => {
         installFieldTestApi(

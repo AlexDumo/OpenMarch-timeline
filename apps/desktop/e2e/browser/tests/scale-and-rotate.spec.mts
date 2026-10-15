@@ -474,3 +474,46 @@ test("the inspector's rotation input rotates the selection, and saves nothing wh
     expect(await undoSteps(show)).toBe(steps + 1);
     await expectCanvasMatchesShow(show);
 });
+
+test("change: after a rotation is saved the inspector's input starts over at 0, also when a press on the field saved it", async ({
+    show,
+    field,
+}) => {
+    test.fail(
+        field === "fabric",
+        "Fabric's input shows the selection's angle since it was made, and a typed value is that angle",
+    );
+    const { page } = show;
+    await selectAll(page);
+    const rotation = page.getByRole("textbox", { name: "Rotation" });
+    await expect(rotation).toBeEnabled();
+    const steps = await undoSteps(show);
+
+    await rotation.fill("90");
+    await rotation.blur();
+    await expect
+        .poll(async () => turned(await savedPositions(show, 0)))
+        .toBeCloseTo(90, 0);
+    await expect(rotation).toHaveValue("0");
+    // The save has landed: a rotation can't start from a drop still saving
+    await expectCanvasMatchesShow(show);
+
+    // Typed, then a press on the field instead of a blur: saved, and the
+    // input starts over at 0, so the next number turns from there
+    await rotation.fill("30");
+    const corner = await handleAt(page, "se");
+    await page.mouse.click(corner.x, corner.y);
+    await expect
+        .poll(async () => turned(await savedPositions(show, 0)))
+        .toBeCloseTo(120, 0);
+    await expect(rotation).toHaveValue("0");
+    await expectCanvasMatchesShow(show);
+    await rotation.fill("15");
+    await rotation.blur();
+    await expect
+        .poll(async () => turned(await savedPositions(show, 0)))
+        .toBeCloseTo(135, 0);
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 3);
+    await expectCanvasMatchesShow(show);
+});

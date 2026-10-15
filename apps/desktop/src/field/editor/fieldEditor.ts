@@ -78,6 +78,11 @@ export type FieldEditorPorts = {
      */
     takePress?(): boolean;
     /**
+     * True while a field tool owns the field (the line tool): the selection
+     * can't be rotated from the inspector then.
+     */
+    toolActive?(): boolean;
+    /**
      * How far the selection box drawn around a multi-selection reaches past
      * its outermost marchers, in field units. A drag from inside it moves the
      * selection, and its handles (#198) sit on it. 0 when omitted.
@@ -180,6 +185,8 @@ export class FieldEditor {
     /** Where the marchers being dragged are drawn, or null with no drag. */
     private live: readonly MarcherPosition[] | null = null;
     private typed: TypedRotation | null = null;
+    /** Counts typed rotations ended, saved or not, so the inspector's input starts over after each. */
+    private rotationsEnded = 0;
     private readonly listeners = new Set<() => void>();
     private readonly now: () => number;
     private readonly areaPorts: AreaPorts;
@@ -358,12 +365,22 @@ export class FieldEditor {
     }
 
     /**
+     * Goes up each time a typed rotation ends, saved (a blur, or a press on
+     * the field first) or dropped: the inspector's input starts over at 0.
+     */
+    rotationVersion(): number {
+        return this.rotationsEnded;
+    }
+
+    /**
      * Turns the selection `degrees` clockwise about its box's center, from
      * where it was when the typing started, as the rotate handle does (user
-     * story 54). Drawn until {@link endRotation} saves it.
+     * story 54). Drawn until {@link endRotation} saves it. Refused during a
+     * drag and while a field tool is on. Over a drop still saving it starts
+     * from where that drop is drawn, and is dropped if that drop is refused.
      */
     rotateSelection(degrees: number): void {
-        if (this.gesture) return;
+        if (this.gesture || this.ports.toolActive?.()) return;
         if (!this.typed) {
             const starts = this.drawnPositions(this.ports.selection.get());
             const box = boundsOf(starts);
@@ -385,11 +402,37 @@ export class FieldEditor {
         const typed = this.typed;
         if (!typed) return;
         this.typed = null;
+        this.rotationsEnded++;
         this.drop(
             typed.starts,
             rotatePositions(typed.starts, typed.center, typed.degrees),
         );
         this.emit();
+    }
+
+    /**
+     * Drops a typed rotation without saving it: the marchers go back. For
+     * when it can't be saved where it was typed (the selection or the page
+     * changed, or the input went away without a blur).
+     */
+    cancelRotation(): void {
+        if (!this.typed) return;
+        this.typed = null;
+        this.rotationsEnded++;
+        this.endLive();
+        this.emit();
+    }
+
+    /** Drops a typed rotation whose marchers aren't the selection any more. */
+    selectionChanged(): void {
+        if (!this.typed) return;
+        if (
+            !sameIds(
+                this.typed.starts.map((p) => p.id),
+                this.ports.selection.get(),
+            )
+        )
+            this.cancelRotation();
     }
 
     /** The cursor the field shows. */
@@ -594,8 +637,10 @@ export class FieldEditor {
                 ),
             DROP_SETTLE_WARNING_MS,
         );
-        const settle = () => {
+        const settle = (result?: DropResult) => {
             clearTimeout(unsettled);
+            // A rotation typed over this drop started from where it snaps back from
+            if (result !== "saved") this.cancelRotation();
             // A later drop is still saving: its answer clears both
             if (drop !== this.drops) return;
             this.pending = null;
@@ -604,7 +649,7 @@ export class FieldEditor {
                 this.live && withPositions(null, this.live),
             );
         };
-        this.ports.drop(positions).then(settle, settle);
+        this.ports.drop(positions).then(settle, () => settle());
     }
 
     private click(press: FieldPress, shift: boolean) {
