@@ -49,6 +49,17 @@ export function glRendererName(
 export type GlInfo = { kind: GlKind; renderer: string | null };
 
 /**
+ * Thrown when a WebGL context can't be created, so the new field can't draw:
+ * the video export's off-screen field (#207) on a machine without WebGL.
+ */
+export class NoWebGLError extends Error {
+    constructor(cause?: unknown) {
+        super("WebGL is not available", { cause });
+        this.name = "NoWebGLError";
+    }
+}
+
+/**
  * Asks the browser for a throwaway WebGL context to see what draws it, then
  * releases it. The field's own context is created later, so this is how the
  * field knows, before it mounts, whether it can draw at all.

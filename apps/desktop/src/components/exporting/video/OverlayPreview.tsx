@@ -111,6 +111,8 @@ export default function OverlayPreview({
                 durationSeconds,
                 width,
                 height,
+                // Drawn at the screen's pixels, so the preview is sharp
+                pixelRatio: dpr,
                 videoTheme,
                 fieldFraming,
                 overlayState: state,

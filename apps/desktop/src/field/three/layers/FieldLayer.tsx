@@ -11,9 +11,8 @@ import {
 import type { FieldProperties } from "@openmarch/core";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { fieldGeometry, rgba01, type FieldRects } from "../fieldGeometry";
-import { useFieldViewStore } from "../fieldView";
+import { useFieldDraw } from "../fieldDrawContext";
 import { TextBatch, type GlyphAtlas, type TextLabel } from "../sdfText";
-import { currentQualitySettings } from "../useFieldQuality";
 
 /**
  * Every rectangle of the field in one instanced draw. A rectangle thinner than
@@ -105,6 +104,7 @@ export default function FieldLayer({
     labelAtlas: GlyphAtlas;
 }) {
     const invalidate = useThree((s) => s.invalidate);
+    const draw = useFieldDraw();
     const dpr = useThree((s) => s.viewport.dpr);
     const gridLines = useUiSettingsStore((s) => s.uiSettings.gridLines);
     const halfLines = useUiSettingsStore((s) => s.uiSettings.halfLines);
@@ -155,12 +155,12 @@ export default function FieldLayer({
     }, [layer, invalidate]);
 
     useFrame(() => {
-        const { zoom } = useFieldViewStore.getState();
+        const { zoom } = draw.view.getState();
         const pixel = 1 / (zoom * dpr);
         layer.background.material.uniforms.uPixel.value = pixel;
         layer.lines.material.uniforms.uPixel.value = pixel;
         layer.lines.material.uniforms.uMinCoverage.value =
-            currentQualitySettings().minLineCoverage;
+            draw.quality().minLineCoverage;
     });
 
     return (
