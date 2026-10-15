@@ -67,9 +67,15 @@ export function ContextLossGuard({ onGiveUp }: { onGiveUp: () => void }) {
     return null;
 }
 
-/** three's error when the browser gives it no WebGL context. */
+/**
+ * three's errors when the browser gives it no WebGL context: "Error creating
+ * WebGL context." and "… with your selected attributes."
+ */
 const isWebGLStartError = (error: unknown) =>
-    error instanceof Error && /WebGL context/i.test(error.message);
+    error instanceof Error &&
+    /^(THREE\.WebGLRenderer: )?Error creating WebGL context\b/.test(
+        error.message,
+    );
 
 /**
  * Catches the field's canvas failing to start (no WebGL context to be had), so

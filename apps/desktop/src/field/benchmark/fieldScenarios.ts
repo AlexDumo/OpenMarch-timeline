@@ -11,6 +11,13 @@ import {
 
 const timeline = () => useTimelineSelectionStore.getState();
 
+/** Pauses, and waits until the app has: pausing puts the playhead where playback stopped. */
+export async function pausePlayback(isPlaying: () => boolean) {
+    if (isPlaying()) runAction("playPause");
+    for (let frame = 0; isPlaying() && frame < 120; frame++) await nextFrame();
+    await nextFrame();
+}
+
 /** Playback from the top of the show; ends early if the show does. */
 function playScenario(isPlaying: () => boolean): BenchmarkScenario {
     let playhead = 0;
@@ -26,11 +33,7 @@ function playScenario(isPlaying: () => boolean): BenchmarkScenario {
         // Playback takes a moment to start
         step: (elapsed) => elapsed < 500 || isPlaying(),
         async stop() {
-            if (isPlaying()) runAction("playPause");
-            // Pausing puts the playhead where playback stopped, once it has
-            for (let frame = 0; isPlaying() && frame < 120; frame++)
-                await nextFrame();
-            await nextFrame();
+            await pausePlayback(isPlaying);
             timeline().seek(playhead);
         },
     };

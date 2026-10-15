@@ -10,6 +10,7 @@ import {
 } from "@openmarch/ui";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
+import { runAction } from "@/shortcuts/registry";
 import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
 import { currentFieldQuality } from "@/field/three/useFieldQuality";
 import {
@@ -20,7 +21,7 @@ import {
     type BenchmarkReport,
     type BenchmarkResult,
 } from "./frameStats";
-import { fieldBenchmarkScenarios } from "./fieldScenarios";
+import { fieldBenchmarkScenarios, pausePlayback } from "./fieldScenarios";
 import { measureScenario } from "./runFieldBenchmark";
 
 declare global {
@@ -92,7 +93,10 @@ export default function FieldBenchmark({
             // Nothing over the field while it's measured
             setOpen(false);
             setCopied(false);
+            // Measured from paused, and playing again afterwards if it was
+            const wasPlaying = playing.current;
             try {
+                if (wasPlaying) await pausePlayback(() => playing.current);
                 const scenarios = fieldBenchmarkScenarios({
                     isPlaying: () => playing.current,
                 });
@@ -107,6 +111,7 @@ export default function FieldBenchmark({
                 setReport(done);
                 return done;
             } finally {
+                if (wasPlaying && !playing.current) runAction("playPause");
                 busy.current = false;
                 setRunning(null);
                 setOpen(true);

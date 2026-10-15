@@ -15,17 +15,24 @@ const withSettings = (quality: FieldQuality): CurrentFieldQuality => ({
     settings: QUALITY_SETTINGS[quality.mode],
 });
 
-/** The field's quality now, outside React: for frame hooks and the test API. */
-export function currentFieldQuality(): CurrentFieldQuality {
+const qualityNow = (): FieldQuality => {
     const { gl, gpuCrashed } = useFieldQualityStore.getState();
-    return withSettings(
-        fieldQuality({
-            performanceMode:
-                useUiSettingsStore.getState().uiSettings.fieldPerformanceMode,
-            gl: gl?.kind ?? null,
-            gpuCrashed,
-        }),
-    );
+    return fieldQuality({
+        performanceMode:
+            useUiSettingsStore.getState().uiSettings.fieldPerformanceMode,
+        gl: gl?.kind ?? null,
+        gpuCrashed,
+    });
+};
+
+/** The field's quality now, outside React: for the test API and the benchmark. */
+export function currentFieldQuality(): CurrentFieldQuality {
+    return withSettings(qualityNow());
+}
+
+/** What the field's quality mode changes, now: for frame hooks (allocates nothing). */
+export function currentQualitySettings(): QualitySettings {
+    return QUALITY_SETTINGS[qualityNow().mode];
 }
 
 /** The field's quality, re-rendering when the setting or the machine's state changes. */

@@ -6,7 +6,7 @@ import type { FieldMarchers } from "../fieldMarchers";
 import { useFieldViewStore } from "../fieldView";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
-import { currentFieldQuality } from "../useFieldQuality";
+import { currentQualitySettings } from "../useFieldQuality";
 
 /** fabric's marcher label: 14 field units, its center 2.2 dot radii above the dot. */
 const LABEL_SIZE = 14;
@@ -61,7 +61,7 @@ export default function LabelsLayer({
         const { zoom } = useFieldViewStore.getState();
         // Labels scale with the field and fade out when they'd be too small to read
         // (`QUALITY_SETTINGS`: low-quality mode hides them sooner)
-        const { labelFadeFrom, labelFadeTo } = currentFieldQuality().settings;
+        const { labelFadeFrom, labelFadeTo } = currentQualitySettings();
         const opacity = Math.min(
             1,
             Math.max(

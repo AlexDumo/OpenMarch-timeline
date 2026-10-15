@@ -42,9 +42,17 @@ const renderField = (error: Error, onError = vi.fn()) => {
 describe("CanvasErrorBoundary", () => {
     it("explains in the field when there's no WebGL context", () => {
         vi.spyOn(console, "error").mockImplementation(() => {});
-        const onError = renderField(new Error("Error creating WebGL context."));
+        const onError = renderField(
+            new Error("THREE.WebGLRenderer: Error creating WebGL context."),
+        );
         expect(screen.getByText("the field cannot be drawn")).toBeTruthy();
         expect(onError).toHaveBeenCalledOnce();
+    });
+
+    it("leaves other WebGL errors to the app's error boundary", () => {
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        renderField(new Error("WebGL context lost while uploading a buffer"));
+        expect(screen.queryByText("the field cannot be drawn")).toBeNull();
     });
 
     it("leaves any other error to the app's error boundary", () => {

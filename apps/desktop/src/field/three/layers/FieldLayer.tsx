@@ -12,7 +12,7 @@ import type { FieldProperties } from "@openmarch/core";
 import { CAP_HEIGHT, fieldGeometry, parseRgba } from "../fieldGeometry";
 import { useFieldViewStore } from "../fieldView";
 import { TextBatch, type GlyphAtlas, type TextLabel } from "../sdfText";
-import { currentFieldQuality } from "../useFieldQuality";
+import { currentQualitySettings } from "../useFieldQuality";
 
 /**
  * Every rectangle of the field in one instanced draw. A rectangle thinner than
@@ -145,8 +145,7 @@ export default function FieldLayer({
         const { zoom } = useFieldViewStore.getState();
         const { uniforms } = layer.lines.material;
         uniforms.uPixel.value = 1 / (zoom * dpr);
-        uniforms.uMinCoverage.value =
-            currentFieldQuality().settings.minLineCoverage;
+        uniforms.uMinCoverage.value = currentQualitySettings().minLineCoverage;
     });
 
     return (

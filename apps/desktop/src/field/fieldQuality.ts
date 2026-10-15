@@ -94,17 +94,28 @@ export type FieldQuality =
     | { mode: "full"; reason: null }
     | { mode: "low"; reason: LowQualityReason };
 
-/** Which mode the field draws in, and why. Unknown WebGL counts as hardware. */
+const FULL: FieldQuality = { mode: "full", reason: null };
+const LOW = {
+    noWebGL: { mode: "low", reason: "noWebGL" },
+    gpuCrashed: { mode: "low", reason: "gpuCrashed" },
+    software: { mode: "low", reason: "software" },
+    setting: { mode: "low", reason: "setting" },
+} as const satisfies Record<LowQualityReason, FieldQuality>;
+
+/**
+ * Which mode the field draws in, and why. Unknown WebGL counts as hardware.
+ * The answers are shared constants, so frame hooks can ask every frame.
+ */
 export function fieldQuality({
     performanceMode,
     gl,
     gpuCrashed,
 }: FieldQualityInput): FieldQuality {
-    if (gl === "none") return { mode: "low", reason: "noWebGL" };
-    if (gpuCrashed) return { mode: "low", reason: "gpuCrashed" };
-    if (gl === "software") return { mode: "low", reason: "software" };
-    if (performanceMode) return { mode: "low", reason: "setting" };
-    return { mode: "full", reason: null };
+    if (gl === "none") return LOW.noWebGL;
+    if (gpuCrashed) return LOW.gpuCrashed;
+    if (gl === "software") return LOW.software;
+    if (performanceMode) return LOW.setting;
+    return FULL;
 }
 
 /** What each mode changes in the field's drawing. */
