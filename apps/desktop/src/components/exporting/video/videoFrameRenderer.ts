@@ -5,9 +5,11 @@ import { SectionAppearance } from "@/db-functions";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import CanvasMarcher from "@/global/classes/canvasObjects/CanvasMarcher";
 import type { ResolverFrameSampler } from "@/timeline/timelineExport";
-import { initializeCanvasForRendering } from "../utils/svg-generator";
 import {
     applyMarcherAppearancesForPage,
+    initializeCanvasForRendering,
+} from "./videoCanvas";
+import {
     getPlaybackPageForTimeMs,
     type MarcherAppearancesByPageId,
 } from "../utils/exportAppearances";

@@ -127,6 +127,32 @@ lasso, move and drop, group transform, line tool, shape handles, kept-mark
 hover, isolation Escape, preview swallowing, navigation, nudges and actions.
 Export improvements are written into the same spec.
 
+### Export improvements
+
+Drill charts (and the launch page preview, which uses the same SVG) are drawn
+from show data since #206 (on the `field-renderer` branch), in
+`apps/desktop/src/components/exporting/utils/drillChartSvg.ts`. Content and
+layout are today's, except:
+
+| Area             | Change                                                                                                                                                                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Position         | Dots, pathways, midpoints, endpoints, grid lines, hashes and labels sit exactly on their coordinates. Fabric drew everything half a grid line down and right, so the whole chart moves 0.5 px.                                                             |
+| Centered text    | Drill numbers and yard-line labels are centered by the SVG renderer (`text-anchor`), not from widths Fabric measured in the browser that ran the export. The PDF draws them in Helvetica (svg-to-pdfkit's fallback, as today), now centered on their spot. |
+| Yard numbers     | Centered on their yard line. Fabric put their left edge 22 px left of the line, so their place depended on the font.                                                                                                                                       |
+| Side labels      | Left labels end 10 px left of the field (`text-anchor: end`) instead of being placed from a measured width.                                                                                                                                                |
+| Border           | One closed 3 px outline just outside the field, instead of four lines with uneven ends.                                                                                                                                                                    |
+| Hashes           | Centered on their checkpoint and yard line, without the 1 px nudges Fabric needed for its own offset.                                                                                                                                                      |
+| Missing position | A marcher with no position on a page isn't drawn on that page. Fabric left it where it last stood (or at the field's corner).                                                                                                                              |
+| Field image      | The export waits for the image to load before reading its size, and keeps JPEG, GIF and WebP types instead of labeling every image PNG. An image the browser can't decode is still embedded, stretched over the field.                                     |
+| Hidden helpers   | No invisible hit-box rectangle per marcher; the SVGs are about a third the size. The PDFs are about 30% larger (svg-to-pdfkit writes coordinates in full).                                                                                                 |
+
+Unchanged on purpose: every drill number is drawn under every dot, as today
+(each page's `setMarcherCoords` brought all of Fabric's dots to the front), so a
+neighboring dot can cover a label in both. An individual chart draws its
+marcher's dot again on top of the paths.
+
+The before/after export diffs for the demo shows are on the #206 PR.
+
 ## Parity gate
 
 Required before #209 (ADR 0005 D-6), run as #208:
