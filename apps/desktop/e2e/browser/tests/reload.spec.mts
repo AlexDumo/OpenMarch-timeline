@@ -9,7 +9,8 @@ import {
 } from "../app.mjs";
 import { savedPosition } from "../positions.mjs";
 
-// Pre-existing on fork main 1be4fd9c in timeline mode: after **+** adds a page flag, the selected page (Inspector, canvas.currentPage, e/Shift+E) stays on the old page until reload.
+// Still failing on the three.js field (#209 rechecked): after the reload, the first marcher is drawn
+// away from where page 1 saved it. Needs a look before it's turned back on.
 test.fixme("a show built in the app looks the same after a reload", async ({
     show,
 }) => {

@@ -1,6 +1,8 @@
 # 0005: A three.js field behind a renderer-independent editor
 
-- Status: accepted; implemented (Fabric removed in fork #209, 2026-10-15)
+- Status: accepted
+- Implemented: fork #209 (2026-10-15) made the new field the only field and
+  deleted Fabric, on the `field-renderer` branch.
 - Date: 2026-10-14
 - Spec: fork issue #189. Work packages: [docs/field](../field/README.md),
   tickets #190 to #209.
@@ -161,6 +163,11 @@ How #205 built it:
 - The new field is built beside Fabric and switched on in one cut-over PR
   (#209), after the parity gate (D-6) passes. Fabric and its speed
   workarounds are deleted in that PR. There is no rollback setting.
+- **Amended (owner decision, 2026-10-15, recorded on #209):** #209 lands on
+  `field-renderer` after the gate's automated half, before the owner's
+  hands-on checklist and real-hardware benchmark. Those now gate #214
+  (`field-renderer` into `main`) instead. Fabric comparisons use the pinned
+  pre-switch build (`field-renderer-pre-209`).
 - Until #209 merges, **Fabric field drawing and field interaction are
   frozen**. Only fixes for real breakage are allowed, and each fix adds a
   parity scenario that pins the fixed behavior.
@@ -225,6 +232,10 @@ Before the switch:
   helpers stop reading Fabric and read the field test API.
 - The 2D field and the 3D View share field geometry and marcher position
   code, so a field change is made once.
+- `window.canvas`, the Fabric canvas that plugins could reach, is gone with
+  Fabric (#209). The plugin example in
+  `apps/website/src/content/blog/2025-06-12-plugins-update/index.mdx` used
+  it. Whether plugins get a replacement is an open owner question.
 
 ## Verification
 

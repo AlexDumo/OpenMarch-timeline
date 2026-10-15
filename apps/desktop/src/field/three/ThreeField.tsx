@@ -5,6 +5,7 @@ import {
     useMemo,
     useRef,
     useState,
+    type CSSProperties,
     type RefObject,
 } from "react";
 import clsx from "clsx";
@@ -162,6 +163,12 @@ function ThreeFieldView() {
     const { isPlaying } = useIsPlaying()!;
     const { beats, pages } = useTimingObjects()!;
     const isFullscreen = useFullscreenStore((s) => s.isFullscreen);
+    const perspective = useFullscreenStore((s) => s.perspective);
+    const setPerspective = useFullscreenStore((s) => s.setPerspective);
+    // The tilt is fullscreen's only: leaving fullscreen flattens the field
+    useEffect(() => {
+        if (!isFullscreen) setPerspective(0);
+    }, [isFullscreen, setPerspective]);
     const { image: fieldImage } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
@@ -433,6 +440,7 @@ function ThreeFieldView() {
                 "rounded-6 relative h-full w-full touch-none overflow-hidden",
                 isFullscreen && "pointer-events-none pt-128",
             )}
+            style={TILT_PERSPECTIVE}
             data-testid="threeField"
         >
             <TimelineIsolationBar />
@@ -451,108 +459,138 @@ function ThreeFieldView() {
                     }}
                 />
             )}
-            {fieldProperties && quality.reason !== "noWebGL" && (
-                <Canvas
-                    key={canvasKey}
-                    // The field canvas, for the scenarios
-                    data-testid="fieldCanvas"
-                    frameloop="demand"
-                    orthographic
-                    // Bounds given here make the camera manual: `FieldCamera` sets them
-                    camera={{
-                        left: 0,
-                        right: 1,
-                        top: 0,
-                        bottom: 1,
-                        near: 0.1,
-                        far: 100,
-                        position: [0, 0, 10],
-                    }}
-                    dpr={quality.settings.dpr}
-                    // Colors are drawn as the theme gives them, with no tone mapping
-                    flat
-                    linear
-                    gl={{
-                        powerPreference: "high-performance",
-                        antialias: false,
-                    }}
-                    onCreated={({ gl }) => {
-                        element.current = gl.domElement;
-                        renderer.current = gl;
-                    }}
-                >
-                    <ContextLossGuard onGiveUp={startOver} />
-                    <FieldCamera
-                        fieldProperties={fieldProperties}
-                        root={root}
-                        ready={ready}
-                        opened={opened}
-                        settled={settled}
-                    />
-                    <EditorInput
+            <div
+                // Fullscreen's perspective (UI-12) tilts the field and what's
+                // drawn over it together. The field takes no input in
+                // fullscreen, so nothing hit-tests through the tilt
+                className="relative h-full w-full"
+                style={tiltStyle(perspective)}
+                data-testid="fieldTilt"
+            >
+                {fieldProperties && quality.reason !== "noWebGL" && (
+                    <Canvas
+                        // Sized by layout, not by the tilted box on screen
+                        resize={{ offsetSize: true }}
+                        key={canvasKey}
+                        // The field canvas, for the scenarios
+                        data-testid="fieldCanvas"
+                        frameloop="demand"
+                        orthographic
+                        // Bounds given here make the camera manual: `FieldCamera` sets them
+                        camera={{
+                            left: 0,
+                            right: 1,
+                            top: 0,
+                            bottom: 1,
+                            near: 0.1,
+                            far: 100,
+                            position: [0, 0, 10],
+                        }}
+                        dpr={quality.settings.dpr}
+                        // Colors are drawn as the theme gives them, with no tone mapping
+                        flat
+                        linear
+                        gl={{
+                            powerPreference: "high-performance",
+                            antialias: false,
+                        }}
+                        onCreated={({ gl }) => {
+                            element.current = gl.domElement;
+                            renderer.current = gl;
+                        }}
+                    >
+                        <ContextLossGuard onGiveUp={startOver} />
+                        <FieldCamera
+                            fieldProperties={fieldProperties}
+                            root={root}
+                            ready={ready}
+                            opened={opened}
+                            settled={settled}
+                        />
+                        <EditorInput
+                            editor={editor}
+                            marchers={marchers}
+                            selectedIds={selectedIds}
+                        />
+                        <PlayheadDriver
+                            marchers={marchers}
+                            isPlaying={isPlaying}
+                            beats={beats}
+                            appearanceSteps={appearanceSteps}
+                        />
+                        <FieldLayer
+                            fieldProperties={fieldProperties}
+                            numberAtlas={atlases.number}
+                            labelAtlas={atlases.checkpoint}
+                        />
+                        <BackgroundImageLayer
+                            image={fieldImage}
+                            placement={fieldImagePlan}
+                        />
+                        <OverlayLayer
+                            plan={timeline.focus}
+                            renderOrder={FOCUS_ORDER}
+                        />
+                        <OverlayLayer
+                            plan={timeline.paths}
+                            renderOrder={PATHS_ORDER}
+                        />
+                        <MarchersLayer
+                            marchers={marchers}
+                            dimming={dimming}
+                            theme={fieldProperties.theme}
+                        />
+                        <LabelsLayer
+                            marchers={marchers}
+                            dimming={dimming}
+                            labels={labels}
+                            theme={fieldProperties.theme}
+                            atlas={atlases.label}
+                        />
+                        <OverlayLayer
+                            plan={timeline.collisions}
+                            renderOrder={COLLISIONS_ORDER}
+                            atlas={atlases.collision}
+                        />
+                        <KeptMarksPlacer
+                            marks={keptMarks}
+                            marchers={marchers}
+                            elements={keptMarkElements}
+                        />
+                    </Canvas>
+                )}
+                {fieldProperties && (
+                    <FieldOverlay
+                        marchers={marchers}
                         editor={editor}
-                        marchers={marchers}
-                        selectedIds={selectedIds}
-                    />
-                    <PlayheadDriver
-                        marchers={marchers}
-                        isPlaying={isPlaying}
-                        beats={beats}
-                        appearanceSteps={appearanceSteps}
-                    />
-                    <FieldLayer
-                        fieldProperties={fieldProperties}
-                        numberAtlas={atlases.number}
-                        labelAtlas={atlases.checkpoint}
-                    />
-                    <BackgroundImageLayer
-                        image={fieldImage}
-                        placement={fieldImagePlan}
-                    />
-                    <OverlayLayer
-                        plan={timeline.focus}
-                        renderOrder={FOCUS_ORDER}
-                    />
-                    <OverlayLayer
-                        plan={timeline.paths}
-                        renderOrder={PATHS_ORDER}
-                    />
-                    <MarchersLayer
-                        marchers={marchers}
-                        dimming={dimming}
                         theme={fieldProperties.theme}
                     />
-                    <LabelsLayer
-                        marchers={marchers}
-                        dimming={dimming}
-                        labels={labels}
-                        theme={fieldProperties.theme}
-                        atlas={atlases.label}
-                    />
-                    <OverlayLayer
-                        plan={timeline.collisions}
-                        renderOrder={COLLISIONS_ORDER}
-                        atlas={atlases.collision}
-                    />
-                    <KeptMarksPlacer
-                        marks={keptMarks}
-                        marchers={marchers}
-                        elements={keptMarkElements}
-                    />
-                </Canvas>
-            )}
-            {fieldProperties && (
-                <FieldOverlay
-                    marchers={marchers}
-                    editor={editor}
-                    theme={fieldProperties.theme}
+                )}
+                <KeptMarksOverlay
+                    marks={keptMarks}
+                    elements={keptMarkElements}
                 />
-            )}
-            <KeptMarksOverlay marks={keptMarks} elements={keptMarkElements} />
+            </div>
             <KeptMarkTooltipView tooltip={keptMarkTooltip} />
         </div>
     );
 }
+
+/** The tilt's depth: the field is viewed from 1500 CSS px away, at its center. */
+const TILT_PERSPECTIVE: CSSProperties = {
+    perspective: "1500px",
+    perspectiveOrigin: "center center",
+};
+
+/**
+ * Fullscreen's perspective: the field leans back `degrees` about a line
+ * below its center, which looks more natural, and eases into each angle.
+ */
+const tiltStyle = (degrees: number): CSSProperties => ({
+    transform: degrees === 0 ? undefined : `rotateX(${degrees}deg)`,
+    transformOrigin: "center 70%",
+    transition: "transform 0.2s ease-out",
+});
 
 /** How long to wait for the fullscreen layout to settle. */
 const FULLSCREEN_SETTLE_MS = 250;

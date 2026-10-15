@@ -112,8 +112,16 @@ tickets (#204, #214, and the features in
   text and the drag-commit link are gone.
 - The Playwright codegen mode (`attachCodegenListeners`) recorded Fabric
   mouse events on marchers; it went with Fabric. The codegen IPC
-  (`window.electron.codegen`) is still there if someone wants to record field
-  presses from the editor.
+  (`window.electron.codegen`) is still there; #254 tracks recording field
+  presses again.
+- Fullscreen's perspective tilt is ported: the `fieldTilt` wrapper in
+  `ThreeField.tsx` tilts the canvas and its overlays, the canvas sizes by
+  layout (`offsetSize`), and leaving fullscreen flattens it. The field takes
+  no input in fullscreen, so pointer mapping never meets the tilt; a feature
+  that wants input there must map through the transform.
+- `window.canvas` is gone, and the plugin example in the 2025-06-12 blog post
+  used it. Whether plugins get a replacement is an open owner question (ADR
+  0005, Consequences).
 - The e2e fixture has no `field` or `webgl` option. Electron always gets
   software GL (`--use-angle=swiftshader`). Run Electron scenarios one worker
   per display (#236).

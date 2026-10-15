@@ -56,6 +56,7 @@ numbers) is in [parity-gate-results.md](parity-gate-results.md).
 22. Right-drag the field far off screen and let go → it stops about one screen past the edge. **(change)** Fabric skipped the pan limit for right-drag, the zoom buttons and pinch.
 23. Use the zoom buttons, zoom reset and fit → as on Fabric (story 9).
 24. Enter fullscreen → the whole field fits, the selection clears; leave it → the field centers again (story 9).
+    24a. In fullscreen, open Perspective on the zoom widget and drag it to about 40° → the field and what's drawn on it lean back together, as on Fabric; leave fullscreen → the field is flat again and the button shows no angle. (Ported in #209; `navigation.spec.mts` pins it.)
 25. On a touchscreen: one-finger pan, two-finger pinch → as on Fabric (story 10).
 26. Mac only: Ctrl+click a marcher without dragging → nothing is selected; it's a pan press. **(change)** Fabric selected.
 

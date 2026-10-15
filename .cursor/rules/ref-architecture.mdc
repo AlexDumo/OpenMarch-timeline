@@ -70,7 +70,6 @@ apps/desktop/
 │   │   │   ├── index.ts          # Barrel exports
 │   │   │   └── use[Entity].ts    # Query/mutation options
 │   │   ├── useTimingObjects.ts   # Multi-query: pages+beats+measures
-│   │   └── useAnimation.ts       # Canvas animation during playback
 │   ├── stores/                   # Zustand stores (UI state)
 │   ├── context/                  # React Context providers
 │   ├── utilities/                # Helper functions

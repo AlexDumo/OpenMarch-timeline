@@ -181,12 +181,12 @@ matches #207's reviewed run (`field-video-207`) within 0.04 dB; what moved is
 the drill numbers, now under the dots. Same content. 1080p export times
 here (software GL): Part 1 45 → 135 s, Part 1 with image 46 → 170 s, Daft
 Punk 94 → 260 s, so 2.8–3.7× Fabric's. To time on real hardware (benchmark
-step 6).
+step 5).
 
 ## 4. The owner's hands-on checklist
 
 [parity-checklist.md](parity-checklist.md): 116 one-line items, by area,
-in the lab build (`?field=three` for the new field). It covers every user
+in the lab build (since #209 the new field, no query string; Fabric is the pinned `field-renderer-pre-209` build). It covers every user
 story in #189, every decided change (marked **(change)**), every "for #208"
 item from the phase notes, and the owner decisions still open (the handle
 look, and whether a drag should survive losing the pointer). Settled on 2026-10-15: drill numbers under the dots (#245) and the

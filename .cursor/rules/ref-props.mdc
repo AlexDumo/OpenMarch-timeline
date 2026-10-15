@@ -5,6 +5,8 @@ alwaysApply: false
 
 # Props Feature Reference
 
+> **Not on this branch.** Props are an upstream (OpenMarch/OpenMarch) feature drawn on the old Fabric canvas. The fork's field (`apps/desktop/src/field/`, three.js) has no props, and the canvas classes, `PropVisualGroup` and `PropDrawingListeners` named below don't exist here. Treat this file as a description of upstream; a port would follow `docs/field/porting-fabric-features.md`.
+
 ## Overview
 
 Props represent physical objects on the field (platforms, obstacles, floor markings). Each prop is linked to a marcher record (with `type: "prop"`) and has per-page geometry via the `prop_page_geometry` table. Props can be drawn on the canvas using various shape tools (rectangle, circle, arc, polygon, freehand).
@@ -15,11 +17,11 @@ Props represent physical objects on the field (platforms, obstacles, floor marki
 |------|---------|
 | `src/global/classes/Prop.ts` | Types, constants, unit conversions |
 | `src/global/classes/PropVisualGroup.ts` | Aggregates visual elements per prop |
-| `src/global/classes/canvasObjects/CanvasProp.ts` | Canvas object (extends CanvasMarcher); upstream only, not on the three.js field |
+| `src/global/classes/canvasObjects/CanvasProp.ts` (upstream) | Canvas object (extends CanvasMarcher) |
 | `src/db-functions/prop.ts` | Database CRUD operations |
 | `src/hooks/queries/useProps.ts` | React Query hooks |
 | `src/stores/PropDrawingStore.ts` | Drawing mode state |
-| `src/components/canvas/listeners/PropDrawingListeners.ts` | Canvas drawing event handlers |
+| `src/components/canvas/listeners/PropDrawingListeners.ts` (upstream) | Canvas drawing event handlers |
 | `src/components/prop/PropList.tsx` | Prop list UI |
 | `src/components/prop/PropsModal.tsx` | Sidebar modal wrapper |
 | `src/components/prop/PropEditForm.tsx` | Edit prop form |

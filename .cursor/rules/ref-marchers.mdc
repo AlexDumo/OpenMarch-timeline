@@ -7,7 +7,7 @@ alwaysApply: false
 
 ## Overview
 
-Marchers are the core entity in OpenMarch - they represent performers on the field. Each marcher belongs to a section (instrument), has a drill number (e.g., "T1" for Trumpet 1), and has positions on each page via the `marcher_pages` junction table. Marchers are rendered on the canvas as `CanvasMarcher` objects.
+Marchers are the core entity in OpenMarch - they represent performers on the field. Each marcher belongs to a section (instrument), has a drill number (e.g., "T1" for Trumpet 1), and has positions on each page via the `marcher_pages` junction table. The field draws them in one instanced layer (`src/field/three/layers/MarchersLayer.tsx`).
 
 ## Key Files
 
@@ -17,13 +17,11 @@ Marchers are the core entity in OpenMarch - they represent performers on the fie
 | `src/global/classes/Sections.ts` | Section definitions (instruments) |
 | `src/global/classes/MarcherPage.ts` | Position per page (junction entity) |
 | `src/global/classes/MarcherPageIndex.ts` | Efficient lookup maps |
-| `src/global/classes/MarcherVisualGroup.ts` | Aggregates canvas visuals per marcher |
 | `src/field/three/layers/MarchersLayer.tsx` | Draws every marcher on the field |
 | `src/db-functions/marcher.ts` | Database CRUD operations |
 | `src/db-functions/marcherPage.ts` | MarcherPage CRUD |
 | `src/hooks/queries/useMarchers.ts` | React Query hooks |
 | `src/hooks/queries/useMarcherPages.ts` | MarcherPage query hooks |
-| `src/hooks/queries/useMarchersWithVisuals.ts` | Combined marcher + visual data |
 | `src/components/marcher/MarcherList.tsx` | Marcher list UI |
 | `src/components/marcher/MarchersModal.tsx` | Sidebar modal wrapper |
 | `src/components/marcher/NewMarcherForm.tsx` | Create marcher form |
@@ -117,9 +115,6 @@ import { createMarchersMutationOptions } from "@/hooks/queries";
 const createMutation = useMutation(createMarchersMutationOptions(queryClient));
 createMutation.mutate([{ name: "John", section: "Trumpet", drill_prefix: "T", drill_order: 1 }]);
 
-// Combined visual data
-import { useMarchersWithVisuals } from "@/hooks/queries";
-const { marchersWithVisuals, isLoading } = useMarchersWithVisuals();
 ```
 
 ## Integration Points
@@ -128,7 +123,7 @@ const { marchersWithVisuals, isLoading } = useMarchersWithVisuals();
 - **Tags**: Marchers can have tags (`marcher_tags` table) that affect their appearance.
 - **Shapes**: Marchers can be assigned to shapes (`shape_page_marchers`).
 - **Props**: A prop is linked to a marcher via `props.marcher_id` FK. Props use `type: "prop"` on the marcher.
-- **Canvas**: `CanvasMarcher` objects are managed by `OpenMarchCanvas.renderMarchers()`.
+- **Field**: `src/field/three/fieldMarchers.ts` holds where each marcher is drawn (from the timeline resolver); looks come from `resolveMarcherLook`.
 - **Selection**: Selected marchers tracked via `SelectedMarchersContext`.
 
 ## Gotchas

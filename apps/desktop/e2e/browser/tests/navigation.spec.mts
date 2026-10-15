@@ -434,3 +434,41 @@ test.describe("touch", () => {
         expectNear(drawn.y, mid.y, 0.5);
     });
 });
+
+test("fullscreen's perspective tilts the field, and leaving fullscreen flattens it", async ({
+    show,
+}) => {
+    const { page } = show;
+    const perspective = page.getByTestId("field-perspective");
+    // Only in fullscreen
+    await expect(perspective).toBeDisabled();
+    await page
+        .getByRole("button", { name: "Toggle timeline fullscreen" })
+        .click();
+    await expect(perspective).toBeEnabled();
+    const tilt = page.getByTestId("fieldTilt");
+    const flat = (await tilt.boundingBox())!;
+
+    await perspective.click();
+    const slider = page.getByRole("slider", { name: "Perspective" });
+    await slider.focus();
+    for (let i = 0; i < 40; i++) await page.keyboard.press("ArrowRight");
+    await expect(perspective).toHaveAccessibleName("Perspective, 40°");
+    // Leaning back, the field looks shorter on screen
+    await expect
+        .poll(async () => (await tilt.boundingBox())!.height)
+        .toBeLessThan(flat.height * 0.9);
+    await page.keyboard.press("Escape");
+
+    await page
+        .getByRole("button", { name: "Toggle timeline fullscreen" })
+        .click();
+    await expect(perspective).toHaveAccessibleName("Perspective, 0°");
+    await expect
+        .poll(async () => {
+            const box = (await tilt.boundingBox())!;
+            const inner = await tilt.evaluate((el) => el.clientHeight);
+            return Math.abs(box.height - inner);
+        })
+        .toBeLessThanOrEqual(1);
+});
