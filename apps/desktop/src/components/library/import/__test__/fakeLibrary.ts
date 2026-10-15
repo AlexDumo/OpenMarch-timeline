@@ -162,7 +162,7 @@ export function modelReport(
         source: measurements(6412),
         output: measurements(2000),
         materials: [],
-        metadata: { generator: null, copyright: null },
+        metadata: { generator: null, copyright: null, license: null },
         ...overrides,
     };
 }
