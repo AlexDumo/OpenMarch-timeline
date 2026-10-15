@@ -3,6 +3,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import { useUpdateSelectedMarchersOnSelectedPage } from "@/hooks/queries";
 import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
+import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { useActionHandler } from "../useActionHandler";
 import { useEditorReadiness } from "./useEditorReadiness";
 import { useUpdateCoordinates } from "./useUpdateCoordinates";
@@ -84,6 +85,12 @@ export function useCursorActionHandlers() {
     useActionHandler(
         "selectAllMarchers",
         () => {
+            // The new field (ADR 0005) selects through its editor
+            const editor = activeFieldEditor();
+            if (editor) {
+                editor.selectAll();
+                return;
+            }
             const canvas = window.canvas as OpenMarchCanvas | undefined;
             if (!canvas) {
                 return;

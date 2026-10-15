@@ -1,8 +1,10 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "../fixtures.mjs";
 import {
+    clickMarcher,
     drawnMarchers,
     expectCanvasMatchesShow,
+    selectedDrillNumbers,
     waitForField,
 } from "../app.mjs";
 import { seedShowSql } from "../seed.mjs";
@@ -282,6 +284,9 @@ test("a WebGL context that doesn't come back is replaced, without reopening the 
     expect((await quality(page)).contextLost).toBe(false);
     await expectCanvasMatchesShow(show);
     await expectDotsDrawn(page, before.dot);
+    // The new canvas takes the pointer: a click selects
+    await clickMarcher(page, "T2");
+    await expect.poll(() => selectedDrillNumbers(page)).toEqual(["T2"]);
 });
 
 test("the desktop app drops to low-quality mode when its GPU process crashes", async ({

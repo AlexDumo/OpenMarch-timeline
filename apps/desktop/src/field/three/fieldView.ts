@@ -61,6 +61,15 @@ export function fieldToElement(
     return { x: view.panX + x * view.zoom, y: view.panY + y * view.zoom };
 }
 
+/** The field point at a position in the element, in CSS pixels: the inverse of {@link fieldToElement}. */
+export function elementToField(
+    view: FieldView,
+    x: number,
+    y: number,
+): { x: number; y: number } {
+    return { x: (x - view.panX) / view.zoom, y: (y - view.panY) / view.zoom };
+}
+
 /**
  * The orthographic camera bounds, in field units, that draw `view`. `top` is
  * less than `bottom` because field y grows downward on screen.
