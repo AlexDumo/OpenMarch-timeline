@@ -221,10 +221,9 @@ export type MarcherLook = {
 };
 
 /**
- * A marcher's look from its appearance stack (highest priority first), merged as
- * `CanvasMarcher.setAppearance` draws it: each value from the first appearance that sets it, else
- * the field theme. The one resolver: `resolveAppearanceFromStack`, the drill-chart export and the
- * three.js field all use it, so they draw what the Fabric field draws.
+ * A marcher's look from its appearance stack (highest priority first): each value from the first
+ * appearance that sets it, else the field theme. The one resolver: `resolveAppearanceFromStack`, the drill-chart export and the
+ * three.js field all use it, so they draw the same look.
  */
 export function resolveMarcherLook(
     appearancesInput:

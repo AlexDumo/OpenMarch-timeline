@@ -5,13 +5,12 @@ import {
 } from "@openmarch/core";
 
 /**
- * The 2D field's layout, in field units: what `OpenMarchCanvas.createFieldGrid`
- * draws, element for element, minus Fabric's half-pixel offset (everything sits
- * exactly on its coordinates). One plan for everything that draws the field
- * flat: the drill chart SVG export (`drillChartSvg.ts`) and the new field
+ * The 2D field's layout, in field units. Everything sits exactly on its
+ * coordinates. One plan for everything that draws the field flat: the drill
+ * chart SVG export (`drillChartSvg.ts`) and the field
  * (`three/fieldGeometry.ts`). Change what the 2D field shows here, once.
  *
- * Renderer-free: no Fabric, no three.js, no DOM.
+ * Renderer-free: no three.js, no DOM.
  */
 
 export type FieldPlanLine = {
@@ -33,11 +32,11 @@ export type FieldPlanText = {
     /** The baseline. */
     y: number;
     fontSize: number;
-    /** A CSS font family, as Fabric names it. */
+    /** A CSS font family. */
     fontFamily: string;
     anchor: "start" | "middle" | "end";
     color: RgbaColor;
-    /** Extra space after each character, in field units (Fabric's `charSpacing`). */
+    /** Extra space after each character, in field units. */
     letterSpacing: number;
     /** Turned half a turn about its center (`textCenterY`), to read from the back sideline. */
     flipped: boolean;
@@ -85,17 +84,17 @@ export type FieldPlanOptions = {
 };
 
 const GRID_STROKE = FieldProperties.GRID_STROKE_WIDTH;
-/** Fabric's text box is 1.13 font sizes tall, with the baseline 0.778 of the way down */
+/** The text box is 1.13 font sizes tall, with the baseline 0.778 of the way down */
 const TEXT_BOX = 1.13;
 const BASELINE_FROM_TOP = TEXT_BOX * (1 - 0.222);
-/** From the middle of Fabric's text box to the baseline, in font sizes */
+/** From the middle of the text box to the baseline, in font sizes */
 export const BASELINE_BELOW_CENTER = BASELINE_FROM_TOP - TEXT_BOX / 2;
 const LABEL_FONT_SIZE = 20;
-/** Fabric names a font that doesn't exist, so the platform's fallback draws them. */
+/** A font that doesn't exist, so the platform's fallback draws the labels. */
 const LABEL_FONT = "mono";
-/** Fabric's default font, which the yard numbers use */
+/** The font the yard numbers use */
 const NUMBER_FONT = "Times New Roman";
-/** Yard numbers: Fabric `charSpacing` 160, in thousandths of an em */
+/** Yard numbers: letter spacing 160 thousandths of an em */
 const YARD_NUMBER_SPACING = 0.16;
 const HASH_WIDTH = 20;
 
@@ -141,14 +140,14 @@ const linesFrom = (from: number, interval: number, end: number): number[] => {
     return out;
 };
 
-/** Fabric's y loops start on the start line and only go back */
+/** The y loops start on the start line and only go back */
 const backFrom = (from: number, interval: number) => {
     const out: number[] = [];
     for (let i = from; i > 0; i -= interval) out.push(i);
     return out;
 };
 
-/** Where a field image goes, fit or fill (`OpenMarchCanvas.refreshBackgroundImageValues`) */
+/** Where a field image goes, fit or fill */
 export const fieldImagePlacement = (
     fieldProperties: Pick<
         FieldProperties,
@@ -261,7 +260,7 @@ export function planField2d(
         for (const yCheckpoint of fp.yCheckpoints) {
             if (!yCheckpoint.visible) continue;
             const y = checkpointY(fp, yCheckpoint);
-            // As wide as Fabric's (the hash width plus the yard line), clipped to the field
+            // As wide as the hash width plus the yard line, clipped to the field
             const half = (HASH_WIDTH + GRID_STROKE) / 2;
             const reference = yCheckpoint.useAsReference;
             line(

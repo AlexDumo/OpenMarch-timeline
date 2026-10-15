@@ -15,7 +15,7 @@ Props represent physical objects on the field (platforms, obstacles, floor marki
 |------|---------|
 | `src/global/classes/Prop.ts` | Types, constants, unit conversions |
 | `src/global/classes/PropVisualGroup.ts` | Aggregates visual elements per prop |
-| `src/global/classes/canvasObjects/CanvasProp.ts` | Fabric.js canvas object (extends CanvasMarcher) |
+| `src/global/classes/canvasObjects/CanvasProp.ts` | Canvas object (extends CanvasMarcher); upstream only, not on the three.js field |
 | `src/db-functions/prop.ts` | Database CRUD operations |
 | `src/hooks/queries/useProps.ts` | React Query hooks |
 | `src/stores/PropDrawingStore.ts` | Drawing mode state |
@@ -104,7 +104,7 @@ Default prop size: `DEFAULT_PROP_WIDTH = 15`, `DEFAULT_PROP_HEIGHT = 15` (pixels
 - `propId` - the prop's database id
 - `propObj` - the DatabaseProp data
 - `geometry` - the DatabasePropPageGeometry for current page
-- `shapeObject` - Fabric.js shape (rect, circle, or custom path)
+- `shapeObject` - the shape (rect, circle, or custom path)
 - Methods: `getDimensions()`, `getEdges()`, `setEdges()`
 
 `PropVisualGroup` is similar to `MarcherVisualGroup` but without the `canvasMarcher` property - it only has pathway/midpoint/endpoint visuals.

@@ -1,6 +1,6 @@
-/** A dot's radius in field units, as drawn (`MarchersLayer`) and as Fabric's `DOT_RADIUS`. */
+/** A dot's radius in field units, as drawn (`MarchersLayer`). */
 export const DOT_RADIUS = 5;
-/** Fabric's dot outline width, in field units. */
+/** A dot's outline width, in field units. */
 export const OUTLINE_WIDTH = 1;
 
 /**

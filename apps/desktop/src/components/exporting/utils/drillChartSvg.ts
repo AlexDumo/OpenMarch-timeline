@@ -13,11 +13,10 @@ import {
 
 /**
  * Drill chart SVGs drawn straight from show data, with no canvas (field renderer migration,
- * #206). The layout is the 2D field's (`OpenMarchCanvas.createFieldGrid`, `CanvasMarcher` and
- * the pathway objects), except that everything sits exactly on its coordinates:
+ * #206). The layout is the 2D field's (`fieldPlan.ts`, the marcher shapes and the pathways), and
+ * everything sits exactly on its coordinates:
  *
- * - Dots, pathways, midpoints and endpoints sit on their stored coordinates. Fabric drew them,
- *   and the field's lines, half a grid line down and right.
+ * - Dots, pathways, midpoints and endpoints sit on their stored coordinates.
  * - Centered text is centered by the SVG renderer (`text-anchor`), so it doesn't depend on the
  *   font measured where the export ran. Yard numbers are centered on their yard line.
  * - The border is one closed outline around the field.
@@ -218,7 +217,7 @@ export function dotLabelSvg(dot: DrillChartDot, theme: FieldTheme): string {
     });
 }
 
-/** A pathway with its midpoint and endpoint (`OpenMarchCanvas.renderTemporaryPathVisuals`) */
+/** A pathway with its midpoint and endpoint */
 const pathVisualsSvg = (
     start: { x: number; y: number },
     end: { x: number; y: number },

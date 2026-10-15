@@ -18,7 +18,7 @@ Marchers are the core entity in OpenMarch - they represent performers on the fie
 | `src/global/classes/MarcherPage.ts` | Position per page (junction entity) |
 | `src/global/classes/MarcherPageIndex.ts` | Efficient lookup maps |
 | `src/global/classes/MarcherVisualGroup.ts` | Aggregates canvas visuals per marcher |
-| `src/global/classes/canvasObjects/CanvasMarcher.ts` | Fabric.js canvas object |
+| `src/field/three/layers/MarchersLayer.tsx` | Draws every marcher on the field |
 | `src/db-functions/marcher.ts` | Database CRUD operations |
 | `src/db-functions/marcherPage.ts` | MarcherPage CRUD |
 | `src/hooks/queries/useMarchers.ts` | React Query hooks |
@@ -98,19 +98,12 @@ class MarcherPageIndex {
 }
 ```
 
-## Canvas Rendering
+## Field Rendering
 
-`CanvasMarcher` extends `fabric.Group` and contains:
-- `dotObject` - the visual dot on the field
-- `textLabel` - drill number label
-- `appearances[]` - layered appearance settings
-- Methods: `setMarcherCoords()`, `getMarcherCoords()`, `setAppearance()`, `setNextAnimation()`
-
-`MarcherVisualGroup` aggregates per-marcher:
-- `canvasMarcher` - the CanvasMarcher instance
-- `previousPathway` / `nextPathway` - path visuals
-- `previousMidpoint` / `nextMidpoint` - midpoint markers
-- `previousEndPoint` / `nextEndPoint` - endpoint markers
+The field (`src/field/`, ADR 0005) draws all marchers in one instanced layer (`three/layers/MarchersLayer.tsx`) and their drill numbers in another (`LabelsLayer.tsx`):
+- positions come from `three/fieldMarchers.ts` (`FieldMarchers`), sampled from the timeline resolver;
+- looks come from `resolveMarcherLook` (`src/entity-components/appearance.ts`) at the beat shown;
+- pathways, midpoints and endpoints are plans in `field/timelineOverlays.ts`.
 
 ## Query Patterns
 

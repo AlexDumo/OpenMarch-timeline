@@ -11,7 +11,7 @@ import {
 import { savedPosition, savedPositions, type Position } from "../positions.mjs";
 import { seedShowSql, type SeedPosition } from "../seed.mjs";
 
-// Nudges and the field's actions, unchanged on the new field (#196; #189
+// Nudges and the field's actions (#196; #189
 // user stories 44 and 61). They're app actions on the selection, so these
 // pin that they still reach the marchers the field selects. Align, swap and
 // set to previous page are in edit-positions.spec.mts.

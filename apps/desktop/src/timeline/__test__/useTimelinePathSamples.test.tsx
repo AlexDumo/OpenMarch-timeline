@@ -2,19 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { createResolver, type Resolver } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
-import type OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
-import type { MarcherVisualMap } from "@/hooks/queries";
 import { GOLDEN_FIXTURES } from "../fixtures/goldenFixtures";
 import { useTimelineResolverStore } from "../timelineStore";
 import { pathsIntoPage } from "../timelinePaths";
 import {
-    useTimelinePathRender,
+    useTimelinePathSamples,
     type PathRenderPage,
-} from "../useTimelinePathRender";
+} from "../useTimelinePathSamples";
 import { useTimelineStepSizes } from "../useTimelineStepSizes";
 
 /**
- * The hooks that put the resolver's paths on the canvas and in the inspector
+ * The hooks that give the field and the inspector the resolver's paths
  * (docs/timeline/phases/07-page-parity.md P7.10).
  */
 
@@ -40,17 +38,6 @@ const PAGES: PathRenderPage[] = [
     },
 ];
 
-const stubCanvas = () =>
-    ({
-        renderTimelinePathVisuals: vi.fn(),
-        removeTimelinePathways: vi.fn(),
-        sendCanvasMarchersToFront: vi.fn(),
-        requestRenderAll: vi.fn(),
-    }) as unknown as OpenMarchCanvas & {
-        renderTimelinePathVisuals: ReturnType<typeof vi.fn>;
-        removeTimelinePathways: ReturnType<typeof vi.fn>;
-    };
-
 const resolver = () =>
     createResolver(GOLDEN_FIXTURES.find((g) => g.name === "G8")!.build().show);
 
@@ -64,10 +51,8 @@ afterEach(() => {
 });
 
 const MARCHER_IDS = [1];
-const VISUALS = {} as MarcherVisualMap;
 
 const props = (
-    canvas: OpenMarchCanvas,
     enabled: boolean,
     overrides: Partial<{
         isPlaying: boolean;
@@ -76,14 +61,11 @@ const props = (
         stepSizeWarningsEnabled: boolean;
     }> = {},
 ) => ({
-    canvas,
     enabled,
     isPlaying: false,
     selectedPage: PAGES[1]!,
     pages: PAGES,
     marcherIds: MARCHER_IDS,
-    marcherVisuals: VISUALS,
-    fieldProperties,
     previousPathsEnabled: true,
     nextPathsEnabled: true,
     stepSizeWarningsEnabled: true,
@@ -99,135 +81,127 @@ const ready = (r: Resolver = resolver()) => {
     return r;
 };
 
-describe("useTimelinePathRender", () => {
-    it("draws the moves into and out of the selected page from the resolver", () => {
+describe("useTimelinePathSamples", () => {
+    it("samples the moves into and out of the selected page from the resolver", () => {
         const r = ready();
-        const canvas = stubCanvas();
-        renderHook(() => useTimelinePathRender(props(canvas, true)));
-
-        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(1);
-        const args = canvas.renderTimelinePathVisuals.mock.calls[0]![0];
-        expect(args.previousPaths).toEqual(
+        const { result } = renderHook(() =>
+            useTimelinePathSamples(props(true)),
+        );
+        expect(result.current.active).toBe(true);
+        expect(result.current.previousPaths).toEqual(
             pathsIntoPage(r, [1], PAGES[1], PAGES[0]),
         );
-        expect(args.nextPaths).toEqual(
+        expect(result.current.nextPaths).toEqual(
             pathsIntoPage(r, [1], PAGES[2], PAGES[1]),
         );
-        expect(canvas.removeTimelinePathways).not.toHaveBeenCalled();
     });
 
-    it("redraws when the resolver's version changes", () => {
+    it("resamples when the resolver's version changes", () => {
         ready();
-        const canvas = stubCanvas();
-        renderHook(() => useTimelinePathRender(props(canvas, true)));
-        act(() => useTimelineResolverStore.setState({ version: 2 }));
-        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(2);
-    });
-
-    it("removes the curved paths and draws nothing when disabled", () => {
-        ready();
-        const canvas = stubCanvas();
-        const { rerender } = renderHook(
-            ({ enabled }) => useTimelinePathRender(props(canvas, enabled)),
-            { initialProps: { enabled: true } },
+        const { result } = renderHook(() =>
+            useTimelinePathSamples(props(true)),
         );
-        rerender({ enabled: false });
-        expect(canvas.removeTimelinePathways).toHaveBeenCalledTimes(1);
-        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(1);
+        const first = result.current.previousPaths;
+        act(() => useTimelineResolverStore.setState({ version: 2 }));
+        expect(result.current.previousPaths).not.toBe(first);
+        expect(result.current.previousPaths).toEqual(first);
     });
 
-    it("neither samples nor draws while playing, and draws once playback stops", () => {
+    it("samples nothing and is inactive when disabled", () => {
         const r = ready();
         const spy = vi.spyOn(r, "positionAt");
-        const canvas = stubCanvas();
-        const { rerender } = renderHook(
+        const { result } = renderHook(() =>
+            useTimelinePathSamples(props(false)),
+        );
+        expect(result.current.active).toBe(false);
+        expect(result.current.previousPaths.size).toBe(0);
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("doesn't sample while playing, and samples once playback stops", () => {
+        const r = ready();
+        const spy = vi.spyOn(r, "positionAt");
+        const { result, rerender } = renderHook(
             ({ isPlaying }) =>
-                useTimelinePathRender(props(canvas, true, { isPlaying })),
+                useTimelinePathSamples(props(true, { isPlaying })),
             { initialProps: { isPlaying: true } },
         );
         act(() => useTimelineResolverStore.setState({ version: 2 }));
         expect(spy).not.toHaveBeenCalled();
-        expect(canvas.renderTimelinePathVisuals).not.toHaveBeenCalled();
-        expect(canvas.removeTimelinePathways).not.toHaveBeenCalled();
+        expect(result.current.active).toBe(false);
 
         rerender({ isPlaying: false });
-        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(1);
+        expect(result.current.active).toBe(true);
+        expect(result.current.previousPaths.size).toBe(1);
     });
 
-    it("keeps the samples and the drawn paths through Play and Stop on the same page", () => {
+    it("keeps the samples through Play and Stop on the same page", () => {
         const r = ready();
-        const canvas = stubCanvas();
-        const { rerender } = renderHook(
+        const { result, rerender } = renderHook(
             ({ isPlaying }) =>
-                useTimelinePathRender(props(canvas, true, { isPlaying })),
+                useTimelinePathSamples(props(true, { isPlaying })),
             { initialProps: { isPlaying: false } },
         );
-        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(1);
+        const first = result.current.previousPaths;
         const spy = vi.spyOn(r, "positionAt");
         rerender({ isPlaying: true });
+        expect(result.current.previousPaths).toBe(first);
         rerender({ isPlaying: false });
         expect(spy).not.toHaveBeenCalled();
-        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(1);
+        expect(result.current.previousPaths).toBe(first);
 
-        // A change while playing is drawn once playback stops
+        // A change while playing is sampled once playback stops
         rerender({ isPlaying: true });
         act(() => useTimelineResolverStore.setState({ version: 2 }));
-        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(1);
+        expect(result.current.previousPaths).toBe(first);
         rerender({ isPlaying: false });
-        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(2);
+        expect(result.current.previousPaths).not.toBe(first);
     });
 
     it("doesn't sample a side that can't show", () => {
         const r = ready();
-        const canvas = stubCanvas();
         // Previous paths off (never forced); next paths off and warnings off (nothing forces them)
-        renderHook(() =>
-            useTimelinePathRender(
-                props(canvas, true, {
+        const off = renderHook(() =>
+            useTimelinePathSamples(
+                props(true, {
                     previousPathsEnabled: false,
                     nextPathsEnabled: false,
                     stepSizeWarningsEnabled: false,
                 }),
             ),
-        );
-        const args = canvas.renderTimelinePathVisuals.mock.calls[0]![0];
-        expect(args.previousPaths.size).toBe(0);
-        expect(args.nextPaths.size).toBe(0);
+        ).result.current;
+        expect(off.previousPaths.size).toBe(0);
+        expect(off.nextPaths.size).toBe(0);
 
         // With warnings on, the next side may be forced on, so it is sampled
-        const forced = stubCanvas();
-        renderHook(() =>
-            useTimelinePathRender(
-                props(forced, true, {
+        const forced = renderHook(() =>
+            useTimelinePathSamples(
+                props(true, {
                     previousPathsEnabled: false,
                     nextPathsEnabled: false,
                     stepSizeWarningsEnabled: true,
                 }),
             ),
-        );
-        const forcedArgs = forced.renderTimelinePathVisuals.mock.calls[0]![0];
-        expect(forcedArgs.previousPaths.size).toBe(0);
-        expect(forcedArgs.nextPaths).toEqual(
+        ).result.current;
+        expect(forced.previousPaths.size).toBe(0);
+        expect(forced.nextPaths).toEqual(
             pathsIntoPage(r, [1], PAGES[2], PAGES[1]),
         );
     });
 
-    it("redraws a toggle change without resampling the other side", () => {
+    it("keeps the other side's samples when a toggle changes", () => {
         const r = ready();
-        const canvas = stubCanvas();
-        const { rerender } = renderHook(
-            ({ stepSizeWarningsEnabled }) =>
-                useTimelinePathRender(
-                    props(canvas, true, { stepSizeWarningsEnabled }),
-                ),
-            { initialProps: { stepSizeWarningsEnabled: true } },
+        const { result, rerender } = renderHook(
+            ({ nextPathsEnabled }) =>
+                useTimelinePathSamples(props(true, { nextPathsEnabled })),
+            { initialProps: { nextPathsEnabled: true } },
         );
+        const first = result.current;
         const spy = vi.spyOn(r, "positionAt");
-        rerender({ stepSizeWarningsEnabled: false });
-        expect(canvas.renderTimelinePathVisuals).toHaveBeenCalledTimes(2);
-        const [first, second] = canvas.renderTimelinePathVisuals.mock.calls;
-        expect(second![0].previousPaths).toBe(first![0].previousPaths);
-        expect(second![0].nextPaths).toBe(first![0].nextPaths);
+        // Warnings still force the next side on, so neither side resamples
+        rerender({ nextPathsEnabled: false });
+        expect(result.current.previousPaths).toBe(first.previousPaths);
+        expect(result.current.nextPaths).toBe(first.nextPaths);
         expect(spy).not.toHaveBeenCalled();
     });
 });

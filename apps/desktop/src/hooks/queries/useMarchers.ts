@@ -19,7 +19,6 @@ import {
 } from "@/db-functions";
 import Marcher, { dbMarcherToMarcher } from "@/global/classes/Marcher";
 import { DEFAULT_STALE_TIME } from "./constants";
-import { marcherWithVisualsKeys } from "./useMarchersWithVisuals";
 
 const { marchers } = schema;
 
@@ -91,9 +90,6 @@ export const createMarchersMutationOptions = (qc: QueryClient) => {
             // Invalidate all marcher queries
             await qc.invalidateQueries({
                 queryKey: [KEY_BASE],
-            });
-            void qc.invalidateQueries({
-                queryKey: marcherWithVisualsKeys.all(),
             });
         },
         onError: (e, variables) => {

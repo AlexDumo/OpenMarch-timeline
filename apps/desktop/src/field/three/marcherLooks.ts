@@ -34,7 +34,7 @@ const write = (out: Float32Array, i: number, color: RgbaColor) => {
 
 /**
  * Writes each marcher's look, resolved from its appearance stack by the
- * shared {@link resolveMarcherLook} (as the Fabric field and the exports), into
+ * shared {@link resolveMarcherLook} (as the exports), into
  * the layers' per-instance buffers. A null stack is the theme's default.
  */
 export function writeMarcherLooks(

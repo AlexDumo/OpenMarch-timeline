@@ -17,9 +17,7 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // 33). The field's selection is the app's: the inspector shows what the field
 // selects, and a selection made elsewhere shows on the field.
 //
-// Changes from today's Fabric field, decided in #189, are the "change:"
-// scenarios, marked `test.fail(field === "fabric", ...)`: Fabric is pinned as
-// differing, and the new field must pass.
+// The "change:" scenarios are the rules-table changes decided in #189.
 
 // Four trumpets and two baritones near the middle of the field, all in view.
 const POSITIONS: SeedPosition[] = [
@@ -133,12 +131,7 @@ test("a selection made outside the field shows on the field", async ({
 
 test("change: clicking one of several selected marchers selects only it (user story 23)", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric keeps the whole selection when you click one of its marchers",
-    );
     const { page } = show;
     await page.keyboard.press("ControlOrMeta+a");
     await expect.poll(() => selectedDrillNumbers(page)).toHaveLength(6);
@@ -149,12 +142,7 @@ test("change: clicking one of several selected marchers selects only it (user st
 
 test("change: clicking empty field inside a selection's box clears it (user story 30)", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric keeps the selection on a click anywhere inside its box",
-    );
     const { page } = show;
     await clickMarcher(page, "T1");
     await clickMarcher(page, "T4", { add: true });
@@ -169,12 +157,7 @@ test("change: clicking empty field inside a selection's box clears it (user stor
 
 test("change: Shift+click on empty field keeps the selection (rules table: Shift adds)", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric clears the selection on a Shift+click on empty field",
-    );
     const { page } = show;
     await clickMarcher(page, "T1");
     await clickMarcher(page, "T2", { add: true });
@@ -189,12 +172,7 @@ test("change: Shift+click on empty field keeps the selection (rules table: Shift
 
 test("change: Ctrl/Cmd+A keeps every marcher selected when they all are (user story 31)", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric's second Ctrl+A clears the selection",
-    );
     const { page } = show;
     await page.keyboard.press("ControlOrMeta+a");
     await expect.poll(() => selectedDrillNumbers(page)).toHaveLength(6);
@@ -205,18 +183,13 @@ test("change: Ctrl/Cmd+A keeps every marcher selected when they all are (user st
 
 test("change: a press that moves under 4 screen px is a click and moves nothing (rules table: Click vs drag)", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric drags a marcher on any movement after 300 ms",
-    );
     const { page } = show;
     const before = await savedPositions(show, 0);
     const t2 = await screenOf(page, "T2");
     await page.mouse.move(t2.x, t2.y);
     await page.mouse.down();
-    // Slowly, past Fabric's 300 ms click limit
+    // Slowly: a click has no time limit, only a distance one
     await page.waitForTimeout(400);
     await page.mouse.move(t2.x + 2, t2.y + 2, { steps: 4 });
     await page.mouse.up();

@@ -4,8 +4,8 @@ import { drawnMarchers, expectCanvasMatchesShow } from "../app.mjs";
 import { seedShowSql } from "../seed.mjs";
 
 /**
- * Every dot is drawn over every drill number, as on Fabric and in the drill
- * chart export (#206: each page brought Fabric's dots to the front). Where
+ * Every dot is drawn over every drill number, as in the drill chart export
+ * (#206, which draws each page's dots in front). Where
  * marchers crowd, a neighbor's dot covers a drill number; the number never
  * covers a dot (#208, owner decision).
  */
@@ -71,7 +71,7 @@ async function screenPixels(
 const near = (a: number[], b: number[]) =>
     a.every((value, i) => Math.abs(value - b[i]!) <= 40);
 
-test("a neighbor's dot covers a drill number, as on Fabric and in the export", async ({
+test("a neighbor's dot covers a drill number, as in the export", async ({
     show,
 }) => {
     const { page } = show;

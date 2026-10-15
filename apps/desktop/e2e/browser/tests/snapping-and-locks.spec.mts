@@ -22,10 +22,8 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // whole rounding steps; Shift turns snapping off; Alt moves at a quarter of
 // the pointer's speed with snapping off; Lock X and Lock Y hold an axis.
 //
-// Changes from today's Fabric field, decided in #189, are the "change:"
-// scenarios, marked `test.fail(field === "fabric", ...)`: Fabric is pinned as
-// differing, and the new field must pass. Lock X / Lock Y leaving shape
-// handles free is #198's and #204's to pin: there are no shape handles here.
+// The "change:" scenarios are the rules-table changes decided in #189. Lock X
+// / Lock Y leaving shape handles free is #198's and #204's to pin: there are no shape handles here.
 
 // Four trumpets on the home page, all in view, none on the grid.
 const PAGE_0: SeedPosition[] = [
@@ -144,8 +142,8 @@ async function dragLegs(
 }
 
 /**
- * Within 1.5 field units on both axes: Fabric draws dots half a unit off, and
- * the mouse lands on whole screen pixels (over a unit apart when zoomed out).
+ * Within 1.5 field units on both axes: the mouse lands on whole screen pixels
+ * (over a unit apart when zoomed out).
  */
 const near = (a: { x: number; y: number }, b: { x: number; y: number }) =>
     Math.abs(a.x - b.x) < 1.5 && Math.abs(a.y - b.y) < 1.5;
@@ -208,12 +206,10 @@ test("rounding on: a dragged marcher snaps onto the rounding grid, and the drop 
 
 test("change: rounding on: a dragged group moves in whole rounding steps and keeps each marcher's offset from the grid", async ({
     show,
-    field,
 }) => {
-    test.fail(field === "fabric", "Fabric doesn't snap a group drag");
     const { page } = show;
     await roundToSteps(show);
-    // T3 is on the top edge of the selection's box, clear of Fabric's handles
+    // T3 is on the top edge of the selection's box, clear of its handles
     await clickMarcher(page, "T1");
     await clickMarcher(page, "T3", { add: true });
     await clickMarcher(page, "T4", { add: true });
@@ -267,9 +263,7 @@ test("rounding on: Shift during a drag turns snapping off", async ({
 
 test("change: rounding on: Alt during a drag moves the marcher at a quarter of the pointer's speed, with snapping off", async ({
     show,
-    field,
 }) => {
-    test.fail(field === "fabric", "Fabric has no precision drag");
     const { page } = show;
     await roundToSteps(show);
     const grid = await fieldGrid(show);
@@ -286,9 +280,7 @@ test("change: rounding on: Alt during a drag moves the marcher at a quarter of t
 
 test("change: rounding on: pressing Alt mid-drag goes on slowly from where the marcher is drawn, without a jump", async ({
     show,
-    field,
 }) => {
-    test.fail(field === "fabric", "Fabric has no precision drag");
     const { page } = show;
     await roundToSteps(show);
     const grid = await fieldGrid(show);

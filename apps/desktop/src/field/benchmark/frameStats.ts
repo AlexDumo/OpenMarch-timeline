@@ -35,7 +35,7 @@ export type FrameStats = {
     cpuAvg: number;
     cpuP95: number;
     cpuMax: number;
-    /** Draw calls in the last frame; null on Fabric, which draws with Canvas2D. */
+    /** Draw calls in the last frame; null where there are none to count. */
     drawCalls: number | null;
 };
 
@@ -45,12 +45,15 @@ export type BenchmarkResult =
 
 /** The machine and field a run measured, so numbers can be compared. */
 export type BenchmarkEnvironment = {
-    /** Which field was measured: the new field or Fabric (until #209). */
-    field: "three" | "fabric";
+    /**
+     * Which field was measured. Only the three.js field now; builds before
+     * fork #209 also measured the Canvas2D field, so reports name it.
+     */
+    field: "three";
     /** The WebGL renderer string, e.g. "ANGLE (Intel, … UHD Graphics 620 …)". */
     renderer: string | null;
     gl: GlKind | null;
-    /** The new field's quality mode, and why it's low; "Canvas2D" on Fabric. */
+    /** The field's quality mode, and why it's low. */
     quality: string;
     /** Device pixels per CSS pixel the field draws at. */
     pixelRatio: number | null;
@@ -129,7 +132,7 @@ export function benchmarkMarkdown({
         "| | |",
         "| --- | --- |",
         `| Renderer | ${env.renderer ?? "none"} (${env.gl ?? "unknown"}) |`,
-        `| Field | ${env.field === "fabric" ? "Fabric" : "new field"}, ${env.quality}, ${env.width} × ${env.height} CSS px at ${env.pixelRatio ?? "?"}× |`,
+        `| Field | three.js field, ${env.quality}, ${env.width} × ${env.height} CSS px at ${env.pixelRatio ?? "?"}× |`,
         `| Marchers | ${env.marchers} |`,
         `| Build | ${env.build} |`,
         `| Browser | ${env.userAgent} |`,

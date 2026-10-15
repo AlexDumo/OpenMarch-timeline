@@ -2,11 +2,13 @@
 
 # Porting a Fabric Feature to the New Field
 
+**Fabric is gone as of #209.** The in-flight Fabric features (#181, #187,
+#188, #182, #114) must port to the new field by this guide before they can
+land on `main`.
+
 Field work that was still in progress on Fabric when the migration started
 isn't ported by the migration (owner decision, 2026-10-15). This guide is for
-whoever moves one of those features onto the new field. Usually that's after
-#209 deletes Fabric. Before #209 the [field freeze](README.md#field-freeze)
-holds, so build on the new field only.
+whoever moves one of those features onto the new field.
 
 Read [ADR 0005](../adr/0005-three-field-renderer.md), the
 [implementation plan](implementation-plan.md) (architecture rules and the
@@ -124,7 +126,7 @@ listed. #237 (#198) and #238 (#203) touch `MarcherRotationInput.tsx` and
 | **#181** `shapes/box-v1`: box shape tool, with placed boxes (#187 `shapes/placed-boxes`) and box selection (#188 `shapes/box-select`) merged in | Many; see [below](#box-v1-181-with-187-and-188)                                                                         | Port on hold (#204); decisions first        |
 | **#182** `tempo/rebase-main`: tempo lab                                                                                                         | Mounts `<TapTheBeatPanel />` in Fabric's `Canvas.tsx`. Nothing else.                                                    | Mount it beside the field instead           |
 | **#114** `timeline/p8-12-replan` (docs only)                                                                                                    | None of its own; the P8.12 plan it records names `Canvas.tsx` and the canvas listeners as readers of `useSelectedPage`. | Update the plan's list                      |
-| P7.11 spec-shape handles (on `main` and `field-renderer`, not a PR)                                                                             | `useTimelineShapeCanvas.ts`, `TimelineShapeOverlay.ts`, `isTimelineShapeHandle` in `canvasListeners.selection.ts`       | Not ported by any ticket; decide with #181  |
+| P7.11 spec-shape handles (on `main` and `field-renderer`, not a PR)                                                                             | `useTimelineShapeCanvas.ts`, `TimelineShapeOverlay.ts`, `isTimelineShapeHandle` in `canvasListeners.selection.ts`       | Dropped; deleted in #209 (owner decision)   |
 | `shapes-draw`, `timeline/shapes`                                                                                                                | Earlier shape UI                                                                                                        | None: both are ancestors of `shapes/box-v1` |
 
 No Fabric field code in: #227 (stop returns), #216 (playback speed), #137
@@ -149,15 +151,16 @@ list with that.
 
 ### P7.11 spec-shape handles
 
-The inspector's shape editor (`components/inspector/TimelineShapesEditor.tsx`)
-draws the picked shape on Fabric with handles to drag
-(`timeline/useTimelineShapeCanvas.ts`, `TimelineShapeOverlay.ts`; geometry
-and commits in `timeline/timelineShapeCanvas.ts`, which has no Fabric). No
-migration ticket ports it, and box v1 deletes it (commit `44ac11ba8`). Decide
-with #181 whether it's dropped or ported. A port keeps
-`timelineShapeCanvas.ts` (`shapeOutline`, `shapeHandles`, `dragHandle`, the
-store's `commit`) and replaces the overlay with an SVG component in
-`FieldOverlay` plus a handle gesture on the `HandleGesture` base.
+Dropped (owner decision on #209). The inspector's shape editor
+(`components/inspector/TimelineShapesEditor.tsx`) drew the picked shape on
+Fabric with handles to drag (`timeline/useTimelineShapeCanvas.ts`,
+`TimelineShapeOverlay.ts`; geometry and commits in
+`timeline/timelineShapeCanvas.ts`). #209 deleted all three, since nothing
+else used the geometry; the inspector still edits shapes through its inputs.
+A later port can take `timelineShapeCanvas.ts` (`shapeOutline`,
+`shapeHandles`, `dragHandle`, the store's `commit`) back from
+`field-renderer-pre-209` and draw the handles as an SVG component in
+`FieldOverlay`, with a handle gesture on the `HandleGesture` base.
 
 ### Box v1 (#181, with #187 and #188)
 

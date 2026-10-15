@@ -7,8 +7,8 @@ import { test, expect, type Show } from "../fixtures.mjs";
 import { seedShowSql } from "../seed.mjs";
 
 /**
- * The video export (#207) draws its frames through the new field off screen,
- * whichever field is on screen. These check the video file it saves: its
+ * The video export (#207) draws its frames through the field off screen.
+ * These check the video file it saves: its
  * size and length, and where the marchers are in its frames, against the
  * show file. Frames are read with ffmpeg.
  */
@@ -119,7 +119,7 @@ function frameAt(file: string, seconds: number) {
 const close = (a: number[], b: number[]) =>
     a.every((value, i) => Math.abs(value - b[i]) <= 40);
 
-test.use({ seedSql: seed, webgl: true });
+test.use({ seedSql: seed });
 // Every frame is drawn and encoded on this machine's CPU
 test.setTimeout(240_000);
 

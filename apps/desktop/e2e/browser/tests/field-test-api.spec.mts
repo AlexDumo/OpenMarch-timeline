@@ -9,8 +9,8 @@ import {
 } from "../app.mjs";
 import { seedShowSql, type SeedPosition } from "../seed.mjs";
 
-// Pins what the field test API reads on today's field, so a new field
-// renderer has to read the same.
+// Pins what the field test API reads, so the scenarios that read through it
+// read what the user sees.
 
 // Four trumpets near the middle of the field, all in view.
 const POSITIONS: SeedPosition[] = [
@@ -108,8 +108,7 @@ test("reads the view", async ({ show }) => {
         x: t1.screen.x - t1.x * zoom - field!.x,
         y: t1.screen.y - t1.y * zoom - field!.y,
     };
-    // Within a twentieth of a pixel: the field's (0, 0), not the renderer's
-    // (Fabric's is half a grid line off).
+    // Within a twentieth of a pixel: the field's (0, 0), not the renderer's.
     expect(origin.x).toBeCloseTo(pan.x, 1);
     expect(origin.y).toBeCloseTo(pan.y, 1);
 });

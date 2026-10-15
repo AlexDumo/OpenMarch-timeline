@@ -9,19 +9,17 @@ import { makeStressShow } from "./stressShow.mjs";
 
 /**
  * The in-app field benchmark (#205) on the parity gate's corpus (#208): both
- * demo shows and the 1,925-marcher stress show, on the field `FIELD` picks.
+ * demo shows and the 1,925-marcher stress show.
  * Not a pass/fail suite: it only runs with `BENCHMARK_OUT=<folder>`, and
  * writes each report there as JSON, plus one line per scenario to
- * `summary.tsv` (show, field, scenario, fps, p95 ms, CPU avg ms, renderer). The browser build is a
+ * `summary.tsv` (show, scenario, fps, p95 ms, CPU avg ms, renderer). The browser build is a
  * production build; headless Chromium draws WebGL in software, so its numbers
  * are lower bounds.
  *
- *     BENCHMARK_OUT=/tmp/bench FIELD=fabric pnpm exec playwright test --project=render benchmark
- *     BENCHMARK_OUT=/tmp/bench FIELD=three pnpm exec playwright test --project=render benchmark
+ *     BENCHMARK_OUT=/tmp/bench pnpm exec playwright test --project=render benchmark
  */
 
 const out = process.env.BENCHMARK_OUT;
-const FIELD = process.env.FIELD === "three" ? "three" : "fabric";
 const desktop = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
     "../../..",
@@ -65,7 +63,7 @@ for (const show of SHOWS)
             );
             fs.mkdirSync(out!, { recursive: true });
             fs.writeFileSync(
-                path.join(out!, `${show.name}-${FIELD}.json`),
+                path.join(out!, `${show.name}.json`),
                 JSON.stringify(report, null, 2),
             );
             const env = report.environment;
@@ -74,7 +72,6 @@ for (const show of SHOWS)
                     path.join(out!, "summary.tsv"),
                     [
                         show.name,
-                        FIELD,
                         result.kind,
                         ...("stats" in result
                             ? [

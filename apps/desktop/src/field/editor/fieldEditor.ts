@@ -236,7 +236,7 @@ export class FieldEditor {
             this.lastClick = null;
             this.ignoredButton = pointer.button;
             // The line tool's presses draw its line and never select (story 20).
-            // Ctrl/Cmd+click doesn't touch the line, as on Fabric
+            // Ctrl/Cmd+click doesn't touch the line
             if (!taken && !pointer.ctrl && !pointer.meta)
                 this.lineTool?.press(pointer);
             return true;

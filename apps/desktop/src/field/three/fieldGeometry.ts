@@ -8,13 +8,12 @@ import {
 } from "@/field/fieldPlan";
 
 /**
- * The field's rectangles and text in field units, for the new 2D field.
+ * The field's rectangles and text in field units.
  *
  * The layout is `planField2d` (`src/field/fieldPlan.ts`), the one the drill
- * chart export draws: today's Fabric field minus its half-pixel offset. This
- * module only turns the plan's lines and border into rectangles for one
- * instanced draw, and its text into SDF labels. Change what the field shows
- * there, once, for both.
+ * chart export draws. This module only turns the plan's lines and border into
+ * rectangles for one instanced draw, and its text into SDF labels. Change
+ * what the field shows there, once, for both.
  */
 
 export type FieldRects = {

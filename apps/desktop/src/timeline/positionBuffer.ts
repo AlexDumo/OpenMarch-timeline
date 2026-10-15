@@ -1,10 +1,10 @@
 import { beatAtTime, type BeatTiming } from "./timeMap";
 
 /**
- * Every marcher's position at one beat, in one reused buffer, for render loops: the Fabric field
- * (`timelineCanvas.ts`), the three.js field (`src/field/three`) and the 3D View
- * (`view3d/positions.ts`) all sample the resolver through this, so they agree on where a marcher
- * is at a time. Pure: no store, no renderer.
+ * Every marcher's position at one beat, in one reused buffer, for render
+ * loops. The field (`src/field/three`) and the 3D View (`view3d/positions.ts`)
+ * both sample the resolver through this, so they agree on where a marcher is
+ * at a time. Pure: no store, no renderer.
  */
 
 /**
@@ -18,7 +18,7 @@ export interface PositionSource {
     positionsAt(beat: number, out: Float64Array): boolean;
 }
 
-/** The fields of a drawn marcher `forEachMarcher` reads. `CanvasMarcher` satisfies this. */
+/** The fields of a drawn marcher `forEachMarcher` reads. */
 export interface MarcherWithId {
     readonly marcherObj: { readonly id: number };
 }
@@ -97,7 +97,7 @@ export class PositionBuffer {
  * The resolver beat to draw at a playback time.
  *
  * @param beats the show's beats, ascending by position, with cumulative timestamps (seconds)
- * @param timeMilliseconds playback time in milliseconds, as `useAnimation` passes it around
+ * @param timeMilliseconds playback time in milliseconds, as the audio clock gives it
  */
 export function playbackBeat(
     beats: readonly BeatTiming[],

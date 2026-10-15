@@ -4,7 +4,7 @@ import {
     STEP_SIZE_WARNING_COLOR,
     STEP_SIZE_WARNING_STROKE_WIDTH,
     WARNING_PATHWAY_DASH,
-} from "@/global/classes/canvasObjects/stepSizeWarning";
+} from "@/timeline/stepSizeWarning";
 import type { CollisionData } from "@/global/classes/CollisionDetection";
 import type { TimelinePath } from "@/timeline/timelinePaths";
 import type {
@@ -14,20 +14,20 @@ import type {
 } from "@/timeline/timelineFocusScene";
 
 /**
- * What the new field draws for the timeline (fork #201): pathways, midpoints
- * and endpoints with step-size warnings, an isolated move's focus scene and
+ * What the field draws for the timeline (fork #201): pathways, midpoints and
+ * endpoints with step-size warnings, an isolated move's focus scene and
  * collision markers, as plain strokes and dots. Renderer-independent: the
  * three.js layers draw these plans, and the unit tests read them. Each plan
- * follows the Fabric object it replaces, minus the half-grid-line offset (the
- * dot position rule in docs/field/implementation-plan.md).
+ * sits on its coordinates, with no half-grid-line offset (the dot position
+ * rule in docs/field/implementation-plan.md).
  */
 
 /** `[r, g, b, a]`, 0 to 1. */
 export type Rgba = readonly [number, number, number, number];
 
 /**
- * Whether sizes are in field units (they scale with the zoom, as Fabric
- * objects do) or in CSS pixels (the same on screen at any zoom).
+ * Whether sizes are in field units (they scale with the zoom) or in CSS
+ * pixels (the same on screen at any zoom).
  */
 export type OverlayUnits = "field" | "screen";
 
@@ -90,7 +90,7 @@ export function hexRgba(hex: string, alpha = 1): Rgba {
 }
 
 // ---------------------------------------------------------------------------
-// Pathways (P7.10): `OpenMarchCanvas.renderTimelinePathVisuals`
+// Pathways (P7.10)
 // ---------------------------------------------------------------------------
 
 /** `Pathway`'s `DEFAULT_PATHWAY_STROKE_WIDTH`, in field units. */
@@ -116,11 +116,10 @@ export type PathOverlayInput = {
 };
 
 /**
- * The selected page's paths, midsets and endpoints, as Fabric draws them in
- * timeline mode: each side in its theme color, or dashed, thicker and red
- * when its fastest stretch is over the step-size threshold. A next path over
- * the threshold shows even with its toggle off; a previous path never does
- * (`evaluatePathWarning`).
+ * The selected page's paths, midsets and endpoints: each side in its theme
+ * color, or dashed, thicker and red when its fastest stretch is over the
+ * step-size threshold. A next path over the threshold shows even with its
+ * toggle off; a previous path never does (`evaluatePathWarning`).
  */
 export function planPathOverlay(input: PathOverlayInput): OverlayPlan {
     const strokes: StrokePlan[] = [];
@@ -334,9 +333,9 @@ const collisionLabelY = (c: Pick<CollisionData, "y" | "distance">) =>
     c.y - COLLISION_FONT_SIZE - c.distance / 2;
 
 /**
- * The collisions on the selected page, as Fabric's `CollisionMarker`s: a disc
- * as wide as the two marchers are apart, centered between them, and the pair's
- * labels centered `12 + r / 2` field units above its center.
+ * The collisions on the selected page: a disc as wide as the two marchers
+ * are apart, centered between them, and the pair's labels centered
+ * `12 + r / 2` field units above its center.
  */
 export function planCollisionOverlay(
     collisions: readonly CollisionData[],
@@ -363,9 +362,8 @@ export function planCollisionOverlay(
 }
 
 /**
- * The view "Zoom to collisions" sets, as `CanvasStore.zoomToCollisions`
- * computes it from Fabric's marker objects: the discs' bounds and their
- * labels' centers (which count as points), padded by 100 field units,
+ * The view "Zoom to collisions" sets: the discs' bounds and their labels'
+ * centers (which count as points), padded by 100 field units,
  * centered, at 70% of the zoom that fits them (never over 1.5 before that). Null with no
  * collisions. `zoom` is CSS pixels per field unit and `panX`, `panY` where
  * field (0, 0) sits, as the field view store holds them.

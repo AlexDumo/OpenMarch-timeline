@@ -99,7 +99,7 @@ describe("pointInPolygon", () => {
         expect(pointInPolygon({ x: 8, y: 5 }, figure8)).toBe(true);
         expect(pointInPolygon({ x: 5, y: 2 }, figure8)).toBe(false);
         expect(pointInPolygon({ x: 5, y: 8 }, figure8)).toBe(false);
-        // Around the same square twice: covered twice is outside, as Fabric's lasso
+        // Around the same square twice: covered twice is outside
         expect(pointInPolygon({ x: 5, y: 5 }, [...square, ...square])).toBe(
             false,
         );

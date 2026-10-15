@@ -4,9 +4,9 @@ import { readField, waitForIdle } from "../app.mjs";
 import type { Show } from "../fixtures.mjs";
 
 // Navigation on the field (fork #194): wheel, trackpad, pinch, pan drags,
-// limits, the zoom controls, fullscreen and touch. Pinned on Fabric first; the
-// two decided changes (#189's rules table, "Panning" and "Alt") are marked
-// where Fabric fails them. The view is read only through the field test API.
+// limits, the zoom controls, fullscreen and touch, with the two decided
+// changes in #189's rules table ("Panning" and "Alt"). The view is read only
+// through the field test API.
 
 type View = { zoom: number; pan: { x: number; y: number } };
 
@@ -51,8 +51,7 @@ const fieldPointAt = (v: View, x: number, y: number) => ({
 });
 
 /**
- * Within a pixel or two: Fabric reports its field half a grid line off, and
- * rounds the field's size to whole pixels.
+ * Within a pixel or two: the field's size is rounded to whole pixels.
  */
 const expectNear = (actual: number, expected: number, within = 1.5) =>
     expect(Math.abs(actual - expected)).toBeLessThanOrEqual(within);
@@ -290,11 +289,7 @@ test("right-drag pans one to one", async ({ show }) => {
     expect((await readField(page)).activeGesture).toBeNull();
 });
 
-test("middle-drag pans one to one", async ({ show, field }) => {
-    test.fail(
-        field === "fabric",
-        "Decided change (#189, Panning): middle-drag never panned on Fabric",
-    );
+test("middle-drag pans one to one", async ({ show }) => {
     const { page } = show;
     const before = await openedView(show);
     await dragField(
@@ -310,11 +305,7 @@ test("middle-drag pans one to one", async ({ show, field }) => {
     expectNear(after.pan.y, before.pan.y + 60, 0.01);
 });
 
-test("Alt+drag doesn't pan", async ({ show, field }) => {
-    test.fail(
-        field === "fabric",
-        "Decided change (#189, Alt): Alt+drag panned on Fabric",
-    );
+test("Alt+drag doesn't pan", async ({ show }) => {
     const { page } = show;
     const before = await openedView(show);
     await dragField(

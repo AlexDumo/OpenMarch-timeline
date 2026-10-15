@@ -15,10 +15,8 @@ import { seedShowSql, type SeedPosition } from "../seed.mjs";
 // marquee and the lasso. The field's selection is the app's: the inspector
 // shows what they select.
 //
-// The marquee is pinned on Fabric; the "change:" scenarios are rules-table
-// changes, marked `test.fail(field === "fabric", ...)`. The lasso is a new
-// input (double-click-and-drag; Fabric's was Shift+drag), so its scenarios
-// run on the new field only.
+// The "change:" scenarios are the rules-table changes decided in #189. The
+// lasso is double-click-and-drag (rules table: Lasso).
 
 // Four trumpets and two baritones near the middle of the field, all in view,
 // and a hidden flute (its section's appearance) standing between T2 and T3.
@@ -227,12 +225,7 @@ test.describe("marquee", () => {
 
     test("change: Shift+drag on empty field adds a marquee to the selection, and draws no lasso (rules table: Shift)", async ({
         show,
-        field,
     }) => {
-        test.fail(
-            field === "fabric",
-            "Fabric draws a lasso on Shift+drag, which selects nothing unless closed",
-        );
         const { page } = show;
         await clickMarcher(page, "B2");
         await expectSelected(page, ["B2"]);
@@ -249,13 +242,6 @@ test.describe("marquee", () => {
 });
 
 test.describe("lasso", () => {
-    test.beforeEach(({ field }) => {
-        test.skip(
-            field === "fabric",
-            "A new input: Fabric's lasso is Shift+drag (rules table: Lasso)",
-        );
-    });
-
     test("double-click-and-drag draws a lasso that selects the marchers inside it, replacing the selection", async ({
         show,
     }) => {

@@ -24,11 +24,11 @@ import type { FieldMarchers } from "./fieldMarchers";
 import { useFieldViewStore, type FieldView } from "./fieldView";
 
 /**
- * The kept marks on the new field (docs/timeline/ui.md UI-18; fork #201): a
- * broken chain beside each marcher kept on the current page, in an SVG over
- * the canvas, and the tooltip of the mark the pointer rests on. As on Fabric,
- * they hide while playing, while a scrub is down and while a move is isolated,
- * and a hidden marcher has no mark.
+ * The kept marks on the field (docs/timeline/ui.md UI-18; fork #201): a broken
+ * chain beside each marcher kept on the current page, in an SVG over the
+ * canvas, and the tooltip of the mark the pointer rests on. They hide while
+ * playing, while a scrub is down and while a move is isolated, and a hidden
+ * marcher has no mark.
  *
  * React renders the marks only when they change; {@link KeptMarksPlacer}
  * (inside the Canvas) moves them in its frame hook, from the drawn marchers
@@ -167,7 +167,7 @@ export function KeptMarksPlacer({
                     view.panY + box.y * view.zoom
                 }) scale(${size})`,
             );
-            // One CSS pixel wide at any size, as Fabric's `1 / zoom`
+            // One CSS pixel wide at any size
             element
                 .querySelector(".kept-mark-backing")
                 ?.setAttribute("stroke-width", String(1 / size));
@@ -190,7 +190,7 @@ function indexOf(marchers: FieldMarchers): Map<number, number> {
 }
 
 /**
- * The tooltip of the mark the pointer rests on, as on Fabric: after
+ * The tooltip of the mark the pointer rests on: after
  * {@link KEPT_MARK_TOOLTIP_DELAY} over a mark or its dot, gone on a press, a
  * move off it, or leaving the field. Listens on `target` (the field's element)
  * while marks show.
@@ -271,7 +271,7 @@ export function useKeptMarkTooltip({
     return tooltip;
 }
 
-/** A kept mark's tooltip, as on Fabric (`TimelineKeptMarks`). */
+/** A kept mark's tooltip. */
 export function KeptMarkTooltipView({
     tooltip,
 }: {

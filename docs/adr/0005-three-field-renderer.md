@@ -1,6 +1,6 @@
 # 0005: A three.js field behind a renderer-independent editor
 
-- Status: accepted
+- Status: accepted; implemented (Fabric removed in fork #209, 2026-10-15)
 - Date: 2026-10-14
 - Spec: fork issue #189. Work packages: [docs/field](../field/README.md),
   tickets #190 to #209.

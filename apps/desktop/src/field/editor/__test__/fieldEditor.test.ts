@@ -1160,8 +1160,8 @@ describe("FieldEditor rotation typed into the inspector (user story 54)", () => 
 
 describe("FieldEditor a pointer lost mid-gesture (#208)", () => {
     // The renderer cancels the press when its pointer capture is lost: an OS
-    // dialog, a notification or switching windows mid-drag. Fabric kept the
-    // drag going; the new field drops it and leaves nothing behind.
+    // dialog, a notification or switching windows mid-drag. The field drops
+    // the drag and leaves nothing behind.
     const ALL = [1, 2, 3, 4];
     const GESTURES = [
         {

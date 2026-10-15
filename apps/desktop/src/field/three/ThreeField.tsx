@@ -102,8 +102,7 @@ import {
 /**
  * Where the timeline's layers sit among the field's (#201): the isolated move's
  * scene and the page's pathways above the field text (1) and under the
- * labels (1.9) and marchers (2), as Fabric stacks them; collision markers over
- * the marchers, as Fabric adds them after the marchers.
+ * labels (1.9) and marchers (2). Collision markers sit over the marchers.
  */
 const FOCUS_ORDER = 1.4;
 const PATHS_ORDER = 1.5;
@@ -139,7 +138,7 @@ export default function ThreeField() {
 }
 
 /**
- * The three.js field (ADR 0005), behind the dev switch in `fieldRenderer.ts`.
+ * The field, drawn with three.js (ADR 0005).
  * #192, the tracer bullet: it draws the field, and every marcher and its label
  * at the playhead, and installs the field test API. #199: each marcher in its
  * appearance at the playhead (the last flag crossed, `appearanceSteps`). #193: the
@@ -334,7 +333,7 @@ function ThreeFieldView() {
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
                     showPositions: (positions) =>
                         marchers.setOverrides(positions),
-                    // #196: drops go through the Fabric field's drop-to-timeline path, unchanged
+                    // #196: drops go through the drop-to-timeline path
                     drop: (positions) =>
                         dropMarchersOnTimeline(
                             positions,
@@ -371,7 +370,7 @@ function ThreeFieldView() {
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
     useFieldLineTool(editor);
-    // As Fabric's line tool, a finished line follows its marchers to another page
+    // A finished line follows its marchers to another page
     useEffect(
         () => marchers.subscribe(() => editor.refreshLineTool()),
         [marchers, editor],
@@ -414,8 +413,8 @@ function ThreeFieldView() {
             () => useUiSettingsStore.getState().uiSettings.mouseSettings,
         );
     }, []);
-    // The view opens as Fabric's canvas, which it creates once the field and a
-    // page are loaded. Latched: a page briefly unselected mustn't reset the view
+    // The view opens once the field and a page are loaded. Latched: a page
+    // briefly unselected mustn't reset the view
     const [ready, setReady] = useState(false);
     if (!ready && fieldProperties && selectedPage) setReady(true);
     // Until the layout settles, the view is still the opening view
@@ -428,8 +427,8 @@ function ThreeFieldView() {
     return (
         <div
             ref={root}
-            // As the Fabric field: fullscreen leaves room above the field, and
-            // the field takes no input there
+            // Fullscreen leaves room above the field, and the field takes no
+            // input there
             className={clsx(
                 "rounded-6 relative h-full w-full touch-none overflow-hidden",
                 isFullscreen && "pointer-events-none pt-128",
@@ -439,7 +438,6 @@ function ThreeFieldView() {
             <TimelineIsolationBar />
             <TimelineFromStartBadge />
             <FieldBenchmark
-                field="three"
                 frames={benchFrames}
                 view={benchView}
                 element={benchElement}
@@ -456,7 +454,7 @@ function ThreeFieldView() {
             {fieldProperties && quality.reason !== "noWebGL" && (
                 <Canvas
                     key={canvasKey}
-                    // As the Fabric field's canvas, for the scenarios
+                    // The field canvas, for the scenarios
                     data-testid="fieldCanvas"
                     frameloop="demand"
                     orthographic
@@ -556,15 +554,14 @@ function ThreeFieldView() {
     );
 }
 
-/** How long the Fabric field waited for the fullscreen layout to settle. */
+/** How long to wait for the fullscreen layout to settle. */
 const FULLSCREEN_SETTLE_MS = 250;
 
 /**
- * As the Fabric field: entering fullscreen fits the whole field and clears the
- * selection, and leaving it centers the field at the base zoom again, once the
- * layout has settled. The field also centers again that long after it's
- * `ready`, as the app's panels finish laying out around it, and marks the
- * view `settled`.
+ * Entering fullscreen fits the whole field and clears the selection, and
+ * leaving it centers the field at the base zoom again, once the layout has
+ * settled. The field also centers again that long after it's `ready`, as the
+ * app's panels finish laying out around it, and marks the view `settled`.
  */
 function useFullscreenFit(
     root: RefObject<HTMLDivElement | null>,
@@ -611,7 +608,7 @@ function useFullscreenFit(
  * show centered at the base zoom once it's `ready`, and points the camera at
  * the store's view. Until the view has `settled`, a resize centers it again.
  * After that a resize keeps the zoom and where the field sits from the
- * top-left, as the Fabric field did; in fullscreen it fits the field again.
+ * top-left; in fullscreen it fits the field again.
  */
 function FieldCamera({
     fieldProperties,

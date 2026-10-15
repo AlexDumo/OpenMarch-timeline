@@ -109,7 +109,7 @@ describe("fieldGeometry", () => {
             );
             expect(at.map((t) => t.rotation).sort()).toEqual([0, Math.PI]);
         }
-        // Fabric's charSpacing 160
+        // Letter spacing 160 thousandths of an em
         for (const t of numbers) expect(t.letterSpacing).toBeCloseTo(0.16);
         // Home numbers are between the front sideline and the field's middle
         for (const t of numbers.filter((n) => n.rotation === 0)) {

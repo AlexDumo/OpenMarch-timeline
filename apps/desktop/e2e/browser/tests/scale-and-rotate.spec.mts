@@ -21,11 +21,9 @@ import type { FieldTestHandle } from "../../../src/field/fieldTestApi";
 // the marchers again after each transform. A transform is dropped through the
 // same timeline rules as a move.
 //
-// Changes from today's Fabric field, decided in #189, are the "change:"
-// scenarios, marked `test.fail(field === "fabric", ...)`: Fabric is pinned as
-// differing, and the new field must pass. As on Fabric, Lock X and Lock Y
-// leave the handles free, and the box fits the marchers again after a
-// rotation.
+// The "change:" scenarios are the rules-table changes decided in #189. Lock X
+// and Lock Y leave the handles free, and the box fits the marchers again
+// after a rotation.
 
 // Four trumpets on three pages, all in view, none in a line.
 const PAGE_0: SeedPosition[] = [
@@ -235,8 +233,7 @@ test("a corner handle scales the formation uniformly from the opposite corner, a
     const scaleY = after.height / before.height;
     expect(scaleX).toBeGreaterThan(1.2);
     expect(scaleY).toBeCloseTo(scaleX, 1);
-    // The opposite corner stays where it was (Fabric's box is a little wider
-    // than the dots, so its corner moves them a few units)
+    // The opposite corner stays where it was, within a few units
     expect(Math.abs(after.left - before.left)).toBeLessThan(6);
     expect(Math.abs(after.top - before.top)).toBeLessThan(6);
     await expectCanvasMatchesShow(show);
@@ -284,12 +281,7 @@ test("a middle handle scales one axis only", async ({ show }) => {
 
 test("change: Shift does nothing on a middle handle: it still scales one axis", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric cancels a middle handle's scale while Shift is down",
-    );
     const { page } = show;
     await selectAll(page);
     const before = spread(asPositions(PAGE_0));
@@ -312,7 +304,7 @@ test("rotation snaps to 15°, about the box's center", async ({ show }) => {
     const saved = await savedChange(show);
     expect(turned(saved)).toBeCloseTo(30, 0);
     // Rotated about the box's center: each marcher keeps its distance from
-    // it (within Fabric's box, which reaches a little further up for labels)
+    // it, within a few units
     const center = middle(asPositions(PAGE_0));
     for (const [id, x, y] of PAGE_0) {
         const p = saved.find((s) => s.id === id)!;
@@ -362,9 +354,7 @@ test("the box fits the marchers again after a rotation", async ({ show }) => {
 
 test("change: Alt scales at a quarter of the pointer's speed", async ({
     show,
-    field,
 }) => {
-    test.fail(field === "fabric", "Alt pans on Fabric");
     const { page } = show;
     await selectAll(page);
     const scale = await canvasScale(page);
@@ -380,9 +370,7 @@ test("change: Alt scales at a quarter of the pointer's speed", async ({
 
 test("change: Alt rotates at a quarter of the pointer's speed, with no snapping", async ({
     show,
-    field,
 }) => {
-    test.fail(field === "fabric", "Alt pans on Fabric");
     const { page } = show;
     await selectAll(page);
 
@@ -412,12 +400,7 @@ test("dragging a handle past the opposite side doesn't flip the formation", asyn
 
 test("change: a press on a handle that moves under 4 px changes nothing, however long it's held", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric's click is under 300 ms: a slower small press transforms",
-    );
     const { page } = show;
     await selectAll(page);
     const steps = await undoSteps(show);
@@ -494,12 +477,7 @@ test("the inspector's rotation input rotates the selection, and saves nothing wh
 
 test("change: after a rotation is saved the inspector's input starts over at 0, also when a press on the field saved it", async ({
     show,
-    field,
 }) => {
-    test.fail(
-        field === "fabric",
-        "Fabric's input shows the selection's angle since it was made, and a typed value is that angle",
-    );
     const { page } = show;
     await selectAll(page);
     const rotation = page.getByRole("textbox", { name: "Rotation" });

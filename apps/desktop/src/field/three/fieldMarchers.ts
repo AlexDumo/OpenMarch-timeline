@@ -22,16 +22,16 @@ const resolverStore: PositionSource = {
 };
 
 /**
- * Where the new field draws each marcher, outside React (ADR 0005 D-2.3).
+ * Where the field draws each marcher, outside React (ADR 0005 D-2.3).
  *
  * The playhead driver fills it from the timeline resolver through the shared
- * {@link PositionBuffer}, as the Fabric field and the 3D View sample
- * it. The marcher and label layers copy it into their GPU buffers when its
- * `version` changes, in a frame hook. The field test API reads it too.
+ * {@link PositionBuffer}, as the 3D View samples it. The marcher and label
+ * layers copy it into their GPU buffers when its `version` changes, in a
+ * frame hook. The field test API reads it too.
  *
  * It also holds each marcher's appearance at the beat drawn: the appearance of
- * the last flag crossed (`appearanceSteps`, as the Fabric field and the video
- * export), so layers restyle and hit testing skips hidden marchers.
+ * the last flag crossed (`appearanceSteps`, as the video export), so layers
+ * restyle and hit testing skips hidden marchers.
  *
  * It also marks which of them are selected (`selected`, `selectionVersion`),
  * from the app's selection, for the marchers layer's selection rings.
@@ -83,8 +83,8 @@ export class FieldMarchers {
 
     /**
      * Samples every marcher at `beat`; with an isolation plan, its members sit
-     * where the plan puts them (as the Fabric field's static render). Returns
-     * false, keeping what's drawn, when the resolver isn't ready.
+     * where the plan puts them. Returns false, keeping what's drawn, when the
+     * resolver isn't ready.
      */
     fill(beat: number, isolationPlan?: IsolationPlan | null): boolean {
         if (!this.sampled.fill(beat)) return false;

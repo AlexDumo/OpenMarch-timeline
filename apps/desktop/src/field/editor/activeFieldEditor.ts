@@ -5,8 +5,7 @@ const listeners = new Set<() => void>();
 
 /**
  * The editor of the field on screen, for app actions that act on the field
- * (Ctrl/Cmd+A, the inspector's rotation), or null while the Fabric field is
- * on screen.
+ * (Ctrl/Cmd+A, the inspector's rotation), or null when none is on screen.
  */
 export const activeFieldEditor = (): FieldEditor | null => active;
 

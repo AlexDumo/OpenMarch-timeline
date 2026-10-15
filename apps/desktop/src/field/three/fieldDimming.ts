@@ -22,9 +22,8 @@ export class FieldDimming {
 
     /**
      * Dims every marcher but `members`; null dims nobody. Nothing changes, and
-     * nothing redraws, when the set is the same as before (as Fabric's
-     * `setTimelineDimmed` returns early), so moving the playhead inside an
-     * isolated move costs nothing here.
+     * nothing redraws, when the set is the same as before, so moving the
+     * playhead inside an isolated move costs nothing here.
      */
     set(members: ReadonlySet<number> | null) {
         if (sameMembers(members, this.members)) return;
@@ -48,5 +47,5 @@ const sameMembers = (
         a.size === b.size &&
         [...a].every((id) => b.has(id)));
 
-/** How opaque a dimmed marcher and its label are (Fabric's `CanvasMarcher.DIMMED_OPACITY`). */
+/** How opaque a dimmed marcher and its label are. */
 export const DIMMED_OPACITY = 0.25;

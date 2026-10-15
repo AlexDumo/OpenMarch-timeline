@@ -5,27 +5,16 @@ Three Fiber) field behind a renderer-independent editor. The decision is
 [ADR 0005](../adr/0005-three-field-renderer.md), and the spec is fork issue
 #189. Read both before you start.
 
-## Field freeze
+## Fabric is gone
 
-**Fabric field drawing and field interaction are frozen until #209 (the
-switch) merges.** That covers:
-
-- `apps/desktop/src/components/canvas/` (Canvas, listeners, hooks);
-- `apps/desktop/src/global/classes/canvasObjects/`;
-- the Fabric parts of `apps/desktop/src/timeline/` (`useTimelineKeptMarks.ts`,
-  `useTimelineShapeCanvas.ts`) and `MarcherRotationInput.tsx`.
-
-Rules while the freeze holds:
-
-- Fix only real breakage there. Each fix adds a parity scenario that pins the
-  fixed behavior, so the new field must match it.
-- Don't add field features or change field behavior on Fabric. Build them on
-  the new field instead.
-- Box v1 (fork PR #181) is held, and rebuilt on the new field in #204 (on
-  hold). Other in-flight Fabric features aren't ported by the migration; see
-  [porting-fabric-features.md](porting-fabric-features.md).
-- The timeline panel, inspector, data layer, 3D View, export content and
-  shortcuts aren't frozen.
+#209 made the three.js field the only field and deleted Fabric: its
+dependency, its code, its unit tests, the Fabric driver of the field test
+API and the dev switch (`openmarch:dev:field`, `?field=three`, the `FIELD`
+variable in the e2e setup). There's no rollback setting. Field work in
+progress on Fabric ports by [porting-fabric-features.md](porting-fabric-features.md)
+before it can land. To compare with Fabric, use the pinned pre-switch build
+(fork branch `field-renderer-pre-209`; links in
+[parity-checklist.md](parity-checklist.md)).
 
 ## Files
 

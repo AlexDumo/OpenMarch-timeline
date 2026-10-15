@@ -1,5 +1,3 @@
-import Canvas from "@/components/canvas/Canvas";
-import { fieldRenderer } from "@/field/fieldRenderer";
 import { threeZoomControls } from "@/field/three/fieldNavigation";
 import Toolbar from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
@@ -27,8 +25,6 @@ import { TooltipProvider } from "@radix-ui/react-tooltip";
 import TitleBar from "@/components/titlebar/TitleBar";
 import { useUiSettingsStore } from "./stores/UiSettingsStore";
 import CanvasZoomControls from "@/components/canvas/CanvasZoomControls";
-import FabricFieldBenchmark from "@/field/benchmark/FabricFieldBenchmark";
-import OpenMarchCanvas from "@/global/classes/canvasObjects/OpenMarchCanvas";
 import Plugin from "./global/classes/Plugin";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Toaster from "./components/ui/Toaster";
@@ -37,7 +33,6 @@ import SvgPreviewHandler from "./utilities/SvgPreviewHandler";
 import { useFullscreenStore } from "./stores/FullscreenStore";
 import AnalyticsOptInModal from "./components/AnalyticsOptInModal";
 import { useEditorModeStore } from "./stores/EditorModeStore";
-import { attachCodegenListeners } from "@/components/canvas/listeners/CodegenListeners";
 import ErrorBoundary from "./ErrorBoundary";
 import {
     QueryCache,
@@ -62,7 +57,7 @@ import { version as currentVersion } from "../package.json";
 import { shouldShowUpdateNotification } from "./utilities/updateNotification";
 import { isAnalyticsChoiceMade } from "./components/welcome/welcomeFlowSteps";
 
-// The new field's own chunk, so the editor doesn't load three.js while Fabric draws the field
+// The field's own chunk, so the launch page doesn't load three.js
 const ThreeField = lazy(() => import("@/field/three/ThreeField"));
 
 export const queryClient = new QueryClient({
@@ -83,9 +78,6 @@ export const queryClient = new QueryClient({
 function App() {
     useLoadFileErrorHandler();
     const [databaseIsReady, setDatabaseIsReady] = useState(false);
-    const [appCanvas, setAppCanvas] = useState<OpenMarchCanvas | undefined>(
-        undefined,
-    );
     const [analyticsConsent, setAnalyticsConsent] = useState<boolean | null>(
         null,
     );
@@ -216,14 +208,6 @@ function App() {
     }, []);
 
     useEffect(() => {
-        if (appCanvas && isCodegen) {
-            void window.electron.codegen.clearMouseActions();
-            const cleanup = attachCodegenListeners(appCanvas);
-            return cleanup;
-        }
-    }, [appCanvas, isCodegen]);
-
-    useEffect(() => {
         if (databaseIsReady)
             createAllUndoTriggers(db).catch((error) => {
                 console.error("Error creating undo triggers:", error);
@@ -346,27 +330,12 @@ function App() {
                                                                 <SidebarModal />
                                                             </>
                                                         )}
-                                                        {fieldRenderer() ===
-                                                        "three" ? (
-                                                            <Suspense>
-                                                                <ThreeField />
-                                                            </Suspense>
-                                                        ) : (
-                                                            <>
-                                                                <Canvas
-                                                                    onCanvasReady={
-                                                                        setAppCanvas
-                                                                    }
-                                                                />
-                                                                <FabricFieldBenchmark />
-                                                            </>
-                                                        )}
+                                                        <Suspense>
+                                                            <ThreeField />
+                                                        </Suspense>
                                                         <CanvasZoomControls
                                                             canvas={
-                                                                fieldRenderer() ===
-                                                                "three"
-                                                                    ? threeZoomControls
-                                                                    : appCanvas
+                                                                threeZoomControls
                                                             }
                                                         />
                                                     </div>

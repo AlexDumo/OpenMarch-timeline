@@ -7,9 +7,8 @@ export { pageEndBeat } from "./pageEndBeat";
 export { playbackBeat, type MarcherWithId } from "./positionBuffer";
 
 /**
- * Drawing the resolver's positions on the canvas in timeline mode (docs/timeline/phases/
- * 05-rendering.md P5.4 playback and P5.5 static render). Pure pieces; the hooks that call them
- * are `useAnimation` and `useTimelineStaticRender`.
+ * The resolver's positions in timeline mode (docs/timeline/phases/05-rendering.md P5.4 playback
+ * and P5.5 static render), read from the open file's resolver store. Pure pieces.
  */
 
 /** Where the positions come from. The store in the app; a stand-in in tests. */

@@ -18,7 +18,7 @@ export type FieldRect = {
 /**
  * A lasso closes, and selects, only when released less than this many screen
  * pixels from where it started: the same on screen at every zoom (rules
- * table: Lasso). Fabric's was 50 field units.
+ * table: Lasso).
  */
 export const LASSO_CLOSE_DISTANCE = 50;
 
@@ -76,10 +76,10 @@ export function pointInPolygon(
 }
 
 /**
- * The marchers a marquee takes: every one whose dot it touches, as Fabric's
- * marquee does, with `radius` the dot's reach in field units (its click
- * target, `hitRadius`). Hidden marchers and ones `canSelect` refuses are
- * never taken, as with a click and Ctrl/Cmd+A.
+ * The marchers a marquee takes: every one whose dot it touches, with `radius`
+ * the dot's reach in field units (its click target, `hitRadius`). Hidden
+ * marchers and ones `canSelect` refuses are never taken, as with a click and
+ * Ctrl/Cmd+A.
  */
 export function marchersInRect(
     marchers: DrawnMarchers,
