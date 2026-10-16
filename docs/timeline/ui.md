@@ -140,7 +140,9 @@ from it. The spec still wins on the model; this file decides presentation.
     moves edit homes.
   - **One timeline per range.** At most one timeline has a given range, so a
     page box always means one timeline. Several groups moving over the same
-    counts are several transitions in that timeline (UI-8).
+    counts are several transitions in that timeline (UI-8). Relaxed by UI-25
+    (2026-10-16): a move split off another keeps its range, and the page box
+    stands for the oldest.
   - **One transition per marcher per timeline.** Adding marchers always spans
     the whole timeline, and adding a marcher already in it does nothing. So
     "the marcher's transition in the selected timeline" is always one row.
@@ -1168,6 +1170,81 @@ from it. The spec still wins on the model; this file decides presentation.
     Stop (Space) and Pause (Shift + Space); holding Shift swaps it to Pause ("Pause here"), as Shift
     swaps Play to Play from the playhead. The field line's note for a stop on another page now reads
     "Paused on page 4". The 3D window's Space stops.
+
+- **UI-25: splitting a move and merging moves (project owner, 2026-10-16).** A move holds one
+  one-slot transition per marcher (UI-9), so when many marchers share one (a page's timeline, say)
+  there was no way to pull some of them out and edit them apart. Supersedes UI-9's **One timeline
+  per range** (owner): a range may hold several moves. Items marked _lead default_ were filled in by
+  the lead; the feel-based ones are V-280 to V-289 in research/ownership/VALIDATION.md. Built on
+  branch `timeline/split-move`. Expert only: Basic (UI-19) offers none of it, not even in the
+  command palette.
+  - **Several moves over one range** (owner). The page box still stands for the page's original
+    timeline: the oldest stored timeline (lowest id) with exactly its range, the one
+    `findTimelineByRange` returned before (`pageTimelineIds`, `isPageTimeline`). A move split off
+    it always draws as its own clip, even on the page's flags, with its own label ("Move 6"). A
+    clicked clip's move is the window's (`windowTimelineId` in the selection store) until the
+    window leaves its range, so the clip, not the page box, shows selected, the Move card and the
+    inspector are about it, the field line names it ("Editing Move 6 (Page 3, counts 1–8)"), and a
+    canvas drag there adds marchers to it. Flag drags move timelines
+    that share a range together. Undo and redo keep the window, as UI-9 says, and an isolated move
+    that undo takes away ends isolation (09-isolation.md).
+  - **Split N selected into new move** (owner, option A). With marchers selected that are in a
+    move, right-clicking the move's clip, or the page box of a page's timeline, offers it; so do
+    the clip's ⋯ menu, the Move card (under "N marchers · Select them") and ⌘K ("Split selected
+    marchers into a new move", for the window's move). The new move has the same counts, is named
+    by the "Move N" rule (UI-14), and gets its own clip row; it is selected and isolated
+    (_lead default_, V-284), so Esc goes back to where you were. Disabled, with the reason under
+    it: while playing ("Pause to split or merge moves."), when none of the selected marchers is in
+    the move, and when all of them are (that would only rename it). The entry shows, disabled,
+    with no marchers selected too, so it can be found (_lead default_, V-287).
+  - **No motion changes** (owner). Each chosen marcher's transition moves to the new timeline as it
+    is: destination, path and layer, and a kept marker with it, as one undoable edit
+    (`splitMarchersIntoNewMove`). A converted page's shared transition (one slot per marcher,
+    P9.10) is split slot by slot: each leaving marcher gets its own one-slot transition with its
+    slot's destination and the same path, and the old one is compacted, so no slot is left vacant.
+    A transition into a shape, a follow-the-leader one, or one whose marchers are in an inheriting
+    follow-the-leader order can't be split apart; the split is refused naming the marchers who move
+    together ("…move into one shape together with … Select them all, or none of them"), and
+    selecting them all moves that whole transition.
+  - **Drag out** (owner, option C, _experimental_: the owner wants to feel it). With marchers
+    selected that are in a move, drag its clip down: a ghost clip under the pointer says "Split 8
+    marchers", and releasing does the same split. The drag locks to an axis when it starts
+    (_lead default_, V-280): 10px up or down, at least twice as far as sideways, is this gesture;
+    4px sideways with more sideways than half the vertical travel is the clip move (re-time) as
+    before; in between it waits. A drop splits once the pointer is 24px below where it was pressed, below
+    the clip's bottom edge and over no other clip or page box (_lead default_, V-281); the timeline
+    is often fitted to its rows at the bottom of the window (UI-19), so there is no empty row to
+    aim at and the drop doesn't need one. The ghost stays on screen if the pointer leaves the
+    window. Without
+    selected members a vertical drag shows nothing and does nothing. Esc or a lost pointer
+    cancels. Edge drags (UI-15) and page-flag grips are untouched: they take the press first.
+    Page boxes don't drag out (_lead default_, V-282): a drag along them scrubs (UI-12), so they
+    keep the menu entry only.
+  - **Merge** (owner). Dragging a move's clip onto another move's clip, or onto the page box of a
+    page's timeline, outlines the target with "Merge into Page 3" while the pointer is over it, and
+    releasing merges; a refused drop is outlined red with the reason, and releasing there only says
+    it again. Shift+click on a second clip selects it beside the window's move (Cmd/Ctrl+click
+    already draws a range), and right-clicking either offers **Merge Move 7 into Move 6**
+    (_lead default_, V-286). A split move's own menu also offers **Merge into Page N** when its
+    counts are that page's. The merge moves every transition into the target and deletes the
+    emptied move, as one undoable edit with no motion change (`mergeMoves`). The target is the
+    page's timeline whenever one of the two is it, so the page box keeps standing for it; otherwise
+    the clip dropped on, or the one right-clicked (_lead default_, V-283). Afterwards the target is
+    selected: its page box, or its clip (_lead default_, V-285). v1 merges only moves with the same
+    counts ("Moves must have the same counts to merge.", owner) and refuses a merge that would give
+    a marcher two transitions in one move.
+  - **Toasts.** "Split 8 marchers into Move 6" and "Merged Move 6 into Page 3", each with **Undo**,
+    which runs the app's undo and closes on the next edit, undo or redo (UI-14's delete toast).
+  - **What still goes by range** (_lead default_, V-288, V-289). Resizing a move or moving a clip
+    onto exactly another move's counts is still refused (UI-15, V-127): only Split makes a shared
+    range. Deleting a page's own timeline (Delete page and its moves) leaves a split move as the
+    oldest over the box, so the box stands for it from then on and its clip goes. Some refusal
+    messages still name a split move by its range ("Page 2's move", `moveName`).
+  - Open, for the owner: merging moves with different counts (whose counts win, or stretch); a
+    drag-out from a page box; whether a split should leave the new move isolated or only selected;
+    and Basic's writes over a page whose marchers were split (Basic writes the page's own
+    timeline, so a Basic edit of a split-off marcher moves its row back into the page's timeline,
+    with the same motion).
 
 ## Mapping the spec onto the view model
 

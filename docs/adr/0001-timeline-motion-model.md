@@ -142,7 +142,8 @@ timeline); selecting a timeline replaces selecting a page, and nothing reads a
 selected page. Rules on stored data, enforced by the write functions
 (`E-ARGS`), not by the database:
 
-- At most one timeline has a given range.
+- At most one timeline has a given range. (Relaxed on 2026-10-16: a move split off another keeps
+  its range; see the amendment below.)
 - A marcher has at most one transition in a timeline when UI-9 makes it; a
   marcher added to a timeline gets its own one-slot shapeless `direct`
   transition spanning it.
@@ -204,6 +205,25 @@ file and be told apart from a move that happens to go nowhere, so it is stored:
   spot as an ordinary move that goes nowhere.
 
 The study is `docs/timeline/research/defined-coordinates/10-keep-later-pages-study.md`.
+
+**Amendment (2026-10-16, project owner): a range may hold several moves.** A designer can pull
+some marchers out of a move (a page's timeline, say) into a move of their own, edit it apart, and
+merge it back. So the first rule above is relaxed:
+
+- Several stored timelines may have the same range. Only **Split** (`splitMarchersIntoNewMove`)
+  makes one, and only by sharing the range of the move it splits; every other write still refuses
+  a new shared range (`createTimelinesInTransaction`, resize, clip moves).
+- A page box stands for the **oldest** timeline (lowest id) with exactly its range, as
+  `findTimelineByRange` already returned. Every other timeline over it is a move: it has a name
+  ("Move N") and a clip. A page flag drag moves timelines that already shared a range together.
+- A marcher is still in at most one of the timelines over one range: split and merge move whole
+  transitions (or peel a slot of a shared shapeless one into its own one-slot transition), and
+  merge refuses a marcher in both.
+- Neither edit changes motion: a timeline has no effect on resolution (R-1). There is no schema,
+  file-format or change-log change; the rows that move are `timeline_transitions.timeline_id`,
+  plus, for a peeled slot, an assignment and a one-slot transition with the slot's destination.
+
+The interaction is UI-25 in `docs/timeline/ui.md`.
 
 Beat editing can still make two timelines share a range; that is in the
 `ui.md` backlog. The interaction is UI-9 in `docs/timeline/ui.md`.
