@@ -21,12 +21,11 @@ export default function MusicXmlSelector() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (!allPages || !allBeats) {
-            toast.error("Failed to fetch required data");
-            return;
-        }
-
         try {
+            if (!allPages || !allBeats) {
+                toast.error("Failed to fetch required data");
+                return;
+            }
             const result = await importMusicXmlMutation.mutateAsync({
                 file,
                 allPages,
