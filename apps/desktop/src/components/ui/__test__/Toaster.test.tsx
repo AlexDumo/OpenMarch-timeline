@@ -24,6 +24,45 @@ afterEach(() => {
 });
 
 describe("Toaster", () => {
+    it("sits 12px from the window's bottom-right corner, 320px wide, on any window width", async () => {
+        render(<Toaster />);
+        act(() => {
+            toast.info("Page 3 is no longer a stop");
+        });
+        const li = (
+            await screen.findByText("Page 3 is no longer a stop")
+        ).closest("[data-sonner-toast]") as HTMLElement;
+        const list = li.closest("[data-sonner-toaster]") as HTMLElement;
+        expect(list.dataset.yPosition).toBe("bottom");
+        expect(list.dataset.xPosition).toBe("right");
+        expect(list.style.getPropertyValue("--width")).toBe("320px");
+        for (const side of ["bottom", "right"]) {
+            expect(list.style.getPropertyValue(`--offset-${side}`)).toBe(
+                "12px",
+            );
+            expect(list.style.getPropertyValue(`--mobile-offset-${side}`)).toBe(
+                "12px",
+            );
+        }
+    });
+
+    it("keeps the icon by the title when the toast has a description", async () => {
+        render(<Toaster />);
+        act(() => {
+            toast.warning("The field is drawing slowly", {
+                description: "Lower the quality in Settings",
+            });
+        });
+        const li = (
+            await screen.findByText("The field is drawing slowly")
+        ).closest("[data-sonner-toast]") as HTMLElement;
+        const icon = li.querySelector("[data-icon]") as HTMLElement;
+        expect(li.className).toMatch(/(^| )items-center( |$)/);
+        expect(icon.className).toContain(
+            "[[data-sonner-toast]:has([data-description])_&]:self-start",
+        );
+    });
+
     it("keeps an action's label on one line, with a focus ring", async () => {
         render(<Toaster />);
         act(() => {
@@ -79,7 +118,7 @@ describe("Toaster", () => {
         // The text fills the first row beside the icon, so the buttons wrap below it
         expect(li.querySelector("[data-icon]")).not.toBeNull();
         expect(content.className).toContain(
-            "[[data-sonner-toast]:has([data-cancel])_&]:basis-[calc(100%-40px)]",
+            "[[data-sonner-toast]:has([data-cancel])_&]:basis-[calc(100%-32px)]",
         );
         // Cancel comes first and pushes both buttons right
         expect(
