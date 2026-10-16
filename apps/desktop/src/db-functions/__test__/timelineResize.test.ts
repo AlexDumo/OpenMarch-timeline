@@ -15,6 +15,7 @@ import {
 import { createTimelineTransitionsInTransaction } from "../timelineTransitions";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import {
+    growOverLayers,
     readTimelineResizeLimits,
     resizeTimeline,
     timelineResizeLimits,
@@ -196,6 +197,51 @@ describe("timelineResizeLimits (pure)", () => {
                 stop: { kind: "minimum" },
             });
             expect(limits.endEdge.max.stop).toEqual({ kind: "show" });
+        },
+    );
+
+    plainIt(
+        "grows over a page's own moves on any layer, and raises its rows above them (owner, 2026-10-16)",
+        () => {
+            const page = (start: number, end: number, layer = 0) => ({
+                ...row(1, start, end, layer),
+                timelineId: 2,
+                pageMove: true,
+            });
+            const others = [page(0, 8), page(16, 24), page(24, 32, 2)];
+            const limits = timelineResizeLimits({
+                timelineId: 1,
+                start: 8,
+                end: 16,
+                own: [row(1, 8, 16)],
+                others,
+                taken: [],
+            });
+            expect(limits.startEdge.min.stop).toEqual({ kind: "show" });
+            expect(limits.endEdge.max.stop).toEqual({ kind: "show" });
+            const own = [{ id: 7, ...row(1, 8, 16) }];
+            const from = { start: 8, end: 16 };
+            expect(
+                growOverLayers(own, others, from, { start: 8, end: 20 }),
+            ).toEqual(new Map([[7, 1]]));
+            expect(
+                growOverLayers(own, others, from, { start: 8, end: 28 }),
+            ).toEqual(new Map([[7, 3]]));
+            // Shrinking or staying inside grows over nothing
+            expect(
+                growOverLayers(own, others, from, { start: 10, end: 16 }).size,
+            ).toBe(0);
+            // A higher move of the marcher inside this one would be overridden: page moves stop
+            // the edge as before
+            const guarded = timelineResizeLimits({
+                timelineId: 1,
+                start: 8,
+                end: 16,
+                own: [row(1, 8, 16)],
+                others: [...others, { ...row(1, 10, 12, 1), timelineId: 3 }],
+                taken: [],
+            });
+            expect(guarded.endEdge.max.beat).toBe(16);
         },
     );
 

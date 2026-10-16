@@ -1235,6 +1235,13 @@ from it. The spec still wins on the model; this file decides presentation.
     a marcher two transitions in one move.
   - **Toasts.** "Split 8 marchers into Move 6" and "Merged Move 6 into Page 3", each with **Undo**,
     which runs the app's undo and closes on the next edit, undo or redo (UI-14's delete toast).
+  - **Growing past the page** (owner, 2026-10-16, V-290). A split move keeps its marchers' layer,
+    so the next page's move sits right against its end on the same layer. Resizing it (or any
+    move) grows over a page's own moves anyway: its rows go one layer above them, it overrides
+    them where it now runs, and the page's move catches up from its set by the page's end (as a
+    move made over the pages already did, E4). It still stops at other moves (V-121), and at a
+    page's moves when the marcher has another move above it inside this one, which raising it
+    would override.
   - **What still goes by range** (_lead default_, V-288, V-289). Resizing a move or moving a clip
     onto exactly another move's counts is still refused (UI-15, V-127): only Split makes a shared
     range. Deleting a page's own timeline (Delete page and its moves) leaves a split move as the

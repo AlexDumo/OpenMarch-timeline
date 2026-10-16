@@ -25,6 +25,7 @@ import {
     splitMarchersIntoNewMove,
     splitMembershipBlocker,
 } from "../timelineSplitMoves";
+import { readTimelineResizeLimits, resizeTimeline } from "../timelineResize";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
 
 // These tests convert the show themselves, so a page's timeline is one shared transition
@@ -694,6 +695,74 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
             expect(
                 (await membersOf(db, page.id)).map((m) => m.marcher),
             ).toContain(b);
+            expect(await violations(db)).toEqual([]);
+        });
+
+        it("a split move grows past its page over the next page's move, which catches up after it", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            const pages = await setUp(db);
+            const range = pageRange(pages, 2);
+            const next = pageRange(pages, 3);
+            const page = await timelineOf(db, range);
+            const [a, b, ...rest] = ids(marchersAndPages);
+            const split = await splitMarchersIntoNewMove({
+                db,
+                timelineId: page.id,
+                marcherIds: [a!, b!],
+            });
+            const limits = (await readTimelineResizeLimits(
+                db,
+                split.timeline.id,
+            ))!;
+            // Page 3's move doesn't stop the edge any more
+            expect(limits.endEdge.max.beat).toBeGreaterThan(next.end);
+            await timelineResolverSettled();
+            const before = await everyBeat(pages);
+            const setAt = (id: number, beat: number) => before.get(id)![beat]!;
+            const mid = next.start + Math.floor((next.end - next.start) / 2);
+            await resizeTimeline({
+                db,
+                timelineId: split.timeline.id,
+                start: range.start,
+                end: mid,
+            });
+            expect(await violations(db)).toEqual([]);
+            // Its rows went above page 3's
+            const rows = await membersOf(db, split.timeline.id);
+            expect(rows.map((r) => [r.marcher, r.end, r.layer])).toEqual([
+                [a, mid, 1],
+                [b, mid, 1],
+            ]);
+            const after = await everyBeat(pages);
+            for (const id of [a!, b!]) {
+                // Page 2's set is reached at the new end, and page 3's still by its end
+                expect(after.get(id)![mid]).toEqual(setAt(id, range.end));
+                expect(after.get(id)![next.end]![0]).toBeCloseTo(
+                    setAt(id, next.end)[0],
+                    9,
+                );
+                expect(after.get(id)![next.end]![1]).toBeCloseTo(
+                    setAt(id, next.end)[1],
+                    9,
+                );
+            }
+            // Everyone else is untouched
+            for (const id of rest)
+                expect(after.get(id)).toEqual(before.get(id));
+            // Undo puts the layers and the range back
+            const undo = await performUndo(db);
+            expect(undo.success, undo.error?.message).toBe(true);
+            expect(
+                (await membersOf(db, split.timeline.id)).map((r) => [
+                    r.end,
+                    r.layer,
+                ]),
+            ).toEqual([
+                [range.end, 0],
+                [range.end, 0],
+            ]);
             expect(await violations(db)).toEqual([]);
         });
 
