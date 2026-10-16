@@ -7,6 +7,7 @@
 import * as z from "zod";
 import type { FieldProperties } from "@openmarch/core";
 import type { LightingPreset, VenueKitId, VenueParams } from "./types";
+import { cameraListSchema, type SavedCamera } from "./cameraList";
 
 export const VENUE_SETTINGS_VERSION = 1;
 
@@ -47,6 +48,14 @@ export const venueSettingsSchema = z.object({
     lighting: z.enum(LIGHTING_PRESETS),
     crowd: z.boolean(),
     params: venueParamsSchema,
+    /**
+     * The show's camera list for each kit it changed (`cameraList.ts`). A
+     * kit without one uses its default cameras. Optional, so older files
+     * stay valid.
+     */
+    cameras: z
+        .partialRecord(z.enum(VENUE_KIT_IDS), cameraListSchema)
+        .optional(),
 });
 
 export type VenueSettings = z.infer<typeof venueSettingsSchema>;
@@ -94,6 +103,33 @@ export const KIT_LIGHTING: Readonly<
     gym: { presets: ["house", "show"], defaultLighting: "house" },
     blank: { presets: ["day", "dusk", "night"], defaultLighting: "day" },
 };
+
+/**
+ * The show's camera list for `kit`, or undefined when it uses the kit's
+ * defaults.
+ */
+export function savedCamerasForKit(
+    settings: Pick<VenueSettings, "cameras">,
+    kit: VenueKitId,
+): SavedCamera[] | undefined {
+    return settings.cameras?.[kit];
+}
+
+/**
+ * Sets the camera list for `kit`, or with `undefined` goes back to the kit's
+ * defaults. Drops `cameras` entirely when no kit has a list.
+ */
+export function withSavedCameras(
+    settings: VenueSettings,
+    kit: VenueKitId,
+    list: SavedCamera[] | undefined,
+): VenueSettings {
+    const { cameras: current, ...rest } = settings;
+    const cameras = { ...current };
+    if (list) cameras[kit] = list;
+    else delete cameras[kit];
+    return Object.keys(cameras).length > 0 ? { ...rest, cameras } : rest;
+}
 
 /**
  * Returns `lighting` if the kit supports it, otherwise the kit's default.

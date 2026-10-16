@@ -94,3 +94,24 @@ describe("venueChanged", () => {
         ).toBe(false);
     });
 });
+
+describe("camera list changes", () => {
+    it("sets and resets the show's cameras for a kit", () => {
+        const list = [{ kind: "kit" as const, id: "pressBox", name: "Box" }];
+        const next = applyVenueChange(hsDusk, {
+            kind: "cameras",
+            kit: "hs",
+            list,
+        });
+        expect(next.cameras).toEqual({ hs: list });
+        expect(venueChanged(hsDusk, next)).toBe(true);
+        const reset = applyVenueChange(next, {
+            kind: "cameras",
+            kit: "hs",
+            list: undefined,
+        });
+        expect(reset).toEqual(hsDusk);
+        expect(venueChanged(next, reset)).toBe(true);
+        expect(venueChanged(hsDusk, reset)).toBe(false);
+    });
+});

@@ -230,6 +230,12 @@ function SceneContents({
         };
     }, [scene, quality]);
 
+    // The show's camera lists. Set before the kit, so a new kit opens on
+    // the show's first camera.
+    useEffect(() => {
+        useView3dSceneStore.getState()._setSavedCameras(settings.cameras);
+    }, [settings.cameras]);
+
     // Kit: rebuilt only for a new kit id, footprint, params or quality.
     useEffect(() => {
         const footprint = JSON.parse(footprintKey) as FieldFootprint;
