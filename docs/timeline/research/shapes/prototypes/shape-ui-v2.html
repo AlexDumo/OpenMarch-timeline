@@ -131,6 +131,12 @@
   #top { gap: 0; overflow: hidden; min-width: 0; }
   #topslot { flex: 1; min-width: 0; }
   .chip { z-index: 6; }
+  .scrub { font-weight: 700; font-variant-numeric: tabular-nums; padding: 1px 6px; border-radius: 5px; border: 1px solid transparent; cursor: ns-resize; user-select: none; touch-action: none; }
+  .scrub.xy { cursor: move; }
+  .scrub:hover, .scrub.live { background: var(--accent2); border-color: var(--accent); }
+  .scrubin { width: 58px; font-weight: 700; }
+  body.scrubbing, body.scrubbing * { cursor: ns-resize !important; }
+  body.scrubbing.xy, body.scrubbing.xy * { cursor: move !important; }
   .ribbon { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
   .ribbon .tool .k { display: none; }
   @media (min-width: 1700px) { .ribbon .tool .k { display: inline; } }
@@ -611,6 +617,58 @@ function edClick(ev) {
 function normDef(pts) { const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys); const w = x1 - x0 || 1, h = y1 - y0 || 1;
   return { pts: pts.map((p) => ({ x: (p.x - x0) / w - 0.5, y: (p.y - y0) / h - 0.5 })), aspect: w / h }; }
 
+/* ---- scrubbable numbers in the chip ---- */
+// Click a number to type it. Drag it to change it: up = more. The box size ("6 × 2") is a 2D
+// pad: drag sideways for more or fewer across, up or down for more or fewer deep.
+const SCRUB_PX = { size: 16, value: 8 };
+function scrubTok(key, text) {
+  if (V.editing === key) return `<input class="scrubin" data-scrubin="${key}" value="${text.replace(" × ", "x")}">`;
+  const xy = key === "size";
+  return `<span class="scrub ${xy ? "xy" : ""} ${V.scrubbing === key ? "live" : ""}" data-scrub="${key}" title="${xy ? "Drag sideways for more across, up or down for more deep · click to type" : "Drag up or down · Alt for tenths · click to type"}">${text}</span>`;
+}
+function applyScrub(key, s0, value) {
+  const n = S.sel.size, iv = intervals(s0, n);
+  if (key === "size") { // remember each spacing while it has no gap to show (one file or one rank)
+    const av = iv.across || s0.av || 2, dv = iv.deep || s0.dv || 2, cols = clamp(value, 1, n), rows = Math.ceil(n / cols);
+    S.shape = { ...s0, cols, av, dv, w: av * (cols - 1), h: dv * (rows - 1) }; return; }
+  const v = Math.max(0.5, value);
+  if (key === "across") S.shape = { ...s0, cols: iv.cols, w: v * (iv.cols - 1) };
+  else if (key === "deep") S.shape = { ...s0, cols: iv.cols, h: v * (iv.rows - 1) };
+  else { S.shape = s0; setApart(v); }
+}
+ov.addEventListener("pointerdown", (e) => {
+  const el = e.target.closest("[data-scrub]"); if (!el || !S.shape) return; e.preventDefault();
+  const key = el.dataset.scrub, s0 = clone(S.shape), iv = intervals(s0, S.sel.size), x0 = e.clientX, y0 = e.clientY;
+  const v0 = key === "size" ? { cols: iv.cols, rows: iv.rows } : key === "across" ? iv.across : key === "deep" ? iv.deep : iv.apart;
+  let moved = false, axis = null;
+  const move = (ev) => {
+    const dx = ev.clientX - x0, dy = y0 - ev.clientY; // up is positive
+    if (!moved && Math.hypot(dx, dy) < 4) return;
+    if (!moved) { moved = true; axis = key === "size" ? (Math.abs(dx) >= Math.abs(dy) ? "x" : "y") : "y"; V.scrubbing = key; document.body.classList.add("scrubbing"); document.body.classList.toggle("xy", key === "size"); }
+    if (key === "size") {
+      const n = S.sel.size;
+      if (axis === "x") applyScrub(key, s0, v0.cols + Math.round(dx / SCRUB_PX.size));
+      else { const rows = clamp(v0.rows + Math.round(dy / SCRUB_PX.size), 1, n); applyScrub(key, s0, Math.ceil(n / rows)); }
+    } else { const unit = ev.altKey ? 0.1 : 0.5; const steps = Math.round(dy / SCRUB_PX.value); applyScrub(key, s0, ev.altKey ? Math.round((v0 + steps * unit) * 10) / 10 : snap(v0) + steps * unit); }
+    render();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+    document.body.classList.remove("scrubbing", "xy"); V.scrubbing = null;
+    if (!moved) V.editing = key;
+    S.force = true; render();
+  };
+  window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+});
+function bindScrubInput() {
+  const i = ov.querySelector("[data-scrubin]"); if (!i) return; i.focus({ preventScroll: true }); i.select();
+  let done = false; const finish = (ok) => { if (done) return; done = true; const key = i.dataset.scrubin;
+    if (ok && S.shape) { const t = i.value.trim().toLowerCase(); if (key === "size") { const m = t.match(/^(\d+)/); if (m) applyScrub(key, S.shape, +m[1]); } else { const v = parseFloat(t); if (isFinite(v) && v > 0) applyScrub(key, S.shape, v); } }
+    V.editing = null; S.force = true; render(); };
+  i.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); };
+  i.onblur = () => finish(true);
+}
+
 /* ---- the one UI ---- */
 const UI = {
   name: "Combined",
@@ -649,8 +707,8 @@ const UI = {
     }
     if (S.shape && S.phase !== "drawing") {
       const s = S.shape, iv = intervals(s, S.sel.size);
-      let row = s.kind === "box" ? `<button data-act="cols-">−</button><b>${iv.cols} × ${iv.rows}</b><button data-act="cols+">+</button><span class="sep"></span><span class="muted">↔</span><button data-act="spx-">−</button><b>${fmt(iv.across)}</b><button data-act="spx+">+</button><span class="muted">↕</span><button data-act="spy-">−</button><b>${fmt(iv.deep)}</b><button data-act="spy+">+</button>`
-        : `<b>${kname(s)}</b><span class="sep"></span><span class="muted">apart</span><button data-act="sp-">−</button><b>${fmt(iv.apart)}</b><button data-act="sp+">+</button>`;
+      let row = s.kind === "box" ? `${scrubTok("size", `${iv.cols} × ${iv.rows}`)}<span class="sep"></span><span class="muted">↔</span>${scrubTok("across", fmt(iv.across))}<span class="muted">↕</span>${scrubTok("deep", fmt(iv.deep))}<span class="muted">steps</span>`
+        : `<b>${kname(s)}</b><span class="sep"></span>${scrubTok("apart", fmt(iv.apart))}<span class="muted">steps apart</span>`;
       row += `<span class="sep"></span><button class="${V.more ? "on" : ""}" data-act="more">⋯</button><button class="primary" data-act="place">Place</button>`;
       const more = V.more ? `<div class="row"><button data-act="rot:-90">⟲ 90°</button><button data-act="rot:90">⟳ 90°</button><button data-act="flipy">Flip</button><button data-act="order">${S.order === "nearest" ? "Least travel" : "Drill order"}</button><button data-act="ptab:shape">More in inspector →</button></div>` : "";
       const guess = V.guesses ? `<div class="row"><span class="muted">Looks like</span>${V.guesses.map((g, i) => `<button class="tool ${V.gi === i ? "on" : ""}" data-act="guess:${i}">${icon(g.shape.kind)}${g.shape.kind === "path" ? "Keep as drawn" : KINDS[g.shape.kind].name}</button>`).join("")}</div>` : "";
@@ -663,6 +721,7 @@ const UI = {
     return o + tipHTML();
   },
   afterOverlay() {
+    bindScrubInput();
     const i = $("#wizin"); if (!i) return; i.focus({ preventScroll: true }); i.setSelectionRange(i.value.length, i.value.length);
     i.oninput = () => { const w = V.wiz; w.text = i.value; w.hot = 0; if (w.step > 0) { const st = wizSteps(item(w.id))[w.step]; const v = parseFloat(i.value); if (isFinite(v)) w.vals[st.key] = v; S.shape = wizShape(w); }
       render(); const box = ov.querySelector(".cmd"); if (box) { const tmp = document.createElement("div"); tmp.innerHTML = wizHTML(); const nb = tmp.firstElementChild; [...nb.children].forEach((c, k) => { if (c.tagName !== "INPUT") box.children[k].outerHTML = c.outerHTML; }); bindPick(); } };
@@ -852,7 +911,7 @@ function go() {
    <li><b>Library</b> (right panel): star shapes, save the current one, or make a <b>custom shape</b> by clicking corners.</li>
    <li><b>Type /</b>: answer one question at a time (shape, how many across, steps apart, rotation) with a live preview. "box 4x3 2" fills the steps for you.</li>
    <li><b>Sketch K</b>: draw roughly and it guesses.</li>
-   <li><b>On the field</b>: the chip under the shape for the common numbers. Grab the center dot to move it (it reads out the yard line). Corners and sides resize. The knob on top rotates around the pivot (set in the Shape panel), and so does just outside a corner (Shift 15°, Alt from center).</li>
+   <li><b>On the field</b>: the chip under the shape. Click a number to type it, or drag it: up or down changes a value, and the box size (6 × 2) drags sideways for more across, up or down for more deep. Grab the center dot to move it (it reads out the yard line). Corners and sides resize. The knob on top rotates around the pivot (set in the Shape panel), and so does just outside a corner (Shift 15°, Alt from center).</li>
    <li><b>Shape panel</b> (right): pivot, exact rotate, flip, scale, and the box resize rule.</li>
    <li><b>View tab</b>: fade the rest, or fade only while drawing.</li>
   </ul><div class="muted" style="font-size:11px">Enter places · Esc cancels · scroll zooms · middle-drag pans</div>`;
