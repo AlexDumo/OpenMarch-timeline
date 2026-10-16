@@ -75,10 +75,10 @@ export const setItemGeometryMutationOptions = (qc: QueryClient) =>
     mutationOptions({
         mutationFn: (args: SetItemGeometryArgs) =>
             setItemGeometry({ db, ...args }),
-        onSettled: () => {
-            // Settled, not success: a refused write redraws the Outline where it was
-            void qc.invalidateQueries({ queryKey: itemGeometryKeys.all() });
-        },
+        // Settled, not success: a refused write redraws the Outline where it was. Returned, so
+        // `mutateAsync` resolves once the field can draw the new Outline
+        onSettled: () =>
+            qc.invalidateQueries({ queryKey: itemGeometryKeys.all() }),
         onError: (e, variables) => {
             conToastError(tolgee.t("props.errors.outline"), e, variables);
         },

@@ -10,6 +10,7 @@ import type {
     DrawnItemGeometry,
     ItemOutlineChanges,
 } from "@/items/itemOutlineTimeline";
+import type { ItemFrame } from "@/field/editor/itemTransform";
 import type { FieldItemSource, FieldMarchers } from "./fieldMarchers";
 
 /** An item's Outline where the field draws it. */
@@ -143,6 +144,19 @@ export class FieldItems implements FieldItemSource {
     /** The Outline of item `id` as drawn now, or null when it isn't drawn. */
     outlineOf(id: number): DrawnItemOutline | null {
         return this.outlines().find((outline) => outline.id === id) ?? null;
+    }
+
+    /** Item `id`'s Outline as the editor's handles see it, in field units, or null when it isn't drawn. */
+    frameOf(id: number): ItemFrame | null {
+        const outline = this.outlineOf(id);
+        if (!outline) return null;
+        const { geometry, center } = outline;
+        return {
+            center,
+            width: geometry.width * PIXELS_PER_METER,
+            depth: geometry.depth * PIXELS_PER_METER,
+            rotation: geometry.rotation,
+        };
     }
 
     /** Calls `listener` whenever the items, their Outlines or a preview change. */

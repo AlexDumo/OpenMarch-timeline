@@ -107,3 +107,62 @@ test("moves a prop dragged from inside its Outline, and saves where it lands", a
     expect(riser.y).toBeGreaterThan(300);
     expect(riser.width).toBe(4);
 });
+
+/** Selects the riser with a click inside its Outline, and returns its handles. */
+async function selectRiser(page: Page) {
+    await expect.poll(() => drawnItems(page)).toHaveLength(1);
+    const at = await insideRiser(page, 1);
+    await page.mouse.click(at.x, at.y);
+    await expect
+        .poll(() => page.evaluate(() => window.fieldTest!.selection()))
+        .toEqual([10]);
+    await expect
+        .poll(() => page.evaluate(() => window.fieldTest!.handles()))
+        .not.toBeNull();
+    return (await page.evaluate(() => window.fieldTest!.handles()))!;
+}
+
+test("resizes a prop from its side handle at the playhead, without moving it", async ({
+    show,
+}) => {
+    const handles = await selectRiser(show.page);
+    const { zoom } = (await readField(show.page)).viewport;
+    // A meter further out on the east side: a meter more on each side
+    await dragFrom(show.page, handles.e, { x: PIXELS_PER_METER * zoom, y: 0 });
+    await waitForIdle(show.page);
+    await expect
+        .poll(async () => {
+            const [riser] = await drawnItems(show.page);
+            return Math.round(riser.width * 10) / 10;
+        })
+        .toBe(6);
+    const [riser] = await drawnItems(show.page);
+    expect([riser.x, riser.y, riser.depth]).toEqual([700, 300, 2]);
+    const saved = await show.query(
+        "SELECT beat_id, round(width, 1) AS width, depth FROM item_geometry",
+    );
+    expect(saved).toEqual([{ beat_id: 0, width: 6, depth: 2 }]);
+    await expectCanvasMatchesShow(show);
+});
+
+test("turns a prop from its rotate handle, snapped to 15°", async ({
+    show,
+}) => {
+    const handles = await selectRiser(show.page);
+    const [riser] = await drawnItems(show.page);
+    // From above the center round to its right: a quarter turn clockwise
+    const reach = handles.rot.y - riser.screen.y;
+    await dragFrom(
+        show.page,
+        handles.rot,
+        { x: -reach, y: -reach + 2 },
+        { steps: 20 },
+    );
+    await waitForIdle(show.page);
+    await expect
+        .poll(async () => (await drawnItems(show.page))[0].rotation)
+        .toBe(90);
+    expect(await show.query("SELECT rotation FROM item_geometry")).toEqual([
+        { rotation: 90 },
+    ]);
+});

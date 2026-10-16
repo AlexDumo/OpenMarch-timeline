@@ -7,6 +7,7 @@ import type { FieldRect } from "@/field/editor/selectionArea";
 import type { LineToolShape } from "@/field/editor/lineTool";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import type { FieldMarchers } from "./fieldMarchers";
+import type { FieldItems } from "./fieldItems";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 import {
     drawnSelectionBox,
@@ -56,10 +57,12 @@ const ROTATE_LINE_WIDTH = 1;
  */
 export default function FieldOverlay({
     marchers,
+    items,
     editor,
     theme,
 }: {
     marchers: FieldMarchers;
+    items: FieldItems;
     editor: FieldEditor;
     theme: FieldTheme;
 }) {
@@ -73,13 +76,14 @@ export default function FieldOverlay({
             (listener: () => void) => {
                 const off = [
                     marchers.subscribe(listener),
+                    items.subscribe(listener),
                     subscribeEditor(listener),
                 ];
                 return () => off.forEach((unsubscribe) => unsubscribe());
             },
-            [marchers, subscribeEditor],
+            [marchers, items, subscribeEditor],
         ),
-        () => JSON.stringify(drawnSelectionBox(marchers, editor)),
+        () => JSON.stringify(drawnSelectionBox(marchers, editor, items)),
     );
     const area = useSyncExternalStore(subscribeEditor, () =>
         editor.areaShape(),

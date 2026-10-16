@@ -59,6 +59,8 @@ import { ruledMove } from "@/field/editor/moveRules";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
 import { publishLinePreviews, useFieldLineTool } from "@/field/fieldLineTool";
+import { useFieldItemWrites } from "@/field/fieldItemWrites";
+import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
@@ -218,6 +220,7 @@ function ThreeFieldView() {
     const marchers = useMemo(() => new FieldMarchers(), []);
     const items = useMemo(() => new FieldItems(marchers), [marchers]);
     const itemLabels = useFieldItems(items, beats);
+    const saveItem = useFieldItemWrites(items);
     const labels = useMemo(
         () =>
             new Map(
@@ -300,6 +303,7 @@ function ThreeFieldView() {
     );
     const benchMarchers = useCallback(() => marchers.ids.length, [marchers]);
     const latest = useRef({
+        saveItem,
         labels,
         pageId: selectedPage?.id ?? null,
         marcherRows,
@@ -310,6 +314,7 @@ function ThreeFieldView() {
         fieldProperties,
     });
     latest.current = {
+        saveItem,
         labels,
         pageId: selectedPage?.id ?? null,
         fieldImage: fieldImagePlan,
@@ -365,6 +370,17 @@ function ThreeFieldView() {
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),
                     itemAt: (point) => items.itemAt(point),
+                    itemFrame: (id) => items.frameOf(id),
+                    previewItem: (id, size) =>
+                        items.setPreview(
+                            id,
+                            size && {
+                                width: size.width / PIXELS_PER_METER,
+                                depth: size.depth / PIXELS_PER_METER,
+                                rotation: size.rotation,
+                            },
+                        ),
+                    saveItem: (id, size) => latest.current.saveItem(id, size),
                 },
                 {
                     isMac: isMacPlatform(),
@@ -412,7 +428,7 @@ function ThreeFieldView() {
                 selection: () => selection.current,
                 activeGesture: () => editor.activeGesture(),
                 handles() {
-                    const box = drawnSelectionBox(marchers, editor);
+                    const box = drawnSelectionBox(marchers, editor, items);
                     return (
                         box &&
                         selectionHandles(box, useFieldViewStore.getState().zoom)
@@ -586,6 +602,7 @@ function ThreeFieldView() {
                 {fieldProperties && (
                     <FieldOverlay
                         marchers={marchers}
+                        items={items}
                         editor={editor}
                         theme={fieldProperties.theme}
                     />

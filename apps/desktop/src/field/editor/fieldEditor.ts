@@ -17,6 +17,13 @@ import {
     type SelectionFrame,
 } from "./groupTransform";
 import { hitRadius, marcherAt, type DrawnMarchers } from "./hitTest";
+import {
+    ItemResizeGesture,
+    ItemRotateGesture,
+    itemSelectionFrame,
+    type ItemFrame,
+    type ItemSize,
+} from "./itemTransform";
 import { LineTool, type LineToolShape, type StepGrid } from "./lineTool";
 import {
     MoveGesture,
@@ -109,6 +116,15 @@ export type FieldEditorPorts = {
     isItem?(id: number): boolean;
     /** The item whose Outline holds `point`, topmost first, or null. */
     itemAt?(point: FieldPoint): number | null;
+    /** Item `id`'s Outline as drawn, or null when it isn't drawn. */
+    itemFrame?(id: number): ItemFrame | null;
+    /** Draws item `id` at this size and turn while a handle drags it; null draws it as stored. */
+    previewItem?(id: number, size: ItemSize | null): void;
+    /**
+     * Saves item `id`'s new size and turn at the playhead. Resolves "saved"
+     * once the field can draw it, or "refused" when nothing was saved.
+     */
+    saveItem?(id: number, size: ItemSize): Promise<DropResult>;
 };
 
 export type DropResult = "saved" | "refused";
@@ -536,6 +552,8 @@ export class FieldEditor {
     /** Scaling or rotating the selection from one of its box's handles (#198). */
     private startTransform(press: FieldPress): FieldGesture | null {
         if (!press.handle) return null;
+        const item = this.selectedItem();
+        if (item) return this.startItemTransform(press, press.handle, item);
         const starts = this.drawnPositions(this.ports.selection.get());
         const box = boundsOf(starts);
         if (starts.length < 2 || !box) return null;
@@ -556,6 +574,8 @@ export class FieldEditor {
      * marchers as drawn, or null with fewer than two.
      */
     private selectionFrame(): SelectionFrame | null {
+        const item = this.selectedItem();
+        if (item) return itemSelectionFrame(item.frame);
         const starts = this.drawnPositions(this.ports.selection.get());
         const box = boundsOf(starts);
         if (starts.length < 2 || !box) return null;
@@ -568,6 +588,55 @@ export class FieldEditor {
         if (!frame) return null;
         const zoom = this.ports.zoom();
         return handleAt(handlePoints(frame, zoom), point, zoom);
+    }
+
+    /**
+     * The one item selected and drawn, with its Outline: its handles resize
+     * and turn it (C2.1) instead of scaling or rotating a selection. Null for
+     * any other selection.
+     */
+    private selectedItem(): { id: number; frame: ItemFrame } | null {
+        const selection = this.ports.selection.get();
+        if (selection.length !== 1) return null;
+        const [id] = selection;
+        if (!this.ports.isItem?.(id)) return null;
+        const frame = this.ports.itemFrame?.(id) ?? null;
+        return frame && { id, frame };
+    }
+
+    /**
+     * Resizing or turning the selected item from a handle. Drawn at the size
+     * given until its save settles, as a drop's marchers are.
+     */
+    private startItemTransform(
+        press: FieldPress,
+        handle: HandleId,
+        { id, frame }: { id: number; frame: ItemFrame },
+    ): FieldGesture {
+        const preview = (size: ItemSize | null) =>
+            this.ports.previewItem?.(id, size);
+        const host = {
+            show: (size: ItemSize) => preview(size),
+            cancel: () => preview(null),
+            save: (size: ItemSize) => {
+                const unchanged =
+                    size.width === frame.width &&
+                    size.depth === frame.depth &&
+                    size.rotation === frame.rotation;
+                if (unchanged || !this.ports.saveItem) {
+                    preview(null);
+                    return;
+                }
+                preview(size);
+                this.ports.saveItem(id, size).then(
+                    () => preview(null),
+                    () => preview(null),
+                );
+            },
+        };
+        return handle === "rot"
+            ? new ItemRotateGesture(press.start, frame, host)
+            : new ItemResizeGesture(frame, host, handle);
     }
 
     /** A marquee, or a lasso after a double-click, from empty field. */
