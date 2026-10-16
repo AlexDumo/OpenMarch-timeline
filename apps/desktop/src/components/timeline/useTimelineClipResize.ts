@@ -7,6 +7,7 @@ import {
 import type { DbConnection } from "@/db-functions/types";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { pageTimelineIds } from "@/timeline/timelineViewModel";
 import type { TimelineInput } from "./Timeline";
 import type {
     ClipResizeBound,
@@ -21,23 +22,27 @@ import type {
  * view axis.
  */
 
-/** What to call the timeline over `[start, end)`: its page, or its clip's label. */
+/**
+ * What to call the timeline over `[start, end)`: its page, when it is the page's own timeline
+ * (`pageIds`, from `pageTimelineIds`), or its clip's label. A move split off a page's timeline shares the page's
+ * box but goes by its own label (UI-25).
+ */
 export function timelineName(
     range: { readonly start: number; readonly end: number },
     timelineId: number,
     timelines: readonly TimelineInput[],
     pageBoxes: readonly { start: number; end: number; name?: string }[],
+    pageIds: ReadonlySet<number>,
 ): string {
-    // UI-25: a clip (a move, even one split off a page's timeline) goes by its label
-    const clip = timelines.find(
-        (t) => t.linkId !== undefined && Number(t.linkId) === timelineId,
-    );
-    if (clip?.label) return clip.label;
     const page = pageBoxes.find(
         (b) => b.start === range.start && b.end === range.end,
     );
-    if (page?.name) return `Page ${page.name}'s move`;
-    return "another move";
+    const pageName = page?.name ? `Page ${page.name}'s move` : undefined;
+    if (pageName && pageIds.has(timelineId)) return pageName;
+    const clip = timelines.find(
+        (t) => t.linkId !== undefined && Number(t.linkId) === timelineId,
+    );
+    return clip?.label ?? pageName ?? "another move";
 }
 
 /** A bound's reason as the drag tag says it (`null`: the show's edge, nothing to say). */
@@ -78,11 +83,13 @@ export function useTimelineClipResize({
                     timelineId,
                 );
                 if (!limits) return null;
-                const { pageBoxes } = useTimelineSelectionStore.getState();
+                const { pageBoxes, storedTimelines } =
+                    useTimelineSelectionStore.getState();
+                const pages = pageTimelineIds(storedTimelines ?? [], pageBoxes);
                 const nameOf = (
                     range: { start: number; end: number },
                     id: number,
-                ) => timelineName(range, id, timelines, pageBoxes);
+                ) => timelineName(range, id, timelines, pageBoxes, pages);
                 const bound = (b: TimelineResizeBound): ClipResizeBound => ({
                     beat: b.beat,
                     reason: resizeBoundReason(b, nameOf),

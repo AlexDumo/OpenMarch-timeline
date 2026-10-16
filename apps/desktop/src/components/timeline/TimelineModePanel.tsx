@@ -413,10 +413,12 @@ export default function TimelineModePanel() {
             store.selectRange(start, end, next.timelineId);
             // UI-17: a drawn range (Ctrl+drag) is the loop, and turns looping on, as dragging
             // Logic's cycle bar does; a page box or Shift+click takes a loop that is on to the
-            // pages selected. A dragged start flag only moves the edit window
-            const pageBox = store.pageBoxes.some(
-                (b) => b.start === start && b.end === end,
-            );
+            // pages selected. A dragged start flag only moves the edit window. A clip click
+            // carries its move, and a move split off a page keeps the page's range but is still
+            // a clip, not the page box (UI-25)
+            const pageBox =
+                next.timelineId === undefined &&
+                store.pageBoxes.some((b) => b.start === start && b.end === end);
             if (
                 store.isolation === null &&
                 (next.drawn ||

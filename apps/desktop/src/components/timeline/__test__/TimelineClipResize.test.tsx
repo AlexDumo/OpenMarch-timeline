@@ -165,24 +165,40 @@ describe("clipResizeTagText", () => {
 
 describe("the panel's names for limits", () => {
     const timelines = [
+        // The page's own timeline is in the list too, with its fallback label
+        {
+            id: "clip-2",
+            linkId: 2,
+            label: "Timeline 2",
+        } as unknown as TimelineInput,
         {
             id: "clip-7",
             linkId: 7,
             label: "Move 3",
         } as unknown as TimelineInput,
+        // A move split off page 1's timeline (UI-25)
+        {
+            id: "clip-9",
+            linkId: 9,
+            label: "Move 5",
+        } as unknown as TimelineInput,
     ];
     const boxes = [{ start: 1, end: 9, name: "1" }];
+    const pages = new Set([2]);
 
     it("names a page's move by its page, and another move by its clip", () => {
-        expect(timelineName({ start: 1, end: 9 }, 2, timelines, boxes)).toBe(
-            "Page 1's move",
-        );
-        expect(timelineName({ start: 4, end: 12 }, 7, timelines, boxes)).toBe(
-            "Move 3",
-        );
-        expect(timelineName({ start: 4, end: 12 }, 8, timelines, boxes)).toBe(
-            "another move",
-        );
+        expect(
+            timelineName({ start: 1, end: 9 }, 2, timelines, boxes, pages),
+        ).toBe("Page 1's move");
+        expect(
+            timelineName({ start: 1, end: 9 }, 9, timelines, boxes, pages),
+        ).toBe("Move 5");
+        expect(
+            timelineName({ start: 4, end: 12 }, 7, timelines, boxes, pages),
+        ).toBe("Move 3");
+        expect(
+            timelineName({ start: 4, end: 12 }, 8, timelines, boxes, pages),
+        ).toBe("another move");
         const nameOf = () => "Move 3";
         expect(
             resizeBoundReason(
