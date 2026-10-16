@@ -1653,7 +1653,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     )
                         return;
                     event.stopPropagation();
-                    releaseMove();
+                    // A press during a dropped clip's wait keeps it: only a drag ends it (below),
+                    // so a click (to select it) doesn't send it back for a moment
                     dragRef.current = {
                         pointerId: event.pointerId,
                         startClientX: event.clientX,
@@ -1671,7 +1672,10 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                             TIMELINE_RANGE_DRAG_PX
                     )
                         return;
-                    if (!drag.moved) setMoving(true);
+                    if (!drag.moved) {
+                        releaseMove();
+                        setMoving(true);
+                    }
                     drag.moved = true;
                     const offset = getOffset(
                         event.clientX,
@@ -1694,10 +1698,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     );
                     // A press that didn't move is a click: it selects (onClick) and moves nothing,
                     // even with an edge near a page line, which a zero offset would snap to
-                    if (!drag.moved) {
-                        setMovePreview(null);
-                        return;
-                    }
+                    if (!drag.moved) return;
                     // Recompute with the release's modifier state, as the selection flags do
                     const offset = getOffset(
                         event.clientX,

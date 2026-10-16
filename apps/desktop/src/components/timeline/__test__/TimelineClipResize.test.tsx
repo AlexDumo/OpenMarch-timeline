@@ -716,6 +716,87 @@ describe("a released drag until its range arrives (owner 2026-10-16)", () => {
         expect(drawn()).toEqual(dropped);
     });
 
+    it("a press on a handle during the wait, without a drag, still lets go on a refusal (review)", async () => {
+        const commit = pending();
+        renderWith({
+            limits: vi.fn(async () => openLimits()),
+            commit: vi.fn(() => commit.result),
+        });
+        const before = drawn();
+        await dragEnd(32);
+        const dropped = drawn();
+        const end = screen.getByTestId("timeline-clip-resize-end");
+        pointer(end, "pointerdown", 0);
+        pointer(end, "pointerup", 1);
+        fireEvent.click(end);
+        await flush();
+        // Still waiting: drawn where it was dropped, no tag
+        expect(drawn()).toEqual(dropped);
+        expect(screen.queryByTestId("timeline-clip-resize-tag")).toBeNull();
+        commit.settle(false);
+        await flush();
+        expect(drawn()).toEqual(before);
+        expect(screen.queryByTestId("timeline-clip-resize-preview")).toBeNull();
+    });
+
+    it("a click on a dropped clip during the wait doesn't send it back (review)", async () => {
+        vi.mocked(shiftTimeline).mockReturnValue(new Promise(() => undefined));
+        renderWith({
+            limits: vi.fn(async () => openLimits()),
+            commit: vi.fn(),
+        });
+        pointer(clip(), "pointerdown", 40);
+        pointer(clip(), "pointermove", 56);
+        pointer(clip(), "pointermove", 72);
+        pointer(clip(), "pointerup", 72);
+        fireEvent.click(clip());
+        await flush();
+        const dropped = drawn();
+        pointer(clip(), "pointerdown", 80);
+        pointer(clip(), "pointerup", 80);
+        fireEvent.click(clip());
+        await flush();
+        expect(drawn()).toEqual(dropped);
+    });
+
+    it("limits that arrive after a newer press still commit the drop, and leave the newer drag alone (review)", async () => {
+        const arrivals: ((limits: ClipResizeLimits) => void)[] = [];
+        const resize = {
+            limits: vi.fn(
+                () =>
+                    new Promise<ClipResizeLimits | null>((resolve) => {
+                        arrivals.push(resolve);
+                    }),
+            ),
+            commit: vi.fn(),
+        };
+        renderWith(resize);
+        const end = screen.getByTestId("timeline-clip-resize-end");
+        // Released before its limits arrive
+        pointer(end, "pointerdown", 0);
+        pointer(end, "pointermove", 32);
+        pointer(end, "pointerup", 32);
+        // A newer drag, still running when the first limits arrive
+        pointer(end, "pointerdown", 32);
+        pointer(end, "pointermove", 64);
+        const newer = drawn();
+        expect(screen.getByTestId("timeline-clip-resize-tag")).toBeTruthy();
+        arrivals[0]!(openLimits());
+        await flush();
+        expect(resize.commit).toHaveBeenCalledTimes(1);
+        expect(resize.commit).toHaveBeenCalledWith({
+            timelineId: "A",
+            startBeatIndex: 3,
+            endBeatIndex: 11,
+        });
+        // The newer drag is untouched: same preview, its tag, and Esc still cancels it
+        expect(drawn()).toEqual(newer);
+        expect(screen.getByTestId("timeline-clip-resize-tag")).toBeTruthy();
+        expect(clipGestureActive()).toBe(true);
+        fireEvent.keyDown(window, { key: "Escape" });
+        expect(clipGestureActive()).toBe(false);
+    });
+
     it("a refused move goes back at once", async () => {
         let settle: (value: null) => void = () => undefined;
         vi.mocked(shiftTimeline).mockReturnValue(

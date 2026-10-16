@@ -355,6 +355,8 @@ export function useClipEdgeResize({
     const [preview, setPreview] = useState<ClipResizePreview | null>(null);
     const [tagBeside, setTagBeside] = useState(false);
     const dragRef = useRef<{
+        /** Which press this is (`gestures`) */
+        gesture: number;
         pointerId: number;
         edge: Edge;
         startClientX: number;
@@ -372,6 +374,8 @@ export function useClipEdgeResize({
         limitsRead: Promise<unknown>;
     } | null>(null);
     const swallowRef = useRef(false);
+    /** Counts presses on the handles, so a release can tell a newer one started */
+    const gestures = useRef(0);
 
     // A released resize stays drawn until its range arrives (or the commit wrote nothing)
     const released = useReleasedPreview(() => setPreview(null));
@@ -426,8 +430,10 @@ export function useClipEdgeResize({
             // handlers and the surface take those
             if (event.button !== 0 || event.ctrlKey || event.metaKey) return;
             event.stopPropagation();
-            released.release();
+            // A press during a released resize's wait keeps the wait: only a drag ends it
+            // (below), so a press that never moves can't leave the dropped preview behind
             const drag = {
+                gesture: ++gestures.current,
                 pointerId: event.pointerId,
                 edge,
                 startClientX: event.clientX,
@@ -474,6 +480,7 @@ export function useClipEdgeResize({
                 Math.abs(event.clientX - drag.startClientX) < RESIZE_DRAG_PX
             )
                 return;
+            if (!drag.moved) released.release();
             drag.moved = true;
             drag.clientX = event.clientX;
             drag.snapDisabled = isPageSnapDisabled(event);
@@ -501,23 +508,27 @@ export function useClipEdgeResize({
                 setPreview({ ...next, stoppedBy: null, blockedBy: null });
             const finish = () => {
                 const next = landAt(drag, clientX, snapDisabled);
+                // A newer press came while the limits were read: the drop still commits, but
+                // the preview and the wait are the newer gesture's now
+                const superseded = gestures.current !== drag.gesture;
                 // It commits where it waits: never on a forbidden beat (UI-15)
                 if (
                     next.startBeatIndex === range!.startBeatIndex &&
                     next.endBeatIndex === range!.endBeatIndex
                 ) {
+                    if (superseded) return;
                     released.release();
                     setPreview(null);
                     return;
                 }
+                const result = resize!.commit({
+                    timelineId: trackId,
+                    startBeatIndex: next.startBeatIndex,
+                    endBeatIndex: next.endBeatIndex,
+                });
+                if (superseded) return;
                 settle(next);
-                released.hold(
-                    resize!.commit({
-                        timelineId: trackId,
-                        startBeatIndex: next.startBeatIndex,
-                        endBeatIndex: next.endBeatIndex,
-                    }),
-                );
+                released.hold(result);
             };
             if (drag.limits) finish();
             else {
