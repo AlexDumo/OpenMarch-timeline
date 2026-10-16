@@ -29,10 +29,6 @@
             "setSelectedToPrevious": "Copy positions from previous page (selected)",
             "setSelectedToPreviousSuccess": "{count, plural, other {Successfully set {count} marcher coordinates on page {currentPage} to the coordinates of the previous page {previousPage}}}"
         },
-        "cursor": {
-            "defaultMode": "Selection mode",
-            "lineMode": "Create line"
-        },
         "edit": {
             "noRedoAvailable": "No action to redo",
             "noUndoAvailable": "No action to undo",
@@ -95,11 +91,11 @@
             "selectAll": "Select all"
         },
         "shape": {
-            "applyQuick": "Snap to shape",
-            "create": "Create shape",
-            "createCircle": "Create circle",
             "delete": "Deletes the current selected shapes",
-            "noMarchersSelected": "No marchers selected"
+            "noMarchersSelected": "No marchers selected",
+            "block": "Shape: Box",
+            "apply": "Place marchers on the shape",
+            "keywords": "shape form formation set place"
         },
         "swap": {
             "error": "Could not swap marchers {marcher1} and {marcher2}",
@@ -685,15 +681,7 @@
         "valueMissing": "Please enter a value."
     },
     "inspector": {
-        "alignment": {
-            "applyCoordinates": "Apply coordinates",
-            "cancelUpdates": "Cancel",
-            "createShape": "Create Shape",
-            "createShapeTimeline": "Create Shape makes a page shape, which timeline mode doesn't use. Apply the coordinates to move these marchers onto the line, or draw a shape in the Shapes part of the Timeline section.",
-            "drawLine": "Draw a line."
-        },
         "marcher": {
-            "createLine": "Create Line",
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
             "loading": "Loading marcher",
@@ -745,6 +733,7 @@
             "split": {
                 "success": "Page split successfully"
             },
+            "playing": "Playing…",
             "subset": "Subset",
             "title": "Page {pageNumber}"
         },
@@ -773,11 +762,6 @@
             "ungroupShapeButton": "Un-group",
             "ungroupShapeTooltip": "Delete this shape for this page. Will not move marchers from their current position",
             "viewTab": "View"
-        },
-        "shapes": {
-            "moreShapesComingSoon": "More shapes coming soon!",
-            "selectShape": "Select Shape",
-            "title": "Shapes"
         },
         "timeline": {
             "assign": {
@@ -930,65 +914,6 @@
             "progress": {
                 "value": "{percent}%"
             },
-            "shapes": {
-                "title": "Shapes",
-                "help": "Shapes are formations in field coordinates, with no time. A transition moves its marchers into one. A new shape is drawn through the selected marchers where they stand at the selected page, or in the middle of the field when nobody is selected.",
-                "canvasHelp": "The picked shape is drawn on the field. Drag a round handle to reshape it, or the square handle to move it. Each drag is saved as one change when you let go.",
-                "dragDropped": "That drag wasn't saved, because another shape change was still being saved. Drag it again.",
-                "newKind": "Kind of new shape",
-                "create": "New shape",
-                "none": "No shapes yet.",
-                "pick": "Shape to edit",
-                "named": "{name} ({kind})",
-                "unnamed": "Shape {id} ({kind})",
-                "name": "Name",
-                "usedBy": "Used by transitions {list}.",
-                "unused": "No transition uses this shape.",
-                "usedHelp": "Changes move every marcher heading to this shape.",
-                "kindLabel": "Kind",
-                "kindHelp": "Changing the kind redraws the shape in the area the old one covered. A box or circle becomes an open freehand path along its outline, so its two ends are different places.",
-                "kindInUse": "Transitions {list} use this shape. Changing its kind spreads their slots over the new shape, so their marchers end in new places.",
-                "kindNoFtl": "It can't become a block: transition {list} follows the leader into it, and a trail can't end on a block.",
-                "kinds": {
-                    "line": "Line",
-                    "freehand": "Freehand",
-                    "circle": "Circle",
-                    "box": "Box",
-                    "block": "Block"
-                },
-                "points": "Points",
-                "pointsHelp": "Slots are spread evenly along the path, from the first point to the last.",
-                "pointX": "Point {n} x",
-                "pointY": "Point {n} y",
-                "pointUp": "Move point {n} up",
-                "pointDown": "Move point {n} down",
-                "pointRemove": "Remove point {n}",
-                "pointAdd": "Add point",
-                "pointsMin": "A freehand path needs at least two points.",
-                "lineStart": "Start",
-                "lineEnd": "End",
-                "x": "{what} x",
-                "y": "{what} y",
-                "center": "Center",
-                "radius": "Radius",
-                "startAngle": "Start angle (degrees)",
-                "direction": "Direction",
-                "counterclockwise": "Counterclockwise",
-                "clockwise": "Clockwise",
-                "circleHelp": "Slots are spread evenly around the circle from the start angle. Angles and directions are in field coordinates, measured from +x toward +y.",
-                "origin": "Origin",
-                "width": "Width",
-                "height": "Height",
-                "boxHelp": "Slots are spread evenly around the outline, starting at the origin.",
-                "rows": "Rows",
-                "cols": "Columns",
-                "spacing": "Spacing",
-                "cells": "{rows} × {cols} = {cells} places, filled row by row from the origin.",
-                "cellsNeeded": "Transition {list} has {slots} slots, so the block needs at least {slots} places.",
-                "noPositions": "None of the selected marchers is in the timeline yet, so there is nowhere to draw the shape through. Select marchers that are, or nobody to draw it in the middle of the field.",
-                "delete": "Delete shape",
-                "deleteInUse": "It can't be deleted while transitions {list} use it. Give them another destination first."
-            },
             "slot": {
                 "value": "{slot} of {count}"
             },
@@ -1007,6 +932,116 @@
                 "onTimeline": "{id} on {timeline}",
                 "plain": "{id}"
             }
+        },
+        "shapeTool": {
+            "title": "Shape",
+            "draw": {
+                "byClicks": "click its points on the field, double-click to finish",
+                "byDrag": "drag on the field to draw it",
+                "hint": "Drag on the field to draw the {kind}, or tune it here.",
+                "moveBox": "Drag to move this box",
+                "sizeInBox": "Spacing, size and Place are in the box beside the shape.",
+                "warnings": "{count, plural, one {# warning} other {# warnings}}",
+                "hintBend": "Move the pointer to bend the arc, then click to set it.",
+                "hintClicks": "Click points on the field to draw the {kind}; double-click to finish.",
+                "tool": "Shape tool",
+                "toolDraw": "Draw",
+                "toolPanel": "Panel only (earlier)"
+            },
+            "fill": {
+                "box": "Box",
+                "circle": "Circle",
+                "filled": "Filled",
+                "grid": "Grid",
+                "natural": "Natural",
+                "outline": "Outline",
+                "staggered": "Staggered"
+            },
+            "leftUnplaced": "The {kind} wasn't placed",
+            "placeAnyway": "Some marchers would walk through each other. Place anyway, or change the shape.",
+            "placeAnywayButton": "Place anyway",
+            "useNearest": "Use Nearest",
+            "bringBack": "Bring it back",
+            "view": {
+                "auto": "Auto",
+                "autoByShape": "Auto (depends on the shape)",
+                "autoIs": "Auto ({choice})",
+                "faint": "Faint",
+                "handles": "Handles",
+                "handlesFade": "Fade when away",
+                "handlesHide": "Hide when away",
+                "handlesShow": "Always show",
+                "hide": "Hide",
+                "off": "Off",
+                "labels": "Preview labels",
+                "labelsAuto": "As field ({choice})",
+                "labelsNames": "Drill numbers",
+                "labelsNone": "Off",
+                "labelsNumbers": "Numbers only",
+                "legendBigSteps": "Walks needing steps over the limit (orange)",
+                "legendCollisions": "Walks that cross or pass too close (red)",
+                "legendHandles": "Handles to drag: move, size, turn",
+                "legendNew": "Where each marcher goes",
+                "legendOld": "The shape being replaced",
+                "legendProblemWalks": "Other walks: point at a marcher to see its walk",
+                "legendShowOnly": "The show look draws only where each marcher goes. V shows every mark.",
+                "legendStart": "Where they start this move",
+                "legendStartAt": "Where they start this move: Page {page}",
+                "legendWalks": "Each marcher's walk",
+                "look": "Look (V)",
+                "lookShow": "The show (dots only)",
+                "lookWalks": "Dots and walks",
+                "lookWorking": "Working (all marks)",
+                "oldShape": "Old shape",
+                "paths": "Walks",
+                "pathsAll": "All",
+                "pathsNone": "Off",
+                "pathsCollisions": "Collisions only",
+                "pathsProblems": "Problems only",
+                "show": "Show",
+                "starts": "Start marks",
+                "strong": "Strong",
+                "title": "View",
+                "toLegend": "View and legend"
+            },
+            "hint": "Pick a shape for the selected marchers (L for a line, O for a circle).",
+            "hintPlaced": "These marchers were placed as a shape. Edit it, or pick a new shape.",
+            "editPlaced": "Edit {kind}",
+            "movedByHand": "{count, plural, one {# moved by hand} other {# moved by hand}}",
+            "overridesKeep": "Keep",
+            "overridesReset": "Reset",
+            "pick": "Pick a shape",
+            "spacing": "Spacing",
+            "gaps": "Interval",
+            "intervalHelp": "Straight distance between neighbors, in steps. 2 = every gap 2 steps · 4,4,2 = one gap each · 4x3 = 3 gaps of 4 steps",
+            "order": "Order",
+            "orderNearest": "Nearest",
+            "orderNearestHelp": "Each marcher goes to a spot near where they stand, with the least travel overall.",
+            "orderKeep": "Keep order",
+            "orderKeepHelp": "Marchers keep their order along the shape.",
+            "orderDrill": "Drill number",
+            "orderDrillHelp": "Marchers fill the shape by drill number, from its start.",
+            "reverse": "Reverse",
+            "apply": "Place",
+            "cancel": "Cancel",
+            "spacingFit": "Fit",
+            "spacingInterval": "Interval",
+            "intervalPlaceholder": "2 or 4x3,2x4",
+            "anchor": "Lay from",
+            "anchorKeep": "Keep fixed",
+            "intervalLocked": "Interval locked: the shape keeps it. Click to let the spacing fit the shape",
+            "intervalFits": "Spacing fits the shape. Click, or type an interval, to lock it",
+            "sizeLocked": "Size locked: a locked interval is laid on the shape as sized. Click to let the size follow the interval",
+            "sizeFollows": "Size follows the interval. Click, or type a size, to lock it",
+            "sizeKeepsPath": "This shape keeps the path you draw: a locked interval is laid along it",
+            "stateFit": "Spacing fits the shape. Type an interval to lock it; the size lock decides whether the shape then resizes.",
+            "stateFollow": "Interval locked: dragging resizes the shape to keep it.",
+            "stateKeep": "Interval and size locked: the run is laid on the shape.",
+            "anchorStart": "Start",
+            "anchorCenter": "Center",
+            "anchorEnd": "End",
+            "marchers": "{count, plural, one {# marcher} other {# marchers}}",
+            "more": "More"
         },
         "title": "Inspector"
     },
@@ -1566,7 +1601,7 @@
     },
     "marcherPages": {
         "carryForward": {
-            "only": "Only Page {page}",
+            "only": "Change only Page {page}",
             "onlyEdited": "Only the edited pages",
             "onePage": "Page {page} followed (it was a copy)",
             "pages": "Pages {first}–{last} followed (they were copies)"
@@ -1914,6 +1949,16 @@
         "tolgeeDevToolsToggle": "Tolgee In-Context Translating"
     },
     "shapes": {
+        "box": {
+            "label": "Box {files} × {ranks} · {interval} steps",
+            "left": {
+                "closeUp": "Close up",
+                "hint": "Their spots stay empty. Undo puts them back.",
+                "many": "{count} left the box",
+                "one": "{name} left the box",
+                "resplit": "Re-split"
+            }
+        },
         "circle": "Circle",
         "square": "Square",
         "triangle": "Triangle",
@@ -2026,9 +2071,11 @@
                 "keptEarlier": "Kept on Page {page} · won't follow earlier pages"
             },
             "followed": {
-                "onePage": "Page {page} followed",
-                "only": "Only Page {page}",
-                "pages": "Pages {first}–{last} followed"
+                "keepOne": "Keep Page {page} as before",
+                "keepPages": "Keep Pages {first}–{last} as before",
+                "onePage": "Page {page} was holding this form, so it changed too",
+                "only": "Change only Page {page}",
+                "pages": "Pages {first}–{last} were holding this form, so they changed too"
             },
             "names": {
                 "many": "{first}, {second} and {count} others",
@@ -2111,8 +2158,24 @@
         "view": {
             "gridLines": "Grid lines",
             "halfLines": "Half lines",
+            "labelPosition": "Label position",
+            "labelPositionAbove": "Above the dot",
+            "labelPositionBeside": "Beside the dot",
+            "labelSize": "Label size",
+            "labelSizeLarge": "Large",
+            "labelSizeNormal": "Normal",
+            "labelSizeSmall": "Small",
+            "labels": "Labels",
+            "labelsAuto": "Auto (smaller when crowded)",
+            "labelsNames": "Drill numbers",
+            "labelsNumbers": "Numbers only",
+            "labelsOff": "Off",
             "nextPaths": "Next paths",
             "previousPaths": "Previous paths",
+            "shapes": "Shapes",
+            "shapesAlways": "Always",
+            "shapesOff": "Off",
+            "shapesSelected": "When selected",
             "stepSizeWarnings": "Step size warnings",
             "uiSettingsToolbar": "Ui Settings Toolbar"
         }

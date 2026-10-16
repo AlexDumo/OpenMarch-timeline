@@ -57,8 +57,6 @@ const PALETTE_CATEGORY_ORDER: readonly ActionCategory[] = [
 
 /** The most common drill-writing actions, shown in "Suggested" until usage history takes over. */
 const SUGGESTED_ACTIONS: readonly ActionId[] = [
-    "alignmentEventLine",
-    "createCircle",
     "openExportDialog",
     "alignHorizontally",
     "alignVertically",
