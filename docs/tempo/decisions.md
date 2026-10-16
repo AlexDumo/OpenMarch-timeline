@@ -1354,14 +1354,22 @@ check.
   counts 1–4".
 - **Validate:** V-303.
 
-## EC-9 How far the counts are drawn
+## EC-9 How far the timeline scrolls (owner, 2026-10-16)
 
-- **Choice:** the timeline draws the stored counts and endless ones up to a screen past the
-  latest of the stop point and the playhead (rule 7), rounded up to whole screens, and a screen
-  more each time a scroll comes within half a screen of the end. A screen is the visible part of
-  the timeline, rounded up to a power of two counts (at least 32), so a pinch redraws the lanes a
-  few times, not every frame. Endless counts are `Beat`s and `Measure`s with ids nothing stores
-  (`endlessTimeline.ts`); every lane draws them as stored ones.
+- **Context:** rule 7 grew the scroll a screen at a time as a scroll neared the end. The owner:
+  scrolling that never ends is pointless; scroll as far as the music or the last page, with a good
+  bit of room.
+- **Choice:** the timeline draws and scrolls to the stop point (the latest of the last page's
+  flag, the music's end and the last move's end, rule 6) plus half a screen and at least 32
+  counts, rounded up to 32 counts. It doesn't grow as you scroll; the playhead (playing on past
+  it, say) keeps it where it is but adds no room, so clicks at the far right don't creep it out.
+  Placing a page with **+ N counts**, dragging END or a move further, or playing on past the stop
+  point moves it on. Endless counts are `Beat`s and `Measure`s with ids nothing stores
+  (`endlessTimeline.ts`); every lane draws them as stored ones. A screen is rounded down to a power
+  of two counts, so a pinch redraws the lanes a few times, not every frame. The last move's end
+  stays in the stop point so a move past the end can be reached.
+- **Alternatives:** a screen at a time as the scroll nears the end (built first); one screen of
+  room.
 - **Validate:** V-301.
 
 ## EC-10 The pill after the last page
@@ -1410,10 +1418,12 @@ check.
 
 ## EC-16 Right-click **+ N counts** to change N (owner request, 2026-10-16)
 
-- **Choice:** right-clicking the pill opens a menu: "Create pages every N counts to the end" (when
-  the music runs on, EC-10), then "New pages get" 4, 8, 12, 16, 24 or 32 counts (the current one
-  checked) and "Other" with a number box (1–999) and Set. It writes the file's "Default new page
-  counts" workspace setting, the same one as in Workspace settings, so it isn't an undo step;
-  pages already made keep their length. The pill's tooltip says it can be right-clicked.
-- **Alternatives:** a small number field on the pill; only in Workspace settings.
+- **Choice:** right-clicking the pill opens a small menu: "Create pages every N counts to the end"
+  (when the music runs on, EC-10), then "New pages [16] counts" with the number selected, so
+  typing a number and Enter sets it (1–999; Set does too). The owner chose a typed number over a
+  list of presets. It writes the file's "Default new page counts" workspace setting, the same one
+  as in Workspace settings, so it isn't an undo step; pages already made keep their length. The
+  pill's tooltip says it can be right-clicked.
+- **Alternatives:** presets 4–32 (built first); a number field on the pill; only in Workspace
+  settings.
 - **Validate:** V-304.

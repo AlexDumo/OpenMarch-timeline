@@ -174,22 +174,18 @@ describe("+ N counts after the last page (E1)", () => {
 });
 
 describe("changing how many counts + N counts adds", () => {
-    it("right-click offers presets and a typed number, and sets the default", () => {
+    it("right-click asks for the number, and sets the default", () => {
         const onCountsChange = vi.fn();
         show({
             appendCounts: { ...appendCounts(), counts: 16, onCountsChange },
         });
         fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
-        const menu = screen.getByTestId("timeline-append-counts-menu");
-        expect(menu.textContent).toContain("New pages get");
-        fireEvent.click(screen.getByRole("menuitem", { name: "8 counts" }));
-        expect(onCountsChange).toHaveBeenCalledWith(8);
-        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
-
-        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        expect(screen.getByTestId("timeline-append-counts-menu")).toBeTruthy();
+        expect(screen.queryAllByRole("menuitem")).toEqual([]);
         const field = screen.getByRole("textbox", {
             name: "Counts for new pages",
-        });
+        }) as HTMLInputElement;
+        expect(field.value).toBe("16");
         fireEvent.change(field, { target: { value: "0" } });
         expect(
             (screen.getByRole("button", { name: "Set" }) as HTMLButtonElement)
@@ -197,7 +193,8 @@ describe("changing how many counts + N counts adds", () => {
         ).toBe(true);
         fireEvent.change(field, { target: { value: "20" } });
         fireEvent.submit(field.closest("form")!);
-        expect(onCountsChange).toHaveBeenLastCalledWith(20);
+        expect(onCountsChange).toHaveBeenCalledWith(20);
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
     });
 
     it("without the command, a right-click opens no menu", () => {
