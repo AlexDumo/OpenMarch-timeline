@@ -11,3 +11,6 @@ export * from "./constants";
 export * from "./tags/queries";
 export * from "./tags/mutations";
 export * from "./useMarcherAppearances";
+export * from "./useCues";
+export * from "./usePhraseAssets";
+export * from "./usePagePerformerSettings";

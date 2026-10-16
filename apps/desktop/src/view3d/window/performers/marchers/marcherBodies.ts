@@ -46,6 +46,7 @@ import { holdClip, poseArms } from "./armPose";
 import { instrumentMaterial } from "./instrumentGeometry";
 import { HornSet } from "./hornSet";
 import { mirrorClip, mirrorName } from "./mirrorClip";
+import { plainRow } from "@/view3d/core/marchers/planner";
 import {
     platformClip,
     platformRig,
@@ -77,6 +78,34 @@ function contactAlpha(size = 64): THREE.DataTexture {
     const t = new THREE.DataTexture(data, size, size);
     t.needsUpdate = true;
     return t;
+}
+
+/** The uniform shader's glove line (om-pose `uniform-shader.js`). */
+export const GLOVE_LINE = "if (part == 5) return uGloves;";
+/** The per-instance skin tone, as `instancedSkinning` declares it. */
+const BARE_HAND_LINE = "if (part == 5) return vSkinTone;";
+
+/**
+ * Patches a material from `instancedSkinning` so its hands (the gloves part)
+ * show each instance's skin tone instead of the glove color: a look without
+ * gloves. Call it after `instancedSkinning`, which declares `vSkinTone`.
+ */
+export function bareHands(material: THREE.Material): THREE.Material {
+    const base = material.onBeforeCompile;
+    const key = material.customProgramCacheKey();
+    material.onBeforeCompile = (shader, renderer) => {
+        base.call(material, shader, renderer);
+        if (!shader.fragmentShader.includes(GLOVE_LINE))
+            console.warn(
+                "bareHands: uniform shader's glove line not found; the hands keep the glove color",
+            );
+        shader.fragmentShader = shader.fragmentShader.replace(
+            GLOVE_LINE,
+            BARE_HAND_LINE,
+        );
+    };
+    material.customProgramCacheKey = () => key + "|bare-hands";
+    return material;
 }
 
 /**
@@ -190,21 +219,35 @@ const parseHoldId = (id: string) => {
 /** Which foot the band steps off on. "right" plays every clip mirrored. */
 export type StepOffFoot = "left" | "right";
 
-/** The clips to load for `names`: on the right foot, each row's mirrored partner too. */
+/** Whether row `name` bakes mirrored, and the row it mirrors. */
+function mirrored(name: string, foot: StepOffFoot) {
+    const { row, mirrored: rightFootRow } = plainRow(name);
+    return { row, mirror: rightFootRow !== (foot === "right") };
+}
+
+/**
+ * The clips to load for `names`: each mirrored row's partner too. A row
+ * is mirrored when a right-foot move plays it (`mirrorRow`), or for every
+ * row when the whole bake is on the right foot.
+ */
 export function clipsToLoad(
     names: readonly string[],
     foot: StepOffFoot,
 ): string[] {
     const out = new Set(names);
-    if (foot === "right") for (const n of names) out.add(mirrorName(n));
+    for (const n of names) {
+        const { row, mirror } = mirrored(n, foot);
+        if (mirror) out.add(mirrorName(row));
+    }
     return [...out];
 }
 
 /**
- * The clip a row bakes from: on the right foot the mirror of its partner
- * (`mirrorName`), so slides and built turns keep their travel direction
- * while the feet swap; then backward marching and closes go up on the
- * platform of the foot (`platformClip.ts`).
+ * The clip a row bakes from: a mirrored row (a right-foot move's, or any
+ * row on a right-foot bake) is the mirror of its partner (`mirrorName`), so
+ * slides and built turns keep their travel direction while the feet swap;
+ * then backward marching and closes go up on the platform of the foot
+ * (`platformClip.ts`).
  */
 export function clipForBake(
     name: string,
@@ -212,9 +255,10 @@ export function clipForBake(
     foot: StepOffFoot,
     rig: PlatformRig,
 ): THREE.AnimationClip {
-    let clip = clips[name];
-    if (foot === "right") {
-        const partner = mirrorName(name);
+    const { row, mirror } = mirrored(name, foot);
+    let clip = clips[name] ?? clips[row];
+    if (mirror) {
+        const partner = mirrorName(row);
         const source = clips[partner];
         if (!source)
             throw new Error(
@@ -329,6 +373,7 @@ export class MarcherBodies {
                     }),
                     bake,
                 );
+                if (!g.look.options.gloves) bareHands(material);
                 materialByLook.set(u, material);
                 this.materials.push(material);
             }
