@@ -12,6 +12,7 @@ import {
     carryCuesPastDeletedBeatsInTransaction,
     type CueCarryResult,
 } from "./cues";
+import { carryItemGeometryPastDeletedBeatsInTransaction } from "./items";
 
 export const FIRST_BEAT_ID = 0;
 
@@ -522,8 +523,9 @@ export async function deleteBeatsCarryingCues({
 }
 
 /**
- * Deletes beats the user chose to delete (a beat, a measure, a tempo group): their cues carry
- * forward to the next beat first (ADR 0004 amendment of 2026-10-15), in the same transaction.
+ * Deletes beats the user chose to delete (a beat, a measure, a tempo group): their cues and item
+ * Outline changes carry forward to the next beat first (ADR 0004 amendment of 2026-10-15), in
+ * the same transaction.
  * Replacing every beat (an import) uses {@link deleteBeatsInTransaction}, whose cues go with
  * their beats.
  */
@@ -535,6 +537,7 @@ export const deleteBeatsCarryingCuesInTransaction = async ({
     beatIds: Set<number>;
 }): Promise<DeletedBeatsAndCues> => {
     const cues = await carryCuesPastDeletedBeatsInTransaction({ tx, beatIds });
+    await carryItemGeometryPastDeletedBeatsInTransaction({ tx, beatIds });
     const beats = await deleteBeatsInTransaction({ tx, beatIds });
     return { beats, cues };
 };

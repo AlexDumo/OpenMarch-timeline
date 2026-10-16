@@ -7,6 +7,7 @@ import AppearanceModal from "@/components/marcher/appearance/AppearanceModal";
 import MobileExportModal from "../mobile/MobileExportModal";
 import AssetsModal from "@/components/assets/AssetsModal";
 import { isWebBuild } from "@/utilities/webBuild";
+import PropsModal from "@/components/items/PropsModal";
 
 export default function Sidebar() {
     return (
@@ -16,6 +17,7 @@ export default function Sidebar() {
         >
             <div className="flex flex-col gap-16">
                 <MarchersModal />
+                <PropsModal />
                 <MusicModal />
                 <FieldModal />
                 <MetronomeModal />
