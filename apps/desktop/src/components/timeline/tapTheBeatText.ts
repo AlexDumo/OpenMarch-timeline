@@ -26,7 +26,7 @@ export interface TapMeasure {
 /**
  * A count tick named as everywhere names it (D6, `placeName`): "Pg 2 · ct 4/16" for the 4th count
  * after page 2's start; on a flag, "C · end of Pg 10 · Pg 11 starts", with the rehearsal mark on
- * its downbeat; "the start" for the show's start, "After pg 4 · +4" past the last page.
+ * its downbeat; "the start" for the show's start, "END +4" past the last page.
  */
 export function countLabel(
     pages: readonly NamedPage[],

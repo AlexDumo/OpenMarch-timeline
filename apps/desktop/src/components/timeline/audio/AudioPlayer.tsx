@@ -18,7 +18,8 @@ import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { timeAtBeat } from "@/timeline/timeMap";
+import { beatsThrough, measuresThrough } from "@/timeline/endlessTimeline";
+import { usePlaybackStopBeat } from "@/timeline/usePlaybackStopBeat";
 import AudioOffsetWorker from "@/workers/audioOffset.worker.ts?worker";
 import {
     audioEnvelope,
@@ -150,7 +151,22 @@ export default function AudioPlayer() {
     const selectedPageContext = useSelectedPage();
     const isPlayingContext = useIsPlaying();
     const selectedAudioFileContext = useSelectedAudioFile();
-    const { beats, measures, pages } = useTimingObjects();
+    const {
+        beats: storedBeats,
+        measures: storedMeasures,
+        pages,
+        countGrid,
+    } = useTimingObjects();
+    // The metronome counts on past the stored counts, up to where playing on stops (endless counts)
+    const stopBeat = usePlaybackStopBeat();
+    const beats = useMemo(
+        () => beatsThrough(countGrid, storedBeats, stopBeat + 1).slice(),
+        [countGrid, storedBeats, stopBeat],
+    );
+    const measures = useMemo(
+        () => measuresThrough(countGrid, storedMeasures, beats).slice(),
+        [beats, countGrid, storedMeasures],
+    );
     const { data: workspaceSettings } = useQuery(
         workspaceSettingsQueryOptions(),
     );
@@ -187,7 +203,7 @@ export default function AudioPlayer() {
     const playheadRevision = useTimelineSelectionStore((s) =>
         isPlaying ? s.playheadRevision : -1,
     );
-    const startSeconds = timeAtBeat(beats, playheadBeat);
+    const startSeconds = countGrid.timeAtBeat(playheadBeat);
     const restartKey = playheadRevision;
     const playbackSpeed = usePlaybackSpeedStore(effectivePlaybackSpeed);
 
