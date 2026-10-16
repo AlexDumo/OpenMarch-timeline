@@ -618,7 +618,9 @@ const UI = {
   over(K) {
     const s = S.shape; let h = "";
     if (s && S.phase !== "drawing") { if (s.h >= 0.3) for (const [, sx, sy] of HANDLES.filter((x) => x[1] && x[2])) { const p = toWorld(s, { x: (sx * s.w) / 2 + (sx * 9) / K, y: (sy * s.h) / 2 + (sy * 9) / K }); h += `<circle data-h="rot" cx="${p.x}" cy="${p.y}" r="${9 / K}" fill="transparent" style="cursor:alias"/>`; }
-      h += handlesSVG(K, { rotKnob: false }); const pv = this.pivotP(); if (pv && V.pv && (V.pv[0] || V.pv[1])) h += `<circle cx="${pv.x}" cy="${pv.y}" r="${5 / K}" fill="var(--yellow)" stroke="#111" vector-effect="non-scaling-stroke" pointer-events="none"/>`; }
+      h += handlesSVG(K, { rotKnob: false });
+      h += `<circle data-h="move" cx="${s.cx}" cy="${s.cy}" r="${7 / K}" fill="#fff" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke" style="cursor:move"/><circle cx="${s.cx}" cy="${s.cy}" r="${2.5 / K}" fill="var(--accent)" pointer-events="none"/>`;
+      const pv = this.pivotP(); if (pv && V.pv && (V.pv[0] || V.pv[1])) h += `<circle cx="${pv.x}" cy="${pv.y}" r="${5 / K}" fill="var(--yellow)" stroke="#111" vector-effect="non-scaling-stroke" pointer-events="none"/>`; }
     if (V.stroke) h += `<polyline points="${V.stroke.map((p) => p.x + "," + p.y).join(" ")}" fill="none" stroke="#fff" stroke-width="2" opacity=".7" vector-effect="non-scaling-stroke"/>`;
     return h;
   },
@@ -722,6 +724,7 @@ const UI = {
   down(hit, p, e) {
     if (V.ring) { V.ring = null; return null; }
     if (e.button === 2) { V.ring = toScreen(p); return { move: (q) => this.ringHot(q), up: () => { if (V.hot) useItem(V.hot); V.ring = null; V.hot = null; } }; }
+    if (hit.h === "move") { const d = moveDrag(p); return { move: (q) => { d.move(q); const c = S.shape; S.tip = { p: q, t: `${yardDesc(c.cx)} · ${depthDesc(c.cy)}` }; }, up: () => (S.tip = null) }; }
     if (hit.h) return undefined;
     if (hit.t === "shape") return undefined;
     if (hit.t === "marcher" && e.shiftKey) return undefined;
@@ -831,7 +834,7 @@ function go() {
    <li><b>Library</b> (right panel): star shapes, save the current one, or make a <b>custom shape</b> by clicking corners.</li>
    <li><b>Type /</b>: answer one question at a time (shape, how many across, steps apart, rotation) with a live preview. "box 4x3 2" fills the steps for you.</li>
    <li><b>Sketch K</b>: draw roughly and it guesses.</li>
-   <li><b>On the field</b>: the chip under the shape for the common numbers. Corners and sides resize, just outside a corner rotates (Shift 15°, Alt from center).</li>
+   <li><b>On the field</b>: the chip under the shape for the common numbers. Grab the center dot to move it (it reads out the yard line). Corners and sides resize, just outside a corner rotates (Shift 15°, Alt from center).</li>
    <li><b>Shape panel</b> (right): pivot, exact rotate, flip, scale, and the box resize rule.</li>
    <li><b>View tab</b>: fade the rest, or fade only while drawing.</li>
   </ul><div class="muted" style="font-size:11px">Enter places · Esc cancels · scroll zooms · middle-drag pans</div>`;
