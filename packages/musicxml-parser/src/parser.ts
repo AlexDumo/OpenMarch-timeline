@@ -284,6 +284,8 @@ function resolveMeasures(
             short &&
             pickup &&
             pickup.meter === meter.text &&
+            // A pickup rounded up to the whole measure leaves none: then it's just short
+            pickup.counts < counts.length &&
             Math.abs(
                 pickup.quarters + raw.contentQuarters - meterLength(meter),
             ) <= SHORT_TOLERANCE
@@ -376,7 +378,13 @@ function placeEvents(resolved: ResolvedMeasure[]) {
             return { ...e, measureIndex, count };
         }),
     );
-    placed.sort((a, b) => a.count - b.count || a.seq - b.seq);
+    // On one count, a mark written past the end of the measure before goes first
+    placed.sort(
+        (a, b) =>
+            a.count - b.count ||
+            a.measureIndex - b.measureIndex ||
+            a.seq - b.seq,
+    );
     return { slots, firstCount, placed };
 }
 
@@ -455,12 +463,16 @@ function walkTempos(
     const definesTempo = (e: PlacedEvent) =>
         e.kind === "tempo" ||
         (e.kind === "words" && e.words.kind !== "tempo-word");
-    // Each measure's starting state, recorded before the events on or after its first count
+    // Each measure's starting state, recorded before its own events on or after its first count.
+    // A mark written past the end of the measure before it lands on its first count but comes
+    // first, so a repeat or jump back to the measure still starts at its written-order tempo.
     const starts: TempoState[] = [];
-    const startMeasuresUpTo = (count: number) => {
+    const startMeasuresUpTo = (count: number, measureIndex = Infinity) => {
         while (
             starts.length < resolved.length &&
-            firstCount[starts.length]! <= count
+            (firstCount[starts.length]! < count ||
+                (firstCount[starts.length] === count &&
+                    starts.length <= measureIndex))
         ) {
             const entry = entries[starts.length];
             if (entry) {
@@ -487,7 +499,7 @@ function walkTempos(
 
     // eslint-disable-next-line max-lines-per-function
     placed.forEach((e, idx) => {
-        startMeasuresUpTo(e.count);
+        startMeasuresUpTo(e.count, e.measureIndex);
         if (e.kind === "tempo") {
             const marking = shown(e);
             if (marking.approximate)

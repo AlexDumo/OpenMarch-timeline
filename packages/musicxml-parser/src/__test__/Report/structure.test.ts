@@ -3,6 +3,7 @@ import { parseMusicXmlWithReport } from "../../parser";
 import {
     measure,
     museScoreTempo,
+    note,
     rehearsal,
     rest,
     score,
@@ -56,9 +57,33 @@ describe("parts", () => {
         expect(result.ramps).toHaveLength(1);
         expect(result.summary.rehearsalMarks).toEqual(["A"]);
     });
+
+    it("counts a mark written twice on one spot of one part (once per staff) once", () => {
+        const rit = `<direction><direction-type><words>rit.</words></direction-type></direction>`;
+        const m =
+            measure(1, time(4, 4) + rest(4)) +
+            measure(2, rit + rit + rest(4)) +
+            measure(3, museScoreTempo("quarter", 0, 60, 60) + rest(4));
+        expect(parseMusicXmlWithReport(score(m)).ramps).toHaveLength(1);
+    });
 });
 
 describe("tempo marks", () => {
+    it("keeps a tempo written again later in the same measure", () => {
+        const m1 =
+            museScoreTempo("quarter", 0, 120, 120) +
+            note(1) +
+            museScoreTempo("quarter", 0, 100, 100) +
+            note(2) +
+            museScoreTempo("quarter", 0, 120, 120) +
+            note(1);
+        const xml = score(measure(1, time(4, 4) + m1) + measure(2, rest(4)));
+        expect(seconds(xml)).toEqual([
+            [0.5, 0.6, 0.6, 0.5],
+            [0.5, 0.5, 0.5, 0.5],
+        ]);
+    });
+
     it("reads a beat unit tied to another (MusicXML 4 <beat-unit-tied>)", () => {
         // ♩ tied to ♪ = 40: a beat of 1.5 quarters, 40 times a minute, is 60 quarters a minute
         const tied = `<direction><direction-type><metronome><beat-unit>quarter</beat-unit><beat-unit-tied><beat-unit>eighth</beat-unit></beat-unit-tied><per-minute>40</per-minute></metronome></direction-type></direction>`;
@@ -208,6 +233,30 @@ describe("repeats and jumps", () => {
     });
 });
 
+describe("tempo at the end of a repeat", () => {
+    it("plays a tempo written after the last count before the repeat sign after the repeat, not on the way back", () => {
+        const xml = score(
+            measure(
+                1,
+                time(4, 4) + museScoreTempo("quarter", 0, 120, 120) + rest(4),
+            ) +
+                measure(
+                    2,
+                    rest(4) + museScoreTempo("quarter", 0, 80, 80) + backward,
+                ) +
+                measure(3, rest(4)),
+        );
+        const half = [0.5, 0.5, 0.5, 0.5];
+        expect(seconds(xml)).toEqual([
+            half,
+            half,
+            half,
+            half,
+            [0.75, 0.75, 0.75, 0.75],
+        ]);
+    });
+});
+
 describe("short measures", () => {
     const tempo = museScoreTempo("quarter", 0, 60, 60);
 
@@ -243,6 +292,19 @@ describe("short measures", () => {
             1, 2, 1, 1, 2, 1,
         ]);
         expect(codes(xml)).toContain("completes-pickup");
+    });
+
+    it("keeps a count for a short measure after a pickup rounded up to the whole measure", () => {
+        // 6/8 with a five-eighth pickup: it rounds up to both counts, so the one-eighth last
+        // measure can't complete it and is just short
+        const xml = score(
+            measure(0, time(6, 8) + tempo + rest(2.5), { implicit: true }) +
+                measure(1, rest(3)) +
+                measure(2, rest(0.5)),
+        );
+        const result = parseMusicXmlWithReport(xml);
+        expect(result.measures.map((m) => m.beats.length)).toEqual([2, 2, 1]);
+        expect(codes(xml)).not.toContain("completes-pickup");
     });
 
     it("treats a measure a rounding error short as full", () => {

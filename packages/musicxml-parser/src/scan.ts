@@ -749,16 +749,34 @@ function eventKey(e: RawEvent): string {
     }
 }
 
+/** Marks closer than a sixteenth note are on the same spot, in quarter notes. */
+const SAME_SPOT_QUARTERS = 1 / 4;
+
 /**
  * The same mark in several parts of one measure is one mark: keeps each at its earliest position
  * (the first part's on a tie). A `<sound tempo>` and a printed marking of the same tempo merge to
- * whichever says more (the one with a beat unit).
+ * whichever says more (the one with a beat unit). A mark written twice in one part's measure
+ * (♩=120, ♩=100, ♩=120) at two spots is two marks: the nth of each part merge.
  */
 function mergeEvents(readings: PartReading[]): RawEvent[] {
     const byKey = new Map<string, RawEvent>();
-    for (const reading of readings)
-        for (const e of reading.events) {
-            const key = eventKey(e);
+    for (const reading of readings) {
+        // Per mark: how many times this part wrote it, and where it last did
+        const occurrences = new Map<string, { nth: number; pos: number }>();
+        const inOrder = [...reading.events].sort(
+            (a, b) => a.pos - b.pos || a.seq - b.seq,
+        );
+        for (const e of inOrder) {
+            const mark = eventKey(e);
+            const last = occurrences.get(mark);
+            // Written again on about the same spot (once per staff, nudged a little) is one mark
+            const nth = !last
+                ? 0
+                : Math.abs(e.pos - last.pos) <= SAME_SPOT_QUARTERS
+                  ? last.nth
+                  : last.nth + 1;
+            occurrences.set(mark, { nth, pos: e.pos });
+            const key = `${mark}#${nth}`;
             const seen = byKey.get(key);
             if (!seen) byKey.set(key, e);
             else {
@@ -772,6 +790,7 @@ function mergeEvents(readings: PartReading[]): RawEvent[] {
                     byKey.set(key, { ...seen, pos: e.pos });
             }
         }
+    }
     return [...byKey.values()].sort((a, b) => a.pos - b.pos || a.seq - b.seq);
 }
 
