@@ -17,16 +17,21 @@ import { queryClient } from "@/App";
 import { WorkspaceSettings } from "@/settings/workspaceSettings";
 import { workspaceSettingsQueryOptions } from "./queries/useWorkspaceSettings";
 import { useDatabaseReady } from "./useDatabaseReady";
+import { createCountGrid, type CountGrid } from "@/timeline/countGrid";
 
 export type TimingObjects = {
     beats: Beat[];
     measures: Measure[];
     pages: Page[];
     utility: DatabaseUtility | undefined;
+    /** The counts as they go on forever past the last stored one (docs/tempo/endless-counts.md) */
+    countGrid: CountGrid;
     fetchTimingObjects: () => Promise<void>;
     isLoading: boolean;
     hasError: boolean;
 };
+
+const NO_COUNT_GRID = createCountGrid({ beats: [], measureStarts: [] });
 
 const fetchTimingObjects = async () => {
     await queryClient.invalidateQueries({
@@ -152,6 +157,7 @@ export const _combineTimingObjects = (
             measures: [],
             beats: [],
             utility: undefined,
+            countGrid: NO_COUNT_GRID,
             fetchTimingObjects,
             isLoading: true,
             hasError: false,
@@ -165,6 +171,7 @@ export const _combineTimingObjects = (
             measures: [],
             beats: [],
             utility: undefined,
+            countGrid: NO_COUNT_GRID,
             fetchTimingObjects,
             isLoading: false,
             hasError: true,
@@ -178,6 +185,7 @@ export const _combineTimingObjects = (
             measures: [],
             beats: [],
             utility: undefined,
+            countGrid: NO_COUNT_GRID,
             fetchTimingObjects,
             isLoading: false,
             hasError: false,
@@ -226,6 +234,10 @@ export const _combineTimingObjects = (
         measures: createdMeasures,
         beats: createdBeats,
         utility,
+        countGrid: createCountGrid({
+            beats: createdBeats,
+            measureStarts: createdMeasures.map((m) => m.startBeat.index),
+        }),
         fetchTimingObjects,
         isLoading: false,
         hasError: false,
