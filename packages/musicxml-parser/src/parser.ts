@@ -240,6 +240,22 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
                     },
                 );
         }
+        if (raw.contentQuarters > meterLength(meter) + SHORT_TOLERANCE) {
+            // More music than the meter holds (often a missing time signature): notation
+            // programs play all of it, so more counts of the meter's last count
+            const unit = counts[counts.length - 1] ?? 1;
+            let total = meterLength(meter);
+            while (total < raw.contentQuarters - SHORT_TOLERANCE) {
+                counts.push(unit);
+                total += unit;
+            }
+            if (firstPlay)
+                warn("long-measure", "warning", i, {
+                    meter: meter.text,
+                    quarters: formatBpm(raw.contentQuarters),
+                    counts: counts.length,
+                });
+        }
         return { raw, meter, meterChanged, counts };
     });
 }
@@ -352,6 +368,17 @@ function walkTempos(
             const marking = shown(e);
             if (marking.approximate)
                 warn("approximate-tempo", "info", e.measureIndex, {
+                    tempo: formatTempoMarking(marking),
+                });
+            if (e.printedQuarterBpm !== undefined)
+                warn("printed-tempo-differs", "warning", e.measureIndex, {
+                    printed: formatTempoMarking({
+                        ...marking,
+                        quarterBpm: e.printedQuarterBpm,
+                        perMinute:
+                            (e.printedQuarterBpm * marking.perMinute) /
+                            marking.quarterBpm,
+                    }),
                     tempo: formatTempoMarking(marking),
                 });
             setTempo(e.count, marking, e.measureIndex);

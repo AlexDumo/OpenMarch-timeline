@@ -17,12 +17,16 @@ export type ParseWarningCode =
     | "pickup-rounded"
     /** A short measure that completes a pickup got the counts the pickup didn't */
     | "completes-pickup"
+    /** A measure longer than its meter got extra counts for its music */
+    | "long-measure"
     /** A measure shorter than its meter got only the counts its music fills */
     | "short-measure"
     /** A short measure isn't a whole number of counts; it was rounded up */
     | "short-measure-rounded"
     /** A tempo number that isn't a positive number; the previous tempo is kept */
     | "invalid-tempo"
+    /** The printed tempo and the tempo the file plays (`<sound tempo>`) differ; played was used */
+    | "printed-tempo-differs"
     /** An approximate tempo ("c. 132") was read as its number */
     | "approximate-tempo"
     /** A metric modulation (♩. = ♩) with no number; read as "new note = old note" */
@@ -91,6 +95,8 @@ const MESSAGES: Record<ParseWarningCode, string> = {
         "{meter} has no grouping in the file; counted {grouping}",
     "no-time-signature": "No time signature; counted {meter}",
     pickup: "Pickup: {counts} count(s)",
+    "long-measure":
+        "Holds {quarters} quarter note(s), more than {meter}; given {counts} count(s)",
     "completes-pickup": "Completes the pickup in m{pickup}: {counts} count(s)",
     "short-measure":
         "Shorter than {meter}: {counts} count(s), as the music is written",
@@ -99,6 +105,8 @@ const MESSAGES: Record<ParseWarningCode, string> = {
     "pickup-rounded":
         "Pickup is {quarters} quarter note(s), not a whole number of counts; given {counts} count(s)",
     "invalid-tempo": 'Tempo "{text}" isn\'t a number; kept {kept}',
+    "printed-tempo-differs":
+        "The score shows {printed} but plays {tempo}; used {tempo}",
     "approximate-tempo": "Approximate tempo read as {tempo}",
     "metric-modulation":
         "Metric modulation {text} has no number; read as the new note lasting as long as the old one: {tempo}",

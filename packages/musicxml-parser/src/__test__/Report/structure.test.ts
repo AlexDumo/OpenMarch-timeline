@@ -271,3 +271,30 @@ describe("unnumbered endings", () => {
         expect(order(xml)).toEqual(["1", "2", "1x2", "3"]);
     });
 });
+
+describe("long measures", () => {
+    it("gives a measure with more music than its meter extra counts, and warns", () => {
+        const tempo = museScoreTempo("quarter", 0, 60, 60);
+        const xml = score(measure(1, time(4, 4) + tempo + rest(6)));
+        expect(seconds(xml)).toEqual([[1, 1, 1, 1, 1, 1]]);
+        expect(codes(xml)).toContain("long-measure");
+    });
+});
+
+describe("printed and played tempo", () => {
+    it("plays <sound tempo> when the printed mark differs, and says so", () => {
+        // Clara Schumann's Polonaise op. 1 no. 4 prints ♩ = 92 and plays 112
+        const xml = score(
+            measure(
+                1,
+                time(3, 4) + museScoreTempo("quarter", 0, 92, 112) + rest(3),
+            ),
+        );
+        const result = parseMusicXmlWithReport(xml);
+        expect(result.measures[0]!.beats[0]!.duration).toBeCloseTo(60 / 112);
+        expect(result.measures[0]!.tempo!.perMinute).toBeCloseTo(112);
+        expect(result.warnings.map((w) => w.message)).toContain(
+            "m1: The score shows ♩ = 92 but plays ♩ = 112; used ♩ = 112",
+        );
+    });
+});

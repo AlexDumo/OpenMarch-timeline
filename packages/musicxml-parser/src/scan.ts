@@ -43,7 +43,13 @@ export interface XmlElement extends XmlNode {
 
 /** A tempo-related thing that happens at a position (in quarter notes) inside a measure. */
 export type RawEvent = { pos: number; seq: number } & (
-    | { kind: "tempo"; marking: TempoMarking; needsUnit: boolean }
+    | {
+          kind: "tempo";
+          marking: TempoMarking;
+          needsUnit: boolean;
+          /** The printed tempo, in quarters, when `<sound tempo>` plays a different one */
+          printedQuarterBpm?: number;
+      }
     | { kind: "invalid-tempo"; text: string }
     | { kind: "modulation"; modulation: Modulation }
     | { kind: "words"; words: TempoWords }
@@ -237,12 +243,24 @@ function directionEvents(
 
     if (sound !== undefined) {
         // <sound tempo> is the playback truth, in quarters; the printed marking is only shown
+        const differs =
+            printed !== undefined &&
+            Math.abs(printed.quarterBpm - sound) > 0.5 &&
+            metronome?.kind === "marking";
         events.push({
             pos,
             seq: nextSeq(),
             kind: "tempo",
+            ...(differs ? { printedQuarterBpm: printed!.quarterBpm } : {}),
             marking: printed
-                ? { ...printed, quarterBpm: sound, approximate: undefined }
+                ? {
+                      ...printed,
+                      quarterBpm: sound,
+                      // Shown in the printed note value, at the tempo that plays
+                      perMinute:
+                          (sound * printed.perMinute) / printed.quarterBpm,
+                      approximate: undefined,
+                  }
                 : {
                       quarterBpm: sound,
                       beatUnit: "quarter",

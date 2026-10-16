@@ -6,6 +6,7 @@ import {
 } from "../../parser";
 import { formatTempoMarking } from "../../tempo";
 import {
+    DIVISIONS,
     measure,
     museScoreTempo,
     note,
@@ -301,7 +302,12 @@ describe("meters", () => {
 
     it("warns when a score has no time signature, and counts 4/4", () => {
         const xml = score(
-            measure(1, museScoreTempo("quarter", 0, 120, 120) + rest(4)),
+            measure(
+                1,
+                `<attributes><divisions>${DIVISIONS}</divisions></attributes>` +
+                    museScoreTempo("quarter", 0, 120, 120) +
+                    rest(4),
+            ),
         );
         expect(codes(xml)).toEqual(["no-time-signature"]);
         expect(durations(xml)[0]).toHaveLength(4);
