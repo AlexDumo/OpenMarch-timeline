@@ -49,10 +49,18 @@ export type RawEvent = { pos: number; seq: number } & (
     | { kind: "words"; words: TempoWords }
 );
 
+/** A note value a metronome mark counts in: its unit and dots, and its length with any ties. */
+export interface BeatGroup {
+    unit: BeatUnit;
+    dots: number;
+    /** Length in quarter notes, including notes tied to it */
+    quarters: number;
+}
+
 /** A metric modulation printed as "new note = old note", like ♩. = ♩. */
 export interface Modulation {
-    newUnit: { unit: BeatUnit; dots: number };
-    oldUnit: { unit: BeatUnit; dots: number };
+    newUnit: BeatGroup;
+    oldUnit: BeatGroup;
 }
 
 export interface RawMeasure {
@@ -138,25 +146,38 @@ function readMetronome(
     | { kind: "invalid"; text: string }
     | { kind: "modulation"; modulation: Modulation }
     | undefined {
-    // Each <beat-unit> is followed by its <beat-unit-dot>s
-    const units: { unit: string; dots: number }[] = [];
+    // Each <beat-unit> is followed by its <beat-unit-dot>s and any <beat-unit-tied> notes
+    // (MusicXML 4: ♩. tied to ♪. is one beat of 2.25 quarters)
+    const units: BeatGroup[] = [];
+    let valid = true;
     for (const child of childElements(metronome)) {
         const name = nameOf(child);
-        if (name === "beat-unit") units.push({ unit: textOf(child), dots: 0 });
-        else if (name === "beat-unit-dot" && units.length > 0)
-            units[units.length - 1]!.dots++;
+        const last = units[units.length - 1];
+        if (name === "beat-unit") {
+            const unit = textOf(child);
+            if (!isBeatUnit(unit)) valid = false;
+            else units.push({ unit, dots: 0, quarters: unitQuarters(unit) });
+        } else if (name === "beat-unit-dot" && last) {
+            last.dots++;
+            last.quarters += unitQuarters(last.unit) / 2 ** last.dots;
+        } else if (name === "beat-unit-tied" && last) {
+            const unit = textOf(firstChild(child, "beat-unit"));
+            const dots = childElements(child, "beat-unit-dot").length;
+            if (isBeatUnit(unit)) last.quarters += unitQuarters(unit, dots);
+        }
     }
+    // The <metronome-note> form is mostly swing marks (♪♪ = ♩♪³): no tempo
+    if (!valid) units.length = 0;
     const perMinuteEl = firstChild(metronome, "per-minute");
     const perMinute = perMinuteEl ? textOf(perMinuteEl) : undefined;
     const first = units[0];
-    if (perMinute !== undefined && first && isBeatUnit(first.unit)) {
+    if (perMinute !== undefined && first) {
         const reading = readPerMinute(perMinute);
         if (!reading.ok) return { kind: "invalid", text: perMinute };
         return {
             kind: "marking",
             marking: {
-                quarterBpm:
-                    reading.value * unitQuarters(first.unit, first.dots),
+                quarterBpm: reading.value * first.quarters,
                 beatUnit: first.unit,
                 dots: first.dots,
                 perMinute: reading.value,
@@ -165,13 +186,10 @@ function readMetronome(
         };
     }
     const [left, right] = units;
-    if (left && right && isBeatUnit(left.unit) && isBeatUnit(right.unit))
+    if (left && right)
         return {
             kind: "modulation",
-            modulation: {
-                newUnit: { unit: left.unit, dots: left.dots },
-                oldUnit: { unit: right.unit, dots: right.dots },
-            },
+            modulation: { newUnit: left, oldUnit: right },
         };
     if (perMinute !== undefined) return { kind: "invalid", text: perMinute };
     return undefined;
@@ -213,9 +231,7 @@ function directionEvents(
                     quarterBpm: sound,
                     beatUnit: modulationUnit.unit,
                     dots: modulationUnit.dots,
-                    perMinute:
-                        sound /
-                        unitQuarters(modulationUnit.unit, modulationUnit.dots),
+                    perMinute: sound / modulationUnit.quarters,
                 }
               : textMarking;
 

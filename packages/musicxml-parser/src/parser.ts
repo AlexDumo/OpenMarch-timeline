@@ -314,11 +314,9 @@ function walkTempos(
         if (e.kind === "modulation") {
             // "♩. = ♩": the new ♩. lasts as long as the old ♩ did
             const { newUnit, oldUnit } = e.modulation;
-            const perMinute =
-                current / unitQuarters(oldUnit.unit, oldUnit.dots);
+            const perMinute = current / oldUnit.quarters;
             const marking: TempoMarking = {
-                quarterBpm:
-                    perMinute * unitQuarters(newUnit.unit, newUnit.dots),
+                quarterBpm: perMinute * newUnit.quarters,
                 beatUnit: newUnit.unit,
                 dots: newUnit.dots,
                 perMinute,
@@ -525,6 +523,8 @@ function warnAboutStructure(
         if (w === 0) return false;
         const previous = parseInt(written[w - 1]!.label);
         const current = parseInt(m.label);
+        // A file that doesn't number its measures has nothing to warn about
+        if (Number.isNaN(previous) && Number.isNaN(current)) return false;
         return Number.isNaN(current) || current !== previous + 1;
     });
     if (gap > 0 && at(gap) >= 0)
