@@ -205,3 +205,54 @@ describe("repeats and jumps", () => {
         expect(codes(xml)).not.toContain("measure-numbers");
     });
 });
+
+describe("short measures", () => {
+    const tempo = museScoreTempo("quarter", 0, 60, 60);
+
+    it("gives a short last measure only the counts its music fills", () => {
+        const xml = score(
+            measure(1, time(4, 4) + tempo + rest(4)) + measure(2, rest(3)),
+        );
+        expect(seconds(xml)).toEqual([
+            [1, 1, 1, 1],
+            [1, 1, 1],
+        ]);
+        expect(codes(xml)).toContain("short-measure");
+    });
+
+    it("reads a short first measure as a pickup even when it isn't marked implicit", () => {
+        const xml = score(
+            measure(0, time(4, 4) + tempo + rest(1)) + measure(1, rest(4)),
+        );
+        expect(seconds(xml)[0]).toEqual([1]);
+        expect(codes(xml)).toContain("pickup");
+    });
+
+    it("gives the measure that completes a rounded pickup the counts the pickup didn't take", () => {
+        // 6/8 with an eighth-note pickup: the pickup rounds up to one dotted-quarter count, and
+        // the last measure (five eighths) gets the other count, so the repeat stays in time
+        const xml = score(
+            measure(0, time(6, 8) + tempo + rest(0.5), { implicit: true }) +
+                measure(1, rest(3)) +
+                measure(2, rest(2.5) + backward),
+        );
+        const result = parseMusicXmlWithReport(xml);
+        expect(result.measures.map((m) => m.beats.length)).toEqual([
+            1, 2, 1, 1, 2, 1,
+        ]);
+        expect(codes(xml)).toContain("completes-pickup");
+    });
+
+    it("treats a measure a rounding error short as full", () => {
+        // Triplets written as 160 + 160 + 159 divisions
+        const xml = score(
+            measure(
+                1,
+                time(1, 4) +
+                    tempo +
+                    `<note><rest/><duration>479</duration><voice>1</voice></note>`,
+            ),
+        );
+        expect(codes(xml)).not.toContain("short-measure");
+    });
+});

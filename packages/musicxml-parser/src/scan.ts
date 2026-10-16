@@ -530,6 +530,7 @@ function readPartMeasure(
             return type === "stop" || type === "discontinue";
         }),
     };
+    // Positions in quarter notes: <divisions> can change in the middle of a measure
     let cur = 0;
     let max = 0;
     for (const el of childElements(measure)) {
@@ -544,20 +545,25 @@ function readPartMeasure(
             }
             case "note":
                 if (firstChild(el, "grace") || firstChild(el, "chord")) break;
-                cur += numberOf(firstChild(el, "duration"));
+                cur += numberOf(firstChild(el, "duration")) / state.divisions;
                 max = Math.max(max, cur);
                 break;
             case "backup":
-                cur = Math.max(0, cur - numberOf(firstChild(el, "duration")));
+                cur = Math.max(
+                    0,
+                    cur -
+                        numberOf(firstChild(el, "duration")) / state.divisions,
+                );
                 break;
             case "forward":
-                cur += numberOf(firstChild(el, "duration"));
+                cur += numberOf(firstChild(el, "duration")) / state.divisions;
                 max = Math.max(max, cur);
                 break;
             case "direction": {
-                const pos =
-                    Math.max(0, cur + numberOf(firstChild(el, "offset"))) /
-                    state.divisions;
+                const pos = Math.max(
+                    0,
+                    cur + numberOf(firstChild(el, "offset")) / state.divisions,
+                );
                 reading.events.push(...directionEvents(el, pos, nextSeq));
                 const rehearsal = textOf(descendants(el, "rehearsal")[0]);
                 if (rehearsal && reading.rehearsalMark === undefined)
@@ -569,7 +575,7 @@ function readPartMeasure(
                 const tempoAttr = attrOf(el, "tempo");
                 if (tempoAttr === undefined) break;
                 const tempo = readSoundTempo(tempoAttr);
-                const pos = cur / state.divisions;
+                const pos = cur;
                 reading.events.push(
                     tempo !== undefined
                         ? {
@@ -595,7 +601,7 @@ function readPartMeasure(
             }
         }
     }
-    reading.contentQuarters = max / state.divisions;
+    reading.contentQuarters = max;
     return reading;
 }
 

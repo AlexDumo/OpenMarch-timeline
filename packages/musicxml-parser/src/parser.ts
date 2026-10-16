@@ -97,6 +97,9 @@ export interface MusicXmlParseResult {
 
 const EPSILON = 1e-6;
 
+/** How much shorter than its meter a measure can be and still count as full, in quarters. */
+const SHORT_TOLERANCE = 1 / 16;
+
 type Warn = (
     code: ParseWarningCode,
     severity: ParseWarning["severity"],
@@ -115,6 +118,11 @@ interface ResolvedMeasure {
 /** Gives each measure its meter and counts, warning about what the rule couldn't read. */
 // eslint-disable-next-line max-lines-per-function
 function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
+    const seen = new Set<RawMeasure>();
+    // The last pickup played, which a later short measure may complete
+    let pickup:
+        | { label: string; meter: string; quarters: number; counts: number }
+        | undefined;
     let meter: Meter | undefined;
     // The note value the tempo in effect is printed in (for counting x/2 meters)
     let printedUnit: { unit: BeatUnit; dots: number } | undefined;
@@ -163,27 +171,74 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
         }
 
         let counts = [...meter.counts];
-        if (
-            raw.implicit &&
+        // Exporters round tuplet durations to whole divisions, so a measure a 64th short is full
+        const short =
             raw.contentQuarters > EPSILON &&
-            raw.contentQuarters < meterLength(meter) - EPSILON
-        ) {
-            // A pickup (or the short half of a split measure): only the counts its music fills
+            raw.contentQuarters < meterLength(meter) - SHORT_TOLERANCE;
+        // A measure played again by a repeat was already reported
+        const firstPlay = !seen.has(raw);
+        seen.add(raw);
+        if (short && (raw.implicit || i === 0)) {
+            // A pickup (or the short half of a split measure): only the counts its music fills,
+            // from the end of the measure
             let k = counts.length;
             let filled = 0;
             while (k > 0 && filled < raw.contentQuarters - EPSILON)
                 filled += counts[--k]!;
             counts = counts.slice(k);
+            pickup = {
+                label: raw.label,
+                meter: meter.text,
+                quarters: raw.contentQuarters,
+                counts: counts.length,
+            };
             const exact = Math.abs(filled - raw.contentQuarters) <= EPSILON;
-            warn(
-                exact ? "pickup" : "pickup-rounded",
-                exact ? "info" : "warning",
-                i,
-                {
+            if (firstPlay)
+                warn(
+                    exact ? "pickup" : "pickup-rounded",
+                    exact ? "info" : "warning",
+                    i,
+                    {
+                        counts: counts.length,
+                        quarters: formatBpm(raw.contentQuarters),
+                    },
+                );
+        } else if (
+            short &&
+            pickup &&
+            pickup.meter === meter.text &&
+            Math.abs(
+                pickup.quarters + raw.contentQuarters - meterLength(meter),
+            ) <= SHORT_TOLERANCE
+        ) {
+            // The other half of the pickup (a section's last measure): together they make one
+            // measure, so it gets the counts the pickup didn't, even when the pickup was rounded
+            counts = counts.slice(0, counts.length - pickup.counts);
+            if (firstPlay)
+                warn("completes-pickup", "info", i, {
                     counts: counts.length,
-                    quarters: formatBpm(raw.contentQuarters),
-                },
-            );
+                    pickup: pickup.label,
+                });
+        } else if (short) {
+            // A short measure: notation programs play only the music that's there, so only the
+            // counts it fills, from the start
+            let k = 0;
+            let filled = 0;
+            while (k < counts.length && filled < raw.contentQuarters - EPSILON)
+                filled += counts[k++]!;
+            counts = counts.slice(0, k);
+            const exact = Math.abs(filled - raw.contentQuarters) <= EPSILON;
+            if (firstPlay)
+                warn(
+                    exact ? "short-measure" : "short-measure-rounded",
+                    exact ? "info" : "warning",
+                    i,
+                    {
+                        counts: counts.length,
+                        meter: meter.text,
+                        quarters: formatBpm(raw.contentQuarters),
+                    },
+                );
         }
         return { raw, meter, meterChanged, counts };
     });
