@@ -7,6 +7,7 @@ import {
     removeDeletedMarchersFromTimelinesInTransaction,
 } from "./timelineMarchers";
 import { deleteEmptySetCuesInTransaction } from "./cues";
+import { deleteHeldPlacementsWithNoHolderInTransaction } from "./itemPlacements";
 
 type DatabaseMarcher = typeof schema.marchers.$inferSelect;
 
@@ -200,9 +201,12 @@ const deleteMarchersInTransaction = async ({
             );
     }
     // The marchers left their hand-picked sets through the cascade; a set left empty deletes
-    // its cue in the same edit (ADR 0004 D-2)
-    if (deletedMarchers.length > 0)
+    // its cue in the same edit (ADR 0004 D-2), and a held Placement change left with no holder
+    // goes too (ADR 0002 D-10)
+    if (deletedMarchers.length > 0) {
         await deleteEmptySetCuesInTransaction({ tx });
+        await deleteHeldPlacementsWithNoHolderInTransaction({ tx });
+    }
     return deletedMarchers;
 };
 

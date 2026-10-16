@@ -12,7 +12,7 @@ import {
     carryCuesPastDeletedBeatsInTransaction,
     type CueCarryResult,
 } from "./cues";
-import { carryItemGeometryPastDeletedBeatsInTransaction } from "./items";
+import { carryItemChangesPastDeletedBeatsInTransaction } from "./items";
 
 export const FIRST_BEAT_ID = 0;
 
@@ -537,7 +537,7 @@ export const deleteBeatsCarryingCuesInTransaction = async ({
     beatIds: Set<number>;
 }): Promise<DeletedBeatsAndCues> => {
     const cues = await carryCuesPastDeletedBeatsInTransaction({ tx, beatIds });
-    await carryItemGeometryPastDeletedBeatsInTransaction({ tx, beatIds });
+    await carryItemChangesPastDeletedBeatsInTransaction({ tx, beatIds });
     const beats = await deleteBeatsInTransaction({ tx, beatIds });
     return { beats, cues };
 };

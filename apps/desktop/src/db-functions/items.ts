@@ -15,7 +15,6 @@ import { transactionWithHistory } from "./history";
 import { createMarchersInTransaction } from "./marcher";
 import { updateMarcherHomesInTransaction } from "./marcherHome";
 import { beatsAfterDeletion } from "./cues";
-import { hasItemTables } from "./itemLibraryKeeps";
 
 export { itemLibraryKeeps } from "./itemLibraryKeeps";
 
@@ -336,54 +335,81 @@ export async function updateItems({
     );
 }
 
+/** An item table keyed by beat: Outline changes (C2.1) and Placement changes (C2.3). */
+type BeatKeyedItemTable =
+    | typeof schema.item_geometry
+    | typeof schema.item_placements;
+
+/** Whether the file has `name`: the item tables come with timeline-only migrations. */
+const hasTable = async (tx: DbTransaction, name: string) =>
+    !!(
+        await tx
+            .select({ n: sql<number>`count(*)` })
+            .from(sql`sqlite_schema`)
+            .where(sql`type = 'table' AND name = ${name}`)
+            .get()
+    )?.n;
+
 /**
- * Carries the Outline changes on beats about to be deleted forward, as cues are carried (ADR
- * 0004 amendment of 2026-10-15). Call it in the deletion's transaction, before the beats go, so
- * one undo restores both. Per item, of the changes on a run of deleted beats only the last is
- * kept: it moves to the first surviving beat after the run, unless the item already has a change
- * there, which wins. With no beat after the run, the changes go with their beats. Without this,
- * deleting the count a prop was made on would leave it Off field for good.
+ * Carries the item changes on beats about to be deleted forward, as cues are carried (ADR 0004
+ * amendment of 2026-10-15): Outline changes and Placement changes. Call it in the deletion's
+ * transaction, before the beats go, so one undo restores both. Per item and table, of the
+ * changes on a run of deleted beats only the last is kept: it moves to the first surviving beat
+ * after the run, unless the item already has a change there, which wins. With no beat after the
+ * run, the changes go with their beats. Without this, deleting the count a prop was made on
+ * would leave it Off field for good.
  */
-export async function carryItemGeometryPastDeletedBeatsInTransaction({
+export async function carryItemChangesPastDeletedBeatsInTransaction({
     tx,
     beatIds,
 }: {
     tx: DbTransaction;
     beatIds: ReadonlySet<number>;
 }): Promise<void> {
-    if (beatIds.size === 0 || !(await hasItemTables(tx))) return;
-    const rows = await tx
-        .select({
-            id: schema.item_geometry.id,
-            item_id: schema.item_geometry.item_id,
-            beat_id: schema.item_geometry.beat_id,
-        })
-        .from(schema.item_geometry)
-        .all();
-    if (!rows.some((row) => beatIds.has(row.beat_id))) return;
-    const { order, nextBeat } = await beatsAfterDeletion(tx, beatIds);
+    if (beatIds.size === 0) return;
+    const tables: [string, BeatKeyedItemTable][] = [
+        ["item_geometry", schema.item_geometry],
+        ["item_placements", schema.item_placements],
+    ];
+    let after: Awaited<ReturnType<typeof beatsAfterDeletion>> | null = null;
+    for (const [name, table] of tables) {
+        if (!(await hasTable(tx, name))) continue;
+        const rows = await tx
+            .select({
+                id: table.id,
+                item_id: table.item_id,
+                beat_id: table.beat_id,
+            })
+            .from(table)
+            .all();
+        if (!rows.some((row) => beatIds.has(row.beat_id))) continue;
+        after ??= await beatsAfterDeletion(tx, beatIds);
+        const { order, nextBeat } = after;
 
-    // The last change per item and destination; the rest go with their beats
-    const kept = new Map<string, { id: number; to: number; at: number }>();
-    for (const row of rows) {
-        if (!beatIds.has(row.beat_id)) continue;
-        const to = nextBeat.get(row.beat_id) ?? null;
-        if (to === null) continue;
-        const key = `${row.item_id}|${to}`;
-        const at = order.get(row.beat_id)!;
-        const current = kept.get(key);
-        if (!current || at > current.at) kept.set(key, { id: row.id, to, at });
+        // The last change per item and destination; the rest go with their beats
+        const kept = new Map<string, { id: number; to: number; at: number }>();
+        for (const row of rows) {
+            if (!beatIds.has(row.beat_id)) continue;
+            const to = nextBeat.get(row.beat_id) ?? null;
+            if (to === null) continue;
+            const key = `${row.item_id}|${to}`;
+            const at = order.get(row.beat_id)!;
+            const current = kept.get(key);
+            if (!current || at > current.at)
+                kept.set(key, { id: row.id, to, at });
+        }
+        const taken = new Set(
+            rows
+                .filter((row) => !beatIds.has(row.beat_id))
+                .map((row) => `${row.item_id}|${row.beat_id}`),
+        );
+        for (const [key, { id, to }] of kept) {
+            if (taken.has(key)) continue;
+            await tx
+                .update(table)
+                .set({ beat_id: to })
+                .where(eq(table.id, id))
+                .run();
+        }
     }
-    const taken = new Set(
-        rows
-            .filter((row) => !beatIds.has(row.beat_id))
-            .map((row) => `${row.item_id}|${row.beat_id}`),
-    );
-    const moving = [...kept.entries()].filter(([key]) => !taken.has(key));
-    for (const [, { id, to }] of moving)
-        await tx
-            .update(schema.item_geometry)
-            .set({ beat_id: to })
-            .where(eq(schema.item_geometry.id, id))
-            .run();
 }
