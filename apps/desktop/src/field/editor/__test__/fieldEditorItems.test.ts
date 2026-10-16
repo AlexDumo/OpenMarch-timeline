@@ -98,6 +98,12 @@ describe("FieldEditor with items", () => {
         expect(state.selected).toEqual([3]);
     });
 
+    it("selects every performer with Ctrl/Cmd+A, and no item", () => {
+        const { editor, state } = setup();
+        editor.selectAll();
+        expect(state.selected).toEqual([1, 3]);
+    });
+
     it("passes over a dimmed item", () => {
         const { editor, state } = setup({ dimmed: [2] });
         click(editor, 340, 115);
