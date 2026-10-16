@@ -4,6 +4,7 @@ import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { getTestWithHistory } from "@/test/history";
 import { performUndo } from "../history";
+import { deleteBeatsCarryingCues } from "../beat";
 import {
     createItems,
     getItemGeometry,
@@ -215,6 +216,35 @@ describeDbTests("items", (it) => {
     });
 
     describe("updateItems", () => {
+        it("clears a Floor prop's roll-out when it stops being a floor", async ({
+            db,
+            beats,
+        }) => {
+            expect(beats).toBeDefined();
+            const [beat] = await firstBeatIds(db);
+            const [item] = await createItems({
+                db,
+                newItems: [
+                    {
+                        ...riser(beat!),
+                        surfaceType: "floor",
+                        geometry: {
+                            outlineType: "rectangle",
+                            width: 2,
+                            depth: 1,
+                            rollsOutFrom: "front",
+                        },
+                    },
+                ],
+            });
+            await updateItems({
+                db,
+                modifiedItems: [{ itemId: item!.id, surfaceType: "platform" }],
+            });
+            const [row] = await getItemGeometry({ db });
+            expect([row!.rolls_out, row!.leading_edge]).toEqual([0, null]);
+        });
+
         testWithHistory(
             "renames an item and changes a prop's surface in one step",
             async ({ db, beats }) => {
@@ -270,6 +300,48 @@ describeDbTests("items", (it) => {
                     modifiedItems: [{ itemId: rifle.id, surfaceType: "floor" }],
                 }),
             ).rejects.toThrow(/surface/);
+        });
+    });
+
+    describe("deleting beats", () => {
+        const geometryBeats = async (db: DbConnection) =>
+            (await getItemGeometry({ db })).map((g) => g.beat_id);
+
+        it("carries an Outline change on a deleted beat to the next beat, so the item stays on field", async ({
+            db,
+            beats,
+        }) => {
+            expect(beats).toBeDefined();
+            const [, b1, b2, b3] = await firstBeatIds(db);
+            await createItems({ db, newItems: [riser(b1!)] });
+            await deleteBeatsCarryingCues({ db, beatIds: new Set([b1!, b2!]) });
+            expect(await geometryBeats(db)).toEqual([b3]);
+            await performUndo(db);
+            expect(await geometryBeats(db)).toEqual([b1]);
+        });
+
+        it("keeps the change already on the next beat, and the last of a deleted run", async ({
+            db,
+            beats,
+        }) => {
+            expect(beats).toBeDefined();
+            const [, b1, b2, b3] = await firstBeatIds(db);
+            const [item] = await createItems({ db, newItems: [riser(b1!)] });
+            await setItemGeometry({
+                db,
+                itemId: item!.id,
+                beatId: b2!,
+                geometry: { outlineType: "rectangle", width: 5, depth: 1 },
+            });
+            await setItemGeometry({
+                db,
+                itemId: item!.id,
+                beatId: b3!,
+                geometry: { outlineType: "rectangle", width: 7, depth: 1 },
+            });
+            await deleteBeatsCarryingCues({ db, beatIds: new Set([b1!, b2!]) });
+            const rows = await getItemGeometry({ db });
+            expect(rows.map((g) => [g.beat_id, g.width])).toEqual([[b3, 7]]);
         });
     });
 });
