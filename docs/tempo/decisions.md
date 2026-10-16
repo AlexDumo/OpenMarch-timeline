@@ -1418,12 +1418,14 @@ check.
 
 ## EC-16 Right-click **+ N counts** to change N (owner request, 2026-10-16)
 
-- **Choice:** right-clicking the pill opens a small menu: "Create pages every N counts to the end"
-  (when the music runs on, EC-10), then "New pages [16] counts" with the number selected, so
-  typing a number and Enter sets it (1–999; Set does too). The owner chose a typed number over a
-  list of presets. It writes the file's "Default new page counts" workspace setting, the same one
-  as in Workspace settings, so it isn't an undo step; pages already made keep their length. The
-  pill's tooltip says it can be right-clicked.
+- **Choice:** right-clicking the pill opens a small menu: "+ Create pages every N counts to the
+  end" (when the music runs on, EC-10), drawn as an outlined accent button that fills on hover,
+  then "New pages [16] counts" with the number selected. A whole number (1–999) is saved on Enter
+  or when the box loses focus; Escape cancels; anything else is ignored. Leaving the menu closes
+  it (a click on the field doesn't reach the menu's outside-click check, so the box's blur closes
+  it too). The owner chose a typed number over presets, and no Set button. It writes the file's
+  "Default new page counts" workspace setting, so it isn't an undo step; pages already made keep
+  their length. The pill's tooltip says it can be right-clicked.
 - **Alternatives:** presets 4–32 (built first); a number field on the pill; only in Workspace
   settings.
 - **Validate:** V-304.

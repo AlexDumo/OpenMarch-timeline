@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { PlusIcon } from "@phosphor-icons/react";
 import {
     KEEP_MENU_EVENTS,
     TIMELINE_MENU_CONTENT_CLASS,
 } from "./TimelineRangeMenu";
 
-const ITEM_CLASS =
-    "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none";
+/** The menu's one action: it reads as a button, as **+ N counts** does, and fills on hover */
+const ACTION_CLASS =
+    "border-accent text-accent rounded-4 data-[highlighted]:bg-accent data-[highlighted]:text-text-invert flex cursor-pointer items-center gap-6 border px-8 py-5 text-[12px] font-medium outline-hidden transition-colors select-none";
 
 /** The most counts a new page can default to */
 export const MAX_DEFAULT_PAGE_COUNTS = 999;
@@ -23,7 +25,8 @@ export const parsePageCounts = (text: string): number | null => {
 
 /**
  * The right-click menu on **+ N counts** (E1): how many counts a new page gets, the file's "Default
- * new page counts" setting (the same as in Workspace settings), typed, then Enter; and, when the music runs on past the last page, pages every N counts to its end (FB-7).
+ * new page counts" setting (the same as in Workspace settings), typed, saved on Enter or when the
+ * box loses focus (Escape cancels); and, when the music runs on past the last page, pages every N counts to its end (FB-7).
  * Opens where the pill was right-clicked.
  */
 export function TimelineAppendCountsMenu({
@@ -47,6 +50,7 @@ export function TimelineAppendCountsMenu({
 }) {
     const [typed, setTyped] = useState(String(counts));
     const field = useRef<HTMLInputElement>(null);
+    const content = useRef<HTMLDivElement>(null);
     // Typing is the point: the box has focus, its number selected, once the menu has placed it
     useEffect(() => {
         const frame = requestAnimationFrame(() => {
@@ -56,9 +60,11 @@ export function TimelineAppendCountsMenu({
         return () => cancelAnimationFrame(frame);
     }, []);
     const parsed = parsePageCounts(typed);
-    const choose = (next: number) => {
-        if (next !== counts) onCountsChange(next);
-        onClose();
+    // Escape closes without keeping what was typed; the blur that follows mustn't save it
+    const cancelled = useRef(false);
+    const save = () => {
+        if (cancelled.current || parsed === null || parsed === counts) return;
+        onCountsChange(parsed);
     };
     return (
         <DropdownMenu.Root
@@ -77,6 +83,7 @@ export function TimelineAppendCountsMenu({
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
                 <DropdownMenu.Content
+                    ref={content}
                     data-testid="timeline-append-counts-menu"
                     align="start"
                     {...KEEP_MENU_EVENTS}
@@ -87,9 +94,10 @@ export function TimelineAppendCountsMenu({
                             <DropdownMenu.Item
                                 data-testid="timeline-pages-to-end"
                                 title={toEnd.title}
-                                className={ITEM_CLASS}
+                                className={ACTION_CLASS}
                                 onSelect={toEnd.onAppend}
                             >
+                                <PlusIcon size={12} weight="bold" />
                                 {toEnd.label}
                             </DropdownMenu.Item>
                             <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
@@ -99,7 +107,9 @@ export function TimelineAppendCountsMenu({
                         className="flex items-center gap-6 px-8 py-4 text-[12px]"
                         onSubmit={(event) => {
                             event.preventDefault();
-                            if (parsed !== null) choose(parsed);
+                            save();
+                            cancelled.current = true;
+                            onClose();
                         }}
                     >
                         <label className="flex items-center gap-6">
@@ -112,26 +122,33 @@ export function TimelineAppendCountsMenu({
                                 onChange={(event) =>
                                     setTyped(event.target.value)
                                 }
+                                // Enter, or leaving the box, saves a whole number
+                                onBlur={(event) => {
+                                    save();
+                                    // A click on the field doesn't reach the menu's outside-click
+                                    // check, but it takes the focus: leaving the menu closes it
+                                    const next = event.relatedTarget;
+                                    if (
+                                        !(next instanceof Node) ||
+                                        !content.current?.contains(next)
+                                    ) {
+                                        cancelled.current = true;
+                                        onClose();
+                                    }
+                                }}
                                 // The menu's typeahead would take the digits; Escape still closes
                                 onKeyDown={(event) => {
-                                    if (event.key !== "Escape")
-                                        event.stopPropagation();
+                                    if (event.key === "Escape")
+                                        cancelled.current = true;
+                                    else event.stopPropagation();
                                 }}
                                 className="border-stroke bg-bg-1 text-text rounded-4 focus-visible:border-accent h-22 w-48 border px-4 font-mono outline-hidden"
                             />
                             counts
                         </label>
-                        <button
-                            type="submit"
-                            disabled={parsed === null}
-                            className="text-accent rounded-4 hover:bg-fg-2 px-4 py-1 font-medium disabled:opacity-40"
-                        >
-                            Set
-                        </button>
                     </form>
-                    <p className="text-text-subtitle max-w-[200px] px-8 pb-2 text-[11px]">
-                        Also in Workspace settings. Pages already made keep
-                        their length.
+                    <p className="text-text-subtitle px-8 pb-2 text-[11px]">
+                        Pages already made keep their length.
                     </p>
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
