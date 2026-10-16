@@ -37,7 +37,7 @@ const look = (
     guard?: "swingFlag" | "doubleSwingFlag",
 ): MarcherSlotLook => ({
     body: defaultPerformerBody(id),
-    uniform: sectionUniform(section, null, "up", undefined, guard),
+    uniform: sectionUniform(section, "up", undefined, undefined, guard),
     silkColor: 0xcc2233,
 });
 
