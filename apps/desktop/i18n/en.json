@@ -1712,6 +1712,7 @@
         "importing": "Importing...",
         "importLabel": "MusicXML Import",
         "importSuccess": "MusicXML file: \"{fileName}\" imported successfully!",
+        "repeatPlayNote": "m{label}, time {time}",
         "individualBeatTempos": "Individual beat tempos",
         "makeMixedMeter": "Make Mixed Meter",
         "makeSimpleMeter": "Make Regular Meter",

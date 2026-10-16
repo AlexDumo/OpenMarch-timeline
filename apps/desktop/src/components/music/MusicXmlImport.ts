@@ -15,8 +15,8 @@ import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     Measure as ParserMeasure,
-    extractXmlFromMxlFile,
     parseMusicXml,
+    readMusicXmlFile,
 } from "@openmarch/musicxml-parser";
 import { DatabaseBeat, NewBeatArgs } from "@/db-functions";
 import { NewMeasureArgs } from "@/db-functions";
@@ -72,11 +72,14 @@ export const _importMusicXmlFile = async ({
             await withTimelinePageRipple(tx, async () => {
                 const { file, allPages, measures, allBeats } = data;
 
-                // Import & parse MusicXML file + handle MXL files
-                const xmlText = file.name.endsWith(".mxl")
-                    ? await extractXmlFromMxlFile(await file.arrayBuffer())
-                    : await file.text();
+                // Read the file's bytes (compressed or not, any text encoding), then parse it.
+                // Measures come in the order they are played, repeats played out
+                const xmlText = await readMusicXmlFile(
+                    await file.arrayBuffer(),
+                );
                 let parsedMeasures: ParserMeasure[] = parseMusicXml(xmlText);
+                if (parsedMeasures.length === 0)
+                    throw new Error("The file has no measures");
 
                 // Get page count
                 if (!allPages) throw new Error("Failed to fetch pages");
@@ -127,7 +130,15 @@ export const _importMusicXmlFile = async ({
                     (measure, i) => ({
                         start_beat: dbBeats[measureStartBeatPositions[i]].id,
                         rehearsal_mark: measure.rehearsalMark,
-                        notes: measure.notes,
+                        // A measure played again by a repeat says which written measure it is
+                        notes:
+                            measure.notes ??
+                            (measure.time && measure.time > 1
+                                ? tolgee.t("music.repeatPlayNote", {
+                                      label: measure.label ?? "",
+                                      time: measure.time,
+                                  })
+                                : undefined),
                     }),
                 );
                 await createMeasuresInTransaction({

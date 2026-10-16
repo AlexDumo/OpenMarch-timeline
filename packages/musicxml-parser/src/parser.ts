@@ -10,7 +10,6 @@ import {
     formatBpm,
     formatTempoMarking,
     markingFromQuarterBpm,
-    unitQuarters,
     type BeatUnit,
     type TempoMarking,
 } from "./tempo";
