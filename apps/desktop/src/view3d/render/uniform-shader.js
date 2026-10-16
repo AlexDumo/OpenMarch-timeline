@@ -267,9 +267,11 @@ vec3 uniformColor() {
       float plate = 1.0 - over(length(q) - 1.0);
       c = mix(c, uTrim, plate * front);
       c = mix(c, uSecondary, (1.0 - over(length(q) - 0.78)) * front);
-      // the cummerbund around the waist, with two pleats
-      float cb = over(p.y - ${f(L.belt - 0.02)}) * over(${f(L.belt + 0.1)} - p.y);
-      float pleat = max(band(p.y - ${f(L.belt + 0.025)}, 0.0025), band(p.y - ${f(L.belt + 0.06)}, 0.0025));
+      // high-waisted trousers below the cummerbund
+      c = mix(c, uPants, over(${f(L.belt + 0.06)} - p.y));
+      // the cummerbund, right under the braid, with two pleats
+      float cb = over(p.y - ${f(L.belt + 0.06)}) * over(${f(L.belt + 0.18)} - p.y);
+      float pleat = max(band(p.y - ${f(L.belt + 0.1)}, 0.0025), band(p.y - ${f(L.belt + 0.14)}, 0.0025));
       c = mix(c, mix(uSecondary, uSecondary * 0.72, pleat), cb);
     }
     c = mix(c, uTrim, over(p.y - ${f(L.collar)}) * uCollar);  // high collar
