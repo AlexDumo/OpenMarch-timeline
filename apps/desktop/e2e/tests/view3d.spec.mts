@@ -7,17 +7,18 @@
  * it in the editor, and check it persists after reopening the show; and
  * check the window makes no network requests.
  *
- * Headless CI may have no WebGL. The window then shows a fallback message
- * instead of the scene, so the sync and venue checks read the overlay's DOM
- * (the readout and the settings panel's venue and lighting pickers), and the
- * scene wrapper's `data-kit` / `data-lighting` are checked only when WebGL is
- * available.
+ * Headless CI may have no GPU: no WebGL, or WebGL drawn in software. The
+ * window then shows a fallback message instead of the scene, so the sync and
+ * venue checks read the overlay's DOM (the readout and the settings panel's
+ * venue and lighting pickers), and the scene wrapper's `data-kit` /
+ * `data-lighting` are checked only on a GPU.
  */
 import { test } from "../fixtures.mjs";
 import { expect, type Page } from "playwright/test";
 import type { ElectronApplication } from "playwright";
 import { seedShowSql } from "../browser/seed.mjs";
 import { selectTimelinePage as selectPage } from "../utils/timeline.mjs";
+import { classifyGlRenderer, type GlKind } from "../../src/field/fieldQuality";
 
 /** The largest difference allowed between the window's and the editor's show time. */
 const SYNC_TOLERANCE_MS = 50;
@@ -264,7 +265,7 @@ async function expectVenue(
     view3d: Page,
     kit: string,
     lighting: string,
-    webgl: boolean,
+    gpu: boolean,
 ) {
     const venue = view3d.getByTestId("view3d-venue-picker");
     const light = view3d.getByTestId("view3d-lighting-picker");
@@ -276,7 +277,7 @@ async function expectVenue(
         "data-state",
         "on",
     );
-    if (webgl) {
+    if (gpu) {
         // The scene reports the kit and lighting it actually built.
         const scene = view3d.getByTestId("view3d-scene");
         await expect(scene).toHaveAttribute("data-kit", kit, {
@@ -286,11 +287,21 @@ async function expectVenue(
     }
 }
 
-async function hasWebGl(view3d: Page): Promise<boolean> {
-    return view3d.evaluate(() => {
+/** What draws WebGL in the window, which decides whether the scene draws. */
+async function glKind(view3d: Page): Promise<GlKind> {
+    const renderer = await view3d.evaluate(() => {
         const canvas = document.createElement("canvas");
-        return !!(canvas.getContext("webgl2") ?? canvas.getContext("webgl"));
+        const gl = (canvas.getContext("webgl2") ??
+            canvas.getContext("webgl")) as WebGLRenderingContext | null;
+        if (!gl) return null;
+        const debug = gl.getExtension("WEBGL_debug_renderer_info");
+        return String(
+            gl.getParameter(
+                debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER,
+            ),
+        );
     });
+    return classifyGlRenderer(renderer);
 }
 
 // eslint-disable-next-line max-lines-per-function
@@ -336,15 +347,21 @@ test("3D View follows the editor and saves the venue", async ({
 
     // Open the window from the editor.
     let view3d = await openView3d(app, editor, networkUrls);
-    const webgl = await hasWebGl(view3d);
-    console.log(`3D View WebGL: ${webgl ? "available" : "unavailable"}`);
+    const kind = await glKind(view3d);
+    const gpu = kind === "hardware";
+    console.log(`3D View WebGL: ${kind}`);
     testInfo.annotations.push({
         type: "webgl",
-        description: webgl ? "available" : "unavailable (fallback shown)",
+        description: gpu ? kind : `${kind} (fallback shown)`,
     });
-    if (!webgl) {
+    if (!gpu) {
         await expect(
-            view3d.getByText("3D View needs WebGL", { exact: false }),
+            view3d.getByText(
+                kind === "none"
+                    ? "3D View needs WebGL"
+                    : "3D View needs a graphics card",
+                { exact: false },
+            ),
         ).toBeVisible();
     }
 
@@ -440,7 +457,7 @@ test("3D View follows the editor and saves the venue", async ({
         view3d,
         "view3d-lighting-picker",
     ))!;
-    await expectVenue(view3d, initialKit, initialLighting, webgl);
+    await expectVenue(view3d, initialKit, initialLighting, gpu);
 
     const kit = initialKit === "college" ? "bighs" : "college";
     await view3d
@@ -459,20 +476,20 @@ test("3D View follows the editor and saves the venue", async ({
         .getByTestId("view3d-lighting-picker")
         .locator(`[data-value="${lighting}"]`)
         .click();
-    await expectVenue(view3d, kit, lighting, webgl);
+    await expectVenue(view3d, kit, lighting, gpu);
 
     // Undo in the editor reverts each change; redo puts it back.
     await editor.getByRole("tab", { name: "File" }).click();
     const undo = editor.getByRole("button", { name: "Undo", exact: true });
     const redo = editor.getByRole("button", { name: "Redo", exact: true });
     await undo.click();
-    await expectVenue(view3d, kit, kitLighting, webgl);
+    await expectVenue(view3d, kit, kitLighting, gpu);
     await undo.click();
-    await expectVenue(view3d, initialKit, initialLighting, webgl);
+    await expectVenue(view3d, initialKit, initialLighting, gpu);
     await redo.click();
-    await expectVenue(view3d, kit, kitLighting, webgl);
+    await expectVenue(view3d, kit, kitLighting, gpu);
     await redo.click();
-    await expectVenue(view3d, kit, lighting, webgl);
+    await expectVenue(view3d, kit, lighting, gpu);
 
     // Close the show (which closes the window) and reopen both.
     const closed = view3d.waitForEvent("close");
@@ -499,7 +516,7 @@ test("3D View follows the editor and saves the venue", async ({
     ).toBeVisible({ timeout: 20_000 });
 
     view3d = await openView3d(app, editor, networkUrls);
-    await expectVenue(view3d, kit, lighting, webgl);
+    await expectVenue(view3d, kit, lighting, gpu);
     // The reopened window picks up the editor's selection.
     const selectedName = (
         await editor

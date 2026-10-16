@@ -2186,7 +2186,8 @@
         },
         "window": {
             "title": "3D View — {showName}",
-            "graphicsUnavailable": "3D View needs WebGL, which isn't available on this computer."
+            "graphicsUnavailable": "3D View needs WebGL, which isn't available on this computer.",
+            "gpuUnavailable": "3D View needs a graphics card (GPU). This computer is drawing graphics in software, which is too slow for 3D."
         },
         "playback": {
             "label": "Playback"

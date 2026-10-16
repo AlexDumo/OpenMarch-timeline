@@ -9,7 +9,7 @@
  * `Scene.tsx` (P3.1) draws the venue, and `overlay/` (P3.3) floats the
  * venue, lighting and camera controls and the readout over it.
  */
-import { Component, type ReactNode, useEffect } from "react";
+import { Component, type ReactNode, useEffect, useState } from "react";
 import {
     QueryCache,
     QueryClient,
@@ -17,10 +17,24 @@ import {
 } from "@tanstack/react-query";
 import { T, TolgeeProvider, useTranslate } from "@tolgee/react";
 import TitleBar from "@/components/titlebar/TitleBar";
+import { probeWebGL, type GlKind } from "@/field/fieldQuality";
 import tolgee from "@/global/singletons/Tolgee";
 import { startView3dSync } from "@/view3d/sync/view3dSyncStore";
 import View3dOverlay from "./overlay/View3dOverlay";
 import Scene from "./Scene";
+
+/**
+ * What the viewport shows instead of the scene, as a translation key, or null
+ * to draw the scene. The scene draws only on a GPU: WebGL drawn in software
+ * would run the whole view on the CPU, too slow to use and hard on the
+ * battery.
+ */
+export function viewportFallback(kind: GlKind): string | null {
+    if (kind === "hardware") return null;
+    return kind === "software"
+        ? "view3d.window.gpuUnavailable"
+        : "view3d.window.graphicsUnavailable";
+}
 
 export interface View3dWindowParams {
     showName: string;
@@ -81,6 +95,8 @@ export default function View3dRoot() {
 function View3dWindow() {
     const { t } = useTranslate();
     const title = t("view3d.window.title", { showName: params.showName });
+    // Probed once, before the scene creates its own context.
+    const [fallback] = useState(() => viewportFallback(probeWebGL().kind));
 
     useEffect(() => {
         document.title = title;
@@ -93,18 +109,28 @@ function View3dWindow() {
                 className="relative min-h-0 flex-1"
                 data-testid="view3d-viewport"
             >
-                <ViewportErrorBoundary
-                    fallback={
-                        <p className="text-body text-text/60 p-24">
-                            <T keyName="view3d.window.graphicsUnavailable" />
-                        </p>
-                    }
-                >
-                    <Scene />
-                </ViewportErrorBoundary>
+                {fallback ? (
+                    <ViewportMessage keyName={fallback} />
+                ) : (
+                    <ViewportErrorBoundary
+                        fallback={
+                            <ViewportMessage keyName="view3d.window.graphicsUnavailable" />
+                        }
+                    >
+                        <Scene />
+                    </ViewportErrorBoundary>
+                )}
                 <View3dOverlay />
             </div>
         </main>
+    );
+}
+
+function ViewportMessage({ keyName }: { keyName: string }) {
+    return (
+        <p className="text-body text-text/60 p-24">
+            <T keyName={keyName} />
+        </p>
     );
 }
 

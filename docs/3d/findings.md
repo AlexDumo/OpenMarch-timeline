@@ -458,6 +458,51 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   to spare and takes 0.19 s. The integrated-GPU budget is still
   unmeasured.
 
+### 2026-10-16 · trevor (3d/p7-unlit-lights) · where the GPU frame goes (P7.2)
+
+- Result: **unlit lights were a third of the GPU frame.** Hiding a light while
+  its intensity is 0 cuts the frame from 13.87 to 9.72 ms at high (−30%) and
+  2.42 to 1.81 ms at low (−25%), by day, with identical pixels.
+- Breakdown, high, by switching one part off at a time (GPU ms a frame, two
+  fresh pages each): whole frame 14.3; no marchers 6.8 (marchers ≈ 7.5); no
+  light-pole spots 9.3 (≈ 5); no shadows 13.3 (the shadow map isn't redrawn
+  while the camera orbits); crowd and stands under 1; 1x pixel ratio 7–10;
+  empty scene 1.4. The marchers are 1.19M of 1.22M triangles.
+- Cause: by day the four pole spots have intensity 0 but stay visible, and
+  three.js shades every visible light for every pixel whatever its
+  intensity. The pro roof spots, gym show spots and the night sun did the
+  same. `setLightIntensity` (environment/lighting.ts) now sets the intensity
+  and hides the light at 0.
+- Cost: each preset now lights the scene with its own set of lights, so its
+  shaders differ. Compiled on the switch, the first change to night froze
+  the window for 1.46 s (before: 0.14 s). `warmLighting.ts` compiles the
+  kit's other presets in the background with `compileAsync` once the scene
+  stops adding shaders (38 ms, 13 ms of it on the main thread); the first
+  switch to night is now 50 ms. It runs only with
+  `KHR_parallel_shader_compile`; without it the compile would block, so the
+  switch pays instead.
+- GPU only: under SwiftShader the 3D View drew the whole scene on the CPU.
+  The window now probes WebGL with the field's `probeWebGL()` before the
+  scene mounts and shows "3D View needs a graphics card (GPU)" on a software
+  renderer instead of drawing. `failIfMajorPerformanceCaveat` doesn't catch
+  SwiftShader in Chromium 148, so the probe reads the renderer name. The P5.1
+  SwiftShader numbers above describe a path that no longer draws.
+- Machine and fixture: Apple M1 Pro, web preview in headless Chromium 148
+  (ANGLE Metal, no frame cap), 1400 × 900 at DPR 2 (2800 × 1713 canvas), LHB
+  demo (385 marchers), hs kit by day, Podium camera, 3 s orbit drag, GPU time
+  from `EXT_disjoint_timer_query_webgl2` medians, three alternating rounds
+  of a fresh page each. The before numbers hold the unlit lights visible in
+  the same build, which is what the old code did. A temporary hook exposed
+  the renderer; it was not committed.
+- Parity: day before against after, 0 of 1.2M pixels differ by more than 1.
+  Night and dusk turn the right lights on (checked through the settings
+  panel). Idle: 0 frames drawn in 5 s once settled.
+- Not run: the GPU benchmark harness, an energy reading on battery, an
+  integrated GPU, Electron end to end (the spec's GPU check was updated to
+  match).
+- Next: the marchers are now most of the frame (≈ 7.5 of 9.7 ms at high),
+  mostly fill at DPR 2.
+
 ## Packaging
 
 ### 2026-10-11 · 3d-worker (3d/c1-sharp) · C1.5 sharp, macOS arm64
