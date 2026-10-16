@@ -3119,8 +3119,9 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
 });
 
 /**
- * Where Stop goes back to, while playing (UI-24): the resting playhead, drawn as its ghost (a
- * hollow head and a dashed line), so you can see where playback came from, in Basic as in Expert.
+ * Where Stop goes back to, while playing (UI-24): the resting playhead, drawn as a flag (a pennant
+ * like the start flag's, in the playhead's color, on a dashed line), so you can see where playback
+ * came from, in Basic as in Expert.
  * REAPER's edit cursor, which stays while the play cursor moves, is the model. It never takes the
  * pointer: clicks there seek playback, as anywhere else.
  */
@@ -3142,22 +3143,18 @@ export const TimelineReturnMarker = memo(function TimelineReturnMarker({
             style={{ left, height }}
         >
             <span
-                className="border-accent absolute top-[10px] left-1/2 -translate-x-1/2 border-l-2 border-dashed opacity-70"
-                style={{ height: height - 10 }}
+                className="border-accent absolute top-0 left-1/2 -translate-x-1/2 border-l-2 border-dashed opacity-70"
+                style={{ height }}
             />
+            {/* A pennant like the start flag's, mirrored to hang back from its stem, so it reads
+                as a marker rather than a second playhead head to grab */}
             <svg
                 width="12"
-                height="11"
-                viewBox="0 0 12 11"
-                className="text-accent absolute top-0 left-[calc(50%-6px)]"
+                height="12"
+                viewBox="0 0 12 12"
+                className="text-accent absolute top-0 right-[calc(50%-1px)]"
             >
-                <path
-                    d="M1 1 H11 V5.6 L6 9.6 L1 5.6 Z"
-                    fill="var(--color-bg-1, transparent)"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                />
+                <path d="M12 0 L0 0 L12 12 Z" fill="currentColor" />
             </svg>
         </span>
     );

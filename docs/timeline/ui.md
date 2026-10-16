@@ -1158,8 +1158,9 @@ from it. The spec still wins on the model; this file decides presentation.
     always did (lead default, V-273).
   - **Stop when nothing plays** does nothing (owner).
   - **Where Stop goes back to is marked while playing** (owner, 2026-10-16: "hard to see in Expert,
-    not at all in Basic"). The resting playhead stays drawn as its ghost, a hollow head and a
-    dashed line, while the live playhead moves; it goes when playback ends. It is the same in Basic
+    not at all in Basic"). The resting playhead stays drawn as a flag, a pennant like the start flag's in the playhead's color, mirrored to hang back from a
+    dashed stem, while the live playhead moves (owner, 2026-10-16: a hollow playhead head on a dashed
+    line looked like something to grab); it goes when playback ends. It is the same in Basic
     and Expert, and never takes the pointer. REAPER's edit cursor, which stays while the play
     cursor moves, is the model (V-275).
   - **The button.** While playing, Play is Stop ("Stop and go back"), and its tooltip is a guide to
