@@ -91,6 +91,15 @@ describeDbTests("fieldFloor", (it) => {
             );
         });
 
+        it("never reads the legacy field_properties.image", async ({ db }) => {
+            await db
+                .update(schema.field_properties)
+                .set({ image: bytes("legacy image") })
+                .where(eq(schema.field_properties.id, 1))
+                .run();
+            expect(await getFieldFloorImage({ db })).toBeNull();
+        });
+
         it("is null when the floor's Version isn't in the show", async ({
             db,
         }) => {

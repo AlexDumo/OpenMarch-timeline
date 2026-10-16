@@ -2,6 +2,7 @@ import { FieldProperties } from "@openmarch/core";
 import { db, schema } from "../database/db";
 import { eq } from "drizzle-orm";
 import { transactionWithHistory } from "../../db-functions/history";
+import { getFieldFloorImage } from "../../db-functions/fieldFloor";
 
 const { field_properties } = schema;
 
@@ -66,14 +67,12 @@ export async function updateFieldPropertiesImage(
     );
 }
 
+/**
+ * The field image: the show's floor's display texture (ADR 0002 D-23), or null. The legacy
+ * `field_properties.image` column is read only by convert on open.
+ */
 export async function getFieldPropertiesImage(): Promise<Uint8Array | null> {
-    const result = await db
-        .select({ image: field_properties.image })
-        .from(field_properties)
-        .where(eq(field_properties.id, 1))
-        .prepare()
-        .get();
-    return result?.image ?? null;
+    return getFieldFloorImage({ db });
 }
 
 export async function deleteFieldPropertiesImage(): Promise<void> {

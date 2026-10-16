@@ -3,6 +3,7 @@ import Page from "@/global/classes/Page";
 import { FieldProperties } from "@openmarch/core";
 import { ReadableCoords } from "@/global/classes/ReadableCoords";
 import { db } from "@/global/database/db";
+import { getFieldFloorImage } from "@/db-functions/fieldFloor";
 import { SectionAppearance } from "@/db-functions";
 import type { AppearanceComponentOptional } from "@/entity-components/appearance";
 import type { PagePosition, PagePositionMap } from "./exportPagePositions";
@@ -187,11 +188,9 @@ export const generateDrillChartExportSVGs = async (args: {
     return { SVGs: outputSVGs, coords: readableCoordsStrings };
 };
 
+/** The field image: the show's floor (ADR 0002 D-23), or null. */
 export async function getFieldPropertiesImage(): Promise<Uint8Array | null> {
-    const result = await db.query.field_properties.findFirst({
-        columns: { image: true },
-    });
-    return result?.image ?? null;
+    return getFieldFloorImage({ db });
 }
 export const OPENMARCH_FIELD_IMAGE_PLACEHOLDER =
     "OPENMARCH_FIELD_IMAGE_PLACEHOLDER";
