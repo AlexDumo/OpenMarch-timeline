@@ -5,7 +5,11 @@ import { readTimelineTables } from "@/timeline/timelineRows";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { mapDbErrors, refuse } from "./timelineErrors";
-import { findTimelineByRange, type DatabaseTimeline } from "./timelines";
+import {
+    findTimelineByRange,
+    timelinesWithRange,
+    type DatabaseTimeline,
+} from "./timelines";
 import {
     createTimelineTransitionsInTransaction,
     deleteTimelineTransitionRowsInTransaction,
@@ -222,11 +226,18 @@ export const addMarchersToTimelineInTransaction = async ({
     range,
     marcherIds,
     passThrough = false,
+    into,
 }: {
     tx: DbTransaction;
     range: BeatRange;
     marcherIds: readonly number[];
     passThrough?: boolean;
+    /**
+     * UI-25: the stored timeline over `range` to add to, when several share it (a move split off
+     * a page's timeline that is selected). Ignored unless it exists with exactly `range`; the
+     * oldest over the range (the page's) is used otherwise.
+     */
+    into?: number;
 }): Promise<AddMarchersToTimelineResult> => {
     const { start, end } = range;
     if (
@@ -247,7 +258,12 @@ export const addMarchersToTimelineInTransaction = async ({
     const missing = ids.find((id) => !labels.has(id));
     if (missing !== undefined) refuse(`marcher ${missing} does not exist`);
 
-    const existing = await findTimelineByRange(tx, range);
+    const existing =
+        (into === undefined
+            ? undefined
+            : (await timelinesWithRange(tx, range)).find(
+                  (t) => t.id === into,
+              )) ?? (await findTimelineByRange(tx, range));
     const timelinesOf = await timelinesOfMarchers(tx, ids);
     // In any timeline over exactly this range: a file from before C-12 may hold two, and a
     // marcher in the newer one is in this timeline too (one transition per marcher per range)

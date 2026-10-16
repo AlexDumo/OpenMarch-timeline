@@ -294,8 +294,8 @@ export const moveLabel = ({
 }): string => name ?? (number === undefined ? "Move" : `Move ${number}`);
 
 /**
- * Every move's label by stored timeline id (UI-14). Moves are the stored timelines off the page
- * boxes (the ones drawn as clips, UI-10). A move made since the review stores its own "Move N"
+ * Every move's label by stored timeline id (UI-14). Moves are the stored timelines that aren't a
+ * page box's own (`pageTimelineIds`; the ones drawn as clips, UI-10, UI-25). A move made since the review stores its own "Move N"
  * (`nextAutoMoveName`), which never changes; a move stored without a name is numbered after the
  * highest of those, by start, then id.
  */
@@ -308,9 +308,9 @@ export function moveLabels(
     }[],
     pageBoxes: readonly { readonly start: number; readonly end: number }[],
 ): Map<number, string> {
-    const boxes = new Set(pageBoxes.map((b) => `${b.start}:${b.end}`));
+    const pages = pageTimelineIds(timelines, pageBoxes);
     const moves = timelines
-        .filter((t) => !boxes.has(`${t.start}:${t.end}`))
+        .filter((t) => !pages.has(t.id))
         .sort((a, b) => a.start - b.start || a.id - b.id);
     let next =
         Math.max(0, ...timelines.map((t) => autoMoveNumber(t.name) ?? 0)) + 1;
@@ -318,6 +318,54 @@ export function moveLabels(
         moves.map((t) => [t.id, t.name ?? moveLabel({ number: next++ })]),
     );
 }
+
+/**
+ * The stored timeline each page box stands for (UI-10 "Clips only off the page boxes"; UI-25): the
+ * oldest (lowest id) with exactly the box's range. A range may hold several moves since UI-25 (a
+ * move split off a page's timeline keeps its range); the others are moves, drawn as clips.
+ */
+export function pageTimelineIds(
+    timelines: readonly {
+        readonly id: number;
+        readonly start: number;
+        readonly end: number;
+    }[],
+    pageBoxes: readonly { readonly start: number; readonly end: number }[],
+): Set<number> {
+    const boxes = new Set(pageBoxes.map((b) => `${b.start}:${b.end}`));
+    const oldest = new Map<string, number>();
+    for (const t of timelines) {
+        const key = `${t.start}:${t.end}`;
+        if (!boxes.has(key)) continue;
+        const seen = oldest.get(key);
+        if (seen === undefined || t.id < seen) oldest.set(key, t.id);
+    }
+    return new Set(oldest.values());
+}
+
+/** Whether stored timeline `timeline` is the page timeline a page box stands for (`pageTimelineIds`). */
+export const isPageTimeline = (
+    timeline: {
+        readonly id: number;
+        readonly start: number;
+        readonly end: number;
+    },
+    timelines: readonly {
+        readonly id: number;
+        readonly start: number;
+        readonly end: number;
+    }[],
+    pageBoxes: readonly { readonly start: number; readonly end: number }[],
+): boolean =>
+    pageBoxes.some(
+        (b) => b.start === timeline.start && b.end === timeline.end,
+    ) &&
+    !timelines.some(
+        (t) =>
+            t.id < timeline.id &&
+            t.start === timeline.start &&
+            t.end === timeline.end,
+    );
 
 /** The longest name a move keeps (UI-14); a longer one is cut to it. */
 export const MOVE_NAME_MAX_LENGTH = 80;
