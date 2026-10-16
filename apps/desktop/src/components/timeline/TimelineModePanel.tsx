@@ -1017,7 +1017,8 @@ export function describePageFlagBlock(
         "linkId" | "label" | "startBeatIndex" | "endBeatIndex"
     >[],
 ): string {
-    if (block.kind === "show-end") return "The end of the show";
+    // Nothing stops the last flag past every move (endless counts); never shown
+    if (block.kind === "open") return "";
     const flags = pageFlags(pages);
     if (block.kind === "flag") {
         const flag = flags.find((f) => f.page.id === block.pageId);

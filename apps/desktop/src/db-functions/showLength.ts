@@ -1,20 +1,14 @@
-import { asc } from "drizzle-orm";
 import { schema } from "@/global/database/db";
-import {
-    continuedCounts,
-    countContinuation,
-    countsToReach,
-    pageFlagsToEnd,
-    type CountContinuation,
-} from "@/timeline/showLength";
-import { createBeatsInTransaction } from "./beat";
-import { createMeasuresInTransaction } from "./measures";
-import { ensureSecondBeatHasPage, FIRST_PAGE_ID } from "./page";
+import { countsToReach, pageFlagsToEnd } from "@/timeline/showLength";
+import { appendCountsInTransaction, readContinuation } from "./endlessCounts";
+import { FIRST_PAGE_ID } from "./page";
 import { addPageFlagInTransaction, type AddedPageFlag } from "./pageFlags";
-import { readPageGrid, withTimelinePageRipple } from "./timelineRipple";
+import { readPageGrid } from "./timelineRipple";
 import { refuse } from "./timelineErrors";
 import { transactionWithHistory } from "./history";
 import type { DbConnection, DbTransaction } from "./types";
+
+export { appendCountsInTransaction } from "./endlessCounts";
 
 /**
  * Counts after the end of the show (tempo experiment E1, "a show is as long as its music").
@@ -25,76 +19,6 @@ import type { DbConnection, DbTransaction } from "./types";
  * the end of the show, so no timeline row moves (the last page grows only where its flag was
  * already past the show's last count). Each is one undoable edit.
  */
-
-/** `countContinuation` for the show in `tx`, and the show's end in seconds */
-async function readContinuation(tx: DbTransaction): Promise<{
-    continuation: CountContinuation;
-    beatCount: number;
-    endSeconds: number;
-}> {
-    const beats = await tx
-        .select({ id: schema.beats.id, duration: schema.beats.duration })
-        .from(schema.beats)
-        .orderBy(asc(schema.beats.position), asc(schema.beats.id))
-        .all();
-    const ordinal = new Map(beats.map((b, i) => [b.id, i]));
-    const measures = await tx
-        .select({ startBeat: schema.measures.start_beat })
-        .from(schema.measures)
-        .all();
-    const measureStarts = measures.flatMap((m) => {
-        const index = ordinal.get(m.startBeat);
-        return index === undefined ? [] : [index];
-    });
-    return {
-        continuation: countContinuation({ beats, measureStarts }),
-        beatCount: beats.length,
-        endSeconds: beats.reduce((sum, b) => sum + b.duration, 0),
-    };
-}
-
-/**
- * Appends `counts` counts after the show's last count, continuing its tempo and meter, with a
- * measure line on each appended count that starts a measure. Call it inside a
- * `transactionWithHistory`. Returns the show's beat count afterwards (beat 0 included).
- */
-export async function appendCountsInTransaction({
-    tx,
-    counts,
-}: {
-    tx: DbTransaction;
-    counts: number;
-}): Promise<number> {
-    if (!Number.isInteger(counts) || counts < 0)
-        refuse(`can't add ${counts} counts: it must be a whole number`);
-    const { continuation, beatCount } = await readContinuation(tx);
-    if (counts === 0) return beatCount;
-    const appended = continuedCounts(continuation, counts);
-    await withTimelinePageRipple(tx, async () => {
-        const created = await createBeatsInTransaction({
-            tx,
-            newBeats: appended.map((count) => ({
-                duration: count.duration,
-                include_in_measure: true,
-            })),
-        });
-        const downbeats = appended.flatMap((count, k) =>
-            count.downbeat && created[k] ? [created[k].id] : [],
-        );
-        if (downbeats.length > 0)
-            await createMeasuresInTransaction({
-                tx,
-                newItems: downbeats.map((start_beat) => ({
-                    start_beat,
-                    rehearsal_mark: null,
-                    notes: null,
-                })),
-            });
-        // A show with no counts gets its first page with its first count
-        await ensureSecondBeatHasPage({ tx });
-    });
-    return beatCount + counts;
-}
 
 /** Where the last page's flag is, as an ordinal: past the show's last count where the show ends first */
 async function lastFlagBeat(tx: DbTransaction): Promise<number> {
