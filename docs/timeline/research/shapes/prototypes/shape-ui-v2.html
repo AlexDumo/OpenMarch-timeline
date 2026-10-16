@@ -1,0 +1,851 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throw away. Not app code.
+  v2: the owner's picks from v1 (2026-10-16) combined into one system. See the
+  guide card in the page. v1 (all 17 ideas) is shape-ui-ideas.html.
+  Shapes here are one-moment tools: they set where the selected marchers stand
+  at the current beat. Every shape shares one frame (center, size, rotation,
+  flip), so the same transforms work on every kind.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>PROTOTYPE v2 · Shapes, combined</title>
+<style>
+  :root {
+    --bg: rgb(15, 14, 19);
+    --bg2: rgb(24, 23, 30);
+    --bg3: rgb(34, 33, 42);
+    --stroke: rgba(255, 255, 255, 0.08);
+    --text: rgb(208, 208, 208);
+    --sub: rgba(208, 208, 208, 0.6);
+    --dim: rgba(208, 208, 208, 0.35);
+    --accent: rgb(150, 126, 255);
+    --accent2: rgba(150, 126, 255, 0.25);
+    --red: rgb(227, 74, 74);
+    --yellow: rgb(220, 190, 40);
+    --green: rgb(90, 180, 70);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  button { font: inherit; color: inherit; background: var(--bg3); border: 1px solid var(--stroke);
+    border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+  button:hover { border-color: rgba(255,255,255,0.2); }
+  button.on { background: var(--accent2); border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+  button.ghost { background: transparent; border-color: transparent; }
+  input, select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--stroke);
+    border-radius: 5px; padding: 2px 6px; width: 56px; }
+  select { width: auto; }
+  #app { display: grid; grid-template-rows: 44px 1fr 74px; height: 100%; }
+  #top { display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--stroke); background: var(--bg2); }
+  .brand { font-weight: 700; }
+  .muted { color: var(--sub); }
+  .tag { font-size: 11px; color: var(--yellow); border: 1px solid rgba(220,190,40,0.4); border-radius: 4px; padding: 1px 6px; }
+  #topslot { display: flex; gap: 4px; align-items: center; margin-left: 12px; }
+  main { display: grid; grid-template-columns: 1fr auto; min-height: 0; }
+  #stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+  #fld { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; }
+  #ov { position: absolute; inset: 0; pointer-events: none; }
+  #ov > * { pointer-events: auto; }
+  #ov .pe-none { pointer-events: none; }
+  #panel { width: 0; overflow: auto; border-left: 1px solid var(--stroke); background: var(--bg2); }
+  #panel.open { width: 290px; padding: 12px; }
+  #tl { border-top: 1px solid var(--stroke); background: var(--bg2); position: relative; padding: 8px 12px; }
+  #notes { position: absolute; left: 10px; top: 10px; width: 330px; background: rgba(24,23,30,0.94);
+    border: 1px solid var(--stroke); border-radius: 10px; padding: 10px 12px; z-index: 5; }
+  #notes h3 { margin: 0 0 4px; font-size: 14px; }
+  #notes .q { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  #notes ul { margin: 4px 0; padding-left: 18px; }
+  #notes li { margin: 2px 0; }
+  #notes .lbl { color: var(--sub); font-size: 11px; text-transform: uppercase; margin-top: 6px; }
+  #notes.min > :not(.hdr) { display: none; }
+  #notes .hdr { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+  #switcher { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 20;
+    display: flex; gap: 6px; align-items: center; background: #f1efe6; color: #111; padding: 6px 8px;
+    border-radius: 999px; box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+  #switcher button { white-space: nowrap; background: #fff; color: #111; border-color: #ccc; border-radius: 999px; }
+  #switcher button.on { background: #111; color: #fff; border-color: #111; }
+  #switcher .vl { white-space: nowrap; min-width: 210px; text-align: center; font-weight: 600; }
+  #switcher .sep { width: 1px; height: 20px; background: #ccc; margin: 0 2px; }
+  #switcher select { background: #fff; color: #111; border-color: #ccc; }
+  .chip { position: absolute; background: var(--bg2); border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 9px; padding: 5px 7px; display: flex; gap: 5px; align-items: center; white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.45); transform: translateX(-50%); }
+  .chip button { padding: 1px 7px; }
+  .chip .sep { width: 1px; height: 18px; background: var(--stroke); }
+  .chip b { font-variant-numeric: tabular-nums; }
+  .chip.col { flex-direction: column; align-items: stretch; }
+  .row { display: flex; gap: 5px; align-items: center; }
+  .hint { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: rgba(24,23,30,0.9);
+    border: 1px solid var(--stroke); border-radius: 8px; padding: 6px 10px; color: var(--sub); pointer-events: none !important; }
+  .kbd { display: inline-block; border: 1px solid rgba(255,255,255,0.25); border-bottom-width: 2px; border-radius: 4px;
+    padding: 0 4px; font-size: 11px; color: var(--text); margin: 0 1px; }
+  .ico { width: 18px; height: 18px; display: block; }
+  .tool { display: flex; align-items: center; gap: 5px; padding: 3px 7px; }
+  .tool .k { color: var(--sub); font-size: 11px; }
+  .dim { position: absolute; transform: translate(-50%, -50%); background: var(--bg); border: 1px solid var(--accent);
+    color: var(--text); border-radius: 5px; padding: 0 5px; font-size: 12px; white-space: nowrap; cursor: text; }
+  .dim span.tok { border-bottom: 1px dotted var(--accent); cursor: text; }
+  .dim input { width: 44px; padding: 0 3px; }
+  .radial { position: absolute; width: 0; height: 0; }
+  .radial button { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; border-radius: 999px;
+    background: var(--bg2); box-shadow: 0 3px 12px rgba(0,0,0,0.5); }
+  .radial button.hot { background: var(--accent); color: #111; }
+  .radial .ctr { position: absolute; transform: translate(-50%,-50%); width: 34px; height: 34px; border-radius: 50%;
+    border: 1px dashed var(--accent); pointer-events: none; }
+  .drawer { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(24,23,30,0.96); border-top: 1px solid var(--stroke);
+    padding: 8px 10px; display: flex; gap: 8px; overflow-x: auto; align-items: stretch; }
+  .card { flex: none; width: 112px; border: 1px solid var(--stroke); border-radius: 8px; padding: 4px; cursor: pointer; background: var(--bg); text-align: center; }
+  .card:hover, .card.on { border-color: var(--accent); }
+  .card svg { width: 100%; height: 62px; display: block; }
+  .card .nm { font-size: 12px; }
+  .card .sb { font-size: 10.5px; color: var(--sub); }
+  .drawer .grp { flex: none; writing-mode: vertical-rl; transform: rotate(180deg); color: var(--sub); font-size: 11px; text-transform: uppercase; text-align: center; }
+  .cmd { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); width: 420px; background: var(--bg2);
+    border: 1px solid var(--accent); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); }
+  .cmd input { width: 100%; border: 0; background: transparent; font-size: 15px; padding: 9px 12px; outline: none; }
+  .cmd .sug { border-top: 1px solid var(--stroke); padding: 4px; }
+  .cmd .sug div { padding: 4px 8px; border-radius: 6px; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .cmd .sug div.hot, .cmd .sug div:hover { background: var(--accent2); }
+  .cmd .sug .ex { color: var(--sub); }
+  .hud { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: var(--bg2); border: 1px solid var(--accent);
+    border-radius: 8px; padding: 6px 12px; font-size: 14px; }
+  .tip { position: absolute; background: #111; color: #eee; border-radius: 5px; padding: 2px 6px; font-size: 12px; pointer-events: none !important; white-space: nowrap; }
+  .toast { position: absolute; left: 50%; bottom: 130px; transform: translateX(-50%); background: var(--bg3);
+    border: 1px solid var(--stroke); border-radius: 8px; padding: 6px 10px; display: flex; gap: 8px; align-items: center; }
+  .pn h4 { margin: 0 0 8px; font-size: 13px; }
+  .pn .sec { border-top: 1px solid var(--stroke); padding: 9px 0; }
+  .pn .sec:first-child { border-top: 0; padding-top: 0; }
+  .pn .f { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 4px 0; }
+  .pn .f label { color: var(--sub); }
+  .pn .grid9 { display: grid; grid-template-columns: repeat(3, 22px); gap: 4px; }
+  .pn .grid9 button { width: 22px; height: 22px; padding: 0; border-radius: 50%; }
+  .pn .seg { display: flex; } .pn .seg button { border-radius: 0; } .pn .seg button:first-child { border-radius: 6px 0 0 6px; } .pn .seg button:last-child { border-radius: 0 6px 6px 0; }
+  .pn .help { color: var(--sub); font-size: 11.5px; }
+  .tlbar { height: 20px; border-radius: 4px; background: var(--bg3); position: relative; margin-top: 6px; }
+  .tlmove { position: absolute; top: 2px; bottom: 2px; background: rgba(150,126,255,0.35); border-radius: 3px; font-size: 11px; padding: 0 5px; }
+  .tlhead { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--yellow); }
+  #top { gap: 0; overflow: hidden; min-width: 0; }
+  #topslot { flex: 1; min-width: 0; }
+  .chip { z-index: 6; }
+  .ribbon { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+  .ribbon .tool .k { display: none; }
+  @media (min-width: 1700px) { .ribbon .tool .k { display: inline; } }
+  #app, main { min-width: 0; width: 100vw; }
+  main { grid-template-columns: minmax(0, 1fr) auto; }
+  .tabs { display: flex; gap: 2px; margin-right: 10px; }
+  .tabs .tab { background: transparent; border-color: transparent; border-radius: 6px 6px 0 0; color: var(--sub); }
+  .tabs .tab.on { color: var(--text); background: var(--bg3); border-color: var(--stroke); }
+  .ribbon { display: flex; gap: 3px; align-items: center; overflow-x: auto; white-space: nowrap; }
+  .vsep { width: 1px; height: 22px; background: var(--stroke); margin: 0 6px; flex: none; }
+  .seg { display: inline-flex; } .seg button { border-radius: 0; } .seg button:first-child { border-radius: 6px 0 0 6px; } .seg button:last-child { border-radius: 0 6px 6px 0; }
+  .ptabs { display: flex; gap: 4px; margin-bottom: 10px; }
+  .ptabs button { flex: 1; }
+  .libro { display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 6px; }
+  .libro.on { background: var(--accent2); }
+  .libro .li { display: flex; align-items: center; gap: 6px; flex: 1; cursor: pointer; }
+  .libro .star { color: var(--yellow); font-size: 15px; padding: 0 4px; }
+  #panel.open { width: 300px; }
+  button[disabled] { opacity: .4; cursor: default; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top"><span class="brand">OpenMarch</span><span class="tag" style="margin:0 12px 0 8px;white-space:nowrap">PROTO v2</span><div id="topslot"></div></header>
+  <main>
+    <div id="stage"><svg id="fld"></svg><div id="ov"></div><div id="notes"></div></div>
+    <aside id="panel"></aside>
+  </main>
+  <footer id="tl">
+    <div class="muted" style="font-size:11px">Timeline (stub) · the shape sets positions at the playhead: <b style="color:var(--text)">count 33</b>, the end of Move 3</div>
+    <div class="tlbar"><div class="tlmove" style="left:2%;width:22%">Move 1</div><div class="tlmove" style="left:26%;width:18%">Move 2</div><div class="tlmove" style="left:46%;width:20%">Move 3</div><div class="tlhead" style="left:66%"></div><div class="tlmove" style="left:68%;width:24%;opacity:.5">Move 4</div></div>
+  </footer>
+</div>
+<div id="switcher"></div>
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const svg = $("#fld"), ov = $("#ov"), panel = $("#panel"), notesEl = $("#notes"), topslot = $("#topslot"), stage = $("#stage");
+const FW = 160, FH = 84; // steps (8 to 5), front sideline is the bottom edge
+const snap = (v) => Math.round(v * 2) / 2;
+const snapP = (p) => ({ x: snap(p.x), y: snap(p.y) });
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = (v) => { const r = Math.round(v * 10) / 10; return String(r); };
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const deg = (r) => (r * 180) / Math.PI, rad = (d) => (d * Math.PI) / 180;
+const clone = (o) => JSON.parse(JSON.stringify(o));
+
+/* ---------------- band ---------------- */
+function makeBand() {
+  const ms = [];
+  for (let i = 0; i < 12; i++) { const a = Math.PI * (1.15 + 0.7 * (i / 11)); ms.push({ id: "T" + (i + 1), x: snap(80 + 22 * Math.cos(a) + ((i % 3) - 1) * 0.8), y: snap(46 + 14 * Math.sin(a) + (i % 2) * 1.2) }); }
+  for (let i = 0; i < 6; i++) ms.push({ id: "M" + (i + 1), x: 66 + i * 5.5, y: 52 });
+  for (let i = 0; i < 8; i++) ms.push({ id: "F" + (i + 1), x: 44 + (i % 4) * 3, y: 58 + Math.floor(i / 4) * 4 });
+  for (let i = 0; i < 6; i++) ms.push({ id: "C" + (i + 1), x: 106 + (i % 3) * 3, y: 58 + Math.floor(i / 3) * 4 });
+  return ms;
+}
+const GROUPS = { Trumpets: (id) => id[0] === "T", Mellos: (id) => id[0] === "M", Flutes: (id) => id[0] === "F", "3 trumpets": (id) => ["T1", "T2", "T3"].includes(id), Everyone: () => true };
+
+/* ---------------- kinds ---------------- */
+const KINDS = {
+  line: { name: "Line", key: "L", icon: '<path d="M4 12H20"/><circle cx="4" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="20" cy="12" r="1.6"/>' },
+  arc: { name: "Arc", key: "A", icon: '<path d="M4 17A8 8 0 0 1 20 17"/>' },
+  circle: { name: "Circle", key: "O", icon: '<circle cx="12" cy="12" r="7.5"/>' },
+  box: { name: "Box", key: "B", icon: '<rect x="5" y="6" width="14" height="12" rx="1"/><circle cx="9" cy="10" r="1.2"/><circle cx="15" cy="10" r="1.2"/><circle cx="9" cy="14" r="1.2"/><circle cx="15" cy="14" r="1.2"/>' },
+  diamond: { name: "Diamond", key: "D", icon: '<path d="M12 4l8 8-8 8-8-8z"/>' },
+  triangle: { name: "Triangle", key: "T", icon: '<path d="M12 5l8 14H4z"/>' },
+  wedge: { name: "Wedge", key: "V", icon: '<path d="M4 7l8 11 8-11"/>' },
+  path: { name: "Curve", key: "C", icon: '<path d="M4 16C8 4 14 20 20 8"/>' },
+};
+const KIND_KEYS = Object.keys(KINDS);
+const icon = (k) => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${KINDS[k].icon}</svg>`;
+const DEFAULT_PATH = [{ x: -0.5, y: 0.3 }, { x: -0.25, y: -0.5 }, { x: 0, y: 0 }, { x: 0.25, y: 0.5 }, { x: 0.5, y: -0.3 }];
+
+function outlineLocal(s) {
+  const w = s.w, h = s.h, P = [];
+  switch (s.kind) {
+    case "line": return { pts: [{ x: -w / 2, y: 0 }, { x: w / 2, y: 0 }], closed: false };
+    case "arc": for (let i = 0; i <= 32; i++) { const t = Math.PI + (Math.PI * i) / 32; P.push({ x: (w / 2) * Math.cos(t), y: h / 2 + h * Math.sin(t) }); } return { pts: P, closed: false };
+    case "circle": for (let i = 0; i < 48; i++) { const t = -Math.PI / 2 + (2 * Math.PI * i) / 48; P.push({ x: (w / 2) * Math.cos(t), y: (h / 2) * Math.sin(t) }); } return { pts: P, closed: true };
+    case "box": return { pts: [{ x: -w / 2, y: -h / 2 }, { x: w / 2, y: -h / 2 }, { x: w / 2, y: h / 2 }, { x: -w / 2, y: h / 2 }], closed: true };
+    case "diamond": return { pts: [{ x: 0, y: -h / 2 }, { x: w / 2, y: 0 }, { x: 0, y: h / 2 }, { x: -w / 2, y: 0 }], closed: true };
+    case "triangle": return { pts: [{ x: 0, y: -h / 2 }, { x: w / 2, y: h / 2 }, { x: -w / 2, y: h / 2 }], closed: true };
+    case "wedge": return { pts: [{ x: -w / 2, y: -h / 2 }, { x: 0, y: h / 2 }, { x: w / 2, y: -h / 2 }], closed: false };
+    case "custom": return { pts: s.def.pts.map((p) => ({ x: p.x * w, y: p.y * h })), closed: !!s.def.closed };
+    case "path": return { pts: smoothPath((s.pts || DEFAULT_PATH).map((p) => ({ x: p.x * w, y: p.y * h }))), closed: false };
+  }
+}
+function smoothPath(pts) { // Catmull-Rom so a few clicked points read as a curve
+  if (pts.length < 3) return pts;
+  const out = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+    for (let t = 0; t < 1; t += 0.125) { const t2 = t * t, t3 = t2 * t;
+      out.push({ x: 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+                 y: 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3) }); }
+  }
+  out.push(pts[pts.length - 1]); return out;
+}
+function samplePoly(pts, closed, n) {
+  const seg = [], L = [0]; const m = closed ? pts.length : pts.length - 1;
+  for (let i = 0; i < m; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; seg.push([a, b]); L.push(L[L.length - 1] + dist(a, b)); }
+  const tot = L[L.length - 1], out = [];
+  for (let i = 0; i < n; i++) {
+    const t = closed ? (tot * i) / n : n === 1 ? tot / 2 : (tot * i) / (n - 1);
+    let j = 0; while (j < seg.length - 1 && L[j + 1] < t) j++;
+    const [a, b] = seg[j] || [pts[0], pts[0]]; const sl = L[j + 1] - L[j] || 1; const f = clamp((t - L[j]) / sl, 0, 1);
+    out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f });
+  }
+  return { out, tot };
+}
+function boxSplit(s, n) {
+  const cols = s.cols ? Math.min(s.cols, n) : clamp(Math.round(Math.sqrt((n * s.w) / Math.max(s.h, 0.01))), 1, n);
+  return { cols, rows: Math.ceil(n / cols) };
+}
+function spotsLocal(s, n) {
+  if (!n) return [];
+  if (s.kind === "box") {
+    const { cols, rows } = boxSplit(s, n); const dx = cols > 1 ? s.w / (cols - 1) : 0, dy = rows > 1 ? s.h / (rows - 1) : 0; const out = [];
+    for (let r = 0; r < rows; r++) { const cnt = r < rows - 1 ? cols : n - cols * (rows - 1); const off = ((cols - cnt) * dx) / 2;
+      for (let c = 0; c < cnt; c++) out.push({ x: -s.w / 2 + off + c * dx, y: rows === 1 ? 0 : s.h / 2 - r * dy }); }
+    return out;
+  }
+  if (s.kind === "circle") { const out = []; for (let i = 0; i < n; i++) { const t = -Math.PI / 2 + (2 * Math.PI * i) / n; out.push({ x: (s.w / 2) * Math.cos(t), y: (s.h / 2) * Math.sin(t) }); } return out; }
+  const o = outlineLocal(s); return samplePoly(o.pts, o.closed, n).out;
+}
+function intervals(s, n) {
+  if (s.kind === "box") { const { cols, rows } = boxSplit(s, n); return { cols, rows, across: cols > 1 ? s.w / (cols - 1) : 0, deep: rows > 1 ? s.h / (rows - 1) : 0, short: cols * rows - n }; }
+  const o = outlineLocal(s); const { tot } = samplePoly(o.pts, o.closed, 2); const lenTot = o.closed ? tot : tot;
+  return { apart: o.closed ? lenTot / n : lenTot / Math.max(1, n - 1) };
+}
+const toWorld = (s, p) => { const x = p.x * (s.fx || 1), y = p.y * (s.fy || 1), c = Math.cos(s.rot), si = Math.sin(s.rot); return { x: s.cx + x * c - y * si, y: s.cy + x * si + y * c }; };
+const toLocal = (s, p) => { const dx = p.x - s.cx, dy = p.y - s.cy, c = Math.cos(-s.rot), si = Math.sin(-s.rot); return { x: (dx * c - dy * si) * (s.fx || 1), y: (dx * si + dy * c) * (s.fy || 1) }; };
+const spotsOf = (s, n) => spotsLocal(s, n).map((p) => toWorld(s, p));
+
+function shapeFromDrag(kind, a, b, shift) {
+  const d = dist(a, b), ang = Math.atan2(b.y - a.y, b.x - a.x);
+  if (kind === "line") return { kind, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, w: d, h: 0, rot: ang };
+  if (kind === "circle") return { kind, cx: a.x, cy: a.y, w: 2 * d, h: 2 * d, rot: 0 };
+  if (kind === "arc") { const s = { kind, cx: 0, cy: 0, w: d, h: d / 2, rot: ang }; const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; const o = toWorld({ ...s, cx: 0, cy: 0 }, { x: 0, y: -s.h / 2 }); return { ...s, cx: m.x + o.x, cy: m.y + o.y }; }
+  let w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
+  if (shift) { const m = Math.max(w, h); w = h = m; }
+  const sx = Math.sign(b.x - a.x) || 1, sy = Math.sign(b.y - a.y) || 1;
+  return { kind, cx: a.x + (sx * w) / 2, cy: a.y + (sy * h) / 2, w, h, rot: 0, pts: kind === "path" ? DEFAULT_PATH : undefined };
+}
+function autoShape(kind, n, iv = 2, at) {
+  const c = at || selCenter(); let w, h, cols;
+  switch (kind) {
+    case "line": w = iv * (n - 1); h = 0; break;
+    case "box": cols = clamp(Math.round(Math.sqrt(n * 1.5)), 1, n); w = iv * (cols - 1); h = iv * (Math.ceil(n / cols) - 1); break;
+    case "circle": w = h = (n * iv) / Math.PI; break;
+    case "arc": { const r = ((n - 1) * iv) / Math.PI; w = 2 * r; h = r; break; }
+    case "diamond": { const side = (n * iv) / 4; w = h = side * Math.SQRT2; break; }
+    case "triangle": { const side = (n * iv) / 3; w = side; h = side * 0.866; break; }
+    case "wedge": { const leg = ((n - 1) * iv) / 2; w = leg * Math.SQRT2; h = leg * Math.SQRT1_2; break; }
+    case "path": w = iv * (n - 1) * 0.8; h = w * 0.35; break;
+  }
+  return { kind, cx: snap(c.x), cy: snap(c.y), w, h, rot: 0, cols, pts: kind === "path" ? DEFAULT_PATH : undefined };
+}
+function convertKind(s, kind) {
+  const t = { ...s, kind };
+  if (kind === "line") t.h = 0;
+  else if (t.h < 1) t.h = kind === "arc" ? t.w / 2 : t.w * 0.6;
+  if (kind === "circle") { const m = Math.max(t.w, t.h); t.w = t.h = m; }
+  if (kind === "path" && !t.pts) t.pts = DEFAULT_PATH;
+  if (kind !== "box") delete t.cols;
+  return t;
+}
+// one transform for every kind: rotate by dθ and scale by sx, sy (in the shape's own axes) about a pivot
+function transformShape(s0, pivot, sx = 1, sy = 1, dth = 0) {
+  const s = clone(s0); const c = Math.cos(s0.rot), si = Math.sin(s0.rot);
+  let vx = s0.cx - pivot.x, vy = s0.cy - pivot.y; let lx = vx * c + vy * si, ly = -vx * si + vy * c; lx *= sx; ly *= sy;
+  vx = lx * c - ly * si; vy = lx * si + ly * c; s.w = s0.w * Math.abs(sx); s.h = s0.h * Math.abs(sy);
+  if (sx < 0) s.fx = -(s0.fx || 1); if (sy < 0) s.fy = -(s0.fy || 1);
+  const c2 = Math.cos(dth), s2 = Math.sin(dth); s.cx = pivot.x + vx * c2 - vy * s2; s.cy = pivot.y + vx * s2 + vy * c2; s.rot = s0.rot + dth;
+  return s;
+}
+
+/* ---------------- state ---------------- */
+const S = { ms: makeBand(), sel: new Set(), shape: null, kind: "box", q: 0, v: 0, drag: null, mouse: { x: 80, y: 42 }, undo: null, toast: null, order: "nearest", keepSpacing: false, cache: {}, view: { x: 36, y: 14, w: 88, h: 51.6 } };
+let HOME = clone(S.ms);
+let V = {}; // per-variant scratch state
+function setGroup(g) { S.sel = new Set(S.ms.filter((m) => GROUPS[g](m.id)).map((m) => m.id)); S.group = g; }
+setGroup("Trumpets");
+const selMs = () => S.ms.filter((m) => S.sel.has(m.id));
+function selCenter() { const a = selMs(); if (!a.length) return { x: 80, y: 42 }; return { x: a.reduce((t, m) => t + m.x, 0) / a.length, y: a.reduce((t, m) => t + m.y, 0) / a.length }; }
+
+function assign(spots, ms) {
+  const res = {};
+  if (S.order === "drill") { const sorted = [...ms].sort((a, b) => +a.id.slice(1) - +b.id.slice(1)); sorted.forEach((m, i) => (res[m.id] = spots[i])); return res; }
+  const pairs = []; ms.forEach((m) => spots.forEach((p, j) => pairs.push([(m.x - p.x) ** 2 + (m.y - p.y) ** 2, m.id, j])));
+  pairs.sort((a, b) => a[0] - b[0]); const used = new Set();
+  for (const [, id, j] of pairs) { if (res[id] || used.has(j)) continue; res[id] = spots[j]; used.add(j); }
+  return res;
+}
+function place() {
+  if (!S.shape || !S.cache.asg) return; const asg = S.cache.asg; S.undo = clone(S.ms);
+  const from = clone(S.ms), to = S.ms.map((m) => (asg[m.id] ? { x: asg[m.id].x, y: asg[m.id].y } : { x: m.x, y: m.y }));
+  const t0 = performance.now(); S.shape = null; cur().after?.();
+  const step = (t) => { const f = clamp((t - t0) / 350, 0, 1), e = 1 - (1 - f) ** 3; S.ms.forEach((m, i) => { m.x = from[i].x + (to[i].x - from[i].x) * e; m.y = from[i].y + (to[i].y - from[i].y) * e; }); render(); if (f < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step); toast(`Placed ${S.sel.size} marchers at count 33`, true);
+}
+function toast(msg, undo) { S.toast = { msg, undo }; clearTimeout(S.tt); S.tt = setTimeout(() => { S.toast = null; render(); }, 4500); }
+
+/* ---------------- geometry for the view ---------------- */
+function ctm() { return svg.getScreenCTM(); }
+const k = () => ctm().a; // px per step
+function toField(e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(ctm().inverse()); return { x: q.x, y: q.y }; }
+function toScreen(p) { const m = ctm(), r = stage.getBoundingClientRect(); return { x: m.a * p.x + m.e - r.left, y: m.d * p.y + m.f - r.top }; }
+function worldBBox(s) { const o = outlineLocal(s).pts.map((p) => toWorld(s, p)); const xs = o.map((p) => p.x), ys = o.map((p) => p.y); return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; }
+function insideShape(s, p, pad = 1.5) { const l = toLocal(s, p); return Math.abs(l.x) <= s.w / 2 + pad && Math.abs(l.y) <= s.h / 2 + pad; }
+function yardDesc(x) { const i = clamp(Math.round(x / 8), 0, 20), yd = Math.min(5 * i, 100 - 5 * i), side = i < 10 ? "S1" : i > 10 ? "S2" : "", off = x - 8 * i;
+  const inward = i < 10 ? off > 0 : off < 0; const o = Math.abs(off) < 0.05 ? "on" : `${fmt(Math.abs(off))} ${inward ? "in" : "out"} from`; return `${o} ${side} ${yd}`.replace("  ", " ").trim(); }
+function depthDesc(y) { const refs = [["back sideline", 0], ["back hash", 28], ["front hash", 56], ["front sideline", FH]]; let best = refs[0]; for (const r of refs) if (Math.abs(y - r[1]) < Math.abs(y - best[1])) best = r;
+  const d = y - best[1]; return Math.abs(d) < 0.05 ? `on ${best[0]}` : `${fmt(Math.abs(d))} ${d < 0 ? "behind" : "in front of"} ${best[0]}`; }
+
+/* ---------------- field ---------------- */
+const FIELD = (() => {
+  let h = `<rect x="0" y="0" width="${FW}" height="${FH}" fill="#1f3427"/>`;
+  for (let i = 0; i <= 20; i++) { const x = i * 8; h += `<line x1="${x}" y1="0" x2="${x}" y2="${FH}" stroke="rgba(255,255,255,${i % 2 ? 0.22 : 0.4})" vector-effect="non-scaling-stroke"/>`;
+    for (const y of [28, 56]) h += `<line x1="${x - 0.8}" y1="${y}" x2="${x + 0.8}" y2="${y}" stroke="rgba(255,255,255,.5)" vector-effect="non-scaling-stroke"/>`;
+    if (i % 2 === 0 && i > 0 && i < 20) { const n = Math.min(5 * i, 100 - 5 * i); h += `<text x="${x}" y="${FH - 9}" font-size="2.4" fill="rgba(255,255,255,.3)" text-anchor="middle">${n}</text><text x="${x}" y="11" font-size="2.4" fill="rgba(255,255,255,.35)" text-anchor="middle" transform="rotate(180 ${x} 10.2)">${n}</text>`; } }
+  h += `<text x="${FW / 2}" y="${FH + 4.5}" font-size="2.6" fill="rgba(255,255,255,.35)" text-anchor="middle">FRONT · audience</text>`;
+  return h;
+})();
+
+/* ---------------- render ---------------- */
+function render() {
+  const Vt = cur(), n = S.sel.size, sh = S.shape;
+  S.phase = S.drag?.draw ? "drawing" : sh ? "open" : "idle";
+  svg.setAttribute("viewBox", `${S.view.x} ${S.view.y} ${S.view.w} ${S.view.h}`);
+  const p = Vt.panel?.() || ""; panel.classList.toggle("open", !!p);
+  if (panel._h !== p && !(panel.contains(document.activeElement) && document.activeElement.tagName === "INPUT" && !S.force)) { panel.innerHTML = p; panel._h = p; }
+  const K = k() || 6;
+  let sp = null, asg = null; if (sh && n) { sp = spotsOf(sh, n); asg = assign(sp, selMs()); }
+  S.cache = { sp, asg };
+  let h = FIELD + (Vt.under?.(K) || "");
+  if (asg && Vt.walks !== false) for (const m of selMs()) { const p = asg[m.id]; if (p) h += `<line x1="${m.x}" y1="${m.y}" x2="${p.x}" y2="${p.y}" stroke="rgba(150,126,255,.45)" stroke-width="1" vector-effect="non-scaling-stroke"/>`; }
+  if (sh) h += outlineSVG(sh, Vt.outline);
+  for (const m of S.ms) h += marcherSVG(m, S.sel.has(m.id), Vt);
+  if (sp) for (const p of sp) h += `<circle cx="${p.x}" cy="${p.y}" r="0.7" fill="var(--accent)" stroke="#fff" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+  if (asg && Vt.labels !== false) for (const m of selMs()) { const p = asg[m.id]; if (p) h += `<text x="${p.x}" y="${p.y - 1.05}" font-size="1.05" fill="#fff" text-anchor="middle" pointer-events="none">${m.id}</text>`; }
+  h += Vt.over?.(K) || "";
+  svg.innerHTML = h;
+  let o = Vt.overlay?.() || "";
+  if (S.toast) o += `<div class="toast">${S.toast.msg}${S.toast.undo ? ' <button data-act="undo">Undo</button>' : ""}</div>`;
+  if (ov._h !== o && !(ov.contains(document.activeElement) && document.activeElement.tagName === "INPUT" && !S.force)) { ov.innerHTML = o; ov._h = o; Vt.afterOverlay?.(); }
+  const t = Vt.top?.() ?? stripCompact(); if (topslot._h !== t) { topslot.innerHTML = t; topslot._h = t; }
+  S.force = false;
+}
+function outlineSVG(s, style) {
+  const o = outlineLocal(s), pts = o.pts.map((p) => toWorld(s, p)).map((p) => `${p.x},${p.y}`).join(" ");
+  const tag = o.closed ? "polygon" : "polyline";
+  return `<${tag} points="${pts}" fill="${o.closed ? "rgba(150,126,255,.06)" : "none"}" stroke="var(--accent)" stroke-width="${style === "faint" ? 1 : 1.5}" stroke-dasharray="${S.phase === "drawing" ? "5 4" : "none"}" opacity="${style === "faint" ? 0.5 : 0.9}" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+}
+function marcherSVG(m, sel, Vt) {
+  const st = Vt.mstyle ? Vt.mstyle(m, sel) : defaultStyle(m, sel);
+  if (st.hidden) return "";
+  const r = st.r ?? 0.6;
+  let h = `<g opacity="${st.op ?? 1}">`;
+  if (st.halo) h += `<circle cx="${m.x}" cy="${m.y}" r="${r + 1.1}" fill="${st.halo}" />`;
+  h += `<circle cx="${m.x}" cy="${m.y}" r="${r}" fill="${st.fill ?? "#e8e8e8"}" stroke="${st.ring ?? "#222"}" stroke-width="${st.ringW ?? 1}" vector-effect="non-scaling-stroke"/>`;
+  if (st.label !== false) h += `<text x="${m.x}" y="${m.y - 1.1}" font-size="1.15" fill="${st.lc ?? "rgba(255,255,255,.75)"}" text-anchor="middle">${m.id}</text>`;
+  return h + "</g>";
+}
+function defaultStyle(m, sel) {
+  if (sel && S.shape) return { fill: "transparent", ring: "rgba(150,126,255,.8)", ringW: 1.2, lc: "rgba(255,255,255,.35)", label: false };
+  if (sel) return { fill: "#fff", ring: "var(--accent)", ringW: 2 };
+  return {};
+}
+const cur = () => QS[S.q].variants[S.v];
+
+/* ---------------- shared handles (Figma-ish box) ---------------- */
+const HANDLES = [["nw", -1, -1], ["n", 0, -1], ["ne", 1, -1], ["e", 1, 0], ["se", 1, 1], ["s", 0, 1], ["sw", -1, 1], ["w", -1, 0]];
+function handlesSVG(K, opts = {}) {
+  const s = S.shape; if (!s || S.phase === "drawing") return ""; const r = 4.5 / K; let h = "";
+  const flat = s.h < 0.3;
+  for (const [nm, sx, sy] of HANDLES) { if (flat && sy !== 0) continue; if (opts.cornersOnly && (sx === 0 || sy === 0)) continue;
+    const p = toWorld(s, { x: (sx * s.w) / 2, y: (sy * s.h) / 2 });
+    h += `<rect data-h="${nm}" x="${p.x - r}" y="${p.y - r}" width="${2 * r}" height="${2 * r}" fill="#fff" stroke="var(--accent)" stroke-width="1.5" vector-effect="non-scaling-stroke" style="cursor:pointer"/>`; }
+  if (opts.rotKnob !== false) { const top = toWorld(s, { x: 0, y: -s.h / 2 - 22 / K }), base = toWorld(s, { x: 0, y: -s.h / 2 });
+    h += `<line x1="${base.x}" y1="${base.y}" x2="${top.x}" y2="${top.y}" stroke="var(--accent)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/><circle data-h="rot" cx="${top.x}" cy="${top.y}" r="${r}" fill="var(--bg)" stroke="var(--accent)" stroke-width="1.5" vector-effect="non-scaling-stroke" style="cursor:grab"/>`; }
+  return h;
+}
+function scaleDrag(name, p0, e0) {
+  const s0 = clone(S.shape), H = HANDLES.find((h) => h[0] === name); const [, hx, hy] = H; const n = S.sel.size; const iv0 = intervals(s0, n);
+  if (s0.kind === "box" && !s0.cols) s0.cols = iv0.cols;
+  return { move(p, e) {
+    let q = toLocal(s0, p); q = { x: snap(q.x), y: snap(q.y) };
+    if (s0.kind === "line") { // line ends are free points
+      const other = toWorld(s0, { x: (-hx * s0.w) / 2, y: 0 }), me = snapP(p);
+      S.shape = e.altKey ? { ...shapeFromDrag("line", { x: 2 * s0.cx - me.x, y: 2 * s0.cy - me.y }, me) } : shapeFromDrag("line", other, me); S.tip = { p, t: `${fmt(dist(other, me))} steps · ${fmt(S.shape.w / Math.max(1, n - 1))} apart` }; return; }
+    let w = s0.w, h = s0.h, cxl = 0, cyl = 0; const ax = (-hx * s0.w) / 2, ay = (-hy * s0.h) / 2;
+    if (hx) { if (e.altKey) w = 2 * Math.abs(q.x); else { w = Math.abs(q.x - ax); cxl = (q.x + ax) / 2; } }
+    if (hy) { if (e.altKey) h = 2 * Math.abs(q.y); else { h = Math.abs(q.y - ay); cyl = (q.y + ay) / 2; } }
+    if (e.shiftKey && hx && hy) { const f = Math.max(w / (s0.w || 1), h / (s0.h || 1)); w = s0.w * f; h = s0.h * f; if (!e.altKey) { cxl = ax + hx * w / 2; cyl = ay + hy * h / 2; } }
+    const s = { ...s0, w, h };
+    if (S.keepSpacing && s0.kind === "box") { // size changes the count across, not the spacing
+      if (hx) { s.cols = clamp(Math.round(w / (iv0.across || 2)) + 1, 1, n); s.w = (iv0.across || 2) * (s.cols - 1); }
+      else if (hy) { const rows = clamp(Math.round(h / (iv0.deep || 2)) + 1, 1, n); s.cols = Math.ceil(n / rows); }
+      const rr = Math.ceil(n / s.cols); s.h = (iv0.deep || 2) * (rr - 1);
+      if (!e.altKey) { cxl = hx ? ax + (hx * s.w) / 2 : 0; cyl = hy ? ay + (hy * s.h) / 2 : 0; }
+    }
+    const c = toWorld({ ...s0, fx: 1, fy: 1 }, { x: cxl * (s0.fx || 1), y: cyl * (s0.fy || 1) }); s.cx = c.x; s.cy = c.y; S.shape = s;
+    const iv = intervals(s, n); S.tip = { p, t: s.kind === "box" ? `${iv.cols} × ${iv.rows} · ${fmt(iv.across)} across, ${fmt(iv.deep)} deep` : `${fmt(s.w)} × ${fmt(s.h)} steps · ${fmt(iv.apart)} apart` };
+  }, up() { S.tip = null; } };
+}
+function rotDrag(p0, pivot) {
+  const s0 = clone(S.shape), c = pivot || { x: s0.cx, y: s0.cy }, a0 = Math.atan2(p0.y - c.y, p0.x - c.x);
+  return { move(p, e) { let d = Math.atan2(p.y - c.y, p.x - c.x) - a0; let tot = deg(s0.rot + d); tot = e.shiftKey ? Math.round(tot / 15) * 15 : Math.round(tot); d = rad(tot) - s0.rot;
+      S.shape = transformShape(s0, c, 1, 1, d); S.tip = { p, t: `${((tot % 360) + 360) % 360}°${e.shiftKey ? "" : " · Shift for 15°"}` }; }, up() { S.tip = null; } };
+}
+function moveDrag(p0) { const s0 = clone(S.shape); return { move(p) { S.shape = { ...s0, cx: s0.cx + snap(p.x - p0.x), cy: s0.cy + snap(p.y - p0.y) }; }, up() {} }; }
+function drawDrag(kind, p0) {
+  const a = snapP(p0), prev = S.shape; let moved = false;
+  return { draw: true, move(p, e) { if (dist(p, p0) > 0.8) moved = true; if (!moved) return; S.shape = shapeFromDrag(kind, a, snapP(p), e.shiftKey); },
+    up() { if (!moved) { S.shape = prev; return; } if (S.shape.kind === "box") S.shape.cols = boxSplit(S.shape, S.sel.size).cols; } };
+}
+function stdDown(hit, p, e) {
+  if (hit.h === "rot") return rotDrag(p);
+  if (hit.h && hit.h !== "pivot") return scaleDrag(hit.h, p, e);
+  if (hit.t === "marcher" && e.shiftKey) { const id = hit.m.id; S.sel.has(id) ? S.sel.delete(id) : S.sel.add(id); S.group = null; return null; }
+  if (hit.t === "shape") return moveDrag(p);
+  if (S.sel.size) return drawDrag(S.kind, p);
+  return null;
+}
+function hitTest(e, p) {
+  const h = e.target.closest?.("[data-h]"); if (h) return { h: h.dataset.h };
+  if (S.shape && insideShape(S.shape, p)) return { t: "shape" };
+  let best = null, bd = 1.4; for (const m of S.ms) { const d = dist(m, p); if (d < bd) { bd = d; best = m; } }
+  if (best) return { t: "marcher", m: best };
+  return { t: "field" };
+}
+function tipHTML() { if (!S.tip) return ""; const s = toScreen(S.tip.p); return `<div class="tip" style="left:${s.x + 14}px;top:${s.y + 14}px">${S.tip.t}</div>`; }
+
+/* ---------------- shared actions ---------------- */
+function act(a, el) {
+  const s = S.shape, n = S.sel.size;
+  if (a === "place") return place();
+  if (a === "cancel") { S.shape = null; return; }
+  if (a === "undo") { if (S.undo) { S.ms = S.undo; S.undo = null; } S.toast = null; return; }
+  if (a.startsWith("kind:")) { const kd = a.slice(5); S.kind = kd; if (s) S.shape = convertKind(s, kd); return; }
+  if (a.startsWith("sel:")) { setGroup(a.slice(4)); return; }
+  if (!s) return;
+  const iv = intervals(s, n);
+  if (a === "cols+" || a === "cols-") { if (s.kind !== "box") return; const c = clamp(iv.cols + (a === "cols+" ? 1 : -1), 1, n); const rows = Math.ceil(n / c);
+    S.shape = { ...s, cols: c, w: (iv.across || 2) * (c - 1), h: (iv.deep || 2) * (rows - 1) }; return; }
+  if (a === "spx+" || a === "spx-") { const d = a.endsWith("+") ? 0.5 : -0.5; if (s.kind === "box") S.shape = { ...s, cols: iv.cols, w: Math.max(0.5, iv.across + d) * (iv.cols - 1) }; else return act(a === "spx+" ? "sp+" : "sp-"); return; }
+  if (a === "spy+" || a === "spy-") { const d = a.endsWith("+") ? 0.5 : -0.5; if (s.kind === "box") S.shape = { ...s, cols: iv.cols, h: Math.max(0.5, iv.deep + d) * (iv.rows - 1) }; return; }
+  if (a === "sp+" || a === "sp-") { const cur = s.kind === "box" ? iv.across : iv.apart; const nv = Math.max(0.5, snap(cur) + (a === "sp+" ? 0.5 : -0.5)); return setApart(nv); }
+  if (a.startsWith("rot:")) { S.shape = transformShape(s, cur().pivotP?.() || { x: s.cx, y: s.cy }, 1, 1, rad(+a.slice(4))); return; }
+  if (a === "flipx") { S.shape = transformShape(s, cur().pivotP?.() || { x: s.cx, y: s.cy }, -1, 1, 0); return; }
+  if (a === "flipy") { S.shape = transformShape(s, cur().pivotP?.() || { x: s.cx, y: s.cy }, 1, -1, 0); return; }
+  if (a === "order") { S.order = S.order === "nearest" ? "drill" : "nearest"; return; }
+}
+function setApart(v) { const s = S.shape, n = S.sel.size, iv = intervals(s, n);
+  if (s.kind === "box") { S.shape = { ...s, cols: iv.cols, w: v * (iv.cols - 1), h: v * (iv.rows - 1) }; return; }
+  const f = v / (iv.apart || 1); S.shape = { ...s, w: s.w * f, h: s.h * f }; }
+function summary(s) { const n = S.sel.size, iv = intervals(s, n); return s.kind === "box" ? `${iv.cols} × ${iv.rows}${iv.short ? ` · ${iv.short} short` : ""} · ${fmt(iv.across)} across, ${fmt(iv.deep)} deep` : `${kname(s)} · ${n} · ${fmt(iv.apart)} steps apart`; }
+const kname = (s) => s.name || KINDS[s.kind]?.name || "Shape";
+
+/* ---------------- shared bits of UI ---------------- */
+function stripCompact() { return KIND_KEYS.map((kd) => `<button class="ghost ${S.kind === kd ? "on" : ""}" data-act="kind:${kd}" title="${KINDS[kd].name}">${icon(kd)}</button>`).join("") + `<span class="muted" style="margin-left:8px">Drag on the field to draw · <span class="kbd">Enter</span> place · <span class="kbd">Esc</span> cancel · Shift-click a marcher to add/remove</span>`; }
+function placeBar() { return S.shape ? `<button class="primary" data-act="place">Place</button>` : ""; }
+function hintIfIdle(t) { return !S.shape && S.phase !== "drawing" ? `<div class="hint">${t}</div>` : ""; }
+function chipBelow(inner, extraY = 26, cls = "") { const b = worldBBox(S.shape), s = toScreen({ x: (b.x0 + b.x1) / 2, y: b.y1 }); return `<div class="chip ${cls}" style="left:${s.x}px;top:${s.y + extraY}px">${inner}</div>`; }
+
+/* ======================= v2: ONE COMBINED SYSTEM ======================= */
+// Owner picks 2026-10-16: fade the rest · floating chip · Shapes tab + favorites ring +
+// library with custom shapes + typed steps + sketch · box handles + transform panel.
+const STAR = (pts) => pts; // readability
+function starPts() { const out = []; for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.2 : 0.5, t = -Math.PI / 2 + (i * Math.PI) / 5; out.push({ x: r * Math.cos(t), y: r * Math.sin(t) }); } return out; }
+let LIB = [
+  ...KIND_KEYS.map((kd) => ({ id: kd, name: KINDS[kd].name, type: "kind", kind: kd, fav: ["line", "arc", "circle", "box"].includes(kd) })),
+  { id: "cf", name: "Company front", type: "preset", kind: "line", iv: 1.5, fav: true, note: "Line · 1.5 apart" },
+  { id: "arrow", name: "Arrowhead", type: "preset", kind: "wedge", iv: 2, fy: -1, fav: false, note: "Wedge pointing back" },
+  { id: "star", name: "Star", type: "custom", kind: "custom", def: { pts: starPts(), closed: true }, fav: false, note: "Custom · 10 points" },
+];
+const item = (id) => LIB.find((x) => x.id === id);
+function itemIcon(it, size = 18) {
+  if (it.kind !== "custom") return icon(it.kind).replace('class="ico"', `class="ico" style="width:${size}px;height:${size}px"`);
+  const p = it.def.pts.map((q) => `${12 + q.x * 18},${12 + q.y * 18}`).join(" ");
+  return `<svg class="ico" style="width:${size}px;height:${size}px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><${it.def.closed ? "polygon" : "polyline"} points="${p}"/></svg>`;
+}
+// a shape made from a library item, sized for the selection at a spacing
+function shapeFromItem(it, n, iv) {
+  if (it.kind === "custom") { const t = { kind: "custom", def: it.def, name: it.name, cx: 0, cy: 0, w: it.def.aspect || 1, h: 1, rot: 0 }; const o = outlineLocal(t); const L = samplePoly(o.pts, o.closed, 2).tot; const need = iv * (o.closed ? n : n - 1); const f = need / (L || 1); const c = selCenter(); const asp = it.def.aspect || 1; return { ...t, w: f * asp, h: f, cx: snap(c.x), cy: snap(c.y) }; }
+  const s = autoShape(it.kind, n, iv ?? it.iv ?? 2); if (it.fy) s.fy = it.fy; if (it.type === "preset") s.name = it.name; return s;
+}
+function drawItem(it, a, b, shift) {
+  if (it.kind === "custom") { const s = shapeFromDrag("box", a, b, shift); return { ...s, kind: "custom", def: it.def, name: it.name }; }
+  const s = shapeFromDrag(it.kind, a, b, shift); if (it.fy) s.fy = it.fy; return s;
+}
+function useItem(id) {
+  const it = item(id); if (!it) return; S.tool = id; S.kind = it.kind;
+  if (it.type === "preset") { S.shape = shapeFromItem(it, S.sel.size); return; }
+  if (S.shape) { const b = S.shape; S.shape = it.kind === "custom" ? { ...b, kind: "custom", def: it.def, name: it.name, h: b.h < 1 ? b.w : b.h } : (({ name, def, ...r }) => convertKind(r, it.kind))(b); }
+}
+const curItem = () => item(S.tool) || item("box");
+
+/* ---- typed steps (D) ---- */
+function wizSteps(it) {
+  const st = [{ key: "shape", q: "What shape?" }];
+  if (it && it.kind === "box") st.push({ key: "across", q: "How many across?", def: () => clamp(Math.round(Math.sqrt(S.sel.size * 1.5)), 1, S.sel.size) }, { key: "iv", q: "Steps apart, side to side?", def: () => it.iv ?? 2 }, { key: "deep", q: "Steps apart, front to back?", def: (v) => v.iv });
+  else if (it) st.push({ key: "iv", q: "Steps apart?", def: () => it.iv ?? 2 });
+  if (it) st.push({ key: "rot", q: "Rotate how many degrees?", def: () => 0 });
+  return st;
+}
+function wizShape(w) {
+  const it = item(w.id); if (!it) return null; const v = w.vals, n = S.sel.size; const iv = +v.iv || 2;
+  let s = shapeFromItem(it, n, iv);
+  if (it.kind === "box") { const c = clamp(+v.across || 4, 1, n), rows = Math.ceil(n / c), dp = +v.deep || iv; s.cols = c; s.w = iv * (c - 1); s.h = dp * (rows - 1); }
+  if (+v.rot) s = transformShape(s, { x: s.cx, y: s.cy }, 1, 1, rad(+v.rot));
+  return s;
+}
+function wizMatches(q) { q = q.toLowerCase().trim(); const w0 = q.split(/\s+/)[0] || ""; const syn = { ring: "circle", block: "box", rect: "box", square: "box", chevron: "wedge", v: "wedge", curve: "path", front: "cf" };
+  let list = LIB.filter((it) => !q || it.name.toLowerCase().startsWith(q) || it.name.toLowerCase().includes(" " + w0) || it.name.toLowerCase().startsWith(w0) || syn[w0] === it.id);
+  if (!list.length) list = LIB.slice(); return list.slice(0, 6); }
+function wizPrefill(q) { // "box 4x3 2" fills later steps
+  const v = {}; const d = q.match(/(\d+)\s*(x|by|×)\s*(\d+)/); if (d) v.across = +d[1]; const a = q.replace(/(\d+)\s*(x|by|×)\s*(\d+)/, "").match(/([\d.]+)/); if (a) v.iv = +a[1]; const r = q.match(/rot\w*\s*(-?[\d.]+)/); if (r) v.rot = +r[1]; return v; }
+function miniSVG(s, n, h = 70) {
+  if (!s) return ""; const t = { ...s, cx: 0, cy: 0 }; const sp = spotsOf(t, n), o = outlineLocal(t), pts = o.pts.map((p) => toWorld(t, p)), all = pts.concat(sp);
+  const xs = all.map((p) => p.x), ys = all.map((p) => p.y), x0 = Math.min(...xs) - 1.5, y0 = Math.min(...ys) - 1.5, w = Math.max(...xs) - x0 + 1.5, hh = Math.max(...ys) - y0 + 1.5, sz = Math.max(w, hh * 1.6);
+  return `<svg viewBox="${x0 + w / 2 - sz / 2} ${y0 + hh / 2 - sz / 3.2} ${sz} ${sz / 1.6}" style="width:100%;height:${h}px;display:block"><${o.closed ? "polygon" : "polyline"} points="${pts.map((p) => p.x + "," + p.y).join(" ")}" fill="none" stroke="rgba(150,126,255,.6)" stroke-width="${sz / 100}"/>${sp.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="${sz / 50}" fill="#fff"/>`).join("")}</svg>`;
+}
+function wizHTML() {
+  const w = V.wiz; const it = item(w.id); const steps = wizSteps(w.step === 0 ? null : it); const all = wizSteps(it); const st = all[w.step];
+  const crumbs = all.map((x, i) => i === 0 ? (it && w.step > 0 ? it.name : "Shape") : `${x.key === "across" ? (w.vals.across ?? "?") + " across" : x.key === "iv" ? (w.vals.iv ?? "?") + " apart" : x.key === "deep" ? (w.vals.deep ?? "?") + " deep" : (w.vals.rot ?? "?") + "°"}`)
+    .map((c, i) => `<span style="${i === w.step ? "color:var(--text);font-weight:600" : i < w.step ? "color:var(--text)" : "color:var(--dim)"}">${c}</span>`).join(' <span class="muted">›</span> ');
+  const list = w.step === 0 ? `<div class="sug">${wizMatches(w.text).map((x, i) => `<div class="${i === (w.hot || 0) ? "hot" : ""}" data-wpick="${x.id}">${itemIcon(x)}<span>${x.name}</span>${x.fav ? '<span style="color:var(--yellow)">★</span>' : ""}<span class="ex" style="margin-left:auto">${x.note || ""}</span></div>`).join("")}</div>` : "";
+  const prev = w.step > 0 ? `<div style="border-top:1px solid var(--stroke);padding:4px 8px">${miniSVG(wizShape(w), S.sel.size)}<div class="muted" style="font-size:11.5px;text-align:center">${S.shape ? summary(S.shape) : ""}</div></div>` : "";
+  return `<div class="cmd"><div style="padding:8px 12px 0;font-size:12px">${crumbs}</div><div style="padding:4px 12px 0;font-weight:600">${st.q}</div><input id="wizin" value="${(w.text ?? "").toString().replace(/"/g, "&quot;")}" autocomplete="off" placeholder="${w.step === 0 ? "box, arc, company front… or box 4x3 2" : ""}">${list}${prev}<div class="muted" style="font-size:11px;padding:4px 12px 8px"><span class="kbd">Enter</span> next · <span class="kbd">⌫</span> on empty goes back · <span class="kbd">Esc</span> cancel</div></div>`;
+}
+function wizStart() { V.wiz = { step: 0, text: "", vals: {}, id: null, hot: 0, before: S.shape }; S.force = true; }
+function wizSet(i) { const w = V.wiz; const st = wizSteps(item(w.id))[i]; w.step = i; if (i === 0) { w.text = w.id ? item(w.id).name : ""; return; } if (w.vals[st.key] == null) w.vals[st.key] = st.def(w.vals); w.text = String(w.vals[st.key]); }
+function wizEnter() {
+  const w = V.wiz;
+  if (w.step === 0) { const m = wizMatches(w.text)[w.hot || 0]; if (!m) return; w.id = m.id; w.vals = { ...wizPrefill(w.text) }; }
+  else { const st = wizSteps(item(w.id))[w.step]; const v = parseFloat(w.text); if (isFinite(v)) w.vals[st.key] = v; }
+  const all = wizSteps(item(w.id)); if (w.step + 1 >= all.length) { S.shape = wizShape(w); S.tool = w.id; S.kind = item(w.id).kind; V.wiz = null; return; }
+  wizSet(w.step + 1); S.shape = wizShape(w);
+}
+
+/* ---- custom shape editor (C) ---- */
+function edHTML() {
+  const e = V.ed, n = S.sel.size; const G = 220, g = (v) => (v + 0.5) * G;
+  let grid = ""; for (let i = 0; i <= 10; i++) { const p = (i * G) / 10; grid += `<line x1="${p}" y1="0" x2="${p}" y2="${G}" stroke="rgba(255,255,255,${i === 5 ? 0.18 : 0.07})"/><line x1="0" y1="${p}" x2="${G}" y2="${p}" stroke="rgba(255,255,255,${i === 5 ? 0.18 : 0.07})"/>`; }
+  const pts = e.pts.map((p) => `${g(p.x)},${g(p.y)}`).join(" ");
+  let dots = ""; if (e.pts.length >= 2) { const t = { kind: "custom", def: { pts: e.pts, closed: e.closed }, cx: 0, cy: 0, w: 1, h: 1, rot: 0 }; dots = spotsOf(t, n).map((p) => `<circle cx="${g(p.x)}" cy="${g(p.y)}" r="3.5" fill="#fff"/>`).join(""); }
+  const verts = e.pts.map((p, i) => `<circle cx="${g(p.x)}" cy="${g(p.y)}" r="${i === 0 ? 6 : 4}" fill="${i === 0 ? "var(--yellow)" : "var(--accent)"}"/>`).join("");
+  return `<div class="sec"><h4>New custom shape</h4><div class="help">Click to add corners. Click the yellow first corner to close it. Your ${n} marchers spread evenly along it.</div>
+    <svg id="edsvg" width="${G}" height="${G}" style="background:var(--bg);border-radius:6px;margin:6px 0;cursor:crosshair">${grid}${e.pts.length > 1 ? `<${e.closed ? "polygon" : "polyline"} points="${pts}" fill="${e.closed ? "rgba(150,126,255,.08)" : "none"}" stroke="var(--accent)" stroke-width="2"/>` : ""}${dots}${verts}</svg>
+    <div class="row" style="flex-wrap:wrap"><button data-act="ed:undo">Undo corner</button><button data-act="ed:clear">Clear</button><button class="${e.closed ? "on" : ""}" data-act="ed:closed">${e.closed ? "Closed" : "Open"}</button></div>
+    <div class="f" style="margin-top:6px"><label>Name</label><input data-in="edname" value="${e.name}" style="width:140px"></div>
+    <div class="row"><button class="primary" data-act="ed:save" ${e.pts.length < 2 ? "disabled" : ""}>Save to library</button><button data-act="ed:cancel">Cancel</button></div></div>`;
+}
+function edClick(ev) {
+  const r = ev.currentTarget.getBoundingClientRect(); const x = Math.round(((ev.clientX - r.left) / r.width) * 10) / 10 - 0.5, y = Math.round(((ev.clientY - r.top) / r.height) * 10) / 10 - 0.5; const e = V.ed;
+  if (e.pts.length > 2 && Math.hypot(x - e.pts[0].x, y - e.pts[0].y) < 0.06) { e.closed = true; } else { e.pts.push({ x, y }); }
+  S.force = true; render();
+}
+function normDef(pts) { const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys); const w = x1 - x0 || 1, h = y1 - y0 || 1;
+  return { pts: pts.map((p) => ({ x: (p.x - x0) / w - 0.5, y: (p.y - y0) / h - 0.5 })), aspect: w / h }; }
+
+/* ---- the one UI ---- */
+const UI = {
+  name: "Combined",
+  mstyle(m, sel) {
+    if (sel) return defaultStyle(m, sel);
+    const open = S.shape || S.phase === "drawing" || S.tab === "shapes" && S.tool;
+    if (S.fade === "drawing") return S.phase === "drawing" ? { op: 0.15, label: false } : {};
+    return S.shape || S.phase === "drawing" ? { op: 0.2, label: false } : {};
+  },
+  top() {
+    const tabs = ["Home", "View", "Shapes", "Timeline"].map((t) => `<button class="tab ${S.tab === t.toLowerCase() ? "on" : ""}" data-act="tab:${t.toLowerCase()}">${t}</button>`).join("");
+    let rib = "";
+    if (S.tab === "shapes") {
+      rib = `<button class="tool" data-act="wiz">⌨ Type <span class="k">/</span></button><button class="tool ${S.tool === "sketch" ? "on" : ""}" data-act="sketch">✎ Sketch <span class="k">K</span></button><button class="tool" data-act="ptab:library">☰ Library</button><span class="vsep"></span>` + LIB.filter((it) => it.type === "kind").map((it) => `<button class="tool ${S.tool === it.id ? "on" : ""}" data-act="use:${it.id}" title="${it.name} (${KINDS[it.kind].key})">${itemIcon(it)}<span>${it.name}</span><span class="k">${KINDS[it.kind].key}</span></button>`).join("");
+      const mine = LIB.filter((it) => it.type !== "kind" && it.fav);
+      if (mine.length) rib += `<span class="vsep"></span>` + mine.map((it) => `<button class="tool ${S.tool === it.id ? "on" : ""}" data-act="use:${it.id}">${itemIcon(it)}<span>${it.name}</span></button>`).join("");
+    } else if (S.tab === "view") {
+      rib = `<span class="muted">While a shape is open, other marchers:</span><span class="seg"><button class="${S.fade !== "drawing" ? "on" : ""}" data-act="fade:always">Fade</button><button class="${S.fade === "drawing" ? "on" : ""}" data-act="fade:drawing">Fade only while drawing</button></span>`;
+    } else rib = `<span class="muted">(${S.tab} tab, not part of this prototype) · open the Shapes tab</span>`;
+    return `<div class="tabs">${tabs}</div><div class="ribbon">${rib}</div>`;
+  },
+  over(K) {
+    const s = S.shape; let h = "";
+    if (s && S.phase !== "drawing") { if (s.h >= 0.3) for (const [, sx, sy] of HANDLES.filter((x) => x[1] && x[2])) { const p = toWorld(s, { x: (sx * s.w) / 2 + (sx * 9) / K, y: (sy * s.h) / 2 + (sy * 9) / K }); h += `<circle data-h="rot" cx="${p.x}" cy="${p.y}" r="${9 / K}" fill="transparent" style="cursor:alias"/>`; }
+      h += handlesSVG(K, { rotKnob: false }); const pv = this.pivotP(); if (pv && V.pv && (V.pv[0] || V.pv[1])) h += `<circle cx="${pv.x}" cy="${pv.y}" r="${5 / K}" fill="var(--yellow)" stroke="#111" vector-effect="non-scaling-stroke" pointer-events="none"/>`; }
+    if (V.stroke) h += `<polyline points="${V.stroke.map((p) => p.x + "," + p.y).join(" ")}" fill="none" stroke="#fff" stroke-width="2" opacity=".7" vector-effect="non-scaling-stroke"/>`;
+    return h;
+  },
+  overlay() {
+    let o = "";
+    if (!S.shape && S.phase !== "drawing" && !V.wiz) {
+      const t = S.tool === "sketch" ? "Sketch roughly: a line, circle, box, arc, V…" : S.tab === "shapes" ? `Drag on the field to draw a ${curItem().name.toLowerCase()} · hold <span class="kbd">S</span> for favorites · <span class="kbd">/</span> to type one` : `Open the <b>Shapes</b> tab, or hold <span class="kbd">S</span> for favorites`;
+      o += `<div class="hint">${t}</div>`;
+    }
+    if (S.shape && S.phase !== "drawing") {
+      const s = S.shape, iv = intervals(s, S.sel.size);
+      let row = s.kind === "box" ? `<button data-act="cols-">−</button><b>${iv.cols} × ${iv.rows}</b><button data-act="cols+">+</button><span class="sep"></span><span class="muted">↔</span><button data-act="spx-">−</button><b>${fmt(iv.across)}</b><button data-act="spx+">+</button><span class="muted">↕</span><button data-act="spy-">−</button><b>${fmt(iv.deep)}</b><button data-act="spy+">+</button>`
+        : `<b>${kname(s)}</b><span class="sep"></span><span class="muted">apart</span><button data-act="sp-">−</button><b>${fmt(iv.apart)}</b><button data-act="sp+">+</button>`;
+      row += `<span class="sep"></span><button class="${V.more ? "on" : ""}" data-act="more">⋯</button><button class="primary" data-act="place">Place</button>`;
+      const more = V.more ? `<div class="row"><button data-act="rot:-90">⟲ 90°</button><button data-act="rot:90">⟳ 90°</button><button data-act="flipy">Flip</button><button data-act="order">${S.order === "nearest" ? "Nearest" : "Drill order"}</button><button data-act="ptab:shape">More in inspector →</button></div>` : "";
+      const guess = V.guesses ? `<div class="row"><span class="muted">Looks like</span>${V.guesses.map((g, i) => `<button class="tool ${V.gi === i ? "on" : ""}" data-act="guess:${i}">${icon(g.shape.kind)}${g.shape.kind === "path" ? "Keep as drawn" : KINDS[g.shape.kind].name}</button>`).join("")}</div>` : "";
+      o += chipBelow(`${guess}<div class="row">${row}</div>${more}`, 26, "col");
+    }
+    if (V.ring) { const fav = LIB.filter((it) => it.fav).slice(0, 8); const N = Math.max(fav.length, 1);
+      o += `<div class="radial" style="left:${V.ring.x}px;top:${V.ring.y}px"><div class="ctr"></div>${fav.map((it, i) => { const t = -Math.PI / 2 + (i * 2 * Math.PI) / N; return `<button class="tool ${V.hot === it.id ? "hot" : ""}" style="left:${Math.cos(t) * 110}px;top:${Math.sin(t) * 80}px" data-act="use:${it.id}">${itemIcon(it)}${it.name}</button>`; }).join("")}<div class="tip" style="left:-90px;top:${80 + 30}px">Star shapes in the Library to put them here</div></div>`; }
+    if (V.wiz) o += wizHTML();
+    if (S.tool === "sketch" && !V.ring) { const sc = toScreen(S.mouse); o += `<div class="tip" style="left:${sc.x + 14}px;top:${sc.y + 14}px">✎ Sketch</div>`; }
+    return o + tipHTML();
+  },
+  afterOverlay() {
+    const i = $("#wizin"); if (!i) return; i.focus({ preventScroll: true }); i.setSelectionRange(i.value.length, i.value.length);
+    i.oninput = () => { const w = V.wiz; w.text = i.value; w.hot = 0; if (w.step > 0) { const st = wizSteps(item(w.id))[w.step]; const v = parseFloat(i.value); if (isFinite(v)) w.vals[st.key] = v; S.shape = wizShape(w); }
+      render(); const box = ov.querySelector(".cmd"); if (box) { const tmp = document.createElement("div"); tmp.innerHTML = wizHTML(); const nb = tmp.firstElementChild; [...nb.children].forEach((c, k) => { if (c.tagName !== "INPUT") box.children[k].outerHTML = c.outerHTML; }); bindPick(); } };
+    const bindPick = () => ov.querySelectorAll("[data-wpick]").forEach((el) => (el.onmousedown = (e) => { e.preventDefault(); V.wiz.text = item(el.dataset.wpick).name; V.wiz.hot = 0; wizEnter(); S.force = true; render(); }));
+    bindPick();
+    i.onkeydown = (e) => { const w = V.wiz; e.stopPropagation();
+      if (e.key === "Enter") { e.preventDefault(); wizEnter(); S.force = true; render(); }
+      else if (e.key === "Escape") { S.shape = w.before; V.wiz = null; S.force = true; render(); }
+      else if (e.key === "Backspace" && i.value === "" && w.step > 0) { e.preventDefault(); wizSet(w.step - 1); S.force = true; render(); }
+      else if (w.step === 0 && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); const L = wizMatches(w.text).length; w.hot = ((w.hot || 0) + (e.key === "ArrowDown" ? 1 : -1) + L) % L; S.force = true; render(); } };
+  },
+  panel() {
+    const tabs = `<div class="ptabs"><button class="${S.ptab === "shape" ? "on" : ""}" data-act="ptab:shape">Shape</button><button class="${S.ptab === "library" ? "on" : ""}" data-act="ptab:library">Library</button></div>`;
+    if (S.ptab === "library") {
+      if (V.ed) return `<div class="pn">${tabs}${edHTML()}</div>`;
+      const grp = (title, list) => list.length ? `<div class="sec"><h4>${title}</h4>${list.map((it) => `<div class="libro ${S.tool === it.id ? "on" : ""}"><button class="ghost star" data-act="fav:${it.id}" title="${it.fav ? "Remove from favorites" : "Add to favorites (the S ring)"}">${it.fav ? "★" : "☆"}</button><span class="li" data-act="use:${it.id}">${itemIcon(it)}<span>${it.name}</span></span><span class="muted" style="font-size:11px">${it.note || (it.type === "kind" ? KINDS[it.kind].key : "")}</span>${it.type !== "kind" ? `<button class="ghost" data-act="del:${it.id}" title="Delete">×</button>` : ""}</div>`).join("")}</div>` : "";
+      return `<div class="pn">${tabs}<div class="help" style="margin-bottom:8px">★ puts a shape in the hold-<span class="kbd">S</span> ring and the Shapes tab. Click a name to use it.</div>${grp("Basic", LIB.filter((x) => x.type === "kind"))}${grp("Saved", LIB.filter((x) => x.type === "preset"))}${grp("Custom", LIB.filter((x) => x.type === "custom"))}
+        <div class="sec row" style="flex-wrap:wrap"><button data-act="savecur" ${S.shape ? "" : "disabled"}>+ Save current shape</button><button data-act="ed:new">+ New custom shape</button></div></div>`;
+    }
+    const s = S.shape; if (!s) return `<div class="pn">${tabs}<div class="help">Draw or pick a shape. Exact rotate, flip, scale and pivot live here; most of the time the handles on the field are enough.</div><div class="sec"><div class="lbl muted" style="font-size:11px;text-transform:uppercase">${S.sel.size} marchers selected</div></div></div>`;
+    const pv = V.pv || [0, 0];
+    return `<div class="pn">${tabs}<div class="sec"><h4>${summary(s)}</h4><div class="f"><label>Side to side</label><span>${yardDesc(s.cx)}</span></div><div class="f"><label>Front to back</label><span>${depthDesc(s.cy)}</span></div></div>
+      <div class="sec"><div class="f"><label>Pivot</label><div class="grid9">${[-1, 0, 1].map((gy) => [-1, 0, 1].map((gx) => `<button class="${pv[0] === gx && pv[1] === gy ? "on" : ""}" data-act="pv:${gx},${gy}"></button>`).join("")).join("")}</div></div></div>
+      <div class="sec"><div class="f"><label>Rotate</label><span><input data-in="rot" value="${Math.round(((deg(s.rot) % 360) + 360) % 360)}">°</span></div><div class="row" style="flex-wrap:wrap"><button data-act="rot:-90">⟲ 90°</button><button data-act="rot:90">⟳ 90°</button><button data-act="rot:180">180°</button><button data-act="rot:-15">⟲ 15°</button><button data-act="rot:15">⟳ 15°</button></div></div>
+      <div class="sec"><div class="f"><label>Flip</label><span class="row"><button data-act="flipx">Side to side</button><button data-act="flipy">Front to back</button></span></div></div>
+      <div class="sec"><div class="f"><label>Scale</label><span class="row"><button data-act="sc:0.5">½</button><button data-act="sc:0.8">−</button><button data-act="sc:1.25">+</button><button data-act="sc:2">×2</button></span></div><div class="f"><label>Footprint</label><span class="muted">${fmt(s.w)} × ${fmt(s.h)} steps</span></div></div>
+      ${s.kind === "box" ? `<div class="sec"><div class="f"><label>When I resize</label></div><div class="seg"><button class="${!S.keepSpacing ? "on" : ""}" data-act="ks:0">Stretch spacing</button><button class="${S.keepSpacing ? "on" : ""}" data-act="ks:1">Keep spacing</button></div><div class="help" style="margin-top:6px">${S.keepSpacing ? "Handles add or remove marchers across; the spacing stays." : "Handles change the spacing; the count across stays."}</div></div>` : ""}
+      <div class="sec"><div class="f"><label>Who goes where</label><span class="seg"><button class="${S.order === "nearest" ? "on" : ""}" data-act="order">Nearest</button><button class="${S.order === "drill" ? "on" : ""}" data-act="order">Drill order</button></span></div></div>
+      <div class="sec row"><button class="primary" data-act="place">Place</button><button data-act="cancel">Cancel</button><button data-act="savecur">☆ Save</button></div></div>`;
+  },
+  pivotP() { const s = S.shape; if (!s) return null; const [gx, gy] = V.pv || [0, 0]; return toWorld(s, { x: (gx * s.w) / 2, y: (gy * s.h) / 2 }); },
+  input(name, v) {
+    if (name === "rot" && S.shape && isFinite(+v)) S.shape = transformShape(S.shape, this.pivotP(), 1, 1, rad(+v) - S.shape.rot);
+    if (name === "edname" && V.ed) V.ed.name = v;
+  },
+  act(a) {
+    const s = S.shape;
+    if (a.startsWith("tab:")) { S.tab = a.slice(4); return true; }
+    if (a.startsWith("ptab:")) { S.ptab = a.slice(5); return true; }
+    if (a.startsWith("fade:")) { S.fade = a.slice(5); return true; }
+    if (a.startsWith("use:")) { useItem(a.slice(4)); V.ring = null; V.hot = null; V.guesses = null; return true; }
+    if (a === "sketch") { S.tool = S.tool === "sketch" ? "box" : "sketch"; return true; }
+    if (a === "wiz") { wizStart(); return true; }
+    if (a === "more") { V.more = !V.more; return true; }
+    if (a.startsWith("guess:")) { V.gi = +a.slice(6); S.shape = clone(V.guesses[V.gi].shape); return true; }
+    if (a.startsWith("fav:")) { const it = item(a.slice(4)); it.fav = !it.fav; if (it.fav && LIB.filter((x) => x.fav).length > 8) { it.fav = false; toast("The ring holds 8. Unstar one first."); } return true; }
+    if (a.startsWith("del:")) { LIB = LIB.filter((x) => x.id !== a.slice(4)); return true; }
+    if (a === "savecur") { if (!s) return true; const id = "u" + Date.now(); const iv = intervals(s, S.sel.size);
+      if (s.kind === "custom") LIB.push({ id, name: "My " + kname(s).toLowerCase(), type: "custom", kind: "custom", def: s.def, fav: true, note: "Custom" });
+      else LIB.push({ id, name: "My " + kname(s).toLowerCase(), type: "preset", kind: s.kind, iv: snap(s.kind === "box" ? iv.across : iv.apart) || 2, fy: s.fy, fav: true, note: `${KINDS[s.kind].name} · ${fmt(s.kind === "box" ? iv.across : iv.apart)} apart` });
+      S.ptab = "library"; toast("Saved to this show's library and starred"); return true; }
+    if (a === "ed:new") { V.ed = { pts: [], closed: false, name: "My shape" }; S.ptab = "library"; return true; }
+    if (a === "ed:undo") { V.ed.pts.pop(); V.ed.closed = false; return true; }
+    if (a === "ed:clear") { V.ed.pts = []; V.ed.closed = false; return true; }
+    if (a === "ed:closed") { V.ed.closed = !V.ed.closed; return true; }
+    if (a === "ed:cancel") { V.ed = null; return true; }
+    if (a === "ed:save") { const e = V.ed; if (e.pts.length < 2) return true; const nd = normDef(e.pts); const id = "c" + Date.now();
+      LIB.push({ id, name: e.name || "My shape", type: "custom", kind: "custom", def: { pts: nd.pts, closed: e.closed, aspect: nd.aspect }, fav: true, note: `Custom · ${e.pts.length} corners` }); V.ed = null; useItem(id); toast("Saved and starred. Drag on the field to draw it."); return true; }
+    if (a.startsWith("pv:")) { V.pv = a.slice(3).split(",").map(Number); return true; }
+    if (a.startsWith("ks:")) { S.keepSpacing = a === "ks:1"; return true; }
+    if (a.startsWith("sc:") && s) { const f = +a.slice(3); if (S.keepSpacing && s.kind === "box") { const iv = intervals(s, S.sel.size); const c = clamp(Math.round((iv.cols - 1) * f) + 1, 1, S.sel.size); S.shape = { ...s, cols: c, w: iv.across * (c - 1), h: iv.deep * (Math.ceil(S.sel.size / c) - 1) }; } else S.shape = transformShape(s, this.pivotP(), f, f, 0); return true; }
+  },
+  ringHot(p) { if (!V.ring) return; const fav = LIB.filter((it) => it.fav).slice(0, 8); const N = fav.length; if (!N) return; const sc = toScreen(p), dx = sc.x - V.ring.x, dy = sc.y - V.ring.y; if (Math.hypot(dx, dy) < 30) { V.hot = null; return; } let t = Math.atan2(dy, dx) + Math.PI / 2; t = (t + 2 * Math.PI) % (2 * Math.PI); V.hot = fav[Math.round(t / ((2 * Math.PI) / N)) % N].id; },
+  hover(p) { this.ringHot(p); },
+  key(e, down) {
+    if (V.wiz) return;
+    const kk = e.key.toLowerCase();
+    if (kk === "s" && !e.metaKey && !e.ctrlKey) { if (down && !V.ring) V.ring = toScreen(S.mouse); if (!down && V.ring) { if (V.hot) useItem(V.hot); V.ring = null; V.hot = null; } return true; }
+    if (!down) return;
+    if (e.key === "/") { wizStart(); return true; }
+    if (kk === "escape" && (V.ring || V.guesses || S.tool === "sketch")) { V.ring = null; if (S.tool === "sketch" && !S.shape) S.tool = "box"; S.shape = null; V.guesses = null; return true; }
+    if (kk === "k") { this.act("sketch"); return true; }
+    if (S.tab === "shapes" && !e.metaKey && !e.ctrlKey) { const it = LIB.find((x) => x.type === "kind" && KINDS[x.kind].key.toLowerCase() === kk); if (it) { useItem(it.id); return true; } }
+  },
+  context() { return true; },
+  down(hit, p, e) {
+    if (V.ring) { V.ring = null; return null; }
+    if (e.button === 2) { V.ring = toScreen(p); return { move: (q) => this.ringHot(q), up: () => { if (V.hot) useItem(V.hot); V.ring = null; V.hot = null; } }; }
+    if (hit.h) return undefined;
+    if (hit.t === "shape") return undefined;
+    if (hit.t === "marcher" && e.shiftKey) return undefined;
+    if (!S.sel.size) return null;
+    if (S.tool === "sketch") { V.stroke = [p]; const prev = S.shape;
+      return { draw: true, move: (q) => V.stroke.push(q), up: () => { const st = V.stroke; V.stroke = null; if (st.length < 5) { S.shape = prev; return; } V.guesses = recognize(st); V.gi = 0; S.shape = clone(V.guesses[0].shape); } }; }
+    const it = curItem(); const a = snapP(p), prev = S.shape; let moved = false; V.guesses = null;
+    return { draw: true, move: (q, ev) => { if (dist(q, p) > 0.8) moved = true; if (moved) S.shape = drawItem(it.type === "preset" ? { ...it, kind: it.kind } : it, a, snapP(q), ev.shiftKey); },
+      up: () => { if (!moved) { S.shape = prev; return; } if (S.shape.kind === "box") S.shape.cols = boxSplit(S.shape, S.sel.size).cols; } };
+  },
+  after() { V.guesses = null; V.more = false; V.pv = null; },
+};
+const QS = [{ title: "Combined", short: "v2", variants: [UI] }];
+const SAVED_DEFAULT = [
+  { name: "Company front", note: "line · 1.5 apart", shape: { kind: "line", w: 16.5, h: 0, rot: 0 } },
+  { name: "Arrowhead", note: "wedge · points back", shape: { kind: "wedge", w: 16, h: 7, rot: 0, fy: -1 } },
+  { name: "Tight diamond", note: "diamond · 1.5 apart", shape: { kind: "diamond", w: 6.4, h: 6.4, rot: 0 } },
+];
+
+/* ---------------- dimension labels (Q2B) ---------------- */
+function dimsSVG(K) { const s = S.shape, n = S.sel.size, off = 16 / K; let h = ""; const L = (a, b) => `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="var(--accent)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+  if (s.kind === "box" || s.kind === "line") { const y = s.kind === "box" ? -s.h / 2 - off : -off; const a = toWorld(s, { x: -s.w / 2, y }), b = toWorld(s, { x: s.w / 2, y }); h += L(a, b) + L(toWorld(s, { x: -s.w / 2, y: y - 3 / K }), toWorld(s, { x: -s.w / 2, y: y + 6 / K })) + L(toWorld(s, { x: s.w / 2, y: y - 3 / K }), toWorld(s, { x: s.w / 2, y: y + 6 / K }));
+    if (s.kind === "box") { const x = -s.w / 2 - off; const c = toWorld(s, { x, y: -s.h / 2 }), d = toWorld(s, { x, y: s.h / 2 }); h += L(c, d); } }
+  if (s.kind === "circle") { const c = { x: s.cx, y: s.cy }, e = toWorld(s, { x: (s.w / 2) * Math.cos(-Math.PI / 4), y: (s.h / 2) * Math.sin(-Math.PI / 4) }); h += `<line x1="${c.x}" y1="${c.y}" x2="${e.x}" y2="${e.y}" stroke="var(--accent)" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>`; }
+  return h; }
+function dimsHTML() { const s = S.shape, n = S.sel.size, iv = intervals(s, n), K = k(), off = 16 / K; const lab = (p, html) => { const q = toScreen(p); return `<div class="dim" style="left:${q.x}px;top:${q.y}px">${html}</div>`; }; const tok = (name, v) => `<span class="tok" data-edit="${name}" data-v="${v}">${v}</span>`; let h = "";
+  if (s.kind === "box") { h += lab(toWorld(s, { x: 0, y: -s.h / 2 - off }), `${tok("cols", iv.cols)} across · ${tok("across", fmt(iv.across))} apart`); h += lab(toWorld(s, { x: -s.w / 2 - off - 34 / K, y: 0 }), `${iv.rows} deep · ${tok("deep", fmt(iv.deep))} apart`); }
+  else if (s.kind === "line") h += lab(toWorld(s, { x: 0, y: -off }), `${n} · ${tok("apart", fmt(iv.apart))} apart · ${fmt(s.w)} steps`);
+  else if (s.kind === "circle") { h += lab(toWorld(s, { x: (s.w / 4) * Math.cos(-Math.PI / 4), y: (s.h / 4) * Math.sin(-Math.PI / 4) }), `r ${tok("r", fmt(s.w / 2))}`); h += lab(toWorld(s, { x: 0, y: s.h / 2 + off }), `${n} · ${tok("apart", fmt(iv.apart))} apart`); }
+  else h += lab(toWorld(s, { x: 0, y: s.h / 2 + off }), `${n} · ${tok("apart", fmt(iv.apart))} apart`);
+  if (Math.abs(Math.sin(s.rot)) > 0.01) h += lab(toWorld(s, { x: s.w / 2 + off, y: -s.h / 2 - off }), `${tok("rot", Math.round(deg(s.rot)))}°`);
+  return h; }
+function editToken(el) { const name = el.dataset.edit; el.outerHTML = `<input data-tokin="${name}" value="${el.dataset.v}">`; const i = ov.querySelector(`[data-tokin="${name}"]`); i.focus(); i.select();
+  let fired = false; const done = (ok) => { if (fired) return; fired = true; if (ok) { const v = +i.value; const s = S.shape, n = S.sel.size, iv = intervals(s, n); if (isFinite(v) && v > 0) {
+    if (name === "cols") { const c = clamp(Math.round(v), 1, n); S.shape = { ...s, cols: c, w: iv.across * (c - 1), h: iv.deep * (Math.ceil(n / c) - 1) }; }
+    if (name === "across") S.shape = { ...s, cols: iv.cols, w: v * (iv.cols - 1) }; if (name === "deep") S.shape = { ...s, cols: iv.cols, h: v * (iv.rows - 1) };
+    if (name === "apart") setApart(v); if (name === "r") S.shape = { ...s, w: 2 * v, h: 2 * v }; }
+    if (name === "rot" && isFinite(v)) S.shape = transformShape(s, { x: s.cx, y: s.cy }, 1, 1, rad(v) - s.rot); }
+    S.force = true; i.blur(); render(); };
+  i.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") done(true); if (e.key === "Escape") done(false); }; i.onblur = () => { if (ov.contains(i)) done(true); }; }
+
+/* ---------------- parsing (Q3D) ---------------- */
+function cmdSug(q) { const parsed = parseCmd(q); const ex = ["box 4x3 2 steps", "circle r 6", "arc 2 apart", "line 1.5 steps", "company front", "wedge 2 apart rotated 180", "diamond 1.5 steps"].filter((x) => !q || x.startsWith(q.split(" ")[0]) || !parsed);
+  return (parsed ? `<div class="hot">${icon(parsed.shape.kind)}<span>${parsed.label}</span><span class="ex" style="margin-left:auto">Enter</span></div>` : q ? `<div><span class="ex">Not sure what that is yet. Start with a shape name.</span></div>` : "") + ex.slice(0, 4).map((x) => `<div data-ex="${x}"><span class="ex">Try</span> ${x}</div>`).join(""); }
+function parseCmd(q) { q = q.toLowerCase().trim(); if (!q) return null; const n = S.sel.size;
+  const syn = [["company front", "line"], ["line", "line"], ["arc", "arc"], ["curve", "path"], ["circle", "circle"], ["ring", "circle"], ["box", "box"], ["block", "box"], ["rect", "box"], ["square", "box"], ["diamond", "diamond"], ["triangle", "triangle"], ["wedge", "wedge"], ["chevron", "wedge"], ["v ", "wedge"]];
+  const hit = syn.find(([w]) => q.startsWith(w) || q.includes(" " + w)); if (!hit) return null; const kind = hit[1];
+  const iv = +(q.match(/([\d.]+)\s*(steps?|apart|step)/)?.[1] || (q.match(/@\s*([\d.]+)/)?.[1]) || (hit[0] === "company front" ? 1.5 : 2));
+  const s = autoShape(kind, n, iv || 2); const dims = q.match(/(\d+)\s*(x|by|×)\s*(\d+)/); let label = `${KINDS[kind].name} · ${n} marchers · ${fmt(iv)} steps apart`;
+  if (dims && kind === "box") { const c = clamp(+dims[1], 1, n); s.cols = c; s.w = iv * (c - 1); s.h = iv * (Math.ceil(n / c) - 1); label = `Box ${c} × ${Math.ceil(n / c)} · ${fmt(iv)} apart`; }
+  const r = q.match(/(?:r|radius)\s*([\d.]+)/); if (r && (kind === "circle" || kind === "arc")) { const R = +r[1]; s.w = 2 * R; s.h = kind === "circle" ? 2 * R : R; label = `${KINDS[kind].name} · radius ${fmt(R)} · ${fmt(intervals(s, n).apart)} apart`; }
+  else if (kind === "circle" && /circle\s+(\d+)\s*$/.test(q)) { const R = +q.match(/circle\s+(\d+)/)[1]; s.w = s.h = 2 * R; label = `Circle · radius ${R} · ${fmt(intervals(s, n).apart)} apart`; }
+  const rt = q.match(/(?:rotated?|turn(?:ed)?)\s*(-?[\d.]+)/); if (rt) { s.rot = rad(+rt[1]); label += ` · rotated ${rt[1]}°`; }
+  return { shape: s, label }; }
+
+/* ---------------- recognition (Q3E) ---------------- */
+function recognize(st) { const n = S.sel.size; let len = 0; for (let i = 1; i < st.length; i++) len += dist(st[i - 1], st[i]); const a = st[0], b = st[st.length - 1], chord = dist(a, b);
+  const xs = st.map((p) => p.x), ys = st.map((p) => p.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, w = Math.max(1, x1 - x0), h = Math.max(1, y1 - y0);
+  const bb = (kind) => ({ kind, cx: snap(cx), cy: snap(cy), w: snap(w), h: snap(h), rot: 0 });
+  const asDrawn = () => { const pts = st.filter((_, i) => i % Math.max(1, Math.floor(st.length / 24)) === 0).concat([b]).map((p) => ({ x: (p.x - cx) / w, y: (p.y - cy) / h })); return { kind: "path", cx, cy, w, h, rot: 0, pts }; };
+  const out = [];
+  if (chord < 0.25 * len) { const err = (f) => st.reduce((t, p) => { const u = (p.x - cx) / (w / 2), v = (p.y - cy) / (h / 2); return t + Math.abs(f(u, v) - 1); }, 0) / st.length;
+    const sc = [["circle", err((u, v) => Math.hypot(u, v))], ["box", err((u, v) => Math.max(Math.abs(u), Math.abs(v)))], ["diamond", err((u, v) => Math.abs(u) + Math.abs(v))], ["triangle", 0.35]].sort((p, q) => p[1] - q[1]);
+    for (const [kd] of sc) { const s = bb(kd); if (kd === "circle" && Math.abs(w - h) / Math.max(w, h) < 0.25) s.w = s.h = snap((w + h) / 2); if (kd === "box") s.cols = boxSplit(s, n).cols; out.push({ shape: s }); } }
+  else { const ang = Math.atan2(b.y - a.y, b.x - a.x); if (chord / len > 0.9) out.push({ shape: shapeFromDrag("line", snapP(a), snapP(b)) });
+    let far = 0, fi = 0; const nx = -(b.y - a.y) / chord, ny = (b.x - a.x) / chord; st.forEach((p, i) => { const d = (p.x - a.x) * nx + (p.y - a.y) * ny; if (Math.abs(d) > Math.abs(far)) { far = d; fi = i; } });
+    const seg = (i0, i1) => { let l = 0; for (let i = i0 + 1; i <= i1; i++) l += dist(st[i - 1], st[i]); return dist(st[i0], st[i1]) / (l || 1); };
+    const wedgeish = seg(0, fi) > 0.93 && seg(fi, st.length - 1) > 0.93;
+    const arc = { kind: "arc", w: chord, h: Math.abs(far), rot: ang, fy: far > 0 ? -1 : 1 }; const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; arc.cx = m.x + nx * far / 2; arc.cy = m.y + ny * far / 2;
+    const wedge = { ...arc, kind: "wedge", fy: far > 0 ? 1 : -1 };
+    if (wedgeish) out.push({ shape: wedge }, { shape: arc }); else out.push({ shape: arc }, { shape: wedge });
+    if (chord / len <= 0.9) out.push({ shape: shapeFromDrag("line", snapP(a), snapP(b)) }); }
+  out.push({ shape: asDrawn() }); return out; }
+
+function convexHull(P) { const pts = P.slice().sort((a, b) => a.x - b.x || a.y - b.y); if (pts.length < 3) return pts; const cr = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); const lo = [], up = [];
+  for (const p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of pts.slice().reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1)); }
+
+/* ---------------- events ---------------- */
+svg.addEventListener("wheel", (e) => { e.preventDefault(); const p = toField(e), v = S.view, f = Math.exp(e.deltaY * 0.0015), w = clamp(v.w * f, 30, 180), h = (w * 51.6) / 88;
+  S.view = { x: p.x - ((p.x - v.x) * w) / v.w, y: p.y - ((p.y - v.y) * h) / v.h, w, h }; S.force = true; render(); }, { passive: false });
+svg.addEventListener("pointerdown", (e) => { if (e.button === 1 || (e.button === 0 && V.space)) { e.preventDefault(); const c0 = { x: e.clientX, y: e.clientY }, v0 = { ...S.view }; S.drag = { move: (_, ev) => { const kk = k(); S.view = { ...v0, x: v0.x - (ev.clientX - c0.x) / kk, y: v0.y - (ev.clientY - c0.y) / kk }; S.force = true; }, up() {} }; svg.setPointerCapture(e.pointerId); return; } const p = toField(e); S.mouse = p; const hit = hitTest(e, p); const Vt = cur();
+  let d = Vt.down ? Vt.down(hit, p, e) : undefined; if (d === undefined) d = e.button === 2 ? null : stdDown(hit, p, e);
+  if (d) { S.drag = d; svg.setPointerCapture(e.pointerId); } render(); });
+svg.addEventListener("pointermove", (e) => { const p = toField(e); S.mouse = p; if (S.drag) S.drag.move(p, e); cur().hover?.(p, e); render(); });
+svg.addEventListener("pointerup", (e) => { if (S.drag) { S.drag.up?.(toField(e), e); S.drag = null; } render(); });
+stage.addEventListener("contextmenu", (e) => { if (cur().context?.(toField(e), e)) { e.preventDefault(); render(); } });
+function onAct(e) { const el = e.target.closest("[data-act]"); if (!el) return; const a = el.dataset.act; if (!(cur().act?.(a, el))) act(a, el); S.force = true; render(); }
+ov.addEventListener("click", onAct); panel.addEventListener("click", onAct); topslot.addEventListener("click", onAct);
+document.getElementById("switcher").addEventListener("click", onAct);
+panel.addEventListener("change", (e) => { const n = e.target.dataset?.in; if (n) { cur().input?.(n, e.target.value); S.force = true; render(); } });
+window.addEventListener("keydown", (e) => { if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") { if (e.key === "Enter" && e.target.dataset?.in) { e.target.dispatchEvent(new Event("change", { bubbles: true })); } return; }
+  if (cur().key?.(e, true)) { e.preventDefault(); render(); return; }
+  if (e.key === "Enter") { place(); render(); } if (e.key === "Escape") { V.ring = null; S.shape = null; render(); }
+  if (e.key === "[" ) { act("cols-"); render(); } if (e.key === "]") { act("cols+"); render(); } });
+window.addEventListener("keyup", (e) => { if (e.target.tagName === "INPUT") return; if (cur().key?.(e, false)) render(); });
+window.addEventListener("resize", () => { S.force = true; render(); });
+
+/* ---------------- prototype bar + guide ---------------- */
+function go() {
+  V = {}; S.drag = null; S.tip = null; S.shape = null;
+  notesEl.innerHTML = `<div class="hdr"><div><div class="q">Prototype v2 · your picks combined</div><h3>Where everything is</h3></div><button class="ghost" data-min title="Hide">–</button></div>
+  <ul>
+   <li><b>Shapes tab</b> (top): every basic shape with its key, then your starred saved shapes. Drag on the field to draw.</li>
+   <li><b>Hold S</b> or right-press the field: a ring of your <span style="color:var(--yellow)">★</span> favorites.</li>
+   <li><b>Library</b> (right panel): star shapes, save the current one, or make a <b>custom shape</b> by clicking corners.</li>
+   <li><b>Type /</b>: answer one question at a time (shape, how many across, steps apart, rotation) with a live preview. "box 4x3 2" fills the steps for you.</li>
+   <li><b>Sketch K</b>: draw roughly and it guesses.</li>
+   <li><b>On the field</b>: the chip under the shape for the common numbers. Corners and sides resize, just outside a corner rotates (Shift 15°, Alt from center).</li>
+   <li><b>Shape panel</b> (right): pivot, exact rotate, flip, scale, and the box resize rule.</li>
+   <li><b>View tab</b>: fade the rest, or fade only while drawing.</li>
+  </ul><div class="muted" style="font-size:11px">Enter places · Esc cancels · scroll zooms · middle-drag pans</div>`;
+  notesEl.querySelector("[data-min]").onclick = () => notesEl.classList.toggle("min");
+  drawBar(); S.force = true; render();
+}
+function drawBar() { const sw = document.getElementById("switcher");
+  sw.innerHTML = `<span style="font-weight:600;padding:0 6px">PROTOTYPE v2</span><span class="sep"></span><span>Selected</span><select id="grp">${Object.keys(GROUPS).map((g) => `<option ${g === S.group ? "selected" : ""}>${g}</option>`).join("")}${S.group ? "" : "<option selected>Custom</option>"}</select><button data-reset>Reset</button><span class="sep"></span><a href="shape-ui-ideas.html" style="color:#333;padding:0 6px">v1 ideas</a>`;
+  sw.querySelector("[data-reset]").onclick = () => { S.ms = clone(HOME); S.undo = null; go(); };
+  sw.querySelector("#grp").onchange = (e) => { setGroup(e.target.value); go(); }; }
+panel.addEventListener("click", (e) => { const sv = e.target.closest("#edsvg"); if (sv && V.ed) edClick({ currentTarget: sv, clientX: e.clientX, clientY: e.clientY }); });
+S.tab = "shapes"; S.ptab = "shape"; S.tool = "box"; S.fade = "always";
+go();
+requestAnimationFrame(() => { S.force = true; render(); });
+</script>
+</body>
+</html>
