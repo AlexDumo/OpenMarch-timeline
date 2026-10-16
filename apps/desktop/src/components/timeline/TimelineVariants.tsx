@@ -122,6 +122,7 @@ import {
     TimelinePunchTapLayer,
     usePunchTap,
 } from "./TimelinePunchTap";
+import { TimelineAppendCountsMenu } from "./TimelineAppendCountsMenu";
 import {
     fitSeconds,
     TimelineShowEnd,
@@ -177,9 +178,6 @@ export function fitBackZoom(
 /** About how wide **+ N counts** is, and the room kept for it after the last beat (E1) */
 const APPEND_COUNTS_WIDTH = 84;
 const APPEND_COUNTS_ROOM = APPEND_COUNTS_WIDTH + 16;
-/** About how wide a pill in the top row is for `label` (10px text, icon and padding) */
-const pillWidth = (label: string) =>
-    Math.max(APPEND_COUNTS_WIDTH, Math.ceil(label.length * 5.6) + 24);
 
 /** How much one pixel of wheel or pinch delta zooms */
 const WHEEL_ZOOM_RATE = 0.0025;
@@ -1107,9 +1105,11 @@ const TimelineSurface = memo(function TimelineSurface({
             : atFlag;
     })();
     const showAppendCounts = props.appendCounts != null && !props.isPlaying;
-    const appendWidth = props.appendCounts
-        ? pillWidth(props.appendCounts.label)
-        : APPEND_COUNTS_WIDTH;
+    // Right-clicking **+ N counts** sets how many counts new pages get
+    const [appendMenuAt, setAppendMenuAt] = useState<{
+        x: number;
+        y: number;
+    } | null>(null);
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
     // UI-12: clicks and scrubs land on a nearby downbeat or page line; Basic's on any count
@@ -2077,6 +2077,21 @@ const TimelineSurface = memo(function TimelineSurface({
                                     event.stopPropagation()
                                 }
                                 onClick={props.appendCounts.onAppend}
+                                onContextMenu={(event) => {
+                                    const { counts, onCountsChange } =
+                                        props.appendCounts ?? {};
+                                    if (
+                                        counts === undefined ||
+                                        !onCountsChange
+                                    )
+                                        return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setAppendMenuAt({
+                                        x: event.clientX,
+                                        y: event.clientY,
+                                    });
+                                }}
                                 className="border-accent text-accent bg-bg-1 hover:bg-accent hover:text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex h-16 items-center gap-2 rounded-full border px-6 text-[10px] leading-none font-medium whitespace-nowrap outline-hidden focus-visible:ring-2"
                                 style={{
                                     left: appendCountsX,
@@ -2087,26 +2102,19 @@ const TimelineSurface = memo(function TimelineSurface({
                                 {props.appendCounts.label}
                             </button>
                         )}
-                        {showAppendCounts && props.appendCounts?.toEnd && (
-                            <button
-                                type="button"
-                                data-testid="timeline-pages-to-end"
-                                data-timeline-interactive="true"
-                                aria-label={props.appendCounts.toEnd.title}
-                                title={props.appendCounts.toEnd.title}
-                                onPointerDown={(event) =>
-                                    event.stopPropagation()
-                                }
-                                onClick={props.appendCounts.toEnd.onAppend}
-                                className="border-accent text-accent bg-bg-1 hover:bg-accent hover:text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex h-16 items-center gap-2 rounded-full border border-dashed px-6 text-[10px] leading-none font-medium whitespace-nowrap outline-hidden focus-visible:ring-2"
-                                style={{
-                                    left: appendCountsX + appendWidth + 6,
-                                    top: TIMELINE_PAGE_ROW_TOP + 6,
-                                }}
-                            >
-                                {props.appendCounts.toEnd.label}
-                            </button>
-                        )}
+                        {appendMenuAt &&
+                            props.appendCounts?.counts !== undefined &&
+                            props.appendCounts.onCountsChange && (
+                                <TimelineAppendCountsMenu
+                                    at={appendMenuAt}
+                                    counts={props.appendCounts.counts}
+                                    onCountsChange={
+                                        props.appendCounts.onCountsChange
+                                    }
+                                    toEnd={props.appendCounts.toEnd}
+                                    onClose={() => setAppendMenuAt(null)}
+                                />
+                            )}
                         <TimelineRangePreview
                             preview={pointer.rangePreview}
                             axis={axis}

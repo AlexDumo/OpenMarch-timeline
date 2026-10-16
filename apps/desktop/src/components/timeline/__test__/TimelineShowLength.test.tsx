@@ -127,27 +127,29 @@ describe("+ N counts after the last page (E1)", () => {
         expect(onAppend).toHaveBeenCalledTimes(1);
     });
 
-    it("offers pages to the end next to it when counts run on (FB-7)", () => {
+    it("offers pages to the end in its right-click menu, not as a pill (FB-7)", () => {
         const onPages = vi.fn();
         show({
             appendCounts: {
                 ...appendCounts(),
-                label: "page of 16 counts",
+                counts: 16,
+                onCountsChange: vi.fn(),
                 toEnd: {
-                    label: "Pages every 16 counts to the end",
+                    label: "Create pages every 16 counts to the end",
                     title: "Add pages every 16 counts to the end of the music",
                     onAppend: onPages,
                 },
             },
         });
-        const toEnd = screen.getByRole("button", {
-            name: "Add pages every 16 counts to the end of the music",
-        });
-        expect(parseFloat(toEnd.style.left)).toBeGreaterThan(
-            parseFloat(pill()!.style.left) + 84,
+        expect(screen.queryByTestId("timeline-pages-to-end")).toBeNull();
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        fireEvent.click(
+            screen.getByRole("menuitem", {
+                name: "Create pages every 16 counts to the end",
+            }),
         );
-        fireEvent.click(toEnd);
         expect(onPages).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
     });
 
     it("moves past + at the playhead instead of hiding under it", () => {
@@ -168,6 +170,40 @@ describe("+ N counts after the last page (E1)", () => {
         cleanup();
         show({});
         expect(pill()).toBeNull();
+    });
+});
+
+describe("changing how many counts + N counts adds", () => {
+    it("right-click offers presets and a typed number, and sets the default", () => {
+        const onCountsChange = vi.fn();
+        show({
+            appendCounts: { ...appendCounts(), counts: 16, onCountsChange },
+        });
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        const menu = screen.getByTestId("timeline-append-counts-menu");
+        expect(menu.textContent).toContain("New pages get");
+        fireEvent.click(screen.getByRole("menuitem", { name: "8 counts" }));
+        expect(onCountsChange).toHaveBeenCalledWith(8);
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
+
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        const field = screen.getByRole("textbox", {
+            name: "Counts for new pages",
+        });
+        fireEvent.change(field, { target: { value: "0" } });
+        expect(
+            (screen.getByRole("button", { name: "Set" }) as HTMLButtonElement)
+                .disabled,
+        ).toBe(true);
+        fireEvent.change(field, { target: { value: "20" } });
+        fireEvent.submit(field.closest("form")!);
+        expect(onCountsChange).toHaveBeenLastCalledWith(20);
+    });
+
+    it("without the command, a right-click opens no menu", () => {
+        show({ appendCounts: appendCounts() });
+        fireEvent.contextMenu(pill()!);
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
     });
 });
 

@@ -149,7 +149,14 @@ export interface TimelineAppendCounts {
     /** Its tooltip and accessible name, such as "Add a page of 16 counts after the last page" */
     readonly title: string;
     readonly onAppend: () => void;
-    /** "Add pages every 16 counts to the end", when counts run on past the last page (FB-7) */
+    /** The page length it adds now; with `onCountsChange`, a right-click changes it */
+    readonly counts?: number;
+    /** Sets the file's default new page counts, from the pill's right-click menu */
+    readonly onCountsChange?: (counts: number) => void;
+    /**
+     * "Create pages every 16 counts to the end", when the music runs on past the last page (FB-7):
+     * an entry in the pill's right-click menu
+     */
     readonly toEnd?: {
         readonly label: string;
         readonly title: string;

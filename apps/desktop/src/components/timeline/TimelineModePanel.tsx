@@ -32,7 +32,10 @@ import {
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
 import { useTimelineTracksState } from "@/timeline/useTimelineTracks";
-import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
+import {
+    updateWorkspaceSettingsMutationOptions,
+    workspaceSettingsQueryOptions,
+} from "@/hooks/queries/useWorkspaceSettings";
 import {
     useRetimeBeats,
     useSetTempoSyncedBeatIds,
@@ -959,9 +962,11 @@ function useShowLengthControls({
 }) {
     const { t } = useTolgee();
     const queryClient = useQueryClient();
-    const counts =
-        useQuery(workspaceSettingsQueryOptions()).data?.defaultNewPageCounts ??
-        16;
+    const { data: settings } = useQuery(workspaceSettingsQueryOptions());
+    const counts = settings?.defaultNewPageCounts ?? 16;
+    const { mutate: updateSettings } = useMutation(
+        updateWorkspaceSettingsMutationOptions(queryClient),
+    );
     const { mutate: appendPage } = useMutation(
         appendPageOfCountsMutationOptions(queryClient, selectAddedPage),
     );
@@ -979,6 +984,17 @@ function useShowLengthControls({
               label: t("timeline.showLength.appendCounts", { counts }),
               title: t("timeline.showLength.appendCountsTitle", { counts }),
               onAppend: () => appendPage(counts),
+              counts,
+              // The pill's right-click menu sets the file's default new page counts
+              ...(settings
+                  ? {
+                        onCountsChange: (next: number) =>
+                            updateSettings({
+                                ...settings,
+                                defaultNewPageCounts: next,
+                            }),
+                    }
+                  : {}),
               ...(musicEndBeat !== null && musicEndBeat - lastFlag > counts
                   ? {
                         toEnd: {
