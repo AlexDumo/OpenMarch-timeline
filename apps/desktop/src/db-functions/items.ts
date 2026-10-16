@@ -335,10 +335,14 @@ export async function updateItems({
     );
 }
 
-/** An item table keyed by beat: Outline changes (C2.1) and Placement changes (C2.3). */
+/**
+ * An item table keyed by beat: Outline changes (C2.1), Placement changes (C2.3) and Artwork slot
+ * assignments (C2.4, one per slot).
+ */
 type BeatKeyedItemTable =
     | typeof schema.item_geometry
-    | typeof schema.item_placements;
+    | typeof schema.item_placements
+    | typeof schema.item_artwork_slots;
 
 /** Whether the file has `name`: the item tables come with timeline-only migrations. */
 const hasTable = async (tx: DbTransaction, name: string) =>
@@ -352,8 +356,8 @@ const hasTable = async (tx: DbTransaction, name: string) =>
 
 /**
  * Carries the item changes on beats about to be deleted forward, as cues are carried (ADR 0004
- * amendment of 2026-10-15): Outline changes and Placement changes. Call it in the deletion's
- * transaction, before the beats go, so one undo restores both. Per item and table, of the
+ * amendment of 2026-10-15): Outline, Placement and slot changes. Call it in the deletion's
+ * transaction, before the beats go, so one undo restores both. Per item (and slot) and table, of the
  * changes on a run of deleted beats only the last is kept: it moves to the first surviving beat
  * after the run, unless the item already has a change there, which wins. With no beat after the
  * run, the changes go with their beats. Without this, deleting the count a prop was made on
@@ -370,18 +374,23 @@ export async function carryItemChangesPastDeletedBeatsInTransaction({
     const tables: [string, BeatKeyedItemTable][] = [
         ["item_geometry", schema.item_geometry],
         ["item_placements", schema.item_placements],
+        ["item_artwork_slots", schema.item_artwork_slots],
     ];
     let after: Awaited<ReturnType<typeof beatsAfterDeletion>> | null = null;
     for (const [name, table] of tables) {
         if (!(await hasTable(tx, name))) continue;
-        const rows = await tx
-            .select({
-                id: table.id,
-                item_id: table.item_id,
-                beat_id: table.beat_id,
-            })
-            .from(table)
-            .all();
+        const rows = (
+            await tx
+                .select({
+                    id: table.id,
+                    item_id: table.item_id,
+                    beat_id: table.beat_id,
+                    // Slot assignments are one change per slot
+                    slot: "slot" in table ? table.slot : sql<null>`NULL`,
+                })
+                .from(table)
+                .all()
+        ).map((row) => ({ ...row, key: `${row.item_id}|${row.slot ?? ""}` }));
         if (!rows.some((row) => beatIds.has(row.beat_id))) continue;
         after ??= await beatsAfterDeletion(tx, beatIds);
         const { order, nextBeat } = after;
@@ -392,7 +401,7 @@ export async function carryItemChangesPastDeletedBeatsInTransaction({
             if (!beatIds.has(row.beat_id)) continue;
             const to = nextBeat.get(row.beat_id) ?? null;
             if (to === null) continue;
-            const key = `${row.item_id}|${to}`;
+            const key = `${row.key}|${to}`;
             const at = order.get(row.beat_id)!;
             const current = kept.get(key);
             if (!current || at > current.at)
@@ -401,7 +410,7 @@ export async function carryItemChangesPastDeletedBeatsInTransaction({
         const taken = new Set(
             rows
                 .filter((row) => !beatIds.has(row.beat_id))
-                .map((row) => `${row.item_id}|${row.beat_id}`),
+                .map((row) => `${row.key}|${row.beat_id}`),
         );
         for (const [key, { id, to }] of kept) {
             if (taken.has(key)) continue;

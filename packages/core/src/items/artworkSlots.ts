@@ -182,7 +182,7 @@ export function effectiveDpi(
 export type AssignmentScope = "show" | "from_count";
 
 export function defaultAssignmentScope(
-    assignments: readonly ArtworkAssignment[],
+    assignments: readonly Pick<ArtworkAssignment, "slot">[],
     slot: string,
 ): AssignmentScope {
     return assignments.some((a) => a.slot === slot) ? "from_count" : "show";
