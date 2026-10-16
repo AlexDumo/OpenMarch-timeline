@@ -6,10 +6,13 @@
  *
  * - **Repeats.** A backward repeat jumps back to the nearest forward repeat after the last repeat
  *   that was already played out, or to the start of the piece when there is none. `times` says how
- *   often the section is played in all (2 unless the file says otherwise).
+ *   often the section is played in all (2 unless the file says otherwise). A repeat inside an
+ *   ending bracket that starts with its own forward repeat is nested: once played out, the outer
+ *   section carries on.
  * - **Endings.** A bracket is played on the passes its numbers list ("1, 2" plays on the first two
  *   passes) and skipped on the others. A pass is how many times the current repeat section has been
- *   started.
+ *   started. A backward repeat in a bracket repeats until every ending of its group has been
+ *   played (endings "1", "2", "3, 5, 7", "4, 6", "8" play the section eight times).
  * - **Jumps.** D.C. goes to the first measure and D.S. to the segno, each at the end of its measure
  *   and only once. After a jump, repeats are not taken again and the last ending of a bracket group
  *   is played (the usual reading of "D.S. al Coda" over a repeat with endings). After a jump, To Coda
@@ -77,13 +80,25 @@ export function performanceOrder(navigation: MeasureNavigation[]): {
     const usedJumps = new Set<number>();
     const limit = Math.max(1, n) * MAX_PLAYS_PER_MEASURE;
 
-    // The current repeat section: where a backward repeat goes back to, and which pass this is
-    let sectionStart = 0;
-    let pass = 1;
-    let afterJump = false;
-    // True while landing on a measure because a backward repeat jumped back to it
-    let repeating = false;
-
+    /** The start of each bracket group (consecutive bracket measures), for each measure in one. */
+    const groupStart: number[] = [];
+    navigation.forEach((m, k) => {
+        groupStart.push(
+            m.ending
+                ? navigation[k - 1]?.ending
+                    ? groupStart[k - 1]!
+                    : k
+                : -1,
+        );
+    });
+    /** The numbers of every bracket in the group `k` is in. */
+    const groupNumbers = (k: number) => {
+        const numbers: number[][] = [];
+        for (let j = groupStart[k]!; j < n && navigation[j]!.ending; j++)
+            if (navigation[j]!.ending!.start)
+                numbers.push(navigation[j]!.ending!.numbers);
+        return numbers;
+    };
     /** The index just past the bracket that starts at `start`. */
     const bracketEnd = (start: number) => {
         let k = start + 1;
@@ -91,17 +106,14 @@ export function performanceOrder(navigation: MeasureNavigation[]): {
             k++;
         return k;
     };
-    /** The numbers of the last bracket in the group of brackets that starts at `start`. */
-    const lastBracketNumbers = (start: number) => {
-        let k = start;
-        let numbers = navigation[start]!.ending!.numbers;
-        while (k < n && navigation[k]!.ending) {
-            if (navigation[k]!.ending!.start)
-                numbers = navigation[k]!.ending!.numbers;
-            k++;
-        }
-        return numbers;
-    };
+
+    // Repeat sections, innermost last: where a backward repeat goes back to, and which pass this is.
+    // The first one is the top-level section; sections nested in a bracket go on top of it
+    const sections: { start: number; pass: number }[] = [{ start: 0, pass: 1 }];
+    const top = () => sections[sections.length - 1]!;
+    let afterJump = false;
+    // True while landing on a measure because a backward repeat jumped back to it
+    let landing = false;
 
     let i = 0;
     while (i < n) {
@@ -111,19 +123,25 @@ export function performanceOrder(navigation: MeasureNavigation[]): {
         }
         const nav = navigation[i]!;
 
-        if (nav.forwardRepeat && !repeating) {
-            sectionStart = i;
-            pass = 1;
-        }
-        repeating = false;
+        // Past a bracket group, the top-level section is played out
+        if (
+            !landing &&
+            !nav.ending &&
+            navigation[i - 1]?.ending &&
+            sections.length === 1
+        )
+            sections[0] = { start: i, pass: 1 };
 
-        if (nav.ending?.start) {
-            const playOn = afterJump ? lastBracketNumbers(i) : [pass];
+        if (nav.ending?.start && !landing) {
+            const groups = groupNumbers(i);
+            const playOn = afterJump
+                ? groups[groups.length - 1]!
+                : [top().pass];
             if (!nav.ending.numbers.some((num) => playOn.includes(num))) {
                 const end = bracketEnd(i);
                 // A later bracket that no repeat can reach would never be played: play it instead
                 const reachable = navigation
-                    .slice(sectionStart, end)
+                    .slice(top().start, end)
                     .some((m) => m.backwardRepeat);
                 if (reachable || afterJump) {
                     i = end;
@@ -136,6 +154,12 @@ export function performanceOrder(navigation: MeasureNavigation[]): {
                 });
             }
         }
+
+        if (nav.forwardRepeat && !landing) {
+            if (nav.ending) sections.push({ start: i, pass: 1 });
+            else sections.splice(0, sections.length, { start: i, pass: 1 });
+        }
+        landing = false;
 
         order.push({ index: i, time: ++times[i]! });
 
@@ -153,15 +177,24 @@ export function performanceOrder(navigation: MeasureNavigation[]): {
         }
 
         if (nav.backwardRepeat && !afterJump) {
-            if (pass < nav.backwardRepeat.times) {
-                pass++;
-                i = sectionStart;
-                repeating = true;
+            const section = top();
+            // In a bracket of the section's own group: repeat until a later ending has played
+            const ownGroup =
+                nav.ending &&
+                (sections.length === 1 || !navigation[section.start]!.ending);
+            const plays = ownGroup
+                ? Math.max(...groupNumbers(i).flat(), section.pass)
+                : nav.backwardRepeat.times;
+            if (section.pass < plays) {
+                section.pass++;
+                i = section.start;
+                landing = true;
                 continue;
             }
-            // Played out: a later section without a forward repeat starts after this one
-            sectionStart = i + 1;
-            pass = 1;
+            // Played out: a nested section hands back to the one around it, and a later
+            // top-level section without a forward repeat starts after this one
+            if (sections.length > 1) sections.pop();
+            else if (!nav.ending) sections[0] = { start: i + 1, pass: 1 };
         }
 
         if ((nav.daCapo || nav.dalSegno !== undefined) && !usedJumps.has(i)) {
@@ -180,8 +213,7 @@ export function performanceOrder(navigation: MeasureNavigation[]): {
                 }
             }
             afterJump = true;
-            sectionStart = target;
-            pass = 1;
+            sections.splice(0, sections.length, { start: target, pass: 1 });
             i = target;
             continue;
         }

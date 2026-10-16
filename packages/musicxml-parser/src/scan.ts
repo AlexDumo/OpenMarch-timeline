@@ -353,8 +353,8 @@ function readNavigation(measure: XmlElement, marks: NavigationMarks) {
             const times = Number(repeat!.getAttribute("times"));
             nav.backwardRepeat = {
                 times: Math.max(
-                    nav.backwardRepeat?.times ?? 2,
-                    Number.isInteger(times) && times > 1 ? times : 2,
+                    nav.backwardRepeat?.times ?? 0,
+                    Number.isInteger(times) && times >= 1 ? times : 2,
                 ),
             };
         }
@@ -364,10 +364,8 @@ function readNavigation(measure: XmlElement, marks: NavigationMarks) {
                 .split(/[^0-9]+/)
                 .filter(Boolean)
                 .map(Number);
-            nav.ending = {
-                numbers: numbers.length > 0 ? numbers : [1],
-                start: true,
-            };
+            // An unnumbered bracket is numbered by its place in its group (see settleNavigation)
+            nav.ending = { numbers, start: true };
         }
     }
 
@@ -442,11 +440,17 @@ function settleNavigation(
             }
     }
 
-    // Endings: a bracket runs from its start to its stop or discontinue
+    // Endings: a bracket runs from its start to its stop or discontinue. An unnumbered bracket
+    // plays on the pass its place in its group says (the second bracket on the second pass)
     let open: number[] | undefined;
+    let place = 0;
     marksByMeasure.forEach((nav, i) => {
-        if (nav.ending?.start) open = nav.ending.numbers;
-        else if (open) nav.ending = { numbers: open, start: false };
+        if (nav.ending?.start) {
+            place++;
+            if (nav.ending.numbers.length === 0) nav.ending.numbers = [place];
+            open = nav.ending.numbers;
+        } else if (open) nav.ending = { numbers: open, start: false };
+        else place = 0;
         if (endingStops[i]) open = undefined;
     });
 

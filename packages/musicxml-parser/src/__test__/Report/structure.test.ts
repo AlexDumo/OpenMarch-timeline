@@ -256,3 +256,18 @@ describe("short measures", () => {
         expect(codes(xml)).not.toContain("short-measure");
     });
 });
+
+describe("unnumbered endings", () => {
+    it("plays unnumbered brackets in the order they are written", () => {
+        const tempo = museScoreTempo("quarter", 0, 60, 60);
+        const xml = score(
+            measure(1, time(2, 4) + tempo + rest(2)) +
+                measure(2, endingStart("") + rest(2) + endingStop("")) +
+                measure(
+                    3,
+                    endingStart("") + rest(2) + endingStop("", "discontinue"),
+                ),
+        );
+        expect(order(xml)).toEqual(["1", "2", "1x2", "3"]);
+    });
+});

@@ -212,4 +212,62 @@ describe("performanceOrder", () => {
         expect(order).toHaveLength(16);
         expect(issues).toEqual([{ code: "endless", index: 0, played: 16 }]);
     });
+
+    it("doesn't repeat a section marked to play once", () => {
+        expect(play(nav(2, { 1: { backwardRepeat: { times: 1 } } }))).toEqual([
+            1, 2,
+        ]);
+    });
+
+    it("repeats until every ending of the group has played", () => {
+        // |1. 2 :|2. 3 :|3.5. 4 :|4. 5 :|6. 6 — LilyPond suite 45d, shortened
+        expect(
+            play(
+                nav(7, {
+                    2: { ...ending([1]), backwardRepeat: { times: 2 } },
+                    3: { ...ending([2]), backwardRepeat: { times: 2 } },
+                    4: { ...ending([3, 5]), backwardRepeat: { times: 2 } },
+                    5: { ...ending([4]), backwardRepeat: { times: 2 } },
+                    6: ending([6]),
+                }),
+            ),
+        ).toEqual([1, 2, 1, 3, 1, 4, 1, 5, 1, 4, 1, 6, 7]);
+    });
+
+    it("plays a repeat nested in a first ending, then the outer repeat", () => {
+        // 1 |1. ||:2:|| 3 :|2. ||:4:|| 5 — LilyPond suite 45i
+        expect(
+            play(
+                nav(6, {
+                    2: ending([1]),
+                    3: {
+                        ...ending([1], false),
+                        forwardRepeat: true,
+                        backwardRepeat: { times: 2 },
+                    },
+                    4: { ...ending([1], false), backwardRepeat: { times: 2 } },
+                    5: {
+                        ...ending([2]),
+                        forwardRepeat: true,
+                        backwardRepeat: { times: 2 },
+                    },
+                    6: ending([2], false),
+                }),
+            ),
+        ).toEqual([1, 2, 3, 3, 4, 1, 5, 5, 6]);
+    });
+
+    it("starts a new section after an ending group", () => {
+        // ||: 1 |1. 2 :||2. 3 | 4 :|| — the last repeat goes back to 4, not 1
+        expect(
+            play(
+                nav(5, {
+                    1: { forwardRepeat: true },
+                    2: { ...ending([1]), backwardRepeat: { times: 2 } },
+                    3: ending([2]),
+                    4: { backwardRepeat: { times: 2 } },
+                }),
+            ),
+        ).toEqual([1, 2, 1, 3, 4, 4, 5]);
+    });
 });
