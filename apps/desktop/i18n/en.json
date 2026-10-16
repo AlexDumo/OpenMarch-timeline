@@ -2270,6 +2270,7 @@
             "zoom": "Scroll"
         },
         "uniformPreset": {
+            "cadet": "Cadet",
             "fade": "Ultraviolet Fade",
             "military": "Night Watch",
             "plastron": "Lilac Plastron",

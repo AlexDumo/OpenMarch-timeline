@@ -168,7 +168,14 @@ export function isGuard(section: string): boolean {
 
 /** A uniform: `createUniformMaterial`'s input. Colors are sRGB numbers. */
 export interface UniformLook {
-    style: "classic" | "sash" | "plastron" | "military" | "split" | "fade";
+    style:
+        | "classic"
+        | "sash"
+        | "plastron"
+        | "military"
+        | "split"
+        | "fade"
+        | "cadet";
     colors: {
         primary: number;
         secondary: number;

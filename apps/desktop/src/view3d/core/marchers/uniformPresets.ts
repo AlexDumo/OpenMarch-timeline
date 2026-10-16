@@ -15,6 +15,7 @@ import type { UniformLook } from "./looks";
 export const UNIFORM_PRESET_IDS = [
     "sash",
     "signature",
+    "cadet",
     "fade",
     "plastron",
     "military",
@@ -58,6 +59,8 @@ const LILAC = 0xe8e3ff;
 const WHITE = 0xf2f2ee;
 const SILVER = 0xc9cdd8;
 const GOLD = 0xd8b04a;
+/** Cadet's cummerbund and plate: a brighter, yellower gold. */
+const CADET_GOLD = 0xf0c02a;
 const BLACK = 0x111114;
 /** Darker than the pants, so the feet still separate from the legs. */
 const SHOE_BLACK = 0x0b0b0d;
@@ -151,6 +154,44 @@ export const UNIFORM_PRESETS: Readonly<Record<UniformPresetId, UniformPreset>> =
             silk: (u, v) => {
                 const d = u - v;
                 return Math.abs(d) < 0.035 ? GOLD : d < 0 ? OM : OM_NIGHT;
+            },
+        },
+        // Cadet: academy full dress. A purple jacket with rows of white
+        // braid across the chest, a white cross belt with a gold plate, a
+        // pleated gold cummerbund, white trousers and a purple shako with a
+        // white plume. Silks: purple, a white band across the middle edged in
+        // gold.
+        cadet: {
+            band: {
+                style: "cadet",
+                colors: {
+                    primary: OM,
+                    secondary: CADET_GOLD,
+                    accent: WHITE,
+                    trim: WHITE,
+                    pants: WHITE,
+                    shoes: SHOE_BLACK,
+                    gloves: WHITE,
+                    hat: OM,
+                    plume: WHITE,
+                    visor: BLACK,
+                },
+                options: { ...BAND, stripe: false },
+            },
+            guard: guardLook(
+                "cadet",
+                {
+                    primary: OM,
+                    secondary: CADET_GOLD,
+                    accent: WHITE,
+                    trim: WHITE,
+                },
+                WHITE,
+            ),
+            carry: OM,
+            silk: (_u, v) => {
+                const d = Math.abs(v - 0.5);
+                return d < 0.12 ? WHITE : d < 0.18 ? CADET_GOLD : OM;
             },
         },
         // Ultraviolet Fade: the jacket fades from near-black at the waist up to

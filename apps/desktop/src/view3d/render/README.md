@@ -21,6 +21,9 @@ The `.d.ts` files are hand-written for the `.js` files; keep them in step.
 - Moved from `src/view3d/vendor/om-pose/` (2026-10-11), with header comments
   and spelling ignores only. No behavior change.
 - `legTurnSetup` and `cloneRig` are exported for the per-channel bake.
+- `uniform-shader.js` has a seventh style, `cadet` (2026-10-16): academy
+  full dress, with chest braid in trim, a cross belt in the accent color with
+  a plate, and a pleated cummerbund in the secondary color.
 
 ## Channel layering
 
