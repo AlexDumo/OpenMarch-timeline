@@ -16,7 +16,7 @@
  * - **Jumps.** D.C. goes to the first measure and D.S. to the segno, each at the end of its measure
  *   and only once. After a jump, repeats are not taken again and the last ending of a bracket group
  *   is played (the usual reading of "D.S. al Coda" over a repeat with endings). After a jump, To Coda
- *   goes to the coda, and Fine ends the piece.
+ *   goes to the coda, and Fine ends the piece. The coda is new music, so its repeats are taken.
  *
  * Every jump happens at the end of a measure, so a mark in the middle of a measure moves to its
  * end. A file that would loop forever stops after `MAX_PLAYS_PER_MEASURE` plays of its measures.
@@ -170,6 +170,9 @@ export function performanceOrder(navigation: MeasureNavigation[]): {
                 (m, k) => k > from && m.coda === nav.toCoda,
             );
             if (coda !== -1) {
+                // The coda is music not played before: its repeats and endings are taken
+                afterJump = false;
+                sections.splice(0, sections.length, { start: coda, pass: 1 });
                 i = coda;
                 continue;
             }

@@ -184,6 +184,36 @@ describe("performanceOrder", () => {
         ).toEqual([1, 2, 1, 3, 4, 1, 3, 4]);
     });
 
+    it("takes the repeats in the coda after D.S. al Coda", () => {
+        // §1 | 2 To Coda | 3 D.S. | ⊕||: 4 | 5 :||
+        expect(
+            play(
+                nav(5, {
+                    1: { segno: "segno" },
+                    2: { toCoda: "coda" },
+                    3: { dalSegno: "segno" },
+                    4: { coda: "coda", forwardRepeat: true },
+                    5: { backwardRepeat: { times: 2 } },
+                }),
+            ),
+        ).toEqual([1, 2, 3, 1, 2, 4, 5, 4, 5]);
+    });
+
+    it("plays the endings in the coda by pass", () => {
+        // 1 To Coda | 2 D.C. | ⊕||: 3 |1. 4 :||2. 5
+        expect(
+            play(
+                nav(5, {
+                    1: { toCoda: "coda" },
+                    2: { daCapo: true },
+                    3: { coda: "coda", forwardRepeat: true },
+                    4: { ...ending([1]), backwardRepeat: { times: 2 } },
+                    5: ending([2]),
+                }),
+            ),
+        ).toEqual([1, 2, 1, 3, 4, 3, 5]);
+    });
+
     it("ignores D.S. with no segno, and says so", () => {
         const navigation = nav(2, { 2: { dalSegno: "segno" } });
         expect(play(navigation)).toEqual([1, 2]);
