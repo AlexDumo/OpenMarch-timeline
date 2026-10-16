@@ -1,4 +1,4 @@
-// cspell:words Bienvenido Bienvenue vindo
+// cspell:words Hola Bonjour
 
 /** A language the app is translated into. */
 export interface AppLanguage {
@@ -6,17 +6,17 @@ export interface AppLanguage {
     code: string;
     /** The language's name in that language. */
     name: string;
-    /** "Welcome" in that language, for the welcome flow's first page. */
+    /** "Hello" in that language, for the welcome flow's first page. */
     greeting: string;
 }
 
 /** The app's languages, in the order Settings and the welcome flow list them. */
 export const APP_LANGUAGES: readonly AppLanguage[] = [
-    { code: "en", name: "English", greeting: "Welcome" },
-    { code: "es", name: "Español", greeting: "Bienvenido" },
-    { code: "fr", name: "Français", greeting: "Bienvenue" },
-    { code: "pt-BR", name: "Português (Brasil)", greeting: "Bem-vindo" },
-    { code: "ja", name: "日本語", greeting: "ようこそ" },
+    { code: "en", name: "English", greeting: "Hello" },
+    { code: "es", name: "Español", greeting: "Hola" },
+    { code: "fr", name: "Français", greeting: "Bonjour" },
+    { code: "pt-BR", name: "Português (Brasil)", greeting: "Olá" },
+    { code: "ja", name: "日本語", greeting: "こんにちは" },
 ];
 
 /**
