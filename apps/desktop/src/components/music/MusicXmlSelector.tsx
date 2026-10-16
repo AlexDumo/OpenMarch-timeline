@@ -4,6 +4,7 @@ import { Button } from "@openmarch/ui";
 import { T, useTolgee } from "@tolgee/react";
 import { useTimingObjects } from "@/hooks";
 import { useImportMusicXml } from "./MusicXmlImport";
+import { useMusicXmlChecksStore } from "@/stores/MusicXmlChecksStore";
 
 export default function MusicXmlSelector() {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -30,7 +31,22 @@ export default function MusicXmlSelector() {
         });
 
         if (result.success) {
-            toast.success(result.message);
+            const { checks } = result;
+            useMusicXmlChecksStore.getState().setChecks(file.name, checks);
+            if (checks.length === 0) toast.success(result.message);
+            else
+                // Kept until dismissed: the list says what to check in the score
+                toast.warning(result.message, {
+                    description: t("music.importChecksCount", {
+                        count: checks.length,
+                    }),
+                    duration: Infinity,
+                    action: {
+                        label: t("music.importChecksShow"),
+                        onClick: () =>
+                            useMusicXmlChecksStore.getState().setOpen(true),
+                    },
+                });
         }
 
         // Clear the file input

@@ -15,9 +15,10 @@ import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     Measure as ParserMeasure,
-    parseMusicXml,
+    parseMusicXmlWithReport,
     readMusicXmlFile,
 } from "@openmarch/musicxml-parser";
+import { importChecks, type ImportCheck } from "./musicXmlImportChecks";
 import { DatabaseBeat, NewBeatArgs } from "@/db-functions";
 import { NewMeasureArgs } from "@/db-functions";
 import { ModifiedPageArgs } from "@/db-functions";
@@ -37,6 +38,8 @@ export type MusicXmlImportData = {
 export type ImportResult = {
     success: boolean;
     message: string;
+    /** What the importer guessed or couldn't read, to check in the score */
+    checks: ImportCheck[];
 };
 
 // generates standard 120bpm 4/4 measures
@@ -77,7 +80,8 @@ export const _importMusicXmlFile = async ({
                 const xmlText = await readMusicXmlFile(
                     await file.arrayBuffer(),
                 );
-                let parsedMeasures: ParserMeasure[] = parseMusicXml(xmlText);
+                const parsed = parseMusicXmlWithReport(xmlText);
+                let parsedMeasures: ParserMeasure[] = parsed.measures;
                 if (parsedMeasures.length === 0)
                     throw new Error("The file has no measures");
 
@@ -187,6 +191,7 @@ export const _importMusicXmlFile = async ({
                     message: tolgee.t("music.importSuccess", {
                         fileName: file.name,
                     }),
+                    checks: importChecks(parsed),
                 };
             }),
     );
