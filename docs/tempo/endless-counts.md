@@ -1,6 +1,6 @@
 # Spec: endless counts
 
-Status: **draft**, 2026-10-16. Builds on the show-length work in this branch (E1: T-8, T-9, T-10,
+Status: **accepted**, 2026-10-16 (decisions at the end). Builds on the show-length work in this branch (E1: T-8, T-9, T-10,
 FB-7). A larger change, storing a tempo map instead of beat rows, is a separate question:
 AlexDumo/OpenMarch-timeline#264. This spec doesn't need it.
 
@@ -35,8 +35,9 @@ Creative tools with a timeline don't ask for that: the grid just keeps going.
 6. **The timeline scrolls on.** The scroll extent is the later of the show's end and the music's
    end, plus one screen, and grows as you scroll or seek right. Fit shows the show and the music,
    as T-10's fit does now.
-7. **Counts past the last page belong to no page.** The readout names them from the last page,
-   for example "after Pg 12 · ct 5" (exact wording to decide, with DN-1).
+7. **Counts past the show's end belong to no page.** The readout names them by how far past the
+   end they are: **END +1** is the first count after the last page ends, **END +5** the fifth. At
+   the end itself the readout names the last page's last count, as DN-1 does now.
 
 ### What happens to E1
 
@@ -125,8 +126,8 @@ or scrolled to, whatever the conversion does.
    removing `extendCountsTo` and its strings. Update T-8, T-9, T-10 and FB-7 in
    [decisions.md](decisions.md) and their validation rows (V-404–V-406, V-437).
 
-Slices 1 and 2 change no behavior on their own. With 3–5 behind a Tempo lab flag
-(`endlessCounts`), the flag off keeps E1 as it is.
+Slices 1 and 2 change no behavior on their own. Slices 3–5 replace E1's show-length parts
+directly, with no Tempo lab flag.
 
 ## To validate
 
@@ -138,13 +139,13 @@ Slices 1 and 2 change no behavior on their own. With 3–5 behind a Tempo lab fl
 - Undo of a page flag placed far past the end removes the counts too, and the timeline looks the
   same as before.
 
-## Decisions for the owner
+## Decisions
 
-1. **Playback past the show's end** (rule 5): to the end of the music (proposed), or stop at the
-   show's end.
-2. **Wizard** (T-8): store only the starter pages' counts (proposed), or keep counts to the end of
-   the recording.
-3. **The readout past the last page** (rule 7): wording.
-4. **Behind a flag first** (proposed), or replace E1 directly.
-5. **Trailing stored counts**: when the last pages are deleted, stored counts past the new show
-   end stay (proposed: they're harmless and look the same), or are trimmed.
+Made by the owner, 2026-10-16:
+
+1. **Playback goes on past the show's end** to the end of the music (rule 5).
+2. **The wizard stores only the starter pages' counts** (T-8 changes).
+3. **The readout past the end is "END +n"** (rule 7).
+4. **It replaces E1 directly**, with no lab flag.
+5. **Stored counts after the show's end stay** when the last pages are deleted. They look the
+   same as counts that were never stored, so nothing needs trimming.
