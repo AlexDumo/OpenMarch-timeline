@@ -25,11 +25,10 @@ import type { DbTransaction } from "./types";
  * that run past the show's end.
  */
 
-/** `countContinuation` for the show in `tx`, and the show's end in seconds */
-export async function readContinuation(tx: DbTransaction): Promise<{
+/** `countContinuation` for the show in `tx`, and its beat count (beat 0 included) */
+async function readContinuation(tx: DbTransaction): Promise<{
     continuation: CountContinuation;
     beatCount: number;
-    endSeconds: number;
 }> {
     const beats = await tx
         .select({ id: schema.beats.id, duration: schema.beats.duration })
@@ -48,7 +47,6 @@ export async function readContinuation(tx: DbTransaction): Promise<{
     return {
         continuation: countContinuation({ beats, measureStarts }),
         beatCount: beats.length,
-        endSeconds: beats.reduce((sum, b) => sum + b.duration, 0),
     };
 }
 

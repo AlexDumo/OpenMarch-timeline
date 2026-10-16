@@ -11,11 +11,7 @@ import {
 } from "@/timeline/timelineStore";
 import { performRedo, performUndo } from "../history";
 import { readPageGrid } from "../timelineRipple";
-import {
-    appendPageOfCounts,
-    appendPagesToEnd,
-    extendCountsTo,
-} from "../showLength";
+import { appendPageOfCounts, appendPagesToEnd } from "../showLength";
 
 // These tests set the flag and convert the show themselves
 keepFixturesInPageMode(
@@ -133,8 +129,8 @@ const ORIGINAL = [
     [6, 41, 49],
 ];
 
-describeDbTests("counts past the end of the show (E1)", (it) => {
-    describe("pages every N counts to the end (FB-7)", () => {
+describeDbTests("pages after the last one (E1, endless counts)", (it) => {
+    describe("pages every N counts to the end of the music (FB-7)", () => {
         it("adds a page every 16 counts over the counts past the last flag, as one undo", async ({
             db,
             marchersAndPages: _,
@@ -144,7 +140,9 @@ describeDbTests("counts past the end of the show (E1)", (it) => {
             const motionBefore = await positions();
             const before = await snapshot(db);
 
-            expect(await appendPagesToEnd({ db, counts: 16 })).toBe(3);
+            expect(
+                await appendPagesToEnd({ db, counts: 16, untilBeat: 97 }),
+            ).toBe(3);
 
             const after = await grid(db);
             expect(after.slice(0, 7)).toEqual(ORIGINAL);
@@ -161,7 +159,36 @@ describeDbTests("counts past the end of the show (E1)", (it) => {
             expect(await positions()).toEqual(motionBefore);
             await roundTrip(db, before, await snapshot(db));
             // Pages already reach the end: nothing to add, and no empty undo step
-            expect(await appendPagesToEnd({ db, counts: 16 })).toBe(0);
+            expect(
+                await appendPagesToEnd({ db, counts: 16, untilBeat: 97 }),
+            ).toBe(0);
+        });
+
+        it("goes on to the end of the music past the stored counts, storing them (endless counts)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const timelineBefore = await snapshot(db, TIMELINE_TABLES);
+            const before = await snapshot(db);
+
+            // The music ends 30 counts past the stored counts: flags at 65, 81, 97, 113 and 127
+            expect(
+                await appendPagesToEnd({ db, counts: 16, untilBeat: 127 }),
+            ).toBe(5);
+
+            expect(
+                (await grid(db)).slice(7).map(([, start, end]) => [start, end]),
+            ).toEqual([
+                [49, 65],
+                [65, 81],
+                [81, 97],
+                [97, 113],
+                [113, 127],
+            ]);
+            expect((await beats(db)).length).toBe(127);
+            expect(await snapshot(db, TIMELINE_TABLES)).toEqual(timelineBefore);
+            await roundTrip(db, before, await snapshot(db));
         });
     });
 
@@ -246,43 +273,6 @@ describeDbTests("counts past the end of the show (E1)", (it) => {
             await appendPageOfCounts({ db, counts: 8 });
 
             expect((await measureStarts(db)).slice(-3)).toEqual([89, 95, 101]);
-        });
-    });
-
-    describe("Extend counts to the end of the music", () => {
-        it("appends whole measures until the music's end, with no page flag", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            await setUp(db);
-            const pagesBefore = await grid(db);
-            const timelineBefore = await snapshot(db, TIMELINE_TABLES);
-            const before = await snapshot(db);
-
-            // 48 s of counts; music to 2:31: 103 s more is 206 counts, so 52 measures (208)
-            const added = await extendCountsTo({ db, untilSeconds: 151 });
-
-            expect(added).toBe(208);
-            const after = await beats(db);
-            expect(after.length).toBe(97 + 208);
-            expect(after.reduce((sum, b) => sum + b.duration, 0)).toBe(152);
-            const starts = await measureStarts(db);
-            expect(starts.length).toBe(24 + 52);
-            expect(starts.slice(-2)).toEqual([297, 301]);
-            expect(await grid(db)).toEqual(pagesBefore);
-            expect(await snapshot(db, TIMELINE_TABLES)).toEqual(timelineBefore);
-            await roundTrip(db, before, await snapshot(db));
-        });
-
-        it("works on a show not yet converted, and adds nothing when the counts already reach the end", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            await setTimelineFlag(db, false);
-            expect(await extendCountsTo({ db, untilSeconds: 30 })).toBe(0);
-            expect((await beats(db)).length).toBe(97);
-            expect(await extendCountsTo({ db, untilSeconds: 49 })).toBe(4);
-            expect((await beats(db)).length).toBe(101);
         });
     });
 });

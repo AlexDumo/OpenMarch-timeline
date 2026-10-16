@@ -3,7 +3,6 @@ import { db } from "@/global/database/db";
 import {
     appendPageOfCounts,
     appendPagesToEnd,
-    extendCountsTo,
 } from "@/db-functions/showLength";
 import type { AddedPageFlag } from "@/db-functions/pageFlags";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
@@ -11,9 +10,9 @@ import { invalidatePageQueries } from "./usePages";
 import { measureKeys } from "./useMeasures";
 
 /**
- * Counts past the end of the show (tempo experiment E1): **+ N counts** after the last page, and
- * extending the counts to the end of the music. Both add beats and measures (and the first a page),
- * so they invalidate those queries. A refusal shows its message as a toast.
+ * Pages after the last one (E1, with endless counts): **+ N counts** after the last page, and pages
+ * every N counts to the end of the music. Both can store counts and measures (and add pages), so
+ * they invalidate those queries. A refusal shows its message as a toast.
  */
 
 const invalidateShowLength = async (qc: QueryClient) => {
@@ -35,31 +34,22 @@ export const appendPageOfCountsMutationOptions = (
         onError: (e) => toastTimelineError(e),
     });
 
-/** Adds a page every `counts` counts to the end of the show (FB-7). Resolves to the pages added. */
+/** Adds a page every `counts` counts to `untilBeat`, the music's end (FB-7). Resolves to the pages added. */
 export const appendPagesToEndMutationOptions = (
     qc: QueryClient,
     onAdded?: (pages: number) => void,
 ) =>
     mutationOptions({
-        mutationFn: (counts: number) => appendPagesToEnd({ db, counts }),
+        mutationFn: ({
+            counts,
+            untilBeat,
+        }: {
+            counts: number;
+            untilBeat: number;
+        }) => appendPagesToEnd({ db, counts, untilBeat }),
         onSuccess: async (pages) => {
             await invalidateShowLength(qc);
             onAdded?.(pages);
-        },
-        onError: (e) => toastTimelineError(e),
-    });
-
-/** Extends the counts until `untilSeconds`, the end of the music. Resolves to the counts added. */
-export const extendCountsToMutationOptions = (
-    qc: QueryClient,
-    onExtended?: (counts: number) => void,
-) =>
-    mutationOptions({
-        mutationFn: (untilSeconds: number) =>
-            extendCountsTo({ db, untilSeconds }),
-        onSuccess: async (counts) => {
-            await invalidateShowLength(qc);
-            onExtended?.(counts);
         },
         onError: (e) => toastTimelineError(e),
     });

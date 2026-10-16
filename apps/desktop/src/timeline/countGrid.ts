@@ -137,6 +137,7 @@ const NO_COUNTS: CountGrid = {
  * @param beats the show's beats, ascending by position, with cumulative timestamps
  * @param measureStarts ordinals of measures' first beats, in any order
  */
+// eslint-disable-next-line max-lines-per-function
 export function createCountGrid({
     beats,
     measureStarts,

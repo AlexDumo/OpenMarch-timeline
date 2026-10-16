@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest";
-import fc from "fast-check";
 import {
     continuedCounts,
     countContinuation,
-    countsToCoverAudio,
-    countsToReach,
-    measuresToCoverAudio,
     musicEndSeconds,
-    MUSIC_END_TOLERANCE_SECONDS,
     pageFlagsToEnd,
 } from "../showLength";
 
@@ -99,144 +94,6 @@ describe("countContinuation", () => {
                 count.downbeat ? [k] : [],
             ),
         ).toEqual([0, 3, 6]);
-    });
-});
-
-describe("countsToReach", () => {
-    const fourFour = countContinuation({
-        beats: show(...repeat(80, 0.5)),
-        measureStarts: Array.from({ length: 20 }, (_, i) => 1 + i * 4),
-    });
-
-    it("covers the music, ending on a bar line", () => {
-        // 40 s of counts, music to 2:31: 111 s is 222 counts, so 56 measures (224)
-        expect(
-            countsToReach({
-                continuation: fourFour,
-                endSeconds: 40,
-                untilSeconds: 151,
-            }),
-        ).toBe(224);
-    });
-
-    it("without measures, just enough counts", () => {
-        expect(
-            countsToReach({
-                continuation: countContinuation({
-                    beats: show(...repeat(80, 0.5)),
-                    measureStarts: [],
-                }),
-                endSeconds: 40,
-                untilSeconds: 151,
-            }),
-        ).toBe(222);
-    });
-
-    it("doesn't add a measure for the last few milliseconds of the music", () => {
-        expect(
-            countsToReach({
-                continuation: fourFour,
-                endSeconds: 40,
-                untilSeconds: 40.004,
-            }),
-        ).toBe(0);
-    });
-
-    it("adds nothing when the show is long enough", () => {
-        expect(
-            countsToReach({
-                continuation: fourFour,
-                endSeconds: 40,
-                untilSeconds: 40,
-            }),
-        ).toBe(0);
-        expect(
-            countsToReach({
-                continuation: fourFour,
-                endSeconds: 40,
-                untilSeconds: 12,
-            }),
-        ).toBe(0);
-    });
-
-    it("is the fewest counts that reach the end, then the rest of that measure", () => {
-        fc.assert(
-            fc.property(
-                fc.array(fc.double({ min: 0.2, max: 1.5, noNaN: true }), {
-                    minLength: 1,
-                    maxLength: 24,
-                }),
-                fc.array(fc.integer({ min: 1, max: 24 }), { maxLength: 6 }),
-                fc.double({ min: -5, max: 120, noNaN: true }),
-                (durations, starts, past) => {
-                    const beats = show(...durations);
-                    const continuation = countContinuation({
-                        beats,
-                        measureStarts: starts,
-                    });
-                    const endSeconds = durations.reduce((a, b) => a + b, 0);
-                    const untilSeconds = endSeconds + past;
-                    const k = countsToReach({
-                        continuation,
-                        endSeconds,
-                        untilSeconds,
-                    });
-                    const timeAfter = (n: number) =>
-                        continuedCounts(continuation, n).reduce(
-                            (t, count) => t + count.duration,
-                            endSeconds,
-                        );
-                    let fewest = 0;
-                    while (
-                        timeAfter(fewest) <
-                        untilSeconds - MUSIC_END_TOLERANCE_SECONDS
-                    )
-                        fewest++;
-                    expect(timeAfter(k)).toBeGreaterThanOrEqual(
-                        untilSeconds - MUSIC_END_TOLERANCE_SECONDS,
-                    );
-                    expect(k).toBeGreaterThanOrEqual(fewest);
-                    if (!continuation.measured || fewest === 0)
-                        expect(k).toBe(fewest);
-                    else {
-                        expect(continuation.isDownbeat(k)).toBe(true);
-                        for (let n = fewest; n < k; n++)
-                            expect(continuation.isDownbeat(n)).toBe(false);
-                    }
-                },
-            ),
-        );
-    });
-});
-
-describe("a new show's length from its audio", () => {
-    it("tempo only: whole measures to the end of the recording, at least the starter 20", () => {
-        const at = (audioSeconds: number | null, beatsPerMeasure = 4) =>
-            measuresToCoverAudio({
-                audioSeconds,
-                beatDuration: 0.5,
-                beatsPerMeasure,
-                minMeasures: 20,
-            });
-        expect(at(151)).toBe(76);
-        expect(at(60)).toBe(30);
-        expect(at(60, 3)).toBe(40);
-        expect(at(10)).toBe(20);
-        expect(at(null)).toBe(20);
-        expect(at(0)).toBe(20);
-        expect(at(Number.NaN)).toBe(20);
-    });
-
-    it("skip: counts to the end of the recording, at least 128", () => {
-        expect(
-            countsToCoverAudio({ audioSeconds: 151, beatDuration: 0.5 }),
-        ).toBe(302);
-        expect(
-            countsToCoverAudio({ audioSeconds: 30, beatDuration: 0.5 }),
-        ).toBe(128);
-        expect(
-            countsToCoverAudio({ audioSeconds: undefined, beatDuration: 0.5 }),
-        ).toBe(128);
     });
 });
 
