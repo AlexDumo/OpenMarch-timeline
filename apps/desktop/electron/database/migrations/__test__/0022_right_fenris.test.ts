@@ -32,7 +32,8 @@ import {
 const CUE_MIGRATION = migrationAt(22);
 
 /**
- * Tables later migrations add (0023's cameras, 0024's items, 0025's Placement), gone from a file
+ * Tables later migrations add (0023's cameras, 0024's items, 0025's Placement, 0026's slots),
+ * gone from a file
  * from before 0022 too
  */
 const LATER_TABLES = [
@@ -41,6 +42,7 @@ const LATER_TABLES = [
     "item_geometry",
     "item_placements",
     "item_placement_marchers",
+    "item_artwork_slots",
 ];
 
 const CUE_TABLES = [

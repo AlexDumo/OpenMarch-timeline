@@ -45,6 +45,8 @@ export const tablesWithHistory = [
     // Where each item is (ADR 0002 D-10), its holders and crew after their change
     schema.item_placements,
     schema.item_placement_marchers,
+    // Which Artwork sits on each item slot (ADR 0002 D-10)
+    schema.item_artwork_slots,
 ];
 
 /**

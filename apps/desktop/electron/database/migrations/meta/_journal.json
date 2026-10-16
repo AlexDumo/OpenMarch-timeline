@@ -183,6 +183,13 @@
             "when": 1792168750467,
             "tag": "0025_skinny_the_hunter",
             "breakpoints": true
+        },
+        {
+            "idx": 26,
+            "version": "6",
+            "when": 1792169561480,
+            "tag": "0026_yellow_carmella_unuscione",
+            "breakpoints": true
         }
     ]
 }
