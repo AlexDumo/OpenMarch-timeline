@@ -12,8 +12,8 @@
  *   camera once whenever it builds a crowd.
  * - `cameras`: the cameras the menu lists and keys 1–9 pick, in order: the
  *   kit's defaults, or the show's own list for this kit (`cameraList.ts`).
- *   `camerasCustomized` says which. The scene keeps the show's lists in
- *   `savedCameras` with `_setSavedCameras`.
+ *   `camerasCustomized` says which. The scene keeps the show's lists
+ *   (`view3d_cameras`) in `savedCameras` with `_setSavedCameras`.
  * - `focus`: the kit's default look-at point (normally the field center).
  * - `lighting`: the preset actually applied (the stored one, or the kit's
  *   default when the stored one doesn't fit the kit).
@@ -48,8 +48,11 @@
 import type { Vector3Tuple } from "three";
 import { create } from "zustand";
 import type { Crowd } from "@/view3d/core/environment";
-import { resolveCameras, type ViewCamera } from "@/view3d/core/cameraList";
-import type { VenueSettings } from "@/view3d/core/venueSettings";
+import {
+    resolveCameras,
+    type ShowVenueCameras,
+    type ViewCamera,
+} from "@/view3d/core/cameraList";
 import type {
     KitResult,
     LightingPreset,
@@ -80,7 +83,7 @@ export interface View3dSceneState {
     crowd: Crowd | null;
     cameras: ViewCamera[];
     camerasCustomized: boolean;
-    savedCameras: VenueSettings["cameras"];
+    savedCameras: ShowVenueCameras | undefined;
     focus: Vector3Tuple;
     lighting: LightingPreset | null;
     quality: View3dQuality;
@@ -106,7 +109,7 @@ export interface View3dSceneState {
     /** Scene only. */
     _setKit: (kitId: VenueKitId | null, kit: KitResult | null) => void;
     /** Scene only: the show's camera lists changed. */
-    _setSavedCameras: (saved: VenueSettings["cameras"]) => void;
+    _setSavedCameras: (saved: ShowVenueCameras | undefined) => void;
     /** Scene only. */
     _setCrowd: (crowd: Crowd | null) => void;
     /** Scene only. */
@@ -121,9 +124,9 @@ const startMode = loadQualityMode();
 function camerasFor(
     kitId: VenueKitId | null,
     kit: KitResult | null,
-    saved: VenueSettings["cameras"],
+    saved: ShowVenueCameras | undefined,
 ): Pick<View3dSceneState, "cameras" | "camerasCustomized"> {
-    const list = kitId ? saved?.[kitId] : undefined;
+    const list = kitId ? saved?.[kitId]?.list : undefined;
     return {
         cameras: kit ? resolveCameras(kit.cameras, list) : [],
         camerasCustomized: list !== undefined,

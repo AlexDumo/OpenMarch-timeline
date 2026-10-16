@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { CameraSeat } from "../types";
 import {
     cameraListSchema,
+    copyOfProfile,
     defaultCameraList,
+    EMPTY_SHOW_CAMERAS,
+    parseShowCamerasJson,
+    profileStatus,
+    replacingLosesWork,
+    showCamerasSchema,
+    withVenueCameras,
+    type CameraProfile,
     editCameraList,
     MAX_CAMERAS,
     newCameraId,
@@ -11,12 +19,6 @@ import {
     type SavedCamera,
     type ViewPose,
 } from "../cameraList";
-import {
-    defaultVenueForKit,
-    parseVenueSettings,
-    parseVenueSettingsJson,
-    withSavedCameras,
-} from "../venueSettings";
 
 const seat = (id: string): CameraSeat => ({
     id,
@@ -189,9 +191,7 @@ describe("new camera ids and names", () => {
     });
 });
 
-describe("camera lists in the venue settings", () => {
-    const hs = defaultVenueForKit("hs");
-
+describe("the show's cameras", () => {
     it("rejects duplicate ids", () => {
         expect(
             cameraListSchema.safeParse([
@@ -201,34 +201,90 @@ describe("camera lists in the venue settings", () => {
         ).toBe(false);
     });
 
-    it("stores a list per kit and drops `cameras` when the last one resets", () => {
-        const withList = withSavedCameras(hs, "hs", [
-            { kind: "kit", id: "pressBox" },
-        ]);
-        expect(parseVenueSettings(withList).cameras).toEqual({
-            hs: [{ kind: "kit", id: "pressBox" }],
+    it("keeps a list per venue, and goes back to defaults by removing it", () => {
+        const list: SavedCamera[] = [{ kind: "kit", id: "pressBox" }];
+        const hs = withVenueCameras(EMPTY_SHOW_CAMERAS, "hs", { list });
+        const both = withVenueCameras(hs, "gym", { list: [] });
+        expect(Object.keys(both.venues)).toEqual(["hs", "gym"]);
+        expect(showCamerasSchema.parse(both)).toEqual(both);
+        expect(
+            withVenueCameras(
+                withVenueCameras(both, "gym", undefined),
+                "hs",
+                undefined,
+            ),
+        ).toEqual(EMPTY_SHOW_CAMERAS);
+    });
+
+    it("reads stored JSON, and ignores what doesn't match", () => {
+        const hs = withVenueCameras(EMPTY_SHOW_CAMERAS, "hs", { list: [] });
+        expect(parseShowCamerasJson(JSON.stringify(hs))).toEqual(hs);
+        expect(parseShowCamerasJson("not json")).toBeUndefined();
+        expect(
+            parseShowCamerasJson(
+                JSON.stringify({
+                    version: 1,
+                    venues: { hs: { list: [{ kind: "view", id: "v" }] } },
+                }),
+            ),
+        ).toBeUndefined();
+    });
+});
+
+describe("profileStatus", () => {
+    const list: SavedCamera[] = [{ kind: "kit", id: "pressBox" }];
+    const profile: CameraProfile = {
+        id: "p1",
+        name: "Judges",
+        kit: "hs",
+        cameras: list,
+        createdAt: "2026-10-01T00:00:00.000Z",
+        updatedAt: "2026-10-01T00:00:00.000Z",
+    };
+    const fromProfile = { list, profile: copyOfProfile(profile) };
+
+    it("tells defaults and the show's own list apart", () => {
+        expect(profileStatus(undefined, [profile])).toEqual({
+            kind: "defaults",
         });
-        const both = withSavedCameras(withList, "gym", []);
-        expect(Object.keys(both.cameras ?? {})).toEqual(["hs", "gym"]);
-        const reset = withSavedCameras(
-            withSavedCameras(both, "gym", undefined),
-            "hs",
-            undefined,
-        );
-        expect(reset).toEqual(hs);
-        expect("cameras" in reset).toBe(false);
+        expect(profileStatus({ list }, [profile])).toEqual({ kind: "custom" });
+        expect(replacingLosesWork({ kind: "defaults" })).toBe(false);
+        expect(replacingLosesWork({ kind: "custom" })).toBe(true);
     });
 
-    it("reads files saved before camera lists", () => {
-        expect(parseVenueSettingsJson(JSON.stringify(hs))).toEqual(hs);
+    it("an unedited profile this computer has is safe to replace", () => {
+        const status = profileStatus(fromProfile, [profile]);
+        expect(status).toMatchObject({
+            kind: "profile",
+            edited: false,
+            local: "same",
+        });
+        expect(replacingLosesWork(status)).toBe(false);
     });
 
-    it("rejects a saved view without a pose", () => {
-        expect(() =>
-            parseVenueSettings({
-                ...hs,
-                cameras: { hs: [{ kind: "view", id: "v", name: "v" }] },
-            }),
-        ).toThrow();
+    it("notices edits", () => {
+        const status = profileStatus({ ...fromProfile, list: [] }, [profile]);
+        expect(status).toMatchObject({ edited: true, local: "same" });
+        expect(replacingLosesWork(status)).toBe(true);
+    });
+
+    it("notices a profile changed on this computer, but not a rename", () => {
+        const later = "2026-10-02T00:00:00.000Z";
+        expect(
+            profileStatus(fromProfile, [
+                { ...profile, updatedAt: later, cameras: [] },
+            ]),
+        ).toMatchObject({ local: "newer" });
+        expect(
+            profileStatus(fromProfile, [
+                { ...profile, updatedAt: later, name: "Renamed" },
+            ]),
+        ).toMatchObject({ local: "same" });
+    });
+
+    it("notices a profile this computer doesn't have", () => {
+        const status = profileStatus(fromProfile, []);
+        expect(status).toMatchObject({ local: "missing", localProfile: null });
+        expect(replacingLosesWork(status)).toBe(true);
     });
 });

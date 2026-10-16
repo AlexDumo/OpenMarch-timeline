@@ -11,18 +11,14 @@ import type {
 import {
     lightingForKit,
     parseVenueSettings,
-    withSavedCameras,
     type VenueSettings,
 } from "@/view3d/core/venueSettings";
-import type { SavedCamera } from "@/view3d/core/cameraList";
 
 export type VenueChange =
     | { kind: "kit"; kit: VenueKitId }
     | { kind: "lighting"; lighting: LightingPreset }
     | { kind: "crowd"; crowd: boolean }
-    | { kind: "params"; params: Partial<VenueParams> }
-    /** The show's camera list for a kit; undefined resets it to the kit's defaults. */
-    | { kind: "cameras"; kit: VenueKitId; list: SavedCamera[] | undefined };
+    | { kind: "params"; params: Partial<VenueParams> };
 
 /**
  * Applies one change to the current settings and validates the result.
@@ -54,10 +50,6 @@ export function applyVenueChange(
                 ...current,
                 params: { ...current.params, ...change.params },
             });
-        case "cameras":
-            return parseVenueSettings(
-                withSavedCameras(current, change.kit, change.list),
-            );
     }
 }
 
@@ -70,7 +62,6 @@ export function venueChanged(a: VenueSettings, b: VenueSettings): boolean {
         a.params.homeColor !== b.params.homeColor ||
         a.params.awayColor !== b.params.awayColor ||
         a.params.endZoneText !== b.params.endZoneText ||
-        a.params.endZoneColor !== b.params.endZoneColor ||
-        JSON.stringify(a.cameras ?? {}) !== JSON.stringify(b.cameras ?? {})
+        a.params.endZoneColor !== b.params.endZoneColor
     );
 }
