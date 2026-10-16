@@ -8,11 +8,13 @@ import type {
     FieldTestImage,
     FieldTestItem,
     FieldTestLook,
+    FieldTestPropTool,
     FieldTestMarcher,
     ScreenPoint,
 } from "@/field/fieldTestApi";
 import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
 import type { LineToolShape } from "@/field/editor/lineTool";
+import type { PropToolShape } from "@/field/editor/propTool";
 import type { FieldMarchers } from "./fieldMarchers";
 import type { FieldItems } from "./fieldItems";
 import { fieldToElement, type FieldViewState } from "./fieldView";
@@ -43,6 +45,8 @@ export type ThreeFieldState = {
     lineTool(): LineToolShape | null;
     /** The items drawn (C2.1). */
     items: FieldItems;
+    /** The editor's prop tool, or null when it's off (C2.1). */
+    propTool(): PropToolShape | null;
 };
 
 /**
@@ -121,6 +125,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
             };
         },
         items: () => itemsOnScreen(field),
+        propTool: () => propToolOf(field),
     };
 }
 
@@ -147,6 +152,19 @@ function lookOf(
         shape: look.shape,
         fill: rgbaToString(look.fill),
         outline: rgbaToString(look.outline),
+    };
+}
+
+/** The prop tool as the field shows it, or null when it's off. */
+function propToolOf(field: ThreeFieldState): FieldTestPropTool | null {
+    const tool = field.propTool();
+    if (!tool) return null;
+    return {
+        outlineType: tool.outlineType,
+        preview: tool.preview && {
+            points: tool.preview.points.map((p) => ({ ...p })),
+            closed: tool.preview.closed,
+        },
     };
 }
 

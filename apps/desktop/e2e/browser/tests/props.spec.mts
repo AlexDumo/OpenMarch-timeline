@@ -166,3 +166,72 @@ test("turns a prop from its rotate handle, snapped to 15°", async ({
         { rotation: 90 },
     ]);
 });
+
+/** Picks an Outline in the Props panel's Draw, which closes the panel for drawing. */
+async function pickOutline(page: Page, outline: string) {
+    await page.locator("#sidebar-launcher-props").click();
+    await page.getByRole("button", { name: outline }).click();
+    await expect
+        .poll(() => page.evaluate(() => window.fieldTest!.activeGesture()))
+        .toBe("prop");
+}
+
+test("draws a new prop with the Props panel's rectangle, on field from the playhead", async ({
+    show,
+}) => {
+    await expect.poll(() => drawnItems(show.page)).toHaveLength(1);
+    await pickOutline(show.page, "Rectangle");
+    const box = (await show.page
+        .getByTestId("fieldCanvas")
+        .first()
+        .boundingBox())!;
+    const from = { x: box.x + box.width * 0.2, y: box.y + box.height * 0.6 };
+    await dragFrom(show.page, from, { x: 80, y: 50 });
+    await waitForIdle(show.page);
+    await expect.poll(() => drawnItems(show.page)).toHaveLength(2);
+    expect(
+        await show.page.evaluate(() => window.fieldTest!.activeGesture()),
+    ).toBeNull();
+    expect(
+        await show.query(
+            "SELECT kind, surface_type, outline_type, beat_id FROM items JOIN item_geometry ON item_geometry.item_id = items.id WHERE items.id != 1",
+        ),
+    ).toEqual([
+        {
+            kind: "prop",
+            surface_type: "floor",
+            outline_type: "rectangle",
+            beat_id: 0,
+        },
+    ]);
+    await expectCanvasMatchesShow(show);
+});
+
+test("Escape turns the prop tool off, and nothing is drawn", async ({
+    show,
+}) => {
+    await expect.poll(() => drawnItems(show.page)).toHaveLength(1);
+    await pickOutline(show.page, "Polygon");
+    const box = (await show.page
+        .getByTestId("fieldCanvas")
+        .first()
+        .boundingBox())!;
+    await show.page.mouse.click(
+        box.x + box.width * 0.2,
+        box.y + box.height * 0.6,
+    );
+    await show.page.mouse.move(
+        box.x + box.width * 0.3,
+        box.y + box.height * 0.6,
+    );
+    await expect
+        .poll(() =>
+            show.page.evaluate(() => window.fieldTest!.propTool?.()?.preview),
+        )
+        .not.toBeNull();
+    await show.page.keyboard.press("Escape");
+    await expect
+        .poll(() => show.page.evaluate(() => window.fieldTest!.propTool?.()))
+        .toBeNull();
+    expect(await show.query("SELECT id FROM items")).toEqual([{ id: 1 }]);
+});

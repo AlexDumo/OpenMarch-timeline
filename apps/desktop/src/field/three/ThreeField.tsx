@@ -60,6 +60,11 @@ import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
 import { publishLinePreviews, useFieldLineTool } from "@/field/fieldLineTool";
 import { useFieldItemWrites } from "@/field/fieldItemWrites";
+import {
+    snapToRounding,
+    useFieldPropTool,
+    usePropDrawn,
+} from "@/field/fieldPropTool";
 import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
@@ -102,6 +107,7 @@ import {
 import { FieldUnavailable, useFieldQualityNotice } from "./FieldQualityNotice";
 import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
+import PropDrawingNotice from "@/components/items/PropDrawingNotice";
 import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
 import {
@@ -221,6 +227,7 @@ function ThreeFieldView() {
     const items = useMemo(() => new FieldItems(marchers), [marchers]);
     const itemLabels = useFieldItems(items, beats);
     const saveItem = useFieldItemWrites(items);
+    const propDrawn = usePropDrawn();
     const labels = useMemo(
         () =>
             new Map(
@@ -304,6 +311,7 @@ function ThreeFieldView() {
     const benchMarchers = useCallback(() => marchers.ids.length, [marchers]);
     const latest = useRef({
         saveItem,
+        propDrawn,
         labels,
         pageId: selectedPage?.id ?? null,
         marcherRows,
@@ -315,6 +323,7 @@ function ThreeFieldView() {
     });
     latest.current = {
         saveItem,
+        propDrawn,
         labels,
         pageId: selectedPage?.id ?? null,
         fieldImage: fieldImagePlan,
@@ -381,6 +390,9 @@ function ThreeFieldView() {
                             },
                         ),
                     saveItem: (id, size) => latest.current.saveItem(id, size),
+                    snap: (point) =>
+                        snapToRounding(point, latest.current.fieldProperties),
+                    propDrawn: (outline) => latest.current.propDrawn(outline),
                 },
                 {
                     isMac: isMacPlatform(),
@@ -409,6 +421,7 @@ function ThreeFieldView() {
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
     useFieldLineTool(editor);
+    useFieldPropTool(editor);
     // A finished line follows its marchers to another page
     useEffect(
         () => marchers.subscribe(() => editor.refreshLineTool()),
@@ -436,6 +449,7 @@ function ThreeFieldView() {
                 },
                 lineTool: () => editor.lineToolShape(),
                 items,
+                propTool: () => editor.propToolShape(),
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
                 dimmed: (id) => dimming.isDimmed(id),
@@ -478,6 +492,7 @@ function ThreeFieldView() {
         >
             <TimelineIsolationBar />
             <TimelineFromStartBadge />
+            <PropDrawingNotice />
             <FieldBenchmark
                 frames={benchFrames}
                 view={benchView}

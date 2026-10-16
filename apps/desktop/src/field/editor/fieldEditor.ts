@@ -25,6 +25,9 @@ import {
     type ItemSize,
 } from "./itemTransform";
 import { LineTool, type LineToolShape, type StepGrid } from "./lineTool";
+import { PropTool, type PropToolShape } from "./propTool";
+import type { OutlineType } from "@/db-functions/items";
+import type { DrawnOutline } from "@/items/itemOutlines";
 import {
     MoveGesture,
     type MarcherPosition,
@@ -125,6 +128,10 @@ export type FieldEditorPorts = {
      * once the field can draw it, or "refused" when nothing was saved.
      */
     saveItem?(id: number, size: ItemSize): Promise<DropResult>;
+    /** A point snapped as a marcher's coordinates are (the prop tool's corners). */
+    snap?(point: FieldPoint): FieldPoint;
+    /** The prop tool finished an Outline: for the app to make the prop. */
+    propDrawn?(outline: DrawnOutline): void;
 };
 
 export type DropResult = "saved" | "refused";
@@ -216,6 +223,10 @@ export class FieldEditor {
     private rotationsEnded = 0;
     /** The line tool, while it's on (#203). */
     private lineTool: LineTool | null = null;
+    /** The prop tool, while it's on (C2.1). */
+    private propTool: PropTool | null = null;
+    /** The prop tool's last press, for telling its double-clicks. */
+    private lastToolPress: { time: number; screen: FieldPoint } | null = null;
     /** A right press during the line tool, until its release: a click clears the line. */
     private rightPress: FieldPointer | null = null;
     private readonly listeners = new Set<() => void>();
@@ -252,6 +263,20 @@ export class FieldEditor {
         this.cancelGesture();
         this.ignoredButton = null;
         const taken = this.ports.takePress?.() ?? false;
+        if (this.propTool) {
+            // The prop tool's presses draw and never select; its moves and
+            // release are its own
+            this.press = null;
+            this.lastClick = null;
+            if (!taken && !pointer.ctrl && !pointer.meta) {
+                this.propTool.press(pointer);
+                this.lastToolPress = {
+                    time: this.now(),
+                    screen: pointer.screen,
+                };
+            }
+            return true;
+        }
         if (taken || this.lineTool) {
             // Captured all the same, so its moves and release do nothing either.
             // Nor is it half of a double-click: the next press can't start a lasso
@@ -278,6 +303,10 @@ export class FieldEditor {
     }
 
     pointerMove(pointer: FieldPointer): void {
+        if (this.propTool) {
+            this.propTool.move(pointer);
+            return;
+        }
         if (this.lineTool) {
             this.lineTool.move(pointer);
             return;
@@ -319,6 +348,10 @@ export class FieldEditor {
             this.rightPress = null;
             // A right-drag panned: the line stays, so the user can pan to its far end
             if (right && !isPastSlop(right, pointer)) this.lineTool?.clear();
+            return;
+        }
+        if (this.propTool) {
+            if (pointer.button === 0) this.propTool.release(pointer);
             return;
         }
         if (this.ignoredButton !== null) {
@@ -385,6 +418,7 @@ export class FieldEditor {
 
     /** The gesture in progress, for the field test API and the overlay; a press that's still a click has none. */
     activeGesture(): FieldTestGesture | null {
+        if (this.propTool) return "prop";
         if (this.lineTool) return "line";
         return this.gesture?.kind ?? null;
     }
@@ -410,6 +444,46 @@ export class FieldEditor {
             changed: () => this.emit(),
         });
         this.emit();
+    }
+
+    /**
+     * Turns the prop tool on to draw an Outline of `outlineType` (the Props
+     * panel's Draw), or off with null. Turning it on ends any press or
+     * gesture; turning it on again starts the drawing over.
+     */
+    setPropTool(outlineType: OutlineType | null): void {
+        if (outlineType === null) {
+            if (!this.propTool) return;
+            this.propTool = null;
+            this.emit();
+            return;
+        }
+        this.cancelGesture();
+        this.press = null;
+        this.lastClick = null;
+        this.lastToolPress = null;
+        this.propTool = new PropTool(outlineType, {
+            snap: (point) => this.ports.snap?.(point) ?? point,
+            finished: (outline) => this.ports.propDrawn?.(outline),
+            changed: () => this.emit(),
+            isDoubleClick: (pointer) => {
+                const last = this.lastToolPress;
+                return (
+                    last !== null &&
+                    this.now() - last.time <= DOUBLE_CLICK_MS &&
+                    Math.hypot(
+                        pointer.screen.x - last.screen.x,
+                        pointer.screen.y - last.screen.y,
+                    ) <= DOUBLE_CLICK_SLOP
+                );
+            },
+        });
+        this.emit();
+    }
+
+    /** The prop tool's Outline being drawn, or null when it's off. */
+    propToolShape(): PropToolShape | null {
+        return this.propTool?.shape() ?? null;
     }
 
     /** The marchers were drawn again: a finished line lines them up from where they are now. */
@@ -523,7 +597,7 @@ export class FieldEditor {
 
     /** The cursor the field shows. */
     cursor(): FieldCursor {
-        return this.lineTool ? "crosshair" : this.hover;
+        return this.lineTool || this.propTool ? "crosshair" : this.hover;
     }
 
     /** Calls `listener` whenever the gesture or cursor changes. Returns the unsubscribe. */
