@@ -114,12 +114,30 @@ interface ResolvedMeasure {
     meterChanged: boolean;
     /** Length of each count in quarter notes (a pickup keeps only the counts it fills) */
     counts: number[];
+    /** False when a repeat or jump plays the written measure again; it was already reported */
+    firstPlay: boolean;
 }
+
+/** Same meter for counting: the same signature, counted the same way (x/2 in halves or quarters). */
+const sameMeter = (a: Meter, b: Meter) =>
+    a.text === b.text &&
+    a.counts.length === b.counts.length &&
+    a.counts.every((c, k) => Math.abs(c - b.counts[k]!) <= EPSILON);
 
 /** Gives each measure its meter and counts, warning about what the rule couldn't read. */
 // eslint-disable-next-line max-lines-per-function
 function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
     const seen = new Set<RawMeasure>();
+    // Each short measure's counts as first played, so every play of it gets the same counts (a
+    // measure that completed the pickup on the first pass would otherwise be just short later)
+    const shortCounts = new Map<
+        RawMeasure,
+        {
+            meter: Meter;
+            counts: number[];
+            kind: "pickup" | "completes" | "short";
+        }
+    >();
     // The last pickup played, which a later short measure may complete
     let pickup:
         | { label: string; meter: string; quarters: number; counts: number }
@@ -139,6 +157,9 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
     };
     return raws.map((raw, i) => {
         let meterChanged = false;
+        // A measure played again by a repeat was already reported
+        const firstPlay = !seen.has(raw);
+        seen.add(raw);
         notePrinted(raw.events.filter((e) => e.pos < EPSILON));
         const read =
             raw.time?.kind === "read"
@@ -149,13 +170,18 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
                   })
                 : undefined;
         notePrinted(raw.events);
+        // Before any meter, the unread signature is the only warning: counted as if there were none
         if (raw.time && !read)
-            warn("unknown-meter", "warning", i, {
-                meter: raw.time.text,
-                kept: (meter ?? DEFAULT_METER).text,
-            });
+            warn(
+                "unknown-meter",
+                "warning",
+                i,
+                meter
+                    ? { meter: raw.time.text, kept: meter.text }
+                    : { meter: raw.time.text },
+            );
         if (read) {
-            meterChanged = !meter || meter.text !== read.text;
+            meterChanged = !meter || !sameMeter(meter, read);
             if (meterChanged && read.assumedGrouping)
                 warn("assumed-grouping", "warning", i, {
                     meter: read.text,
@@ -164,9 +190,10 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
             meter = read;
         }
         if (!meter) {
-            warn("no-time-signature", "warning", i, {
-                meter: DEFAULT_METER.text,
-            });
+            if (!raw.time)
+                warn("no-time-signature", "warning", i, {
+                    meter: DEFAULT_METER.text,
+                });
             meter = DEFAULT_METER;
             meterChanged = true;
         }
@@ -178,12 +205,12 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
                 1,
                 Math.ceil(raw.contentQuarters - SHORT_TOLERANCE),
             );
-            seen.add(raw);
             return {
                 raw,
                 meter,
                 meterChanged,
                 counts: new Array<number>(quarters).fill(1),
+                firstPlay,
             };
         }
 
@@ -192,10 +219,19 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
         const short =
             raw.contentQuarters > EPSILON &&
             raw.contentQuarters < meterLength(meter) - SHORT_TOLERANCE;
-        // A measure played again by a repeat was already reported
-        const firstPlay = !seen.has(raw);
-        seen.add(raw);
-        if (short && (raw.implicit || i === 0)) {
+        const before = short ? shortCounts.get(raw) : undefined;
+        if (before && sameMeter(before.meter, meter)) {
+            // Played again: the counts it had the first time, and the pickup it set or completed
+            counts = [...before.counts];
+            if (before.kind === "pickup")
+                pickup = {
+                    label: raw.label,
+                    meter: meter.text,
+                    quarters: raw.contentQuarters,
+                    counts: counts.length,
+                };
+            else if (before.kind === "completes") pickup = undefined;
+        } else if (short && (raw.implicit || i === 0)) {
             // A pickup (or the short half of a split measure): only the counts its music fills,
             // from the end of the measure
             let k = counts.length;
@@ -203,6 +239,7 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
             while (k > 0 && filled < raw.contentQuarters - EPSILON)
                 filled += counts[--k]!;
             counts = counts.slice(k);
+            shortCounts.set(raw, { meter, counts, kind: "pickup" });
             pickup = {
                 label: raw.label,
                 meter: meter.text,
@@ -231,6 +268,7 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
             // The other half of the pickup (a section's last measure): together they make one
             // measure, so it gets the counts the pickup didn't, even when the pickup was rounded
             counts = counts.slice(0, counts.length - pickup.counts);
+            shortCounts.set(raw, { meter, counts, kind: "completes" });
             const completed = pickup.label;
             // A pickup is completed once; later short measures are just short
             pickup = undefined;
@@ -247,6 +285,7 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
             while (k < counts.length && filled < raw.contentQuarters - EPSILON)
                 filled += counts[k++]!;
             counts = counts.slice(0, k);
+            shortCounts.set(raw, { meter, counts, kind: "short" });
             const exact = Math.abs(filled - raw.contentQuarters) <= EPSILON;
             if (firstPlay)
                 warn(
@@ -276,7 +315,7 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
                     counts: counts.length,
                 });
         }
-        return { raw, meter, meterChanged, counts };
+        return { raw, meter, meterChanged, counts, firstPlay };
     });
 }
 
@@ -326,8 +365,13 @@ function placeEvents(resolved: ResolvedMeasure[]) {
 function walkTempos(
     placed: PlacedEvent[],
     resolved: ResolvedMeasure[],
-    warn: Warn,
+    warnEveryPlay: Warn,
 ) {
+    // A measure played again by a repeat was already reported
+    const warn: Warn = (code, severity, measureIndex, params) => {
+        if (resolved[measureIndex]!.firstPlay)
+            warnEveryPlay(code, severity, measureIndex, params);
+    };
     // The marking to show for a tempo that came without a beat unit: in its measure's count
     const shown = (e: PlacedTempo): TempoMarking =>
         e.needsUnit
@@ -471,7 +515,9 @@ function walkTempos(
         const from =
             currentMarking ?? markingFromQuarterBpm(current, [1, 1, 1, 1]);
         beforeRamp ??= from;
-        const next = placed.slice(idx + 1).find(definesTempo);
+        let next: PlacedEvent | undefined;
+        for (let j = idx + 1; j < placed.length && !next; j++)
+            if (definesTempo(placed[j]!)) next = placed[j];
         const ramp: Ramp = {
             kind: words.kind,
             text: words.text,

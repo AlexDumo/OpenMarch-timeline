@@ -6,7 +6,9 @@ import {
     rehearsal,
     rest,
     score,
+    sibeliusTempo,
     time,
+    words,
 } from "./scoreBuilders";
 
 const seconds = (xml: string, options = {}) =>
@@ -420,6 +422,117 @@ describe("missing divisions", () => {
         expect(seconds(xml)).toEqual([
             [1, 1, 1, 1],
             [1, 1, 1, 1],
+        ]);
+    });
+});
+
+describe("repeated measures", () => {
+    const tempo = museScoreTempo("quarter", 0, 60, 60);
+
+    it("reports a measure's tempo warnings once, not on every pass", () => {
+        // Too slow to be meant, and a rit. with nothing to arrive at, in a repeated section
+        const xml = score(
+            measure(
+                1,
+                time(4, 4) + museScoreTempo("quarter", 0, 5, 5) + rest(4),
+            ) +
+                measure(2, words("rit.") + rest(4) + backward) +
+                measure(3, rest(4)),
+        );
+        expect(order(xml)).toEqual(["1", "2", "1x2", "2x2", "3"]);
+        const warned = codes(xml);
+        expect(warned.filter((c) => c === "unusual-tempo")).toHaveLength(1);
+        expect(warned.filter((c) => c === "ramp-not-applied")).toHaveLength(1);
+    });
+
+    it("gives the measure that completes the pickup the same counts on every pass", () => {
+        // 4/4 with a pickup of 1.5 quarters (rounded up to two counts); the last measure (2.5
+        // quarters) completes it with the other two counts, the first time and the second
+        const xml = score(
+            measure(0, time(4, 4) + tempo + rest(1.5), { implicit: true }) +
+                measure(1, forward + rest(4)) +
+                measure(2, rest(2.5) + backward),
+        );
+        expect(order(xml)).toEqual(["0", "1", "2", "1x2", "2x2"]);
+        expect(
+            parseMusicXmlWithReport(xml).measures.map((m) => m.beats.length),
+        ).toEqual([2, 4, 2, 4, 2]);
+    });
+});
+
+describe("x/2 meters", () => {
+    it("reports a meter change when a restated x/2 meter starts counting in quarters", () => {
+        const xml = score(
+            measure(1, time(3, 2) + sibeliusTempo("half", 0, 60) + rest(6)) +
+                measure(
+                    2,
+                    sibeliusTempo("quarter", 0, 120) + time(3, 2) + rest(6),
+                ),
+        );
+        const report = parseMusicXmlWithReport(xml);
+        expect(report.measures.map((m) => m.beats.length)).toEqual([3, 6]);
+        expect(report.measures[1]!.meterChanged).toBe(true);
+        expect(report.summary.meterChanges).toBe(1);
+    });
+});
+
+describe("unreadable first meter", () => {
+    it("warns once about a first meter it can't read, naming it", () => {
+        const xml = score(
+            measure(
+                1,
+                `<attributes><divisions>480</divisions><time><senza-misura/></time></attributes>` +
+                    museScoreTempo("quarter", 0, 60, 60) +
+                    rest(3),
+            ),
+        );
+        const report = parseMusicXmlWithReport(xml);
+        expect(report.warnings.map((w) => w.message)).toEqual([
+            "m1: senza misura isn't a meter OpenMarch can count; each measure counted in quarter notes, as long as its music",
+        ]);
+        expect(seconds(xml)).toEqual([[1, 1, 1]]);
+    });
+});
+
+describe("divisions given late", () => {
+    it("reads the measures before a part's first <divisions> with that divisions", () => {
+        const whole = (n: number) =>
+            `<note><rest/><duration>${n}</duration><voice>1</voice></note>`;
+        const xml = score(
+            measure(
+                1,
+                `<attributes><time><beats>2</beats><beat-type>4</beat-type></time></attributes>` +
+                    museScoreTempo("quarter", 0, 60, 60) +
+                    whole(480) +
+                    whole(480),
+            ) +
+                measure(
+                    2,
+                    `<attributes><divisions>480</divisions></attributes>` +
+                        whole(960),
+                ),
+        );
+        expect(seconds(xml)).toEqual([
+            [1, 1],
+            [1, 1],
+        ]);
+        expect(codes(xml)).not.toContain("long-measure");
+    });
+});
+
+describe("rit. targets", () => {
+    it("looks past tempo words for the tempo a rit. arrives at", () => {
+        const xml = score(
+            measure(
+                1,
+                time(4, 4) + museScoreTempo("quarter", 0, 120, 120) + rest(4),
+            ) +
+                measure(2, words("rit.") + rest(4)) +
+                measure(3, words("Maestoso") + rest(4)) +
+                measure(4, museScoreTempo("quarter", 0, 80, 80) + rest(4)),
+        );
+        expect(parseMusicXmlWithReport(xml).ramps).toMatchObject([
+            { applied: true, targetMeasureIndex: 3, toQuarterBpm: 80 },
         ]);
     });
 });

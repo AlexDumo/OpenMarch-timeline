@@ -567,6 +567,9 @@ interface PartState {
     divisions: number;
     /** True once the part has said what its divisions are */
     declared: boolean;
+    /** The first divisions the part gives, and the index of the measure that gives it */
+    firstDivisions?: number;
+    declaredAt?: number;
 }
 
 /** What one part says about one measure. */
@@ -601,6 +604,7 @@ function readPartMeasure(
         const first = descendants(measure, "divisions")[0];
         if (numberOf(first) > 0) {
             state.divisions = numberOf(first);
+            state.firstDivisions = state.divisions;
             state.declared = true;
         }
     }
@@ -713,8 +717,17 @@ function inferDivisions(readings: (PartReading | undefined)[][], part: number) {
     const [factor] = [...ratios.entries()].sort((a, b) => b[1] - a[1])[0] ?? [
         1,
     ];
-    if (factor <= 1) return;
-    for (const row of readings) {
+    if (factor > 1) rescale(readings, part, factor, readings.length);
+}
+
+/** Divides a part's lengths and positions by `factor` in its first `count` measures. */
+function rescale(
+    readings: (PartReading | undefined)[][],
+    part: number,
+    factor: number,
+    count: number,
+) {
+    for (const row of readings.slice(0, count)) {
         const reading = row[part];
         if (!reading) continue;
         reading.contentQuarters /= factor;
@@ -819,7 +832,10 @@ export function scanScore(doc: {
             parts.map(([, ms], p) => {
                 const m = ms[i];
                 if (!m) return undefined;
-                const reading = readPartMeasure(m.content, states[p]!, nextSeq);
+                const state = states[p]!;
+                const declared = state.declared;
+                const reading = readPartMeasure(m.content, state, nextSeq);
+                if (!declared && state.declared) state.declaredAt = i;
                 const before = marks.codaSymbols;
                 readNavigation(m.content, marks);
                 // A coda symbol printed in every part is one symbol
@@ -831,6 +847,10 @@ export function scanScore(doc: {
     }
     states.forEach((state, p) => {
         if (!state.declared) inferDivisions(readings, p);
+        // A part whose first <divisions> comes in a later measure: the measures before it were
+        // read with one division per quarter, and are taken to use that first value too
+        else if (state.declaredAt! > 0)
+            rescale(readings, p, state.firstDivisions!, state.declaredAt!);
     });
 
     const measures: RawMeasure[] = [];

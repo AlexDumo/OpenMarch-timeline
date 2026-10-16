@@ -5,7 +5,11 @@
  */
 
 export type ParseWarningCode =
-    /** A `<time>` the counting rule doesn't cover; the previous meter is kept */
+    /**
+     * A `<time>` the counting rule doesn't cover; the previous meter (`kept`) is kept. With no
+     * meter before it, `kept` is left out and the music is counted in quarters, as with no time
+     * signature
+     */
     | "unknown-meter"
     /** The file gave no grouping for a meter like 7/8; the rule's grouping was used */
     | "assumed-grouping"
@@ -151,6 +155,10 @@ const MESSAGES: Record<ParseWarningCode, string> = {
         "The file's measure numbers aren't consecutive after m{previous}; OpenMarch numbers this measure m{appNumber}",
 };
 
+/** An unread signature with no meter before it to keep: counted as if there were none. */
+const UNKNOWN_FIRST_METER =
+    "{meter} isn't a meter OpenMarch can count; each measure counted in quarter notes, as long as its music";
+
 const fill = (template: string, params: Record<string, string | number>) =>
     template.replace(/\{(\w+)\}/g, (_, key: string) =>
         String(params[key] ?? ""),
@@ -170,6 +178,10 @@ export function warningMessage(
     if (warning.code === "sound-tempo-ignored")
         params.reason =
             SOUND_REASONS[String(params.reason)] ?? String(params.reason);
-    const text = fill(MESSAGES[warning.code], params);
+    const template =
+        warning.code === "unknown-meter" && params.kept === undefined
+            ? UNKNOWN_FIRST_METER
+            : MESSAGES[warning.code];
+    const text = fill(template, params);
     return measureLabel ? `m${measureLabel}: ${text}` : text;
 }

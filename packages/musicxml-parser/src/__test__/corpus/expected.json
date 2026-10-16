@@ -25,8 +25,8 @@
     },
     "flatio-embed-examples/external-audio/example.xml": {
         "order": "1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7 8 9",
-        "counts": "2 4 4 4 4 4 4 4 2 2 4 4 4 4 4 4 4 3",
-        "seconds": 24.375,
+        "counts": "2 4 4 4 4 4 4 4 2 2 4 4 4 4 4 4 4 2",
+        "seconds": 24,
         "warnings": ["completes-pickup", "pickup-rounded", "repeat-played"]
     },
     "napulen-effects-of-translation/lilypond_to_musicxml/BWV-510.xml": {
@@ -236,7 +236,7 @@
         "order": "1 2 3 4",
         "counts": "2 3 2 3",
         "seconds": 5,
-        "warnings": ["no-tempo", "no-time-signature", "unknown-meter"]
+        "warnings": ["no-tempo", "unknown-meter"]
     },
     "w3c-musicxmlTestSuite/31c-MetronomeMarks.musicxml": {
         "order": "1 2 3",
