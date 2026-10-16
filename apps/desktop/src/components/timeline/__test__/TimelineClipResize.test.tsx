@@ -129,6 +129,41 @@ describe("resizedRange", () => {
             resizedRange({ ...base, limits, edge: "end", beat: 21 }),
         ).toMatchObject({ endBeatIndex: 21, blockedBy: null });
     });
+
+    it("says why a move split off a page can't grow, not that its own counts are taken (UI-25)", () => {
+        // The page's own timeline shares the split move's range; the next page's move blocks it
+        const limits: ClipResizeLimits = {
+            startEdge: {
+                min: { beat: 8, reason: "stops at Page 1's move" },
+                max: { beat: 15, reason: "1 count minimum" },
+            },
+            endEdge: {
+                min: { beat: 9, reason: "1 count minimum" },
+                max: { beat: 16, reason: "stops at Page 3's move" },
+            },
+            taken: [
+                {
+                    startBeatIndex: 8,
+                    endBeatIndex: 16,
+                    reason: "Page 2's move already has these counts",
+                },
+            ],
+        };
+        expect(
+            resizedRange({ ...base, limits, edge: "end", beat: 22 }),
+        ).toMatchObject({
+            endBeatIndex: 16,
+            stoppedBy: "stops at Page 3's move",
+            blockedBy: null,
+        });
+        expect(
+            resizedRange({ ...base, limits, edge: "start", beat: 3 }),
+        ).toMatchObject({
+            startBeatIndex: 8,
+            stoppedBy: "stops at Page 1's move",
+            blockedBy: null,
+        });
+    });
 });
 
 describe("clipResizeTagText", () => {
