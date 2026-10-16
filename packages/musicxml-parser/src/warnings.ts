@@ -9,7 +9,7 @@ export type ParseWarningCode =
     | "unknown-meter"
     /** The file gave no grouping for a meter like 7/8; the rule's grouping was used */
     | "assumed-grouping"
-    /** No time signature before the first measure; 4/4 was used */
+    /** No time signature before the first measure; counted in quarters, as long as the music */
     | "no-time-signature"
     /** A pickup measure got only the counts its music fills */
     | "pickup"
@@ -93,7 +93,8 @@ const MESSAGES: Record<ParseWarningCode, string> = {
     "unknown-meter": "{meter} isn't a meter OpenMarch can count; kept {kept}",
     "assumed-grouping":
         "{meter} has no grouping in the file; counted {grouping}",
-    "no-time-signature": "No time signature; counted {meter}",
+    "no-time-signature":
+        "No time signature; each measure counted in quarter notes, as long as its music",
     pickup: "Pickup: {counts} count(s)",
     "long-measure":
         "Holds {quarters} quarter note(s), more than {meter}; given {counts} count(s)",

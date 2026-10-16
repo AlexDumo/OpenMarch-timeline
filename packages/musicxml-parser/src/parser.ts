@@ -170,6 +170,22 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
             meterChanged = true;
         }
 
+        if (meter === DEFAULT_METER && raw.contentQuarters > EPSILON) {
+            // No time signature yet: one quarter-note count per quarter of music, however long
+            // each measure is (unmeasured music, or a file that leaves the signature out)
+            const quarters = Math.max(
+                1,
+                Math.ceil(raw.contentQuarters - SHORT_TOLERANCE),
+            );
+            seen.add(raw);
+            return {
+                raw,
+                meter,
+                meterChanged,
+                counts: new Array<number>(quarters).fill(1),
+            };
+        }
+
         let counts = [...meter.counts];
         // Exporters round tuplet durations to whole divisions, so a measure a 64th short is full
         const short =
@@ -214,10 +230,13 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
             // The other half of the pickup (a section's last measure): together they make one
             // measure, so it gets the counts the pickup didn't, even when the pickup was rounded
             counts = counts.slice(0, counts.length - pickup.counts);
+            const completed = pickup.label;
+            // A pickup is completed once; later short measures are just short
+            pickup = undefined;
             if (firstPlay)
                 warn("completes-pickup", "info", i, {
                     counts: counts.length,
-                    pickup: pickup.label,
+                    pickup: completed,
                 });
         } else if (short) {
             // A short measure: notation programs play only the music that's there, so only the

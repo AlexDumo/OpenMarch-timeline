@@ -298,3 +298,21 @@ describe("printed and played tempo", () => {
         );
     });
 });
+
+describe("no time signature", () => {
+    it("counts each measure in quarters, as long as its music", () => {
+        const divisions = `<attributes><divisions>480</divisions></attributes>`;
+        const tempo = museScoreTempo("quarter", 0, 60, 60);
+        const xml = score(
+            measure(1, divisions + tempo + rest(2)) +
+                measure(2, rest(2)) +
+                measure(3, rest(5)),
+        );
+        expect(seconds(xml)).toEqual([
+            [1, 1],
+            [1, 1],
+            [1, 1, 1, 1, 1],
+        ]);
+        expect(codes(xml)).toEqual(["no-time-signature"]);
+    });
+});
