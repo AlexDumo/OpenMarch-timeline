@@ -57,6 +57,18 @@ stable `code` and `params` (to translate) and an English `message`.
    pnpm run test
    ```
 
+### The corpus test
+
+`src/__test__/corpus/files` holds 54 real scores from many exporters (Dorico, Finale, Sibelius,
+MuseScore, Noteflight, Flat.io, LilyPond and MEI converters, and the MusicXML test suite), each
+under its own license: see `src/__test__/corpus/ATTRIBUTION.md`. `corpus.test.ts` checks each
+file's played order, counts per measure, length and warning codes against `expected.json`. When
+a parser change moves any of them, review the change, then accept it:
+
+```bash
+pnpm exec tsx scripts/update-corpus-snapshot.ts
+```
+
 ### Checking against a corpus
 
 `scripts/corpus-report.ts` runs the parser over every MusicXML file in a folder and prints what
