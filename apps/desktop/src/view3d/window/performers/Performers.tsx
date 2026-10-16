@@ -36,6 +36,7 @@ import {
     SRGBColorSpace,
 } from "three";
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
+import { performersOnly } from "@/global/classes/Marcher";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
@@ -123,7 +124,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     });
 
     const marcherIdsKey = useMemo(
-        () => (marchers ?? []).map((m) => m.id).join(","),
+        // Performers only: items (props and equipment) get no figure
+        () =>
+            performersOnly(marchers ?? [])
+                .map((m) => m.id)
+                .join(","),
         [marchers],
     );
     const slots = useMemo(
