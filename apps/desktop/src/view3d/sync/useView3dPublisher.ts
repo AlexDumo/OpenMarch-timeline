@@ -138,11 +138,8 @@ export function useView3dPublisher() {
     const heldBeat = isPlaying ? null : pausedBeat;
     const playbackSpeed = usePlaybackSpeedStore(effectivePlaybackSpeed);
     const chosenSpeed = usePlaybackSpeedStore((s) => s.speed);
-    // What Play does, for the window's Play tooltip, as the editor's transport reads them
+    // What Play does, for the window's Play tooltip, as the editor's transport reads it
     const playLoops = useTimelineSelectionStore((s) => loopBounds(s) !== null);
-    const playingOnce = useTimelineSelectionStore(
-        (s) => s.playback?.kind === "preview" && s.playback.once === true,
-    );
     const { mutate: updateVenue } = useMutation(
         updateVenueSettingsMutationOptions(queryClient),
     );
@@ -165,7 +162,6 @@ export function useView3dPublisher() {
         beats,
         pausedBeat,
         playLoops,
-        playingOnce,
     });
     latest.current = {
         isPlaying,
@@ -174,7 +170,6 @@ export function useView3dPublisher() {
         beats,
         pausedBeat,
         playLoops,
-        playingOnce,
     };
 
     const sendClock = useCallback(() => {
@@ -183,7 +178,6 @@ export function useView3dPublisher() {
             beats: b,
             pausedBeat: beat,
             playLoops: loops,
-            playingOnce: once,
         } = latest.current;
         const clock: View3dClock = {
             seq: ++seqRef.current,
@@ -196,7 +190,6 @@ export function useView3dPublisher() {
             speed: effectivePlaybackSpeed(usePlaybackSpeedStore.getState()),
             chosenSpeed: usePlaybackSpeedStore.getState().speed,
             playLoops: loops,
-            playingOnce: once,
         };
         window.electron.publishToView3d(VIEW3D_CLOCK_CHANNEL, clock);
     }, []);
@@ -286,7 +279,6 @@ export function useView3dPublisher() {
         playbackSpeed,
         chosenSpeed,
         playLoops,
-        playingOnce,
         sendClock,
     ]);
 

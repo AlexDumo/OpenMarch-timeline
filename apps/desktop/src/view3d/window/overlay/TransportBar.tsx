@@ -36,7 +36,6 @@ export function TransportBar() {
     const { pages } = useTimingObjects();
     const playing = useView3dSyncStore((s) => !!s.clock?.playing);
     const playLoops = useView3dSyncStore((s) => !!s.clock?.playLoops);
-    const playingOnce = useView3dSyncStore((s) => !!s.clock?.playingOnce);
     // As in the editor, the buttons work whenever the show has pages; a move
     // with nowhere to go does nothing
     const ready = pages.length > 0;
@@ -63,7 +62,6 @@ export function TransportBar() {
                     isPlaying={playing}
                     onPlayingChange={ready ? onPlayingChange : undefined}
                     playLoops={playLoops}
-                    playingOnce={playingOnce}
                     onPlayFromPlayhead={ready ? onPlayFromPlayhead : undefined}
                     testIdPrefix="view3d"
                 />

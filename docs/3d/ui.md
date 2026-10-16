@@ -92,12 +92,14 @@ replacing the first layout's venue and lighting bars and the wide camera bar.
   (`components/timeline/TransportButtons.tsx`, `PlaybackSpeedButton.tsx`), so
   their icons, tooltips and modifier clicks match the editor's exactly:
   Shift+click and Alt+click on Previous and Next step a beat or go to the
-  start or end, Shift+click on Play plays from the playhead, and the speed
+  start or end, Shift+click on Play plays from the playhead (or pauses while
+  playing), and the speed
   button steps on a click and opens its slider on a right-click. Their
   tooltips are in English, as the editor's are, rather than under `view3d.*`
   (UI-6).
-- **Keys**, the editor's own: Space plays or stops and Shift+Space plays from
-  the playhead; Q and E go to the previous and next page, Shift+Q and Shift+E
+- **Keys**, the editor's own: Space plays, or stops and goes back to where
+  Play was pressed; Shift+Space plays from the playhead, or pauses where it
+  is; Q and E go to the previous and next page, Shift+Q and Shift+E
   a beat, and Alt+Q and Alt+E (or Home and End) the start and end; ] and [
   held play at double and half speed. Space works even when a window button
   has focus, so a click never steals it; it doesn't apply in text fields or

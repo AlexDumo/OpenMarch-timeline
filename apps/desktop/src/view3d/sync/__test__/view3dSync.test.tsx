@@ -36,7 +36,6 @@ const clock = (overrides: Partial<View3dClock> = {}): View3dClock => ({
     speed: 1,
     chosenSpeed: 1,
     playLoops: false,
-    playingOnce: false,
     ...overrides,
 });
 

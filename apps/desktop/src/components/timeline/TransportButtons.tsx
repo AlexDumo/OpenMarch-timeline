@@ -16,6 +16,7 @@ import {
     ArrowLineRightIcon,
     CaretLeftIcon,
     CaretRightIcon,
+    PauseIcon,
     PlayIcon,
     SkipBackIcon,
     SkipForwardIcon,
@@ -29,6 +30,7 @@ import type { TimelineNavigation } from "./TimelineViewModel";
 // The same elements every render, so the memoized transport buttons don't re-render for them
 const SKIP_BACK_ICON = <SkipBackIcon size={16} />;
 const STOP_ICON = <StopIcon size={16} weight="fill" />;
+const PAUSE_ICON = <PauseIcon size={16} weight="fill" />;
 const SKIP_FORWARD_ICON = <SkipForwardIcon size={16} />;
 // Previous and Next while Shift (the start or end of the show) or Alt (a beat) is held
 const START_ICON = <ArrowLineLeftIcon size={16} />;
@@ -364,28 +366,43 @@ const playGuide = (
     },
 ];
 
+/** What Stop (Space) and Pause (Shift+Space) do while playing (UI-24) */
+const stopGuide: readonly TransportGuideRow<"play" | "shift">[] = [
+    {
+        mode: "play",
+        icon: STOP_ICON,
+        label: "Stop and go back",
+        shortcut: TRANSPORT_SHORTCUTS.play,
+    },
+    {
+        mode: "shift",
+        icon: PAUSE_ICON,
+        label: "Pause here",
+        shortcut: TRANSPORT_SHORTCUTS.playPage,
+    },
+];
+
 /**
  * Play, or Stop while playing. Shift+click is Shift+Space: plays from the playhead, or the loop
- * once. Holding Shift swaps the icon and label to say so, and the tooltip is a guide to both, as
+ * once; while playing, it pauses where it is (UI-24), where Stop goes back to where Play was
+ * pressed. Holding Shift swaps the icon and label to say so, and the tooltip is a guide to both, as
  * Previous and Next do. Kept apart from the transport so only this re-renders for Shift.
  */
 export const TransportPlayButton = memo(function TransportPlayButton({
     isPlaying,
     onPlayingChange,
     playLoops,
-    playingOnce,
     onPlayFromPlayhead,
     testIdPrefix = "timeline",
 }: {
     isPlaying: boolean;
     onPlayingChange?: (isPlaying: boolean) => void;
     playLoops: boolean;
-    playingOnce: boolean;
     onPlayFromPlayhead?: () => void;
     /** "timeline" in the editor, "view3d" in the 3D View window */
     testIdPrefix?: string;
 }) {
-    const shift = useHeldShift(onPlayingChange != null && !isPlaying);
+    const shift = useHeldShift(onPlayingChange != null);
     const togglePlaying = useCallback(
         (event: ReactMouseEvent) =>
             event.shiftKey && onPlayFromPlayhead
@@ -394,25 +411,8 @@ export const TransportPlayButton = memo(function TransportPlayButton({
         [isPlaying, onPlayingChange, onPlayFromPlayhead],
     );
     const onClick = onPlayingChange ? togglePlaying : undefined;
-    if (isPlaying)
-        return (
-            <TransportButton
-                label="Stop"
-                shortcut={TRANSPORT_SHORTCUTS.play}
-                hint={
-                    playLoops || playingOnce
-                        ? "Goes back to where you were editing"
-                        : "Stops where it is"
-                }
-                testId={`${testIdPrefix}-play`}
-                pressed
-                onClick={onClick}
-            >
-                {STOP_ICON}
-            </TransportButton>
-        );
-    const guide = playGuide(playLoops);
     const mode = shift && onPlayFromPlayhead ? "shift" : "play";
+    const guide = isPlaying ? stopGuide : playGuide(playLoops);
     const row = guide.find((r) => r.mode === mode)!;
     return (
         <TransportButton
@@ -423,11 +423,11 @@ export const TransportPlayButton = memo(function TransportPlayButton({
                 <TransportGuide
                     rows={onPlayFromPlayhead ? guide : guide.slice(0, 1)}
                     mode={mode}
-                    testId={`${testIdPrefix}-play-guide`}
+                    testId={`${testIdPrefix}-${isPlaying ? "stop" : "play"}-guide`}
                 />
             }
             testId={`${testIdPrefix}-play`}
-            pressed={false}
+            pressed={isPlaying}
             onClick={onClick}
         >
             {row.icon}

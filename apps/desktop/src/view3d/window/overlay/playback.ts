@@ -12,7 +12,7 @@ export const HELD_PLAYBACK_ACTIONS: ReadonlySet<View3dPlaybackAction> = new Set(
 
 /**
  * The playback action for a key press, using the editor's shortcuts: Space
- * plays or stops, Shift+Space plays from the playhead (or the loop once), Q
+ * plays or stops, Shift+Space plays from the playhead or pauses, Q
  * and E step a page, Shift+Q and Shift+E a beat, Alt+Q and Alt+E (or Home and
  * End) go to the first and last page, and ] and [ play at double or half
  * speed while held. Matches on `code`, like the editor, so the keys stay put

@@ -69,8 +69,6 @@ export interface View3dClock {
     chosenSpeed: number;
     /** Play loops (looping is on, or a move is isolated), for Play's tooltip */
     playLoops: boolean;
-    /** Playing the loop once (Shift+Space), which Stop goes back from */
-    playingOnce: boolean;
 }
 
 export interface View3dSelection {
@@ -190,8 +188,7 @@ export function isView3dClock(value: unknown): value is View3dClock {
         isFiniteNumber(value.rate) &&
         isFiniteNumber(value.speed) &&
         isFiniteNumber(value.chosenSpeed) &&
-        typeof value.playLoops === "boolean" &&
-        typeof value.playingOnce === "boolean"
+        typeof value.playLoops === "boolean"
     );
 }
 

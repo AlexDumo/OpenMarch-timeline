@@ -163,7 +163,6 @@ export const TimelineTransport = memo(function TimelineTransport({
     isPlaying,
     onPlayingChange,
     playLoops = false,
-    playingOnce = false,
     onPlayFromPlayhead,
     onNavigate,
     onFit,
@@ -182,8 +181,6 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayingChange?: (isPlaying: boolean) => void;
     /** Looping is on, so Play loops and shows the loop's bar (UI-17) */
     playLoops?: boolean;
-    /** Shift+Space's once-through is playing (UI-17) */
-    playingOnce?: boolean;
     /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     onPlayFromPlayhead?: () => void;
     onNavigate?: (direction: TimelineNavigation) => void;
@@ -344,7 +341,6 @@ export const TimelineTransport = memo(function TimelineTransport({
                         isPlaying={isPlaying}
                         onPlayingChange={onPlayingChange}
                         playLoops={playLoops}
-                        playingOnce={playingOnce}
                         onPlayFromPlayhead={onPlayFromPlayhead}
                     />
                     <TransportNavigationButton
@@ -2710,6 +2706,63 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
         </button>
     );
 });
+
+/**
+ * Where Stop goes back to, while playing (UI-24): the resting playhead, drawn as a flag (a pennant
+ * like the start flag's, in the playhead's color, on a dashed line), so you can see where playback
+ * came from, in Basic as in Expert.
+ * REAPER's edit cursor, which stays while the play cursor moves, is the model. It never takes the
+ * pointer: clicks there seek playback, as anywhere else.
+ */
+export const TimelineReturnMarker = memo(function TimelineReturnMarker({
+    beat,
+    pixelsPerBeat,
+    height,
+}: {
+    beat: BeatPosition;
+    pixelsPerBeat: number;
+    height: number;
+}) {
+    const left = Math.round(beatToX(beat, pixelsPerBeat));
+    return (
+        <span
+            aria-hidden="true"
+            data-testid="timeline-return-marker"
+            className="pointer-events-none absolute top-0 z-40 w-12 -translate-x-1/2"
+            style={{ left, height }}
+        >
+            <span
+                className="border-accent absolute top-0 left-1/2 -translate-x-1/2 border-l-2 border-dashed opacity-70"
+                style={{ height }}
+            />
+            {/* A pennant like the start flag's, mirrored to hang back from its stem, so it reads
+                as a marker rather than a second playhead head to grab */}
+            <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                className="text-accent absolute top-0 right-[calc(50%-1px)]"
+            >
+                <path d="M12 0 L0 0 L12 12 Z" fill="currentColor" />
+            </svg>
+        </span>
+    );
+});
+
+/**
+ * Whether the return marker shows (UI-24): always in Expert; in Basic only mid-page, since a return
+ * to a page's start or end is already marked by that page's box (owner, 2026-10-16).
+ */
+export function showsReturnMarker(
+    beat: BeatPosition,
+    pages: readonly TimelinePageMarker[],
+    beatCount: number,
+    basic: boolean,
+): boolean {
+    if (!basic) return true;
+    if (beat === 0 || beat >= beatCount) return false;
+    return !pages.some((page) => page.atBeat === beat || page.endBeat === beat);
+}
 
 /** How far, in pixels, a press on empty timeline space must move to select a range */
 export const TIMELINE_RANGE_DRAG_PX = 4;
