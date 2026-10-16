@@ -7,7 +7,10 @@
 import * as z from "zod";
 import type { FieldProperties } from "@openmarch/core";
 import type { LightingPreset, VenueKitId, VenueParams } from "./types";
-import { UNIFORM_PRESET_IDS } from "./marchers/uniformPresets";
+import {
+    GUARD_UNIFORM_PRESET_IDS,
+    UNIFORM_PRESET_IDS,
+} from "./marchers/uniformPresets";
 
 export const VENUE_SETTINGS_VERSION = 1;
 
@@ -49,10 +52,13 @@ export const venueSettingsSchema = z.object({
     crowd: z.boolean(),
     params: venueParamsSchema,
     /**
-     * The built-in uniform preset the band and guard wear
-     * (`marchers/uniformPresets.ts`). Absent means the default, Royal Sash. Added 2026-10-16 without a version bump: older builds ignore it.
+     * The built-in uniform preset the band wears
+     * (`marchers/uniformPresets.ts`); absent means West Point. Added
+     * 2026-10-16 without a version bump: older builds ignore it.
      */
     uniforms: z.enum(UNIFORM_PRESET_IDS).optional(),
+    /** The preset the guard wears, as `uniforms`; absent means Royal Sash. */
+    guardUniforms: z.enum(GUARD_UNIFORM_PRESET_IDS).optional(),
 });
 
 export type VenueSettings = z.infer<typeof venueSettingsSchema>;

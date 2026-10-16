@@ -85,6 +85,18 @@ describe("uniforms change", () => {
         });
         expect(next).toEqual({ ...hsDusk, uniforms: "military" });
     });
+
+    it("sets the guard's preset apart from the band's", () => {
+        const next = applyVenueChange(
+            { ...hsDusk, uniforms: "westPoint" },
+            { kind: "guardUniforms", guardUniforms: "fade" },
+        );
+        expect(next).toEqual({
+            ...hsDusk,
+            uniforms: "westPoint",
+            guardUniforms: "fade",
+        });
+    });
 });
 
 describe("venueChanged", () => {
@@ -94,7 +106,13 @@ describe("venueChanged", () => {
             true,
         );
         // absent means the default preset
-        expect(venueChanged(hsDusk, { ...hsDusk, uniforms: "sash" })).toBe(
+        expect(venueChanged(hsDusk, { ...hsDusk, uniforms: "westPoint" })).toBe(
+            false,
+        );
+        expect(
+            venueChanged(hsDusk, { ...hsDusk, guardUniforms: "prism" }),
+        ).toBe(true);
+        expect(venueChanged(hsDusk, { ...hsDusk, guardUniforms: "sash" })).toBe(
             false,
         );
         expect(venueChanged(hsDusk, { ...hsDusk, crowd: false })).toBe(true);

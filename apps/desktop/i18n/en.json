@@ -2243,7 +2243,8 @@
             },
             "stepOffFootHint": "The performer's own foot, whichever way they face. Facing you, their left foot is on your right. Starts on the show's saved foot; the other one is a preview and isn't saved.",
             "keysSection": "Keyboard and mouse",
-            "uniforms": "Uniforms"
+            "uniforms": "Band uniform",
+            "guardUniforms": "Guard uniform"
         },
         "keys": {
             "playPause": "Play or pause",
@@ -2270,13 +2271,13 @@
             "zoom": "Scroll"
         },
         "uniformPreset": {
-            "cadet": "Cadet",
             "fade": "Ultraviolet Fade",
             "military": "Night Watch",
             "plastron": "Lilac Plastron",
             "prism": "Prism Split",
             "sash": "Royal Sash",
-            "signature": "Signature"
+            "signature": "Signature",
+            "westPoint": "West Point"
         },
         "cameras": {
             "title": "Cameras",

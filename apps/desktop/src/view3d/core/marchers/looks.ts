@@ -2,15 +2,17 @@
  * What each 3D View marcher looks like: its body (type, skin tone, height
  * class) and its section's uniform (ADR 0002 D-7).
  *
- * The show file stores only the uniform preset (the venue settings'
- * `uniforms`), so the rest is derived:
+ * The show file stores only the uniform presets (the venue settings'
+ * `uniforms` for the band and `guardUniforms` for the guard), so the rest is
+ * derived:
  *
  * - body type and skin tone from a stable hash of the marcher ID, so a
  *   marcher looks the same every time the show opens;
  * - height class 0.95, 1.00 or 1.05 by the same hash at high quality, and
  *   1.00 for everyone at low quality;
- * - the uniform from the show's preset (`uniformPresets.ts`): its band
- *   look, or its guard look for the guard sections, chosen by `isGuard`
+ * - the uniform from the show's presets (`uniformPresets.ts`): the band
+ *   preset's band look, or the guard preset's guard look for the guard
+ *   sections, chosen by `isGuard`
  *   (ADR 0002 D-7 and D-18). The section's 2D fill color never touches the
  *   uniform; it only colors what the section carries (drum shells, flag
  *   silks), which otherwise take the preset's colors and silk pattern. Each
@@ -31,8 +33,11 @@ import { bassSizesFor } from "../instruments/battery";
 import type { GuardModelId, ModelOptions } from "../instruments/model";
 import type { HoldState } from "../instruments/holds";
 import {
+    DEFAULT_GUARD_UNIFORM_PRESET,
     DEFAULT_UNIFORM_PRESET,
     UNIFORM_PRESETS,
+    guardLookOf,
+    type GuardUniformPresetId,
     type UniformPresetId,
 } from "./uniformPresets";
 
@@ -230,14 +235,14 @@ export function fillToNumber(c: RgbaColor): number {
 }
 
 /**
- * A section's uniform from the show's uniform preset: the preset's guard
- * look for the guard sections, its band look for everyone else. Nothing else
- * about it comes from the show. Brass carry their horn in gold lacquer, held
- * as `hold` says (docs/3d/instruments.md §5). `fill` (sRGB, the section's 2D
- * fill) colors drum shells and plain flag silks; without one they take the
- * preset's carry color and pattern. `guard`, when set, is the equipment
- * every guard section carries instead of its own (the settings' guard
- * equipment).
+ * A section's uniform from the show's uniform presets: the band preset's
+ * band look, or the guard preset's guard look for the guard sections
+ * (`isGuard`). Nothing else about it comes from the show. Brass carry their
+ * horn in gold lacquer, held as `hold` says (docs/3d/instruments.md §5).
+ * `fill` (sRGB, the section's 2D fill) colors drum shells and plain flag
+ * silks; without one they take the color and silk pattern of the preset
+ * that dresses the section. `guard`, when set, is the equipment every guard
+ * section carries instead of its own (the settings' guard equipment).
  */
 export function sectionUniform(
     section: string,
@@ -246,11 +251,14 @@ export function sectionUniform(
     fill?: number,
     guard?: GuardModelId,
     preset: UniformPresetId = DEFAULT_UNIFORM_PRESET,
+    guardPreset: GuardUniformPresetId = DEFAULT_GUARD_UNIFORM_PRESET,
 ): UniformLook {
-    const dress = UNIFORM_PRESETS[preset];
-    const base = isGuard(section) ? dress.guard : dress.band;
+    const inGuard = isGuard(section);
+    const dressedBy: UniformPresetId = inGuard ? guardPreset : preset;
+    const dress = UNIFORM_PRESETS[dressedBy];
+    const base = inGuard ? guardLookOf(guardPreset) : dress.band;
     const carry =
-        guard && isGuard(section)
+        guard && inGuard
             ? guardCarry(guard)
             : withOptions(carryForSection(section), options);
     return {
@@ -262,7 +270,7 @@ export function sectionUniform(
             instrument: "none",
             carry,
             carryColor: carry ? (fill ?? dress.carry) : null,
-            silk: carry && fill === undefined && dress.silk ? preset : null,
+            silk: carry && fill === undefined && dress.silk ? dressedBy : null,
             finish: "brass",
             hold,
         },

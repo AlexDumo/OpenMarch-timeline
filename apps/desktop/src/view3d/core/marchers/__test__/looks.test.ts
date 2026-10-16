@@ -17,9 +17,14 @@ import {
     uniformKey,
 } from "../looks";
 import {
+    DEFAULT_GUARD_UNIFORM_PRESET,
     DEFAULT_UNIFORM_PRESET,
+    GUARD_UNIFORM_PRESET_IDS,
     UNIFORM_PRESETS,
     UNIFORM_PRESET_IDS,
+    guardLookOf,
+    guardUniformPresetOf,
+    uniformPresetOf,
 } from "../uniformPresets";
 import type { GuardModelId } from "../../instruments/model";
 
@@ -164,8 +169,8 @@ describe("section uniforms", () => {
         expect(a).not.toBe(b);
     });
 
-    it("dresses band sections in the preset's band look, Royal Sash by default", () => {
-        expect(DEFAULT_UNIFORM_PRESET).toBe("sash");
+    it("dresses band sections in the band preset's look, West Point by default", () => {
+        expect(DEFAULT_UNIFORM_PRESET).toBe("westPoint");
         for (const b of [
             "Trumpet",
             "Snare",
@@ -174,11 +179,12 @@ describe("section uniforms", () => {
             "Unknown",
         ]) {
             const u = sectionUniform(b);
-            expect(u.style).toBe("sash");
-            expect(u.colors).toEqual(UNIFORM_PRESETS.sash.band.colors);
-            expect(u.colors.primary).toBe(0x170d4a);
-            expect(u.colors.accent).toBe(0x6442ff);
-            expect(u.options).toMatchObject(UNIFORM_PRESETS.sash.band.options);
+            expect(u.style).toBe("cadet");
+            expect(u.colors).toEqual(UNIFORM_PRESETS.westPoint.band.colors);
+            expect(u.colors.primary).toBe(0x6442ff);
+            expect(u.options).toMatchObject(
+                UNIFORM_PRESETS.westPoint.band.options,
+            );
             for (const id of UNIFORM_PRESET_IDS) {
                 const p = sectionUniform(
                     b,
@@ -194,18 +200,23 @@ describe("section uniforms", () => {
         }
     });
 
-    it("dresses guard sections in the preset's guard look: plain, bare hands, no hat", () => {
+    it("dresses guard sections in the guard preset's look, Royal Sash by default: plain, bare hands, no hat", () => {
+        expect(DEFAULT_GUARD_UNIFORM_PRESET).toBe("sash");
         for (const g of ["Color Guard", "Rifle", "Flag", "Dancer", "Twirler"]) {
-            for (const id of UNIFORM_PRESET_IDS) {
+            expect(sectionUniform(g).colors).toEqual(
+                UNIFORM_PRESETS.sash.guard!.colors,
+            );
+            for (const id of GUARD_UNIFORM_PRESET_IDS) {
                 const u = sectionUniform(
                     g,
                     "up",
                     undefined,
                     undefined,
                     undefined,
+                    "westPoint",
                     id,
                 );
-                expect(u.colors).toEqual(UNIFORM_PRESETS[id].guard.colors);
+                expect(u.colors).toEqual(guardLookOf(id).colors);
                 expect(u.options).toMatchObject({
                     stripe: false,
                     collar: false,
@@ -215,6 +226,52 @@ describe("section uniforms", () => {
                 });
             }
         }
+    });
+
+    it("picks the band's and the guard's presets apart", () => {
+        const at = (
+            section: string,
+            band: "fade" | "military",
+            guard: "fade" | "military",
+        ) =>
+            sectionUniform(
+                section,
+                "up",
+                undefined,
+                undefined,
+                undefined,
+                band,
+                guard,
+            );
+        // the band preset never dresses the guard, nor the guard preset the band
+        expect(at("Trumpet", "fade", "military").colors).toEqual(
+            at("Trumpet", "fade", "fade").colors,
+        );
+        expect(at("Color Guard", "fade", "military").colors).toEqual(
+            at("Color Guard", "military", "military").colors,
+        );
+        // drum shells take the band's carry, silks the guard's
+        expect(at("Snare", "fade", "military").options.carryColor).toBe(
+            UNIFORM_PRESETS.fade.carry,
+        );
+        expect(at("Flag", "fade", "military").options.carryColor).toBe(
+            UNIFORM_PRESETS.military.carry,
+        );
+        expect(at("Flag", "fade", "military").options.silk).toBe("military");
+    });
+
+    it("offers every preset to the band and only those with a guard look to the guard", () => {
+        for (const id of UNIFORM_PRESET_IDS)
+            expect(Boolean(UNIFORM_PRESETS[id].guard), id).toBe(
+                (GUARD_UNIFORM_PRESET_IDS as readonly string[]).includes(id),
+            );
+        expect(GUARD_UNIFORM_PRESET_IDS).not.toContain("westPoint");
+        expect(() => guardLookOf("westPoint" as never)).toThrow();
+        expect(uniformPresetOf("westPoint")).toBe("westPoint");
+        expect(uniformPresetOf("plaid")).toBe("westPoint");
+        expect(guardUniformPresetOf("westPoint")).toBe("sash");
+        expect(guardUniformPresetOf(undefined)).toBe("sash");
+        expect(guardUniformPresetOf("prism")).toBe("prism");
     });
 
     it("groups looks by band vs guard, never by section name or fill", () => {
@@ -246,7 +303,7 @@ describe("section uniforms", () => {
         expect(red.colors).toEqual(sectionUniform("Snare").colors);
         expect(red.options.carryColor).toBe(0xc8102e);
         expect(sectionUniform("Snare").options.carryColor).toBe(
-            UNIFORM_PRESETS.sash.carry,
+            UNIFORM_PRESETS.westPoint.carry,
         );
         expect(
             sectionUniform("Drum Major", "up", undefined, 0xc8102e).options
@@ -261,7 +318,7 @@ describe("section uniforms", () => {
                 .silk,
         ).toBeNull();
         expect(sectionUniform("Drum Major").options.silk).toBeNull();
-        for (const id of UNIFORM_PRESET_IDS) {
+        for (const id of GUARD_UNIFORM_PRESET_IDS) {
             const silk = UNIFORM_PRESETS[id].silk;
             expect(
                 sectionUniform(
@@ -270,6 +327,7 @@ describe("section uniforms", () => {
                     undefined,
                     undefined,
                     undefined,
+                    "westPoint",
                     id,
                 ).options.silk,
             ).toBe(silk ? id : null);

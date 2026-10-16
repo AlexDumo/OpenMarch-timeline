@@ -24,6 +24,7 @@ import type { GuardEquipment } from "../sceneStore";
 import { Segmented } from "./Panel";
 import {
     LightingControl,
+    GuardUniformPicker,
     UniformPicker,
     VenuePicker,
     useVenueRequest,
@@ -81,6 +82,9 @@ export function SettingsPanel({
                     </Row>
                     <Row label={t("view3d.settings.uniforms")} stacked>
                         <UniformPicker />
+                    </Row>
+                    <Row label={t("view3d.settings.guardUniforms")} stacked>
+                        <GuardUniformPicker />
                     </Row>
                     {hasStands && <CrowdRows />}
                     {kitId !== "gym" && <EndZoneRow />}

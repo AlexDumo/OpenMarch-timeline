@@ -1,21 +1,25 @@
 /**
  * The built-in uniform presets (ADR 0002 D-18, amended 2026-10-16): what the
- * band and the guard wear until the show has uniforms of its own. The show
- * picks one in the 3D View's venue settings (`uniforms`). All are in
- * OpenMarch purple (#6442ff); Royal Sash is the default.
+ * band and the guard wear until the show has uniforms of its own, all in
+ * OpenMarch purple (#6442ff). The show picks the band's and the guard's
+ * apart in the 3D View's venue settings (`uniforms` and `guardUniforms`):
+ * West Point dresses the band by default, Royal Sash the guard.
  *
- * Each preset dresses the band and the guard, colors the drum shells, and
- * paints the flag silks. A section with its own 2D fill color keeps plain
- * silks and shells in that color.
+ * Each preset has a band look; all but West Point have a guard look too.
+ * What a section carries takes the color of the preset that dresses it:
+ * drum shells the band's, flag silks the guard's, painted with its pattern.
+ * A section with its own 2D fill color keeps plain silks and shells in that
+ * color.
  *
  * Pure: no three.js, React or database.
  */
 import type { UniformLook } from "./looks";
 
+/** Every preset, for the band. */
 export const UNIFORM_PRESET_IDS = [
+    "westPoint",
     "sash",
     "signature",
-    "cadet",
     "fade",
     "plastron",
     "military",
@@ -23,7 +27,19 @@ export const UNIFORM_PRESET_IDS = [
 ] as const;
 export type UniformPresetId = (typeof UNIFORM_PRESET_IDS)[number];
 
-export const DEFAULT_UNIFORM_PRESET: UniformPresetId = "sash";
+/** The presets with a guard look, for the guard. */
+export const GUARD_UNIFORM_PRESET_IDS = [
+    "sash",
+    "signature",
+    "fade",
+    "plastron",
+    "military",
+    "prism",
+] as const satisfies readonly UniformPresetId[];
+export type GuardUniformPresetId = (typeof GUARD_UNIFORM_PRESET_IDS)[number];
+
+export const DEFAULT_UNIFORM_PRESET: UniformPresetId = "westPoint";
+export const DEFAULT_GUARD_UNIFORM_PRESET: GuardUniformPresetId = "sash";
 
 /** The part of a look a preset sets. */
 export type PresetLook = Pick<UniformLook, "style" | "colors"> & {
@@ -41,8 +57,9 @@ export type SilkPattern = (u: number, v: number) => number;
 
 export interface UniformPreset {
     band: PresetLook;
-    guard: PresetLook;
-    /** sRGB: drum shells, and silks without a pattern. */
+    /** Absent for band-only presets; see `GUARD_UNIFORM_PRESET_IDS`. */
+    guard?: PresetLook;
+    /** sRGB: what the sections it dresses carry; silks without a pattern. */
     carry: number;
     /** The silks' pattern; plain `carry` when absent. */
     silk?: SilkPattern;
@@ -59,8 +76,8 @@ const LILAC = 0xe8e3ff;
 const WHITE = 0xf2f2ee;
 const SILVER = 0xc9cdd8;
 const GOLD = 0xd8b04a;
-/** Cadet's cummerbund and plate: a brighter, yellower gold. */
-const CADET_GOLD = 0xf0c02a;
+/** West Point's cummerbund and plate: a brighter, yellower gold. */
+const WEST_POINT_GOLD = 0xf0c02a;
 const BLACK = 0x111114;
 /** Darker than the pants, so the feet still separate from the legs. */
 const SHOE_BLACK = 0x0b0b0d;
@@ -120,6 +137,31 @@ function guardLook(
 
 export const UNIFORM_PRESETS: Readonly<Record<UniformPresetId, UniformPreset>> =
     {
+        // West Point: academy full dress. A purple jacket, up to the neck, with
+        // rows of white braid high across the chest, a white cross belt with a gold plate, a
+        // pleated gold cummerbund, white trousers and a purple shako with a
+        // white plume. Band only.
+        westPoint: {
+            band: {
+                style: "cadet",
+                colors: {
+                    primary: OM,
+                    secondary: WEST_POINT_GOLD,
+                    accent: WHITE,
+                    trim: WHITE,
+                    pants: WHITE,
+                    shoes: SHOE_BLACK,
+                    gloves: WHITE,
+                    hat: OM,
+                    plume: WHITE,
+                    visor: BLACK,
+                },
+                // no collar: the purple runs up to the neck
+                options: { ...BAND, stripe: false, collar: false },
+            },
+            // band only: the guard wears its own preset
+            carry: OM,
+        },
         // Royal Sash: a midnight jacket with a purple sash edged in gold. Silks:
         // split on the diagonal, purple at the pole and midnight at the fly, with
         // a gold seam.
@@ -154,45 +196,6 @@ export const UNIFORM_PRESETS: Readonly<Record<UniformPresetId, UniformPreset>> =
             silk: (u, v) => {
                 const d = u - v;
                 return Math.abs(d) < 0.035 ? GOLD : d < 0 ? OM : OM_NIGHT;
-            },
-        },
-        // Cadet: academy full dress. A purple jacket, up to the neck, with
-        // rows of white braid high across the chest, a white cross belt with a gold plate, a
-        // pleated gold cummerbund, white trousers and a purple shako with a
-        // white plume. Silks: purple, a white band across the middle edged in
-        // gold.
-        cadet: {
-            band: {
-                style: "cadet",
-                colors: {
-                    primary: OM,
-                    secondary: CADET_GOLD,
-                    accent: WHITE,
-                    trim: WHITE,
-                    pants: WHITE,
-                    shoes: SHOE_BLACK,
-                    gloves: WHITE,
-                    hat: OM,
-                    plume: WHITE,
-                    visor: BLACK,
-                },
-                // no collar: the purple runs up to the neck
-                options: { ...BAND, stripe: false, collar: false },
-            },
-            guard: guardLook(
-                "cadet",
-                {
-                    primary: OM,
-                    secondary: CADET_GOLD,
-                    accent: WHITE,
-                    trim: WHITE,
-                },
-                WHITE,
-            ),
-            carry: OM,
-            silk: (_u, v) => {
-                const d = Math.abs(v - 0.5);
-                return d < 0.12 ? WHITE : d < 0.18 ? CADET_GOLD : OM;
             },
         },
         // Ultraviolet Fade: the jacket fades from near-black at the waist up to
@@ -361,9 +364,23 @@ export const UNIFORM_PRESETS: Readonly<Record<UniformPresetId, UniformPreset>> =
         },
     };
 
-/** `id` if it names a preset, otherwise the default. */
+/** `id` if it names a preset, otherwise the band's default. */
 export function uniformPresetOf(id: unknown): UniformPresetId {
     return (UNIFORM_PRESET_IDS as readonly unknown[]).includes(id)
         ? (id as UniformPresetId)
         : DEFAULT_UNIFORM_PRESET;
+}
+
+/** `id` if it names a preset with a guard look, otherwise the guard's default. */
+export function guardUniformPresetOf(id: unknown): GuardUniformPresetId {
+    return (GUARD_UNIFORM_PRESET_IDS as readonly unknown[]).includes(id)
+        ? (id as GuardUniformPresetId)
+        : DEFAULT_GUARD_UNIFORM_PRESET;
+}
+
+/** A guard preset's guard look. */
+export function guardLookOf(id: GuardUniformPresetId): PresetLook {
+    const look = UNIFORM_PRESETS[id].guard;
+    if (!look) throw new Error(`uniform preset ${id} has no guard look`);
+    return look;
 }

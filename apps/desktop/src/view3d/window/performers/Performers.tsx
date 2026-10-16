@@ -39,7 +39,10 @@ import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
-import { uniformPresetOf } from "@/view3d/core/marchers/uniformPresets";
+import {
+    guardUniformPresetOf,
+    uniformPresetOf,
+} from "@/view3d/core/marchers/uniformPresets";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { marcherHeading } from "@/view3d/core/marchers/facing";
 import {
@@ -138,9 +141,11 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     );
     const count = slots.ids.length;
 
-    // the show's uniform preset, from its venue settings (ADR 0002 D-18)
+    // the show's band and guard uniform presets, from its venue settings
+    // (ADR 0002 D-18)
     const { data: venue } = useVenueSettings();
     const uniformPreset = uniformPresetOf(venue?.uniforms);
+    const guardUniformPreset = guardUniformPresetOf(venue?.guardUniforms);
     // om-pose marchers (ADR 0002 D-7); the cylinders stand in until they load.
     const { data: sectionAppearances } = useQuery(
         allSectionAppearancesQueryOptions(),
@@ -183,9 +188,17 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 fill ? fillToNumber(fill) : undefined,
                 guardEquipment === "section" ? undefined : guardEquipment,
                 uniformPreset,
+                guardUniformPreset,
             ),
         }));
-    }, [looksKey, quality, hornState, guardEquipment, uniformPreset]);
+    }, [
+        looksKey,
+        quality,
+        hornState,
+        guardEquipment,
+        uniformPreset,
+        guardUniformPreset,
+    ]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],

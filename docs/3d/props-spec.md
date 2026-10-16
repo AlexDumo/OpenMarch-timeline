@@ -554,9 +554,9 @@ cascade and its `equipment_name` column are not used [07 revision].
 - One uniform reference per performer from a count on, never per-part
   overrides. A per-performer override is a hand-picked set. Hats off is
   "Trumpets → _Band, hats off_ from count N".
-- Default: the show's uniform preset (ADR 0002 D-18, amended 2026-10-16):
-  its band look, or its guard look when `isGuard`. Only the preset's id is
-  stored, in the venue settings.
+- Default: the show's uniform presets (ADR 0002 D-18, amended 2026-10-16):
+  the band preset's band look, or the guard preset's guard look when
+  `isGuard`. Only the two preset ids are stored, in the venue settings.
 
 ### Exports [21, 26.5]
 
@@ -657,10 +657,12 @@ rounded to the page. Printing behavior cues stays out of scope.
   or stripe), black jazz shoes, no headwear, no gloves, no cape. Chosen by
   `isGuard`; nothing stored.
 - **Amended 2026-10-16 (owner):** seven built-in uniform presets in OpenMarch
-  purple replace the pair, each with a band look, a guard look, a drum color
-  and a silk pattern: Royal Sash (the default), Signature, Cadet, Ultraviolet
-  Fade, Lilac Plastron, Night Watch and Prism Split. The show picks one in the
-  venue settings (`uniforms`). See `core/marchers/uniformPresets.ts`.
+  purple replace the pair: West Point (the band's default, band only), Royal
+  Sash (the guard's default), Signature, Ultraviolet Fade, Lilac Plastron,
+  Night Watch and Prism Split. Each has a band look and a drum color; all but
+  West Point also have a guard look and a silk pattern. The show picks the
+  band's and the guard's presets apart in the venue settings (`uniforms`,
+  `guardUniforms`). See `core/marchers/uniformPresets.ts`.
 
 ### Rendering [04, 09, 15, 18, 26.3]
 
@@ -807,8 +809,8 @@ readout) [22].
 - Sections lose their fill-colored uniforms and wear Band default or Guard
   default [09].
 - Flags with no Silk cue show a built-in plain silk in the section's 2D color
-  [26.11]. Amended 2026-10-16: a section without a 2D fill shows the uniform
-  preset's patterned silk instead.
+  [26.11]. Amended 2026-10-16: a section without a 2D fill shows the guard
+  uniform preset's patterned silk instead.
 - Swing flags grow to the real 44 × 66 in Cut [03, 10].
 - Silks stop shading like chrome, hang at rest and billow on the move, and
   drop from a 56 × 36 to a 24 × 16 grid [02, 10].
