@@ -33,8 +33,9 @@ import {
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { isolatedTimelineName } from "@/components/timeline/TimelineIsolationBar";
 import { useMoveCommands } from "@/components/timeline/useTimelineCommands";
-import { useSplitMergeMoves } from "@/components/timeline/useSplitMergeMoves";
+import { useSplitMergeCommands } from "@/components/timeline/useSplitMergeMoves";
 import {
+    selectedMembers,
     splitEntryState,
     splitMergeContext,
 } from "@/components/timeline/splitMergeMoves";
@@ -199,11 +200,10 @@ export function TimelineMoveCard({
             ),
         [selectedKey],
     );
-    const splitMerge = useSplitMergeMoves({
+    const splitMerge = useSplitMergeCommands({
         database: db,
         selectedMarcherIds: selectedIds,
         isPlaying,
-        pages,
     });
     const basic = useIsBasicMode();
     const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
@@ -505,8 +505,9 @@ export function TimelineMoveCard({
                         onClick={() =>
                             splitMerge.commands.split(
                                 timeline.id,
-                                [...selectedIds].filter((id) =>
-                                    timeline.marcherIds.has(id),
+                                selectedMembers(
+                                    splitMerge.context(),
+                                    timeline.id,
                                 ),
                             )
                         }

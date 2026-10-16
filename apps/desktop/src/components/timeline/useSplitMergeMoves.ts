@@ -19,11 +19,49 @@ import {
     mergeDirection,
     mergeBlocker,
     pageTimelineOver,
+    selectedMembers,
     splitEntryState,
     type SplitMergeCommands,
     type SplitMergeContext,
 } from "./splitMergeMoves";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
+
+/**
+ * The split and merge commands (`createSplitMergeCommands`) with the context they read when run:
+ * the store, the selected marchers and whether playback runs. Undo is the app's undo. The Move
+ * card uses these alone; the panel gets them with its menus and drag (`useSplitMergeMoves`).
+ */
+export function useSplitMergeCommands({
+    database,
+    selectedMarcherIds,
+    isPlaying,
+}: {
+    database: DbConnection;
+    selectedMarcherIds: ReadonlySet<number>;
+    isPlaying: boolean;
+}): { commands: SplitMergeCommands; context: () => SplitMergeContext } {
+    const { mutate: performHistoryAction } = usePerformHistoryAction();
+    const latest = useRef({ selectedMarcherIds, isPlaying });
+    latest.current = { selectedMarcherIds, isPlaying };
+    const undoRef = useRef(() => performHistoryAction("undo"));
+    undoRef.current = () => performHistoryAction("undo");
+    return useMemo(() => {
+        const context = () =>
+            splitMergeContext(
+                useTimelineSelectionStore.getState(),
+                latest.current.selectedMarcherIds,
+                latest.current.isPlaying,
+            );
+        return {
+            context,
+            commands: createSplitMergeCommands({
+                database,
+                undo: () => undoRef.current(),
+                context,
+            }),
+        };
+    }, [database]);
+}
 
 /**
  * UI-25 for the timeline panel: the split and merge entries of each clip's menu and of the page
@@ -48,27 +86,18 @@ export function useSplitMergeMoves({
     pageMenuExtra: (pageId: number) => readonly TimelineMenuEntry[];
     clipPeel: TimelineMovePeel;
 } {
-    const { mutate: performHistoryAction } = usePerformHistoryAction();
-    const latest = useRef({ selectedMarcherIds, isPlaying, pages });
-    latest.current = { selectedMarcherIds, isPlaying, pages };
-    const undoRef = useRef(() => performHistoryAction("undo"));
-    undoRef.current = () => performHistoryAction("undo");
+    const { commands, context } = useSplitMergeCommands({
+        database,
+        selectedMarcherIds,
+        isPlaying,
+    });
+    const pagesRef = useRef(pages);
+    pagesRef.current = pages;
     return useMemo(() => {
-        const context = () =>
-            splitMergeContext(
-                useTimelineSelectionStore.getState(),
-                latest.current.selectedMarcherIds,
-                latest.current.isPlaying,
-            );
         const pageRangeOf = (pageId: number) =>
-            pageFlags(latest.current.pages).find(
+            pageFlags(pagesRef.current).find(
                 (f) => Number(f.page.id) === pageId,
             )?.range ?? null;
-        const commands = createSplitMergeCommands({
-            database,
-            undo: () => undoRef.current(),
-            context,
-        });
         return {
             commands,
             context,
@@ -92,19 +121,11 @@ export function useSplitMergeMoves({
                 split: (timelineId) => splitVerdict(context(), timelineId),
                 merge: (timelineId, target) =>
                     mergeVerdict(context(), timelineId, target, pageRangeOf),
-                onSplit: (timelineId) => {
-                    const ctx = context();
-                    const t = ctx.storedTimelines.find(
-                        (x) => x.id === timelineId,
-                    );
-                    if (!t) return;
+                onSplit: (timelineId) =>
                     commands.split(
                         timelineId,
-                        [...ctx.selectedMarcherIds].filter((id) =>
-                            t.marcherIds.has(id),
-                        ),
-                    );
-                },
+                        selectedMembers(context(), timelineId),
+                    ),
                 onMerge: (timelineId, target) => {
                     const ctx = context();
                     const resolved = dropTargetTimeline(
@@ -123,7 +144,7 @@ export function useSplitMergeMoves({
                 },
             },
         };
-    }, [database]);
+    }, [commands, context]);
 }
 
 /**
@@ -155,10 +176,8 @@ export function useSplitMergeActions(
         const page = t ? pageTimelineOver(ctx, t) : null;
         return {
             split:
-                split && split.disabledReason === null && t
-                    ? [...selectedMarcherIds].filter((id) =>
-                          t.marcherIds.has(id),
-                      )
+                split && split.disabledReason === null
+                    ? selectedMembers(ctx, windowId)
                     : null,
             merge:
                 page &&

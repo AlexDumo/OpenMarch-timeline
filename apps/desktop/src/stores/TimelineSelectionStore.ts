@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { isPlaywrightSession } from "@/utilities/playwrightSession";
-import { isPageTimeline } from "@/timeline/timelineViewModel";
+import { isPageTimeline, oldestOver } from "@/timeline/timelineViewModel";
 
 /**
  * The timeline-mode edit window and paused playhead (docs/timeline/ui.md UI-9, UI-10, C-12;
@@ -398,13 +398,13 @@ export function resolveStoredTimeline(
     windowTimelineId: number | null = null,
 ): StoredTimelineMembership | null {
     if (selection.kind !== "range" || !timelines) return null;
-    const over = timelines.filter(
-        (t) => t.start === selection.start && t.end === selection.end,
-    );
-    if (over.length === 0) return null;
     return (
-        over.find((t) => t.id === windowTimelineId) ??
-        over.reduce((a, b) => (b.id < a.id ? b : a))
+        timelines.find(
+            (t) =>
+                t.id === windowTimelineId &&
+                t.start === selection.start &&
+                t.end === selection.end,
+        ) ?? oldestOver(timelines, selection)
     );
 }
 

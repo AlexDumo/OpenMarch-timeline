@@ -19,6 +19,7 @@ import {
     isPageTimeline,
     moveLabel,
     moveLabels,
+    pageTimelineOver as storedPageTimelineOver,
 } from "@/timeline/timelineViewModel";
 import type { TimelineMenuEntry } from "./TimelineRangeMenu";
 import type {
@@ -88,16 +89,31 @@ export function pageTimelineOver(
     ctx: SplitMergeContext,
     range: { readonly start: number; readonly end: number },
 ): StoredTimelineMembership | null {
-    const over = ctx.storedTimelines.filter(
-        (t) => t.start === range.start && t.end === range.end,
-    );
-    if (over.length === 0 || !boxOf(ctx, range)) return null;
-    return over.reduce((a, b) => (b.id < a.id ? b : a));
+    return storedPageTimelineOver(ctx.storedTimelines, ctx.pageBoxes, range);
 }
 
 /** The selected marchers in move `t`. */
 const chosenIn = (ctx: SplitMergeContext, t: StoredTimelineMembership) =>
     [...ctx.selectedMarcherIds].filter((id) => t.marcherIds.has(id));
+
+/** The selected marchers in move `timelineId`: the ones **Split** takes. */
+export const selectedMembers = (
+    ctx: SplitMergeContext,
+    timelineId: number,
+): number[] => {
+    const t = stored(ctx, timelineId);
+    return t ? chosenIn(ctx, t) : [];
+};
+
+/** Why splitting the selected marchers off `t` can't run, or `null` (the menus' and the drag's). */
+const splitBlocker = (ctx: SplitMergeContext, t: StoredTimelineMembership) =>
+    ctx.isPlaying
+        ? PAUSE_TO_SPLIT
+        : splitMembershipBlocker(
+              t.marcherIds,
+              ctx.selectedMarcherIds,
+              timelineLabel(ctx, t.id),
+          );
 
 /** **Split N selected into new move** on move `timelineId`: its words and why it can't run. */
 export function splitEntryState(
@@ -118,14 +134,7 @@ export function splitEntryState(
                   "timeline.split.menuNone",
                   "Split selected into new move",
               );
-    const reason = ctx.isPlaying
-        ? PAUSE_TO_SPLIT
-        : splitMembershipBlocker(
-              t.marcherIds,
-              ctx.selectedMarcherIds,
-              timelineLabel(ctx, timelineId),
-          );
-    return { label, disabledReason: reason };
+    return { label, disabledReason: splitBlocker(ctx, t) };
 }
 
 /** Why merging `sourceId` into `targetId` can't run, or `null`. */
@@ -284,13 +293,7 @@ export function splitVerdict(
     const n = chosenIn(ctx, t).length;
     // Without members selected a vertical drag does nothing new
     if (n === 0) return null;
-    const reason = ctx.isPlaying
-        ? PAUSE_TO_SPLIT
-        : splitMembershipBlocker(
-              t.marcherIds,
-              ctx.selectedMarcherIds,
-              timelineLabel(ctx, timelineId),
-          );
+    const reason = splitBlocker(ctx, t);
     if (reason) return { label: reason, refused: true };
     return {
         label: tolgee.t(
@@ -395,6 +398,13 @@ export const mergeMessage = (source: string, target: string) =>
     });
 
 /**
+ * One split or merge at a time, app-wide: the timeline panel, the Move card and the command
+ * palette each build their commands, but share this guard, so a second edit can't start while one
+ * is still writing or waiting for the store.
+ */
+let busy = false;
+
+/**
  * The split and merge edits (UI-25), each one undoable edit with a toast and **Undo**:
  *
  * - **Split** makes the new move, then selects and isolates it (the window comes back to the old
@@ -415,7 +425,6 @@ export function createSplitMergeCommands({
     /** Read when a command runs, for names */
     context: () => SplitMergeContext;
 }): SplitMergeCommands {
-    let busy = false;
     return {
         split: (timelineId, marcherIds) => {
             if (busy || marcherIds.length === 0) return;

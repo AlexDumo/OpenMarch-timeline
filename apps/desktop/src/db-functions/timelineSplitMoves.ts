@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { moveLabels, pageTimelineIds } from "@/timeline/timelineViewModel";
 import { DbConnection, DbTransaction } from "./types";
@@ -11,7 +11,12 @@ import {
 } from "./timelines";
 import { createTimelineTransitionsInTransaction } from "./timelineTransitionsInTransaction";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
-import { removeAssignmentRowsInTransaction } from "./timelineMembership";
+import {
+    marcherLabels,
+    marchersInInheritingFollowTheLeader,
+    removeAssignmentRowsInTransaction,
+} from "./timelineMembership";
+import { joinList } from "@/timeline/timelineRangeWords";
 import { nextMoveNameInTransaction, readMoveWords } from "./timelineMoveNames";
 import type { TimelinePathParams } from "./timelineTransitionsInTransaction";
 
@@ -37,31 +42,16 @@ import type { TimelinePathParams } from "./timelineTransitionsInTransaction";
  *   refused, naming the marchers it would take with it.
  */
 
-/** A marcher's drill number ("T3"), for refusals. */
-const marcherLabels = async (
-    tx: DbTransaction,
-    marcherIds: readonly number[],
-): Promise<Map<number, string>> => {
-    if (marcherIds.length === 0) return new Map();
-    const rows = await tx
-        .select({
-            id: schema.marchers.id,
-            prefix: schema.marchers.drill_prefix,
-            order: schema.marchers.drill_order,
-        })
-        .from(schema.marchers)
-        .where(inArray(schema.marchers.id, [...marcherIds]))
-        .all();
-    return new Map(rows.map((r) => [r.id, `${r.prefix}${r.order}`]));
-};
-
+/** "T1, T2 and T3", or "T1, T2, T3 and 4 more", in marcher id order. */
 const labelList = (labels: Map<number, string>, ids: readonly number[]) => {
     const names = [...ids]
         .sort((a, b) => a - b)
         .map((id) => labels.get(id) ?? `marcher ${id}`);
-    return names.length > 3
-        ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more`
-        : names.join(", ");
+    return joinList(
+        names.length > 3
+            ? [...names.slice(0, 3), `${names.length - 3} more`]
+            : names,
+    );
 };
 
 /**
@@ -127,26 +117,6 @@ const readTimeline = async (
         .from(schema.timelines)
         .where(eq(schema.timelines.id, timelineId))
         .get();
-
-/** Marchers in an inheriting follow-the-leader transition, whose slot order R-12 may read. */
-const marchersInInheritingFtl = async (
-    tx: DbTransaction,
-): Promise<Set<number>> => {
-    const a = schema.timeline_assignments;
-    const t = schema.timeline_transitions;
-    const rows = await tx
-        .select({ marcher: a.marcher_id })
-        .from(a)
-        .innerJoin(t, eq(t.id, a.transition_id))
-        .where(
-            and(
-                eq(t.path_style, "follow_the_leader"),
-                eq(t.order_mode, "inherit"),
-            ),
-        )
-        .all();
-    return new Set(rows.map((r) => r.marcher));
-};
 
 /** Moves transitions to timeline `timelineId`, as they are (same range, C-11). */
 const moveTransitionsTo = async (
@@ -249,7 +219,9 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
         ).length;
         return n > 0 && n < list.length;
     });
-    const ftl = shared ? await marchersInInheritingFtl(tx) : new Set<number>();
+    const ftl = shared
+        ? await marchersInInheritingFollowTheLeader(tx)
+        : new Set<number>();
     for (const [transitionId, list] of byTransition) {
         const leaving = list.filter((r) => chosen.has(r.assignment.marcher_id));
         if (leaving.length === 0) continue;
