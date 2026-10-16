@@ -89,8 +89,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.4: Artwork slot assignments
 
-- Owner: none
-- Status: open
+- Owner: trevor (3d/c2-slots-v2)
+- Status: in-review
 - PR: none
 - Parallel: yes
 - Depends on: C2.1, C1.11
@@ -215,5 +215,19 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
   takes it as `origin`. A created item reads as placed before its first
   row. Holders and crew must be performers.
 - **Left:** no UI yet; the Items tab (C3.7) and put-down (C2.5) use these.
+- **Checks:** desktop and core vitest (full suites); migration tests;
+  type-check, lint, format, spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-slots-v2) · C2.4
+
+- **Done:** migration 0026 (timeline-only): `item_artwork_slots`, one
+  Artwork Version (or none) per item, slot and beat, with fit, pan and pad
+  color, in history and repair. Core: `slotsForItem`, `assignmentAt`,
+  `slotAssignmentsAt`, `dormantAssignments`, `sameSizeSlots`,
+  `effectiveDpi`, `defaultAssignmentScope`. Writes: assign for the show or
+  from the count, replace in place, delete; each one undo step. Slot
+  assignments on deleted beats carry forward per slot. The save prune keeps
+  every Version an assignment names, dormant ones included.
+- **Left:** no UI yet: the Items tab (C3.7) and C5.5 use these.
 - **Checks:** desktop and core vitest (full suites); migration tests;
   type-check, lint, format, spellcheck.
