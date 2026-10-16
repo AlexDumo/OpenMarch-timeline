@@ -186,15 +186,47 @@ describe("changing how many counts + N counts adds", () => {
             name: "Counts for new pages",
         }) as HTMLInputElement;
         expect(field.value).toBe("16");
+        expect(screen.queryByRole("button", { name: "Set" })).toBeNull();
+        // Not a whole number: leaving the box keeps 16, and closes the menu
         fireEvent.change(field, { target: { value: "0" } });
-        expect(
-            (screen.getByRole("button", { name: "Set" }) as HTMLButtonElement)
-                .disabled,
-        ).toBe(true);
-        fireEvent.change(field, { target: { value: "20" } });
-        fireEvent.submit(field.closest("form")!);
-        expect(onCountsChange).toHaveBeenCalledWith(20);
+        fireEvent.blur(field);
+        expect(onCountsChange).not.toHaveBeenCalled();
         expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
+        // Enter saves and closes
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        const again = screen.getByRole("textbox", {
+            name: "Counts for new pages",
+        });
+        fireEvent.change(again, { target: { value: "20" } });
+        fireEvent.submit(again.closest("form")!);
+        expect(onCountsChange).toHaveBeenCalledWith(20);
+        expect(onCountsChange).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
+    });
+
+    it("saves when the box loses focus, and Escape cancels", () => {
+        const onCountsChange = vi.fn();
+        show({
+            appendCounts: { ...appendCounts(), counts: 16, onCountsChange },
+        });
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        let field = screen.getByRole("textbox", {
+            name: "Counts for new pages",
+        });
+        fireEvent.change(field, { target: { value: "12" } });
+        fireEvent.blur(field);
+        expect(onCountsChange).toHaveBeenCalledWith(12);
+        cleanup();
+        onCountsChange.mockClear();
+        show({
+            appendCounts: { ...appendCounts(), counts: 16, onCountsChange },
+        });
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        field = screen.getByRole("textbox", { name: "Counts for new pages" });
+        fireEvent.change(field, { target: { value: "9" } });
+        fireEvent.keyDown(field, { key: "Escape" });
+        fireEvent.blur(field);
+        expect(onCountsChange).not.toHaveBeenCalled();
     });
 
     it("without the command, a right-click opens no menu", () => {
