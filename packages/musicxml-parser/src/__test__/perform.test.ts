@@ -270,4 +270,16 @@ describe("performanceOrder", () => {
             ),
         ).toEqual([1, 2, 1, 3, 4, 4, 5]);
     });
+
+    it("repeats a first ending that has no second ending", () => {
+        // 1 ||: 2 |1. 3 :|| 4
+        expect(
+            play(
+                nav(4, {
+                    2: { forwardRepeat: true },
+                    3: { ...ending([1]), backwardRepeat: { times: 2 } },
+                }),
+            ),
+        ).toEqual([1, 2, 3, 2, 4]);
+    });
 });

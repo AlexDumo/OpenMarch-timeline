@@ -183,7 +183,7 @@ export function performanceOrder(navigation: MeasureNavigation[]): {
                 nav.ending &&
                 (sections.length === 1 || !navigation[section.start]!.ending);
             const plays = ownGroup
-                ? Math.max(...groupNumbers(i).flat(), section.pass)
+                ? Math.max(...groupNumbers(i).flat(), nav.backwardRepeat.times)
                 : nav.backwardRepeat.times;
             if (section.pass < plays) {
                 section.pass++;
