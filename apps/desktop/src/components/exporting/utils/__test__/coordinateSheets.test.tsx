@@ -236,15 +236,11 @@ describe("buildCoordinateSheets", () => {
                     drill_number: "PROP1",
                     type: "item",
                 };
-                const positions = marcherPageMapFromArray([
-                    ...data.marcherPages,
-                    ...data.marcherPages
-                        .filter((mp) => mp.marcher_id === data.marchers[0]!.id)
-                        .map((mp) => ({
-                            ...mp,
-                            id: mp.id + 100000,
-                            marcher_id: prop.id,
-                        })),
+                const positions = pagePositionMapFromRows([
+                    ...data.positions,
+                    ...data.positions
+                        .filter((p) => p.marcher_id === data.marchers[0]!.id)
+                        .map((p) => ({ ...p, marcher_id: prop.id })),
                 ]);
                 const sheets = (marchers: Marcher[]) =>
                     buildCoordinateSheets({

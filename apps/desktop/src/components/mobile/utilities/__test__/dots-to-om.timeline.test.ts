@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it as plainIt, vi } from "vitest";
 import { FieldProperties } from "@openmarch/core";
 import type { OpenMarchShowData } from "@openmarch/schema";
 import { safeValidateOpenMarchData } from "@openmarch/schema";
-import { DbConnection, describeDbTests } from "@/test/base";
+import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { FieldPropertiesSchema } from "@/components/field/fieldPropertiesSchema";
 import type { DB } from "@/global/database/db";
 import { createItems } from "@/db-functions/items";
@@ -293,8 +293,6 @@ describeDbTests("dots-to-om positions", (it) => {
         db,
         marchersAndPages: _,
     }) => {
-        await convertPagesToTimeline(db);
-        await setTimelineMode(db, true);
         const without = await exportShow(db);
         const [beat] = await db
             .select({ id: schema.beats.id })
