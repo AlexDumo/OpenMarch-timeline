@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
+import type Measure from "@/global/classes/Measure";
 import { Timeline, TimelineWaveformProvider } from "../Timeline";
 import type { TimelineAppendCounts } from "../TimelineViewModel";
 
@@ -72,6 +73,7 @@ const show = ({
     beats = BEATS,
     showEndBeat,
     onShowEndMove,
+    measures = [],
 }: {
     positionBeat?: number;
     isPlaying?: boolean;
@@ -80,6 +82,7 @@ const show = ({
     beats?: Beat[];
     showEndBeat?: number;
     onShowEndMove?: (beat: number) => void;
+    measures?: Measure[];
 }) =>
     render(
         <TimelineWaveformProvider
@@ -91,7 +94,7 @@ const show = ({
                 mode="expanded"
                 beats={beats}
                 pages={PAGES}
-                measures={[]}
+                measures={measures}
                 timelines={[]}
                 showTransport={false}
                 pixelsPerBeat={PX}
@@ -245,6 +248,41 @@ describe("the END line (endless counts rule 4)", () => {
         expect(screen.getByText("END")).toBeTruthy();
         const surface = screen.getByTestId("timeline-pointer-surface");
         expect(parseFloat(surface.style.width)).toBe(40 * PX);
+    });
+
+    it("puts its label left of the line beside measure numbers, right of it without measures", () => {
+        const beats = appBeats(40);
+        const measure = (start: number, number: number): Measure => ({
+            id: number,
+            startBeat: beats[start]!,
+            number,
+            rehearsalMark: null,
+            notes: null,
+            duration: 2,
+            counts: 4,
+            beats: beats.slice(start, start + 4),
+            timestamp: beats[start]!.timestamp,
+        });
+        show({
+            beats,
+            showEndBeat: 17,
+            measures: [
+                measure(1, 1),
+                measure(5, 2),
+                measure(9, 3),
+                measure(13, 4),
+                measure(17, 5),
+            ],
+        });
+        // The end is m5's downbeat: its number sits right of the line, so END goes left
+        expect(screen.getByText("END").className).toContain(
+            "-translate-x-full",
+        );
+        cleanup();
+        show({ beats, showEndBeat: 17 });
+        expect(screen.getByText("END").className).not.toContain(
+            "-translate-x-full",
+        );
     });
 
     it("drags on whole counts, not before the last page's start, and commits on release", () => {

@@ -2128,6 +2128,11 @@ const TimelineSurface = memo(function TimelineSurface({
                                 top={TIMELINE_PAGE_ROW_BOTTOM}
                                 height={pinnedHeight}
                                 snapBeats={seekSnapBeats}
+                                labelSide={
+                                    model.measures.length > 0
+                                        ? "left"
+                                        : "right"
+                                }
                                 onMove={
                                     props.isPlaying
                                         ? undefined
