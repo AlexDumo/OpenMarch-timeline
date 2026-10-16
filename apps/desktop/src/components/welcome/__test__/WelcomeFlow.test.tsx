@@ -27,7 +27,7 @@ function renderFlow() {
     render(
         <TolgeeProvider tolgee={tolgee} fallback="">
             <ThemeProvider>
-                <WelcomeFlow open onFinish={onFinish} reload={reload} />
+                <WelcomeFlow onFinish={onFinish} reload={reload} />
             </ThemeProvider>
         </TolgeeProvider>,
     );
