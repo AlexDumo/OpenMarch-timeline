@@ -11,7 +11,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>PROTOTYPE v2 · Shapes, combined</title>
+<title>OpenMarch shapes · prototype</title>
 <style>
   :root {
     --bg: rgb(15, 14, 19);
@@ -161,6 +161,14 @@
   .libro .star { color: var(--yellow); font-size: 15px; padding: 0 4px; }
   #panel.open { width: 300px; }
   button[disabled] { opacity: .4; cursor: default; }
+  #intro { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #intro .card { max-width: 520px; background: var(--bg2); border: 1px solid var(--stroke); border-radius: 14px; padding: 20px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  #intro h2 { margin: 2px 0 8px; font-size: 20px; color: #fff; }
+  #intro .q { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  #intro p, #intro li { line-height: 1.5; }
+  #intro ol { padding-left: 20px; }
+  #intro .warn { color: var(--yellow); }
+  #intro .primary { padding: 6px 18px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -981,13 +989,31 @@ function go() {
   drawBar(); S.force = true; render();
 }
 function drawBar() { const sw = document.getElementById("switcher");
-  sw.innerHTML = `<span style="font-weight:600;padding:0 6px">PROTOTYPE v2</span><span class="sep"></span><span>Selected</span><select id="grp">${Object.keys(GROUPS).map((g) => `<option ${g === S.group ? "selected" : ""}>${g}</option>`).join("")}${S.group ? "" : "<option selected>Custom</option>"}</select><span>Start as</span><select id="arr"><option value="">as in the show</option><option value="line">a line</option><option value="ring">a ring</option><option value="block">a block</option><option value="scatter">scattered</option></select><button data-reset>Reset</button><span class="sep"></span><a href="shape-ui-ideas.html" style="color:#333;padding:0 6px">v1 ideas</a>`;
+  sw.innerHTML = `<span style="font-weight:600;padding:0 6px">PROTOTYPE v2</span><span class="sep"></span><span>Selected</span><select id="grp">${Object.keys(GROUPS).map((g) => `<option ${g === S.group ? "selected" : ""}>${g}</option>`).join("")}${S.group ? "" : "<option selected>Custom</option>"}</select><span>Start as</span><select id="arr"><option value="">as in the show</option><option value="line">a line</option><option value="ring">a ring</option><option value="block">a block</option><option value="scatter">scattered</option></select><button data-reset>Reset</button><span class="sep"></span><button data-intro>About</button>`;
+  sw.querySelector("[data-intro]").onclick = () => showIntro();
   sw.querySelector("[data-reset]").onclick = () => { S.ms = clone(HOME); S.undo = null; go(); };
   sw.querySelector("#grp").onchange = (e) => { setGroup(e.target.value); go(); };
   sw.querySelector("#arr").onchange = (e) => { if (e.target.value) arrangeSel(e.target.value); e.target.value = ""; S.force = true; render(); }; }
 panel.addEventListener("click", (e) => { const sv = e.target.closest("#edsvg"); if (sv && V.ed) edClick({ currentTarget: sv, clientX: e.clientX, clientY: e.clientY }); });
 S.tab = "shapes"; S.ptab = "shape"; S.tool = "box"; S.fade = "always"; S.ratioLock = false;
 go();
+// a welcome card for people opening a shared link
+function showIntro() {
+  const d = document.createElement("div"); d.id = "intro";
+  const touch = matchMedia("(pointer: coarse)").matches || innerWidth < 900;
+  d.innerHTML = `<div class="card"><div class="q">OpenMarch · prototype</div><h2>Shapes for drill design</h2>
+    <p>A clickable sketch of how shapes could work in OpenMarch: draw a form, and the selected marchers get spots on it. It's a throwaway mock, not the app, and nothing you do is saved.</p>
+    ${touch ? '<p class="warn">This needs a desktop browser with a mouse and keyboard. It won\'t work well on a phone or tablet.</p>' : ""}
+    <ol><li>The 12 trumpets are selected. Pick <b>Box</b> in the top bar, then drag on the field.</li>
+    <li>Drag the numbers under the box, or click one to type. Drag the handles, the knob on top, or the center dot.</li>
+    <li>Press <span class="kbd">Enter</span> to place it, <span class="kbd">Esc</span> to cancel.</li>
+    <li>Also try <span class="kbd">/</span> to type a shape, hold <span class="kbd">S</span> for favorites, <b>Sketch</b>, and the <b>Library</b> in the right panel.</li></ol>
+    <p class="muted">The bottom bar changes who's selected (1 to 109 marchers) and rearranges them. The guide card on the left lists everything.</p>
+    <button class="primary" data-go>Start</button></div>`;
+  document.body.appendChild(d); const close = () => { d.remove(); try { localStorage.setItem("omShapeProtoIntro", "1"); } catch {} };
+  d.querySelector("[data-go]").onclick = close; d.onclick = (e) => { if (e.target === d) close(); };
+}
+try { if (!localStorage.getItem("omShapeProtoIntro") || new URLSearchParams(location.search).has("intro")) showIntro(); } catch { showIntro(); }
 requestAnimationFrame(() => { S.force = true; render(); });
 </script>
 </body>
