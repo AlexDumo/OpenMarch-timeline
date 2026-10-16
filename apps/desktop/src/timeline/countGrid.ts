@@ -65,6 +65,9 @@ export interface CountGrid {
     countsIn(fromBeat: number, toBeat: number, limit?: number): GridCount[];
 }
 
+/** The grid's show time to count and back, which is all the transport and playback need */
+export type CountClock = Pick<CountGrid, "timeAtBeat" | "beatAtTime">;
+
 /** The most counts `countsIn` returns unless asked for more: far more than a screen holds */
 export const COUNTS_IN_LIMIT = 100_000;
 

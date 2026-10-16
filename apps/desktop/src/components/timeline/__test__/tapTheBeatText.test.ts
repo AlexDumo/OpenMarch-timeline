@@ -45,7 +45,7 @@ describe("countLabel", () => {
         expect(countLabel(PAGES, 9)).toBe("end of Pg 2 · Pg 3 starts");
         expect(countLabel(PAGES, 17)).toBe("end of Pg 3");
         expect(countLabel(PAGES, 1)).toBe("the start");
-        expect(countLabel(PAGES, 40)).toBe("After pg 3 · +23");
+        expect(countLabel(PAGES, 40)).toBe("END +23");
     });
     it("puts the rehearsal mark on a flag's downbeat first", () => {
         const measures = [

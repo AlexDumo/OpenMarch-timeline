@@ -801,8 +801,9 @@ describe("the playback cursor (UI-11)", () => {
         expect(store().playheadBeat).toBe(17);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 17 });
         expect(store().playheadRevision).toBe(revision + 1);
+        // Past where playing on stops too: the counts never end (endless counts)
         store().cue(40);
-        expect(store().cursorBeat).toBe(25);
+        expect(store().cursorBeat).toBe(40);
     });
 
     it("every write of the window puts the cursor back on the playhead", () => {

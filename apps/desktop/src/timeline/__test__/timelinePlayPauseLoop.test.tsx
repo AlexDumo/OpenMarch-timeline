@@ -106,7 +106,6 @@ describeDbTests("timeline play, pause, play", (it) => {
             act(() => {
                 toggleTimelinePlayback({
                     isPlaying: false,
-                    showEndBeat: result.current.timing.beats.length,
                     setIsPlaying: result.current.playing.setIsPlaying,
                 });
             });
@@ -117,7 +116,6 @@ describeDbTests("timeline play, pause, play", (it) => {
             act(() => {
                 playTimelinePage({
                     isPlaying: true,
-                    showEndBeat: result.current.timing.beats.length,
                     setIsPlaying: result.current.playing.setIsPlaying,
                 });
             });

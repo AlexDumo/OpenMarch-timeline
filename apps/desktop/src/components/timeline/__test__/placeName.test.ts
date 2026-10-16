@@ -58,8 +58,8 @@ describe("placeName (D6)", () => {
         expect(placeName(PAGES, 48)).toBe("end of Pg 3");
         expect(placeName(PAGES, 48, { style: "compact" })).toBe("Pg 3 ct 16");
         expect(placeName(PAGES, 0)).toBe("the start");
-        expect(placeName(PAGES, 52)).toBe("After pg 3 · +4");
-        expect(placeName(PAGES, 52, { style: "compact" })).toBe("Pg 3 +4");
+        expect(placeName(PAGES, 52)).toBe("END +4");
+        expect(placeName(PAGES, 52, { style: "compact" })).toBe("END +4");
     });
 
     it("spells a place out for screen readers", () => {

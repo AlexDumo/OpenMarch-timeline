@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { clientXToBeat } from "@/components/timeline/TimelineGeometry";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { seekTimeline } from "../timelineTransport";
+import { createCountGrid } from "../countGrid";
 
 /**
  * Scrubbing while paused (ui.md UI-12 review): one seek per whole beat the scrub passes, and the
@@ -9,10 +10,13 @@ import { seekTimeline } from "../timelineTransport";
  */
 
 /** Beats 0..16 of 0.5 s; the end of the show is beat 17 */
-const BEATS = Array.from({ length: 17 }, (_, i) => ({
-    timestamp: i * 0.5,
-    duration: 0.5,
-}));
+const BEATS = createCountGrid({
+    beats: Array.from({ length: 17 }, (_, i) => ({
+        timestamp: i * 0.5,
+        duration: 0.5,
+    })),
+    measureStarts: [],
+});
 const store = () => useTimelineSelectionStore.getState();
 const paused = { isPlaying: false, setIsPlaying: () => {} };
 

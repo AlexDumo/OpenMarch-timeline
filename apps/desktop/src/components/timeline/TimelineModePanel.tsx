@@ -69,16 +69,14 @@ import {
 import {
     peaksByBeat,
     useAudioEnvelopeStore,
-    WAVEFORM_FLOOR_DB,
 } from "@/timeline/timelineWaveform";
 import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
-import { musicEndSeconds } from "@/timeline/showLength";
-import type { CountGrid } from "@/timeline/countGrid";
 import {
-    beatsThrough,
-    measuresThrough,
-    playbackStopBeat,
-} from "@/timeline/endlessTimeline";
+    useMusicEndSeconds,
+    usePlaybackStopBeat,
+} from "@/timeline/usePlaybackStopBeat";
+import type { CountGrid } from "@/timeline/countGrid";
+import { beatsThrough, measuresThrough } from "@/timeline/endlessTimeline";
 import {
     moveCommandBlocker,
     useMoveCommands,
@@ -230,10 +228,7 @@ export default function TimelineModePanel() {
     const waveformHidden = useUiSettingsStore(
         (s) => s.uiSettings.timelineWaveformStyle === "hidden",
     );
-    const musicEnd = useMemo(
-        () => (envelope ? musicEndSeconds(envelope, WAVEFORM_FLOOR_DB) : null),
-        [envelope],
-    );
+    const musicEnd = useMusicEndSeconds();
     const waveform = useMemo(() => {
         if (!envelope || waveformHidden) return null;
         const through =
@@ -322,7 +317,7 @@ export default function TimelineModePanel() {
     }, [overridden]);
     // UI-14 round-2 review: a "Select them" selection doesn't follow you to another move
     useClearLeftoverMoveSelection();
-    const punchTap = useTimelinePunchTap(beats.length);
+    const punchTap = useTimelinePunchTap();
     const align = useTimelineAlign({
         beats,
         envelope,
@@ -416,20 +411,7 @@ export default function TimelineModePanel() {
     // the latest of it, the music's end and the last move's end (rule 6)
     const lastPage = pages[pages.length - 1];
     const showEndBeat = lastPage ? pageEndBeat(lastPage) : 0;
-    const lastMoveEnd = useMemo(
-        () =>
-            (storedTimelines ?? []).reduce(
-                (end, timeline) => Math.max(end, timeline.end),
-                0,
-            ),
-        [storedTimelines],
-    );
-    const stopBeat = playbackStopBeat({
-        grid: countGrid,
-        showEndBeat,
-        musicEndSeconds: musicEnd,
-        lastMoveEndBeat: lastMoveEnd,
-    });
+    const stopBeat = usePlaybackStopBeat();
     const { mutate: moveShowEnd } = useMutation(
         moveShowEndMutationOptions(queryClient),
     );
@@ -471,7 +453,7 @@ export default function TimelineModePanel() {
         // UI-17 follow-up: home while playing jumps playback to the start (a page box jumps by
         // its own scrub; home has nowhere else to go)
         if (isPlaying && next?.kind === "home") {
-            jumpTimelinePlayback(beats, 0);
+            jumpTimelinePlayback(countGrid, 0);
             return;
         }
         if (isPlaying) return;
@@ -642,7 +624,7 @@ function PlayingTimeline({
     countGrid: CountGrid;
 }) {
     const { beats, pages } = props;
-    const playback = useTimelinePlayback({ beats, pages });
+    const playback = useTimelinePlayback({ countGrid, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);
     // UI-17: the loop, drawn as a bar with draggable ends; an isolated move always loops, so its
@@ -689,7 +671,12 @@ function PlayingTimeline({
         countGrid,
         beats,
         measures: props.measures,
-        stopBeat: Math.max(props.fitBeat ?? 0, playheadBeat, shownBeat),
+        stopBeat: Math.max(
+            props.fitBeat ?? 0,
+            playheadBeat,
+            shownBeat,
+            playback.positionBeat,
+        ),
         align: props.align,
     });
     // Not while a paused preview holds a frame: + is drawn there, but would add at P (UI-11)
@@ -912,9 +899,7 @@ function useTimelineAlign({
  * count-in (or the user's own loop, UI-17), and the "Lined up" toast with
  * Undo. Tap the beat's open panel keeps T, and opening it applies the take (DT-1).
  */
-function useTimelinePunchTap(
-    showEndBeat: number,
-): TimelinePunchTapConfig | undefined {
+function useTimelinePunchTap(): TimelinePunchTapConfig | undefined {
     const enabled = useTempoLabFlag("punchInTap") === true;
     const tapTheBeatOpen = useTapTheBeatStore((s) => s.open);
     const { setIsPlaying } = useIsPlaying()!;
@@ -936,7 +921,7 @@ function useTimelinePunchTap(
                     return true;
                 }
                 store.cue(from);
-                return startTimelinePlayOn(showEndBeat, setIsPlaying);
+                return startTimelinePlayOn(setIsPlaying);
             },
             blocked: () => useTapTheBeatStore.getState().open,
             otherToolOpen: tapTheBeatOpen,
@@ -949,14 +934,7 @@ function useTimelinePunchTap(
                 }),
             onNotice: (message) => toast.info(message),
         };
-    }, [
-        enabled,
-        performHistoryAction,
-        setIsPlaying,
-        showEndBeat,
-        t,
-        tapTheBeatOpen,
-    ]);
+    }, [enabled, performHistoryAction, setIsPlaying, t, tapTheBeatOpen]);
 }
 
 /**
