@@ -1,7 +1,7 @@
 /**
  * The 3D View's marchers drawn with the instanced renderer (ADR 0002 D-7,
- * performer-behavior.md section 8.3): one `InstancedMesh` per (body,
- * uniform), skinned from the composer's texture, which composes each
+ * performer-behavior.md section 8.3): one `InstancedMesh` per (body type,
+ * `bodyKey`), skinned from the composer's texture, which composes each
  * performer's channels once a frame from the per-channel bake.
  *
  * - `high` quality draws the seven v4u bodies; `low` draws om-pose's block
@@ -35,8 +35,8 @@ import {
 import type { ChannelPlay, FeetPlay } from "@/view3d/render/channelState";
 import { createUniformMaterial } from "@/view3d/render/uniform-shader.js";
 import {
+    bodyKey,
     partVisible,
-    uniformKey,
     type BodyType,
     type PerformerBody,
     type UniformLook,
@@ -330,13 +330,14 @@ export class MarcherBodies {
             const anyBody = bodies.values().next().value!;
             this.blockSource = blockGeometry(THREE, anyBody.mesh.skeleton);
         }
-        // Group the slots by mesh: (body type, uniform) at high, uniform at low.
+        // Group the slots by mesh: (body type, body look) at high, body look
+        // at low. Looks that differ only in what they carry share a mesh.
         const groups = new Map<
             string,
             { type: BodyType; look: UniformLook; slots: number[] }
         >();
         looks.forEach((l, i) => {
-            const u = uniformKey(l.uniform);
+            const u = bodyKey(l.uniform);
             const key = quality === "low" ? u : `${l.body.bodyType}|${u}`;
             let g = groups.get(key);
             if (!g) {
@@ -348,7 +349,7 @@ export class MarcherBodies {
         });
         const materialByLook = new Map<string, THREE.Material>();
         for (const g of groups.values()) {
-            const u = uniformKey(g.look);
+            const u = bodyKey(g.look);
             let material = materialByLook.get(u);
             if (!material) {
                 material = composedSkinning(
