@@ -63,6 +63,9 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     "cues",
     "cue_marchers",
     "page_performer_settings",
+    // Shape recipes after their moves, then their members (ADR 0006)
+    "timeline_shape_recipes",
+    "timeline_shape_recipe_marchers",
 ];
 
 /**

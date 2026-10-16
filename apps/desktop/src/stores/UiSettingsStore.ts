@@ -64,11 +64,36 @@ export interface UiSettings {
         /** In steps, the offset from the center-front point to round to on the Y-axis */
         referencePointY?: number;
     };
+    /**
+     * Marcher labels on the field: full drill numbers, numbers only, off, or `auto` (full drill
+     * numbers, shrunk as far as a smallest readable size where they would touch)
+     */
+    marcherLabels?: MarcherLabelForm;
+    /** Marcher labels' size on the field */
+    marcherLabelSize?: MarcherLabelSize;
+    /** Marcher labels above their dots, or beside them (to the right) */
+    marcherLabelPosition?: "above" | "beside";
+    /**
+     * When placed shapes (a box after Place) show their outline and label on the field: while
+     * any member is selected, always, or never
+     */
+    shapes?: ShapeOutlines;
     /** Whether to enable Tolgee In-Context Translating */
     tolgeeDevTools?: boolean;
     /** Tolgee API Key for In-Context Translating */
     tolgeeApiKey?: string;
 }
+
+export type MarcherLabelForm = "auto" | "names" | "numbers" | "off";
+export type MarcherLabelSize = "small" | "normal" | "large";
+export type ShapeOutlines = "selected" | "always" | "off";
+
+/** How much each label size scales the labels' normal size */
+export const LABEL_SIZE_SCALE: Record<MarcherLabelSize, number> = {
+    small: 0.7,
+    normal: 1,
+    large: 1.4,
+};
 
 // Default settings that will be used if no localStorage data exists
 export const defaultSettings: UiSettings = {
@@ -103,6 +128,8 @@ export const defaultSettings: UiSettings = {
         nearestYSteps: 0,
         referencePointY: undefined,
     },
+    marcherLabels: "auto",
+    shapes: "selected",
     tolgeeDevTools: false,
 };
 

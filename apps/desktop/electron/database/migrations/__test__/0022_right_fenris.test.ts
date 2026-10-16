@@ -38,8 +38,12 @@ const CUE_TABLES = [
     "phrase_assets",
 ];
 
-/** Tables later migrations add (0023's 3D View cameras), gone from a file from before 0022 too */
-const LATER_TABLES = ["view3d_cameras"];
+/** Tables later migrations add (0023's 3D View cameras, 0024's shape recipes), gone from a file from before 0022 too */
+const LATER_TABLES = [
+    "view3d_cameras",
+    "timeline_shape_recipe_marchers",
+    "timeline_shape_recipes",
+];
 
 const tableNames = (db: DatabaseSync) =>
     (

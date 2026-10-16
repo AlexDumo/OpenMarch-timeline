@@ -39,6 +39,9 @@ export const tablesWithHistory = [
     schema.cues,
     schema.cue_marchers,
     schema.page_performer_settings,
+    // Shape recipes beside the positions they placed (ADR 0006)
+    schema.timeline_shape_recipes,
+    schema.timeline_shape_recipe_marchers,
 ];
 
 /**
