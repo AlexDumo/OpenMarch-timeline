@@ -61,5 +61,7 @@ with `node apps/desktop/tempo-kit/score.mts <show.dots> <truth.json>`.
 
 - [decisions.md](decisions.md): the log of choices made while building.
 - [adr-synced-counts.md](adr-synced-counts.md): where synced counts are stored.
+- [endless-counts.md](endless-counts.md): spec (draft) for counts that go on past the last
+  stored count.
 - Feel-based defaults to check by hand are rows V-400 onward in
   [VALIDATION.md](../timeline/research/ownership/VALIDATION.md).
