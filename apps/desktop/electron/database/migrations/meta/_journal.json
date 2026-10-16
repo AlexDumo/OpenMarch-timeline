@@ -169,6 +169,13 @@
             "when": 1792157312422,
             "tag": "0023_even_gunslinger",
             "breakpoints": true
+        },
+        {
+            "idx": 24,
+            "version": "6",
+            "when": 1792162434076,
+            "tag": "0024_fat_randall_flagg",
+            "breakpoints": true
         }
     ]
 }

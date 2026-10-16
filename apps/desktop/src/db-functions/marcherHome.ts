@@ -14,6 +14,9 @@ export interface ModifiedMarcherHomeArgs {
  * Sets marchers' homes (`marchers.home_x`/`home_y`, C-5). Every home is validated (E-N2) before
  * the first write. The existing `marchers` history triggers make it undoable, and the timeline
  * change-log trigger logs it (spec 10.2).
+ *
+ * Returns only the ids: the page-to-timeline conversion sets homes before the timeline-only
+ * migrations run, when later `marchers` columns (such as `type`) don't exist yet.
  */
 export const updateMarcherHomesInTransaction = async ({
     modifiedHomes,
@@ -21,17 +24,17 @@ export const updateMarcherHomesInTransaction = async ({
 }: {
     modifiedHomes: ModifiedMarcherHomeArgs[];
     tx: DbTransaction;
-}): Promise<(typeof schema.marchers.$inferSelect)[]> => {
+}): Promise<{ id: number }[]> => {
     for (const { home } of modifiedHomes)
         assertValid(validateHome(home), "marcher home");
-    const updated: (typeof schema.marchers.$inferSelect)[] = [];
+    const updated: { id: number }[] = [];
     for (const { marcherId, home } of modifiedHomes) {
         const row = await mapDbErrors(() =>
             tx
                 .update(schema.marchers)
                 .set({ home_x: home[0], home_y: home[1] })
                 .where(eq(schema.marchers.id, marcherId))
-                .returning()
+                .returning({ id: schema.marchers.id })
                 .get(),
         );
         if (!row) refuse(`marcher ${marcherId} does not exist`);

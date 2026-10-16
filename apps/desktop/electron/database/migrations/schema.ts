@@ -163,11 +163,18 @@ export const marchers = sqliteTable(
          */
         home_x: real().notNull().default(0),
         home_y: real().notNull().default(0),
+        /**
+         * `marcher` for a performer, `item` for a prop or piece of equipment with an `items` row
+         * (props-spec section 4). Every all-marchers loop filters on it. Migration 0021 adds it
+         * with `ALTER TABLE … ADD COLUMN`; see the note there.
+         */
+        type: text().notNull().default("marcher"),
     },
     (table) => [
         unique().on(table.drill_prefix, table.drill_order),
         ...coordinateChecks("marchers", "home_x"),
         ...coordinateChecks("marchers", "home_y"),
+        check("marchers_type_check", sql`type IN ('marcher', 'item')`),
     ],
 );
 
@@ -797,6 +804,128 @@ export const library_items = sqliteTable(
         check(
             "library_items_version_hash_check",
             sql`length(version_hash) = 64`,
+        ),
+    ],
+);
+
+/* =========================== ITEMS =========================== */
+
+export const ITEM_KINDS = ["prop", "equipment"] as const;
+export const SURFACE_TYPES = ["floor", "platform", "obstacle"] as const;
+export const OUTLINE_TYPES = [
+    "rectangle",
+    "circle",
+    "arc",
+    "polygon",
+    "freehand",
+] as const;
+/** The Floor prop edge a roll-out reveals its Artwork from, in the item's own frame */
+export const LEADING_EDGES = ["front", "back", "left", "right"] as const;
+
+const sqlList = (values: readonly string[]) =>
+    values.map((v) => `'${v}'`).join(", ");
+
+/**
+ * A prop or piece of equipment with its own identity in the show (ADR 0002 D-9, props-spec
+ * section 4). Backed by a `marchers` row of type `item`, so its positions come from the timeline
+ * resolver and its motion and undo are inherited.
+ */
+export const items = sqliteTable(
+    "items",
+    {
+        id: integer().primaryKey(),
+        marcher_id: integer()
+            .notNull()
+            .unique()
+            .references(() => marchers.id, { onDelete: "cascade" }),
+        /** prop or equipment */
+        kind: text().$type<(typeof ITEM_KINDS)[number]>().notNull(),
+        /** floor, platform or obstacle. Props only. */
+        surface_type: text().$type<(typeof SURFACE_TYPES)[number]>(),
+        /**
+         * The Library model and the Version it pins, or both null for a plain Outline. No foreign
+         * key: the show's Library is pruned separately and keeps what this names (D-12).
+         */
+        library_item_id: text(),
+        library_version_hash: text(),
+        ...timestamps,
+    },
+    (_table) => [
+        check("items_kind_check", sql.raw(`kind IN (${sqlList(ITEM_KINDS)})`)),
+        check(
+            "items_surface_type_check",
+            sql.raw(
+                `(kind = 'prop' AND surface_type IS NOT NULL AND surface_type IN (${sqlList(SURFACE_TYPES)})) OR (kind = 'equipment' AND surface_type IS NULL)`,
+            ),
+        ),
+        check(
+            "items_library_check",
+            sql`(library_item_id IS NULL AND library_version_hash IS NULL) OR (library_item_id IS NOT NULL AND library_version_hash IS NOT NULL AND length(library_item_id) = 36 AND length(library_version_hash) = 64)`,
+        ),
+    ],
+);
+
+/**
+ * An item's Outline from a beat on (ADR 0002 D-10, props-spec section 5). Latest wins: the row
+ * on beat B is fully in place on B's click and eases in from the click of B - L + 1, so a
+ * transition of 1 is instant (ADR 0004's state counting). Independent of moves. Sizes are meters,
+ * rotation degrees.
+ */
+export const item_geometry = sqliteTable(
+    "item_geometry",
+    {
+        id: integer().primaryKey(),
+        item_id: integer()
+            .notNull()
+            .references(() => items.id, { onDelete: "cascade" }),
+        beat_id: integer()
+            .notNull()
+            .references(() => beats.id, { onDelete: "cascade" }),
+        outline_type: text().$type<(typeof OUTLINE_TYPES)[number]>().notNull(),
+        /** Footprint across, in meters */
+        width: real().notNull(),
+        /** Footprint front to back, in meters */
+        depth: real().notNull(),
+        /** Vertical size in meters; 0 for a flat Floor prop */
+        height: real().notNull().default(0),
+        /** Yaw on the field plane, in degrees */
+        rotation: real().notNull().default(0),
+        /** JSON points backing a polygon, freehand or arc Outline */
+        custom_outline: text(),
+        /** In counts, at least 1; 1 is instant */
+        transition_length: integer().notNull().default(1),
+        /** Floor props: reveal the Artwork from `leading_edge` instead of stretching it */
+        rolls_out: integer().notNull().default(0),
+        leading_edge: text().$type<(typeof LEADING_EDGES)[number]>(),
+        ...timestamps,
+    },
+    (table) => [
+        unique("item_geometry_item_beat_unique").on(
+            table.item_id,
+            table.beat_id,
+        ),
+        index("item_geometry_beat_id_idx").on(table.beat_id),
+        check(
+            "item_geometry_outline_type_check",
+            sql.raw(`outline_type IN (${sqlList(OUTLINE_TYPES)})`),
+        ),
+        check(
+            "item_geometry_size_check",
+            sql`width > 0 AND depth > 0 AND height >= 0`,
+        ),
+        check(
+            "item_geometry_transition_check",
+            sql`typeof(transition_length) = 'integer' AND transition_length >= 1`,
+        ),
+        check(
+            "item_geometry_custom_outline_check",
+            sql`custom_outline IS NULL OR json_valid(custom_outline)`,
+        ),
+        check(
+            "item_geometry_rolls_out_check",
+            sql.raw(
+                `(rolls_out = 0 AND leading_edge IS NULL) OR (rolls_out = 1 AND leading_edge IS NOT NULL AND leading_edge IN (${sqlList(LEADING_EDGES)}))`,
+            ),
         ),
     ],
 );

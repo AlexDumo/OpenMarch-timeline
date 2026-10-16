@@ -8,6 +8,7 @@ export * from "./path-utility";
 export * from "./page";
 export * from "./timeline";
 export * from "./cues";
+export * from "./items";
 
 // Future core features can be added here:
 // export * from "./marching";
