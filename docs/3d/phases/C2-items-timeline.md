@@ -109,7 +109,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 - Owner: trevor (3d/c2-putdown-v2)
 - Status: in-review
-- PR: none
+- PR: #283
 - Parallel: yes
 - Depends on: C2.3
 
@@ -127,7 +127,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 - Owner: trevor (3d/c2-putdown-v2)
 - Status: in-review
-- PR: none
+- PR: #283
 - Parallel: yes
 - Depends on: C2.3
 
