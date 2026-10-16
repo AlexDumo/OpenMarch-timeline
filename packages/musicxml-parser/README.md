@@ -28,6 +28,8 @@ The parser works in three steps, one module each:
    "1, 2" and unnumbered brackets), nested repeats, D.C., D.S., To Coda and Fine are played out,
    so measures come in **performance order**. A repeated measure appears once per time it is
    played, with `time` counting the plays and `writtenIndex` pointing at the written measure.
+   After a D.C. or D.S., repeats are skipped and the last ending is played, until To Coda
+   reaches the coda: the coda is new music, so its repeats and endings are played out.
    Jumps are read from `<sound>` playback marks, then from symbols, and last from words ("D.S.
    al Coda"); a jump read only from words is reported so someone checks it. Pass
    `{ repeats: "once" }` to keep the written order instead.
@@ -36,7 +38,10 @@ The parser works in three steps, one module each:
    each count's length comes from the tempo in effect: `<sound tempo>`, a `<metronome>` mark
    with dotted or tied beat units, or tempo text, including rit./accel. into a later marking. A
    pickup gets only the counts its music fills, and so does a short measure; a short measure
-   that completes a pickup gets exactly the counts the pickup didn't take.
+   that completes a pickup gets exactly the counts the pickup didn't take. The meter and tempo
+   in effect follow the written score, as notation programs play it: a measure a repeat or jump
+   goes back to starts with the meter and tempo it has there, not the ones the section ended
+   with.
 
 Anything the parser had to guess, couldn't read, or played out is in `warnings`, each with a
 stable `code` and `params` (to translate) and an English `message`.

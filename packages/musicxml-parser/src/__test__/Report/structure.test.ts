@@ -460,6 +460,81 @@ describe("repeated measures", () => {
     });
 });
 
+describe("state after a repeat or jump", () => {
+    it("plays a measure again in its written meter, not the one the section ended in", () => {
+        // 6/8 | ||: 2 (6/8, inherited) | 3/4 3 :|| — notation programs play m2 in 6/8 both times
+        const xml = score(
+            measure(
+                1,
+                time(6, 8) + museScoreTempo("quarter", 1, 80, 120) + rest(3),
+            ) +
+                measure(2, forward + rest(3)) +
+                measure(3, time(3, 4) + rest(3) + backward),
+        );
+        const { measures, warnings } = parseMusicXmlWithReport(xml);
+        expect(
+            measures.map((m) => `${m.label}x${m.time} ${m.meter?.text}`),
+        ).toEqual(["1x1 6/8", "2x1 6/8", "3x1 3/4", "2x2 6/8", "3x2 3/4"]);
+        expect(measures.map((m) => m.beats.length)).toEqual([2, 2, 3, 2, 3]);
+        expect(measures.map((m) => m.meterChanged)).toEqual([
+            true,
+            false,
+            true,
+            true,
+            true,
+        ]);
+        expect(warnings.filter((w) => w.code === "long-measure")).toEqual([]);
+    });
+
+    it("plays a measure again at its written tempo, not the one the section ended at", () => {
+        // ♩ = 120 | ||: 2 | ♩ = 90 3 :|| 4 — the second pass starts at 120 again
+        const xml = score(
+            measure(
+                1,
+                time(4, 4) + museScoreTempo("quarter", 0, 120, 120) + rest(4),
+            ) +
+                measure(2, forward + rest(4)) +
+                measure(
+                    3,
+                    museScoreTempo("quarter", 0, 90, 90) + rest(4) + backward,
+                ) +
+                measure(4, rest(4)),
+        );
+        expect(order(xml)).toEqual(["1", "2", "3", "2x2", "3x2", "4"]);
+        expect(seconds(xml).map((beats) => beats[0])).toEqual([
+            0.5, 0.5, 0.6667, 0.5, 0.6667, 0.6667,
+        ]);
+        const { summary } = parseMusicXmlWithReport(xml);
+        expect(summary.tempoChanges).toBe(3);
+    });
+
+    it("goes back to the segno's tempo after D.S.", () => {
+        // ♩ = 100 | §2 | ♩ = 150 3 D.S. al Fine — m2 is played at 100 again
+        const xml = score(
+            measure(
+                1,
+                time(4, 4) + museScoreTempo("quarter", 0, 100, 100) + rest(4),
+            ) +
+                measure(
+                    2,
+                    `<direction><direction-type><segno/></direction-type><sound segno="segno"/></direction>` +
+                        rest(4) +
+                        `<direction><direction-type><words>Fine</words></direction-type><sound fine="yes"/></direction>`,
+                ) +
+                measure(
+                    3,
+                    museScoreTempo("quarter", 0, 150, 150) +
+                        rest(4) +
+                        `<direction><direction-type><words>D.S. al Fine</words></direction-type><sound dalsegno="segno"/></direction>`,
+                ),
+        );
+        expect(order(xml)).toEqual(["1", "2", "3", "2x2"]);
+        expect(seconds(xml).map((beats) => beats[0])).toEqual([
+            0.6, 0.6, 0.4, 0.6,
+        ]);
+    });
+});
+
 describe("x/2 meters", () => {
     it("reports a meter change when a restated x/2 meter starts counting in quarters", () => {
         const xml = score(

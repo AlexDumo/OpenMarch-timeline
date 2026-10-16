@@ -108,8 +108,16 @@ type Warn = (
     params: Record<string, string | number>,
 ) => void;
 
+/** The meter in effect, and the note value the tempo is printed in, as a measure starts. */
+interface MeterState {
+    meter: Meter | undefined;
+    printedUnit: { unit: BeatUnit; dots: number } | undefined;
+}
+
 interface ResolvedMeasure {
     raw: RawMeasure;
+    /** The state the measure started from */
+    entry: MeterState;
     meter: Meter;
     meterChanged: boolean;
     /** Length of each count in quarter notes (a pickup keeps only the counts it fills) */
@@ -124,9 +132,17 @@ const sameMeter = (a: Meter, b: Meter) =>
     a.counts.length === b.counts.length &&
     a.counts.every((c, k) => Math.abs(c - b.counts[k]!) <= EPSILON);
 
-/** Gives each measure its meter and counts, warning about what the rule couldn't read. */
+/**
+ * Gives each measure its meter and counts, warning about what the rule couldn't read. A measure
+ * with an `entry` state (one a repeat or jump goes back to) starts from it rather than from the
+ * measure played before it, the way notation programs read meter in written order.
+ */
 // eslint-disable-next-line max-lines-per-function
-function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
+function resolveMeasures(
+    raws: RawMeasure[],
+    warn: Warn,
+    entries: (MeterState | undefined)[] = [],
+): ResolvedMeasure[] {
     const seen = new Set<RawMeasure>();
     // Each short measure's counts as first played, so every play of it gets the same counts (a
     // measure that completed the pickup on the first pass would otherwise be just short later)
@@ -144,7 +160,7 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
         | undefined;
     let meter: Meter | undefined;
     // The note value the tempo in effect is printed in (for counting x/2 meters)
-    let printedUnit: { unit: BeatUnit; dots: number } | undefined;
+    let printedUnit: MeterState["printedUnit"];
     const notePrinted = (events: RawEvent[]) => {
         for (const e of events) {
             if (e.kind === "tempo" && !e.needsUnit)
@@ -155,11 +171,17 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
             if (e.kind === "modulation") printedUnit = e.modulation.newUnit;
         }
     };
+    // eslint-disable-next-line max-lines-per-function
     return raws.map((raw, i) => {
-        let meterChanged = false;
         // A measure played again by a repeat was already reported
         const firstPlay = !seen.has(raw);
         seen.add(raw);
+        const previous = meter;
+        const restored = entries[i];
+        if (restored) ({ meter, printedUnit } = restored);
+        const entry: MeterState = { meter, printedUnit };
+        // A meter restored by a jump is a change when it differs from the one played before
+        let meterChanged = !!meter && !!previous && !sameMeter(meter, previous);
         notePrinted(raw.events.filter((e) => e.pos < EPSILON));
         const read =
             raw.time?.kind === "read"
@@ -171,7 +193,7 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
                 : undefined;
         notePrinted(raw.events);
         // Before any meter, the unread signature is the only warning: counted as if there were none
-        if (raw.time && !read)
+        if (raw.time && !read && firstPlay)
             warn(
                 "unknown-meter",
                 "warning",
@@ -181,8 +203,8 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
                     : { meter: raw.time.text },
             );
         if (read) {
-            meterChanged = !meter || !sameMeter(meter, read);
-            if (meterChanged && read.assumedGrouping)
+            meterChanged = !previous || !sameMeter(previous, read);
+            if (meterChanged && read.assumedGrouping && firstPlay)
                 warn("assumed-grouping", "warning", i, {
                     meter: read.text,
                     grouping: read.grouping ?? "",
@@ -190,7 +212,7 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
             meter = read;
         }
         if (!meter) {
-            if (!raw.time)
+            if (!raw.time && firstPlay)
                 warn("no-time-signature", "warning", i, {
                     meter: DEFAULT_METER.text,
                 });
@@ -207,6 +229,7 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
             );
             return {
                 raw,
+                entry,
                 meter,
                 meterChanged,
                 counts: new Array<number>(quarters).fill(1),
@@ -315,7 +338,7 @@ function resolveMeasures(raws: RawMeasure[], warn: Warn): ResolvedMeasure[] {
                     counts: counts.length,
                 });
         }
-        return { raw, meter, meterChanged, counts, firstPlay };
+        return { raw, entry, meter, meterChanged, counts, firstPlay };
     });
 }
 
@@ -357,15 +380,26 @@ function placeEvents(resolved: ResolvedMeasure[]) {
     return { slots, firstCount, placed };
 }
 
+/** The tempo in effect as a measure starts, and the one "a tempo" goes back to. */
+interface TempoState {
+    quarterBpm: number;
+    marking: TempoMarking | undefined;
+    beforeRamp: TempoMarking | undefined;
+}
+
 /**
  * Walks the tempo events in order: numbered tempos, "a tempo" and "Tempo I" change the tempo
  * from their count; rit. and accel. become ramps when a numbered tempo follows close enough.
+ * A measure with an `entry` state (one a repeat or jump goes back to) starts at that tempo, the
+ * way notation programs read tempo in written order. Returns the state each measure started from.
  */
 // eslint-disable-next-line max-lines-per-function
 function walkTempos(
     placed: PlacedEvent[],
     resolved: ResolvedMeasure[],
+    firstCount: number[],
     warnEveryPlay: Warn,
+    entries: (TempoState | undefined)[] = [],
 ) {
     // A measure played again by a repeat was already reported
     const warn: Warn = (code, severity, measureIndex, params) => {
@@ -421,6 +455,31 @@ function walkTempos(
     const definesTempo = (e: PlacedEvent) =>
         e.kind === "tempo" ||
         (e.kind === "words" && e.words.kind !== "tempo-word");
+    // Each measure's starting state, recorded before the events on or after its first count
+    const starts: TempoState[] = [];
+    const startMeasuresUpTo = (count: number) => {
+        while (
+            starts.length < resolved.length &&
+            firstCount[starts.length]! <= count
+        ) {
+            const entry = entries[starts.length];
+            if (entry) {
+                const at = firstCount[starts.length]!;
+                if (Math.abs(entry.quarterBpm - current) > EPSILON) {
+                    if (changes.at(-1)?.count === at) changes.pop();
+                    changes.push({ count: at, quarterBpm: entry.quarterBpm });
+                }
+                current = entry.quarterBpm;
+                currentMarking = entry.marking;
+                beforeRamp = entry.beforeRamp;
+            }
+            starts.push({
+                quarterBpm: current,
+                marking: currentMarking,
+                beforeRamp,
+            });
+        }
+    };
     const keptTempo = () =>
         currentMarking
             ? formatTempoMarking(currentMarking)
@@ -428,6 +487,7 @@ function walkTempos(
 
     // eslint-disable-next-line max-lines-per-function
     placed.forEach((e, idx) => {
+        startMeasuresUpTo(e.count);
         if (e.kind === "tempo") {
             const marking = shown(e);
             if (marking.approximate)
@@ -565,12 +625,13 @@ function walkTempos(
             });
         ramps.push(ramp);
     });
+    startMeasuresUpTo(Infinity);
     const tempoChanges = changes.filter(
         (change, i) =>
             i > 0 &&
             Math.abs(change.quarterBpm - changes[i - 1]!.quarterBpm) > EPSILON,
     ).length;
-    return { changes, ramps, measureTempo, tempoChanges };
+    return { changes, ramps, measureTempo, tempoChanges, starts };
 }
 
 /** Each count's quarter notes per minute: the step changes, then the ramps on top. */
@@ -694,6 +755,15 @@ function warnAboutStructure(
         });
 }
 
+/** The meter and tempo each written measure starts with, reading the score in written order. */
+function writtenOrderStarts(written: RawMeasure[]) {
+    const ignore: Warn = () => {};
+    const resolved = resolveMeasures(written, ignore);
+    const { firstCount, placed } = placeEvents(resolved);
+    const { starts } = walkTempos(placed, resolved, firstCount, ignore);
+    return { meters: resolved.map((m) => m.entry), tempos: starts };
+}
+
 /** How repeats, endings and jumps are read. */
 export type RepeatMode =
     /** Played out: the counts follow the music as it is performed (the default) */
@@ -757,12 +827,29 @@ export function parseMusicXmlWithReport(
     const played: PlayedRef[] = performance.order;
     const raws = played.map((p) => written[p.index]!);
 
-    const resolved = resolveMeasures(raws, warn);
+    // A measure a repeat or jump goes back to starts with the meter and tempo it has in the
+    // written score, not the ones the section ended with: read the written order first
+    const jumpedTo = played.map(
+        (p, i) => i > 0 && p.index !== played[i - 1]!.index + 1,
+    );
+    const writtenStarts = jumpedTo.some(Boolean)
+        ? writtenOrderStarts(written)
+        : undefined;
+    const startOf = <T>(starts: T[] | undefined) =>
+        played.map((p, i) => (jumpedTo[i] ? starts?.[p.index] : undefined));
+
+    const resolved = resolveMeasures(
+        raws,
+        warn,
+        startOf(writtenStarts?.meters),
+    );
     const { slots, firstCount, placed } = placeEvents(resolved);
     const { changes, ramps, measureTempo, tempoChanges } = walkTempos(
         placed,
         resolved,
+        firstCount,
         warn,
+        startOf(writtenStarts?.tempos),
     );
     if (resolved.length > 0 && (changes.length === 0 || changes[0]!.count > 0))
         warn(
