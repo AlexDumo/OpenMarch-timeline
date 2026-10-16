@@ -21,6 +21,7 @@ import {
     type LibraryItemKind,
 } from "@om-electron/main/library/types";
 import { hashParts, versionHashOf } from "@/view3d/library/showHash";
+import { libraryKeepsFromFloor } from "./fieldFloor";
 import {
     planLibraryPrune,
     type LibraryKeep,
@@ -327,8 +328,8 @@ export async function libraryKeepsFromCues({
 
 /**
  * Removes the Versions nothing keeps, then the blobs no remaining Version names (props-spec.md
- * section 2). `keep` is what the show's other tables use (Item tables); the Versions cues name
- * and history are added here.
+ * section 2). `keep` is what the show's other tables use (Item tables); the Versions cues,
+ * history and the show's floor (D-23) name are added here.
  */
 export async function pruneShowLibraryInTransaction({
     tx,
@@ -380,6 +381,7 @@ export async function pruneShowLibraryInTransaction({
             ...keep,
             ...(await libraryKeepsFromCues({ db: tx })),
             ...(await libraryKeepsFromHistory({ db: tx })),
+            ...(await libraryKeepsFromFloor({ db: tx })),
         ],
     });
     if (unreadable.length > 0) plan.blobs = [];
