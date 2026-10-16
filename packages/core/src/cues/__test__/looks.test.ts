@@ -601,6 +601,125 @@ describe("Silk", () => {
     });
 });
 
+describe("Silk aspect", () => {
+    // Aspects are width ÷ height as the silk template lays them out.
+    const SIX_FOOT = {
+        id: "builtin:model.flag6",
+        name: "6 ft flag",
+        label: "Flag",
+        holds: "flag" as const,
+        aspect: 36 / 54,
+    };
+    const BANNER = "library:7f1c2a90-0000-4000-8000-000000000007@161718";
+    const WIDE_SILK = "library:7f1c2a90-0000-4000-8000-000000000008@191a1b";
+    const items: CueLibraryItem[] = [
+        ...libraryItems.map((item) =>
+            item.id === SUN_SILK ? { ...item, aspect: 2 / 3 } : item,
+        ),
+        { id: WIDE_SILK, channel: "silk", name: "Wide", aspect: 3 / 2 },
+        {
+            id: BANNER,
+            channel: "carry",
+            name: "Banner",
+            holds: "flag",
+            aspect: 3 / 2,
+        },
+    ];
+    const silkShow = (cues: CueInput[], marchers = [trumpet, flag, flag2]) =>
+        show(cues, marchers, {
+            libraryItems: items,
+            equipmentFallback: { "color guard": SIX_FOOT },
+        });
+
+    it("fits a silk of the flag's aspect without a note", () => {
+        const out = compileCues(silkShow([cue(130, "silk", 4, SUN_SILK)]));
+
+        expect(spans(out, 2, "silk")).toEqual([
+            [0, 4, "default", "builtin:silk.plain"],
+            [4, 32, "state", SUN_SILK],
+        ]);
+        expect(out.notes).toEqual([]);
+    });
+
+    it("notes a silk whose aspect differs from the held flag's Cut", () => {
+        const out = compileCues(silkShow([cue(131, "silk", 4, WIDE_SILK)]));
+
+        // The silk still applies; the Artwork is fitted to the Cut
+        expect(spans(out, 2, "silk")).toEqual([
+            [0, 4, "default", "builtin:silk.plain"],
+            [4, 32, "state", WIDE_SILK],
+        ]);
+        expect(out.notes).toEqual([
+            { kind: "silk_aspect", cueIds: [131], marcherIds: [2, 3] },
+        ]);
+        expect(out.flags).toEqual([]);
+    });
+
+    it("notes only the performers whose flag is of another Cut, from when Carry gives it", () => {
+        const out = compileCues(
+            silkShow([
+                cue(132, "silk", 4, SUN_SILK),
+                // Performer 3 takes the wider banner on 10
+                cue(133, "carry", 10, BANNER, {
+                    target: { kind: "set", marcherIds: [3] },
+                }),
+            ]),
+        );
+
+        expect(spans(out, 3, "silk")).toEqual([
+            [0, 4, "default", "builtin:silk.plain"],
+            [4, 32, "state", SUN_SILK],
+        ]);
+        expect(out.notes).toEqual([
+            { kind: "silk_aspect", cueIds: [132], marcherIds: [3] },
+        ]);
+    });
+
+    it("leaves out a silk or a flag whose aspect isn't known", () => {
+        const out = compileCues(
+            show(
+                [
+                    cue(134, "silk", 4, MOON_SILK),
+                    cue(135, "silk", 8, WIDE_SILK),
+                ],
+                [trumpet, flag],
+                { libraryItems: items },
+            ),
+        );
+
+        expect(out.notes).toEqual([]);
+    });
+
+    it("never notes the default plain silk", () => {
+        const out = compileCues(
+            silkShow([
+                cue(136, "carry", 2, BANNER, {
+                    target: { kind: "set", marcherIds: [3] },
+                }),
+            ]),
+        );
+
+        expect(out.notes).toEqual([]);
+    });
+
+    it("redoes the note after a Carry edit", () => {
+        const before = compileCues(silkShow([cue(137, "silk", 4, SUN_SILK)]));
+        const after = compileCues(
+            silkShow([
+                cue(137, "silk", 4, SUN_SILK),
+                cue(138, "carry", 0, BANNER, {
+                    target: { kind: "section", section: "Color Guard" },
+                }),
+            ]),
+            { previous: before, channels: ["carry"] },
+        );
+
+        expect(after.notes).toEqual([
+            { kind: "silk_aspect", cueIds: [137], marcherIds: [2, 3] },
+        ]);
+    });
+});
+
 describe("items", () => {
     it("are never reached by any target", () => {
         const out = compileCues(

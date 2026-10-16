@@ -829,7 +829,9 @@ drag-and-drop import [map, 11, 17, 26.5].
 
 ## 15. Open points
 
-- **Where Carry, Silk and Uniform defaults are computed:** in `compileCues`
-  (its input then carries each section's usual equipment and 2D color and
-  each marcher's `isGuard`, a public package API change under ADR 0004 D-6)
-  or in the 3D View. Needed before C3.5.
+- **Where Carry, Silk and Uniform defaults are computed:** settled
+  2026-10-16: in `compileCues`. Its input carries each section's usual
+  equipment and 2D color and each marcher's `isGuard` (ADR 0004 D-6), and
+  Silk items and flag equipment carry their aspect for the Silk aspect note,
+  so the 3D View, `traceCue` and the page-grained exports (C3.8) read one
+  answer.
