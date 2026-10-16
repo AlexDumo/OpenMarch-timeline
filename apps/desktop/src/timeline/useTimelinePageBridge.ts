@@ -55,10 +55,13 @@ export function useTimelinePageBridge(enabled: boolean): void {
             return;
         const page = pageAtPlayhead(pages, playheadBeat);
         if (!page || page.id === selectedPage?.id) return;
+        // Only a write selected now is known as ours. One waiting for its page (the provider's
+        // page list behind this one's) lands in a later commit, maybe after another selection:
+        // the effect below reads it as anyone's, which seeks to it only if the playhead left it
+        if (!setSelectedPage(page)) return;
         bridged.current.add(page.id);
         lastBridged.current = page.id;
         wroteThisCommit.current = page.id;
-        setSelectedPage(page);
         // Only the playhead and pages drive this direction
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, isPlaying, scrubbing, pages, playheadBeat, setSelectedPage]);

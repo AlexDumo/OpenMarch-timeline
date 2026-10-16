@@ -172,7 +172,7 @@ describeDbTests("timeline page bridge", (it) => {
         ).toBe(4);
     });
 
-    it("a write of ours overwritten before it rendered doesn't hide a later selection of that page (review)", async ({
+    it("a write of ours replaced before it committed doesn't hide a later selection of that page (review)", async ({
         db,
         wrapper,
     }) => {
