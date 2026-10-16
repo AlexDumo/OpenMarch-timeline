@@ -51,10 +51,9 @@ export const addPageFlagMutationOptions = (
     mutationOptions({
         mutationFn: ({ beat, subset }: { beat: number; subset?: boolean }) =>
             addPageFlag({ db, beat, subset, splitMoves: isBasicMode() }),
-        onSuccess: (added) => {
-            void invalidatePageQueries(qc);
-            onAdded?.(added);
-        },
+        // Selects the new page in the frame that shows it
+        onSuccess: (added) =>
+            invalidatePageQueries(qc, onAdded && (() => onAdded(added))),
         onError: (e) => toastTimelineError(e),
     });
 
