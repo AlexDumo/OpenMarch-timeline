@@ -1,32 +1,39 @@
 /**
- * The 3D View's marchers drawn with om-pose's instanced renderer (ADR 0002
- * D-7): one `InstancedMesh` per (body, uniform), skinned on the GPU from one
- * texture of baked clips.
+ * The 3D View's marchers drawn with the instanced renderer (ADR 0002 D-7,
+ * performer-behavior.md section 8.3): one `InstancedMesh` per (body,
+ * uniform), skinned from the composer's texture, which composes each
+ * performer's channels once a frame from the per-channel bake.
  *
  * - `high` quality draws the seven v4u bodies; `low` draws om-pose's block
  *   bodies (264 triangles against 1,796), which play the same clips.
  * - A look that carries an instrument gets a second `InstancedMesh` over
  *   the same instances: the horn, posed by the look's hold, in a smooth
  *   metallic material (docs/3d/instruments.md §4).
- * - Built once per marcher set, look set, clip set and quality; per frame
- *   the caller writes positions and the count clock.
+ * - Built once per marcher set, look set, bake and quality; per frame the
+ *   caller writes positions and the count clock, then `compose`s.
  * - Dispose with {@link MarcherBodies.dispose}: the instanced geometries
  *   share the bodies' vertex buffers, so they go through
  *   `disposeInstancedGeometry`, never `geometry.dispose()`.
  */
 import * as THREE from "three";
 import {
-    bakeClips,
     blockGeometry,
     disposeInstancedGeometry,
-    instancedGeometry,
-    instancedSkinning,
-    writeMarcher,
     writeMatrix,
-    type Bake,
-    type MarcherClip,
-} from "@/view3d/vendor/om-pose/instanced-marchers.js";
-import { createUniformMaterial } from "@/view3d/vendor/om-pose/uniform-shader.js";
+} from "@/view3d/render/instanced-marchers.js";
+import {
+    bakeChannels,
+    type ChannelBake,
+    type HornRowSpec,
+} from "@/view3d/render/channelBake";
+import {
+    Composer,
+    composedGeometry,
+    composedSkinning,
+    writeInstance,
+} from "@/view3d/render/composer";
+import type { ChannelPlay, FeetPlay } from "@/view3d/render/channelState";
+import { createUniformMaterial } from "@/view3d/render/uniform-shader.js";
 import {
     partVisible,
     uniformKey,
@@ -35,17 +42,12 @@ import {
     type UniformLook,
 } from "@/view3d/core/marchers/looks";
 import { FIELD_SURFACE_Y } from "@/view3d/core/field";
-import {
-    hold as holdFor,
-    holdId,
-    type HoldFamily,
-    type HoldState,
-} from "@/view3d/core/instruments/holds";
+import { holdId } from "@/view3d/core/instruments/holds";
 import type { LoadedBody } from "./marcherAssets";
-import { holdClip, poseArms } from "./armPose";
 import { instrumentMaterial } from "./instrumentGeometry";
 import { HornSet } from "./hornSet";
 import { mirrorClip, mirrorName } from "./mirrorClip";
+import { plainRow } from "@/view3d/core/marchers/planner";
 import {
     platformClip,
     platformRig,
@@ -77,6 +79,34 @@ function contactAlpha(size = 64): THREE.DataTexture {
     const t = new THREE.DataTexture(data, size, size);
     t.needsUpdate = true;
     return t;
+}
+
+/** The uniform shader's glove line (`render/uniform-shader.js`). */
+export const GLOVE_LINE = "if (part == 5) return uGloves;";
+/** The per-instance skin tone, as `composedSkinning` declares it. */
+const BARE_HAND_LINE = "if (part == 5) return vSkinTone;";
+
+/**
+ * Patches a material from `composedSkinning` so its hands (the gloves part)
+ * show each instance's skin tone instead of the glove color: a look without
+ * gloves. Call it after `composedSkinning`, which declares `vSkinTone`.
+ */
+export function bareHands(material: THREE.Material): THREE.Material {
+    const base = material.onBeforeCompile;
+    const key = material.customProgramCacheKey();
+    material.onBeforeCompile = (shader, renderer) => {
+        base.call(material, shader, renderer);
+        if (!shader.fragmentShader.includes(GLOVE_LINE))
+            console.warn(
+                "bareHands: uniform shader's glove line not found; the hands keep the glove color",
+            );
+        shader.fragmentShader = shader.fragmentShader.replace(
+            GLOVE_LINE,
+            BARE_HAND_LINE,
+        );
+    };
+    material.customProgramCacheKey = () => key + "|bare-hands";
+    return material;
 }
 
 /**
@@ -177,34 +207,38 @@ export function slotHoldId(look: UniformLook): string {
     return c ? holdId(c.family, look.options.hold) : NO_HOLD;
 }
 
-/** The bake row name of a clip played in a hold. */
-export function rowKey(clip: string, hold: string): string {
-    return hold === NO_HOLD ? clip : `${clip}@${hold}`;
-}
-
-const parseHoldId = (id: string) => {
-    const [family, state] = id.split(":") as [HoldFamily, HoldState];
-    return holdFor(family, state);
-};
-
 /** Which foot the band steps off on. "right" plays every clip mirrored. */
 export type StepOffFoot = "left" | "right";
 
-/** The clips to load for `names`: on the right foot, each row's mirrored partner too. */
+/** Whether row `name` bakes mirrored, and the row it mirrors. */
+function mirrored(name: string, foot: StepOffFoot) {
+    const { row, mirrored: rightFootRow } = plainRow(name);
+    return { row, mirror: rightFootRow !== (foot === "right") };
+}
+
+/**
+ * The clips to load for `names`: each mirrored row's partner too. A row
+ * is mirrored when a right-foot move plays it (`mirrorRow`), or for every
+ * row when the whole bake is on the right foot.
+ */
 export function clipsToLoad(
     names: readonly string[],
     foot: StepOffFoot,
 ): string[] {
     const out = new Set(names);
-    if (foot === "right") for (const n of names) out.add(mirrorName(n));
+    for (const n of names) {
+        const { row, mirror } = mirrored(n, foot);
+        if (mirror) out.add(mirrorName(row));
+    }
     return [...out];
 }
 
 /**
- * The clip a row bakes from: on the right foot the mirror of its partner
- * (`mirrorName`), so slides and built turns keep their travel direction
- * while the feet swap; then backward marching and closes go up on the
- * platform of the foot (`platformClip.ts`).
+ * The clip a row bakes from: a mirrored row (a right-foot move's, or any
+ * row on a right-foot bake) is the mirror of its partner (`mirrorName`), so
+ * slides and built turns keep their travel direction while the feet swap;
+ * then backward marching and closes go up on the platform of the foot
+ * (`platformClip.ts`).
  */
 export function clipForBake(
     name: string,
@@ -212,9 +246,10 @@ export function clipForBake(
     foot: StepOffFoot,
     rig: PlatformRig,
 ): THREE.AnimationClip {
-    let clip = clips[name];
-    if (foot === "right") {
-        const partner = mirrorName(name);
+    const { row, mirror } = mirrored(name, foot);
+    let clip = clips[name] ?? clips[row];
+    if (mirror) {
+        const partner = mirrorName(row);
         const source = clips[partner];
         if (!source)
             throw new Error(
@@ -227,45 +262,35 @@ export function clipForBake(
 }
 
 /**
- * Every v4u body shares one skeleton, so any of them bakes for all. Each
- * clip is baked once per hold in `holds` (docs/3d/instruments.md §5): the
- * arm tracks replaced by the hold's pose, under `rowKey` names. Each row's
- * clip comes from `clipForBake`.
+ * Every v4u body shares one skeleton, so any of them bakes for all. The
+ * Feet rows are the clips, each from `clipForBake`; the Horn/Equipment rows
+ * are `horn` (holds and transitions, `hornRows.ts`). Rows add up across the
+ * channels: a clip bakes once whatever the marchers carry.
  */
 export function bakeForBodies(
     bodies: ReadonlyMap<BodyType, LoadedBody>,
     clips: Record<string, THREE.AnimationClip>,
-    holds: readonly string[] = [NO_HOLD],
     foot: StepOffFoot = "left",
-    /** When given, only these rows (`rowKey`) are baked: the ones marchers play. */
+    horn: readonly HornRowSpec[] = [],
+    /** When given, only these Feet rows are baked: the ones marchers play. */
     only?: ReadonlySet<string>,
-): Bake {
+): ChannelBake {
     const first = bodies.values().next().value;
     if (!first) throw new Error("3D View: no bodies to bake on");
     const rig = platformRig(first.mesh.skeleton);
-    const sources: Record<string, THREE.AnimationClip> = {};
-    for (const name of Object.keys(clips))
-        sources[name] = clipForBake(name, clips, foot, rig);
-    const all: Record<string, THREE.AnimationClip> = {};
-    for (const h of holds) {
-        const pose =
-            h === NO_HOLD
-                ? null
-                : poseArms(first.mesh.skeleton, parseHoldId(h));
-        for (const name of Object.keys(clips)) {
-            if (only && !only.has(rowKey(name, h))) continue;
-            const clip = sources[name];
-            all[rowKey(name, h)] = pose
-                ? holdClip(clip, pose, rowKey(name, h))
-                : clip;
-        }
+    const feet: Record<string, THREE.AnimationClip> = {};
+    for (const name of Object.keys(clips)) {
+        if (only && !only.has(name)) continue;
+        feet[name] = clipForBake(name, clips, foot, rig);
     }
-    return bakeClips(THREE, first.scene, all);
+    return bakeChannels(first.scene, { feet, horn });
 }
 
 export class MarcherBodies {
     readonly group = new THREE.Group();
-    readonly bake: Bake;
+    readonly bake: ChannelBake;
+    /** Composes every slot's channels each frame; bodies and instruments skin from it. */
+    readonly composer: Composer;
     private readonly entries: MeshEntry[] = [];
     private readonly materials: THREE.Material[] = [];
     /** The instruments, one group per look, near and far detail (`hornSet.ts`). */
@@ -278,14 +303,20 @@ export class MarcherBodies {
     private readonly scaleOf: Float32Array;
     /** The hold id each slot plays (`slotHoldId`). */
     private readonly holdIds: string[];
+    /** The count clock of the last `writeFrame`. */
+    private count = 0;
 
     constructor(
         bodies: ReadonlyMap<BodyType, LoadedBody>,
-        bake: Bake,
+        bake: ChannelBake,
         looks: readonly MarcherSlotLook[],
         quality: MarcherQuality,
     ) {
         this.bake = bake;
+        this.composer = new Composer(bake, looks.length);
+        const firstRow = this.firstRow();
+        for (let i = 0; i < looks.length; i++)
+            this.composer.writeFeet(i, { row: firstRow });
         this.group.name = "view3d-marchers";
         this.meshOf = new Int32Array(looks.length).fill(-1);
         this.instanceOf = new Int32Array(looks.length);
@@ -320,15 +351,15 @@ export class MarcherBodies {
             const u = uniformKey(g.look);
             let material = materialByLook.get(u);
             if (!material) {
-                material = instancedSkinning(
-                    THREE,
+                material = composedSkinning(
                     createUniformMaterial(THREE, {
                         style: g.look.style,
                         colors: g.look.colors,
                         options: g.look.options,
                     }),
-                    bake,
+                    this.composer,
                 );
+                if (!g.look.options.gloves) bareHands(material);
                 materialByLook.set(u, material);
                 this.materials.push(material);
             }
@@ -337,19 +368,16 @@ export class MarcherBodies {
             g.slots.forEach((slot, k) => {
                 this.meshOf[slot] = entry;
                 this.instanceOf[slot] = k;
-                writeMarcher(mesh, k, {
-                    row: this.firstRow(),
-                    skin: looks[slot].body.skinTone,
-                });
+                writeInstance(mesh, k, slot, looks[slot].body.skinTone);
             });
             this.entries.push({ mesh, slots: g.slots, own });
             this.group.add(mesh);
         }
         if (looks.some((l) => l.uniform.options.carry)) {
-            // in `materials` so writeFrame drives its clip clock and dispose frees it
-            const material = instrumentMaterial(bake);
+            // in `materials` so dispose frees it
+            const material = instrumentMaterial(this.composer);
             this.materials.push(material);
-            this.horns = new HornSet(bodies, bake, looks, quality, material);
+            this.horns = new HornSet(bodies, looks, quality, material);
             for (const m of this.horns.meshes) this.group.add(m);
         }
     }
@@ -363,7 +391,7 @@ export class MarcherBodies {
         const source = this.blockSource ?? bodies.get(g.type)!.mesh.geometry;
         const filtered = this.blockSource ? null : visibleIndex(source, g.look);
         const own: MeshEntry["own"] = filtered ? "index" : "shared";
-        const geometry = instancedGeometry(THREE, source, g.slots.length);
+        const geometry = composedGeometry(source, g.slots.length);
         if (filtered) geometry.setIndex(filtered);
         const mesh = new THREE.InstancedMesh(
             geometry,
@@ -387,8 +415,10 @@ export class MarcherBodies {
     }
 
     private firstRow() {
-        const row = Object.values(this.bake.rows)[0];
-        if (!row) throw new Error("3D View: empty bake");
+        const row = Object.values(this.bake.rows).find(
+            (r) => r.channel === "feet",
+        );
+        if (!row) throw new Error("3D View: no Feet rows in the bake");
         return row;
     }
 
@@ -397,12 +427,19 @@ export class MarcherBodies {
         return this.entries.length + (this.horns?.drawCalls ?? 0);
     }
 
-    /** Sets what slot `slot` plays; call when its clip changes. */
-    setClip(slot: number, clip: MarcherClip): void {
-        const e = this.meshOf[slot];
-        if (e < 0) return;
-        writeMarcher(this.entries[e].mesh, this.instanceOf[slot], clip);
-        this.horns?.setClip(slot, clip);
+    /** Sets what slot `slot`'s Feet play; call when its clip changes. */
+    setClip(slot: number, clip: FeetPlay): void {
+        this.composer.writeFeet(slot, clip);
+    }
+
+    /** Sets what slot `slot`'s Horn/Equipment channel plays; null follows the Feet. */
+    setHorn(slot: number, play: ChannelPlay | null): void {
+        this.composer.writeChannel(slot, "horn", play);
+    }
+
+    /** Composes this frame's bones (after `setClip`, `setHorn` and `writeFrame`). */
+    compose(gl: THREE.WebGLRenderer, force = false): void {
+        this.composer.update(gl, this.count, force);
     }
 
     /**
@@ -448,10 +485,7 @@ export class MarcherBodies {
             discs[o + 15] = 1;
         }
         this.contact.instanceMatrix.needsUpdate = true;
-        for (const m of this.materials)
-            (
-                m.userData.uniforms as { uCount: { value: number } }
-            ).uCount.value = count;
+        this.count = count;
     }
 
     dispose(): void {
@@ -461,6 +495,7 @@ export class MarcherBodies {
         }
         this.horns?.dispose();
         for (const m of this.materials) m.dispose();
+        this.composer.dispose();
         this.blockSource?.dispose();
         this.contact.geometry.dispose();
         const cm = this.contact.material as THREE.MeshBasicMaterial;

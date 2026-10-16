@@ -12,7 +12,12 @@ import {
 import Store from "electron-store";
 import * as fs from "fs";
 import { release } from "node:os";
-import { isWindows7 } from "./gpu";
+import {
+    GPU_CRASHED_CHANNEL,
+    GPU_PROCESS_GONE_CHANNEL,
+    isGpuCrash,
+    isWindows7,
+} from "./gpu";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import * as DatabaseServices from "../database/database.services";
@@ -68,7 +73,14 @@ import {
     SHARP_SELF_TEST_ENV,
     writeSharpSelfTest,
 } from "./services/sharp-self-test";
+import {
+    LIBRARY_IPC_SELF_TEST_ENV,
+    LIBRARY_IPC_SELF_TEST_FILES_ENV,
+    writeLibraryIpcSelfTest,
+} from "./services/library-ipc-self-test";
 import { closeView3dWindow, initView3dWindow } from "./view3dWindow";
+import { initLibraryIpc, watchEditorWindow } from "./library-ipc";
+import { isPdfRendererWindow } from "./artwork-import";
 import {
     initAuthBeforeReady,
     initAuthAfterReady,
@@ -170,6 +182,20 @@ process.env.VITE_PUBLIC = process.env.VITE_DEV_SERVER_URL
 // Disable GPU Acceleration for Windows 7
 if (isWindows7(process.platform, release())) app.disableHardwareAcceleration();
 
+// The field draws with WebGL (ADR 0005 D-3): use the GPU even where Chromium's
+// blocklist turns it off. If the GPU then crashes, the field drops to its
+// low-quality mode for the rest of the session.
+app.commandLine.appendSwitch("ignore-gpu-blocklist");
+let gpuCrashed = false;
+app.on("child-process-gone", (_event, details) => {
+    if (!isGpuCrash(details)) return;
+    console.warn("GPU process gone:", details.reason, details.exitCode);
+    gpuCrashed = true;
+    for (const window of BrowserWindow.getAllWindows())
+        window.webContents.send(GPU_PROCESS_GONE_CHANNEL);
+});
+ipcMain.handle(GPU_CRASHED_CHANNEL, () => gpuCrashed);
+
 // Set application name for Windows 10+ notifications
 if (process.platform === "win32") app.setAppUserModelId(app.getName());
 
@@ -215,6 +241,7 @@ async function createWindow(title?: string) {
         },
     });
     app.commandLine.appendSwitch("enable-features", "AudioServiceOutOfProcess");
+    watchEditorWindow(win);
 
     // Initialize auth IPC handlers before renderer navigation to avoid startup
     // races where the renderer invokes auth channels before handlers exist.
@@ -522,6 +549,18 @@ void app.whenReady().then(async () => {
         app.exit(await writeSharpSelfTest(sharpSelfTestOut));
         return;
     }
+    const libraryIpcSelfTestOut = process.env[LIBRARY_IPC_SELF_TEST_ENV];
+    if (libraryIpcSelfTestOut) {
+        // Packaging check only: run the import IPC on given files, open nothing.
+        app.exit(
+            await writeLibraryIpcSelfTest(
+                libraryIpcSelfTestOut,
+                join(__dirname, "import-worker.js"),
+                process.env[LIBRARY_IPC_SELF_TEST_FILES_ENV] ?? "",
+            ),
+        );
+        return;
+    }
 
     app.setName("OpenMarch");
     console.log("NODE:", process.versions.node);
@@ -551,6 +590,12 @@ void app.whenReady().then(async () => {
         getTheme: () => store.get("theme", "light") as string,
         getLanguage: () => store.get("language", "en") as string,
         getEditorWindow: () => win,
+    });
+    initLibraryIpc({
+        getEditorWindow: () => win,
+        getSetting: (key) => store.get(key),
+        setSetting: (key, value) => store.set(key, value),
+        workerPath: join(__dirname, "import-worker.js"),
     });
 
     await createWindow("OpenMarch - " + store.get("databasePath"));
@@ -835,7 +880,10 @@ ipcMain.handle(
 // Note: second-instance is already handled above with auth callback support
 
 app.on("activate", () => {
-    const allWindows = BrowserWindow.getAllWindows();
+    // Hidden PDF renderer windows (C1.8) are never shown or focused.
+    const allWindows = BrowserWindow.getAllWindows().filter(
+        (w) => !isPdfRendererWindow(w),
+    );
     if (win && !win.isDestroyed()) {
         win.focus();
     } else if (allWindows.length) {

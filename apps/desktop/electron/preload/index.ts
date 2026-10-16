@@ -22,8 +22,13 @@ import type {
 } from "@om-electron/main/auth/types";
 import { AUTH_IPC_CHANNELS } from "../../src/global/auth/constants";
 import { MENU_ACTION_CHANNEL } from "../../src/global/menuActions";
+import { GPU_CRASHED_CHANNEL, GPU_PROCESS_GONE_CHANNEL } from "../main/gpu";
 import type { HistoryResponse } from "@/db-functions";
 import type { PendingConversion } from "@om-electron/database/convertOnOpenGate";
+import type {
+    SqlBatchQuery,
+    SqlReadBatchResult,
+} from "@om-electron/database/sqlProxy";
 import type { ConvertProgress } from "@om-electron/database/convertOnOpenProtocol";
 // Types only, so this preload doesn't share a chunk with the sandboxed 3D
 // View preload.
@@ -33,6 +38,30 @@ import type {
     View3dPublishChannel,
     View3dVenueChangeRequest,
 } from "../../src/view3d/sync/protocol";
+// Types only, like the sync protocol above.
+import type {
+    AddFromShowRequest,
+    AddVersionResultDto,
+    BytesPayload,
+    ImportCommitRequest,
+    ImportCommitResult,
+    ImportInspectRequest,
+    ImportInspection,
+    ImportPickRequest,
+    ImportPreviewRequest,
+    ImportProgress,
+    ImportSession,
+    LibraryChanged,
+    LibraryItem,
+    LibraryItemKind,
+    LibraryItemSummary,
+    ReadPartsRequest,
+    Result,
+    SizePreset,
+    TemplateSaveRequest,
+    ThumbnailsRequest,
+    UpdateItemRequest,
+} from "../../src/view3d/library/protocol";
 
 const VIEW3D_PUBLISH_CHANNELS: readonly string[] = [
     "view3d:clock",
@@ -158,6 +187,16 @@ const APP_API = {
         ) => callback(change);
         ipcRenderer.on("settings:changed", listener);
         return () => ipcRenderer.removeListener("settings:changed", listener);
+    },
+    /** Whether the GPU process crashed this session (ADR 0005 D-3) */
+    gpuCrashed: () =>
+        ipcRenderer.invoke(GPU_CRASHED_CHANNEL) as Promise<boolean>,
+    /** Calls `callback` when the GPU process crashes; returns the unsubscribe */
+    onGpuCrashed: (callback: () => void) => {
+        const listener = () => callback();
+        ipcRenderer.on(GPU_PROCESS_GONE_CHANNEL, listener);
+        return () =>
+            ipcRenderer.removeListener(GPU_PROCESS_GONE_CHANNEL, listener);
     },
     isMacOS: process.platform === "darwin",
     /** Page zoom (View → Zoom In/Out), so native-sized UI can undo it. */
@@ -440,6 +479,105 @@ const APP_API = {
         };
     },
 
+    // Library and import (C1.9, ADR 0002 D-13). Main checks the sender and
+    // validates every payload; each invoke answers a `Result`.
+    library: {
+        importPick: (request: ImportPickRequest) =>
+            ipcRenderer.invoke("library:import-pick", request) as Promise<
+                Result<ImportSession | null>
+            >,
+        importInspect: (request: ImportInspectRequest) =>
+            ipcRenderer.invoke("library:import-inspect", request) as Promise<
+                Result<ImportInspection>
+            >,
+        importPreview: (request: ImportPreviewRequest) =>
+            ipcRenderer.invoke("library:import-preview", request) as Promise<
+                Result<BytesPayload>
+            >,
+        importCommit: (request: ImportCommitRequest) =>
+            ipcRenderer.invoke("library:import-commit", request) as Promise<
+                Result<ImportCommitResult>
+            >,
+        importCancel: (request: { sessionId: string; fileId?: string }) =>
+            ipcRenderer.invoke("library:import-cancel", request) as Promise<
+                Result<void>
+            >,
+        /** Frees the session's bytes in main. */
+        importClose: (request: { sessionId: string }) =>
+            ipcRenderer.send("library:import-close", request),
+        /** Returns an unsubscribe function. */
+        onImportProgress: (callback: (progress: ImportProgress) => void) => {
+            const listener = (
+                _event: IpcRendererEvent,
+                progress: ImportProgress,
+            ) => callback(progress);
+            ipcRenderer.on("library:import-progress", listener);
+            return () => {
+                ipcRenderer.removeListener("library:import-progress", listener);
+            };
+        },
+        list: (request: { kind?: LibraryItemKind } = {}) =>
+            ipcRenderer.invoke("library:list", request) as Promise<
+                Result<LibraryItemSummary[]>
+            >,
+        get: (request: { itemId: string }) =>
+            ipcRenderer.invoke("library:get", request) as Promise<
+                Result<LibraryItem | null>
+            >,
+        readParts: (request: ReadPartsRequest) =>
+            ipcRenderer.invoke("library:read-parts", request) as Promise<
+                Result<Record<string, Uint8Array>>
+            >,
+        thumbnails: (request: ThumbnailsRequest) =>
+            ipcRenderer.invoke("library:thumbnails", request) as Promise<
+                Result<(BytesPayload | null)[]>
+            >,
+        updateItem: (request: UpdateItemRequest) =>
+            ipcRenderer.invoke("library:update-item", request) as Promise<
+                Result<LibraryItem>
+            >,
+        deleteItem: (request: { itemId: string }) =>
+            ipcRenderer.invoke("library:delete-item", request) as Promise<
+                Result<void>
+            >,
+        addFromShow: (request: AddFromShowRequest) =>
+            ipcRenderer.invoke("library:add-from-show", request) as Promise<
+                Result<AddVersionResultDto>
+            >,
+        sizePresets: () =>
+            ipcRenderer.invoke("library:size-presets") as Promise<
+                Result<SizePreset[]>
+            >,
+        sizePresetSave: (request: {
+            id?: string;
+            name: string;
+            data: SizePreset["data"];
+        }) =>
+            ipcRenderer.invoke("library:size-preset-save", request) as Promise<
+                Result<SizePreset>
+            >,
+        sizePresetDelete: (request: { id: string }) =>
+            ipcRenderer.invoke(
+                "library:size-preset-delete",
+                request,
+            ) as Promise<Result<void>>,
+        templateSave: (request: TemplateSaveRequest) =>
+            ipcRenderer.invoke("library:template-save", request) as Promise<
+                Result<{ filename: string } | null>
+            >,
+        /** After every Library write. Returns an unsubscribe function. */
+        onChanged: (callback: (changed: LibraryChanged) => void) => {
+            const listener = (
+                _event: IpcRendererEvent,
+                changed: LibraryChanged,
+            ) => callback(changed);
+            ipcRenderer.on("library:changed", listener);
+            return () => {
+                ipcRenderer.removeListener("library:changed", listener);
+            };
+        },
+    },
+
     // History
     /** Activates on undo or redo. */
     onHistoryAction: (callback: (args: HistoryResponse) => void) =>
@@ -487,6 +625,15 @@ const APP_API = {
         ipcRenderer.invoke("sql:proxy", sql, params, method) as Promise<{
             rows: any[] | any;
         }>,
+    /**
+     * Runs read-only statements as one consistent snapshot (#224). `busy` means a transaction was
+     * open on the connection and nothing ran: try again.
+     */
+    sqlReadBatch: (queries: SqlBatchQuery[]) =>
+        ipcRenderer.invoke(
+            "sql:read-batch",
+            queries,
+        ) as Promise<SqlReadBatchResult>,
     /** Only needed for the triggers */
     unsafeSqlProxy: (sql: string) =>
         ipcRenderer.invoke("unsafeSql:proxy", sql) as Promise<{

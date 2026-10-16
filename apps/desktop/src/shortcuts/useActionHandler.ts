@@ -7,9 +7,10 @@ interface HandlerOptions {
     enabled?: boolean;
     /**
      * When true, a held key runs the action once rather than on each repeat, as the definition's
-     * `ignoreRepeat` does, but it can change with state (navigation while playing). Default false.
+     * `ignoreRepeat` does, but it can change with state (navigation while playing). A function is
+     * read at each repeat, for state kept outside React (an undo still running). Default false.
      */
-    ignoreRepeat?: boolean;
+    ignoreRepeat?: boolean | (() => boolean);
     /** Runs when the key that ran the action is let go (or the window loses focus while held) */
     onRelease?: () => void;
 }
@@ -30,7 +31,9 @@ export function useActionHandlerGroup(
     const enabled = options.enabled ?? true;
     const runRef = useRef(run);
     const enabledRef = useRef(enabled);
-    const ignoreRepeatRef = useRef(options.ignoreRepeat ?? false);
+    const ignoreRepeatRef = useRef<boolean | (() => boolean)>(
+        options.ignoreRepeat ?? false,
+    );
     const releaseRef = useRef(options.onRelease);
     const hasRelease = options.onRelease !== undefined;
     useLayoutEffect(() => {
@@ -53,7 +56,10 @@ export function useActionHandlerGroup(
             registerActionHandler(id as ActionId, {
                 run: (args) => runRef.current(id as ActionId, args),
                 isEnabled: () => enabledRef.current,
-                ignoresRepeat: () => ignoreRepeatRef.current,
+                ignoresRepeat: () => {
+                    const ignore = ignoreRepeatRef.current;
+                    return typeof ignore === "function" ? ignore() : ignore;
+                },
                 release: hasRelease ? () => releaseRef.current?.() : undefined,
             }),
         );

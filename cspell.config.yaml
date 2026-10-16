@@ -2,6 +2,8 @@ words:
   - wsola
   - hann
   - unstretched
+  - LANCZOS
+  - autocontrast
   - blocklist
   - actioned
   - mattpocock
@@ -13,6 +15,11 @@ words:
   - lods
   - Sketchfab
   - gltf
+  - glsl
+  - MSAA
+  - Felzenszwalb
+  - Huttenlocher
+  - swiftshader
   - marktime
   - stepoff
   - prefs
@@ -31,6 +38,12 @@ words:
   - frameless
   - headlessly
   - llvmpipe
+  - softpipe
+  - jank
+  - janky
+  - webglcontextlost
+  - webglcontextrestored
+  - WEBGL
   - libvips
   - libuv
   - sandboxed
@@ -209,6 +222,8 @@ words:
   - toks
   - tolgee
   - Tolgee
+  - ffprobe
+  - PSNR
   - Tinykeys
   - tinykeys
   - Topbar
@@ -253,13 +268,20 @@ words:
   - Zingali
   - Zustand
   - 日本語
+  - lerp
+  - lerped
+  - slerp
+  - slerped
+  - texel
+  - texels
 ignorePaths:
   # Timeline spec and reference suite: external documents, kept verbatim
   - docs/timeline/spec.md
   - docs/timeline/ref/**
   - node_modules/**
   - docs/3d/ref/**
-  - "**/view3d/vendor/**"
+  # Verbatim license texts (CC0 1.0, GPL-3.0) in the Blender Starter kit
+  - apps/desktop/starter-kit/**/LICENSE
   - "**/view3d/assets/om-pose/**"
   - "**/view3d/assets/instruments/*.json"
   - "**/node_modules/**"
