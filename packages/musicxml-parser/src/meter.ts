@@ -7,8 +7,10 @@
  * read it back (`measureIsMixedMeter`, `getStrongBeatIndexes`). The rule below picks the counts
  * for a time signature so that a marching band's "one count" lands where a conductor would beat:
  *
- * 1. **Grouping written in the score wins.** `<beats>2+2+3</beats>` gives one count per group:
- *    here two eighth pairs and an eighth triple (short, short, long).
+ * 1. **Grouping written in the score wins** for eighths and shorter. `<beats>2+2+3</beats>` over
+ *    8 gives one count per group: two eighth pairs and an eighth triple (short, short, long).
+ *    Over a quarter or longer (2+3/4) the grouping only shows the accents: every quarter is a
+ *    count, as rule 2 says.
  * 2. **Whole, half and quarter denominators (x/1, x/2, x/4) count the denominator.** 4/4 is four
  *    quarter counts, 2/2 two half-note counts, 3/2 three half-note counts, 6/4 six quarters.
  *    One exception: x/2 counts quarters while the tempo in effect is marked in quarters (a 3/2
@@ -87,15 +89,16 @@ function countsForPart(
         return undefined;
     const quartersPerNote = 4 / beatType;
 
-    // Rule 1: the score's own grouping
-    if (terms.length > 1)
+    // Rule 1: the score's own grouping, for eighths and shorter
+    if (terms.length > 1 && beatType >= 8)
         return {
             groups: terms,
             counts: terms.map((t) => t * quartersPerNote),
             explicit: true,
         };
 
-    const n = terms[0]!;
+    // A grouping over quarters or longer counts every note (2+3/4 is five quarter counts)
+    const n = terms.reduce((sum, t) => sum + t, 0);
     // Rule 2: whole, half and quarter denominators count the denominator
     if (beatType === 2 && quarterMarked)
         return {

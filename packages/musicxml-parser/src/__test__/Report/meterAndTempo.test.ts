@@ -43,6 +43,15 @@ describe("meterFromTimeSignature", () => {
         });
     });
 
+    it("counts every quarter of a grouping over quarters (2+3/4), and each group over eighths", () => {
+        expect(
+            meterFromTimeSignature([{ beats: "2+3", beatType: "4" }])!.counts,
+        ).toEqual([1, 1, 1, 1, 1]);
+        expect(
+            meterFromTimeSignature([{ beats: "2+3", beatType: "8" }])!.counts,
+        ).toEqual([1, 1.5]);
+    });
+
     it("rejects what the rule doesn't cover", () => {
         expect(meterFromTimeSignature([{ beats: "4", beatType: "3" }])).toBe(
             undefined,
