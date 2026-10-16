@@ -165,7 +165,7 @@ export const marchers = sqliteTable(
         home_y: real().notNull().default(0),
         /**
          * `marcher` for a performer, `item` for a prop or piece of equipment with an `items` row
-         * (props-spec section 4). Every all-marchers loop filters on it. Migration 0021 adds it
+         * (props-spec section 4). Every all-marchers loop filters on it. Migration 0024 adds it
          * with `ALTER TABLE … ADD COLUMN`; see the note there.
          */
         type: text().notNull().default("marcher"),

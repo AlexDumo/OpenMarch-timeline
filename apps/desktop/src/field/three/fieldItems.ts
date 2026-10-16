@@ -47,7 +47,13 @@ export class FieldItems implements FieldItemSource {
     private drawn: {
         version: number;
         itemsVersion: number;
+        appearanceVersion: number;
         outlines: readonly DrawnItemOutline[];
+    } | null = null;
+    /** Each item's geometry at one beat: the marks and the outlines ask at the same beat. */
+    private geometries: {
+        beat: number;
+        byId: Map<number, ItemGeometry | null>;
     } | null = null;
     private readonly listeners = new Set<() => void>();
 
@@ -66,8 +72,11 @@ export class FieldItems implements FieldItemSource {
         this.ids = itemIds;
         this.changes = changes;
         this.hidden = hidden;
-        this.changed();
+        this.geometries = null;
+        // The marchers' marks first, so a listener reads the items as they now are
+        this.version++;
         this.marchers.setItems(this);
+        this.emit();
     }
 
     isItem(id: number): boolean {
@@ -96,7 +105,8 @@ export class FieldItems implements FieldItemSource {
         if (
             cached &&
             cached.version === marchers.version &&
-            cached.itemsVersion === this.version
+            cached.itemsVersion === this.version &&
+            cached.appearanceVersion === marchers.appearanceVersion
         )
             return cached.outlines;
         const beat = marchers.drawnBeat;
@@ -128,6 +138,7 @@ export class FieldItems implements FieldItemSource {
         this.drawn = {
             version: marchers.version,
             itemsVersion: this.version,
+            appearanceVersion: marchers.appearanceVersion,
             outlines,
         };
         return outlines;
@@ -166,11 +177,23 @@ export class FieldItems implements FieldItemSource {
     }
 
     private geometryAt(id: number, beat: number): ItemGeometry | null {
-        return itemGeometryAt(this.changes.get(id) ?? [], beat);
+        if (this.geometries?.beat !== beat)
+            this.geometries = { beat, byId: new Map() };
+        const { byId } = this.geometries;
+        let geometry = byId.get(id);
+        if (geometry === undefined) {
+            geometry = itemGeometryAt(this.changes.get(id) ?? [], beat);
+            byId.set(id, geometry);
+        }
+        return geometry;
     }
 
     private changed() {
         this.version++;
+        this.emit();
+    }
+
+    private emit() {
         for (const listener of this.listeners) listener();
     }
 }

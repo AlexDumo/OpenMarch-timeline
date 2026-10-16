@@ -183,6 +183,26 @@ describe("FieldEditor with items", () => {
             ]);
         });
 
+        it("turns past 360° rather than wrapping, so the change eases the short way", () => {
+            const { editor, state } = setup({ selected: [2], rotation: 350 });
+            // The rotate handle of a box turned 350°: above the top middle, turned with it
+            const rad = (350 * Math.PI) / 180;
+            const handle = {
+                x: 300 + 40 * Math.sin(rad),
+                y: 100 - 40 * Math.cos(rad),
+            };
+            const target = (deg: number) => ({
+                x: 300 + 40 * Math.sin((deg * Math.PI) / 180),
+                y: 100 - 40 * Math.cos((deg * Math.PI) / 180),
+            });
+            editor.pointerDown(at(handle.x, handle.y));
+            editor.pointerMove(at(target(0).x, target(0).y));
+            editor.pointerMove(at(target(10).x, target(10).y));
+            editor.pointerUp(at(target(10).x, target(10).y));
+            // 20° turned, snapped to 15°
+            expect(state.saves[0].rotation).toBeCloseTo(365);
+        });
+
         it("draws it as it was when the drag is cancelled", () => {
             const { editor, state } = setup({ selected: [2] });
             drag(

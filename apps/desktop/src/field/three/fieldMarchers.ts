@@ -219,6 +219,14 @@ export class FieldMarchers {
     private markItems(force: boolean) {
         const items = this.items;
         const n = this.ids.length;
+        // A show with no items, marked so already: nothing to do on each frame
+        if (
+            !force &&
+            (!items || items.ids.size === 0) &&
+            this.isItem.length === n &&
+            this.hidden === this.appearanceHidden
+        )
+            return;
         const isItem = new Uint8Array(n);
         const hidden = Uint8Array.from(
             this.appearanceHidden.length === n
@@ -241,7 +249,10 @@ export class FieldMarchers {
         )
             return;
         this.isItem = isItem;
-        this.hidden = hidden;
+        // With no item hidden, `hidden` is the appearances' own
+        this.hidden = sameBytes(hidden, this.appearanceHidden)
+            ? this.appearanceHidden
+            : hidden;
         this.appearanceVersion++;
     }
 

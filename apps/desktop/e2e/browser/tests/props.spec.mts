@@ -210,8 +210,12 @@ test("draws a new prop with the Props panel's rectangle, on field from the playh
 test("Escape turns the prop tool off, and nothing is drawn", async ({
     show,
 }) => {
-    await expect.poll(() => drawnItems(show.page)).toHaveLength(1);
+    // A selected prop's handles do nothing while the tool is on, so they go
+    await selectRiser(show.page);
     await pickOutline(show.page, "Polygon");
+    expect(
+        await show.page.evaluate(() => window.fieldTest!.handles()),
+    ).toBeNull();
     const box = (await show.page
         .getByTestId("fieldCanvas")
         .first()

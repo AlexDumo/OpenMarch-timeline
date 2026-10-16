@@ -114,4 +114,20 @@ describe("FieldItems", () => {
         expect(items.isItem(2)).toBe(true);
         expect(items.isItem(1)).toBe(false);
     });
+
+    it("draws a newly hidden item no more, even for a listener that read it as it was told", () => {
+        const { marchers, items } = setup([change(0)]);
+        marchers.fill(3);
+        expect(items.outlines()).toHaveLength(1);
+        const seen: number[] = [];
+        items.subscribe(() => seen.push(items.outlines().length));
+        items.set({
+            itemIds: new Set([2]),
+            changes: new Map([[2, [change(0)]]]),
+            hidden: new Set([2]),
+        });
+        expect(seen).toEqual([0]);
+        expect(items.outlines()).toEqual([]);
+        expect(items.itemAt({ x: 100, y: 50 })).toBeNull();
+    });
 });

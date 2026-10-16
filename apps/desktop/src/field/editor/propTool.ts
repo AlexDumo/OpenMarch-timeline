@@ -13,7 +13,8 @@ import type { FieldPoint, FieldPointer } from "./fieldEditor";
  * then its bulge), and a polygon a click per corner, finished with a
  * double-click once it has three. Freehand is a drag, finished on release.
  * Points snap as a marcher's coordinates do, except freehand's. A drawing
- * too small to be meant is dropped, and the tool stays on for another.
+ * too small to be meant is dropped and the tool stays on; a finished one goes
+ * to the app, which makes the prop and turns the tool off.
  */
 
 /** What the overlay draws for the prop tool, and what the field test API reads. */

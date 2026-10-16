@@ -66,22 +66,14 @@ const PULLS: Record<Exclude<HandleId, "rot">, FieldPoint> = {
 
 abstract class ItemHandleGesture implements FieldGesture {
     abstract readonly kind: FieldTestGesture;
-    private last: ItemSize;
 
     constructor(
         protected readonly frame: ItemFrame,
         private readonly host: ItemTransformHost,
-    ) {
-        this.last = {
-            width: frame.width,
-            depth: frame.depth,
-            rotation: frame.rotation,
-        };
-    }
+    ) {}
 
     move(pointer: FieldPointer): void {
-        this.last = this.sizeAt(pointer);
-        this.host.show(this.last);
+        this.host.show(this.sizeAt(pointer));
     }
 
     end(pointer: FieldPointer): void {
@@ -150,9 +142,8 @@ export class ItemRotateGesture extends ItemHandleGesture {
         this.turned += turnBetween(center, this.lastPoint, pointer.field);
         this.lastPoint = pointer.field;
         const turn = snapRotation(this.turned, pointer.shift || pointer.alt);
-        return { width, depth, rotation: normalizeDegrees(rotation + turn) };
+        // Raw, not wrapped to [0, 360): an Outline change eases through the raw angle (so a
+        // spin can be drawn), and 350° turned 20° must ease 20°, not back 340°
+        return { width, depth, rotation: rotation + turn };
     }
 }
-
-/** `degrees` in [0, 360). */
-const normalizeDegrees = (degrees: number) => ((degrees % 360) + 360) % 360;
