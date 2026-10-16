@@ -5,14 +5,11 @@ import {
     countContinuation,
     countsToCoverAudio,
     countsToReach,
-    formatMinutesSeconds,
     measuresToCoverAudio,
     musicEndSeconds,
-    musicRunsPastCounts,
     MUSIC_END_TOLERANCE_SECONDS,
     pageFlagsToEnd,
 } from "../showLength";
-import { waveformWithPastEnd } from "../timelineWaveform";
 
 /** Beat 0 (zero length) and then `durations` */
 const show = (...durations: number[]) => [
@@ -255,79 +252,6 @@ describe("where the music ends", () => {
         expect(musicEndSeconds(envelope(1, 0.5, 1e-3, 1e-3), 42)).toBe(0.2);
         expect(musicEndSeconds(envelope(0, 0), 42)).toBeNull();
         expect(musicEndSeconds(envelope(), 42)).toBeNull();
-    });
-
-    it("offers extending only when more than a count of music is left", () => {
-        const continuation = countContinuation({
-            beats: show(0.5),
-            measureStarts: [],
-        });
-        const past = (musicEnd: number | null) =>
-            musicRunsPastCounts({
-                countsEndSeconds: 40,
-                musicEnd,
-                continuation,
-            });
-        expect(past(151)).toBe(true);
-        expect(past(40.4)).toBe(false);
-        expect(past(30)).toBe(false);
-        expect(past(null)).toBe(false);
-    });
-
-    it("formats times as the player does", () => {
-        expect(formatMinutesSeconds(151.9)).toBe("2:31");
-        expect(formatMinutesSeconds(40)).toBe("0:40");
-        expect(formatMinutesSeconds(5)).toBe("0:05");
-        expect(formatMinutesSeconds(-1)).toBe("0:00");
-    });
-});
-
-describe("the waveform past the last count", () => {
-    // 10 s at 10 values a second: quiet for 4 s, loud after
-    const envelope = {
-        peaks: Float32Array.from({ length: 100 }, (_, i) =>
-            i < 40 ? 0.01 : 1,
-        ),
-        rate: 10,
-    };
-    const beats = [
-        { timestamp: 0, duration: 0 },
-        ...Array.from({ length: 4 }, (_, i) => ({
-            timestamp: i,
-            duration: 1,
-        })),
-    ];
-
-    it("draws the music after the last count on continued counts, until the music ends", () => {
-        const { peaksByBeat, peaksPastEnd } = waveformWithPastEnd(
-            envelope,
-            beats,
-            1,
-            { durationAt: () => 2, musicEnd: 10 },
-            2,
-        );
-        expect(peaksByBeat.length).toBe(4);
-        // 4 s to 10 s in counts of 2 s
-        expect(peaksPastEnd.length).toBe(3);
-        expect(peaksPastEnd.flat()).toEqual(Array(6).fill(1));
-        // One scale for both, set by the show's loudest moment (UI-12): the louder music past
-        // the end can't shrink the show's waveform, and is clipped at the top
-        expect(peaksByBeat.flat()[0]).toBeCloseTo(1);
-    });
-
-    it("draws nothing past the end without music there", () => {
-        expect(
-            waveformWithPastEnd(envelope, beats, 1, {
-                durationAt: () => 2,
-                musicEnd: null,
-            }).peaksPastEnd,
-        ).toEqual([]);
-        expect(
-            waveformWithPastEnd(envelope, beats, 1, {
-                durationAt: () => 2,
-                musicEnd: 3,
-            }).peaksPastEnd,
-        ).toEqual([]);
     });
 });
 

@@ -69,6 +69,7 @@ export async function appendCountsInTransaction({
     const { continuation, beatCount } = await readContinuation(tx);
     if (counts === 0) return beatCount;
     const appended = continuedCounts(continuation, counts);
+    storedCounts = true;
     await withTimelinePageRipple(tx, async () => {
         const created = await createBeatsInTransaction({
             tx,
@@ -94,6 +95,19 @@ export async function appendCountsInTransaction({
     });
     return beatCount + counts;
 }
+
+let storedCounts = false;
+
+/**
+ * Whether an edit has stored counts since the last call (which clears it). Any write can store
+ * counts now, a move or a measure line too, so the app refreshes the beats and measures after a
+ * write that did (`refreshHistoryOnWrites`), whatever queries the write itself refreshes.
+ */
+export const takeStoredCounts = (): boolean => {
+    const stored = storedCounts;
+    storedCounts = false;
+    return stored;
+};
 
 /**
  * The most counts one edit stores (docs/tempo/decisions.md EC-1): about an hour at 300 BPM, far

@@ -204,31 +204,6 @@ export function musicEndSeconds(
 }
 
 /**
- * Whether the music runs past the counts by enough to offer extending them: more than one more
- * count (of the show's last tempo) of music after the last count ends.
- */
-export function musicRunsPastCounts({
-    countsEndSeconds,
-    musicEnd,
-    continuation,
-}: {
-    countsEndSeconds: number;
-    musicEnd: number | null;
-    continuation: CountContinuation;
-}): boolean {
-    return (
-        musicEnd !== null &&
-        musicEnd - countsEndSeconds > continuation.durationAt(0)
-    );
-}
-
-/** `m:ss` for a time in seconds, as the music player shows it (2:31). Rounds down. */
-export function formatMinutesSeconds(seconds: number): string {
-    const whole = Math.max(0, Math.floor(seconds + 1e-6));
-    return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
-}
-
-/**
  * Where "Add pages every N counts to the end" puts flags (docs/tempo/decisions.md FB-7): every
  * `counts` counts after the last flag while the counts last, and a last, shorter page on the end
  * of the show when counts are left over, so the pages cover the whole song. Flags are spec beat

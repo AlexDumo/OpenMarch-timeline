@@ -19,6 +19,7 @@ import {
     pageFlagMoveLimits,
 } from "../pageFlags";
 import { editMeasureLines } from "../measureLines";
+import { endlessIdOf } from "@/timeline/endlessTimeline";
 import { resizeTimeline } from "../timelineResize";
 import { shiftTimeline } from "../timelineCommands";
 import { moveMarchersInRangeInTransaction } from "../timelineMoves";
@@ -260,6 +261,32 @@ describeDbTests("writes past the last stored count", (it) => {
             expect((await measureStarts(db)).slice(-3)).toEqual([
                 101, 105, 109,
             ]);
+        });
+    });
+
+    describe("measures drawn past the end", () => {
+        it("naming an endless measure's mark stores the counts and that measure", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const before = await snapshot(db);
+
+            // The measure the row draws at beat 113 (endless measures are named by their beat)
+            await editMeasureLines({
+                db,
+                edit: { kind: "mark", measureId: endlessIdOf(113), mark: "K" },
+            });
+
+            expect(await beatCount(db)).toBe(114);
+            const k = await db
+                .select()
+                .from(schema.measures)
+                .where(sql`${schema.measures.rehearsal_mark} = 'K'`)
+                .all();
+            expect(k.length).toBe(1);
+            expect((await measureStarts(db)).slice(-2)).toEqual([109, 113]);
+            await roundTrip(db, before, await snapshot(db));
         });
     });
 
