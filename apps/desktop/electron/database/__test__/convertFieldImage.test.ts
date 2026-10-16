@@ -16,7 +16,10 @@ import {
     readUserVersion,
     TIMELINE_MODEL_USER_VERSION,
 } from "../fileVersion";
-import { convertFieldImageOnOpen } from "../convertFieldImage";
+import {
+    convertFieldImageOnOpen,
+    setFloorFromImage,
+} from "../convertFieldImage";
 import { createAllUndoTriggers } from "@/db-functions/historyTriggers";
 import type { EmbedLibraryVersion } from "@/db-functions/showLibrary";
 import { hashParts, versionHashOf } from "@/view3d/library/showHash";
@@ -226,5 +229,29 @@ describe("convertFieldImageOnOpen", () => {
         const makeFloor = vi.fn(async () => floorVersion("display"));
         expect(await convertFieldImageOnOpen(db, { makeFloor })).toBe("none");
         expect(readUserVersion(db)).toBe(7);
+    });
+
+    describe("setFloorFromImage (a new show copying a previous show's floor)", () => {
+        it("makes the image the floor, outside undo history", async () => {
+            db = await createShow(
+                path.join(dir, "show.dots"),
+                FLOOR_MODEL_USER_VERSION,
+            );
+            const historyBefore = count(db, "history_undo");
+            const triggersBefore = fieldTriggers(db);
+
+            const floor = await setFloorFromImage(
+                getOrm(db) as never,
+                LEGACY,
+                async () => floorVersion("display"),
+            );
+
+            expect(floor.itemId).toBe(FLOOR_ID);
+            expect(JSON.parse(fieldRow(db).json_data).floor).toEqual(floor);
+            expect(fieldRow(db).image).toBeNull();
+            expect(count(db, "library_items")).toBe(1);
+            expect(count(db, "history_undo")).toBe(historyBefore);
+            expect(fieldTriggers(db)).toEqual(triggersBefore);
+        });
     });
 });

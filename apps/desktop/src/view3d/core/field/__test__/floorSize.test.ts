@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FieldProperties, fieldFootprint } from "@openmarch/core";
 import FieldPropertiesTemplates from "../../../../global/classes/FieldProperties.templates";
-import { floorSizeForImage } from "../floorSize";
+import { fieldFloorSize, floorSizeForImage } from "../floorSize";
 
 const gym = FieldPropertiesTemplates.INDOOR_50x80_8to5;
 
@@ -37,5 +37,15 @@ describe("floorSizeForImage (D-23 convert on open)", () => {
         });
         expect(size.widthM).toBeCloseTo(footprint.width, 6);
         expect(size.heightM).toBeCloseTo(footprint.depth, 6);
+    });
+});
+
+describe("fieldFloorSize (Upload floor…)", () => {
+    it("is the field's own size", () => {
+        const footprint = extent(gym);
+        expect(fieldFloorSize(gym)).toEqual({
+            widthM: footprint.width,
+            heightM: footprint.depth,
+        });
     });
 });

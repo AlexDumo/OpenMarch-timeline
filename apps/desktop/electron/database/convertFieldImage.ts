@@ -10,8 +10,9 @@
  * 8) converts too. A page-model file (7) is left for the timeline conversion, which runs first.
  */
 import type { DatabaseSync } from "node:sqlite";
-import { sql } from "drizzle-orm";
-import { FieldProperties } from "@openmarch/core";
+import { eq, sql } from "drizzle-orm";
+import * as schema from "./migrations/schema";
+import { FieldProperties, type FieldFloor } from "@openmarch/core";
 import {
     embedLibraryVersionInTransaction,
     type EmbedLibraryVersion,
@@ -89,41 +90,75 @@ export async function convertFieldImageOnOpen(
         }
     }
 
-    // Put back only what the file had: the open's migrations rebuild every trigger anyway
-    const hadUndoTriggers =
-        (
-            db
-                .prepare(
-                    "SELECT count(*) AS n FROM sqlite_master WHERE type = 'trigger' AND name = 'field_properties_ut'",
-                )
-                .get() as { n: number }
-        ).n > 0;
-
     const orm = getOrm(db) as unknown as DbConnection;
+    const hadUndoTriggers = await hasFieldUndoTriggers(orm);
     await orm.transaction(async (tx: DbTransaction) => {
-        if (hasImage) {
-            // Not an undoable edit: the person never made it
-            await dropUndoTriggers(tx, "field_properties");
-            if (floor) {
-                await embedLibraryVersionInTransaction({ tx, version: floor });
-                await setFieldFloorInTransaction({
-                    tx,
-                    floor: {
-                        itemId: floor.itemId,
-                        versionHash: floor.versionHash,
-                    },
-                });
-            }
-            await tx.run(
-                sql`UPDATE field_properties SET image = NULL WHERE id = 1`,
-            );
-            if (hadUndoTriggers)
-                await createUndoTriggers(tx as never, "field_properties");
-        }
+        if (hasImage)
+            await installFloorInTransaction(tx, floor, { hadUndoTriggers });
         if (version < FLOOR_MODEL_USER_VERSION)
             await tx.run(
                 sql.raw(`PRAGMA user_version = ${FLOOR_MODEL_USER_VERSION}`),
             );
     });
     return floor ? "converted" : "none";
+}
+
+/** True when the show has `field_properties`' undo triggers, which an opened show does. */
+async function hasFieldUndoTriggers(
+    db: DbConnection | DbTransaction,
+): Promise<boolean> {
+    const row = await db
+        .select({ n: sql<number>`count(*)` })
+        .from(sql`sqlite_master`)
+        .where(sql`type = 'trigger' AND name = 'field_properties_ut'`)
+        .get();
+    return (row?.n ?? 0) > 0;
+}
+
+/**
+ * Embeds `floor` (when given), names it in the field properties and clears the legacy image,
+ * none of it undoable: the person never made this edit. Puts back only the undo triggers the
+ * file had.
+ */
+async function installFloorInTransaction(
+    tx: DbTransaction,
+    floor: EmbedLibraryVersion | null,
+    { hadUndoTriggers }: { hadUndoTriggers: boolean },
+): Promise<void> {
+    await dropUndoTriggers(tx, "field_properties");
+    if (floor) {
+        await embedLibraryVersionInTransaction({ tx, version: floor });
+        await setFieldFloorInTransaction({
+            tx,
+            floor: { itemId: floor.itemId, versionHash: floor.versionHash },
+        });
+    }
+    await tx.run(sql`UPDATE field_properties SET image = NULL WHERE id = 1`);
+    if (hadUndoTriggers)
+        await createUndoTriggers(tx as never, "field_properties");
+}
+
+/**
+ * Makes `image` the open show's floor, outside undo history, and returns it. For a new show
+ * that copies a previous show's field image (`newShow:setFloorFromImage`). Throws, writing
+ * nothing, when the image can't become a floor.
+ */
+export async function setFloorFromImage(
+    db: DbConnection,
+    image: Uint8Array,
+    makeFloor: MakeFloor,
+): Promise<FieldFloor> {
+    const row = await db
+        .select({ json: schema.field_properties.json_data })
+        .from(schema.field_properties)
+        .where(eq(schema.field_properties.id, 1))
+        .get();
+    const json = row ? parseJson(row.json) : null;
+    if (!json) throw new Error("Field properties not found");
+    const floor = await makeFloor(image, new FieldProperties(json as never));
+    const hadUndoTriggers = await hasFieldUndoTriggers(db);
+    await db.transaction((tx) =>
+        installFloorInTransaction(tx, floor, { hadUndoTriggers }),
+    );
+    return { itemId: floor.itemId, versionHash: floor.versionHash };
 }

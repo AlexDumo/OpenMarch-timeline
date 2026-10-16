@@ -10,6 +10,7 @@ import {
 import {
     getFieldFloor,
     getFieldFloorImage,
+    getFieldFloorPart,
     libraryKeepsFromFloor,
 } from "../fieldFloor";
 import { setFieldFloor } from "../fieldFloorEdits";
@@ -91,6 +92,17 @@ describeDbTests("fieldFloor", (it) => {
             );
         });
 
+        it("reads the floor's original as imported, for a new show to copy", async ({
+            db,
+        }) => {
+            const tarp = await artwork(FLOOR, "tarp display");
+            await embedLibraryVersions({ db, versions: [tarp] });
+            await setFieldFloor({ db, floor: refOf(tarp) });
+            expect(
+                await imageText(getFieldFloorPart({ db, role: "original" })),
+            ).toBe("tarp display.original");
+        });
+
         it("never reads the legacy field_properties.image", async ({ db }) => {
             await db
                 .update(schema.field_properties)
@@ -143,6 +155,42 @@ describeDbTests("fieldFloor", (it) => {
 
             await setFieldFloor({ db, floor: null });
             expect(await fieldJson(db)).toEqual(before);
+        });
+
+        it("applies a patch in the same edit, such as showing the field image", async ({
+            db,
+        }) => {
+            const tarp = await artwork(FLOOR, "tarp");
+            await embedLibraryVersions({ db, versions: [tarp] });
+            const json = await fieldJson(db);
+            await db
+                .update(schema.field_properties)
+                .set({
+                    json_data: JSON.stringify({
+                        ...json,
+                        showFieldImage: false,
+                    }),
+                })
+                .where(eq(schema.field_properties.id, 1))
+                .run();
+            const before = await db.select().from(schema.history_undo).all();
+
+            await setFieldFloor({
+                db,
+                floor: refOf(tarp),
+                patch: { showFieldImage: true },
+            });
+
+            expect(await fieldJson(db)).toMatchObject({
+                showFieldImage: true,
+                floor: refOf(tarp),
+            });
+            const groups = new Set(
+                (await db.select().from(schema.history_undo).all())
+                    .slice(before.length)
+                    .map((row) => row.history_group),
+            );
+            expect(groups.size).toBe(1);
         });
 
         it("undoes and redoes setting, replacing and clearing the floor", async ({

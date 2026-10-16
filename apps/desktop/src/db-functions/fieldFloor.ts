@@ -85,6 +85,29 @@ async function embeddedParts(
 }
 
 /**
+ * One part of the floor's Version, such as `display` or `original`, or null when the show has
+ * no floor or doesn't hold its Version.
+ */
+export async function getFieldFloorPart({
+    db,
+    role,
+}: {
+    db: DbConnection | DbTransaction;
+    role: "display" | "original";
+}): Promise<Uint8Array | null> {
+    const floor = await getFieldFloor({ db });
+    if (!floor) return null;
+    const hash = (await embeddedParts(db, floor))?.[role];
+    if (!hash) return null;
+    const blob = await db
+        .select({ data: schema.library_blobs.data })
+        .from(schema.library_blobs)
+        .where(eq(schema.library_blobs.hash, hash))
+        .get();
+    return blob?.data ?? null;
+}
+
+/**
  * The field image: the floor's display texture (PNG or JPEG), or null when the show has no
  * floor or doesn't hold its Version. Never reads `field_properties.image`.
  */
@@ -93,28 +116,22 @@ export async function getFieldFloorImage({
 }: {
     db: DbConnection | DbTransaction;
 }): Promise<Uint8Array | null> {
-    const floor = await getFieldFloor({ db });
-    if (!floor) return null;
-    const parts = await embeddedParts(db, floor);
-    if (!parts?.display) return null;
-    const blob = await db
-        .select({ data: schema.library_blobs.data })
-        .from(schema.library_blobs)
-        .where(eq(schema.library_blobs.hash, parts.display))
-        .get();
-    return blob?.data ?? null;
+    return getFieldFloorPart({ db, role: "display" });
 }
 
 /**
  * Writes `floor` into the field properties JSON inside `tx`, keeping every other property; null
- * clears it. The Version must already be embedded in the show.
+ * clears it. `patch` sets other properties in the same write, such as `showFieldImage`. The
+ * Version must already be embedded in the show.
  */
 export async function setFieldFloorInTransaction({
     tx,
     floor,
+    patch = {},
 }: {
     tx: DbTransaction;
     floor: FieldFloor | null;
+    patch?: Record<string, unknown>;
 }): Promise<void> {
     if (floor && !(await embeddedParts(tx, floor))) {
         throw new Error(
@@ -123,7 +140,9 @@ export async function setFieldFloorInTransaction({
     }
     const json = await readFieldJson(tx);
     if (!json) throw new Error("Field properties not found");
-    const { floor: _previous, ...rest } = json;
+    const { floor: _previous, ...others } = json;
+    const { floor: _ignored, ...extra } = patch;
+    const rest = { ...others, ...extra };
     await tx
         .update(schema.field_properties)
         .set({

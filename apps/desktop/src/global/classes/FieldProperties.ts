@@ -51,40 +51,10 @@ export async function updateFieldProperties(
     return new FieldProperties(JSON.parse(result));
 }
 
-export async function updateFieldPropertiesImage(
-    image: Uint8Array,
-): Promise<void> {
-    await transactionWithHistory(
-        db,
-        "updateFieldPropertiesImage",
-        async (tx) => {
-            return await tx
-                .update(field_properties)
-                .set({ image: image })
-                .where(eq(field_properties.id, 1))
-                .run();
-        },
-    );
-}
-
 /**
  * The field image: the show's floor's display texture (ADR 0002 D-23), or null. The legacy
  * `field_properties.image` column is read only by convert on open.
  */
 export async function getFieldPropertiesImage(): Promise<Uint8Array | null> {
     return getFieldFloorImage({ db });
-}
-
-export async function deleteFieldPropertiesImage(): Promise<void> {
-    await transactionWithHistory(
-        db,
-        "deleteFieldPropertiesImage",
-        async (tx) => {
-            return await tx
-                .update(field_properties)
-                .set({ image: null })
-                .where(eq(field_properties.id, 1))
-                .run();
-        },
-    );
 }

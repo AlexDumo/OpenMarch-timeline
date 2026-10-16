@@ -11,11 +11,14 @@ import type { DbConnection } from "./types";
 export async function setFieldFloor({
     db,
     floor,
+    patch,
 }: {
     db: DbConnection;
     floor: FieldFloor | null;
+    /** Other field properties to set in the same edit */
+    patch?: Record<string, unknown>;
 }): Promise<void> {
     await transactionWithHistory(db, "setFieldFloor", (tx) =>
-        setFieldFloorInTransaction({ tx, floor }),
+        setFieldFloorInTransaction({ tx, floor, patch }),
     );
 }
