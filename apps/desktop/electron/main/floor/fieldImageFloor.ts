@@ -12,7 +12,8 @@ import type { FieldProperties } from "@openmarch/core";
 import { floorSizeForImage } from "../../../src/view3d/core/field/floorSize";
 import { versionToEmbed } from "../../../src/view3d/library/showLibraryEmbed";
 import type { EmbedLibraryVersion } from "../../../src/db-functions/showLibrary";
-import { importArtwork } from "../artwork-import";
+import { importArtwork, inspectArtwork } from "../artwork-import";
+import type { PdfRenderer } from "../artwork-import/pdf";
 import { sniffArtworkFormat } from "../artwork-import/formats";
 import { openLibraryStore } from "../library/store";
 
@@ -21,38 +22,73 @@ export const FLOOR_TEMP_PREFIX = "openmarch-floor-";
 
 const FLOOR_NAME = "Field image";
 
-/** PNG and JPEG go in as they are; anything else sharp reads (GIF, WebP) becomes a PNG. */
-async function pipelineInput(image: Uint8Array): Promise<Uint8Array> {
+/** Formats the Artwork pipeline reads itself; anything else sharp reads (GIF, WebP) becomes PNG. */
+async function pipelineInput(
+    image: Uint8Array,
+): Promise<{ bytes: Uint8Array; extension: string }> {
     const format = sniffArtworkFormat(image);
-    if (format === "png" || format === "jpeg") return image;
+    if (format)
+        return { bytes: image, extension: format === "jpeg" ? "jpg" : format };
     const sharp = (await import("sharp")).default;
-    return new Uint8Array(await sharp(image).png().toBuffer());
+    return {
+        bytes: new Uint8Array(await sharp(image).png().toBuffer()),
+        extension: "png",
+    };
 }
+
+export interface FloorFromFieldImageOptions {
+    /** Renders a PDF original; defaults to pdf.js in a hidden window, made only for a PDF. */
+    pdfRenderer?: () => PdfRenderer;
+}
+
+const appPdfRenderer = async (): Promise<PdfRenderer> =>
+    (await import("../artwork-import")).createElectronPdfRenderer();
 
 export async function floorFromFieldImage(
     image: Uint8Array,
     fieldProperties: FieldProperties,
+    options: FloorFromFieldImageOptions = {},
 ): Promise<EmbedLibraryVersion> {
-    const bytes = await pipelineInput(image);
-    const sharp = (await import("sharp")).default;
-    const { width, height } = await sharp(bytes).metadata();
-    if (!width || !height) throw new Error("The field image has no size");
-    const size = floorSizeForImage(fieldProperties, { width, height });
+    const { bytes, extension } = await pipelineInput(image);
+    const file = { filename: `${FLOOR_NAME}.${extension}`, bytes };
+    const pdfRenderer =
+        extension === "pdf"
+            ? (options.pdfRenderer?.() ?? (await appPdfRenderer()))
+            : null;
+
+    // The first page's shape, from the pipeline, sizes the floor (a PDF's later pages don't)
+    const inspection = await inspectArtwork(file, { pdfRenderer });
+    if (!inspection.ok) {
+        throw new Error(
+            `The field image couldn't be read: ${inspection.notes.map((n) => n.message).join("; ")}`,
+        );
+    }
+    const first = inspection.pages[0];
+    if (!first) throw new Error("The field image has no pages");
+    const size = floorSizeForImage(fieldProperties, {
+        width: first.aspect,
+        height: 1,
+    });
 
     const root = await mkdtemp(path.join(tmpdir(), FLOOR_TEMP_PREFIX));
     try {
         const store = await openLibraryStore({ root });
-        const report = await importArtwork(store, {
-            file: { filename: `${FLOOR_NAME}.png`, bytes },
-            surface: "baseFloor",
-            size: {
-                width: { m: size.widthM },
-                height: { m: size.heightM },
-                source: "slot",
-                templateId: null,
+        const report = await importArtwork(
+            store,
+            {
+                file,
+                surface: "baseFloor",
+                pages: [first.index],
+                size: {
+                    width: { m: size.widthM },
+                    height: { m: size.heightM },
+                    source: "slot",
+                    templateId: null,
+                },
+                name: FLOOR_NAME,
             },
-            name: FLOOR_NAME,
-        });
+            { pdfRenderer },
+        );
         const page = report.imported[0];
         if (!page) {
             const notes = report.notImported.flatMap((n) => n.notes);

@@ -25,6 +25,11 @@ import {
 } from "@om-electron/database/fileVersion";
 import { initializeNewFileAsTimeline } from "@om-electron/database/convertOnOpenGate";
 import { convertFileOnOpen } from "@om-electron/database/convertOnOpen";
+import {
+    convertFieldImageOnOpen,
+    setFloorFromImage,
+} from "@om-electron/database/convertFieldImage";
+import { webFloorFromFieldImage } from "./floor";
 import * as schema from "@om-electron/database/migrations/schema";
 import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
 import { readPreviousDotsFile } from "@om-electron/main/services/previous-dots-import-service";
@@ -118,6 +123,14 @@ async function openShowAt(path: string, isNewFile: boolean): Promise<number> {
             if (result.status === "conversion-failed") throw result.error;
         }
         await migrator.applyPendingMigrations(MIGRATIONS_FOLDER);
+        // A legacy field image becomes the show's floor, and the file 9 (D-23). A failure
+        // leaves the file as it was; the next open tries again.
+        await convertFieldImageOnOpen(db, {
+            makeFloor: (image, fieldProperties) =>
+                webFloorFromFieldImage(image, fieldProperties),
+        }).catch((error: unknown) =>
+            console.error("Couldn't convert the field image on open", error),
+        );
         // Shows from before workspace settings have no row, and the app adds
         // one as it loads (initializeWorkspaceSettings), which would count as
         // a change the person must download. Adding it while opening, as a
@@ -387,6 +400,17 @@ function registerNewShowHandlers() {
         return 200;
     });
     ipcMain.handle("newShow:getDraftPath", () => draftPath);
+    // A new show copies a previous show's field image as its own floor (D-23)
+    ipcMain.handle("newShow:setFloorFromImage", async (_, image: unknown) => {
+        if (!(image instanceof Uint8Array) || image.byteLength === 0)
+            throw new Error("Not a field image");
+        await setFloorFromImage(
+            DatabaseServices.getOrmConnection() as never,
+            image,
+            (bytes, fieldProperties) =>
+                webFloorFromFieldImage(bytes, fieldProperties),
+        );
+    });
 }
 
 /** The web build's own channels: one show, in from and out to the page. */

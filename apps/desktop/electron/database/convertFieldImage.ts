@@ -10,8 +10,7 @@
  * 8) converts too. A page-model file (7) is left for the timeline conversion, which runs first.
  */
 import type { DatabaseSync } from "node:sqlite";
-import { eq, sql } from "drizzle-orm";
-import * as schema from "./migrations/schema";
+import { sql } from "drizzle-orm";
 import { FieldProperties, type FieldFloor } from "@openmarch/core";
 import {
     embedLibraryVersionInTransaction,
@@ -19,6 +18,8 @@ import {
 } from "@/db-functions/showLibrary";
 import {
     floorOfFieldJson,
+    parseFieldJson,
+    readFieldJson,
     setFieldFloorInTransaction,
 } from "@/db-functions/fieldFloor";
 import {
@@ -52,17 +53,6 @@ interface FieldRow {
     image: Uint8Array | null;
 }
 
-const parseJson = (text: string): Record<string, unknown> | null => {
-    try {
-        const parsed: unknown = JSON.parse(text);
-        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-            ? (parsed as Record<string, unknown>)
-            : null;
-    } catch {
-        return null;
-    }
-};
-
 export async function convertFieldImageOnOpen(
     db: DatabaseSync,
     { makeFloor }: { makeFloor: MakeFloor },
@@ -73,9 +63,12 @@ export async function convertFieldImageOnOpen(
     const row = db
         .prepare("SELECT json_data, image FROM field_properties WHERE id = 1")
         .get() as FieldRow | undefined;
-    const json = row ? parseJson(row.json_data) : null;
+    const json = row ? parseFieldJson(row.json_data) : null;
     const hasImage = !!row?.image && row.image.byteLength > 0;
     const hasFloor = floorOfFieldJson(json) !== null;
+
+    // Without readable field properties there's no size for a floor: keep the image for later
+    if (hasImage && !hasFloor && !json) return "failed";
 
     let floor: EmbedLibraryVersion | null = null;
     if (hasImage && !hasFloor && json) {
@@ -148,12 +141,7 @@ export async function setFloorFromImage(
     image: Uint8Array,
     makeFloor: MakeFloor,
 ): Promise<FieldFloor> {
-    const row = await db
-        .select({ json: schema.field_properties.json_data })
-        .from(schema.field_properties)
-        .where(eq(schema.field_properties.id, 1))
-        .get();
-    const json = row ? parseJson(row.json) : null;
+    const json = await readFieldJson(db);
     if (!json) throw new Error("Field properties not found");
     const floor = await makeFloor(image, new FieldProperties(json as never));
     const hadUndoTriggers = await hasFieldUndoTriggers(db);

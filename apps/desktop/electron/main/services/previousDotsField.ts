@@ -14,15 +14,13 @@ export function fieldForNewShow(
     legacyImage: Uint8Array | null,
     floorOriginal: Uint8Array | null,
 ): NewShowField {
-    const parsed = JSON.parse(fieldPropertiesJson) as Record<string, unknown>;
-    if (!("floor" in parsed))
-        return {
-            fieldPropertiesJson,
-            fieldImage: floorOriginal ?? legacyImage,
-        };
-    const { floor: _floor, ...rest } = parsed;
+    const { floor, ...rest } = JSON.parse(fieldPropertiesJson) as Record<
+        string,
+        unknown
+    >;
     return {
-        fieldPropertiesJson: JSON.stringify(rest),
+        fieldPropertiesJson:
+            floor === undefined ? fieldPropertiesJson : JSON.stringify(rest),
         fieldImage: floorOriginal ?? legacyImage,
     };
 }

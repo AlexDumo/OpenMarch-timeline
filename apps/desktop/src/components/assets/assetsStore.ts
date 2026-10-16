@@ -8,6 +8,7 @@
  * each import in the open show.
  */
 import { create } from "zustand";
+import { conToastError } from "@/utilities/utils";
 import {
     createImportReview,
     type ImportReviewClient,
@@ -66,13 +67,20 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
             },
             onImported: (saved) => {
                 void (async () => {
+                    const embed = get().onImported;
+                    // Without the show's copy there's nothing for onEmbedded to name
+                    if (!embed) return;
                     try {
-                        await get().onImported?.(saved);
+                        await embed(saved);
                     } catch {
-                        // The embed reports its own failure; without a copy there's nothing to name
+                        // The embed reports its own failure
                         return;
                     }
-                    await onEmbedded?.(saved);
+                    try {
+                        await onEmbedded?.(saved);
+                    } catch (error) {
+                        conToastError("Couldn't finish the import", error);
+                    }
                 })();
             },
             // Land on the Library with the new items highlighted. Pages the

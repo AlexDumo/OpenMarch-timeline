@@ -12,6 +12,7 @@ import {
     getFieldFloorImage,
     getFieldFloorPart,
     libraryKeepsFromFloor,
+    writeFieldJsonKeepingFloorInTransaction,
 } from "../fieldFloor";
 import { setFieldFloor } from "../fieldFloorEdits";
 import { hashParts, versionHashOf } from "@/view3d/library/showHash";
@@ -226,6 +227,43 @@ describeDbTests("fieldFloor", (it) => {
             expect(added.length).toBeGreaterThan(0);
             for (const row of added)
                 expect(row.sql).toMatch(/field_properties/);
+        });
+    });
+
+    describe("writeFieldJsonKeepingFloorInTransaction", () => {
+        it("keeps the floor when a template replaces the field properties", async ({
+            db,
+        }) => {
+            const tarp = await artwork(FLOOR, "tarp");
+            await embedLibraryVersions({ db, versions: [tarp] });
+            await setFieldFloor({ db, floor: refOf(tarp) });
+
+            await db.transaction((tx) =>
+                writeFieldJsonKeepingFloorInTransaction({
+                    tx,
+                    json: JSON.stringify({ name: "High School Football" }),
+                }),
+            );
+
+            expect(await fieldJson(db)).toEqual({
+                name: "High School Football",
+                floor: refOf(tarp),
+            });
+        });
+
+        it("ignores a floor in the written JSON: only setFieldFloor sets it", async ({
+            db,
+        }) => {
+            await db.transaction((tx) =>
+                writeFieldJsonKeepingFloorInTransaction({
+                    tx,
+                    json: JSON.stringify({
+                        name: "Gym",
+                        floor: { itemId: OTHER, versionHash: "9".repeat(64) },
+                    }),
+                }),
+            );
+            expect(await fieldJson(db)).toEqual({ name: "Gym" });
         });
     });
 

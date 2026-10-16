@@ -102,7 +102,7 @@ describe("FieldFloorControls (D-23, Q82)", () => {
         expect(setFieldFloor).toHaveBeenCalledWith({
             db: { fake: "db" },
             floor: { itemId: "new-floor", versionHash: "b".repeat(64) },
-            patch: { showFieldImage: true },
+            patch: { showFieldImage: true, backgroundImageOpacity: 1 },
         });
         expect(invalidate).toHaveBeenCalled();
     });

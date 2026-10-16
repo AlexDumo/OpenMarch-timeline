@@ -62,7 +62,8 @@ export default function FieldFloorControls({
                         itemId: first.item.id,
                         versionHash: first.versionHash,
                     },
-                    patch: { showFieldImage: true },
+                    // Shown in full, as the old Import Image did
+                    patch: { showFieldImage: true, backgroundImageOpacity: 1 },
                 });
                 await refresh();
             },

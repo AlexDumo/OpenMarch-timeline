@@ -13,6 +13,7 @@ import sanitizeHtml from "sanitize-html";
 import Store from "electron-store";
 import { getOrmConnection } from "../../database/database.services";
 import { getFieldFloorImage } from "../../../src/db-functions/fieldFloor";
+import { sniffArtworkFormat } from "../artwork-import/formats";
 import { measureRangeString as _measureRangeString } from "../../../src/global/classes/Page.utils";
 import logoSvgRaw from "@/assets/open-march-logo.svg?raw";
 
@@ -569,7 +570,7 @@ export class PDFExportService {
             const base64 = Buffer.from(image).toString("base64");
             // A floor's display texture is PNG, or JPEG for a large opaque image
             const mimeType =
-                image[0] === 0xff && image[1] === 0xd8
+                sniffArtworkFormat(image) === "jpeg"
                     ? "image/jpeg"
                     : "image/png";
             const dataUri = `data:${mimeType};base64,${base64}`;

@@ -70,4 +70,12 @@ describe("assetsStore.startImport", () => {
         await new Promise((r) => setTimeout(r, 0));
         expect(onEmbedded).not.toHaveBeenCalled();
     });
+
+    it("skips onEmbedded when no embed is registered, since nothing was copied", async () => {
+        const onEmbedded = vi.fn();
+        useAssetsStore.getState().startImport({} as never, { onEmbedded });
+        options.onImported?.(saved);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(onEmbedded).not.toHaveBeenCalled();
+    });
 });

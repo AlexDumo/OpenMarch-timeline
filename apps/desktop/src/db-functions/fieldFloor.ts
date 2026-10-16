@@ -24,7 +24,7 @@ const FieldFloorSchema = z.object({
 
 const PartsSchema = z.record(z.string(), z.string());
 
-async function readFieldJson(
+export async function readFieldJson(
     db: DbConnection | DbTransaction,
 ): Promise<Record<string, unknown> | null> {
     const row = await db
@@ -32,9 +32,13 @@ async function readFieldJson(
         .from(schema.field_properties)
         .where(eq(schema.field_properties.id, FIELD_PROPERTIES_ID))
         .get();
-    if (!row) return null;
+    return row ? parseFieldJson(row.json) : null;
+}
+
+/** Field properties JSON as an object, or null when it doesn't parse to one. */
+export function parseFieldJson(text: string): Record<string, unknown> | null {
     try {
-        const parsed: unknown = JSON.parse(row.json);
+        const parsed: unknown = JSON.parse(text);
         return parsed && typeof parsed === "object" && !Array.isArray(parsed)
             ? (parsed as Record<string, unknown>)
             : null;
@@ -170,4 +174,30 @@ export async function libraryKeepsFromFloor({
 }): Promise<LibraryKeep[]> {
     const floor = await getFieldFloor({ db });
     return floor ? [{ ...floor }] : [];
+}
+
+/**
+ * Writes the field properties JSON, keeping the stored floor and ignoring any `floor` in `json`.
+ * Every other field-properties write goes through this: a template, a field file or an edit
+ * built from stale properties never drops or changes the floor; only `setFieldFloor` does.
+ */
+export async function writeFieldJsonKeepingFloorInTransaction({
+    tx,
+    json,
+}: {
+    tx: DbTransaction;
+    json: string;
+}): Promise<string> {
+    const stored = floorOfFieldJson(await readFieldJson(tx));
+    const { floor: _ignored, ...rest } = JSON.parse(json) as Record<
+        string,
+        unknown
+    >;
+    const written = JSON.stringify(stored ? { ...rest, floor: stored } : rest);
+    await tx
+        .update(schema.field_properties)
+        .set({ json_data: written })
+        .where(eq(schema.field_properties.id, FIELD_PROPERTIES_ID))
+        .run();
+    return written;
 }

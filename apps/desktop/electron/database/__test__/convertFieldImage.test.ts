@@ -184,6 +184,24 @@ describe("convertFieldImageOnOpen", () => {
         expect(readUserVersion(db)).toBe(TIMELINE_MODEL_USER_VERSION);
     });
 
+    it("keeps the field image when the field properties can't be read", async () => {
+        db = await createShow(
+            path.join(dir, "show.dots"),
+            TIMELINE_MODEL_USER_VERSION,
+        );
+        withLegacyImage(db);
+        db.prepare(
+            "UPDATE field_properties SET json_data = 'not json' WHERE id = 1",
+        ).run();
+        const makeFloor = vi.fn(async () => floorVersion("display"));
+
+        expect(await convertFieldImageOnOpen(db, { makeFloor })).toBe("failed");
+
+        expect(makeFloor).not.toHaveBeenCalled();
+        expect(Array.from(fieldRow(db).image!)).toEqual(Array.from(LEGACY));
+        expect(readUserVersion(db)).toBe(TIMELINE_MODEL_USER_VERSION);
+    });
+
     it("converts a 9 that still holds a field image, such as a repaired copy", async () => {
         db = await createShow(
             path.join(dir, "show.dots"),
