@@ -5,7 +5,7 @@
  *   full-path>`). Without a container, the first .musicxml or .xml file outside META-INF is used.
  * - **Text encoding.** Finale and some older exporters write UTF-16 with a byte order mark, and a
  *   few write ISO-8859-1 or Windows-1252 and say so in the XML declaration. Both are honored;
- *   everything else is read as UTF-8.
+ *   everything else is read as UTF-8, including files that say UTF-16 but aren't.
  * - **Parsing** uses @xmldom/xmldom everywhere (Electron, the web editor's worker and tests) so a
  *   file reads the same in all of them. The DTD a file names is never fetched.
  */
@@ -39,7 +39,9 @@ export function decodeXmlBytes(data: ArrayBuffer | Uint8Array): string {
         return new TextDecoder("utf-16be").decode(b);
     const head = new TextDecoder("latin1").decode(b.subarray(0, 200));
     const declared = head.match(/^<\?xml[^>]*encoding=["']([^"']+)["']/)?.[1];
-    if (declared && !/^utf-?8$/i.test(declared)) {
+    // A declared 16-bit encoding on bytes that aren't 16-bit (no zero bytes, checked above) is a
+    // mislabel: some exporters write encoding="UTF-16" on a UTF-8 file
+    if (declared && !/^utf-?(8|16|32)/i.test(declared)) {
         try {
             return new TextDecoder(declared).decode(b);
         } catch {
