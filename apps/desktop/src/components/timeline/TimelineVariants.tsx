@@ -40,6 +40,7 @@ import {
     TimelinePageLines,
     TimelinePlayhead,
     TimelineReturnMarker,
+    showsReturnMarker,
     TimelineRehearsalMarkers,
     TimelineRangePreview,
     TimelineRuler,
@@ -1102,13 +1103,20 @@ const TimelineSurface = memo(function TimelineSurface({
                                 onRemove={props.onRemoveBasicPoint}
                             />
                         )}
-                        {props.isPlaying && props.returnBeat !== undefined && (
-                            <TimelineReturnMarker
-                                beat={props.returnBeat}
-                                pixelsPerBeat={pixelsPerBeat}
-                                height={pinnedHeight}
-                            />
-                        )}
+                        {props.isPlaying &&
+                            props.returnBeat !== undefined &&
+                            showsReturnMarker(
+                                props.returnBeat,
+                                model.pages,
+                                model.beatCount,
+                                basic,
+                            ) && (
+                                <TimelineReturnMarker
+                                    beat={props.returnBeat}
+                                    pixelsPerBeat={pixelsPerBeat}
+                                    height={pinnedHeight}
+                                />
+                            )}
                         <TimelinePlayhead
                             model={model}
                             positionBeat={positionBeat}

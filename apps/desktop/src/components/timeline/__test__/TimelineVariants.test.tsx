@@ -12,7 +12,11 @@ import {
     ExpandedTimeline,
     fitBackZoom,
 } from "../TimelineVariants";
-import { scrubLineBeat, snapSeekBeat } from "../TimelinePrimitives";
+import {
+    scrubLineBeat,
+    showsReturnMarker,
+    snapSeekBeat,
+} from "../TimelinePrimitives";
 import { Timeline, TimelineWaveformProvider } from "../Timeline";
 import {
     createLongTimelineStoryModel,
@@ -1849,6 +1853,19 @@ describe("a calmer timeline (UI-12)", () => {
         );
         const marker = screen.getByTestId("timeline-return-marker");
         expect(marker.style.left).toBe(`${4 * commonProps.pixelsPerBeat}px`);
+    });
+
+    it("in Basic, marks the return only mid-page; Expert always (UI-24)", () => {
+        const pages = [
+            { id: 1, label: "1", atBeat: 0, isInitial: false, endBeat: 4 },
+            { id: 2, label: "2", atBeat: 4, isInitial: false, endBeat: 8 },
+        ];
+        expect(showsReturnMarker(4, pages, 16, true)).toBe(false);
+        expect(showsReturnMarker(8, pages, 16, true)).toBe(false);
+        expect(showsReturnMarker(0, pages, 16, true)).toBe(false);
+        expect(showsReturnMarker(16, pages, 16, true)).toBe(false);
+        expect(showsReturnMarker(6, pages, 16, true)).toBe(true);
+        expect(showsReturnMarker(4, pages, 16, false)).toBe(true);
     });
 
     it("keeps page navigation live while playing, where it jumps playback", () => {

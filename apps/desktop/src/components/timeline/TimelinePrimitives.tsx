@@ -3160,6 +3160,21 @@ export const TimelineReturnMarker = memo(function TimelineReturnMarker({
     );
 });
 
+/**
+ * Whether the return marker shows (UI-24): always in Expert; in Basic only mid-page, since a return
+ * to a page's start or end is already marked by that page's box (owner, 2026-10-16).
+ */
+export function showsReturnMarker(
+    beat: BeatPosition,
+    pages: readonly TimelinePageMarker[],
+    beatCount: number,
+    basic: boolean,
+): boolean {
+    if (!basic) return true;
+    if (beat === 0 || beat >= beatCount) return false;
+    return !pages.some((page) => page.atBeat === beat || page.endBeat === beat);
+}
+
 /** How far, in pixels, a press on empty timeline space must move to select a range */
 export const TIMELINE_RANGE_DRAG_PX = 4;
 

@@ -1162,7 +1162,8 @@ from it. The spec still wins on the model; this file decides presentation.
     dashed stem, while the live playhead moves (owner, 2026-10-16: a hollow playhead head on a dashed
     line looked like something to grab); it goes when playback ends. It is the same in Basic
     and Expert, and never takes the pointer. REAPER's edit cursor, which stays while the play
-    cursor moves, is the model (V-275).
+    cursor moves, is the model (V-275). In Basic it shows only when the return is mid-page: on a page's
+    start or end, that page's box already marks it (owner, 2026-10-16).
   - **The button.** While playing, Play is Stop ("Stop and go back"), and its tooltip is a guide to
     Stop (Space) and Pause (Shift + Space); holding Shift swaps it to Pause ("Pause here"), as Shift
     swaps Play to Play from the playhead. The field line's note for a stop on another page now reads
