@@ -1,12 +1,12 @@
 ---
 phase: C2
 title: Customization, props and items on the timeline
-status: not-started
-owner: none
+status: in-progress
+owner: trevor
 branch: none
 pr: none
 depends_on: [C1]
-updated: 2026-10-11
+updated: 2026-10-16
 ---
 
 # C2: Customization, props and items on the timeline
@@ -35,8 +35,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.1: Rebuild PR 1013 on main with the timeline
 
-- Owner: none
-- Status: open
+- Owner: trevor (3d/c2-items-v2)
+- Status: in-review
 - PR: none
 - Parallel: no
 - Depends on: C1.1, C1.3, C3.1
@@ -149,6 +149,39 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ## Handoff notes
 
-Nothing yet.
+- **The 2D editor is the three.js field (#209).** C2.1 was built on Fabric
+  first and ported: items are drawn by `ItemsLayer` from `FieldItems`, hit
+  inside their Outline by the editor's `itemAt` port, resized and turned by
+  item handles (`editor/itemTransform.ts`), and drawn new by the prop tool
+  (`editor/propTool.ts`), a mode like the line tool. Later packages that
+  draw on the field go through the same seams (`docs/field/porting-fabric-features.md`).
+- **Migration numbers:** items are 0024. C2.3's placements and C2.4's slot
+  assignments follow as 0025 and 0026, each registering a rollback in
+  `electron/database/__test__/migrationRollback.ts`.
+- **Feet input** for Outline sizes waits on C1.4's `parseLength`; the Props
+  panel takes meters until then.
+- **Upstream PR 1013** gets closed with a link once the owner says so.
 
 ## Progress log
+
+### 2026-10-16 · trevor (3d/c2-items-v2) · C2.1
+
+- **Done:** migration 0024 (timeline-only) adds `marchers.type` (`marcher`
+  | `item`, ADD COLUMN with a named CHECK), `items` (kind, props-only
+  `surface_type`, an optional pinned Library Version, no FK) and
+  `item_geometry` (beat-keyed Outline: size, height, turn, outline type,
+  size-free custom outline, transition, roll-out and leading edge), in
+  history and repair. `itemGeometryAt` in core eases a change over its
+  transition; an item is Off field before its first change. The field draws
+  each item as its Outline, selects it with a click inside, moves it
+  through the timeline like any marcher, and resizes or turns it with its
+  handles as an Outline change at the playhead, with no move. A Props panel
+  draws new Floor props with PR 1013's five outline tools, lists them with
+  hide and name toggles, and edits one at the playhead. Save prunes the
+  show Library on close and before Save Copy, keeping what items pin.
+- **Fixed on the way:** setting marcher homes returned every `marchers`
+  column, which the page-to-timeline conversion reads before the
+  timeline-only migrations add `type`; it returns ids now.
+- **Checks:** desktop vitest (items, migrations, field, editor); core
+  tests; `e2e/browser/tests/props.spec.mts` in the browser (7 scenarios);
+  type-check, lint, format, spellcheck.

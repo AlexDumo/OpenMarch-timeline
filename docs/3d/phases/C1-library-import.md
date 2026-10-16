@@ -303,12 +303,10 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ## Handoff notes
 
-- **Prune isn't wired yet (owner, 2026-10-13).** `pruneShowLibraryInTransaction`
-  is built and tested, but nothing calls it. Nothing names a Library item
-  before C2's Item tables and C3's cues, and embedding writes no undo row, so
-  the keep set would be empty and pruning on close would drop every import.
-  C2.1 hooks it to show close and before Save Copy, passing the Item tables'
-  references as `keep`; C3 adds the cue references.
+- **Prune is wired by C2.1 (2026-10-16).** `pruneShowLibraryOnSave` runs
+  when the show closes and before Save Copy, keeping what the Item tables
+  pin and what cues and undo history name. An import nothing uses yet is
+  pruned when the show closes: it stays in the local Library.
 - **No UI yet for "update available" or "Add to my Library".**
   `findLibraryUpdates` and `buildAddFromShowRequest` are built and tested;
   their UI belongs in the Assets area's This show section (Q78–Q82).
