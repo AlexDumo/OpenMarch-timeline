@@ -46,6 +46,7 @@ import { holdId } from "@/view3d/core/instruments/holds";
 import type { LoadedBody } from "./marcherAssets";
 import { instrumentMaterial } from "./instrumentGeometry";
 import { HornSet } from "./hornSet";
+import { SilkSet, silkMaterial, type SilkMotionFrame } from "./silkSet";
 import { mirrorClip, mirrorName } from "./mirrorClip";
 import { plainRow } from "@/view3d/core/marchers/planner";
 import {
@@ -186,6 +187,12 @@ function createContactMesh(n: number): THREE.InstancedMesh {
 export interface MarcherSlotLook {
     body: PerformerBody;
     uniform: UniformLook;
+    /**
+     * sRGB: a carried flag's silk, plain, from a Silk cue (props-spec.md
+     * section 6). Without one the silk takes the uniform's carry: the
+     * section's 2D fill, else its preset's color and silk pattern.
+     */
+    silkColor?: number;
 }
 
 export type MarcherQuality = "low" | "high";
@@ -295,6 +302,8 @@ export class MarcherBodies {
     private readonly materials: THREE.Material[] = [];
     /** The instruments, one group per look, near and far detail (`hornSet.ts`). */
     private readonly horns: HornSet | null = null;
+    /** The flags' silks, one cloth mesh per tier (`silkSet.ts`). */
+    private readonly silks: SilkSet | null = null;
     private readonly blockSource: THREE.BufferGeometry | null = null;
     private readonly contact: THREE.InstancedMesh;
     /** Mesh entry and instance index per slot. */
@@ -379,6 +388,14 @@ export class MarcherBodies {
             this.materials.push(material);
             this.horns = new HornSet(bodies, looks, quality, material);
             for (const m of this.horns.meshes) this.group.add(m);
+            const skeleton = bodies.values().next().value!.mesh.skeleton;
+            const cloth = silkMaterial(this.composer);
+            const silks = new SilkSet(skeleton, looks, quality, cloth);
+            if (silks.count > 0) {
+                this.materials.push(cloth);
+                this.silks = silks;
+                for (const m of silks.meshes) this.group.add(m);
+            } else cloth.dispose();
         }
     }
 
@@ -422,9 +439,18 @@ export class MarcherBodies {
         return row;
     }
 
-    /** Draw calls this set issues per frame: a body mesh per group, plus the instruments. */
+    /** Draw calls this set issues per frame: a body mesh per group, plus the instruments and silks. */
     get drawCalls(): number {
-        return this.entries.length + (this.horns?.drawCalls ?? 0);
+        return (
+            this.entries.length +
+            (this.horns?.drawCalls ?? 0) +
+            (this.silks?.drawCalls ?? 0)
+        );
+    }
+
+    /** The slots that carry a silk: the ones `writeFrame`'s silk motion needs. */
+    get silkSlots(): readonly number[] {
+        return this.silks?.slots ?? [];
     }
 
     /** Sets what slot `slot`'s Feet play; call when its clip changes. */
@@ -446,6 +472,8 @@ export class MarcherBodies {
      * Places every slot: at (x, z) facing `heading` when placed, collapsed
      * (not drawn) otherwise. `count` is the show's count clock. `camera`
      * picks each instrument's detail; null draws them all at full detail.
+     * `silk` is each slot's motion for the silks' wave; without it they
+     * keep the last motion written, as when only the camera moved.
      */
     writeFrame(
         xz: Float32Array,
@@ -453,6 +481,7 @@ export class MarcherBodies {
         placed: Uint8Array,
         count: number,
         camera: [number, number, number] | null = null,
+        silk: SilkMotionFrame | null = null,
     ): void {
         for (const { mesh, slots } of this.entries) {
             const array = mesh.instanceMatrix.array as Float32Array;
@@ -470,6 +499,8 @@ export class MarcherBodies {
             mesh.instanceMatrix.needsUpdate = true;
         }
         this.horns?.writeFrame(xz, heading, placed, this.scaleOf, camera);
+        if (silk) this.silks?.writeMotion(silk);
+        this.silks?.writeFrame(xz, heading, placed, this.scaleOf, camera);
         const discs = this.contact.instanceMatrix.array as Float32Array;
         for (let i = 0; i < placed.length; i++) {
             const o = i * 16;
@@ -494,6 +525,7 @@ export class MarcherBodies {
             mesh.dispose();
         }
         this.horns?.dispose();
+        this.silks?.dispose();
         for (const m of this.materials) m.dispose();
         this.composer.dispose();
         this.blockSource?.dispose();
