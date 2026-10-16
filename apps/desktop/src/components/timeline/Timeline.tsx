@@ -42,6 +42,7 @@ import type {
     TimelineNavigation,
     TimelinePageFlagMove,
     TimelineRangeChange,
+    TimelineRangeCommitResult,
     TimelineSeekOptions,
     TimelineSelection,
     TimelineTarget,
@@ -165,7 +166,9 @@ export interface TimelineProps {
     readonly className?: string;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
-    readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
+    readonly onTimelineRangeCommit?: (
+        change: TimelineRangeChange,
+    ) => TimelineRangeCommitResult;
     /** Resizing a clip by its edges (resize-move), in spec beats */
     readonly clipResize?: TimelineClipResizeCommands;
     /** Unpins the start flag (UI-12), from its pin */
@@ -473,10 +476,10 @@ export function Timeline(props: TimelineProps) {
                   const input = timelines.find(
                       (timeline) => timeline.id === change.timelineId,
                   );
-                  if (!input) return;
+                  if (!input) return Promise.resolve(false);
                   const shift =
                       change.startBeatIndex - axis.toView(input.startBeatIndex);
-                  onTimelineRangeCommit({
+                  return onTimelineRangeCommit({
                       timelineId: change.timelineId,
                       startBeatIndex: input.startBeatIndex + shift,
                       endBeatIndex: input.endBeatIndex + shift,
@@ -519,12 +522,12 @@ export function Timeline(props: TimelineProps) {
                 const input = timelines.find(
                     (timeline) => timeline.id === change.timelineId,
                 );
-                if (!input) return;
+                if (!input) return Promise.resolve(false);
                 // An edge that moved lands where it was drawn (`toSpec`), also for a move stored
                 // from spec beat 0, which the view folds onto beat 1
                 const edge = (spec: number, view: number) =>
                     view === axis.toView(spec) ? spec : axis.toSpec(view);
-                clipResize.commit({
+                return clipResize.commit({
                     timelineId: change.timelineId,
                     startBeatIndex: edge(
                         input.startBeatIndex,
