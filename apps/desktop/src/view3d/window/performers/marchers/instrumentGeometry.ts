@@ -24,6 +24,7 @@ import {
 } from "@/view3d/core/instruments/mesh";
 import { composedSkinning, type Composer } from "@/view3d/render/composer";
 import type { ArmPose } from "./armPose";
+import { activeDesign } from "@/view3d/core/marchers/uniformDesigns";
 
 /** The metal's sRGB color per finish: gold lacquer, silver lacquer. */
 export const FINISH_COLORS: Record<Finish, number> = {
@@ -116,6 +117,7 @@ export function instrumentGeometry(
     };
     const metal = linear(FINISH_COLORS[finish]);
     const section = linear(sectionColor);
+    const silkPattern = activeDesign()?.silk;
     const pos: number[] = [];
     const nrm: number[] = [];
     const col: number[] = [];
@@ -133,7 +135,28 @@ export function instrumentGeometry(
         const fallback = linear(
             BRASS_COLORS[piece.part] ?? BRASS_COLORS[PART_METAL],
         );
+        let box: number[] | null = null;
+        if (silkPattern && piece.part === PART_SILK) {
+            box = [Infinity, -Infinity, Infinity, -Infinity];
+            for (let i = 0; i < piece.positions.length; i += 3) {
+                box[0] = Math.min(box[0], piece.positions[i]);
+                box[1] = Math.max(box[1], piece.positions[i]);
+                box[2] = Math.min(box[2], piece.positions[i + 2]);
+                box[3] = Math.max(box[3], piece.positions[i + 2]);
+            }
+        }
         for (let i = 0; i < piece.positions.length; i += 3) {
+            const silkColor =
+                box && silkPattern
+                    ? linear(
+                          silkPattern(
+                              (piece.positions[i] - box[0]) /
+                                  (box[1] - box[0] || 1),
+                              (piece.positions[i + 2] - box[2]) /
+                                  (box[3] - box[2] || 1),
+                          ),
+                      )
+                    : null;
             v.set(
                 piece.positions[i],
                 piece.positions[i + 1],
@@ -144,7 +167,9 @@ export function instrumentGeometry(
                 .applyMatrix3(normalM)
                 .normalize();
             nrm.push(v.x, v.y, v.z);
-            if (piece.part === PART_METAL) col.push(metal.r, metal.g, metal.b);
+            if (silkColor) col.push(silkColor.r, silkColor.g, silkColor.b);
+            else if (piece.part === PART_METAL)
+                col.push(metal.r, metal.g, metal.b);
             else if (piece.part === PART_SHELL || piece.part === PART_SILK)
                 col.push(section.r, section.g, section.b);
             else if (piece.colors)

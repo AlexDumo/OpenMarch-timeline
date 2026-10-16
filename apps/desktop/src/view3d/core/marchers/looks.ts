@@ -27,6 +27,7 @@ import {
 import { bassSizesFor } from "../instruments/battery";
 import type { GuardModelId, ModelOptions } from "../instruments/model";
 import type { HoldState } from "../instruments/holds";
+import { activeDesign } from "./uniformDesigns";
 
 const withOptions = (
     carry: Carry | null,
@@ -297,7 +298,15 @@ export function sectionUniform(
     carryColor: number = DEFAULT_PRIMARY,
     guard?: GuardModelId,
 ): UniformLook {
-    const base = isGuard(section) ? GUARD_DEFAULT : BAND_DEFAULT;
+    const design = activeDesign();
+    if (design && carryColor === DEFAULT_PRIMARY) carryColor = design.carry;
+    const base = design
+        ? isGuard(section)
+            ? design.guard
+            : design.band
+        : isGuard(section)
+          ? GUARD_DEFAULT
+          : BAND_DEFAULT;
     const carry =
         guard && isGuard(section)
             ? guardCarry(guard)
