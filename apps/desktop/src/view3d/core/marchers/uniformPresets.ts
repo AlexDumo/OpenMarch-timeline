@@ -1,8 +1,8 @@
 /**
  * The built-in uniform presets (ADR 0002 D-18, amended 2026-10-16): what the
  * band and the guard wear until the show has uniforms of its own. The show
- * picks one in the 3D View's venue settings (`uniforms`); Ultraviolet Fade,
- * in OpenMarch purple (#6442ff), is the default.
+ * picks one in the 3D View's venue settings (`uniforms`). All are in
+ * OpenMarch purple (#6442ff); Royal Sash is the default.
  *
  * Each preset dresses the band and the guard, colors the drum shells, and
  * paints the flag silks. A section with its own 2D fill color keeps plain
@@ -13,17 +13,16 @@
 import type { UniformLook } from "./looks";
 
 export const UNIFORM_PRESET_IDS = [
-    "fade",
-    "signature",
     "sash",
+    "signature",
+    "fade",
     "plastron",
     "military",
     "prism",
-    "classic",
 ] as const;
 export type UniformPresetId = (typeof UNIFORM_PRESET_IDS)[number];
 
-export const DEFAULT_UNIFORM_PRESET: UniformPresetId = "fade";
+export const DEFAULT_UNIFORM_PRESET: UniformPresetId = "sash";
 
 /** The part of a look a preset sets. */
 export type PresetLook = Pick<UniformLook, "style" | "colors"> & {
@@ -62,10 +61,6 @@ const GOLD = 0xd8b04a;
 const BLACK = 0x111114;
 /** Darker than the pants, so the feet still separate from the legs. */
 const SHOE_BLACK = 0x0b0b0d;
-/** Classic's jacket and shako: om-pose's "Royal" blue. */
-const ROYAL = 0x2d4f9e;
-/** Lifted from om-pose's 0x1c1f2b, which renders as black legs. */
-const NAVY = 0x2b3150;
 
 /** Blends two sRGB colors, `t` from 0 (a) to 1 (b). */
 function mix(a: number, b: number, t: number): number {
@@ -122,6 +117,42 @@ function guardLook(
 
 export const UNIFORM_PRESETS: Readonly<Record<UniformPresetId, UniformPreset>> =
     {
+        // Royal Sash: a midnight jacket with a purple sash edged in gold. Silks:
+        // split on the diagonal, purple at the pole and midnight at the fly, with
+        // a gold seam.
+        sash: {
+            band: {
+                style: "sash",
+                colors: {
+                    primary: OM_NIGHT,
+                    secondary: WHITE,
+                    accent: OM,
+                    trim: GOLD,
+                    pants: OM_NIGHT,
+                    shoes: SHOE_BLACK,
+                    gloves: WHITE,
+                    hat: OM_NIGHT,
+                    plume: OM,
+                    visor: GOLD,
+                },
+                options: BAND,
+            },
+            guard: guardLook(
+                "sash",
+                {
+                    primary: OM_NIGHT,
+                    secondary: OM_NIGHT,
+                    accent: OM,
+                    trim: GOLD,
+                },
+                OM_NIGHT,
+            ),
+            carry: OM_NIGHT,
+            silk: (u, v) => {
+                const d = u - v;
+                return Math.abs(d) < 0.035 ? GOLD : d < 0 ? OM : OM_NIGHT;
+            },
+        },
         // Ultraviolet Fade: the jacket fades from near-black at the waist up to
         // purple at the chest, with lilac trim; the guard fades into lavender.
         // Silks glow from ink at the pole out to lilac at the fly end.
@@ -182,42 +213,6 @@ export const UNIFORM_PRESETS: Readonly<Record<UniformPresetId, UniformPreset>> =
             silk: (u, v) => {
                 const d = Math.abs(u - v);
                 return d < 0.11 ? WHITE : d < 0.14 ? OM_DEEP : OM;
-            },
-        },
-        // Royal Sash: a midnight jacket with a purple sash edged in gold. Silks:
-        // split on the diagonal, purple at the pole and midnight at the fly, with
-        // a gold seam.
-        sash: {
-            band: {
-                style: "sash",
-                colors: {
-                    primary: OM_NIGHT,
-                    secondary: WHITE,
-                    accent: OM,
-                    trim: GOLD,
-                    pants: OM_NIGHT,
-                    shoes: SHOE_BLACK,
-                    gloves: WHITE,
-                    hat: OM_NIGHT,
-                    plume: OM,
-                    visor: GOLD,
-                },
-                options: BAND,
-            },
-            guard: guardLook(
-                "sash",
-                {
-                    primary: OM_NIGHT,
-                    secondary: OM_NIGHT,
-                    accent: OM,
-                    trim: GOLD,
-                },
-                OM_NIGHT,
-            ),
-            carry: OM_NIGHT,
-            silk: (u, v) => {
-                const d = u - v;
-                return Math.abs(d) < 0.035 ? GOLD : d < 0 ? OM : OM_NIGHT;
             },
         },
         // Lilac Plastron: a lilac bib on a purple jacket, with white pants, shoes
@@ -321,38 +316,6 @@ export const UNIFORM_PRESETS: Readonly<Record<UniformPresetId, UniformPreset>> =
                 const i = Math.floor((u * 0.7 + v * 0.3) * shades.length);
                 return shades[Math.min(shades.length - 1, Math.max(0, i))];
             },
-        },
-        // Classic navy, the 3D View's first defaults: om-pose's classic style, a
-        // navy jacket and shako, white and gold trim, a seam stripe, navy pants,
-        // white gloves; an all-black, plain guard. Plain navy silks.
-        classic: {
-            band: {
-                style: "classic",
-                colors: {
-                    primary: ROYAL,
-                    secondary: WHITE,
-                    accent: WHITE,
-                    trim: GOLD,
-                    pants: NAVY,
-                    shoes: SHOE_BLACK,
-                    gloves: WHITE,
-                    hat: ROYAL,
-                    plume: WHITE,
-                    visor: BLACK,
-                },
-                options: BAND,
-            },
-            guard: guardLook(
-                "classic",
-                {
-                    primary: BLACK,
-                    secondary: BLACK,
-                    accent: BLACK,
-                    trim: BLACK,
-                },
-                BLACK,
-            ),
-            carry: ROYAL,
         },
     };
 

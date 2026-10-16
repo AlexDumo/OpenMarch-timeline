@@ -50,8 +50,7 @@ export const venueSettingsSchema = z.object({
     params: venueParamsSchema,
     /**
      * The built-in uniform preset the band and guard wear
-     * (`marchers/uniformPresets.ts`). Absent means the default, Ultraviolet
-     * Fade. Added 2026-10-16 without a version bump: older builds ignore it.
+     * (`marchers/uniformPresets.ts`). Absent means the default, Royal Sash. Added 2026-10-16 without a version bump: older builds ignore it.
      */
     uniforms: z.enum(UNIFORM_PRESET_IDS).optional(),
 });

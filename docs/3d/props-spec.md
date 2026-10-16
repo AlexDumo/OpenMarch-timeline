@@ -656,12 +656,11 @@ rounded to the page. Printing behavior cues stays out of scope.
   trim, navy pants. **Guard default:** all black and plain (no pattern, trim
   or stripe), black jazz shoes, no headwear, no gloves, no cape. Chosen by
   `isGuard`; nothing stored.
-- **Amended 2026-10-16 (owner):** seven built-in uniform presets replace the
-  pair, each with a band look, a guard look, a drum color and a silk
-  pattern: Ultraviolet Fade (the default), Signature, Royal Sash, Lilac
-  Plastron, Night Watch and Prism Split in OpenMarch purple, and Classic
-  navy (the pair above). The show picks one in the venue settings
-  (`uniforms`). See `core/marchers/uniformPresets.ts`.
+- **Amended 2026-10-16 (owner):** six built-in uniform presets in OpenMarch
+  purple replace the pair, each with a band look, a guard look, a drum color
+  and a silk pattern: Royal Sash (the default), Signature, Ultraviolet Fade,
+  Lilac Plastron, Night Watch and Prism Split. The show picks one in the
+  venue settings (`uniforms`). See `core/marchers/uniformPresets.ts`.
 
 ### Rendering [04, 09, 15, 18, 26.3]
 

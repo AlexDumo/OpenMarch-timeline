@@ -90,11 +90,11 @@ describe("uniforms change", () => {
 describe("venueChanged", () => {
     it("compares kit, lighting, crowd, uniforms and params", () => {
         expect(venueChanged(hsDusk, { ...hsDusk })).toBe(false);
-        expect(venueChanged(hsDusk, { ...hsDusk, uniforms: "sash" })).toBe(
+        expect(venueChanged(hsDusk, { ...hsDusk, uniforms: "fade" })).toBe(
             true,
         );
         // absent means the default preset
-        expect(venueChanged(hsDusk, { ...hsDusk, uniforms: "fade" })).toBe(
+        expect(venueChanged(hsDusk, { ...hsDusk, uniforms: "sash" })).toBe(
             false,
         );
         expect(venueChanged(hsDusk, { ...hsDusk, crowd: false })).toBe(true);
