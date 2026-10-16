@@ -1,4 +1,4 @@
-// cspell:words Bienvenido configuremos
+// cspell:words Bienvenido futuro diseño
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -222,7 +222,7 @@ describe("WelcomeFlow", () => {
         );
         const active = () => description.querySelector("[data-active]");
         await waitFor(() => expect(active()).toHaveAttribute("lang", "es"));
-        expect(active()?.textContent).toMatch(/configuremos/);
+        expect(active()?.textContent).toMatch(/futuro del diseño/);
         const greeting = screen.getByTestId("welcome-greeting");
         expect(greeting.querySelector("[data-active]")?.textContent).toBe(
             "Bienvenido",
