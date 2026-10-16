@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState, type RefObject } from "react";
+import clsx from "clsx";
 import type { TimelineXAxis } from "./timelineAxis";
 import type { TimelineViewportExtent } from "./TimelineViewModel";
 
@@ -25,6 +26,7 @@ export const TimelineShowEnd = memo(function TimelineShowEnd({
     top,
     height,
     snapBeats,
+    labelSide = "left",
     onMove,
 }: {
     beat: number;
@@ -35,6 +37,8 @@ export const TimelineShowEnd = memo(function TimelineShowEnd({
     top: number;
     height: number;
     snapBeats: readonly number[];
+    /** Which side of the line "END" goes: left beside measure numbers, right without measures */
+    labelSide?: "left" | "right";
     /** Without it (while playing), the line is drawn but can't be dragged */
     onMove?: (beat: number) => void;
 }) {
@@ -61,9 +65,15 @@ export const TimelineShowEnd = memo(function TimelineShowEnd({
                 className="bg-text pointer-events-none absolute z-30 w-px opacity-35"
                 style={{ left: x, top, height: Math.max(0, height - top) }}
             />
+            {/* Measure numbers sit just right of their downbeat, and the end is often one, so the
+                label ends at the line; without measures the row numbers counts just left of
+                their ticks instead, so it starts there */}
             <span
                 aria-hidden="true"
-                className="text-text pointer-events-none absolute z-30 pl-3 text-[9px] leading-none font-medium tracking-wide opacity-50"
+                className={clsx(
+                    "text-text pointer-events-none absolute z-30 text-[9px] leading-none font-medium tracking-wide opacity-50",
+                    labelSide === "left" ? "-translate-x-full pr-3" : "pl-3",
+                )}
                 style={{ left: x, top: top + 3 }}
             >
                 END

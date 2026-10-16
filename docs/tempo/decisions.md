@@ -1303,6 +1303,9 @@ check.
   grabs it; the ruler's grip still does UI-16's roll edit. Its drag (`moveShowEnd`) sets
   `last_page_counts`, storing counts if needed, and runs no ripple: a page move ending on the old
   end stays where it was (it then shows as a move clip). No END line with no page after home.
+  "END" is written just left of the line: the end is often a downbeat, whose measure number sits
+  just right of it. A show without measures numbers counts just left of their ticks instead, so
+  there it goes right of the line.
 - **Alternatives:** one gesture for both (the drag rolls moves too); END only in the ruler.
 - **Validate:** V-300.
 
