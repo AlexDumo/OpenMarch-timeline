@@ -1364,12 +1364,13 @@ check.
   (`endlessTimeline.ts`); every lane draws them as stored ones.
 - **Validate:** V-301.
 
-## EC-10 The pills after the last page
+## EC-10 The pill after the last page
 
 - **Choice:** **+ N counts** always reads "+ 16 counts" ("Add a page of 16 counts after the last
   page"): with endless counts there are no "existing" counts after the flag to add a page over.
-  "Pages every 16 counts to the end" shows only with music that runs more than 16 counts past the
-  last flag, and goes to the music's end.
+  "Create pages every 16 counts to the end" (FB-7) is no longer a second pill; it is the first
+  entry of the pill's right-click menu (EC-16, owner 2026-10-16), shown only with music that runs
+  more than 16 counts past the last flag, and goes to the music's end.
 
 ## EC-11 The waveform's loudness scale
 
@@ -1406,3 +1407,13 @@ check.
   doesn't warn (it exports the whole file). The video preview now ends at the show's end too, as
   the video already did.
 - **Alternatives:** a confirm on Export; pages of the last page's length.
+
+## EC-16 Right-click **+ N counts** to change N (owner request, 2026-10-16)
+
+- **Choice:** right-clicking the pill opens a menu: "Create pages every N counts to the end" (when
+  the music runs on, EC-10), then "New pages get" 4, 8, 12, 16, 24 or 32 counts (the current one
+  checked) and "Other" with a number box (1–999) and Set. It writes the file's "Default new page
+  counts" workspace setting, the same one as in Workspace settings, so it isn't an undo step;
+  pages already made keep their length. The pill's tooltip says it can be right-clicked.
+- **Alternatives:** a small number field on the pill; only in Workspace settings.
+- **Validate:** V-304.
