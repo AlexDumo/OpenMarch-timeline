@@ -1,7 +1,8 @@
 # Spec: endless counts
 
-Status: **accepted**, 2026-10-16 (decisions at the end). Builds on the show-length work in this
-branch (E1: T-8, T-9, T-10, FB-7). A larger change, storing a tempo map instead of beat rows, is a
+Status: **accepted**, 2026-10-16 (decisions at the end); built on `tempo/endless-counts`, with the
+choices made while building in [decisions.md](decisions.md) EC-1 onward. Builds on the
+show-length work in this branch (E1: T-8, T-9, T-10, FB-7). A larger change, storing a tempo map instead of beat rows, is a
 separate question: AlexDumo/OpenMarch-timeline#264. This spec doesn't need it.
 
 ## Problem

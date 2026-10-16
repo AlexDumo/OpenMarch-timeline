@@ -1110,9 +1110,6 @@ const TimelineSurface = memo(function TimelineSurface({
     const appendWidth = props.appendCounts
         ? pillWidth(props.appendCounts.label)
         : APPEND_COUNTS_WIDTH;
-    const toEndWidth = props.appendCounts?.toEnd
-        ? pillWidth(props.appendCounts.toEnd.label)
-        : 0;
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
     // UI-12: clicks and scrubs land on a nearby downbeat or page line; Basic's on any count

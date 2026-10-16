@@ -18,7 +18,7 @@ Everything in the tempo core is in the timing layer.
 | Piece                                  | Path                                                                                                                                                                                                |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Pure retiming, tap tempo and read-outs | `apps/desktop/src/timeline/tempo/` (its [README](../../apps/desktop/src/timeline/tempo/README.md) lists every function)                                                                             |
-| Show time to count and back            | `apps/desktop/src/timeline/timeMap.ts`                                                                                                                                                              |
+| Show time to count and back            | `apps/desktop/src/timeline/timeMap.ts` (the stored counts); `countGrid.ts` (counts that go on past them)                                                                                            |
 | Write path (one transaction, one undo) | `apps/desktop/src/db-functions/tempo.ts`: `retimeBeats`, `retimeBeatsInTransaction`, `setTempoSyncedBeatIds`, `readTempoSyncedBeatIds`                                                              |
 | React Query hooks                      | `apps/desktop/src/hooks/queries/useTempo.ts`: `useRetimeBeats`, `useSetTempoSyncedBeatIds`, `useTempoSyncedBeatIds`                                                                                 |
 | Tempo map (E11)                        | `apps/desktop/src/components/timeline/TempoMapPanel.tsx`; typed rows in `tempoMapMarks` (workspace settings)                                                                                        |
@@ -61,7 +61,7 @@ with `node apps/desktop/tempo-kit/score.mts <show.dots> <truth.json>`.
 
 - [decisions.md](decisions.md): the log of choices made while building.
 - [adr-synced-counts.md](adr-synced-counts.md): where synced counts are stored.
-- [endless-counts.md](endless-counts.md): spec (draft) for counts that go on past the last
-  stored count.
+- [endless-counts.md](endless-counts.md): spec, accepted and built, for counts that go on past
+  the last stored count; choices made while building are EC-1 onward in decisions.md.
 - Feel-based defaults to check by hand are rows V-400 onward in
   [VALIDATION.md](../timeline/research/ownership/VALIDATION.md).

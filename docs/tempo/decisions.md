@@ -141,6 +141,12 @@ fixture list and how to score).
 
 ## T-8 Wizard: counts to the end of the recording, pages stay at the start (show-length, E1)
 
+- **Changed 2026-10-16 (endless counts, decision 2):** the wizard stores only what the starter
+  pages need again: "Tempo only" its 20 measures, "Skip" its 128 counts, whatever the recording's
+  length. The counts go on past them at the same tempo and meter, so the end of the song needs no
+  counts made first. MusicXML still stores its measures. `countsToCoverAudio`,
+  `measuresToCoverAudio` and the audio-length read are gone. What follows is the E1 record.
+
 - **Context:** "Tempo only" made 20 measures (80 counts, 40 s at 120) whatever the MP3's length;
   "Skip for now" made 128 counts. The music past that had no counts, so nothing could be planned
   there.
@@ -156,6 +162,12 @@ fixture list and how to score).
   to add more?
 
 ## T-9 **+ N counts**: a page after the last page, N from the "new page counts" setting (show-length, E1)
+
+- **Changed 2026-10-16 (endless counts):** the counts never end, so **+ N counts** only adds a
+  flag N counts after the last flag, and the flag stores the counts it lands on
+  (`addPageFlagInTransaction` calls `ensureCountsInTransaction`). **+** at the playhead works at
+  any count past the last page. The pill always reads "+ 16 counts" (EC-10). What follows is the
+  E1 record.
 
 - **Context:** "+" was offered only at the paused playhead, and never past the show's last count
   (`planPageFlagInsertion` returned null there), with nothing to say why.
@@ -175,6 +187,10 @@ fixture list and how to score).
 - **Validate:** V-404.
 
 ## T-10 The music past the last count: drawn dimmed, with a note that offers extending (show-length, E1)
+
+- **Changed 2026-10-16 (endless counts):** removed. The waveform draws in full on the counts that
+  go on past the stored ones, and there is nothing to extend: no note, no dimmed part, no
+  `extendCountsTo`. Fit fits to where playback stops (rule 7). What follows is the E1 record.
 
 - **Context:** the waveform lane drew only the music under existing counts, so a show shorter than
   its music looked complete.
@@ -776,6 +792,11 @@ fixture list and how to score).
 
 ## FB-7 Pages to the end of the music in one step (fix-beginner, E1)
 
+- **Changed 2026-10-16 (endless counts):** "Pages every 16 counts to the end" goes to the end of
+  the music (the first whole count at or after it), storing the counts as each flag lands, and is
+  offered only with music that runs more than N counts past the last flag (EC-10). What follows is
+  the E1 record.
+
 - **Context:** a show made from an MP3 has counts to the end of the song but five pages; "+ 16
   counts" added a page over counts that already existed (bug B3).
 - **Choice:** when 16 or more counts lie past the last flag, the pill reads "+ page of 16 counts"
@@ -1258,3 +1279,119 @@ fixture list and how to score).
 - **Alternatives:** split rows at letters in `deriveTempoMap` itself (it would cut typed sections
   and their protection).
 - **Validate:** V-270.
+
+## EC-0 Endless counts, as built (2026-10-16)
+
+The spec is [endless-counts.md](endless-counts.md). These are the choices made while building it,
+where the spec left room or the code asked for one. Each is listed in the PR for the owner to
+check.
+
+## EC-1 One edit stores at most 20,000 counts
+
+- **Context:** a write past the end stores every count up to it. A bad beat number (the page flag
+  tests try `1e9`) would make a runaway show.
+- **Choice:** `ensureCountsInTransaction` refuses (`E-ARGS`) more than `MAX_COUNTS_PER_EDIT`
+  (20,000) new counts in one edit, about an hour at 300 BPM. E1's `countsToReach` had the same cap.
+- **Alternatives:** no cap; a cap on the show's total counts.
+
+## EC-2 The END line moves the end, not the moves
+
+- **Context:** rule 4 says the END line's drag changes the last page's length "with no effect on
+  drill". The END line is the last page's flag, which already has a grip in the ruler (UI-16) that
+  carries the moves on the flag with it.
+- **Choice:** the END line is drawn from under the page row to the bottom, and only that strip
+  grabs it; the ruler's grip still does UI-16's roll edit. Its drag (`moveShowEnd`) sets
+  `last_page_counts`, storing counts if needed, and runs no ripple: a page move ending on the old
+  end stays where it was (it then shows as a move clip). No END line with no page after home.
+- **Alternatives:** one gesture for both (the drag rolls moves too); END only in the ruler.
+- **Validate:** V-300.
+
+## EC-3 The last flag's drag has no end
+
+- **Context:** `planPageFlagMoveLimits` walked to the show's last count and stopped there
+  (`show-end`).
+- **Choice:** for the last flag it walks to just past the furthest timeline row's end; if nothing
+  stops it there, `max` is `Infinity` and the block is `{ kind: "open" }` (no words). The move
+  stores the counts it lands on.
+
+## EC-4 Page.ts push and yank are left alone
+
+- **Context:** the spec lists `Page.ts` push and yank among the writes. They are page-era helpers
+  with no callers in the timeline app.
+- **Choice:** unchanged.
+
+## EC-5 Measure edits past the end
+
+- **Choice:** the measure row draws endless measures with ids below `-1,000,000`
+  (`endlessIdOf(beat)`). An edit that names one (a rehearsal mark on it, say) stores the counts up
+  to it first, which stores the measure, and then edits that row. Starting a measure past the end
+  stores the counts up to its beat. Giving the last measure more beats than are stored stores the
+  counts to its new end; the lines the stored counts carried on in between are moved or merged
+  as the edit already does.
+
+## EC-6 The audio isn't padded to the stop point; the metronome is
+
+- **Context:** the spec's table says to pad the silent audio to rule 6's stop point.
+- **Choice:** the live clock is the AudioContext's time, which runs on past the end of the
+  decoded buffer, so playback goes on in silence without padding; padding would decode the audio
+  again every time the stop point moved. The metronome's buffer is built on the counts up to the
+  stop point, so it counts on past the stored counts. Past the stop point it is silent too.
+- **Alternatives:** pad the buffer to the stop point; an endless metronome.
+
+## EC-7 Playing on stops where it crosses the stop point
+
+- **Choice:** the playback driver stops playing on when one frame is before the stop point and the
+  next at or past it. A cue (Play, a jump, a loop) resets the frame before, so Play or a click
+  past the stop point plays on in silence until stopped (rule 6), and a jump back before it stops
+  there again. `canPlayOn` is gone: there is always something to play.
+- **Validate:** V-302.
+
+## EC-8 "END +n" in every readout style
+
+- **Choice:** the readout past the show's end is "END +5" in the full and the compact transport;
+  screen readers hear "5 counts past the end of the show". At the end itself it names the last
+  page's last count, as before. Move names in refusals and tooltips still say "after Page 12,
+  counts 1–4".
+- **Validate:** V-303.
+
+## EC-9 How far the counts are drawn
+
+- **Choice:** the timeline draws the stored counts and endless ones up to a screen past the
+  latest of the stop point and the playhead (rule 7), rounded up to whole screens, and a screen
+  more each time a scroll comes within half a screen of the end. A screen is the visible part of
+  the timeline, rounded up to a power of two counts (at least 32), so a pinch redraws the lanes a
+  few times, not every frame. Endless counts are `Beat`s and `Measure`s with ids nothing stores
+  (`endlessTimeline.ts`); every lane draws them as stored ones.
+- **Validate:** V-301.
+
+## EC-10 The pills after the last page
+
+- **Choice:** **+ N counts** always reads "+ 16 counts" ("Add a page of 16 counts after the last
+  page"): with endless counts there are no "existing" counts after the flag to add a page over.
+  "Pages every 16 counts to the end" shows only with music that runs more than 16 counts past the
+  last flag, and goes to the music's end.
+
+## EC-11 The waveform's loudness scale
+
+- **Choice:** the waveform is scaled to the loudest moment of the whole music, now that every
+  count is drawn the same. E1 scaled it to the music under the stored counts, so applause past
+  the last count couldn't shrink the show's waveform.
+
+## EC-12 Align past the stored counts
+
+- **Choice:** the Align view draws the endless counts on its seconds axis too. A retime writes
+  only the stored counts' lengths (Align moves flags, which are always on stored counts); the
+  endless counts follow the last measure as before.
+
+## EC-13 Writes that store counts refresh the beats
+
+- **Choice:** any write can store counts now (a move, a measure line), so after a committed write
+  that did, the app refreshes the beats, pages and measures (`takeStoredCounts`, in
+  `refreshHistoryOnWrites`), whatever queries the write itself refreshes.
+
+## EC-14 Legacy show-wide layouts
+
+- **Context:** a file with the pre-P9.10 show-wide layout fails every edit with E-T1 until it is
+  converted again.
+- **Choice:** unchanged; a move shifted past the end on such a file now fails at the row trigger
+  (still E-T1) rather than at the commit check, since storing the counts runs first.

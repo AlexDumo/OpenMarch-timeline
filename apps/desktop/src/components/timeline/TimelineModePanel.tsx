@@ -416,8 +416,11 @@ export default function TimelineModePanel() {
         moveShowEndMutationOptions(queryClient),
     );
     const showLength = useShowLengthControls({
-        beats,
         lastFlag: showEndBeat,
+        musicEndBeat:
+            musicEnd === null
+                ? null
+                : Math.ceil(countGrid.beatAtTime(musicEnd) - 1e-6),
         hidden: isPlaying || holding,
     });
     // Tempo lab `drillChoices` (E10): count edits that ask what the drill should do
@@ -938,18 +941,20 @@ function useTimelinePunchTap(): TimelinePunchTapConfig | undefined {
 }
 
 /**
- * E1, a show as long as its music: **+ N counts** after the last page (N is the show's "new page
- * counts" setting), and, when the music runs past the last count, the note that offers extending
- * the counts to its end. Each is one undoable edit; the new page is selected, as **+** selects it.
+ * E1 with endless counts: **+ N counts** after the last page (N is the show's "new page counts"
+ * setting), and, when the music runs on more than N counts past the last flag, pages every N counts
+ * to the music's end (FB-7). Each is one undoable edit that stores the counts it lands on; the new
+ * page is selected, as **+** selects it.
  */
 function useShowLengthControls({
-    beats,
     lastFlag,
+    musicEndBeat,
     hidden,
 }: {
-    beats: readonly unknown[];
     /** The last page's flag, a spec beat position */
     lastFlag: number;
+    /** The first whole count at or after the music's end; null without music */
+    musicEndBeat: number | null;
     hidden: boolean;
 }) {
     const { t } = useTolgee();
@@ -968,27 +973,13 @@ function useShowLengthControls({
                 );
         }),
     );
-    // Counts already past the last flag (a show made from an MP3): the pill adds a page over them,
-    // and says so, and one more offers pages to the end (FB-7)
-    const countsPast = beats.length - lastFlag;
-    const overExisting = countsPast >= counts;
     const appendCounts = hidden
         ? undefined
         : {
-              label: t(
-                  overExisting
-                      ? "timeline.showLength.appendPage"
-                      : "timeline.showLength.appendCounts",
-                  { counts },
-              ),
-              title: t(
-                  overExisting
-                      ? "timeline.showLength.appendPageTitle"
-                      : "timeline.showLength.appendCountsTitle",
-                  { counts },
-              ),
+              label: t("timeline.showLength.appendCounts", { counts }),
+              title: t("timeline.showLength.appendCountsTitle", { counts }),
               onAppend: () => appendPage(counts),
-              ...(countsPast > counts
+              ...(musicEndBeat !== null && musicEndBeat - lastFlag > counts
                   ? {
                         toEnd: {
                             label: t("timeline.showLength.pagesToEnd", {
@@ -997,7 +988,8 @@ function useShowLengthControls({
                             title: t("timeline.showLength.pagesToEndTitle", {
                                 counts,
                             }),
-                            onAppend: () => pagesToEnd(counts),
+                            onAppend: () =>
+                                pagesToEnd({ counts, untilBeat: musicEndBeat }),
                         },
                     }
                   : {}),

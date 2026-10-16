@@ -68,10 +68,6 @@ import { updateUtilityInTransaction } from "@/db-functions/utility";
 import { measureKeys } from "@/hooks/queries/useMeasures";
 import type { DbTransaction } from "@/db-functions/types";
 import type { DatabaseMeasure } from "@/db-functions/measures";
-import {
-    countsToCoverAudio,
-    measuresToCoverAudio,
-} from "@/timeline/showLength";
 
 const DEFAULT_NEW_PAGE_COUNTS = 16;
 const TEMPO_ONLY_DEFAULT_NEW_PAGE_MEASURES = 4;
@@ -95,26 +91,6 @@ const PAGES_COUNT = 8;
 const COUNTS_PER_PAGE = DEFAULT_NEW_PAGE_COUNTS;
 const TOTAL_COUNTS = PAGES_COUNT * COUNTS_PER_PAGE;
 const DEFAULT_TEMPO = 120;
-
-/**
- * The selected audio file's length in seconds, decoded the way the audio player decodes it, or
- * null when there is none or it can't be decoded (the show then gets its usual starter length).
- */
-export async function readSelectedAudioDurationSeconds(): Promise<
-    number | null
-> {
-    try {
-        const audioFile = await AudioFile.getSelectedAudioFile();
-        // -1 is the silent placeholder for a show with no audio
-        if (audioFile.id === -1 || !audioFile.data) return null;
-        const context = new OfflineAudioContext(1, 1, 44100);
-        const buffer = await context.decodeAudioData(audioFile.data.slice(0));
-        return buffer.duration;
-    } catch (error) {
-        console.warn("Couldn't read the audio's length", error);
-        return null;
-    }
-}
 
 export const sanitizeFilename = (name: string): string =>
     name.trim().replace(/[<>:"/\\|?*]/g, "_");
@@ -426,24 +402,16 @@ async function applyPreviousDotsMarcherTags(
 
 /**
  * The show's starter counts and pages ("Skip for now", and MusicXML when the file is short):
- * 8 pages of 16 counts, and with audio, counts to the end of the recording (E1).
+ * 8 pages of 16 counts. Only what the pages need: the counts go on past them (endless counts).
  */
-async function createBeatsAndPages(
-    queryClient: QueryClient,
-    audioSeconds: number | null,
-): Promise<void> {
+async function createBeatsAndPages(queryClient: QueryClient): Promise<void> {
     const currentBeats = await queryClient.fetchQuery(
         allDatabaseBeatsQueryOptions(),
     );
     const workspaceSettings = await getWorkspaceSettingsParsed({ db });
     const tempo = workspaceSettings.defaultTempo;
     const beatDuration = 60 / tempo;
-    const totalCounts = countsToCoverAudio({
-        audioSeconds,
-        beatDuration,
-        minCounts: TOTAL_COUNTS,
-    });
-    const beatsNeeded = Math.max(0, totalCounts + 1 - currentBeats.length);
+    const beatsNeeded = Math.max(0, TOTAL_COUNTS + 1 - currentBeats.length);
 
     const newBeats =
         beatsNeeded > 0
@@ -655,7 +623,7 @@ async function createTempoOnlyPagesInTransaction(
     params: {
         tempo: number;
         beatsPerMeasure: number;
-        /** At least `TEMPO_ONLY_MEASURE_COUNT`; more to cover the audio (E1) */
+        /** `TEMPO_ONLY_MEASURE_COUNT` */
         measureCount: number;
         pageByStartBeat: Map<number, number>;
     },
@@ -709,21 +677,15 @@ async function invalidateTempoOnlyQueries(
 }
 
 /**
- * "Tempo only": 20 measures with 5 starter pages, and with audio, measures to the end of the
- * recording at the chosen tempo and meter (E1). The pages stay at the start.
+ * "Tempo only": 20 measures with 5 starter pages at the chosen tempo and meter. The counts go on
+ * past them at that tempo and meter (endless counts), so the show doesn't need more stored.
  */
 async function createTempoOnlyBeatsMeasuresAndPages(
     form: NewShowFormState,
     queryClient: QueryClient,
-    audioSeconds: number | null,
 ): Promise<void> {
     const { tempo, beatsPerMeasure } = requireTempoOnlyData(form.tempo);
-    const measureCount = measuresToCoverAudio({
-        audioSeconds,
-        beatDuration: 60 / tempo,
-        beatsPerMeasure,
-        minMeasures: TEMPO_ONLY_MEASURE_COUNT,
-    });
+    const measureCount = TEMPO_ONLY_MEASURE_COUNT;
 
     const existingPages = await queryClient.fetchQuery(
         allDatabasePagesQueryOptions(),
@@ -749,17 +711,13 @@ async function createTempoOnlyBeatsMeasuresAndPages(
 }
 
 /**
- * Applies wizard data to the open draft DB, then moves the file to the user's path.
- *
- * With audio and no MusicXML, the show's counts run to the end of the recording (tempo experiment
- * E1); `readAudioDuration` reads its length. A MusicXML file's own measures set its length.
+ * Applies wizard data to the open draft DB, then moves the file to the user's path. The show stores
+ * only the counts its starter pages need, or a MusicXML file's measures; the counts go on past them
+ * (docs/tempo/endless-counts.md, T-8).
  */
 export async function completeNewShow(
     form: NewShowFormState,
     queryClient: QueryClient,
-    readAudioDuration: () => Promise<
-        number | null
-    > = readSelectedAudioDurationSeconds,
 ): Promise<void> {
     const targetPath = resolveNewShowFilePath(form.projectName, form.filePath);
 
@@ -779,19 +737,9 @@ export async function completeNewShow(
     await applyMusicSettings(form.audio, form.tempo);
     await updateFieldProperties(form.fieldTemplate);
     await applyPreviousDotsFieldImage(form, queryClient);
-    const audioSeconds =
-        form.audio?.method === "audio" && form.tempo?.method !== "xml"
-            ? await readAudioDuration()
-            : null;
-    if (form.tempo?.method === "tempo_only") {
-        await createTempoOnlyBeatsMeasuresAndPages(
-            form,
-            queryClient,
-            audioSeconds,
-        );
-    } else {
-        await createBeatsAndPages(queryClient, audioSeconds);
-    }
+    if (form.tempo?.method === "tempo_only")
+        await createTempoOnlyBeatsMeasuresAndPages(form, queryClient);
+    else await createBeatsAndPages(queryClient);
     await applyPerformersSettings(form.performers, queryClient);
     await applyPreviousDotsCoordinates(form, queryClient);
     await applyPreviousDotsSectionAppearances(form, queryClient);
