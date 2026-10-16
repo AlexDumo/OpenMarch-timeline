@@ -10,7 +10,8 @@
  * In fullscreen, everything but the readout hides after 3 s without pointer
  * movement (not while the settings panel is open), and the readout grows.
  *
- * Keys: Space, Q and E (Shift for a beat, Alt or Home/End for the ends), and
+ * Keys: Space (Shift+Space from the playhead), Q and E (Shift for a beat,
+ * Alt or Home/End for the ends), and
  * ] and [ held for double or half speed, run the editor's playback actions, F toggles fullscreen and C the crowd. Esc
  * closes the settings panel, then leaves fullscreen. The camera rig (P3.2)
  * owns 1–9, and Esc for pick-a-seat.
@@ -72,7 +73,9 @@ function usePlaybackShortcuts() {
             // flicker, and a held speed key holds.
             if (
                 event.repeat &&
-                (action === "playPause" || HELD_PLAYBACK_ACTIONS.has(action))
+                (action === "playPause" ||
+                    action === "playPage" ||
+                    HELD_PLAYBACK_ACTIONS.has(action))
             )
                 return;
             if (HELD_PLAYBACK_ACTIONS.has(action)) held.set(event.code, action);

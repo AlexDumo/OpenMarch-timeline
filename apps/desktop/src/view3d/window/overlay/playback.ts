@@ -10,52 +10,13 @@ export const HELD_PLAYBACK_ACTIONS: ReadonlySet<View3dPlaybackAction> = new Set(
     ["holdFasterPlayback", "holdSlowerPlayback"],
 );
 
-/** The speed actions, which work any time, playing or not */
-type SpeedAction =
-    | "holdFasterPlayback"
-    | "holdSlowerPlayback"
-    | "nextPlaybackSpeed"
-    | "previousPlaybackSpeed"
-    | "resetPlaybackSpeed";
-
-/** Which play and step actions would do something right now. */
-export type TransportState = Record<
-    Exclude<View3dPlaybackAction, SpeedAction>,
-    boolean
->;
-
-/**
- * Mirrors the editor's timeline buttons: page steps work only while paused
- * and when there is a page to go to, and play needs a page after the
- * selected one (pause always works).
- */
-export function transportState(
-    pages: readonly { id: number; order: number }[],
-    selectedPageId: number | null,
-    playing: boolean,
-): TransportState {
-    const sorted = [...pages].sort((a, b) => a.order - b.order);
-    const index = sorted.findIndex((page) => page.id === selectedPageId);
-    const hasPrevious = index > 0;
-    const hasNext = index >= 0 && index < sorted.length - 1;
-    return {
-        playPause: playing || hasNext,
-        previousPage: !playing && hasPrevious,
-        firstPage: !playing && hasPrevious,
-        nextPage: !playing && hasNext,
-        lastPage: !playing && hasNext,
-        // The window doesn't know the beats; the editor ignores a step past either end
-        previousBeat: !playing && index >= 0,
-        nextBeat: !playing && index >= 0,
-    };
-}
-
 /**
  * The playback action for a key press, using the editor's shortcuts: Space
- * plays or pauses, Q and E step a page, Shift+Q and Shift+E a beat, and
- * Alt+Q and Alt+E (or Home and End) go to the first and last page, and ] and
- * [ play at double or half speed while held. Matches on
- * `code`, like the editor, so the keys stay put on other layouts.
+ * plays or stops, Shift+Space plays from the playhead (or the loop once), Q
+ * and E step a page, Shift+Q and Shift+E a beat, Alt+Q and Alt+E (or Home and
+ * End) go to the first and last page, and ] and [ play at double or half
+ * speed while held. Matches on `code`, like the editor, so the keys stay put
+ * on other layouts.
  */
 export function playbackActionForKey(event: {
     code: string;
@@ -73,7 +34,7 @@ export function playbackActionForKey(event: {
     }
     switch (event.code) {
         case "Space":
-            return event.shiftKey ? null : "playPause";
+            return event.shiftKey ? "playPage" : "playPause";
         case "KeyQ":
             return event.shiftKey ? "previousBeat" : "previousPage";
         case "KeyE":

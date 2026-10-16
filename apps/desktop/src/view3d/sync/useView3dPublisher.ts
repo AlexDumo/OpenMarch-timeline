@@ -34,6 +34,7 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { timeAtBeat, type BeatTiming } from "@/timeline/timeMap";
+import { loopBounds } from "@/timeline/timelineTransport";
 import {
     effectivePlaybackSpeed,
     usePlaybackSpeedStore,
@@ -136,6 +137,12 @@ export function useView3dPublisher() {
     // The playhead also moves while playing; only a paused one re-anchors the clock
     const heldBeat = isPlaying ? null : pausedBeat;
     const playbackSpeed = usePlaybackSpeedStore(effectivePlaybackSpeed);
+    const chosenSpeed = usePlaybackSpeedStore((s) => s.speed);
+    // What Play does, for the window's Play tooltip, as the editor's transport reads them
+    const playLoops = useTimelineSelectionStore((s) => loopBounds(s) !== null);
+    const playingOnce = useTimelineSelectionStore(
+        (s) => s.playback?.kind === "preview" && s.playback.once === true,
+    );
     const { mutate: updateVenue } = useMutation(
         updateVenueSettingsMutationOptions(queryClient),
     );
@@ -157,6 +164,8 @@ export function useView3dPublisher() {
         selectedMarcherIdsKey,
         beats,
         pausedBeat,
+        playLoops,
+        playingOnce,
     });
     latest.current = {
         isPlaying,
@@ -164,6 +173,8 @@ export function useView3dPublisher() {
         selectedMarcherIdsKey,
         beats,
         pausedBeat,
+        playLoops,
+        playingOnce,
     };
 
     const sendClock = useCallback(() => {
@@ -171,6 +182,8 @@ export function useView3dPublisher() {
             isPlaying: playing,
             beats: b,
             pausedBeat: beat,
+            playLoops: loops,
+            playingOnce: once,
         } = latest.current;
         const clock: View3dClock = {
             seq: ++seqRef.current,
@@ -182,6 +195,8 @@ export function useView3dPublisher() {
             rate: playing ? getLivePlaybackRate() : 1,
             speed: effectivePlaybackSpeed(usePlaybackSpeedStore.getState()),
             chosenSpeed: usePlaybackSpeedStore.getState().speed,
+            playLoops: loops,
+            playingOnce: once,
         };
         window.electron.publishToView3d(VIEW3D_CLOCK_CHANNEL, clock);
     }, []);
@@ -245,7 +260,7 @@ export function useView3dPublisher() {
     }, []);
 
     // Clock: on play, pause, a move of the paused playhead, a tempo or speed
-    // change, and a heartbeat while playing.
+    // change, looping turned on or off, and a heartbeat while playing.
     useEffect(() => {
         if (!windowOpen) return;
         sendClock();
@@ -263,7 +278,17 @@ export function useView3dPublisher() {
             clearTimeout(settle);
             clearInterval(heartbeat);
         };
-    }, [windowOpen, isPlaying, heldBeat, beats, playbackSpeed, sendClock]);
+    }, [
+        windowOpen,
+        isPlaying,
+        heldBeat,
+        beats,
+        playbackSpeed,
+        chosenSpeed,
+        playLoops,
+        playingOnce,
+        sendClock,
+    ]);
 
     useEffect(() => {
         if (windowOpen) sendSelection();

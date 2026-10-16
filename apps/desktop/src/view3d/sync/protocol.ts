@@ -67,6 +67,10 @@ export interface View3dClock {
     speed: number;
     /** The playback speed chosen in the editor, without a held key */
     chosenSpeed: number;
+    /** Play loops (looping is on, or a move is isolated), for Play's tooltip */
+    playLoops: boolean;
+    /** Playing the loop once (Shift+Space), which Stop goes back from */
+    playingOnce: boolean;
 }
 
 export interface View3dSelection {
@@ -90,6 +94,7 @@ export interface View3dVenueChangeRequest {
  */
 export const VIEW3D_PLAYBACK_ACTIONS = [
     "playPause",
+    "playPage",
     "previousPage",
     "nextPage",
     "firstPage",
@@ -184,7 +189,9 @@ export function isView3dClock(value: unknown): value is View3dClock {
         isFiniteNumber(value.anchorWallMs) &&
         isFiniteNumber(value.rate) &&
         isFiniteNumber(value.speed) &&
-        isFiniteNumber(value.chosenSpeed)
+        isFiniteNumber(value.chosenSpeed) &&
+        typeof value.playLoops === "boolean" &&
+        typeof value.playingOnce === "boolean"
     );
 }
 
