@@ -5,8 +5,10 @@ import type { AreaShape } from "@/field/editor/areaGestures";
 import { HANDLE_SIZE, type HandleId } from "@/field/editor/groupTransform";
 import type { FieldRect } from "@/field/editor/selectionArea";
 import type { LineToolShape } from "@/field/editor/lineTool";
+import type { PropToolShape } from "@/field/editor/propTool";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import type { FieldMarchers } from "./fieldMarchers";
+import type { FieldItems } from "./fieldItems";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 import {
     drawnSelectionBox,
@@ -37,6 +39,9 @@ const OUTLINE_DASH = [3, 5];
 /** How far a line marcher's outline's center line sits outside its dot. */
 const OUTLINE_GAP = 0.25;
 
+/** The prop tool's line while drawing, in CSS px. */
+const PROP_PREVIEW_WIDTH = 2;
+
 /** The rotate handle's connecting line, in CSS px. */
 const ROTATE_LINE_WIDTH = 1;
 
@@ -56,10 +61,12 @@ const ROTATE_LINE_WIDTH = 1;
  */
 export default function FieldOverlay({
     marchers,
+    items,
     editor,
     theme,
 }: {
     marchers: FieldMarchers;
+    items: FieldItems;
     editor: FieldEditor;
     theme: FieldTheme;
 }) {
@@ -73,19 +80,23 @@ export default function FieldOverlay({
             (listener: () => void) => {
                 const off = [
                     marchers.subscribe(listener),
+                    items.subscribe(listener),
                     subscribeEditor(listener),
                 ];
                 return () => off.forEach((unsubscribe) => unsubscribe());
             },
-            [marchers, subscribeEditor],
+            [marchers, items, subscribeEditor],
         ),
-        () => JSON.stringify(drawnSelectionBox(marchers, editor)),
+        () => JSON.stringify(drawnSelectionBox(marchers, editor, items)),
     );
     const area = useSyncExternalStore(subscribeEditor, () =>
         editor.areaShape(),
     );
     const lineTool = useSyncExternalStore(subscribeEditor, () =>
         editor.lineToolShape(),
+    );
+    const propTool = useSyncExternalStore(subscribeEditor, () =>
+        editor.propToolShape(),
     );
 
     return (
@@ -98,6 +109,7 @@ export default function FieldOverlay({
                 <Marquee rect={area.rect} theme={theme} />
             )}
             {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
+            {propTool && <PropToolPreview tool={propTool} theme={theme} />}
             {lineTool && (
                 <LineToolPreview
                     tool={lineTool}
@@ -170,6 +182,46 @@ function SelectionBox({ frame }: { frame: DrawnSelectionBox | null }) {
                 ),
             )}
         </g>
+    );
+}
+
+/**
+ * The prop tool's Outline as it's drawn (C2.1): the theme's line color,
+ * filled at 30% when it's a closed shape.
+ */
+function PropToolPreview({
+    tool,
+    theme,
+}: {
+    tool: PropToolShape;
+    theme: FieldTheme;
+}) {
+    const view = useFieldViewStore();
+    const { preview } = tool;
+    if (!preview) return null;
+    const points = preview.points
+        .map((point) => {
+            const at = fieldToElement(view, point.x, point.y);
+            return `${at.x},${at.y}`;
+        })
+        .join(" ");
+    const stroke = rgbaToString(theme.primaryStroke);
+    return preview.closed ? (
+        <polygon
+            data-testid="fieldPropTool"
+            points={points}
+            fill={rgbaToString({ ...theme.primaryStroke, a: 0.3 })}
+            stroke={stroke}
+            strokeWidth={PROP_PREVIEW_WIDTH}
+        />
+    ) : (
+        <polyline
+            data-testid="fieldPropTool"
+            points={points}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={PROP_PREVIEW_WIDTH}
+        />
     );
 }
 

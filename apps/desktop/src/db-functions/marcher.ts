@@ -20,6 +20,8 @@ export interface NewMarcherArgs {
     drill_order: number;
     year?: string | null;
     notes?: string | null;
+    /** `item` for a prop or piece of equipment (`createItems`); a performer by default */
+    type?: "marcher" | "item";
 }
 
 /**
