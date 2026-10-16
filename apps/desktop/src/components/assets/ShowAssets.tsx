@@ -2,7 +2,8 @@
  * The Assets panel's This show tab (owner decision Q81): what the open show
  * embeds, which travels with the file, grouped like the Library. Items the
  * local Library lacks offer "Add to my Library"; Library updates are noted,
- * never applied silently. The show's Credits sit below.
+ * never applied silently. Deleting an item cues use offers "Replace with…".
+ * The show's Credits sit below.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { T, useTranslate } from "@tolgee/react";
@@ -10,18 +11,32 @@ import {
     CubeIcon,
     ImageIcon,
     PlusIcon,
+    TrashIcon,
     TShirtIcon,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
-import { readLibraryBlob } from "@/db-functions/showLibrary";
-import { useShowLibrary } from "@/hooks/queries/useShowLibrary";
+import {
+    deleteShowLibraryItem,
+    libraryItemUses,
+    readLibraryBlob,
+} from "@/db-functions/showLibrary";
+import {
+    showLibraryKeys,
+    useShowLibrary,
+} from "@/hooks/queries/useShowLibrary";
+import { invalidateCueQueries } from "@/hooks/queries/useCues";
 import { buildAddFromShowRequest } from "@/view3d/library/showLibraryUpdates";
 import type { LibraryItemSummary } from "@/view3d/library/protocol";
 import type { LibraryApi } from "@/view3d/library/importClient";
 import type { LibraryItemKind } from "@om-electron/main/library/types";
 import { showAssetGroups, type ShowAssetItem } from "./showAssetGroups";
 import ShowCredits from "./ShowCredits";
+import DeleteShowAssetDialog, {
+    type ShowAssetDeleted,
+    type ShowAssetDeletion,
+} from "./DeleteShowAssetDialog";
 
 export type ShowAssetsApi = Pick<
     LibraryApi,
@@ -52,15 +67,25 @@ function useLocalLibrary(api: ShowAssetsApi) {
     return library;
 }
 
+const showDeletion: ShowAssetDeletion = {
+    uses: (itemId) => libraryItemUses({ db, itemId }),
+    remove: (itemId, replaceWith) =>
+        deleteShowLibraryItem({ db, itemId, replaceWith }),
+};
+
 export default function ShowAssets({
     api,
     readBlob = (hash) => readLibraryBlob({ db, hash }),
+    deletion = showDeletion,
 }: {
     api: ShowAssetsApi;
     /** Tests pass a stand-in; the open show's blobs by default. */
     readBlob?: (hash: string) => Promise<Uint8Array | undefined>;
+    /** Tests pass a stand-in; the open show's database by default. */
+    deletion?: ShowAssetDeletion;
 }) {
     const { t } = useTranslate();
+    const queryClient = useQueryClient();
     const { data: show } = useShowLibrary();
     const library = useLocalLibrary(api);
     const groups = useMemo(
@@ -68,6 +93,8 @@ export default function ShowAssets({
         [show, library],
     );
     const [adding, setAdding] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState<ShowAssetItem | null>(null);
+    const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
     const add = async (item: ShowAssetItem) => {
         setAdding(item.itemId);
@@ -85,6 +112,24 @@ export default function ShowAssets({
         } finally {
             setAdding(null);
         }
+    };
+
+    const onItemDeleted = ({
+        item,
+        replacedWith,
+        keptForUndo,
+    }: ShowAssetDeleted) => {
+        setDeleting(null);
+        void queryClient.invalidateQueries({ queryKey: showLibraryKeys.all() });
+        if (replacedWith) void invalidateCueQueries(queryClient);
+        const params = { name: item.name, replacement: replacedWith?.name };
+        const message = [
+            replacedWith
+                ? t("assets.show.delete.replaced", params)
+                : !keptForUndo && t("assets.show.delete.deleted", params),
+            keptForUndo && t("assets.show.delete.keptForUndo", params),
+        ];
+        toast.success(message.filter(Boolean).join(" "));
     };
 
     if (!show) return null;
@@ -122,6 +167,7 @@ export default function ShowAssets({
                                     item={item}
                                     adding={adding === item.itemId}
                                     onAdd={() => void add(item)}
+                                    onDelete={() => setDeleting(item)}
                                 />
                             ))}
                         </ul>
@@ -129,6 +175,13 @@ export default function ShowAssets({
                 ))
             )}
             <ShowCredits />
+            <DeleteShowAssetDialog
+                item={deleting}
+                candidates={allItems}
+                deletion={deletion}
+                onClose={() => setDeleting(null)}
+                onDeleted={onItemDeleted}
+            />
         </div>
     );
 }
@@ -137,11 +190,14 @@ function ShowAssetRow({
     item,
     adding,
     onAdd,
+    onDelete,
 }: {
     item: ShowAssetItem;
     adding: boolean;
     onAdd: () => void;
+    onDelete: () => void;
 }) {
+    const { t } = useTranslate();
     const Icon = KIND_ICONS[item.kind];
     return (
         <li
@@ -180,6 +236,16 @@ function ShowAssetRow({
                     <T keyName="assets.show.addToLibrary" />
                 </button>
             )}
+            <button
+                type="button"
+                onClick={onDelete}
+                aria-label={t("assets.show.delete.label")}
+                title={t("assets.show.delete.label")}
+                className="text-text-subtitle hover:text-red shrink-0 duration-150 ease-out"
+                data-testid="show-item-delete"
+            >
+                <TrashIcon size={14} />
+            </button>
         </li>
     );
 }
