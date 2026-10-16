@@ -18,26 +18,40 @@ Creative tools with a timeline don't ask for that: the grid just keeps going.
    stored count's tempo and the last measure's meter (`countContinuation`, the rule E1's append
    already uses). Nothing marks where the stored counts stop: a count looks the same whether it's
    stored or not.
-2. **The tempo after the end is the last tempo.** A tempo or meter change is an edit to stored
-   counts (Tempo…, Align, tap, the tempo map), and the endless counts after it follow whatever
-   comes last. Retiming the last stored measure retimes everything after it.
+   Every count is treated the same, with a page or without: the show's end (rule 4) only matters
+   to exports.
+2. **The tempo after the end is the last measure as stored.** The endless counts repeat the last
+   stored measure's count lengths, rit. or uneven counts included, not the last typed tempo mark.
+   A tempo or meter change is an edit to stored counts (Tempo…, Align, tap, the tempo map), and
+   the endless counts follow whatever comes last. Retiming the last stored measure retimes
+   everything after it. A tempo or meter edit at a count that isn't stored stores the counts up to
+   it first, then applies from there on, in one undo step.
 3. **Counts are stored when something lands on them.** Placing anything at or past the stored
    end first appends counts up to it, in the same transaction and undo step: **+** or a page flag
    drag, the last page's length, a timeline move or resize, a measure line or rehearsal mark, an
    Align drag or a punch-in take. Undoing the edit removes the counts with it. Looking, scrolling,
    scrubbing and playing store nothing.
 4. **The show's end is the end of the last page:** its flag plus its counts (`last_page_counts`).
-   Those counts are always stored (rule 3). It's where drill ends, and exports end there, as they
-   do now.
-5. **Playback goes on past the show's end** to the end of the music (T-10's `musicEndSeconds`),
-   so you can hear what's left to plan. With no music, or music that ends first, it stops at the
-   show's end. The playhead can be dragged or stepped anywhere.
-6. **The timeline scrolls on.** The scroll extent is the later of the show's end and the music's
-   end, plus one screen, and grows as you scroll or seek right. Fit shows the show and the music,
-   as T-10's fit does now.
-7. **Counts past the show's end belong to no page.** The readout names them by how far past the
+   Those counts are always stored (rule 3). Exports end there, as they do now, video included.
+   The timeline draws a thin, quiet **END** line there. It isn't a wall: you can place, drag,
+   select, loop and play across it. Dragging the END line changes the last page's length (like
+   #111's page edge drag), storing counts if needed, in one undo step, with no effect on drill.
+5. **Moves can go past the show's end.** A timeline move can be placed or resized anywhere; the
+   last page doesn't grow to cover it. Exports leave it out (rule 9).
+6. **Playback goes on past the show's end.** It stops at the latest of the show's end, the end of
+   the music (T-10's `musicEndSeconds`) and the end of the last move, so you hear what's left to
+   plan and see every move you placed. Marchers follow moves past the end and hold where no move
+   continues. Play from past that stop point plays on in silence until you stop it. The playhead
+   can be dragged or stepped anywhere.
+7. **The timeline scrolls on.** The scroll extent is rule 6's stop point plus one screen, and grows as you scroll or seek right. Fit shows up to the stop point, as T-10's fit
+   does now with the music.
+8. **Counts past the show's end belong to no page.** The readout names them by how far past the
    end they are: **END +1** is the first count after the last page ends, **END +5** the fifth. At
    the end itself the readout names the last page's last count, as DN-1 does now.
+9. **Exports warn about moves past the end.** When moves run past the show's end, each export
+   dialog says so ("2 moves run past the end of the show (Pg 12) and won't be in this export"),
+   offers **Add pages to the end** (pages every N counts up to the end of the last move), and can
+   still export as it is.
 
 ### What happens to E1
 
@@ -77,7 +91,7 @@ and each move is a small, testable change.
 
 - `addPageFlagInTransaction` and the flag move in `pageFlags.ts` (today they refuse past the
   show's end with `show-end`); `planPageFlagInsertion` loses its `beat <= beatCount` limit.
-- Setting `last_page_counts` (the last page's length).
+- Setting `last_page_counts` (the last page's length, and the END line drag).
 - Timeline move create, move and resize (`TimelineClipResize`'s `beatCount` cap goes).
 - Measure line and rehearsal mark edits (`measureLines.ts` refuses at `beatCount` today).
 - Align drags, punch-in takes and tap, where they reach past the end.
@@ -95,19 +109,19 @@ and sees the same show. The page converter and the web editor read the same rows
 
 From a read of this branch (2026-10-16). "Show end" below means rule 4.
 
-| Area       | Where                                                                                                                                | Today                                                    | Change                                                  |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------- |
-| Conversion | `timeline/timeMap.ts`, `timeline/timelineCanvas.ts` (`playbackBeat`)                                                                 | Clamp at `beats.length`                                  | Drawing and playback use the grid                       |
-| Axis       | `timeline/timelineViewModel.ts:773`, `components/timeline/timelineAxis.ts`, `TimelineVariants.tsx`                                   | Width and `beatAt` are `beats.length`                    | Width from rule 6; `beatAt` from the grid               |
-| Drawing    | `TimelinePrimitives.tsx`, `TimelineMeasureRow.tsx`, `timeline/timelineWaveform.ts`                                                   | Ticks and peaks from the stored beats; T-10 dimmed peaks | `countsIn` for the visible range; waveform in full      |
-| Pointer    | `TimelineGeometry.ts:284–321`, `Timeline.tsx`, `TimelinePageFlagGrips.tsx`                                                           | Pointer and drags clamp to `[0, beatCount]`              | No clamp at the end                                     |
-| Playback   | `useTimelinePlaybackDriver.ts`, `timelinePlayhead.ts` (`canPlayOn`, `playbackStep`), `TimelineSelectionStore.showEndBeat`            | Stop at `beats.length`                                   | `showEndBeat` becomes rule 5's stop point               |
-| Transport  | `timelineTransport.ts:118`, `useNavigationActionHandlers.ts:37`                                                                      | Seek and beat steps clamp to `beats.length`              | Seek anywhere; Alt+E stays "last page"                  |
-| Audio      | `AudioFile.ts:186` (`computePlaceholderAudioDurationFromPages`), `AudioPlayer.tsx`, `audioOffset.worker.ts`                          | Silent padding to the last page's end + 10 s             | Pad to rule 5's stop point                              |
-| Pages      | `Page.fromDatabase.ts:142`, `timelineRipple.ts` (`readPageGrid`), `sourceTimelinePositions.ts:80`                                    | Last page clipped to the stored counts                   | Unchanged: rule 4 keeps the last page's counts stored   |
-| Writes     | `pageFlags.ts`, `measureLines.ts`, `TimelineClipResize.tsx`, `Page.ts`, `drillEdits.ts` (`withLastFlag`)                             | Refuse or clip at `beatCount`                            | `ensureCountsInTransaction` first                       |
-| E1         | `showLength.ts`, `db-functions/showLength.ts`, `TimelineModePanel.tsx:755–850`                                                       | Pills, note, extend                                      | See "What happens to E1"                                |
-| Exports    | `videoRenderer.ts:196`, `videoOverlay.ts`, `videoExportAudio.ts`, `timelineKeyframes.ts`, `ExportCoordinatesModal.tsx`, drill sheets | Last page's end or the stored end                        | Unchanged (rule 4); check they agree after rule 4 lands |
+| Area       | Where                                                                                                                                | Today                                                    | Change                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------- |
+| Conversion | `timeline/timeMap.ts`, `timeline/timelineCanvas.ts` (`playbackBeat`)                                                                 | Clamp at `beats.length`                                  | Drawing and playback use the grid                     |
+| Axis       | `timeline/timelineViewModel.ts:773`, `components/timeline/timelineAxis.ts`, `TimelineVariants.tsx`                                   | Width and `beatAt` are `beats.length`                    | Width from rule 7; `beatAt` from the grid             |
+| Drawing    | `TimelinePrimitives.tsx`, `TimelineMeasureRow.tsx`, `timeline/timelineWaveform.ts`                                                   | Ticks and peaks from the stored beats; T-10 dimmed peaks | `countsIn` for the visible range; waveform in full    |
+| Pointer    | `TimelineGeometry.ts:284–321`, `Timeline.tsx`, `TimelinePageFlagGrips.tsx`                                                           | Pointer and drags clamp to `[0, beatCount]`              | No clamp at the end                                   |
+| Playback   | `useTimelinePlaybackDriver.ts`, `timelinePlayhead.ts` (`canPlayOn`, `playbackStep`), `TimelineSelectionStore.showEndBeat`            | Stop at `beats.length`                                   | `showEndBeat` becomes rule 6's stop point             |
+| Transport  | `timelineTransport.ts:118`, `useNavigationActionHandlers.ts:37`                                                                      | Seek and beat steps clamp to `beats.length`              | Seek anywhere; Alt+E stays "last page"                |
+| Audio      | `AudioFile.ts:186` (`computePlaceholderAudioDurationFromPages`), `AudioPlayer.tsx`, `audioOffset.worker.ts`                          | Silent padding to the last page's end + 10 s             | Pad to rule 6's stop point                            |
+| Pages      | `Page.fromDatabase.ts:142`, `timelineRipple.ts` (`readPageGrid`), `sourceTimelinePositions.ts:80`                                    | Last page clipped to the stored counts                   | Unchanged: rule 4 keeps the last page's counts stored |
+| Writes     | `pageFlags.ts`, `measureLines.ts`, `TimelineClipResize.tsx`, `Page.ts`, `drillEdits.ts` (`withLastFlag`)                             | Refuse or clip at `beatCount`                            | `ensureCountsInTransaction` first                     |
+| E1         | `showLength.ts`, `db-functions/showLength.ts`, `TimelineModePanel.tsx:755–850`                                                       | Pills, note, extend                                      | See "What happens to E1"                              |
+| Exports    | `videoRenderer.ts:196`, `videoOverlay.ts`, `videoExportAudio.ts`, `timelineKeyframes.ts`, `ExportCoordinatesModal.tsx`, drill sheets | Last page's end or the stored end                        | End at rule 4; rule 9's warning                       |
 
 The riskiest are the time map (every scrub, playhead and animation goes through it), the playback
 stop chain, and the axis width: without a new extent, nothing past the stored counts can be drawn
@@ -120,13 +134,15 @@ or scrolled to, whatever the conversion does.
 2. **Write path**: `ensureCountsInTransaction` and each write in the list above, with database
    tests that a write past the end stores the counts and one undo removes them.
 3. **Draw and scroll**: axis extent, visible-range ticks and measure lines, pointer without the
-   clamp, full waveform. T-10's dimmed music and note go.
-4. **Playback and transport**: rule 5's stop point, seek past the end, audio padding.
+   clamp, full waveform, the END line and its drag. T-10's dimmed music and note go.
+4. **Playback and transport**: rule 6's stop point, playing on in silence, seek past the end,
+   audio padding.
 5. **E1 clean-up**: wizard (T-8), **+** past the last page, FB-7 to the end of the music,
    removing `extendCountsTo` and its strings. Update T-8, T-9, T-10 and FB-7 in
    [decisions.md](decisions.md) and their validation rows (V-404–V-406, V-437).
+6. **Export warning**: rule 9 in the video, coordinate sheet and drill sheet export dialogs.
 
-Slices 1 and 2 change no behavior on their own. Slices 3–5 replace E1's show-length parts
+Slices 1 and 2 change no behavior on their own. Slices 3–6 replace E1's show-length parts
 directly, with no Tempo lab flag.
 
 ## To validate
@@ -136,6 +152,7 @@ directly, with no Tempo lab flag.
 - A MusicXML show whose score ends before the recording: counts carry on at the last tempo.
 - A long scroll past the end at the widest zoom: frame times stay even (count lines are drawn
   for the visible range only).
+- A move past the END line: it plays, and the export warns and offers pages.
 - Undo of a page flag placed far past the end removes the counts too, and the timeline looks the
   same as before.
 
@@ -143,9 +160,22 @@ directly, with no Tempo lab flag.
 
 Made by the owner, 2026-10-16:
 
-1. **Playback goes on past the show's end** to the end of the music (rule 5).
+1. **Playback goes on past the show's end** (rule 6).
 2. **The wizard stores only the starter pages' counts** (T-8 changes).
-3. **The readout past the end is "END +n"** (rule 7).
+3. **The readout past the end is "END +n"** (rule 8).
 4. **It replaces E1 directly**, with no lab flag.
 5. **Stored counts after the show's end stay** when the last pages are deleted. They look the
    same as counts that were never stored, so nothing needs trimming.
+6. **Every count is treated the same**, with or without a page; only exports stop at the end
+   (rule 1).
+7. **Moves may go past the end** and exports leave them out; the last page doesn't grow (rule 5).
+8. **Marchers follow moves past the end** and hold where none continues (rule 6).
+9. **Playback stops at the latest of** the show's end, the music's end and the last move's end;
+   Play from past that plays on until stopped (rule 6).
+10. **The endless counts repeat the last stored measure** as it sounds, not the last typed tempo;
+    tempo and meter edits in the endless counts store up to there first (rule 2).
+11. **Video export ends at the show's end**, not the music's (rule 4).
+12. **Loops and selections can cross the end** and store nothing (rules 3 and 4).
+13. **A quiet END line marks the show's end**, and dragging it changes the last page's length
+    (rule 4).
+14. **Exports warn about moves past the end** and offer pages to cover them (rule 9).
