@@ -134,6 +134,8 @@
   .scrub { font-weight: 700; font-variant-numeric: tabular-nums; padding: 1px 6px; border-radius: 5px; border: 1px solid transparent; cursor: ns-resize; user-select: none; touch-action: none; }
   .scrub.xy { cursor: move; }
   .scrub.ew { cursor: ew-resize; }
+  .chip .lockbtn { padding: 1px 3px; color: var(--sub); }
+  .chip .lockbtn.on { color: var(--accent); background: var(--accent2); border-color: var(--accent); }
   body.scrubbing.ew, body.scrubbing.ew * { cursor: ew-resize !important; }
   .scrub:hover, .scrub.live { background: var(--accent2); border-color: var(--accent); }
   .scrubin { width: 58px; font-weight: 700; }
@@ -457,6 +459,13 @@ function scaleDrag(name, p0, e0) {
       else if (hy) { const rows = clamp(Math.round(h / (iv0.deep || 2)) + 1, 1, n); s.cols = Math.ceil(n / rows); }
       const rr = Math.ceil(n / s.cols); s.h = (iv0.deep || 2) * (rr - 1);
       if (!e.altKey) { cxl = hx ? ax + (hx * s.w) / 2 : 0; cyl = hy ? ay + (hy * s.h) / 2 : 0; }
+    } else if (S.ratioLock && s0.kind === "box") { // locked: across and deep spacing grow together
+      const a0 = iv0.across || s0.av || 2, d0 = iv0.deep || s0.dv || 2, cols = iv0.cols, rows = iv0.rows;
+      const fx = cols > 1 ? w / (cols - 1) / a0 : null, fy = rows > 1 ? h / (rows - 1) / d0 : null;
+      let f = hx && hy ? Math.max(fx ?? 0, fy ?? 0) : hx ? fx : fy; if (!f) f = 1;
+      f = Math.max(f, 0.5 / Math.min(a0, d0));
+      s.w = a0 * f * (cols - 1); s.h = d0 * f * (rows - 1); s.av = a0 * f; s.dv = d0 * f;
+      cxl = e.altKey || !hx ? 0 : ax + (hx * s.w) / 2; cyl = e.altKey || !hy ? 0 : ay + (hy * s.h) / 2;
     }
     const c = toWorld({ ...s0, fx: 1, fy: 1 }, { x: cxl * (s0.fx || 1), y: cyl * (s0.fy || 1) }); s.cx = c.x; s.cy = c.y; S.shape = s;
     const iv = intervals(s, n); S.tip = { p, t: s.kind === "box" ? `${iv.cols} × ${iv.rows} · ${fmt(iv.across)} across, ${fmt(iv.deep)} deep` : `${fmt(s.w)} × ${fmt(s.h)} steps · ${fmt(iv.apart)} apart` };
@@ -619,6 +628,10 @@ function edClick(ev) {
 function normDef(pts) { const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys); const w = x1 - x0 || 1, h = y1 - y0 || 1;
   return { pts: pts.map((p) => ({ x: (p.x - x0) / w - 0.5, y: (p.y - y0) / h - 0.5 })), aspect: w / h }; }
 
+/* ---- ratio lock (box): across and deep spacing change together. Off by default. ---- */
+const LINK_ON = `<svg class="ico" style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>`;
+const LINK_OFF = `<svg class="ico" style="width:15px;height:15px;opacity:.55" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15.5 11.5l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M8.5 12.5l-3 3a4 4 0 0 0 5.7 5.7l1-1"/><path d="M8 3v2M3 8h2M16 21v-2M21 16h-2"/></svg>`;
+
 /* ---- scrubbable numbers in the chip ---- */
 // Click a number to type it. Drag it to change it: up = more. The box size ("6 × 2") is a 2D
 // pad: drag sideways for more or fewer across, up or down for more or fewer deep.
@@ -634,6 +647,9 @@ function applyScrub(key, s0, value) {
     const av = iv.across || s0.av || 2, dv = iv.deep || s0.dv || 2, cols = clamp(value, 1, n), rows = Math.ceil(n / cols);
     S.shape = { ...s0, cols, av, dv, w: av * (cols - 1), h: dv * (rows - 1) }; return; }
   const v = Math.max(0.5, value);
+  if (S.ratioLock && (key === "across" || key === "deep")) { // the other spacing follows, keeping their ratio
+    const a0 = iv.across || s0.av || 2, d0 = iv.deep || s0.dv || 2, f = key === "across" ? v / a0 : v / d0;
+    S.shape = { ...s0, cols: iv.cols, av: a0 * f, dv: d0 * f, w: a0 * f * (iv.cols - 1), h: d0 * f * (iv.rows - 1) }; return; }
   if (key === "across") S.shape = { ...s0, cols: iv.cols, w: v * (iv.cols - 1) };
   else if (key === "deep") S.shape = { ...s0, cols: iv.cols, h: v * (iv.rows - 1) };
   else { S.shape = s0; setApart(v); }
@@ -709,7 +725,7 @@ const UI = {
     }
     if (S.shape && S.phase !== "drawing") {
       const s = S.shape, iv = intervals(s, S.sel.size);
-      let row = s.kind === "box" ? `${scrubTok("size", `${iv.cols} × ${iv.rows}`)}<span class="sep"></span><span class="muted">↔</span>${scrubTok("across", fmt(iv.across))}<span class="muted">↕</span>${scrubTok("deep", fmt(iv.deep))}<span class="muted">steps</span>`
+      let row = s.kind === "box" ? `${scrubTok("size", `${iv.cols} × ${iv.rows}`)}<span class="sep"></span><span class="muted">↔</span>${scrubTok("across", fmt(iv.across))}<button class="ghost lockbtn ${S.ratioLock ? "on" : ""}" data-act="ratiolock" title="${S.ratioLock ? "Across and deep spacing change together (click to unlock)" : "Lock across and deep spacing together"}">${S.ratioLock ? LINK_ON : LINK_OFF}</button><span class="muted">↕</span>${scrubTok("deep", fmt(iv.deep))}<span class="muted">steps</span>`
         : `<b>${kname(s)}</b><span class="sep"></span>${scrubTok("apart", fmt(iv.apart))}<span class="muted">steps apart</span>`;
       row += `<span class="sep"></span><button class="${V.more ? "on" : ""}" data-act="more">⋯</button><button class="primary" data-act="place">Place</button>`;
       const more = V.more ? `<div class="row"><button data-act="rot:-90">⟲ 90°</button><button data-act="rot:90">⟳ 90°</button><button data-act="flipy">Flip</button><button data-act="order">${S.order === "nearest" ? "Least travel" : "Drill order"}</button><button data-act="ptab:shape">More in inspector →</button></div>` : "";
@@ -768,6 +784,7 @@ const UI = {
     if (a === "sketch") { S.tool = S.tool === "sketch" ? "box" : "sketch"; return true; }
     if (a === "wiz") { wizStart(); return true; }
     if (a === "more") { V.more = !V.more; return true; }
+    if (a === "ratiolock") { S.ratioLock = !S.ratioLock; return true; }
     if (a.startsWith("guess:")) { V.gi = +a.slice(6); S.shape = clone(V.guesses[V.gi].shape); return true; }
     if (a.startsWith("fav:")) { const it = item(a.slice(4)); it.fav = !it.fav; if (it.fav && LIB.filter((x) => x.fav).length > 8) { it.fav = false; toast("The ring holds 8. Unstar one first."); } return true; }
     if (a.startsWith("del:")) { LIB = LIB.filter((x) => x.id !== a.slice(4)); return true; }
@@ -913,7 +930,7 @@ function go() {
    <li><b>Library</b> (right panel): star shapes, save the current one, or make a <b>custom shape</b> by clicking corners.</li>
    <li><b>Type /</b>: answer one question at a time (shape, how many across, steps apart, rotation) with a live preview. "box 4x3 2" fills the steps for you.</li>
    <li><b>Sketch K</b>: draw roughly and it guesses.</li>
-   <li><b>On the field</b>: the chip under the shape. Click a number to type it, or drag it: side-to-side spacing drags right or left, other values drag up or down, and the box size (6 × 2) drags sideways for more across, up or down for more deep. Grab the center dot to move it (it reads out the yard line). Corners and sides resize. The knob on top rotates around the pivot (set in the Shape panel), and so does just outside a corner (Shift 15°, Alt from center).</li>
+   <li><b>On the field</b>: the chip under the shape. Click a number to type it, or drag it: side-to-side spacing drags right or left, other values drag up or down, and the box size (6 × 2) drags sideways for more across, up or down for more deep. The link between the two spacings locks their ratio (off to start), for typing, dragging and handles. Grab the center dot to move it (it reads out the yard line). Corners and sides resize. The knob on top rotates around the pivot (set in the Shape panel), and so does just outside a corner (Shift 15°, Alt from center).</li>
    <li><b>Shape panel</b> (right): pivot, exact rotate, flip, scale, and the box resize rule.</li>
    <li><b>View tab</b>: fade the rest, or fade only while drawing.</li>
   </ul><div class="muted" style="font-size:11px">Enter places · Esc cancels · scroll zooms · middle-drag pans</div>`;
@@ -925,7 +942,7 @@ function drawBar() { const sw = document.getElementById("switcher");
   sw.querySelector("[data-reset]").onclick = () => { S.ms = clone(HOME); S.undo = null; go(); };
   sw.querySelector("#grp").onchange = (e) => { setGroup(e.target.value); go(); }; }
 panel.addEventListener("click", (e) => { const sv = e.target.closest("#edsvg"); if (sv && V.ed) edClick({ currentTarget: sv, clientX: e.clientX, clientY: e.clientY }); });
-S.tab = "shapes"; S.ptab = "shape"; S.tool = "box"; S.fade = "always";
+S.tab = "shapes"; S.ptab = "shape"; S.tool = "box"; S.fade = "always"; S.ratioLock = false;
 go();
 requestAnimationFrame(() => { S.force = true; render(); });
 </script>
