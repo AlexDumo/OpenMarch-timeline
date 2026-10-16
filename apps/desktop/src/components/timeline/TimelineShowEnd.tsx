@@ -122,9 +122,9 @@ export const TimelineShowEnd = memo(function TimelineShowEnd({
 });
 
 /**
- * Tells the owner how many counts a screen holds and when a scroll comes within half a screen of
- * the surface's end (rule 7), so it can draw the counts a screen further. Reports on scroll and
- * resize, and when the zoom changes, but only when the answer changes.
+ * Tells the owner how many counts a screen holds (rule 7), so it can leave room past where
+ * playback stops. Reports on resize and when the zoom changes, but only when the answer changes
+ * by a tenth or more.
  */
 export function useViewportExtent(
     viewportRef: RefObject<HTMLElement | null>,
@@ -135,35 +135,24 @@ export function useViewportExtent(
     useEffect(() => {
         const viewport = viewportRef.current;
         if (!viewport || !onExtent) return;
-        let last: TimelineViewportExtent | null = null;
+        let last: number | null = null;
         const report = () => {
             const width = viewport.clientWidth;
             if (!(width > 0)) return;
             const screenBeats =
                 width / axis.pxPerBeatAt(Math.max(beatCount - 1, 0));
-            const atEnd =
-                viewport.scrollLeft + width >= viewport.scrollWidth - width / 2;
-            if (
-                last &&
-                last.atEnd === atEnd &&
-                Math.abs(screenBeats - last.screenBeats) <
-                    last.screenBeats * 0.1
-            )
+            if (last !== null && Math.abs(screenBeats - last) < last * 0.1)
                 return;
-            last = { screenBeats, atEnd };
-            onExtent(last);
+            last = screenBeats;
+            onExtent({ screenBeats });
         };
         report();
-        viewport.addEventListener("scroll", report, { passive: true });
         const observer =
             typeof ResizeObserver === "undefined"
                 ? null
                 : new ResizeObserver(report);
         observer?.observe(viewport);
-        return () => {
-            viewport.removeEventListener("scroll", report);
-            observer?.disconnect();
-        };
+        return () => observer?.disconnect();
     }, [axis, beatCount, onExtent, viewportRef]);
 }
 

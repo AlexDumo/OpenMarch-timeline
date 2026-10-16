@@ -671,18 +671,14 @@ function PlayingTimeline({
     );
     // UI-9 **+** after the free paused playhead; the new page becomes the selection
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
-    // Endless counts (rules 1 and 7): the timeline draws the counts on past the stored ones, a
-    // screen past where playback stops, and a screen further each time a scroll nears the end
+    // Endless counts (rules 1 and 7): the timeline draws the counts on past the stored ones, with
+    // some room past where playback stops; the scroll ends there
     const endless = useEndlessCounts({
         countGrid,
         beats,
         measures: props.measures,
-        stopBeat: Math.max(
-            props.fitBeat ?? 0,
-            playheadBeat,
-            shownBeat,
-            playback.positionBeat,
-        ),
+        stopBeat: props.fitBeat ?? 0,
+        playheadBeat: Math.max(playheadBeat, shownBeat, playback.positionBeat),
         align: props.align,
     });
     // Not while a paused preview holds a frame: + is drawn there, but would add at P (UI-11)
@@ -732,55 +728,50 @@ function PlayingTimeline({
 }
 
 /** The fewest counts drawn past where playback stops, before the scroller has said how wide it is */
-const MIN_SCREEN_BEATS = 32;
+/** The fewest counts the timeline goes on past where playback stops */
+const MIN_PADDING_BEATS = 32;
 
 /**
  * The counts the timeline draws (docs/tempo/endless-counts.md rules 1 and 7): the stored ones,
- * then the grid's up to a screen past `stopBeat` (where playback stops, or the playhead past it),
- * growing by a screen each time a scroll nears the end. Rounded up to whole screens so that
- * playing on past the end redraws the lanes once a screen, not on every count. The Align view's
- * count lengths go on with them; its retime writes only the stored ones (an Align edit moves
- * flags, which are always on stored counts).
+ * then the grid's up to some room past `stopBeat` (the latest of the last page's flag, the music's
+ * end and the last move's end): half a screen, at least 32 counts (EC-9). The scroll ends there;
+ * placing a page or move further, or dragging END, moves it on. The playhead keeps the end where
+ * it is (playing on past it, say) but adds no room, so clicking at the far right doesn't creep the
+ * end out. Rounded up to 32 counts so that playing on redraws the lanes once in a while.
+ * The Align view's count lengths go on with them; its retime writes only the stored ones (an Align
+ * edit moves flags, which are always on stored counts).
  */
 function useEndlessCounts({
     countGrid,
     beats,
     measures,
     stopBeat,
+    playheadBeat,
     align,
 }: {
     countGrid: CountGrid;
     beats: TimelineProps["beats"];
     measures: TimelineProps["measures"];
     stopBeat: number;
+    /** The playhead, or the beat playing: the timeline reaches it, with no room past it */
+    playheadBeat: number;
     align: TimelineAlign | undefined;
 }) {
-    const [view, setView] = useState({
-        screenBeats: MIN_SCREEN_BEATS,
-        reach: 0,
-    });
-    const screen = view.screenBeats;
+    const [screenBeats, setScreenBeats] = useState(2 * MIN_PADDING_BEATS);
+    const padding = Math.max(MIN_PADDING_BEATS, screenBeats / 2);
     const extent =
-        Math.ceil(Math.max(stopBeat, view.reach, beats.length) / screen + 1) *
-        screen;
-    const latestExtent = useRef(extent);
-    latestExtent.current = extent;
+        Math.ceil(
+            Math.max(stopBeat + padding, playheadBeat) / MIN_PADDING_BEATS,
+        ) * MIN_PADDING_BEATS;
     const onViewportExtent = useCallback(
-        ({ screenBeats, atEnd }: { screenBeats: number; atEnd: boolean }) =>
-            setView((current) => {
-                // Whole powers of two, so a pinch redraws the counts a few times, not every frame
-                const quantized = Math.max(
-                    MIN_SCREEN_BEATS,
-                    2 ** Math.ceil(Math.log2(Math.max(screenBeats, 1))),
-                );
-                const reach = atEnd
-                    ? Math.max(current.reach, latestExtent.current)
-                    : current.reach;
-                return quantized === current.screenBeats &&
-                    reach === current.reach
-                    ? current
-                    : { screenBeats: quantized, reach };
-            }),
+        ({ screenBeats: next }: { screenBeats: number }) =>
+            // Whole powers of two (down), so a pinch redraws the counts a few times, not every frame
+            setScreenBeats(
+                Math.max(
+                    MIN_PADDING_BEATS,
+                    2 ** Math.floor(Math.log2(Math.max(next, 1))),
+                ),
+            ),
         [],
     );
     const drawnBeats = useMemo(

@@ -164,12 +164,10 @@ export interface TimelineAppendCounts {
     };
 }
 
-/** What the timeline's scroller shows, so its owner can draw counts a screen past it (endless counts) */
+/** What the timeline's scroller shows, so its owner can leave room past the show (endless counts) */
 export interface TimelineViewportExtent {
     /** How many counts one screen holds now */
     readonly screenBeats: number;
-    /** Whether a scroll has come within half a screen of the surface's end */
-    readonly atEnd: boolean;
 }
 
 export interface TimelineViewModel {
@@ -302,7 +300,7 @@ export interface TimelineInteractionProps {
     readonly onShowEndMove?: (beat: BeatPosition) => void;
     /** The beats Fit fits (rule 7: where playback stops), in view beats; without it, every beat */
     readonly fitBeatCount?: number;
-    /** The scroller's width in counts, and scrolls near its end (rule 7) */
+    /** The scroller's width in counts (rule 7) */
     readonly onViewportExtent?: (extent: TimelineViewportExtent) => void;
     /** Double-clicking a page box or clip opens (isolates) its range, in view beats here */
     readonly onOpenRange?: (target: TimelineMenuTarget) => void;

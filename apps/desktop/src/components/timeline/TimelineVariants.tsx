@@ -867,8 +867,8 @@ const TimelineSurface = memo(function TimelineSurface({
     }, [cancelAlignEdit, showAlign]);
 
     const width = axis.width;
-    // The owner draws the counts on past where playback stops, with some room (endless counts),
-    // so the surface is as wide as the counts
+    // The owner draws the counts on past where playback stops, with some room (endless counts,
+    // EC-9), so the surface is as wide as the counts
     const surfaceWidth =
         Math.max(width + TIMELINE_END_INSET, baseAxis.width) + initialPageWidth;
     const showWaveform = showAlign
@@ -1063,7 +1063,7 @@ const TimelineSurface = memo(function TimelineSurface({
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [align, alignKeyBlocked, toggleAlign]);
 
-    // Endless counts rule 7: say how many counts a screen holds, and when a scroll nears the end
+    // Endless counts rule 7: say how many counts a screen holds, for the room past the end
     useViewportExtent(
         viewportRef,
         axis,

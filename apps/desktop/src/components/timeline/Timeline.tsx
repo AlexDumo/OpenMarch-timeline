@@ -222,7 +222,7 @@ export interface TimelineProps {
     readonly onShowEndMove?: (beat: number) => void;
     /** The beats Fit fits (rule 7, where playback stops), in spec beats; without it, every beat */
     readonly fitBeat?: number;
-    /** The scroller's width in counts, and scrolls near its end, so the owner draws counts on */
+    /** The scroller's width in counts, so the owner leaves room past where playback stops */
     readonly onViewportExtent?: (extent: TimelineViewportExtent) => void;
     /** The page box menu's **Delete page** (UI-9 Deleting a flag), by page id */
     readonly onDeletePageFlag?: (pageId: number) => void;
