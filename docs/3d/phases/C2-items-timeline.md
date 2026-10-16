@@ -107,8 +107,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.5: Put-down and Snap to holder
 
-- Owner: none
-- Status: open
+- Owner: trevor (3d/c2-putdown-v2)
+- Status: in-review
 - PR: none
 - Parallel: yes
 - Depends on: C2.3
@@ -125,8 +125,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.6: The show's notes list
 
-- Owner: none
-- Status: open
+- Owner: trevor (3d/c2-putdown-v2)
+- Status: in-review
 - PR: none
 - Parallel: yes
 - Depends on: C2.3
@@ -231,3 +231,18 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 - **Left:** no UI yet: the Items tab (C3.7) and C5.5 use these.
 - **Checks:** desktop and core vitest (full suites); migration tests;
   type-check, lint, format, spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-putdown-v2) · C2.5 and C2.6
+
+- **Done (C2.5):** a released item is put down where its holder stands at
+  the release (`itemPutDown.ts`, core `putDownDrifts`): a placed change
+  records where. Editing the holder's drill afterwards raises a put-down
+  drift note, and Snap to holder moves the item to the holder's spot in one
+  undoable step.
+- **Done (C2.6):** the show's notes list (`showNotes.ts`, `useShowNotes`,
+  `ShowNotesList`) with its first four producers: hand conflicts, crew
+  distance, crew-less moves (when the show's warning is on) and put-down
+  drift. Quiet: never a modal, never a block. Shown in the Props panel, and
+  an item's own notes in its editor.
+- **Checks:** desktop and core vitest (full suites); type-check, lint,
+  format, spellcheck.
