@@ -71,8 +71,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.3: Item Placement
 
-- Owner: none
-- Status: open
+- Owner: trevor (3d/c2-placement-v2)
+- Status: in-review
 - PR: none
 - Parallel: yes
 - Depends on: C2.1
@@ -199,3 +199,21 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
   belong to the cue code; check them when items get cues (C3.7).
 - **Checks:** desktop vitest (full suite); type-check, lint, format,
   spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-placement-v2) · C2.3
+
+- **Done:** migration 0025 (timeline-only): `item_placements` (held,
+  placed, off_field; beat-keyed; optional ripple `group_id`) and
+  `item_placement_marchers` (holders with a hand, crew with none), in
+  history and repair. Core lookups `placementAt`, `handsAt`,
+  `handConflicts` (newest wins), `crewDistances`, `crewOutOfReach`,
+  `handsNeeded`. Writes: set, replace and delete a change, and item
+  ripples by group, each one undo step; deleting a holder deletes a held
+  change left with none. Placement changes on deleted beats carry forward.
+  Show setting `warnPropMovesWithoutCrew`, off by default.
+- **Calls:** whether an item came from a flag isn't stored; the lookup
+  takes it as `origin`. A created item reads as placed before its first
+  row. Holders and crew must be performers.
+- **Left:** no UI yet; the Items tab (C3.7) and put-down (C2.5) use these.
+- **Checks:** desktop and core vitest (full suites); migration tests;
+  type-check, lint, format, spellcheck.
