@@ -13,6 +13,7 @@ import {
     addPageFlag,
     deletePageFlags,
     movePageFlag,
+    moveShowEnd,
     type MovedPageFlag,
     pageFlagGrid,
     newPageNames,
@@ -154,6 +155,19 @@ export const movePageFlagMutationOptions = (
         // Settles once the pages are read again, so a dragged flag isn't drawn back meanwhile
         onSuccess: async (moved) => {
             if (moved.from !== moved.to) onMoved?.(moved);
+            await invalidatePageQueries(qc);
+        },
+        onError: (e) => toastTimelineError(e),
+    });
+
+/**
+ * Moves the END line (docs/tempo/endless-counts.md rule 4): the last page's length, storing counts
+ * up to it if needed. No move follows it. Settles once the pages are read again.
+ */
+export const moveShowEndMutationOptions = (qc: QueryClient) =>
+    mutationOptions({
+        mutationFn: (beat: number) => moveShowEnd({ db, beat }),
+        onSuccess: async () => {
             await invalidatePageQueries(qc);
         },
         onError: (e) => toastTimelineError(e),

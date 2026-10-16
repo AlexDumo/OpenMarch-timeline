@@ -3,17 +3,26 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
 import { Timeline, TimelineWaveformProvider } from "../Timeline";
-import type {
-    TimelineAppendCounts,
-    TimelineMusicPastEnd,
-} from "../TimelineViewModel";
+import type { TimelineAppendCounts } from "../TimelineViewModel";
 
 /**
- * E1, a show as long as its music, on the timeline: **+ N counts** after the last page's flag,
- * the music past the last count drawn dimmed, and the note that offers extending the counts.
+ * The end of the show on the timeline: **+ N counts** after the last page's flag (E1), and the
+ * END line where the counts go on past it (endless counts).
  */
 
 afterEach(cleanup);
+
+// jsdom has no PointerEvent, so fireEvent's pointer events would lose clientX
+if (typeof window.PointerEvent === "undefined") {
+    class TestPointerEvent extends MouseEvent {
+        readonly pointerId: number;
+        constructor(type: string, init: PointerEventInit = {}) {
+            super(type, init);
+            this.pointerId = init.pointerId ?? 1;
+        }
+    }
+    window.PointerEvent = TestPointerEvent as unknown as typeof PointerEvent;
+}
 
 /** The zero-length beat 0, then `count` timed beats */
 const appBeats = (count: number): Beat[] =>
@@ -59,27 +68,28 @@ const show = ({
     positionBeat = 5,
     isPlaying = false,
     appendCounts,
-    musicPastEnd,
     onAddPageFlag,
-    pastEnd = 0,
+    beats = BEATS,
+    showEndBeat,
+    onShowEndMove,
 }: {
     positionBeat?: number;
     isPlaying?: boolean;
     appendCounts?: TimelineAppendCounts;
-    musicPastEnd?: TimelineMusicPastEnd;
     onAddPageFlag?: () => void;
-    pastEnd?: number;
+    beats?: Beat[];
+    showEndBeat?: number;
+    onShowEndMove?: (beat: number) => void;
 }) =>
     render(
         <TimelineWaveformProvider
             waveform={{
                 peaksByBeat: Array.from({ length: 16 }, () => [0.5, 0.5]),
-                peaksPastEnd: Array.from({ length: pastEnd }, () => [1, 1]),
             }}
         >
             <Timeline
                 mode="expanded"
-                beats={BEATS}
+                beats={beats}
                 pages={PAGES}
                 measures={[]}
                 timelines={[]}
@@ -90,7 +100,8 @@ const show = ({
                 onSelectionChange={vi.fn()}
                 onAddPageFlag={onAddPageFlag}
                 appendCounts={appendCounts}
-                musicPastEnd={musicPastEnd}
+                showEndBeat={showEndBeat}
+                onShowEndMove={onShowEndMove}
             />
         </TimelineWaveformProvider>,
     );
@@ -160,40 +171,47 @@ describe("+ N counts after the last page (E1)", () => {
     });
 });
 
-describe("the music past the last count (E1)", () => {
-    it("draws it dimmed after the last count, and leaves room for it", () => {
-        show({ pastEnd: 30 });
-        const lane = screen.getByTestId("timeline-waveform-past-end");
+describe("the END line (endless counts rule 4)", () => {
+    it("draws a quiet line at the show's end, with the counts going on past it", () => {
+        // 16 stored counts, and 24 more drawn past them (as the panel draws endless counts)
+        show({ beats: appBeats(40), showEndBeat: 17 });
+        const line = screen.getByTestId("timeline-show-end");
+        expect(parseFloat(line.style.left)).toBe(16 * PX);
+        expect(screen.getByText("END")).toBeTruthy();
         const surface = screen.getByTestId("timeline-pointer-surface");
-        // After home's box and the 16 counts
-        expect(parseFloat(lane.style.left)).toBe(
-            parseFloat(surface.style.left) + 16 * PX,
-        );
-        expect(parseFloat(lane.style.width)).toBe(30 * PX);
-        // The music past the end can't be scrubbed: it has no counts yet
-        expect(parseFloat(surface.style.width)).toBe(16 * PX);
-        expect(
-            parseFloat(surface.parentElement!.style.width),
-        ).toBeGreaterThanOrEqual(46 * PX);
+        expect(parseFloat(surface.style.width)).toBe(40 * PX);
     });
 
-    it("offers extending the counts, in words, while paused", () => {
-        const onExtend = vi.fn();
-        const musicPastEnd = {
-            message: "Counts end at 0:08; the music runs to 0:23.",
-            actionLabel: "Extend counts to the end",
-            onExtend,
-        };
-        show({ pastEnd: 30, musicPastEnd });
-        const note = screen.getByTestId("timeline-music-past-end");
-        expect(note.textContent).toContain(musicPastEnd.message);
-        expect(parseFloat(note.style.left)).toBeGreaterThan(16 * PX);
-        fireEvent.click(
-            screen.getByRole("button", { name: "Extend counts to the end" }),
-        );
-        expect(onExtend).toHaveBeenCalledTimes(1);
+    it("drags on whole counts, not before the last page's start, and commits on release", () => {
+        const onShowEndMove = vi.fn();
+        show({ beats: appBeats(40), showEndBeat: 17, onShowEndMove });
+        const grip = screen.getByTestId("timeline-show-end-grip");
+        grip.setPointerCapture = vi.fn();
+        fireEvent.pointerDown(grip, { button: 0, pointerId: 1, clientX: 256 });
+        fireEvent.pointerMove(grip, { pointerId: 1, clientX: 24.6 * PX });
+        expect(
+            parseFloat(screen.getByTestId("timeline-show-end").style.left),
+        ).toBe(25 * PX);
+        fireEvent.pointerUp(grip, { pointerId: 1, clientX: 24.6 * PX });
+        // View beat 25 is spec beat 26
+        expect(onShowEndMove).toHaveBeenCalledWith(26);
+        // Back before page 2's start, it stops one count after it
+        fireEvent.pointerDown(grip, { button: 0, pointerId: 2, clientX: 256 });
+        fireEvent.pointerUp(grip, { pointerId: 2, clientX: 0 });
+        expect(onShowEndMove).toHaveBeenLastCalledWith(10);
+    });
+
+    it("can't be dragged while playing, and isn't there without a show end", () => {
+        show({
+            beats: appBeats(40),
+            showEndBeat: 17,
+            onShowEndMove: vi.fn(),
+            isPlaying: true,
+        });
+        expect(screen.queryByTestId("timeline-show-end-grip")).toBeNull();
+        expect(screen.getByTestId("timeline-show-end")).toBeTruthy();
         cleanup();
-        show({ pastEnd: 30, musicPastEnd, isPlaying: true });
-        expect(screen.queryByTestId("timeline-music-past-end")).toBeNull();
+        show({});
+        expect(screen.queryByTestId("timeline-show-end")).toBeNull();
     });
 });

@@ -42,8 +42,8 @@ import { durationsByBeatId } from "@/db-functions/tempo";
 import {
     appendPageOfCountsMutationOptions,
     appendPagesToEndMutationOptions,
-    extendCountsToMutationOptions,
 } from "@/hooks/queries/useShowLength";
+import { moveShowEndMutationOptions } from "@/hooks/queries/usePageFlags";
 import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { AudioClock } from "./Clock";
 import { TempoMapMenu } from "./TempoMapPanel";
@@ -67,18 +67,18 @@ import {
     type TimelineSelection,
 } from "./Timeline";
 import {
+    peaksByBeat,
     useAudioEnvelopeStore,
-    waveformWithPastEnd,
     WAVEFORM_FLOOR_DB,
 } from "@/timeline/timelineWaveform";
 import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
-import { showEndTime, timeAtBeat } from "@/timeline/timeMap";
+import { musicEndSeconds } from "@/timeline/showLength";
+import type { CountGrid } from "@/timeline/countGrid";
 import {
-    countContinuation,
-    formatMinutesSeconds,
-    musicEndSeconds,
-    musicRunsPastCounts,
-} from "@/timeline/showLength";
+    beatsThrough,
+    measuresThrough,
+    playbackStopBeat,
+} from "@/timeline/endlessTimeline";
 import {
     moveCommandBlocker,
     useMoveCommands,
@@ -217,26 +217,18 @@ export const toTimelineSelection = (
  * The measure row edits rehearsal marks and measure lines (tempo E8, `useTimelineMeasureRow`).
  */
 export default function TimelineModePanel() {
-    const { beats, pages, measures } = useTimingObjects()!;
+    const { beats, pages, measures, countGrid } = useTimingObjects()!;
     // UI-19: Basic is this timeline with its page boxes holding the music, and none of the
     // Expert parts (clips, the loop, isolation, moves): docs/timeline/research/basic-mode
     const basic = useIsBasicMode();
     const basicExtras = useBasicTimelineExtras(pages);
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
-    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis; E1:
-    // and the music past the last count, on counts as the show would go on. Hidden in settings,
-    // the lane goes away as it does with no audio.
+    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis, in
+    // full: past the stored counts on the counts that go on (endless counts), to the music's end.
+    // Hidden in settings, the lane goes away as it does with no audio.
     const envelope = useAudioEnvelopeStore((s) => s.envelope);
     const waveformHidden = useUiSettingsStore(
         (s) => s.uiSettings.timelineWaveformStyle === "hidden",
-    );
-    const continuation = useMemo(
-        () =>
-            countContinuation({
-                beats,
-                measureStarts: measures.map((m) => m.startBeat.index),
-            }),
-        [beats, measures],
     );
     const musicEnd = useMemo(
         () => (envelope ? musicEndSeconds(envelope, WAVEFORM_FLOOR_DB) : null),
@@ -244,12 +236,15 @@ export default function TimelineModePanel() {
     );
     const waveform = useMemo(() => {
         if (!envelope || waveformHidden) return null;
-        const peaks = waveformWithPastEnd(
-            envelope,
-            beats,
-            createTimelineBeatAxis(beats).offset,
-            { durationAt: continuation.durationAt, musicEnd },
-        );
+        const through =
+            musicEnd === null ? 0 : Math.ceil(countGrid.beatAtTime(musicEnd));
+        const peaks = {
+            peaksByBeat: peaksByBeat(
+                envelope,
+                beatsThrough(countGrid, beats, through),
+                createTimelineBeatAxis(beats).offset,
+            ),
+        };
         // A show with no audio plays a silent placeholder: nothing to draw, so in Basic, where the
         // lane sets the pane's height, it counts as no waveform (UI-19)
         if (
@@ -258,7 +253,7 @@ export default function TimelineModePanel() {
         )
             return null;
         return peaks;
-    }, [envelope, beats, continuation, musicEnd, waveformHidden, basic]);
+    }, [envelope, beats, countGrid, musicEnd, waveformHidden, basic]);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );
@@ -417,11 +412,30 @@ export default function TimelineModePanel() {
     );
     // Not while a paused preview holds a frame (UI-11), as **+**
     const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
+    // The show's end (endless counts rule 4) is the last page's flag; playback and Fit go on to
+    // the latest of it, the music's end and the last move's end (rule 6)
+    const lastPage = pages[pages.length - 1];
+    const showEndBeat = lastPage ? pageEndBeat(lastPage) : 0;
+    const lastMoveEnd = useMemo(
+        () =>
+            (storedTimelines ?? []).reduce(
+                (end, timeline) => Math.max(end, timeline.end),
+                0,
+            ),
+        [storedTimelines],
+    );
+    const stopBeat = playbackStopBeat({
+        grid: countGrid,
+        showEndBeat,
+        musicEndSeconds: musicEnd,
+        lastMoveEndBeat: lastMoveEnd,
+    });
+    const { mutate: moveShowEnd } = useMutation(
+        moveShowEndMutationOptions(queryClient),
+    );
     const showLength = useShowLengthControls({
         beats,
-        lastFlag: pages.length > 0 ? pageEndBeat(pages[pages.length - 1]!) : 0,
-        continuation,
-        musicEnd,
+        lastFlag: showEndBeat,
         hidden: isPlaying || holding,
     });
     // Tempo lab `drillChoices` (E10): count edits that ask what the drill should do
@@ -562,7 +576,16 @@ export default function TimelineModePanel() {
                     }
                     align={align}
                     appendCounts={showLength.appendCounts}
-                    musicPastEnd={showLength.musicPastEnd}
+                    countGrid={countGrid}
+                    fitBeat={stopBeat}
+                    showEndBeat={
+                        lastPage && lastPage.counts > 0
+                            ? showEndBeat
+                            : undefined
+                    }
+                    onShowEndMove={
+                        isolated ? undefined : (beat) => moveShowEnd(beat)
+                    }
                     drillEdits={counts.drillEdits}
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(
@@ -599,6 +622,7 @@ export default function TimelineModePanel() {
  */
 function PlayingTimeline({
     basic = false,
+    countGrid,
     ...props
 }: { basic?: boolean } & Omit<
     TimelineProps,
@@ -612,7 +636,11 @@ function PlayingTimeline({
     | "addPageNames"
     | "loop"
     | "onLoopChange"
->) {
+    | "onViewportExtent"
+> & {
+    /** The counts as they go on past the stored ones (endless counts) */
+    countGrid: CountGrid;
+}) {
     const { beats, pages } = props;
     const playback = useTimelinePlayback({ beats, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
@@ -646,16 +674,24 @@ function PlayingTimeline({
     );
     // UI-12: the paused clock reads the beat the timeline shows, not the selected page's end
     const shownBeat = useTimelineSelectionStore(displayedBeat);
+    // Past the stored counts too: they go on (endless counts)
     const pausedSeconds =
-        beats.length > 0
-            ? timeAtBeat(beats, Math.min(shownBeat, beats.length))
-            : undefined;
+        beats.length > 0 ? countGrid.timeAtBeat(shownBeat) : undefined;
     const clock = useMemo(
         () => <AudioClock pausedSeconds={pausedSeconds} />,
         [pausedSeconds],
     );
     // UI-9 **+** after the free paused playhead; the new page becomes the selection
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    // Endless counts (rules 1 and 7): the timeline draws the counts on past the stored ones, a
+    // screen past where playback stops, and a screen further each time a scroll nears the end
+    const endless = useEndlessCounts({
+        countGrid,
+        beats,
+        measures: props.measures,
+        stopBeat: Math.max(props.fitBeat ?? 0, playheadBeat, shownBeat),
+        align: props.align,
+    });
     // Not while a paused preview holds a frame: + is drawn there, but would add at P (UI-11)
     const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
     const addPageFlag = useAddPageFlag({
@@ -682,6 +718,10 @@ function PlayingTimeline({
     return (
         <Timeline
             {...props}
+            beats={endless.beats}
+            measures={endless.measures}
+            align={endless.align}
+            onViewportExtent={endless.onViewportExtent}
             selection={selection}
             transportClock={clock}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
@@ -696,6 +736,88 @@ function PlayingTimeline({
             onLoopChange={isolation || basic ? undefined : changeLoop}
         />
     );
+}
+
+/** The fewest counts drawn past where playback stops, before the scroller has said how wide it is */
+const MIN_SCREEN_BEATS = 32;
+
+/**
+ * The counts the timeline draws (docs/tempo/endless-counts.md rules 1 and 7): the stored ones,
+ * then the grid's up to a screen past `stopBeat` (where playback stops, or the playhead past it),
+ * growing by a screen each time a scroll nears the end. Rounded up to whole screens so that
+ * playing on past the end redraws the lanes once a screen, not on every count. The Align view's
+ * count lengths go on with them; its retime writes only the stored ones (an Align edit moves
+ * flags, which are always on stored counts).
+ */
+function useEndlessCounts({
+    countGrid,
+    beats,
+    measures,
+    stopBeat,
+    align,
+}: {
+    countGrid: CountGrid;
+    beats: TimelineProps["beats"];
+    measures: TimelineProps["measures"];
+    stopBeat: number;
+    align: TimelineAlign | undefined;
+}) {
+    const [view, setView] = useState({
+        screenBeats: MIN_SCREEN_BEATS,
+        reach: 0,
+    });
+    const screen = view.screenBeats;
+    const extent =
+        Math.ceil(Math.max(stopBeat, view.reach, beats.length) / screen + 1) *
+        screen;
+    const latestExtent = useRef(extent);
+    latestExtent.current = extent;
+    const onViewportExtent = useCallback(
+        ({ screenBeats, atEnd }: { screenBeats: number; atEnd: boolean }) =>
+            setView((current) => {
+                // Whole powers of two, so a pinch redraws the counts a few times, not every frame
+                const quantized = Math.max(
+                    MIN_SCREEN_BEATS,
+                    2 ** Math.ceil(Math.log2(Math.max(screenBeats, 1))),
+                );
+                const reach = atEnd
+                    ? Math.max(current.reach, latestExtent.current)
+                    : current.reach;
+                return quantized === current.screenBeats &&
+                    reach === current.reach
+                    ? current
+                    : { screenBeats: quantized, reach };
+            }),
+        [],
+    );
+    const drawnBeats = useMemo(
+        () => beatsThrough(countGrid, beats, extent),
+        [beats, countGrid, extent],
+    );
+    const drawnMeasures = useMemo(
+        () => measuresThrough(countGrid, measures, drawnBeats),
+        [countGrid, drawnBeats, measures],
+    );
+    const drawnAlign = useMemo(() => {
+        if (!align || drawnBeats === beats) return align;
+        const stored = beats.length;
+        return {
+            ...align,
+            durations: drawnBeats.map((beat) => beat.duration),
+            onRetime: (edit: Parameters<TimelineAlign["onRetime"]>[0]) =>
+                align.onRetime({
+                    ...edit,
+                    durations: edit.durations.slice(0, stored),
+                    synced: edit.synced.filter((i) => i < stored),
+                }),
+        };
+    }, [align, beats, drawnBeats]);
+    return {
+        beats: drawnBeats as TimelineProps["beats"],
+        measures: drawnMeasures as TimelineProps["measures"],
+        align: drawnAlign,
+        onViewportExtent,
+    };
 }
 
 /**
@@ -845,15 +967,11 @@ function useTimelinePunchTap(
 function useShowLengthControls({
     beats,
     lastFlag,
-    continuation,
-    musicEnd,
     hidden,
 }: {
-    beats: Parameters<typeof showEndTime>[0];
+    beats: readonly unknown[];
     /** The last page's flag, a spec beat position */
     lastFlag: number;
-    continuation: ReturnType<typeof countContinuation>;
-    musicEnd: number | null;
     hidden: boolean;
 }) {
     const { t } = useTolgee();
@@ -864,14 +982,6 @@ function useShowLengthControls({
     const { mutate: appendPage } = useMutation(
         appendPageOfCountsMutationOptions(queryClient, selectAddedPage),
     );
-    const { mutate: extend } = useMutation(
-        extendCountsToMutationOptions(queryClient, (added) => {
-            if (added > 0)
-                toast.success(
-                    t("timeline.showLength.extended", { counts: added }),
-                );
-        }),
-    );
     const { mutate: pagesToEnd } = useMutation(
         appendPagesToEndMutationOptions(queryClient, (added) => {
             if (added > 0)
@@ -880,7 +990,6 @@ function useShowLengthControls({
                 );
         }),
     );
-    const countsEnd = showEndTime(beats);
     // Counts already past the last flag (a show made from an MP3): the pill adds a page over them,
     // and says so, and one more offers pages to the end (FB-7)
     const countsPast = beats.length - lastFlag;
@@ -915,24 +1024,7 @@ function useShowLengthControls({
                     }
                   : {}),
           };
-    const musicPastEnd =
-        !hidden &&
-        musicEnd !== null &&
-        musicRunsPastCounts({
-            countsEndSeconds: countsEnd,
-            musicEnd,
-            continuation,
-        })
-            ? {
-                  message: t("timeline.showLength.musicPastEnd", {
-                      countsEnd: formatMinutesSeconds(countsEnd),
-                      musicEnd: formatMinutesSeconds(musicEnd),
-                  }),
-                  actionLabel: t("timeline.showLength.extendToEnd"),
-                  onExtend: () => extend(musicEnd),
-              }
-            : undefined;
-    return { appendCounts, musicPastEnd };
+    return { appendCounts };
 }
 
 /**

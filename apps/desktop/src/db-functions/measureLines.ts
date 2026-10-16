@@ -3,6 +3,7 @@ import { schema } from "@/global/database/db";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { ensureCountsInTransaction } from "./endlessCounts";
+import { endlessBeatOfId } from "@/timeline/endlessTimeline";
 import {
     planMeasureLineEdit,
     type MeasureLineEdit,
@@ -80,6 +81,60 @@ function countsNeeded(
     return needs(line.beat + edit.beats);
 }
 
+/** The measure ids `edit` names */
+const measureIdsOf = (edit: MeasureLineEdit): number[] =>
+    edit.kind === "start"
+        ? []
+        : edit.kind === "moveMark"
+          ? [edit.fromMeasureId, edit.toMeasureId]
+          : [edit.measureId];
+
+/** `edit` with each measure id swapped by `swap` */
+const withMeasureIds = (
+    edit: MeasureLineEdit,
+    swap: (id: number) => number,
+): MeasureLineEdit =>
+    edit.kind === "start"
+        ? edit
+        : edit.kind === "moveMark"
+          ? {
+                ...edit,
+                fromMeasureId: swap(edit.fromMeasureId),
+                toMeasureId: swap(edit.toMeasureId),
+            }
+          : { ...edit, measureId: swap(edit.measureId) };
+
+/**
+ * `edit` on stored measures: a measure the row drew past the stored counts (an endless measure,
+ * `endlessBeatOfId`) is stored first, with the counts up to it, and the edit names that row.
+ */
+async function storeEndlessMeasures(
+    tx: DbTransaction,
+    edit: MeasureLineEdit,
+): Promise<MeasureLineEdit> {
+    const beats = measureIdsOf(edit).flatMap((id) => {
+        const beat = endlessBeatOfId(id);
+        return beat === null ? [] : [beat];
+    });
+    if (beats.length === 0) return edit;
+    await ensureCountsInTransaction({ tx, through: Math.max(...beats) + 1 });
+    const { lines, beatIds } = await readMeasureLines(tx);
+    const idAt = new Map(lines.map((line) => [line.beat, line.id]));
+    for (const beat of beats) {
+        if (idAt.has(beat)) continue;
+        // The counts carry the meter on, so the measure is there; a line goes there if not
+        const [created] = await tx
+            .insert(schema.measures)
+            .values({ start_beat: beatIds[beat]!, rehearsal_mark: null })
+            .returning({ id: schema.measures.id });
+        idAt.set(beat, created!.id);
+    }
+    return withMeasureIds(edit, (id) => {
+        const beat = endlessBeatOfId(id);
+        return beat === null ? id : idAt.get(beat)!;
+    });
+}
+
 /** Applies one measure-row edit inside `tx`. */
 export async function editMeasureLinesInTransaction({
     tx,
@@ -88,6 +143,7 @@ export async function editMeasureLinesInTransaction({
     tx: DbTransaction;
     edit: MeasureLineEdit;
 }): Promise<MeasureLineEditResult> {
+    edit = await storeEndlessMeasures(tx, edit);
     let read = await readMeasureLines(tx);
     const through = countsNeeded(read.lines, read.bounds.beatCount, edit);
     if (through > 0) {
@@ -146,7 +202,10 @@ export async function editMeasureLines({
 }): Promise<MeasureLineEditResult> {
     // An edit that changes nothing (renaming C to C) isn't an undo entry
     const { lines, bounds } = await readMeasureLines(db);
-    if (countsNeeded(lines, bounds.beatCount, edit) === 0) {
+    const endless = measureIdsOf(edit).some(
+        (id) => endlessBeatOfId(id) !== null,
+    );
+    if (!endless && countsNeeded(lines, bounds.beatCount, edit) === 0) {
         const plan = planMeasureLineEdit(lines, bounds, edit);
         if (
             plan.creates.length + plan.updates.length + plan.deletes.length ===
