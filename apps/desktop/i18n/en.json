@@ -2317,7 +2317,9 @@
                 "right": "Performer's right"
             },
             "stepOffFootHint": "The performer's own foot, whichever way they face. Facing you, their left foot is on your right. Starts on the show's saved foot; the other one is a preview and isn't saved.",
-            "keysSection": "Keyboard and mouse"
+            "keysSection": "Keyboard and mouse",
+            "uniforms": "Band uniform",
+            "guardUniforms": "Guard uniform"
         },
         "keys": {
             "playPause": "Play or pause",
@@ -2342,6 +2344,15 @@
             "orbit": "Drag",
             "pan": "Shift+drag",
             "zoom": "Scroll"
+        },
+        "uniformPreset": {
+            "fade": "Ultraviolet Fade",
+            "military": "Night Watch",
+            "plastron": "Lilac Plastron",
+            "prism": "Prism Split",
+            "sash": "Royal Sash",
+            "signature": "Signature",
+            "westPoint": "West Point"
         },
         "cameras": {
             "title": "Cameras",
@@ -2420,15 +2431,23 @@
     },
     "welcomeFlow": {
         "back": "Back",
+        "changeLater": "You can change this any time in Settings.",
         "continue": "Continue",
         "dialogLabel": "Set up OpenMarch",
+        "finish": "Finish",
+        "getStarted": "Get started",
+        "language": {
+            "title": "Choose your language"
+        },
         "mode": {
-            "note": "You can change this any time in Settings.",
             "title": "How do you want to work?"
         },
         "step": "Step {current} of {total}",
+        "theme": {
+            "title": "Light or dark?"
+        },
         "welcome": {
-            "description": "Let's set things up. This takes a few seconds.",
+            "description": "Welcome to the future of design. Let's get you set up.",
             "title": "Welcome to OpenMarch"
         }
     },
