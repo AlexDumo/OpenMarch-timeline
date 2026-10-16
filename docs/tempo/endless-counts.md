@@ -1,7 +1,7 @@
 # Spec: endless counts
 
-Status: **accepted**, 2026-10-16 (decisions at the end). Builds on the show-length work in this branch (E1: T-8, T-9, T-10,
-FB-7). A larger change, storing a tempo map instead of beat rows, is a separate question:
+Status: **accepted**, 2026-10-16 (decisions at the end). Builds on the show-length work in this
+branch (E1: T-8, T-9, T-10, FB-7). A larger change, storing a tempo map instead of beat rows, is a separate question:
 AlexDumo/OpenMarch-timeline#264. This spec doesn't need it.
 
 ## Problem
@@ -43,8 +43,9 @@ Creative tools with a timeline don't ask for that: the grid just keeps going.
    plan and see every move you placed. Marchers follow moves past the end and hold where no move
    continues. Play from past that stop point plays on in silence until you stop it. The playhead
    can be dragged or stepped anywhere.
-7. **The timeline scrolls on.** The scroll extent is rule 6's stop point plus one screen, and grows as you scroll or seek right. Fit shows up to the stop point, as T-10's fit
-   does now with the music.
+7. **The timeline scrolls on.** The scroll extent is rule 6's stop point plus one screen, and
+   grows as you scroll or seek right. Fit shows up to the stop point, as T-10's fit does now with
+   the music.
 8. **Counts past the show's end belong to no page.** The readout names them by how far past the
    end they are: **END +1** is the first count after the last page ends, **END +5** the fifth. At
    the end itself the readout names the last page's last count, as DN-1 does now.
