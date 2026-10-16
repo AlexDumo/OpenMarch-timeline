@@ -1209,19 +1209,17 @@ export const TimelinePageLines = memo(function TimelinePageLines({
 });
 
 /**
- * The bar past the last page's flag, shaded darker: the pages have run out there. It lies over the
- * page row and the measure row, so the counts past the end read muted too, and takes no presses.
+ * The page row past the last page's flag, shaded darker: the pages have run out there. The counts
+ * under it stay as they are, and it takes no presses.
  */
 export const TimelinePastEndShade = memo(function TimelinePastEndShade({
     pages,
     pixelsPerBeat,
     width,
-    height,
 }: {
     pages: readonly TimelinePageMarker[];
     pixelsPerBeat: number;
     width: number;
-    height: number;
 }) {
     const lastFlag = getLastFlagBeat({ pages });
     if (lastFlag === null) return null;
@@ -1236,7 +1234,7 @@ export const TimelinePastEndShade = memo(function TimelinePastEndShade({
                 top: TIMELINE_PAGE_ROW_TOP,
                 left,
                 width: width - left,
-                height: Math.max(0, height - TIMELINE_PAGE_ROW_TOP),
+                height: TIMELINE_PAGE_ROW_HEIGHT,
             }}
         />
     );

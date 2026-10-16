@@ -1077,8 +1077,6 @@ const TimelineSurface = memo(function TimelineSurface({
                             pages={model.pages}
                             pixelsPerBeat={pixelsPerBeat}
                             width={width}
-                            // Basic's bar is its page boxes, which run down the whole pane
-                            height={basic ? timelineHeight : audioTop}
                         />
                         <TimelineRehearsalMarkers
                             model={model}
