@@ -320,11 +320,28 @@ function selCenter() { const a = selMs(); if (!a.length) return { x: 80, y: 42 }
 function assign(spots, ms) {
   const res = {};
   if (S.order === "drill") { const sorted = [...ms].sort((a, b) => +a.id.slice(1) - +b.id.slice(1)); sorted.forEach((m, i) => (res[m.id] = spots[i])); return res; }
-  const pairs = []; ms.forEach((m) => spots.forEach((p, j) => pairs.push([(m.x - p.x) ** 2 + (m.y - p.y) ** 2, m.id, j])));
-  pairs.sort((a, b) => a[0] - b[0]); const used = new Set();
-  for (const [, id, j] of pairs) { if (res[id] || used.has(j)) continue; res[id] = spots[j]; used.add(j); }
+  // least total SQUARED travel (Hungarian), the same solve as the app's shape tool. Squared, not
+  // plain distance: plain distance ties when a line slides along itself (two end marchers can
+  // leapfrog the whole line for the same total), squared picks everyone taking an even step.
+  const n = ms.length; if (!n) return res;
+  const cost = ms.map((m) => spots.map((p) => (m.x - p.x) ** 2 + (m.y - p.y) ** 2));
+  const col = hungarian(cost); ms.forEach((m, i) => (res[m.id] = spots[col[i]]));
   return res;
 }
+// O(n^3) Hungarian (Kuhn–Munkres with potentials). cost is n×n. Returns the column for each row.
+function hungarian(cost) {
+  const n = cost.length, INF = 1e18, u = new Array(n + 1).fill(0), v = new Array(n + 1).fill(0), p = new Array(n + 1).fill(0), way = new Array(n + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    p[0] = i; let j0 = 0; const minv = new Array(n + 1).fill(INF), used = new Array(n + 1).fill(false);
+    do { used[j0] = true; const i0 = p[j0]; let delta = INF, j1 = 0;
+      for (let j = 1; j <= n; j++) if (!used[j]) { const cur = cost[i0 - 1][j - 1] - u[i0] - v[j]; if (cur < minv[j]) { minv[j] = cur; way[j] = j0; } if (minv[j] < delta) { delta = minv[j]; j1 = j; } }
+      for (let j = 0; j <= n; j++) if (used[j]) { u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta;
+      j0 = j1; } while (p[j0] !== 0);
+    do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
+  }
+  const col = new Array(n); for (let j = 1; j <= n; j++) col[p[j] - 1] = j - 1; return col;
+}
+function travel() { const a = S.cache.asg; if (!a) return null; const d = selMs().map((m) => (a[m.id] ? dist(m, a[m.id]) : 0)); return { total: d.reduce((x, y) => x + y, 0), longest: Math.max(0, ...d) }; }
 function place() {
   if (!S.shape || !S.cache.asg) return; const asg = S.cache.asg; S.undo = clone(S.ms);
   const from = clone(S.ms), to = S.ms.map((m) => (asg[m.id] ? { x: asg[m.id].x, y: asg[m.id].y } : { x: m.x, y: m.y }));
@@ -635,7 +652,7 @@ const UI = {
       let row = s.kind === "box" ? `<button data-act="cols-">−</button><b>${iv.cols} × ${iv.rows}</b><button data-act="cols+">+</button><span class="sep"></span><span class="muted">↔</span><button data-act="spx-">−</button><b>${fmt(iv.across)}</b><button data-act="spx+">+</button><span class="muted">↕</span><button data-act="spy-">−</button><b>${fmt(iv.deep)}</b><button data-act="spy+">+</button>`
         : `<b>${kname(s)}</b><span class="sep"></span><span class="muted">apart</span><button data-act="sp-">−</button><b>${fmt(iv.apart)}</b><button data-act="sp+">+</button>`;
       row += `<span class="sep"></span><button class="${V.more ? "on" : ""}" data-act="more">⋯</button><button class="primary" data-act="place">Place</button>`;
-      const more = V.more ? `<div class="row"><button data-act="rot:-90">⟲ 90°</button><button data-act="rot:90">⟳ 90°</button><button data-act="flipy">Flip</button><button data-act="order">${S.order === "nearest" ? "Nearest" : "Drill order"}</button><button data-act="ptab:shape">More in inspector →</button></div>` : "";
+      const more = V.more ? `<div class="row"><button data-act="rot:-90">⟲ 90°</button><button data-act="rot:90">⟳ 90°</button><button data-act="flipy">Flip</button><button data-act="order">${S.order === "nearest" ? "Least travel" : "Drill order"}</button><button data-act="ptab:shape">More in inspector →</button></div>` : "";
       const guess = V.guesses ? `<div class="row"><span class="muted">Looks like</span>${V.guesses.map((g, i) => `<button class="tool ${V.gi === i ? "on" : ""}" data-act="guess:${i}">${icon(g.shape.kind)}${g.shape.kind === "path" ? "Keep as drawn" : KINDS[g.shape.kind].name}</button>`).join("")}</div>` : "";
       o += chipBelow(`${guess}<div class="row">${row}</div>${more}`, 26, "col");
     }
@@ -673,7 +690,7 @@ const UI = {
       <div class="sec"><div class="f"><label>Flip</label><span class="row"><button data-act="flipx">Side to side</button><button data-act="flipy">Front to back</button></span></div></div>
       <div class="sec"><div class="f"><label>Scale</label><span class="row"><button data-act="sc:0.5">½</button><button data-act="sc:0.8">−</button><button data-act="sc:1.25">+</button><button data-act="sc:2">×2</button></span></div><div class="f"><label>Footprint</label><span class="muted">${fmt(s.w)} × ${fmt(s.h)} steps</span></div></div>
       ${s.kind === "box" ? `<div class="sec"><div class="f"><label>When I resize</label></div><div class="seg"><button class="${!S.keepSpacing ? "on" : ""}" data-act="ks:0">Stretch spacing</button><button class="${S.keepSpacing ? "on" : ""}" data-act="ks:1">Keep spacing</button></div><div class="help" style="margin-top:6px">${S.keepSpacing ? "Handles add or remove marchers across; the spacing stays." : "Handles change the spacing; the count across stays."}</div></div>` : ""}
-      <div class="sec"><div class="f"><label>Who goes where</label><span class="seg"><button class="${S.order === "nearest" ? "on" : ""}" data-act="order">Nearest</button><button class="${S.order === "drill" ? "on" : ""}" data-act="order">Drill order</button></span></div></div>
+      <div class="sec"><div class="f"><label>Who goes where</label><span class="seg"><button class="${S.order === "nearest" ? "on" : ""}" data-act="order">Least travel</button><button class="${S.order === "drill" ? "on" : ""}" data-act="order">Drill order</button></span></div>${(() => { const t = travel(); return t ? `<div class="help">Longest walk ${fmt(t.longest)} steps · all walks together ${fmt(t.total)} steps</div>` : ""; })()}</div>
       <div class="sec row"><button class="primary" data-act="place">Place</button><button data-act="cancel">Cancel</button><button data-act="savecur">☆ Save</button></div></div>`;
   },
   pivotP() { const s = S.shape; if (!s) return null; const [gx, gy] = V.pv || [0, 0]; return toWorld(s, { x: (gx * s.w) / 2, y: (gy * s.h) / 2 }); },
