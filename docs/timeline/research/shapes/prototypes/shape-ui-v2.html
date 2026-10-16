@@ -69,6 +69,7 @@
   #switcher button { white-space: nowrap; background: #fff; color: #111; border-color: #ccc; border-radius: 999px; }
   #switcher button.on { background: #111; color: #fff; border-color: #111; }
   #switcher .vl { white-space: nowrap; min-width: 210px; text-align: center; font-weight: 600; }
+  #switcher span, #switcher select { white-space: nowrap; }
   #switcher .sep { width: 1px; height: 20px; background: #ccc; margin: 0 2px; }
   #switcher select { background: #fff; color: #111; border-color: #ccc; }
   .chip { position: absolute; background: var(--bg2); border: 1px solid rgba(255,255,255,0.14);
@@ -195,9 +196,38 @@ function makeBand() {
   for (let i = 0; i < 6; i++) ms.push({ id: "M" + (i + 1), x: 66 + i * 5.5, y: 52 });
   for (let i = 0; i < 8; i++) ms.push({ id: "F" + (i + 1), x: 44 + (i % 4) * 3, y: 58 + Math.floor(i / 4) * 4 });
   for (let i = 0; i < 6; i++) ms.push({ id: "C" + (i + 1), x: 106 + (i % 3) * 3, y: 58 + Math.floor(i / 3) * 4 });
+  // more sections so selections can be odd-sized and in the dozens (about 110 on the field)
+  for (let i = 0; i < 13; i++) ms.push({ id: "S" + (i + 1), x: 62 + i * 3, y: 61 });
+  for (let i = 0; i < 24; i++) ms.push({ id: "B" + (i + 1), x: 58 + (i % 12) * 4, y: 19 + Math.floor(i / 12) * 3 });
+  for (let i = 0; i < 40; i++) { const side = i < 20 ? 0 : 1, k = i % 20; ms.push({ id: "G" + (i + 1), x: (side ? 111 : 38) + (k % 5) * 3, y: 24 + Math.floor(k / 5) * 5 }); }
   return ms;
 }
-const GROUPS = { Trumpets: (id) => id[0] === "T", Mellos: (id) => id[0] === "M", Flutes: (id) => id[0] === "F", "3 trumpets": (id) => ["T1", "T2", "T3"].includes(id), Everyone: () => true };
+const num = (id) => +id.slice(1);
+const GROUPS = {
+  "1 marcher (T1)": (id) => id === "T1",
+  "2 marchers": (id) => id === "T1" || id === "T2",
+  "3 trumpets": (id) => id[0] === "T" && num(id) <= 3,
+  "7 trumpets (odd)": (id) => id[0] === "T" && num(id) <= 7,
+  Trumpets: (id) => id[0] === "T",
+  "Saxes, 13 (odd)": (id) => id[0] === "S",
+  "Low brass, 24": (id) => id[0] === "B",
+  "Trumpets + saxes, 25 (odd)": (id) => id[0] === "T" || id[0] === "S",
+  "Guard, 40": (id) => id[0] === "G",
+  "All brass, 42": (id) => "TMB".includes(id[0]),
+  "Guard + low brass, 64": (id) => id[0] === "G" || id[0] === "B",
+  "Everyone, 109": () => true,
+};
+// rearrange the selected marchers before drawing, to try who-goes-where from different starts
+function arrangeSel(kind) {
+  const ms = selMs().sort((a, b) => a.id.localeCompare(b.id) || num(a.id) - num(b.id)), n = ms.length; if (!n) return;
+  const c = selCenter(); let pts;
+  if (kind === "line") pts = ms.map((_, i) => ({ x: c.x + (i - (n - 1) / 2) * 2, y: c.y }));
+  else if (kind === "ring") { const R = Math.max(2, (n * 2) / (2 * Math.PI)); pts = ms.map((_, i) => ({ x: c.x + R * Math.cos((2 * Math.PI * i) / n), y: c.y + R * Math.sin((2 * Math.PI * i) / n) })); }
+  else if (kind === "block") { const cols = Math.ceil(Math.sqrt(n)); pts = ms.map((_, i) => ({ x: c.x + ((i % cols) - (cols - 1) / 2) * 2, y: c.y + (Math.floor(i / cols) - (Math.ceil(n / cols) - 1) / 2) * 2 })); }
+  else { let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647); const side = Math.sqrt(n) * 3.2; pts = [];
+    for (const _ of ms) { let p, tries = 0; do { p = { x: c.x + (rnd() - 0.5) * side * 1.6, y: c.y + (rnd() - 0.5) * side }; tries++; } while (tries < 60 && pts.some((q) => dist(p, q) < 1.6)); pts.push(p); } }
+  ms.forEach((m, i) => { m.x = snap(clamp(pts[i].x, 0, FW)); m.y = snap(clamp(pts[i].y, 0, FH)); });
+}
 
 /* ---------------- kinds ---------------- */
 const KINDS = {
@@ -251,8 +281,16 @@ function samplePoly(pts, closed, n) {
   }
   return { out, tot };
 }
+// The app's box rule (box v2): among splits within about 2x of the drawn proportions, the fewest
+// empty spots first, then the closest fit; otherwise the fewest empty spots overall.
 function boxSplit(s, n) {
-  const cols = s.cols ? Math.min(s.cols, n) : clamp(Math.round(Math.sqrt((n * s.w) / Math.max(s.h, 0.01))), 1, n);
+  if (s.cols) { const cols = Math.min(s.cols, n); return { cols, rows: Math.ceil(n / cols) }; }
+  const ideal = clamp(Math.sqrt((n * s.w) / Math.max(s.h, 0.01)), 1, n);
+  const score = (c) => ({ c, empty: c * Math.ceil(n / c) - n, off: Math.abs(Math.log(c / ideal)) });
+  const all = Array.from({ length: n }, (_, i) => score(i + 1));
+  const near = all.filter((x) => x.off <= Math.log(2) + 1e-9);
+  const best = (list) => list.sort((a, b) => a.empty - b.empty || a.off - b.off)[0];
+  const cols = (best(near.length ? near : all) || { c: 1 }).c;
   return { cols, rows: Math.ceil(n / cols) };
 }
 function spotsLocal(s, n) {
@@ -289,7 +327,7 @@ function autoShape(kind, n, iv = 2, at) {
   const c = at || selCenter(); let w, h, cols;
   switch (kind) {
     case "line": w = iv * (n - 1); h = 0; break;
-    case "box": cols = clamp(Math.round(Math.sqrt(n * 1.5)), 1, n); w = iv * (cols - 1); h = iv * (Math.ceil(n / cols) - 1); break;
+    case "box": cols = boxSplit({ w: 3, h: 2 }, n).cols; w = iv * (cols - 1); h = iv * (Math.ceil(n / cols) - 1); break;
     case "circle": w = h = (n * iv) / Math.PI; break;
     case "arc": { const r = ((n - 1) * iv) / Math.PI; w = 2 * r; h = r; break; }
     case "diamond": { const side = (n * iv) / 4; w = h = side * Math.SQRT2; break; }
@@ -398,7 +436,7 @@ function render() {
   if (sh) h += outlineSVG(sh, Vt.outline);
   for (const m of S.ms) h += marcherSVG(m, S.sel.has(m.id), Vt);
   if (sp) for (const p of sp) h += `<circle cx="${p.x}" cy="${p.y}" r="0.7" fill="var(--accent)" stroke="#fff" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
-  if (asg && Vt.labels !== false) for (const m of selMs()) { const p = asg[m.id]; if (p) h += `<text x="${p.x}" y="${p.y - 1.05}" font-size="1.05" fill="#fff" text-anchor="middle" pointer-events="none">${m.id}</text>`; }
+  if (asg && Vt.labels !== false && n <= 24) for (const m of selMs()) { const p = asg[m.id]; if (p) h += `<text x="${p.x}" y="${p.y - 1.05}" font-size="1.05" fill="#fff" text-anchor="middle" pointer-events="none">${m.id}</text>`; }
   h += Vt.over?.(K) || "";
   svg.innerHTML = h;
   let o = Vt.overlay?.() || "";
@@ -550,6 +588,7 @@ function itemIcon(it, size = 18) {
 }
 // a shape made from a library item, sized for the selection at a spacing
 function shapeFromItem(it, n, iv) {
+  iv = iv ?? it.iv ?? 2;
   if (it.kind === "custom") { const t = { kind: "custom", def: it.def, name: it.name, cx: 0, cy: 0, w: it.def.aspect || 1, h: 1, rot: 0 }; const o = outlineLocal(t); const L = samplePoly(o.pts, o.closed, 2).tot; const need = iv * (o.closed ? n : n - 1); const f = need / (L || 1); const c = selCenter(); const asp = it.def.aspect || 1; return { ...t, w: f * asp, h: f, cx: snap(c.x), cy: snap(c.y) }; }
   const s = autoShape(it.kind, n, iv ?? it.iv ?? 2); if (it.fy) s.fy = it.fy; if (it.type === "preset") s.name = it.name; return s;
 }
@@ -938,9 +977,10 @@ function go() {
   drawBar(); S.force = true; render();
 }
 function drawBar() { const sw = document.getElementById("switcher");
-  sw.innerHTML = `<span style="font-weight:600;padding:0 6px">PROTOTYPE v2</span><span class="sep"></span><span>Selected</span><select id="grp">${Object.keys(GROUPS).map((g) => `<option ${g === S.group ? "selected" : ""}>${g}</option>`).join("")}${S.group ? "" : "<option selected>Custom</option>"}</select><button data-reset>Reset</button><span class="sep"></span><a href="shape-ui-ideas.html" style="color:#333;padding:0 6px">v1 ideas</a>`;
+  sw.innerHTML = `<span style="font-weight:600;padding:0 6px">PROTOTYPE v2</span><span class="sep"></span><span>Selected</span><select id="grp">${Object.keys(GROUPS).map((g) => `<option ${g === S.group ? "selected" : ""}>${g}</option>`).join("")}${S.group ? "" : "<option selected>Custom</option>"}</select><span>Start as</span><select id="arr"><option value="">as in the show</option><option value="line">a line</option><option value="ring">a ring</option><option value="block">a block</option><option value="scatter">scattered</option></select><button data-reset>Reset</button><span class="sep"></span><a href="shape-ui-ideas.html" style="color:#333;padding:0 6px">v1 ideas</a>`;
   sw.querySelector("[data-reset]").onclick = () => { S.ms = clone(HOME); S.undo = null; go(); };
-  sw.querySelector("#grp").onchange = (e) => { setGroup(e.target.value); go(); }; }
+  sw.querySelector("#grp").onchange = (e) => { setGroup(e.target.value); go(); };
+  sw.querySelector("#arr").onchange = (e) => { if (e.target.value) arrangeSel(e.target.value); e.target.value = ""; S.force = true; render(); }; }
 panel.addEventListener("click", (e) => { const sv = e.target.closest("#edsvg"); if (sv && V.ed) edClick({ currentTarget: sv, clientX: e.clientX, clientY: e.clientY }); });
 S.tab = "shapes"; S.ptab = "shape"; S.tool = "box"; S.fade = "always"; S.ratioLock = false;
 go();
