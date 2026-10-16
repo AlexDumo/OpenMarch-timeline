@@ -79,6 +79,7 @@ import {
     writeLibraryIpcSelfTest,
 } from "./services/library-ipc-self-test";
 import { closeView3dWindow, initView3dWindow } from "./view3dWindow";
+import { pruneShowLibraryAt } from "../database/showLibraryPrune";
 import {
     getLibraryStore,
     initLibraryIpc,
@@ -1295,6 +1296,9 @@ export async function saveFile() {
         .then(async (path) => {
             if (path.canceled || !path.filePath) return 0;
 
+            // Save prunes the show Library (C2.1), so the copy carries only what the show uses
+            await pruneShowLibraryAt(DatabaseServices.getDbPath());
+
             // Make a copy into a temp file
             const tempPath = path.filePath + ".tmp";
             if (fs.existsSync(tempPath)) {
@@ -1428,6 +1432,9 @@ async function closeCurrentFileNow(isAppQuitting: boolean) {
     } catch (error) {
         console.error("Error getting SVG on close:", error);
     }
+
+    // The app autosaves, so closing is when save prunes the show Library (C2.1)
+    await pruneShowLibraryAt(DatabaseServices.getDbPath());
 
     // Close the current file
     DatabaseServices.setDbPath("", false);
