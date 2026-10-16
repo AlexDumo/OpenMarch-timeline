@@ -2,10 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
-    BAND_DEFAULT,
     BODY_TYPES,
-    DEFAULT_PRIMARY,
-    GUARD_DEFAULT,
     bassOptions,
     fillToNumber,
     HEIGHT_CLASSES,
@@ -19,6 +16,11 @@ import {
     sectionUniform,
     uniformKey,
 } from "../looks";
+import {
+    DEFAULT_UNIFORM_PRESET,
+    UNIFORM_PRESETS,
+    UNIFORM_PRESET_IDS,
+} from "../uniformPresets";
 import type { GuardModelId } from "../../instruments/model";
 
 const assets = path.resolve(__dirname, "../../../assets/om-pose");
@@ -162,7 +164,8 @@ describe("section uniforms", () => {
         expect(a).not.toBe(b);
     });
 
-    it("dresses band sections in Band default", () => {
+    it("dresses band sections in the preset's band look, Ultraviolet Fade by default", () => {
+        expect(DEFAULT_UNIFORM_PRESET).toBe("fade");
         for (const b of [
             "Trumpet",
             "Snare",
@@ -171,29 +174,73 @@ describe("section uniforms", () => {
             "Unknown",
         ]) {
             const u = sectionUniform(b);
-            expect(u.style).toBe("classic");
-            expect(u.colors).toEqual(BAND_DEFAULT.colors);
-            expect(u.colors.primary).toBe(0x2d4f9e);
-            expect(u.colors.hat).toBe(0x2d4f9e);
-            expect(u.options).toMatchObject(BAND_DEFAULT.options);
+            expect(u.style).toBe("fade");
+            expect(u.colors).toEqual(UNIFORM_PRESETS.fade.band.colors);
+            expect(u.colors.primary).toBe(0x6442ff);
+            expect(u.options).toMatchObject(UNIFORM_PRESETS.fade.band.options);
+            for (const id of UNIFORM_PRESET_IDS) {
+                const p = sectionUniform(
+                    b,
+                    "up",
+                    undefined,
+                    undefined,
+                    undefined,
+                    id,
+                );
+                expect(p.style).toBe(UNIFORM_PRESETS[id].band.style);
+                expect(p.colors).toEqual(UNIFORM_PRESETS[id].band.colors);
+            }
         }
     });
 
-    it("dresses guard sections in Guard default: all black, plain, bare hands", () => {
+    it("dresses guard sections in the preset's guard look: plain, bare hands, no hat", () => {
         for (const g of ["Color Guard", "Rifle", "Flag", "Dancer", "Twirler"]) {
-            const u = sectionUniform(g);
-            expect(u.colors).toEqual(GUARD_DEFAULT.colors);
-            const { gloves: _unused, ...worn } = u.colors;
-            for (const c of Object.values(worn))
-                expect(c).toBeLessThanOrEqual(0x111114);
-            expect(u.options).toMatchObject({
-                stripe: false,
-                collar: false,
-                cuffs: false,
-                gloves: false,
-                hat: false,
-            });
+            for (const id of UNIFORM_PRESET_IDS) {
+                const u = sectionUniform(
+                    g,
+                    "up",
+                    undefined,
+                    undefined,
+                    undefined,
+                    id,
+                );
+                expect(u.colors).toEqual(UNIFORM_PRESETS[id].guard.colors);
+                expect(u.options).toMatchObject({
+                    stripe: false,
+                    collar: false,
+                    cuffs: false,
+                    gloves: false,
+                    hat: false,
+                });
+            }
         }
+    });
+
+    it("keeps the first defaults as Classic navy: navy band, all-black guard", () => {
+        const band = sectionUniform(
+            "Trumpet",
+            "up",
+            undefined,
+            undefined,
+            undefined,
+            "classic",
+        );
+        expect(band.style).toBe("classic");
+        expect(band.colors.primary).toBe(0x2d4f9e);
+        expect(band.colors.hat).toBe(0x2d4f9e);
+        const guard = sectionUniform(
+            "Color Guard",
+            "up",
+            undefined,
+            undefined,
+            undefined,
+            "classic",
+        );
+        const { gloves: _unused, ...worn } = guard.colors;
+        for (const c of Object.values(worn))
+            expect(c).toBeLessThanOrEqual(0x111114);
+        expect(guard.options.carryColor).toBe(0x2d4f9e);
+        expect(guard.options.silk).toBeNull();
     });
 
     it("groups looks by band vs guard, never by section name or fill", () => {
@@ -225,12 +272,48 @@ describe("section uniforms", () => {
         expect(red.colors).toEqual(sectionUniform("Snare").colors);
         expect(red.options.carryColor).toBe(0xc8102e);
         expect(sectionUniform("Snare").options.carryColor).toBe(
-            DEFAULT_PRIMARY,
+            UNIFORM_PRESETS.fade.carry,
         );
         expect(
             sectionUniform("Drum Major", "up", undefined, 0xc8102e).options
                 .carryColor,
         ).toBeNull();
+    });
+
+    it("paints the preset's silk pattern only on carries without a fill", () => {
+        expect(sectionUniform("Color Guard").options.silk).toBe("fade");
+        expect(
+            sectionUniform("Color Guard", "up", undefined, 0xc8102e).options
+                .silk,
+        ).toBeNull();
+        expect(sectionUniform("Drum Major").options.silk).toBeNull();
+        for (const id of UNIFORM_PRESET_IDS) {
+            const silk = UNIFORM_PRESETS[id].silk;
+            expect(
+                sectionUniform(
+                    "Flag",
+                    "up",
+                    undefined,
+                    undefined,
+                    undefined,
+                    id,
+                ).options.silk,
+            ).toBe(silk ? id : null);
+        }
+    });
+
+    it("gives every silk pattern an sRGB color across the whole silk", () => {
+        for (const id of UNIFORM_PRESET_IDS) {
+            const silk = UNIFORM_PRESETS[id].silk;
+            if (!silk) continue;
+            for (let u = 0; u <= 1; u += 0.05)
+                for (let v = 0; v <= 1; v += 0.05) {
+                    const c = silk(u, v);
+                    expect(Number.isInteger(c)).toBe(true);
+                    expect(c).toBeGreaterThanOrEqual(0);
+                    expect(c).toBeLessThanOrEqual(0xffffff);
+                }
+        }
     });
 
     it("turns a 2D fill into an sRGB number", () => {

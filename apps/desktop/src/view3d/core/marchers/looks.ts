@@ -2,17 +2,20 @@
  * What each 3D View marcher looks like: its body (type, skin tone, height
  * class) and its section's uniform (ADR 0002 D-7).
  *
- * The show file stores none of this yet, so the defaults are derived:
+ * The show file stores only the uniform preset (the venue settings'
+ * `uniforms`), so the rest is derived:
  *
  * - body type and skin tone from a stable hash of the marcher ID, so a
  *   marcher looks the same every time the show opens;
  * - height class 0.95, 1.00 or 1.05 by the same hash at high quality, and
  *   1.00 for everyone at low quality;
- * - one of two built-in uniforms per section, Band default or Guard
- *   default, chosen by `isGuard` (ADR 0002 D-7 and D-18). The section's 2D
- *   fill color no longer touches the uniform; it only colors what the
- *   section carries (drum shells, flag silks). Each look carries the
- *   section's instrument from `core/instruments` in the hold it plays.
+ * - the uniform from the show's preset (`uniformPresets.ts`): its band
+ *   look, or its guard look for the guard sections, chosen by `isGuard`
+ *   (ADR 0002 D-7 and D-18). The section's 2D fill color never touches the
+ *   uniform; it only colors what the section carries (drum shells, flag
+ *   silks), which otherwise take the preset's colors and silk pattern. Each
+ *   look carries the section's instrument from `core/instruments` in the
+ *   hold it plays.
  *
  * Pure: no three.js, React or database.
  */
@@ -27,6 +30,11 @@ import {
 import { bassSizesFor } from "../instruments/battery";
 import type { GuardModelId, ModelOptions } from "../instruments/model";
 import type { HoldState } from "../instruments/holds";
+import {
+    DEFAULT_UNIFORM_PRESET,
+    UNIFORM_PRESETS,
+    type UniformPresetId,
+} from "./uniformPresets";
 
 const withOptions = (
     carry: Carry | null,
@@ -194,22 +202,16 @@ export interface UniformLook {
          * by fill.
          */
         carryColor: number | null;
+        /**
+         * The preset whose pattern paints the flag silks, or null for plain
+         * silks in `carryColor`.
+         */
+        silk: UniformPresetId | null;
         /** Gold lacquer ("brass") or silver lacquer. */
         finish: Finish;
         hold: HoldState;
     };
 }
-
-/** Band default's jacket and shako: om-pose's "Royal" blue. */
-export const DEFAULT_PRIMARY = 0x2d4f9e;
-
-const WHITE = 0xf2f2ee;
-const GOLD = 0xd8b04a;
-const BLACK = 0x111114;
-/** Darker than the pants, so the feet still separate from the legs. */
-const SHOE_BLACK = 0x0b0b0d;
-/** Lifted from om-pose's 0x1c1f2b, which renders as black legs. */
-const NAVY = 0x2b3150;
 
 /** A 2D fill color as an sRGB number. */
 export function fillToNumber(c: RgbaColor): number {
@@ -221,83 +223,25 @@ export function fillToNumber(c: RgbaColor): number {
 }
 
 /**
- * Band default: om-pose's classic style, a navy jacket and shako, white and
- * gold trim, a seam stripe, navy pants, white gloves (props-spec, Defaults).
- */
-export const BAND_DEFAULT: Pick<UniformLook, "style" | "colors"> & {
-    options: Pick<
-        UniformLook["options"],
-        "stripe" | "collar" | "cuffs" | "gloves" | "hat"
-    >;
-} = {
-    style: "classic",
-    colors: {
-        primary: DEFAULT_PRIMARY,
-        secondary: WHITE,
-        accent: WHITE,
-        trim: GOLD,
-        pants: NAVY,
-        shoes: SHOE_BLACK,
-        gloves: WHITE,
-        hat: DEFAULT_PRIMARY,
-        plume: WHITE,
-        visor: BLACK,
-    },
-    options: {
-        stripe: true,
-        collar: true,
-        cuffs: true,
-        gloves: true,
-        hat: true,
-    },
-};
-
-/**
- * Guard default: all black and plain. Black top and bottoms with no
- * pattern, trim or seam stripe, black shoes, no hat, no gloves (bare
- * hands), no cape (props-spec, Defaults).
- */
-export const GUARD_DEFAULT: typeof BAND_DEFAULT = {
-    style: "classic",
-    colors: {
-        primary: BLACK,
-        secondary: BLACK,
-        accent: BLACK,
-        trim: BLACK,
-        pants: BLACK,
-        shoes: SHOE_BLACK,
-        // unused: the hands are bare
-        gloves: BLACK,
-        hat: BLACK,
-        plume: BLACK,
-        visor: BLACK,
-    },
-    options: {
-        stripe: false,
-        collar: false,
-        cuffs: false,
-        gloves: false,
-        hat: false,
-    },
-};
-
-/**
- * A section's uniform: Band default, or Guard default for the guard
- * sections. Nothing about it comes from the show. Brass carry their horn in
- * gold lacquer, held as `hold` says (docs/3d/instruments.md §5);
- * `carryColor` (sRGB, the section's 2D fill) colors drum shells and flag
- * silks, and defaults to Band default's navy. `guard`, when set, is the
- * equipment every guard section carries instead of its own (the settings'
- * guard equipment).
+ * A section's uniform from the show's uniform preset: the preset's guard
+ * look for the guard sections, its band look for everyone else. Nothing else
+ * about it comes from the show. Brass carry their horn in gold lacquer, held
+ * as `hold` says (docs/3d/instruments.md §5). `fill` (sRGB, the section's 2D
+ * fill) colors drum shells and plain flag silks; without one they take the
+ * preset's carry color and pattern. `guard`, when set, is the equipment
+ * every guard section carries instead of its own (the settings' guard
+ * equipment).
  */
 export function sectionUniform(
     section: string,
     hold: HoldState = "up",
     options?: ModelOptions,
-    carryColor: number = DEFAULT_PRIMARY,
+    fill?: number,
     guard?: GuardModelId,
+    preset: UniformPresetId = DEFAULT_UNIFORM_PRESET,
 ): UniformLook {
-    const base = isGuard(section) ? GUARD_DEFAULT : BAND_DEFAULT;
+    const dress = UNIFORM_PRESETS[preset];
+    const base = isGuard(section) ? dress.guard : dress.band;
     const carry =
         guard && isGuard(section)
             ? guardCarry(guard)
@@ -310,7 +254,8 @@ export function sectionUniform(
             hatType: "shako",
             instrument: "none",
             carry,
-            carryColor: carry ? carryColor : null,
+            carryColor: carry ? (fill ?? dress.carry) : null,
+            silk: carry && fill === undefined && dress.silk ? preset : null,
             finish: "brass",
             hold,
         },

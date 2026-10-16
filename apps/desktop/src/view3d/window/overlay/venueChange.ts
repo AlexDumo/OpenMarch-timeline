@@ -13,12 +13,17 @@ import {
     parseVenueSettings,
     type VenueSettings,
 } from "@/view3d/core/venueSettings";
+import {
+    uniformPresetOf,
+    type UniformPresetId,
+} from "@/view3d/core/marchers/uniformPresets";
 
 export type VenueChange =
     | { kind: "kit"; kit: VenueKitId }
     | { kind: "lighting"; lighting: LightingPreset }
     | { kind: "crowd"; crowd: boolean }
-    | { kind: "params"; params: Partial<VenueParams> };
+    | { kind: "params"; params: Partial<VenueParams> }
+    | { kind: "uniforms"; uniforms: UniformPresetId };
 
 /**
  * Applies one change to the current settings and validates the result.
@@ -45,6 +50,11 @@ export function applyVenueChange(
             });
         case "crowd":
             return parseVenueSettings({ ...current, crowd: change.crowd });
+        case "uniforms":
+            return parseVenueSettings({
+                ...current,
+                uniforms: change.uniforms,
+            });
         case "params":
             return parseVenueSettings({
                 ...current,
@@ -59,6 +69,7 @@ export function venueChanged(a: VenueSettings, b: VenueSettings): boolean {
         a.kit !== b.kit ||
         a.lighting !== b.lighting ||
         a.crowd !== b.crowd ||
+        uniformPresetOf(a.uniforms) !== uniformPresetOf(b.uniforms) ||
         a.params.homeColor !== b.params.homeColor ||
         a.params.awayColor !== b.params.awayColor ||
         a.params.endZoneText !== b.params.endZoneText ||

@@ -77,9 +77,26 @@ describe("applyVenueChange", () => {
     });
 });
 
+describe("uniforms change", () => {
+    it("sets the show's uniform preset and keeps everything else", () => {
+        const next = applyVenueChange(hsDusk, {
+            kind: "uniforms",
+            uniforms: "military",
+        });
+        expect(next).toEqual({ ...hsDusk, uniforms: "military" });
+    });
+});
+
 describe("venueChanged", () => {
-    it("compares kit, lighting, crowd and params", () => {
+    it("compares kit, lighting, crowd, uniforms and params", () => {
         expect(venueChanged(hsDusk, { ...hsDusk })).toBe(false);
+        expect(venueChanged(hsDusk, { ...hsDusk, uniforms: "sash" })).toBe(
+            true,
+        );
+        // absent means the default preset
+        expect(venueChanged(hsDusk, { ...hsDusk, uniforms: "fade" })).toBe(
+            false,
+        );
         expect(venueChanged(hsDusk, { ...hsDusk, crowd: false })).toBe(true);
         expect(venueChanged(hsDusk, { ...hsDusk, lighting: "day" })).toBe(true);
         expect(venueChanged(hsDusk, { ...hsDusk, kit: "bighs" })).toBe(true);
