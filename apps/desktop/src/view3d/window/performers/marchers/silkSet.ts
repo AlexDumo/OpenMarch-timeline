@@ -22,6 +22,7 @@ import { instrumentModel, type Detail } from "@/view3d/core/instruments";
 import { hold as holdFor } from "@/view3d/core/instruments/holds";
 import type { SilkSpec } from "@/view3d/core/instruments/model";
 import {
+    SILK_CUT_IDS,
     SILK_GRID,
     SILK_WAVE_SHADER,
     silkPhases,
@@ -76,6 +77,8 @@ const INSTANCE_ATTRIBUTES = {
     aSlot: 1,
     /** (fly, header, mirror, bone index) */
     aSilk: 4,
+    /** The Cut: 0 the rectangle, else 1 + its index in `SILK_CUT_IDS` */
+    aCut: 1,
     /** The silk frame to its bone's bind pose: three rows of a 3 × 4 affine. */
     aFrame0: 4,
     aFrame1: 4,
@@ -89,6 +92,7 @@ type InstanceAttribute = keyof typeof INSTANCE_ATTRIBUTES;
 const STATIC: InstanceAttribute[] = [
     "aSlot",
     "aSilk",
+    "aCut",
     "aFrame0",
     "aFrame1",
     "aFrame2",
@@ -100,6 +104,7 @@ ${COMPOSED_BONE_SHADER}
 ${SILK_WAVE_SHADER}
 attribute float aSlot;
 attribute vec4 aSilk;
+attribute float aCut;
 attribute vec4 aFrame0;
 attribute vec4 aFrame1;
 attribute vec4 aFrame2;
@@ -128,7 +133,7 @@ export function silkMaterial(composer: Composer): THREE.MeshStandardMaterial {
                 "#include <beginnormal_vertex>",
                 `mat4 silkFrame = transpose(mat4(aFrame0, aFrame1, aFrame2, vec4(0.0, 0.0, 0.0, 1.0)));
   vec3 silkLocal, silkNormal;
-  silkPoint(position.x, position.y, aSilk.xyz, aMotion, silkLocal, silkNormal);
+  silkPoint(position.x, position.y, aSilk.xyz, aMotion, aCut, silkLocal, silkNormal);
   vec3 objectNormal = mat3(silkFrame) * silkNormal;
   vSilkColor = aColor;`,
             )
@@ -216,6 +221,7 @@ function silkInstances(
         const key = uniformKey(l.uniform);
         let specs = byLook.get(key);
         if (!specs) {
+            // silk specs don't depend on the detail; the pieces aren't used
             const model = instrumentModel(
                 carry.model,
                 "low",
@@ -245,20 +251,24 @@ function silkInstances(
             byLook.set(key, specs);
         }
         const color = lin(l.silkColor ?? l.uniform.colors.primary);
-        for (const { spec, bone, frame } of specs)
+        specs.forEach(({ spec, bone, frame }, n) =>
             silks.push({
                 slot,
-                seed: silkSeed(silks.length),
+                // by slot, so a marcher added earlier in the band doesn't
+                // change the wave of every silk after it
+                seed: silkSeed(slot * 2 + n),
                 values: {
                     aSlot: [slot],
                     aSilk: [spec.fly, spec.header, spec.mirror, bone],
+                    aCut: [spec.cut ? SILK_CUT_IDS.indexOf(spec.cut) + 1 : 0],
                     aFrame0: frame.slice(0, 4),
                     aFrame1: frame.slice(4, 8),
                     aFrame2: frame.slice(8, 12),
                     aMotion: [0, 0, 0, 0],
                     aColor: [color.r, color.g, color.b],
                 },
-            });
+            }),
+        );
     });
     return silks;
 }

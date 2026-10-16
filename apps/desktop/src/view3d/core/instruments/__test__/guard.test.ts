@@ -22,7 +22,7 @@ import {
 import { hold, HOLD_STATES, type Hold } from "../holds";
 import type { Piece, Vec3 } from "../mesh";
 import type { Detail, GuardModelId, InstrumentModel, SilkSpec } from "../model";
-import { SILK_GRID, silkPoint } from "../silkWave";
+import { SILK_GRID, silkCutProfile, silkPoint } from "../silkWave";
 
 /** Triangles drawn for a model: its pieces and its silks' grids. */
 const drawn = (m: InstrumentModel, detail: Detail) =>
@@ -57,6 +57,7 @@ function silkPoints(silk: SilkSpec, speed = 0, turn = 0): Vec3[] {
                     fly: silk.fly,
                     header: silk.header,
                     mirror: silk.mirror,
+                    cut: silk.cut ? silkCutProfile(silk.cut) : undefined,
                     wavePhase: 1,
                     bellyPhase: 1,
                     speed,
@@ -233,12 +234,13 @@ describe("guard equipment", () => {
         },
     );
 
-    // Known defect (C4.11): at the real 52 in pole and 66 in fly, the double
-    // swing's silks dip into the turf at down 45. Lifting them is the owner's
-    // call (the hold, the pole or the drape). This turns red once they clear
-    // the ground; then make it a plain `it`.
-    it.fails("keeps the double swing's silks off the turf at down 45", () => {
+    // C4.11's known defect: as a rectangle at the real 52 in pole and 66 in
+    // fly, the double swing's silks dipped into the turf at down 45 (20 cm
+    // with the wave's droop). The swing Cut rounds its top fly corner away,
+    // and that corner was the low point.
+    it("keeps the double swing's silks off the turf at down 45", () => {
         const m = guardModel("doubleSwingFlag");
+        // the swing holds' "up" state is the down 45 wait (holds.ts)
         const place = placer(hold("doubleSwingFlag", "up"));
         let lowest = Infinity;
         for (const p of silkCloud(m, { rightOnly: true }))

@@ -206,6 +206,10 @@ before skinning (`silkWave.ts`, the silk prototype's variant B: it hangs
 at rest and billows on the move), from per-instance inputs written by
 count: the show clock, a phase seed, ground speed, distance covered and
 turn rate. Only the swing flag's sleeve stays a silk-colored piece.
+A silk's Cut shapes the grid before the wave: each column runs from the
+outline's top to its bottom at that point of the fly (a depth field
+sampled 17 times along the fly, `silkCutProfile`), so the swing silks take
+the catalog's flat-bottomed swing Cut and the 6 ft flag stays a rectangle.
 
 **Parts and finish.** The uniform shader paints parts by id; it knows ids 0
 to 15 today. Instruments take new ids from 16 upward: 16 brass finish (gold

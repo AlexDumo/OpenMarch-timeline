@@ -32,6 +32,7 @@ import type {
     SilkSpec,
 } from "./model";
 import { hold } from "./holds";
+import type { SilkCutId } from "./silkWave";
 
 /**
  * Default colors by part: chrome, black, a brass hilt, the white of a drill
@@ -434,10 +435,11 @@ const tape = (z: number, radius: number, s: SegmentCounts) =>
  */
 const SILK_BASIS: SilkSpec["basis"] = [1, 0, 0, 0, 0, -1, 0, 1, 0];
 
-/** A silk's size, m: out to the fly, and along the pole. */
+/** A silk's size, m: out to the fly, and along the pole; and its Cut. */
 interface SilkSize {
     fly: number;
     header: number;
+    cut?: SilkCutId;
 }
 
 /** The 6 ft flag's silk: 36 × 54 in. */
@@ -483,6 +485,7 @@ function flag(
             {
                 fly: silk.fly,
                 header: silk.header,
+                ...(silk.cut ? { cut: silk.cut } : {}),
                 basis: [...SILK_BASIS],
                 origin: [radius, 0, tip],
                 mirror: 1,
@@ -580,10 +583,11 @@ export const SWING_FLAG = {
     butt: 0.06,
 } as const;
 
-/** The swing flag's silk: the 44 × 66 in swing cut. */
+/** The swing flag's silk: the 44 × 66 in swing Cut, flat-bottomed (Q41). */
 export const SWING_SILK: SilkSize = {
     fly: SWING_FLAG.fly,
     header: SWING_FLAG.header,
+    cut: "silk-swing-44x66",
 };
 
 /**

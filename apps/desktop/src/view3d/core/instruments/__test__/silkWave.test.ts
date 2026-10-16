@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+    SILK_CUT_IDS,
+    SILK_CUT_SAMPLES,
     SILK_GRID,
     SILK_WAVE,
     SILK_WAVE_SHADER,
     silkPhases,
     silkPoint,
+    silkCutProfile,
     silkSeed,
     type SilkWaveInput,
 } from "../silkWave";
+import { curveCutPath, silkCutShape } from "../../sizes/silkCuts";
 
 const SIX_FT: SilkWaveInput = {
     fly: 1.37,
@@ -177,5 +181,74 @@ describe("silk wave", () => {
             `const float K = ${((2 * Math.PI) / 0.9).toFixed(8)};`,
         );
         expect(SILK_WAVE_SHADER).toContain("const float DROOP = 0.500000;");
+    });
+
+    describe("cut outlines", () => {
+        const swing = silkCutProfile("silk-swing-44x66");
+        const SWING: SilkWaveInput = {
+            ...SIX_FT,
+            fly: 66 * 0.0254,
+            header: 44 * 0.0254,
+            cut: swing,
+        };
+
+        it("profiles a rectangle as the full header across the fly", () => {
+            const r = silkCutProfile(curveCutPath(0.9, 1.37));
+            expect(r.top).toHaveLength(SILK_CUT_SAMPLES + 1);
+            for (let i = 0; i <= SILK_CUT_SAMPLES; i++) {
+                expect(r.top[i]).toBeCloseTo(0, 9);
+                expect(r.bottom[i]).toBeCloseTo(1, 9);
+            }
+        });
+
+        it("profiles the swing cut: a flat bottom, the top rounding down to it", () => {
+            expect(silkCutShape("silk-swing-44x66")?.path).toBeDefined();
+            expect(swing.top[0]).toBeCloseTo(0, 9);
+            expect(swing.top[SILK_CUT_SAMPLES]).toBeCloseTo(1, 6);
+            for (let i = 0; i <= SILK_CUT_SAMPLES; i++)
+                expect(swing.bottom[i]).toBeCloseTo(1, 6);
+            for (let i = 1; i <= SILK_CUT_SAMPLES; i++)
+                expect(swing.top[i]).toBeGreaterThanOrEqual(swing.top[i - 1]);
+            // still most of the header a third of the way out
+            expect(swing.top[SILK_CUT_SAMPLES / 4]).toBeLessThan(0.1);
+        });
+
+        it("names every cut the shader knows", () => {
+            expect(SILK_CUT_IDS).toContain("silk-swing-44x66");
+            expect(SILK_WAVE_SHADER).toContain(
+                `vec2 SILK_CUTS[${(SILK_CUT_IDS.length + 1) * (SILK_CUT_SAMPLES + 1)}]`,
+            );
+        });
+
+        it("spans the cut's outline when flat and lifted", () => {
+            const s = { ...SWING, speed: 1.5, wavePhase: 0 };
+            for (const i of [0, 4, 8, 12, 15]) {
+                const u = i / SILK_CUT_SAMPLES;
+                const top = at(u, 1, s).p;
+                const bottom = at(u, 0, s).p;
+                expect(top[1]).toBeCloseTo(-swing.top[i] * SWING.header, 9);
+                expect(bottom[1]).toBeCloseTo(
+                    -swing.bottom[i] * SWING.header,
+                    9,
+                );
+            }
+            // the top meets the bottom at the fly's tip
+            expect(at(1, 1, s).p[1]).toBeCloseTo(at(1, 0, s).p[1], 6);
+        });
+
+        it.each(MOTIONS)(
+            "matches finite differences on the swing cut %s",
+            (_, motion) => {
+                const s = { ...SWING, ...motion };
+                // away from the profile's sample points, where it bends
+                for (const u of [0.02, 0.2, 0.33, 0.47, 0.77, 0.9])
+                    for (const v of [0.03, 0.4, 0.66, 0.97]) {
+                        const { n } = at(u, v, s);
+                        const fd = fdNormal(u, v, s);
+                        for (let k = 0; k < 3; k++)
+                            expect(n[k]).toBeCloseTo(fd[k], 4);
+                    }
+            },
+        );
     });
 });

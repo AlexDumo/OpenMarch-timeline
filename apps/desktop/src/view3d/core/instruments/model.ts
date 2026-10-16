@@ -4,6 +4,7 @@
  * riding one bone of the v4 skeleton. Pure: no three.js.
  */
 import type { Piece, Vec3 } from "./mesh";
+import type { SilkCutId } from "./silkWave";
 
 export type BrassModelId =
     | "trumpet"
@@ -80,6 +81,8 @@ export interface SilkSpec {
     mirror: 1 | -1;
     /** The bone the silk rides, when not the model's default. */
     bone?: InstrumentBone;
+    /** The silk's Cut (`silkWave.ts`); none is the header × fly rectangle. */
+    cut?: SilkCutId;
 }
 
 export interface InstrumentModel {
