@@ -6,6 +6,10 @@ import { transactionWithHistory } from "@/db-functions/history";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useTimingObjects } from "@/hooks";
 import { addPageFlagMutationOptions } from "@/hooks/queries/usePageFlags";
+import { invalidatePageQueries, pageKeys } from "@/hooks/queries/usePages";
+import { utilityKeys } from "@/hooks/queries/useUtility";
+import { addPageFlag } from "@/db-functions/pageFlags";
+import type { DatabasePage, DatabaseUtility } from "@/db-functions";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useTimelinePageBridge } from "../useTimelinePageBridge";
 
@@ -131,5 +135,51 @@ describeDbTests("timeline page bridge", (it) => {
         );
         await new Promise((resolve) => setTimeout(resolve, 200));
         expect(result.current.selectedPage?.id).toBe(added.id);
+    });
+
+    it("shows the new pages and last page length together, over a fetch already running", async ({
+        db,
+        wrapper,
+    }) => {
+        const result = await renderBridge(db, wrapper as never);
+        const qc = result.current.queryClient;
+        const before = qc.getQueryData<DatabasePage[]>(pageKeys.all())!;
+        // A refetch that read the pages before the write and answers after it
+        const stale = qc
+            .fetchQuery({
+                queryKey: pageKeys.all(),
+                queryFn: () =>
+                    new Promise<DatabasePage[]>((resolve) =>
+                        setTimeout(() => resolve(before), 50),
+                    ),
+                staleTime: 0,
+            })
+            .catch(() => undefined);
+
+        await addPageFlag({ db, beat: 20 });
+        let shown: { pages?: number; lastPageCounts?: number } = {};
+        await act(async () => {
+            await invalidatePageQueries(qc, () => {
+                shown = {
+                    pages: qc.getQueryData<DatabasePage[]>(pageKeys.all())
+                        ?.length,
+                    lastPageCounts: qc.getQueryData<DatabaseUtility>(
+                        utilityKeys.all(),
+                    )?.last_page_counts,
+                };
+            });
+            await stale;
+        });
+        // The new page (17..20) and its length are both there when onShown runs
+        await waitFor(() =>
+            expect(shown).toEqual({
+                pages: before.length + 1,
+                lastPageCounts: 3,
+            }),
+        );
+        // and the stale fetch did not put the old pages back
+        expect(qc.getQueryData<DatabasePage[]>(pageKeys.all())).toHaveLength(
+            before.length + 1,
+        );
     });
 });

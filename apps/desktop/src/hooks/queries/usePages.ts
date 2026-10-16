@@ -50,7 +50,9 @@ export const pageKeys = {
  * in one notification: fetched again one by one, the UI drew a frame with the new pages and the old
  * last page length (a page added past the last flag showed the old length, past the playhead).
  * `onShown` runs in that same notification, so state set from it (a selection of the new page)
- * draws in the same frame. The narrower page and beat queries refetch after.
+ * draws in the same frame. The narrower page and beat queries refetch after. This only helps while
+ * something observes the lists themselves (`useTimingObjects` does); otherwise it is a plain
+ * invalidation.
  */
 export const invalidatePageQueries = async (
     qc: QueryClient,
@@ -64,6 +66,14 @@ export const invalidatePageQueries = async (
                 .find({ queryKey, exact: true })
                 ?.getObserversCount() ?? 0) > 0,
     );
+    // A fetch already running may have read the rows from before the write; once these land it
+    // would put them back
+    if (shown)
+        await Promise.all(
+            lists.map((queryKey) =>
+                qc.cancelQueries({ queryKey, exact: true }),
+            ),
+        );
     const read = shown
         ? Promise.all([
               getBeats({ db }),
