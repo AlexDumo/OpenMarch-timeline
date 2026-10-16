@@ -74,6 +74,7 @@ import {
 } from "./qualityFallback";
 import Performers from "./performers/Performers";
 import { warmLightingPresets } from "./warmLighting";
+import { maxPixelRatio } from "./renderPrefs";
 
 /** Default vertical field of view, as in the reference demo. */
 export const DEFAULT_FOV_DEG = 45;
@@ -129,6 +130,7 @@ export default function Scene() {
     const saveOnBattery = useView3dSceneStore(
         (s) => s.powerPrefs.saveOnBattery,
     );
+    const resolution = useView3dSceneStore((s) => s.resolution);
 
     // Cameras load first too, so a venue opens on the show's first camera.
     const ready =
@@ -145,11 +147,12 @@ export default function Scene() {
                 // Draw only when something changes (`DrawWhenNeeded`).
                 frameloop="demand"
                 // `low` renders at 1x so HiDPI screens on integrated GPUs keep
-                // up; so does battery power when saving power is on.
+                // up; so does battery power when saving power is on. Otherwise
+                // the Resolution setting caps it (`renderPrefs.ts`).
                 dpr={
                     quality === "low" || (onBattery && saveOnBattery)
                         ? 1
-                        : [1, 2]
+                        : [1, maxPixelRatio(resolution)]
                 }
                 camera={{
                     fov: DEFAULT_FOV_DEG,

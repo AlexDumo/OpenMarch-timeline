@@ -21,16 +21,25 @@ import { probeWebGL, type GlKind } from "@/field/fieldQuality";
 import tolgee from "@/global/singletons/Tolgee";
 import { startView3dSync } from "@/view3d/sync/view3dSyncStore";
 import View3dOverlay from "./overlay/View3dOverlay";
+import {
+    DRAW_WITHOUT_GPU_STORAGE_KEY,
+    loadDrawWithoutGpu,
+} from "./renderPrefs";
+import { startPrefsSync } from "./sceneStore";
 import Scene from "./Scene";
 
 /**
  * What the viewport shows instead of the scene, as a translation key, or null
- * to draw the scene. The scene draws only on a GPU: WebGL drawn in software
- * would run the whole view on the CPU, too slow to use and hard on the
- * battery.
+ * to draw the scene. The scene draws only on a GPU unless the viewer turned
+ * on Draw without a graphics card in Settings: WebGL drawn in software runs
+ * the whole view on the CPU, too slow to use and hard on the battery.
  */
-export function viewportFallback(kind: GlKind): string | null {
+export function viewportFallback(
+    kind: GlKind,
+    drawWithoutGpu = false,
+): string | null {
     if (kind === "hardware") return null;
+    if (kind === "software" && drawWithoutGpu) return null;
     return kind === "software"
         ? "view3d.window.gpuUnavailable"
         : "view3d.window.graphicsUnavailable";
@@ -80,7 +89,13 @@ export default function View3dRoot() {
             void tolgee.changeLanguage(params.language);
         }
         // Listens to the editor, then says hello for a fresh clock and selection.
-        return startView3dSync(window.view3d, queryClient);
+        const stopSync = startView3dSync(window.view3d, queryClient);
+        // Graphics choices saved in the Settings window apply at once.
+        const stopPrefs = startPrefsSync();
+        return () => {
+            stopSync();
+            stopPrefs();
+        };
     }, []);
 
     return (
@@ -96,7 +111,9 @@ function View3dWindow() {
     const { t } = useTranslate();
     const title = t("view3d.window.title", { showName: params.showName });
     // Probed once, before the scene creates its own context.
-    const [fallback] = useState(() => viewportFallback(probeWebGL().kind));
+    const [glKind] = useState(() => probeWebGL().kind);
+    const drawWithoutGpu = useDrawWithoutGpu();
+    const fallback = viewportFallback(glKind, drawWithoutGpu);
 
     useEffect(() => {
         document.title = title;
@@ -124,6 +141,23 @@ function View3dWindow() {
             </div>
         </main>
     );
+}
+
+/** The Settings window's Draw without a graphics card choice, kept current. */
+function useDrawWithoutGpu(): boolean {
+    const [on, setOn] = useState(() => loadDrawWithoutGpu());
+    useEffect(() => {
+        const onStorage = (event: StorageEvent) => {
+            if (
+                event.key === null ||
+                event.key === DRAW_WITHOUT_GPU_STORAGE_KEY
+            )
+                setOn(loadDrawWithoutGpu());
+        };
+        window.addEventListener("storage", onStorage);
+        return () => window.removeEventListener("storage", onStorage);
+    }, []);
+    return on;
 }
 
 function ViewportMessage({ keyName }: { keyName: string }) {

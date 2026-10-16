@@ -38,4 +38,11 @@ describe("viewportFallback", () => {
             "view3d.window.graphicsUnavailable",
         );
     });
+
+    it("draws in software when the viewer allows it", () => {
+        expect(viewportFallback("software", true)).toBeNull();
+        expect(viewportFallback("none", true)).toBe(
+            "view3d.window.graphicsUnavailable",
+        );
+    });
 });

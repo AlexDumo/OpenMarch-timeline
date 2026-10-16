@@ -486,7 +486,14 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   scene mounts and shows "3D View needs a graphics card (GPU)" on a software
   renderer instead of drawing. `failIfMajorPerformanceCaveat` doesn't catch
   SwiftShader in Chromium 148, so the probe reads the renderer name. The P5.1
-  SwiftShader numbers above describe a path that no longer draws.
+  SwiftShader numbers above describe a path that no longer draws unless the
+  viewer turns on Draw without a graphics card.
+- Settings: the per-computer choices moved out of the 3D View's panel into
+  the app's Settings window (3D View section): quality, a new Resolution
+  (Sharp 2x, Balanced 1.5x, Fast 1x), the two power switches and Draw
+  without a graphics card. The windows share local storage, and the 3D
+  window applies a change as it is saved. Resolution at high, same fixture,
+  GPU ms a frame: Sharp 10.0, Balanced 7.15 (−29%), Fast 5.35 (−47%).
 - Machine and fixture: Apple M1 Pro, web preview in headless Chromium 148
   (ANGLE Metal, no frame cap), 1400 × 900 at DPR 2 (2800 × 1713 canvas), LHB
   demo (385 marchers), hs kit by day, Podium camera, 3 s orbit drag, GPU time
