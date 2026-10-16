@@ -156,8 +156,8 @@ export const UNIFORM_PRESETS: Readonly<Record<UniformPresetId, UniformPreset>> =
                 return Math.abs(d) < 0.035 ? GOLD : d < 0 ? OM : OM_NIGHT;
             },
         },
-        // Cadet: academy full dress. A purple jacket with rows of white
-        // braid across the chest, a white cross belt with a gold plate, a
+        // Cadet: academy full dress. A purple jacket, up to the neck, with
+        // rows of white braid high across the chest, a white cross belt with a gold plate, a
         // pleated gold cummerbund, white trousers and a purple shako with a
         // white plume. Silks: purple, a white band across the middle edged in
         // gold.
@@ -176,7 +176,8 @@ export const UNIFORM_PRESETS: Readonly<Record<UniformPresetId, UniformPreset>> =
                     plume: WHITE,
                     visor: BLACK,
                 },
-                options: { ...BAND, stripe: false },
+                // no collar: the purple runs up to the neck
+                options: { ...BAND, stripe: false, collar: false },
             },
             guard: guardLook(
                 "cadet",

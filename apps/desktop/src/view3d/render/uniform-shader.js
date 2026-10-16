@@ -253,9 +253,9 @@ vec3 uniformColor() {
     }
     if (uStyle == 6) {  // cadet: chest braid, cross belt and plate, cummerbund
       // seven rows of braid across the front, widening up the chest, a knot at each end
-      float rows = over(p.y - 1.10) * over(1.37 - p.y) * front;
-      float rowY = p.y - (mod(p.y - 1.11 + 0.02, 0.04) - 0.02);
-      float w = mix(0.07, 0.11, smoothstep(1.10, 1.37, p.y));
+      float rows = over(p.y - 1.16) * over(1.415 - p.y) * front;
+      float rowY = p.y - (mod(p.y - 1.17 + 0.02, 0.04) - 0.02);
+      float w = mix(0.08, 0.12, smoothstep(1.16, 1.41, p.y));
       float braid = band(p.y - rowY, 0.006) * over(w - abs(p.x));
       float knot = band(length(vec2(abs(p.x) - w - 0.008, p.y - rowY)) - 0.009, 0.0035);
       c = mix(c, uTrim, max(braid, knot) * rows);
@@ -263,7 +263,7 @@ vec3 uniformColor() {
       float d = segDist(p.xy, vec2(0.16, 1.42), vec2(-0.15, ${f(L.belt + 0.06)}));
       c = mix(c, uAccent, band(d, 0.024));
       // the breastplate on the belt, gold edged in trim
-      vec2 q = (p.xy - vec2(-0.011, 1.20)) / vec2(0.032, 0.04);
+      vec2 q = (p.xy - vec2(0.025, 1.25)) / vec2(0.032, 0.04);
       float plate = 1.0 - over(length(q) - 1.0);
       c = mix(c, uTrim, plate * front);
       c = mix(c, uSecondary, (1.0 - over(length(q) - 0.78)) * front);
