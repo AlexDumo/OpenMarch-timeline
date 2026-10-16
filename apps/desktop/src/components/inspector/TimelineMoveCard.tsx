@@ -499,7 +499,7 @@ export function TimelineMoveCard({
                     <Button
                         size="compact"
                         variant="secondary"
-                        className={clsx("w-fit", FOCUS_RING)}
+                        className={clsx("w-fit whitespace-nowrap", FOCUS_RING)}
                         data-testid="timeline-move-card-split"
                         disabled={split.disabledReason !== null}
                         onClick={() =>

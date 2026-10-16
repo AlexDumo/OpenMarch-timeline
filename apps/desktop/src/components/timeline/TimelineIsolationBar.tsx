@@ -11,11 +11,12 @@ import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import {
     isolatedTimeline,
     useTimelineSelectionStore,
+    windowMove,
     type PageBox,
     type TimelineEditSelection,
 } from "@/stores/TimelineSelectionStore";
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
-import { isPageTimeline } from "@/timeline/timelineViewModel";
+import { isPageTimeline, moveLabels } from "@/timeline/timelineViewModel";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import {
     basicPageBox,
@@ -263,6 +264,21 @@ export function TimelineFromStartBadge() {
             ? basicEditSpot(plan.target, pages)
             : null;
     const through = range && !basic ? flagsInside(range, pages) : [];
+    // UI-25: a move split off a page's timeline has the page's range; the line names the move
+    const splitMoveName = useTimelineSelectionStore((s) => {
+        const move = basic ? null : windowMove(s);
+        if (!move || s.isolation) return null;
+        if (
+            !s.pageBoxes.some(
+                (b) => b.start === move.start && b.end === move.end,
+            )
+        )
+            return null;
+        return (
+            moveLabels(s.storedTimelines ?? [], s.pageBoxes).get(move.id) ??
+            null
+        );
+    });
     const name =
         selection.kind === "home"
             ? "home positions"
@@ -270,9 +286,11 @@ export function TimelineFromStartBadge() {
               ? basicSpot.count === null
                   ? `page ${basicSpot.pageName}`
                   : `count ${basicSpot.count} of page ${basicSpot.pageName}`
-              : range
-                ? isolatedTimelineName(range, pages)
-                : "";
+              : splitMoveName !== null && range
+                ? `${splitMoveName} (${isolatedTimelineName(range, pages, true)})`
+                : range
+                  ? isolatedTimelineName(range, pages)
+                  : "";
     const wholePage = basicSpot
         ? basicSpot.count === null
         : isWholePageWindow(selection, pages);

@@ -46,8 +46,12 @@ export interface TimelineClipPeel<Id = TimelineTrackId> {
 
 /** How far up or down the pointer goes before a press on a clip is this gesture (V-280). */
 export const PEEL_START_PX = 10;
-/** How far below the clip's bottom edge the pointer goes before a drop splits (V-281). */
-export const PEEL_SPLIT_PX = 20;
+/**
+ * How far down from the press the pointer goes, below the clip's bottom edge, before a drop splits
+ * (V-281). From the press, not the clip's edge: the timeline is usually fitted to its rows at the
+ * bottom of the window (UI-19), so there is little room below the last row.
+ */
+export const PEEL_SPLIT_PX = 24;
 
 /** Whether a drag that moved `dx`, `dy` so far is a vertical one (the axis lock, V-280). */
 export const isVerticalPeel = (dx: number, dy: number): boolean =>
@@ -125,7 +129,8 @@ export function useClipPeel({
     clipRef: { readonly current: HTMLElement | null };
 }): {
     readonly active: boolean;
-    move: (clientX: number, clientY: number) => void;
+    /** The pointer is at `clientX`, `clientY`; the press was at `pressY` */
+    move: (clientX: number, clientY: number, pressY: number) => void;
     commit: () => void;
     cancel: () => void;
     overlay: ReactNode;
@@ -137,7 +142,7 @@ export function useClipPeel({
         latest.current = next;
         setState(next);
     };
-    const move = (clientX: number, clientY: number) => {
+    const move = (clientX: number, clientY: number, pressY: number) => {
         if (!peel) return;
         setActive(true);
         const own = clipRef.current;
@@ -162,8 +167,13 @@ export function useClipPeel({
             return;
         }
         const clip = own ? rectOf(own) : null;
-        if (clip && clientY > clip.top + clip.height + PEEL_SPLIT_PX) {
+        if (
+            clip &&
+            clientY > clip.top + clip.height &&
+            clientY - pressY >= PEEL_SPLIT_PX
+        ) {
             const verdict = peel.split(trackId);
+            const height = Math.max(clip.height, 18);
             update(
                 verdict
                     ? {
@@ -172,8 +182,12 @@ export function useClipPeel({
                           ghost: {
                               left: clip.left,
                               width: Math.max(clip.width, 24),
-                              top: clientY - clip.height / 2,
-                              height: Math.max(clip.height, 18),
+                              // Kept on screen when the pointer leaves the window
+                              top: Math.min(
+                                  clientY - height / 2,
+                                  window.innerHeight - height - 4,
+                              ),
+                              height,
                           },
                       }
                     : NONE,

@@ -1646,7 +1646,11 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     if (!drag || drag.pointerId !== event.pointerId) return;
                     // UI-25: up or down first is a split or a merge, sideways a re-time
                     if (drag.vertical) {
-                        peeling.move(event.clientX, event.clientY);
+                        peeling.move(
+                            event.clientX,
+                            event.clientY,
+                            drag.startClientY,
+                        );
                         return;
                     }
                     const dx = event.clientX - drag.startClientX;
@@ -1655,7 +1659,11 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         drag.vertical = true;
                         drag.moved = true;
                         setMoving(true);
-                        peeling.move(event.clientX, event.clientY);
+                        peeling.move(
+                            event.clientX,
+                            event.clientY,
+                            drag.startClientY,
+                        );
                         return;
                     }
                     // Sideways first is a re-time; mostly up or down waits for the vertical lock
