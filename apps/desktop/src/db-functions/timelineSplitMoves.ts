@@ -93,6 +93,10 @@ const timelineWords = async (
     };
 };
 
+/** A shared transition's path that a slot keeps on its own (shapeless `direct` or `arc`). */
+const canPeelSlot = (style: string): style is "direct" | "arc" =>
+    style === "direct" || style === "arc";
+
 /** One assignment row with its transition's columns. */
 interface MemberRow {
     assignment: typeof schema.timeline_assignments.$inferSelect;
@@ -282,6 +286,42 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
         peeled.push(...leaving);
     }
 
+    // Each peeled slot's new one-slot transition, read and checked before anything is written
+    const d = schema.timeline_slot_destinations;
+    const points = new Map<string, [number, number]>();
+    if (peeled.length > 0)
+        for (const p of await tx
+            .select()
+            .from(d)
+            .where(
+                inArray(d.transition_id, [
+                    ...new Set(peeled.map((r) => r.transition.id)),
+                ]),
+            )
+            .all())
+            points.set(`${p.transition_id}:${p.slot_index}`, [p.x, p.y]);
+    const peeledTransitions = peeled.map(({ assignment, transition }) => {
+        const point = points.get(`${transition.id}:${assignment.slot_index}`);
+        if (!point)
+            refuse(
+                `transition ${transition.id} has no destination for slot ${assignment.slot_index}`,
+            );
+        const pathStyle = transition.path_style;
+        if (!canPeelSlot(pathStyle))
+            refuse(
+                `transition ${transition.id}'s ${pathStyle} path can't be split slot by slot`,
+            );
+        return {
+            slotCount: 1,
+            destination: { kind: "individual" as const, points: [point] },
+            pathStyle,
+            pathParams: (transition.path_params === null
+                ? null
+                : JSON.parse(transition.path_params)) as TimelinePathParams,
+            orderMode: transition.order_mode as "inherit" | "slot",
+        };
+    });
+
     // Write: the new move (sharing the range, UI-25), whole transitions, then the peeled slots
     const [timeline] = await createTimelinesInTransaction({
         tx,
@@ -296,19 +336,6 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
     });
     await moveTransitionsTo(tx, whole, timeline!.id);
     if (peeled.length > 0) {
-        const d = schema.timeline_slot_destinations;
-        const points = new Map<string, [number, number]>();
-        const destinations = await tx
-            .select()
-            .from(d)
-            .where(
-                inArray(d.transition_id, [
-                    ...new Set(peeled.map((r) => r.transition.id)),
-                ]),
-            )
-            .all();
-        for (const p of destinations)
-            points.set(`${p.transition_id}:${p.slot_index}`, [p.x, p.y]);
         // Old rows go first, so the new ones don't overlap them at the same layer (I-A3)
         await removeAssignmentRowsInTransaction({
             tx,
@@ -318,27 +345,10 @@ export const splitMarchersIntoNewMoveInTransaction = async ({
         });
         const transitions = await createTimelineTransitionsInTransaction({
             tx,
-            newTransitions: peeled.map(({ assignment, transition }) => {
-                const point = points.get(
-                    `${transition.id}:${assignment.slot_index}`,
-                );
-                if (!point)
-                    refuse(
-                        `transition ${transition.id} has no destination for slot ${assignment.slot_index}`,
-                    );
-                return {
-                    timelineId: timeline!.id,
-                    slotCount: 1,
-                    destination: { kind: "individual", points: [point] },
-                    pathStyle: transition.path_style as "direct" | "arc",
-                    pathParams: (transition.path_params === null
-                        ? null
-                        : JSON.parse(
-                              transition.path_params,
-                          )) as TimelinePathParams,
-                    orderMode: transition.order_mode as "inherit" | "slot",
-                };
-            }),
+            newTransitions: peeledTransitions.map((t) => ({
+                ...t,
+                timelineId: timeline!.id,
+            })),
         });
         await createTimelineAssignmentsInTransaction({
             tx,

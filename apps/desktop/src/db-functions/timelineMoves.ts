@@ -22,7 +22,11 @@ import {
     removeMarchersFromTimelineInTransaction,
     type BeatRange,
 } from "./timelineMembership";
-import { deleteTimelinesInTransaction, timelinesWithRange } from "./timelines";
+import {
+    deleteTimelinesInTransaction,
+    oldestOnSharedRange,
+    timelinesWithRange,
+} from "./timelines";
 import { readPageGrid, type PageGrid } from "./timelineRipple";
 import {
     beatWhere,
@@ -799,6 +803,9 @@ export const ownPageMoves = async (
  * transition), a shared transition they leave is compacted (`compact`) and one they empty is
  * deleted, so the edit makes no vacant slot (D-VACANT). A vacancy already in the last slot, or in
  * a transition sharing a marcher with an inheriting follow-the-leader one, stays (`compact`).
+ *
+ * An emptied page timeline that a move split off it still shares the range with is kept, empty
+ * (UI-25, `oldestOnSharedRange`).
  */
 export const clearOwnPageMoves = async (
     tx: DbTransaction,
@@ -839,9 +846,13 @@ export const clearOwnPageMoves = async (
                 .all()
         ).map((r) => r.id),
     );
+    const emptied = timelineIds.filter((id) => !left.has(id));
     await deleteTimelinesInTransaction({
         tx,
-        timelineIds: new Set(timelineIds.filter((id) => !left.has(id))),
+        timelineIds: new Set(emptied),
+        // UI-25: the page's own timeline stays, empty, while a move split off it shares its
+        // range, so that move doesn't become the page's
+        keep: await oldestOnSharedRange(tx, emptied),
     });
 };
 

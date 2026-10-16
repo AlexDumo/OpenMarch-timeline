@@ -216,6 +216,8 @@ merge it back. So the first rule above is relaxed:
 - A page box stands for the **oldest** timeline (lowest id) with exactly its range, as
   `findTimelineByRange` already returned. Every other timeline over it is a move: it has a name
   ("Move N") and a clip. A page flag drag moves timelines that already shared a range together.
+  An edit that empties the page's timeline keeps its row while another timeline shares its range,
+  so a split move never becomes the page's by accident.
 - A marcher is still in at most one of the timelines over one range: split and merge move whole
   transitions (or peel a slot of a shared shapeless one into its own one-slot transition), and
   merge refuses a marcher in both.

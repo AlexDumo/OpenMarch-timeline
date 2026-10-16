@@ -697,6 +697,37 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
             expect(await violations(db)).toEqual([]);
         });
 
+        it("emptying the page's own timeline keeps it, so a move split off it doesn't become the page's", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            const pages = await setUp(db);
+            const range = pageRange(pages, 2);
+            const page = await timelineOf(db, range);
+            const [a, ...rest] = ids(marchersAndPages);
+            const split = await splitMarchersIntoNewMove({
+                db,
+                timelineId: page.id,
+                marcherIds: rest,
+            });
+            const left = await membersOf(db, page.id);
+            expect(left.map((m) => [m.marcher, m.slots])).toEqual([[a, 1]]);
+            await timelineResolverSettled();
+            const [x, y] = resolver().positionAt(a!, range.start);
+            await moveMarchersInTarget({
+                db,
+                target: { kind: "range", ...range },
+                moves: [{ marcherId: a!, x, y }],
+            });
+            // a's own move is gone, but the page's timeline stays (empty) as the oldest
+            expect(await membersOf(db, page.id)).toEqual([]);
+            expect((await timelineOf(db, range)).id).toBe(page.id);
+            expect(
+                (await membersOf(db, split.timeline.id)).map((m) => m.marcher),
+            ).toEqual(rest);
+            expect(await violations(db)).toEqual([]);
+        });
+
         it("a drag in the window of a selected split move adds new marchers to that move", async ({
             db,
             marchersAndPages,

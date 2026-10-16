@@ -1238,7 +1238,10 @@ from it. The spec still wins on the model; this file decides presentation.
   - **What still goes by range** (_lead default_, V-288, V-289). Resizing a move or moving a clip
     onto exactly another move's counts is still refused (UI-15, V-127): only Split makes a shared
     range. Deleting a page's own timeline (Delete page and its moves) leaves a split move as the
-    oldest over the box, so the box stands for it from then on and its clip goes. Some refusal
+    oldest over the box, so the box stands for it from then on and its clip goes. An edit that
+    only empties the page's timeline (dragging its last marcher back, set to previous page) keeps
+    it, empty, while a move split off it shares its range (`oldestOnSharedRange`), so the split
+    move stays a clip. Some refusal
     messages still name a split move by its range ("Page 2's move", `moveName`).
   - Open, for the owner: merging moves with different counts (whose counts win, or stretch); a
     drag-out from a page box; whether a split should leave the new move isolated or only selected;
