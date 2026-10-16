@@ -28,14 +28,16 @@ export function timelineName(
     timelines: readonly TimelineInput[],
     pageBoxes: readonly { start: number; end: number; name?: string }[],
 ): string {
+    // UI-25: a clip (a move, even one split off a page's timeline) goes by its label
+    const clip = timelines.find(
+        (t) => t.linkId !== undefined && Number(t.linkId) === timelineId,
+    );
+    if (clip?.label) return clip.label;
     const page = pageBoxes.find(
         (b) => b.start === range.start && b.end === range.end,
     );
     if (page?.name) return `Page ${page.name}'s move`;
-    const clip = timelines.find(
-        (t) => t.linkId !== undefined && Number(t.linkId) === timelineId,
-    );
-    return clip?.label ?? "another move";
+    return "another move";
 }
 
 /** A bound's reason as the drag tag says it (`null`: the show's edge, nothing to say). */
@@ -125,7 +127,7 @@ export function useTimelineClipResize({
                         if (result)
                             useTimelineSelectionStore
                                 .getState()
-                                .followTimelineRange(from, to);
+                                .followTimelineRange(from, to, timelineId);
                     },
                     (error: unknown) => toastTimelineError(error),
                 );

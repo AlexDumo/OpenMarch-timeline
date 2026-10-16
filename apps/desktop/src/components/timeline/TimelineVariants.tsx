@@ -790,10 +790,22 @@ const TimelineSurface = memo(function TimelineSurface({
     // A clip is its timeline: clicking it selects that range (UI-12)
     const selectTrack = useLatestCallback(
         onSelectionChange
-            ? (trackId: TimelineTrackId) => {
+            ? (
+                  trackId: TimelineTrackId,
+                  options?: { readonly extend?: boolean },
+              ) => {
                   const track = model.tracks.find((t) => t.id === trackId);
                   const range = track && getTrackRange(track);
-                  if (range) onSelectionChange({ kind: "range", range });
+                  if (range)
+                      onSelectionChange({
+                          kind: "range",
+                          range,
+                          ...(options?.extend ? { extend: true } : {}),
+                          // UI-25: the clip's own move, though another may share its range
+                          ...(track.linkId === undefined
+                              ? {}
+                              : { timelineId: Number(track.linkId) }),
+                      });
               }
             : undefined,
     );
@@ -820,6 +832,9 @@ const TimelineSurface = memo(function TimelineSurface({
             onRename: () => setRenaming(String(trackId)),
             onDelete: () => moveCommands.onDelete(trackId),
             disabledReason: moveCommands.disabledReason,
+            ...(moveCommands.extraFor
+                ? { extra: () => moveCommands.extraFor!(trackId) }
+                : {}),
         };
     const rangeMenu = useTimelineRangeMenu({
         menu: props.addSelectedMarchers,
@@ -986,13 +1001,27 @@ const TimelineSurface = memo(function TimelineSurface({
                                     }
                                     // A clip is its timeline: it shows selected when its range is
                                     // the selection, and clicking it selects that range (UI-12)
-                                    selected={sameRange(
-                                        getTrackRange(track),
-                                        selectionRange,
-                                    )}
+                                    selected={
+                                        (sameRange(
+                                            getTrackRange(track),
+                                            selectionRange,
+                                        ) &&
+                                            // UI-25: of the moves sharing a range, the selected one
+                                            (selection?.kind !== "range" ||
+                                                selection.timelineId ===
+                                                    undefined ||
+                                                track.linkId === undefined ||
+                                                selection.timelineId ===
+                                                    Number(track.linkId))) ||
+                                        (selection?.kind === "range" &&
+                                            track.linkId !== undefined &&
+                                            selection.pairedTimelineId ===
+                                                Number(track.linkId))
+                                    }
                                     onSelect={selectTrack}
                                     onRangeCommit={props.onTimelineRangeCommit}
                                     resize={props.clipResize}
+                                    peel={props.clipPeel}
                                     downbeats={seekSnapBeats}
                                     snapPlayhead={playheadAt}
                                     beatCount={model.beatCount}

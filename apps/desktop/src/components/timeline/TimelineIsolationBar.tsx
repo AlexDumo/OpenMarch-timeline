@@ -15,6 +15,7 @@ import {
     type TimelineEditSelection,
 } from "@/stores/TimelineSelectionStore";
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
+import { isPageTimeline } from "@/timeline/timelineViewModel";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import {
     basicPageBox,
@@ -32,6 +33,11 @@ import {
 export function isolatedTimelineName(
     range: { readonly start: number; readonly end: number },
     pages: readonly (FlagPage & { readonly name: string })[],
+    /**
+     * UI-25: the timeline is a move, not a page's own timeline, though its range may be a page
+     * box's (a move split off it): named in counts, "Page 2, counts 1–8"
+     */
+    asMove = false,
 ): string {
     const boxes = pageFlags(pages).filter((f) => f.range !== null);
     // Page 1's box starts at beat 1, show time 0, which the store writes as beat 0 (a flag
@@ -41,7 +47,7 @@ export function isolatedTimelineName(
     const exact = boxes.find(
         (f) => f.range!.start === range.start && f.range!.end === range.end,
     );
-    if (exact) return `Page ${exact.page.name}'s move`;
+    if (exact && !asMove) return `Page ${exact.page.name}'s move`;
     const at = (beat: number) =>
         boxes.find((f) => f.range!.start <= beat && beat < f.range!.end);
     const first = at(range.start);
@@ -430,6 +436,12 @@ export function TimelineFromStartBadge() {
 export default function TimelineIsolationBar() {
     useIsolationEscape();
     const timeline = useTimelineSelectionStore(isolatedTimeline);
+    // UI-25: a move split off a page's timeline is named as a move, not as the page's
+    const isPage = useTimelineSelectionStore(
+        (s) =>
+            timeline !== null &&
+            isPageTimeline(timeline, s.storedTimelines ?? [], s.pageBoxes),
+    );
     const { pages } = useTimingObjects()!;
     if (!timeline) return null;
     const count = timeline.marcherIds.size;
@@ -445,7 +457,7 @@ export default function TimelineIsolationBar() {
         >
             <span className="text-accent font-medium">Isolated</span>
             <span>
-                {isolatedTimelineName(timeline, pages)} · {count}{" "}
+                {isolatedTimelineName(timeline, pages, !isPage)} · {count}{" "}
                 {count === 1 ? "marcher" : "marchers"}
             </span>
             <span className="text-text-subtitle flex min-w-0 items-center gap-4 truncate text-[11px]">

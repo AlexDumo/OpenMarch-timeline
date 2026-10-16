@@ -89,7 +89,11 @@ export function useTimelineCommands({
                     if (result)
                         useTimelineSelectionStore
                             .getState()
-                            .followTimelineShift(from, shift.delta);
+                            .followTimelineShift(
+                                from,
+                                shift.delta,
+                                shift.timelineId,
+                            );
                 },
                 (error: unknown) => toastTimelineError(error),
             );
