@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { beforeEach, expect } from "vitest";
 import { describeDbTests, type DbConnection, schema } from "@/test/base";
@@ -11,6 +12,7 @@ import { utilityKeys } from "@/hooks/queries/useUtility";
 import { addPageFlag } from "@/db-functions/pageFlags";
 import type { DatabasePage, DatabaseUtility } from "@/db-functions";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { pageAtPlayhead } from "../timelinePlayhead";
 import { useTimelinePageBridge } from "../useTimelinePageBridge";
 
 /**
@@ -61,6 +63,7 @@ describeDbTests("timeline page bridge", (it) => {
                 return {
                     timing: useTimingObjects()!,
                     selectedPage: useSelectedPage()!.selectedPage,
+                    setSelectedPage: useSelectedPage()!.setSelectedPage,
                     queryClient: useQueryClient(),
                 };
             },
@@ -135,6 +138,89 @@ describeDbTests("timeline page bridge", (it) => {
         );
         await new Promise((resolve) => setTimeout(resolve, 200));
         expect(result.current.selectedPage?.id).toBe(added.id);
+    });
+
+    it("a page selected elsewhere as the playhead moves wins, without the two directions chasing each other", async ({
+        db,
+        wrapper,
+    }) => {
+        // As undo after moving a page flag: undo selects the page it changed while the
+        // playhead moves into another page, in one update. The bridge's own write for the
+        // playhead is still in flight when it reads the other selection; it used to forget that
+        // write, read it back as someone else's, and seek after it forever (React #185)
+        const result = await renderBridge(db, wrapper as never);
+        act(() => {
+            store().seek(7);
+        });
+        await waitFor(() => expect(result.current.selectedPage?.id).toBe(2));
+        const seeks: number[] = [];
+        const unsubscribe = useTimelineSelectionStore.subscribe((s, prev) => {
+            if (s.playheadBeat !== prev.playheadBeat)
+                seeks.push(s.playheadBeat);
+        });
+        act(() => {
+            store().seek(3);
+            result.current.setSelectedPage({ id: 4 });
+        });
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        unsubscribe();
+        expect(seeks.length).toBeLessThanOrEqual(2);
+        expect(result.current.selectedPage?.id).toBe(4);
+        expect(
+            pageAtPlayhead(result.current.timing.pages, store().playheadBeat)
+                ?.id,
+        ).toBe(4);
+    });
+
+    it("a write of ours replaced before it committed doesn't hide a later selection of that page (review)", async ({
+        db,
+        wrapper,
+    }) => {
+        await seedShow(db);
+        // Another selector, after the bridge, selecting in the same flush as the bridge's write
+        const { result } = renderHook(
+            () => {
+                useTimelinePageBridge(true);
+                const selected = useSelectedPage()!;
+                const [force, setForce] = useState<number | null>(null);
+                const { setSelectedPage } = selected;
+                useEffect(() => {
+                    if (force !== null) setSelectedPage({ id: force });
+                }, [force, setSelectedPage]);
+                return {
+                    timing: useTimingObjects()!,
+                    selectedPage: selected.selectedPage,
+                    setSelectedPage,
+                    setForce,
+                };
+            },
+            { wrapper: wrapper as never },
+        );
+        await waitFor(() => expect(result.current.timing.pages.length).toBe(5));
+        act(() => {
+            store().seek(7);
+        });
+        await waitFor(() => expect(result.current.selectedPage?.id).toBe(2));
+        // The bridge selects page 1 for the playhead; page 4 overwrites it before it renders
+        act(() => {
+            store().seek(3);
+            result.current.setForce(4);
+        });
+        await waitFor(() => expect(result.current.selectedPage?.id).toBe(4));
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        // Page 1 selected elsewhere now: the playhead goes to it
+        act(() => {
+            result.current.setSelectedPage({ id: 1 });
+        });
+        await waitFor(() =>
+            expect(
+                pageAtPlayhead(
+                    result.current.timing.pages,
+                    store().playheadBeat,
+                )?.id,
+            ).toBe(1),
+        );
+        expect(result.current.selectedPage?.id).toBe(1);
     });
 
     it("shows the new pages and last page length together, over a fetch already running", async ({

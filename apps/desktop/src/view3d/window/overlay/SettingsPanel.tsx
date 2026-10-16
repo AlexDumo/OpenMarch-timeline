@@ -22,7 +22,13 @@ import { HOLD_STATES } from "../hornState";
 import { GUARD_EQUIPMENT } from "@/view3d/core/instruments/catalog";
 import type { GuardEquipment } from "../sceneStore";
 import { Segmented } from "./Panel";
-import { LightingControl, VenuePicker, useVenueRequest } from "./VenueControls";
+import {
+    LightingControl,
+    GuardUniformPicker,
+    UniformPicker,
+    VenuePicker,
+    useVenueRequest,
+} from "./VenueControls";
 import { useShowPerformerDefaults } from "../performers/useStoredCues";
 
 /** End-zone lettering longer than this doesn't fit at a readable size. */
@@ -73,6 +79,12 @@ export function SettingsPanel({
                     </Row>
                     <Row label={t("view3d.overlay.lighting")} stacked>
                         <LightingControl />
+                    </Row>
+                    <Row label={t("view3d.settings.uniforms")} stacked>
+                        <UniformPicker />
+                    </Row>
+                    <Row label={t("view3d.settings.guardUniforms")} stacked>
+                        <GuardUniformPicker />
                     </Row>
                     {hasStands && <CrowdRows />}
                     {kitId !== "gym" && <EndZoneRow />}

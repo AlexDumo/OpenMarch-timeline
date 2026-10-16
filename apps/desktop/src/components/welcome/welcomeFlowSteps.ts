@@ -1,18 +1,28 @@
 import type { EditorMode } from "@/stores/EditorModeStore";
 
 /** The welcome flow's steps (UI-19), in order. */
-export type WelcomeStepId = "welcome" | "mode" | "analytics";
+export type WelcomeStepId =
+    | "welcome"
+    | "language"
+    | "theme"
+    | "mode"
+    | "analytics";
 
 /**
- * The steps to show. The analytics question is skipped when the person has
- * already answered it (`optOutAnalytics` is set).
+ * The steps to show. The analytics question is asked only when it hasn't been
+ * answered (`optOutAnalytics` unset) and never in the web build, which has no
+ * analytics.
  */
-export function getWelcomeSteps(
-    analyticsChoiceMade: boolean,
-): readonly WelcomeStepId[] {
-    return analyticsChoiceMade
-        ? ["welcome", "mode"]
-        : ["welcome", "mode", "analytics"];
+export function getWelcomeSteps({
+    analyticsChoiceMade,
+    isWeb,
+}: {
+    analyticsChoiceMade: boolean;
+    isWeb: boolean;
+}): readonly WelcomeStepId[] {
+    const steps: WelcomeStepId[] = ["welcome", "language", "theme", "mode"];
+    if (!analyticsChoiceMade && !isWeb) steps.push("analytics");
+    return steps;
 }
 
 /** Whether Continue is enabled on a step: the mode step needs a choice. */
