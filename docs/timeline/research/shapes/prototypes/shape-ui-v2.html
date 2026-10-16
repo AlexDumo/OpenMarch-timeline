@@ -427,7 +427,7 @@ function render() {
   S.phase = S.drag?.draw ? "drawing" : sh ? "open" : "idle";
   svg.setAttribute("viewBox", `${S.view.x} ${S.view.y} ${S.view.w} ${S.view.h}`);
   const p = Vt.panel?.() || ""; panel.classList.toggle("open", !!p);
-  if (panel._h !== p && !(panel.contains(document.activeElement) && document.activeElement.tagName === "INPUT" && !S.force)) { panel.innerHTML = p; panel._h = p; }
+  if (panel._h !== p && !(panel.contains(document.activeElement) && document.activeElement.tagName === "INPUT" && !S.force)) { panel.innerHTML = p; panel._h = p; Vt.afterPanel?.(); }
   const K = k() || 6;
   let sp = null, asg = null; if (sh && n) { sp = spotsOf(sh, n); asg = assign(sp, selMs()); }
   S.cache = { sp, asg };
@@ -674,14 +674,16 @@ const LINK_OFF = `<svg class="ico" style="width:15px;height:15px;opacity:.55" vi
 /* ---- scrubbable numbers in the chip ---- */
 // Click a number to type it. Drag it to change it: up = more. The box size ("6 × 2") is a 2D
 // pad: drag sideways for more or fewer across, up or down for more or fewer deep.
-const SCRUB_PX = { size: 16, value: 8 };
+const SCRUB_PX = { size: 16, value: 8, rot: 2 };
 function scrubTok(key, text) {
-  if (V.editing === key) return `<input class="scrubin" data-scrubin="${key}" value="${text.replace(" × ", "x")}">`;
-  const xy = key === "size", ew = key === "across";
-  return `<span class="scrub ${xy ? "xy" : ew ? "ew" : ""} ${V.scrubbing === key ? "live" : ""}" data-scrub="${key}" title="${xy ? "Drag sideways for more across, up or down for more deep · click to type" : ew ? "Drag right or left · Alt for tenths · click to type" : "Drag up or down · Alt for tenths · click to type"}">${text}</span>`;
+  if (V.editing === key) return `<input class="scrubin" data-scrubin="${key}" value="${text.replace(" × ", "x").replace("°", "")}">`;
+  const xy = key === "size", ew = key === "across" || key === "rot";
+  const tip = xy ? "Drag sideways for more across, up or down for more deep · click to type" : key === "rot" ? "Drag right to turn clockwise · Shift for 15° · click to type" : ew ? "Drag right or left · Alt for tenths · click to type" : "Drag up or down · Alt for tenths · click to type";
+  return `<span class="scrub ${xy ? "xy" : ew ? "ew" : ""} ${V.scrubbing === key ? "live" : ""}" data-scrub="${key}" title="${tip}">${text}</span>`;
 }
 function applyScrub(key, s0, value) {
   const n = S.sel.size, iv = intervals(s0, n);
+  if (key === "rot") { const [gx, gy] = V.pv || [0, 0]; const pv = toWorld(s0, { x: (gx * s0.w) / 2, y: (gy * s0.h) / 2 }); S.shape = transformShape(s0, pv, 1, 1, rad(value) - s0.rot); return; }
   if (key === "size") { // remember each spacing while it has no gap to show (one file or one rank)
     const av = iv.across || s0.av || 2, dv = iv.deep || s0.dv || 2, cols = clamp(value, 1, n), rows = Math.ceil(n / cols);
     S.shape = { ...s0, cols, av, dv, w: av * (cols - 1), h: dv * (rows - 1) }; return; }
@@ -693,20 +695,21 @@ function applyScrub(key, s0, value) {
   else if (key === "deep") S.shape = { ...s0, cols: iv.cols, h: v * (iv.rows - 1) };
   else { S.shape = s0; setApart(v); }
 }
-ov.addEventListener("pointerdown", (e) => {
+const scrubDown = (e) => {
   const el = e.target.closest("[data-scrub]"); if (!el || !S.shape) return; e.preventDefault();
   const key = el.dataset.scrub, s0 = clone(S.shape), iv = intervals(s0, S.sel.size), x0 = e.clientX, y0 = e.clientY;
-  const v0 = key === "size" ? { cols: iv.cols, rows: iv.rows } : key === "across" ? iv.across : key === "deep" ? iv.deep : iv.apart;
+  const v0 = key === "size" ? { cols: iv.cols, rows: iv.rows } : key === "rot" ? Math.round(deg(s0.rot)) : key === "across" ? iv.across : key === "deep" ? iv.deep : iv.apart;
   let moved = false, axis = null;
   const move = (ev) => {
     const dx = ev.clientX - x0, dy = y0 - ev.clientY; // up is positive
     if (!moved && Math.hypot(dx, dy) < 4) return;
-    if (!moved) { moved = true; axis = key === "size" ? (Math.abs(dx) >= Math.abs(dy) ? "x" : "y") : key === "across" ? "x" : "y"; V.scrubbing = key; document.body.classList.add("scrubbing"); document.body.classList.toggle("xy", key === "size"); document.body.classList.toggle("ew", key === "across"); }
-    if (key === "size") {
+    if (!moved) { moved = true; axis = key === "size" ? (Math.abs(dx) >= Math.abs(dy) ? "x" : "y") : key === "across" || key === "rot" ? "x" : "y"; V.scrubbing = key; document.body.classList.add("scrubbing"); document.body.classList.toggle("xy", key === "size"); document.body.classList.toggle("ew", key === "across" || key === "rot"); }
+    if (key === "rot") { let d = v0 + Math.round(dx / SCRUB_PX.rot); if (ev.shiftKey) d = Math.round(d / 15) * 15; applyScrub(key, s0, d); }
+    else if (key === "size") {
       const n = S.sel.size;
       if (axis === "x") applyScrub(key, s0, v0.cols + Math.round(dx / SCRUB_PX.size));
       else { const rows = clamp(v0.rows + Math.round(dy / SCRUB_PX.size), 1, n); applyScrub(key, s0, Math.ceil(n / rows)); }
-    } else { const unit = ev.altKey ? 0.1 : 0.5; const steps = Math.round((axis === "x" ? dx : dy) / SCRUB_PX.value); applyScrub(key, s0, ev.altKey ? Math.round((v0 + steps * unit) * 10) / 10 : snap(v0) + steps * unit); }
+    } else { const unit = ev.altKey ? 0.1 : 0.5; const steps = Math.round((axis === "x" ? dx : dy) / SCRUB_PX.value); if (!steps) { S.shape = s0; render(); return; } applyScrub(key, s0, ev.altKey ? Math.round((v0 + steps * unit) * 10) / 10 : snap(v0) + steps * unit); }
     render();
   };
   const up = () => {
@@ -716,11 +719,12 @@ ov.addEventListener("pointerdown", (e) => {
     S.force = true; render();
   };
   window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
-});
+};
+ov.addEventListener("pointerdown", scrubDown); panel.addEventListener("pointerdown", scrubDown);
 function bindScrubInput() {
-  const i = ov.querySelector("[data-scrubin]"); if (!i) return; i.focus({ preventScroll: true }); i.select();
+  const i = ov.querySelector("[data-scrubin]") || panel.querySelector("[data-scrubin]"); if (!i || i.dataset.bound) return; i.dataset.bound = "1"; i.focus({ preventScroll: true }); i.select();
   let done = false; const finish = (ok) => { if (done) return; done = true; const key = i.dataset.scrubin;
-    if (ok && S.shape) { const t = i.value.trim().toLowerCase(); if (key === "size") { const m = t.match(/^(\d+)/); if (m) applyScrub(key, S.shape, +m[1]); } else { const v = parseFloat(t); if (isFinite(v) && v > 0) applyScrub(key, S.shape, v); } }
+    if (ok && S.shape) { const t = i.value.trim().toLowerCase(); if (key === "size") { const m = t.match(/^(\d+)/); if (m) applyScrub(key, S.shape, +m[1]); } else if (key === "rot") { const v = parseFloat(t); if (isFinite(v)) applyScrub(key, S.shape, v); } else { const v = parseFloat(t); if (isFinite(v) && v > 0) applyScrub(key, S.shape, v); } }
     V.editing = null; S.force = true; render(); };
   i.onkeydown = (e) => { e.stopPropagation(); if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); };
   i.onblur = () => finish(true);
@@ -777,6 +781,7 @@ const UI = {
     if (S.tool === "sketch" && !V.ring) { const sc = toScreen(S.mouse); o += `<div class="tip" style="left:${sc.x + 14}px;top:${sc.y + 14}px">✎ Sketch</div>`; }
     return o + tipHTML();
   },
+  afterPanel() { bindScrubInput(); },
   afterOverlay() {
     bindScrubInput();
     const i = $("#wizin"); if (!i) return; i.focus({ preventScroll: true }); i.setSelectionRange(i.value.length, i.value.length);
@@ -801,8 +806,7 @@ const UI = {
     const s = S.shape; if (!s) return `<div class="pn">${tabs}<div class="help">Draw or pick a shape. Exact rotate, flip, scale and pivot live here; most of the time the handles on the field are enough.</div><div class="sec"><div class="lbl muted" style="font-size:11px;text-transform:uppercase">${S.sel.size} marchers selected</div></div></div>`;
     const pv = V.pv || [0, 0];
     return `<div class="pn">${tabs}<div class="sec"><h4>${summary(s)}</h4><div class="f"><label>Side to side</label><span>${yardDesc(s.cx)}</span></div><div class="f"><label>Front to back</label><span>${depthDesc(s.cy)}</span></div></div>
-      <div class="sec"><div class="f"><label>Pivot</label><div class="grid9">${[-1, 0, 1].map((gy) => [-1, 0, 1].map((gx) => `<button class="${pv[0] === gx && pv[1] === gy ? "on" : ""}" data-act="pv:${gx},${gy}"></button>`).join("")).join("")}</div></div></div>
-      <div class="sec"><div class="f"><label>Rotate</label><span><input data-in="rot" value="${Math.round(((deg(s.rot) % 360) + 360) % 360)}">°</span></div><div class="row" style="flex-wrap:wrap"><button data-act="rot:-90">⟲ 90°</button><button data-act="rot:90">⟳ 90°</button><button data-act="rot:180">180°</button><button data-act="rot:-15">⟲ 15°</button><button data-act="rot:15">⟳ 15°</button></div></div>
+      <div class="sec"><div class="f" style="align-items:center"><label>Pivot</label><div class="grid9">${[-1, 0, 1].map((gy) => [-1, 0, 1].map((gx) => `<button class="${pv[0] === gx && pv[1] === gy ? "on" : ""}" data-act="pv:${gx},${gy}"></button>`).join("")).join("")}</div><label style="margin-left:auto">Rotate</label>${scrubTok("rot", `${Math.round(((deg(s.rot) % 360) + 360) % 360)}°`)}</div></div>
       <div class="sec"><div class="f"><label>Flip</label><span class="row"><button data-act="flipx">Side to side</button><button data-act="flipy">Front to back</button></span></div></div>
       <div class="sec"><div class="f"><label>Scale</label><span class="row"><button data-act="sc:0.5">½</button><button data-act="sc:0.8">−</button><button data-act="sc:1.25">+</button><button data-act="sc:2">×2</button></span></div><div class="f"><label>Footprint</label><span class="muted">${fmt(s.w)} × ${fmt(s.h)} steps</span></div></div>
       ${s.kind === "box" ? `<div class="sec"><div class="f"><label>When I resize</label></div><div class="seg"><button class="${!S.keepSpacing ? "on" : ""}" data-act="ks:0">Stretch spacing</button><button class="${S.keepSpacing ? "on" : ""}" data-act="ks:1">Keep spacing</button></div><div class="help" style="margin-top:6px">${S.keepSpacing ? "Handles add or remove marchers across; the spacing stays." : "Handles change the spacing; the count across stays."}</div></div>` : ""}
@@ -970,7 +974,7 @@ function go() {
    <li><b>Type /</b>: answer one question at a time (shape, how many across, steps apart, rotation) with a live preview. "box 4x3 2" fills the steps for you.</li>
    <li><b>Sketch K</b>: draw roughly and it guesses.</li>
    <li><b>On the field</b>: the chip under the shape. Click a number to type it, or drag it: side-to-side spacing drags right or left, other values drag up or down, and the box size (6 × 2) drags sideways for more across, up or down for more deep. The link after the two spacings locks their ratio (off to start), for typing, dragging and handles. Grab the center dot to move it (it reads out the yard line). Corners and sides resize. The knob on top rotates around the pivot (set in the Shape panel), and so does just outside a corner (Shift 15°, Alt from center).</li>
-   <li><b>Shape panel</b> (right): pivot, exact rotate, flip, scale, and the box resize rule.</li>
+   <li><b>Shape panel</b> (right): pivot and rotation on one row (click the angle to type it, or drag it sideways), flip, scale, and the box resize rule.</li>
    <li><b>View tab</b>: fade the rest, or fade only while drawing.</li>
   </ul><div class="muted" style="font-size:11px">Enter places · Esc cancels · scroll zooms · middle-drag pans</div>`;
   notesEl.querySelector("[data-min]").onclick = () => notesEl.classList.toggle("min");
