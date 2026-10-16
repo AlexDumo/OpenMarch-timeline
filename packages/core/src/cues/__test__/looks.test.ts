@@ -675,6 +675,37 @@ describe("Silk aspect", () => {
         ]);
     });
 
+    it("counts a Carry item that doesn't say what it holds as the section's usual flag", () => {
+        const PENNANT = "library:7f1c2a90-0000-4000-8000-000000000009@1c1d1e";
+        const out = compileCues(
+            show(
+                [
+                    cue(139, "silk", 4, SUN_SILK),
+                    cue(140, "carry", 0, PENNANT, {
+                        target: { kind: "section", section: "Color Guard" },
+                    }),
+                ],
+                [trumpet, flag],
+                {
+                    libraryItems: [
+                        ...items,
+                        {
+                            id: PENNANT,
+                            channel: "carry",
+                            name: "Pennant",
+                            aspect: 2,
+                        },
+                    ],
+                    equipmentFallback: { "color guard": SIX_FOOT },
+                },
+            ),
+        );
+
+        expect(out.notes).toEqual([
+            { kind: "silk_aspect", cueIds: [139], marcherIds: [2] },
+        ]);
+    });
+
     it("leaves out a silk or a flag whose aspect isn't known", () => {
         const out = compileCues(
             show(

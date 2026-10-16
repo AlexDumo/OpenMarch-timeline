@@ -544,7 +544,8 @@ cascade and its `equipment_name` column are not used [07 revision].
   different flag: a Carry change.
 - Applies only to performers carrying a flag; others are skipped silently. A
   flag of another Cut gets the Artwork fitted per the sizing contract
-  (section 3), with a note when the aspect differs.
+  (section 3), with a note when the aspect differs (by more than 1% of the
+  larger).
 - Default with no Silk cue: a built-in plain silk in the section's 2D color.
 - The silk picker writes a Silk cue (count-keyed), never an appearance row
   [26.1].
@@ -831,7 +832,6 @@ drag-and-drop import [map, 11, 17, 26.5].
 
 - **Where Carry, Silk and Uniform defaults are computed:** settled
   2026-10-16: in `compileCues`. Its input carries each section's usual
-  equipment and 2D color and each marcher's `isGuard` (ADR 0004 D-6), and
-  Silk items and flag equipment carry their aspect for the Silk aspect note,
-  so the 3D View, `traceCue` and the page-grained exports (C3.8) read one
-  answer.
+  equipment and 2D color and each marcher's `isGuard`, and Silk items and
+  flag equipment carry their aspect for the Silk aspect note (ADR 0004,
+  amendment of 2026-10-11, Consequences).

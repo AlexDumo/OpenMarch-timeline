@@ -367,6 +367,11 @@ and item Placement changes under their page with their count. Behavior cues
   where it explains a cue (owner, 2026-10-11 [26.26]). Their input also
   carries each section's usual equipment and 2D color and each marcher's
   `isGuard`, a public package API change under D-6.
+- For the Silk aspect note [26.13], Silk Library items and flag equipment in
+  that input take an optional `aspect` (width ÷ height as the silk template
+  lays it out), and the output's notes gain `silk_aspect`: a Silk cue whose
+  Artwork differs by more than 1% from the Cut of a flag Carry gives while it
+  applies. Another public package API change under D-6 (2026-10-16).
 - Item Placement, geometry and artwork slot rows are not cues, so
   `compileCues` doesn't read them; the 3D View and the notes list resolve
   them on their own.
@@ -377,8 +382,8 @@ and item Placement changes under their page with their count. Behavior cues
 - Compile unit tests: Carry, Silk and Uniform defaults; latest wins and
   specificity on each; ripples; hard cuts with `transition_length` ignored;
   phrases rejected on the three channels; a mismatched Horn/Equipment state
-  ignored with a note; Silk skipping non-flag carriers; items never reached by
-  band or section targets.
+  ignored with a note; Silk skipping non-flag carriers; a Silk cue on a flag
+  of another aspect noted; items never reached by band or section targets.
 - Schema tests: the widened CHECK; the `library:` value; delete restricted
   while cues use an item; beat delete cascades on the item tables; item tables
   in history and repair.
