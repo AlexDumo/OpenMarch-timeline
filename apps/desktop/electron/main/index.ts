@@ -79,7 +79,6 @@ import {
     writeLibraryIpcSelfTest,
 } from "./services/library-ipc-self-test";
 import { closeView3dWindow, initView3dWindow } from "./view3dWindow";
-import { pruneShowLibraryAt } from "../database/showLibraryPrune";
 import {
     getLibraryStore,
     initLibraryIpc,
@@ -1297,7 +1296,7 @@ export async function saveFile() {
             if (path.canceled || !path.filePath) return 0;
 
             // Save prunes the show Library (C2.1), so the copy carries only what the show uses
-            await pruneShowLibraryAt(DatabaseServices.getDbPath());
+            await pruneShowLibrary();
 
             // Make a copy into a temp file
             const tempPath = path.filePath + ".tmp";
@@ -1398,6 +1397,15 @@ function requestSvgBeforeClose(win: BrowserWindow): Promise<string> {
 }
 
 /**
+ * Prunes the open show's Library (C2.1). Loaded when first used: it runs the renderer's
+ * db-functions, which stay out of the startup bundle.
+ */
+async function pruneShowLibrary() {
+    const { pruneShowLibraryAt } = await import("../database/showLibraryPrune");
+    await pruneShowLibraryAt(DatabaseServices.getDbPath());
+}
+
+/**
  * Closes the current database file.
  *
  * @returns 200 for success, -1 for failure
@@ -1434,7 +1442,7 @@ async function closeCurrentFileNow(isAppQuitting: boolean) {
     }
 
     // The app autosaves, so closing is when save prunes the show Library (C2.1)
-    await pruneShowLibraryAt(DatabaseServices.getDbPath());
+    await pruneShowLibrary();
 
     // Close the current file
     DatabaseServices.setDbPath("", false);
