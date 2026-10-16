@@ -819,6 +819,243 @@ describe("a released drag until its range arrives (owner 2026-10-16)", () => {
         await flush();
         expect(drawn()).toEqual(before);
     });
+
+    /** Every left and width the clip took while `change` ran, then its last */
+    const stylesDuring = async (change: () => void) => {
+        const records: MutationRecord[] = [];
+        const styles = new MutationObserver((batch) => records.push(...batch));
+        styles.observe(clip(), {
+            attributes: true,
+            attributeFilter: ["style"],
+            attributeOldValue: true,
+        });
+        change();
+        await flush();
+        records.push(...styles.takeRecords());
+        styles.disconnect();
+        return [
+            ...records.map((record) => {
+                const style = record.oldValue ?? "";
+                return {
+                    left: /left: ([^;]+)/.exec(style)?.[1],
+                    width: /width: ([^;]+)/.exec(style)?.[1],
+                };
+            }),
+            drawn(),
+        ];
+    };
+    const moveBy = (from: number, to: number) => {
+        pointer(clip(), "pointerdown", from);
+        pointer(clip(), "pointermove", from + 10);
+        pointer(clip(), "pointermove", to);
+        pointer(clip(), "pointerup", to);
+        fireEvent.click(clip());
+    };
+
+    it("a move stored from spec beat 0 isn't shifted twice when its range arrives (review)", async () => {
+        vi.mocked(shiftTimeline).mockReturnValue(new Promise(() => undefined));
+        const resize = {
+            limits: vi.fn(async () => openLimits()),
+            commit: vi.fn(),
+        };
+        const { rerender } = renderWith(resize, 0, 8);
+        // Spec [0, 8) is view [0, 7): one beat right
+        moveBy(40, 56);
+        await flush();
+        expect(shiftTimeline).toHaveBeenCalledWith(
+            expect.objectContaining({ delta: 1 }),
+        );
+        const dropped = drawn();
+        expect(dropped).toEqual({ left: "16px", width: "112px" });
+        // Spec [1, 9) is view [0, 8): its start doesn't move on the view, its end does
+        const frames = await stylesDuring(() =>
+            rerender(
+                <Harness timelines={[input("A", 7, 1, 9)]} resize={resize} />,
+            ),
+        );
+        expect(frames.at(-1)).toEqual({ left: "0px", width: "128px" });
+        // Never the drop's start with the arrived range's length (style properties change one
+        // at a time, so a record can also hold one of each, inside a single commit)
+        expect(frames).not.toContainEqual({ left: "16px", width: "128px" });
+    });
+
+    it("a resize dragged again during the wait starts from the drop, and goes on when the drop's range arrives (review)", async () => {
+        const resize = {
+            limits: vi.fn(async () => openLimits()),
+            commit: vi.fn(() => new Promise<boolean>(() => undefined)),
+        };
+        const { rerender } = renderWith(resize);
+        // Spec [3, 9) is view [2, 8): the end two beats out, to view 10 (spec 11)
+        await dragEnd(32);
+        expect(drawn()).toEqual({ left: "32px", width: "128px" });
+        const end = screen.getByTestId("timeline-clip-resize-end");
+        pointer(end, "pointerdown", 100);
+        await flush();
+        pointer(end, "pointermove", 116);
+        // One beat further than the drop, not than the range it replaces
+        expect(drawn()).toEqual({ left: "32px", width: "144px" });
+        expect(
+            screen.getByTestId("timeline-clip-resize-tag").textContent,
+        ).toMatch(/^A: 8 → 9 counts/);
+        // The drop's range arrives mid-drag: the drag goes on
+        rerender(
+            <Harness timelines={[input("A", 7, 3, 11)]} resize={resize} />,
+        );
+        await flush();
+        expect(drawn()).toEqual({ left: "32px", width: "144px" });
+        pointer(end, "pointerup", 116);
+        await flush();
+        expect(resize.commit).toHaveBeenLastCalledWith({
+            timelineId: "A",
+            startBeatIndex: 3,
+            endBeatIndex: 12,
+        });
+        expect(drawn()).toEqual({ left: "32px", width: "144px" });
+    });
+
+    it("a resize dragged again during the wait and back onto the drop commits nothing new, and waits on (review)", async () => {
+        const resize = {
+            limits: vi.fn(async () => openLimits()),
+            commit: vi.fn(() => new Promise<boolean>(() => undefined)),
+        };
+        renderWith(resize);
+        await dragEnd(32);
+        const dropped = drawn();
+        const end = screen.getByTestId("timeline-clip-resize-end");
+        pointer(end, "pointerdown", 100);
+        await flush();
+        pointer(end, "pointermove", 132);
+        pointer(end, "pointermove", 100);
+        pointer(end, "pointerup", 100);
+        await flush();
+        expect(resize.commit).toHaveBeenCalledTimes(1);
+        expect(drawn()).toEqual(dropped);
+    });
+
+    it("a resize dragged again during the wait, then cancelled with Esc, goes back to the drop (review)", async () => {
+        renderWith({
+            limits: vi.fn(async () => openLimits()),
+            commit: vi.fn(() => new Promise<boolean>(() => undefined)),
+        });
+        await dragEnd(32);
+        const dropped = drawn();
+        const end = screen.getByTestId("timeline-clip-resize-end");
+        pointer(end, "pointerdown", 100);
+        await flush();
+        pointer(end, "pointermove", 148);
+        expect(drawn()).not.toEqual(dropped);
+        fireEvent.keyDown(window, { key: "Escape" });
+        await flush();
+        expect(drawn()).toEqual(dropped);
+    });
+
+    it("a moved clip dragged again during the wait starts from the drop, and its commit adds to it (review)", async () => {
+        vi.mocked(shiftTimeline).mockReturnValue(new Promise(() => undefined));
+        const resize = {
+            limits: vi.fn(async () => openLimits()),
+            commit: vi.fn(),
+        };
+        const { rerender } = renderWith(resize);
+        // Spec [3, 9) is view [2, 8): two beats right
+        moveBy(40, 72);
+        await flush();
+        expect(drawn()).toEqual({ left: "64px", width: "96px" });
+        // Grabbed where it's drawn and dragged one beat further
+        pointer(clip(), "pointerdown", 100);
+        pointer(clip(), "pointermove", 110);
+        pointer(clip(), "pointermove", 116);
+        expect(drawn()).toEqual({ left: "80px", width: "96px" });
+        // The first drop's range arrives mid-drag: the drag goes on
+        rerender(
+            <Harness timelines={[input("A", 7, 5, 11)]} resize={resize} />,
+        );
+        await flush();
+        expect(drawn()).toEqual({ left: "80px", width: "96px" });
+        pointer(clip(), "pointerup", 116);
+        await flush();
+        expect(shiftTimeline).toHaveBeenCalledTimes(2);
+        expect(shiftTimeline).toHaveBeenLastCalledWith(
+            expect.objectContaining({ delta: 1 }),
+        );
+        expect(drawn()).toEqual({ left: "80px", width: "96px" });
+    });
+
+    it("a moved clip dragged again before the first range arrives shifts by the second drag only (review)", async () => {
+        vi.mocked(shiftTimeline).mockReturnValue(new Promise(() => undefined));
+        renderWith({
+            limits: vi.fn(async () => openLimits()),
+            commit: vi.fn(),
+        });
+        moveBy(40, 72);
+        await flush();
+        moveBy(100, 116);
+        await flush();
+        // `shiftTimeline` is relative: 2 then 1 lands 3 beats right, where it's drawn
+        expect(
+            vi.mocked(shiftTimeline).mock.calls.map(([args]) => args.delta),
+        ).toEqual([2, 1]);
+        expect(drawn()).toEqual({ left: "80px", width: "96px" });
+    });
+
+    it("a press during the wait that's cancelled leaves the drop alone (review)", async () => {
+        vi.mocked(shiftTimeline).mockReturnValue(new Promise(() => undefined));
+        const commit = pending();
+        renderWith({
+            limits: vi.fn(async () => openLimits()),
+            commit: vi.fn(() => commit.result),
+        });
+        moveBy(40, 72);
+        await flush();
+        const moved = drawn();
+        pointer(clip(), "pointerdown", 80);
+        pointer(clip(), "pointercancel", 80);
+        await flush();
+        expect(drawn()).toEqual(moved);
+
+        cleanup();
+        renderWith({
+            limits: vi.fn(async () => openLimits()),
+            commit: vi.fn(() => commit.result),
+        });
+        await dragEnd(32);
+        const resized = drawn();
+        const end = screen.getByTestId("timeline-clip-resize-end");
+        pointer(end, "pointerdown", 100);
+        pointer(end, "pointercancel", 100);
+        await flush();
+        expect(drawn()).toEqual(resized);
+        pointer(end, "pointerdown", 100);
+        fireEvent(end, new MouseEvent("lostpointercapture", { bubbles: true }));
+        await flush();
+        expect(drawn()).toEqual(resized);
+    });
+
+    it("a refusal after the limits still lets go when a newer press hasn't moved (review)", async () => {
+        const arrivals: ((limits: ClipResizeLimits) => void)[] = [];
+        const commit = pending();
+        renderWith({
+            limits: vi.fn(
+                () =>
+                    new Promise<ClipResizeLimits | null>((resolve) => {
+                        arrivals.push(resolve);
+                    }),
+            ),
+            commit: vi.fn(() => commit.result),
+        });
+        const before = drawn();
+        const end = screen.getByTestId("timeline-clip-resize-end");
+        // Released before its limits arrive, then pressed again without a drag
+        pointer(end, "pointerdown", 0);
+        pointer(end, "pointermove", 32);
+        pointer(end, "pointerup", 32);
+        pointer(end, "pointerdown", 32);
+        arrivals[0]!(openLimits());
+        await flush();
+        expect(drawn()).not.toEqual(before);
+        commit.settle(false);
+        await flush();
+        expect(drawn()).toEqual(before);
+    });
 });
 
 // ---------------------------------------------------------------------------
