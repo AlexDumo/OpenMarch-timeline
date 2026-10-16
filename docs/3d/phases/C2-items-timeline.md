@@ -55,7 +55,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 - Owner: trevor (3d/c2-items-out-of-loops-v2)
 - Status: in-review
-- PR: none
+- PR: #279
 - Parallel: yes
 - Depends on: C2.1
 
