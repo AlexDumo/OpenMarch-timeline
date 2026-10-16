@@ -11,8 +11,8 @@ import {
     getFieldFloor,
     getFieldFloorImage,
     libraryKeepsFromFloor,
-    setFieldFloor,
 } from "../fieldFloor";
+import { setFieldFloor } from "../fieldFloorEdits";
 import { hashParts, versionHashOf } from "@/view3d/library/showHash";
 
 const bytes = (text: string) => new TextEncoder().encode(text);

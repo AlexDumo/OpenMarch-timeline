@@ -11,7 +11,8 @@
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { schema } from "@/global/database/db";
+// The main process embeds a floor on open (D-23), so no renderer database module here
+import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
 import {
     DerivedFromSchema,

@@ -10,9 +10,8 @@
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { FieldFloor } from "@openmarch/core";
-import { schema } from "@/global/database/db";
-import { transactionWithHistory } from "./history";
-import { readLibraryBlob } from "./showLibrary";
+// Shared with the main process's convert on open: no renderer database module or history here
+import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
 import type { LibraryKeep } from "@/view3d/library/showLibraryPrune";
 
@@ -98,7 +97,12 @@ export async function getFieldFloorImage({
     if (!floor) return null;
     const parts = await embeddedParts(db, floor);
     if (!parts?.display) return null;
-    return (await readLibraryBlob({ db, hash: parts.display })) ?? null;
+    const blob = await db
+        .select({ data: schema.library_blobs.data })
+        .from(schema.library_blobs)
+        .where(eq(schema.library_blobs.hash, parts.display))
+        .get();
+    return blob?.data ?? null;
 }
 
 /**
@@ -137,19 +141,6 @@ export async function setFieldFloorInTransaction({
         })
         .where(eq(schema.field_properties.id, FIELD_PROPERTIES_ID))
         .run();
-}
-
-/** Sets or clears the show's floor as one undoable edit. */
-export async function setFieldFloor({
-    db,
-    floor,
-}: {
-    db: DbConnection;
-    floor: FieldFloor | null;
-}): Promise<void> {
-    await transactionWithHistory(db, "setFieldFloor", (tx) =>
-        setFieldFloorInTransaction({ tx, floor }),
-    );
 }
 
 /** The Version the floor names, which prune keeps (D-23). History is covered separately. */

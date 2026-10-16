@@ -209,7 +209,7 @@ describe("opening a show with convert on open", () => {
         expect(await sqlProxyWorks()).toBe(true);
         expect(calls).toEqual(["preparing"]);
         expect(stateOf(showPath)).toMatchObject({
-            userVersion: 8,
+            userVersion: 9,
             pageEraTables: [],
         });
     });
@@ -312,7 +312,7 @@ describe("opening a show with convert on open", () => {
                 path.basename(shown).replace(/\.dots$/, "-2.dots"),
             ].sort(),
         );
-        expect(stateOf(showPath).userVersion).toBe(8);
+        expect(stateOf(showPath).userVersion).toBe(9);
     });
 
     it("two opens of the same file at once: converted once, both open quietly", async () => {
@@ -329,7 +329,7 @@ describe("opening a show with convert on open", () => {
         expect(second.calls).toEqual([]);
         expect(backupsIn(tempDir)).toHaveLength(1);
         expect(stateOf(showPath)).toMatchObject({
-            userVersion: 8,
+            userVersion: 9,
             // One timeline per page move (pages 1 to 6)
             timelines: 6,
         });
@@ -365,8 +365,8 @@ describe("opening a show with convert on open", () => {
         const [a, b] = await Promise.all([firstOpen, secondOpen]);
         expect([a.status, b.status]).toEqual([200, 200]);
         expect(DatabaseServices.getDbPath()).toBe(otherPath);
-        expect(stateOf(showPath).userVersion).toBe(8);
-        expect(stateOf(otherPath).userVersion).toBe(8);
+        expect(stateOf(showPath).userVersion).toBe(9);
+        expect(stateOf(otherPath).userVersion).toBe(9);
     });
 
     describe("the renderer's SQL", () => {
@@ -426,7 +426,7 @@ describe("opening a show with convert on open", () => {
             reloadB.emit("did-navigate");
             await resumedB;
             expect(await sqlProxyWorks()).toBe(true);
-            expect(stateOf(otherPath).userVersion).toBe(8);
+            expect(stateOf(otherPath).userVersion).toBe(9);
         });
 
         it("resumes after the fallback when the reload never navigates, and at once without a window", async () => {
@@ -526,7 +526,7 @@ describe("opening a show with convert on open", () => {
             expect(backupsIn(tempDir)).toEqual([]);
             const state = stateOf(newPath);
             expect(state).toMatchObject({
-                userVersion: 8,
+                userVersion: 9,
                 pageEraTables: [],
                 timelines: 0,
             });
@@ -540,6 +540,91 @@ describe("opening a show with convert on open", () => {
                 (await open(newPath, { dialogs: again.dialogs })).status,
             ).toBe(200);
             expect(again.calls).toEqual([]);
+        });
+    });
+
+    describe("the show's floor (D-23)", () => {
+        const fieldRow = (filePath: string) =>
+            withDb(filePath, (db) =>
+                db
+                    .prepare(
+                        "SELECT json_data, image FROM field_properties WHERE id = 1",
+                    )
+                    .get(),
+            ) as { json_data: string; image: Uint8Array | null };
+
+        /** The page show `beforeEach` made, converted, then given a legacy image at 8. */
+        async function timelineShowWithImage(filePath: string) {
+            expect((await open(filePath)).status).toBe(200);
+            const png = new Uint8Array(
+                await (
+                    await import("sharp")
+                )
+                    .default({
+                        create: {
+                            width: 64,
+                            height: 32,
+                            channels: 3,
+                            background: { r: 0, g: 80, b: 40 },
+                        },
+                    })
+                    .png()
+                    .toBuffer(),
+            );
+            withDb(filePath, (db) => {
+                db.prepare(
+                    "UPDATE field_properties SET image = ? WHERE id = 1",
+                ).run(png);
+                db.prepare("PRAGMA user_version = 8").run();
+            });
+        }
+
+        it("makes an opened 8's field image its floor and writes 9", async () => {
+            await timelineShowWithImage(showPath);
+
+            expect((await open(showPath)).status).toBe(200);
+
+            const row = fieldRow(showPath);
+            expect(row.image).toBeNull();
+            expect(JSON.parse(row.json_data).floor).toMatchObject({
+                itemId: expect.any(String),
+                versionHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+            });
+            expect(stateOf(showPath).userVersion).toBe(9);
+            expect(
+                withDb(showPath, (db) =>
+                    db.prepare("SELECT kind, name FROM library_items").all(),
+                ),
+            ).toEqual([{ kind: "artwork", name: "Field image" }]);
+
+            // Opening it again makes no second floor.
+            const floor = JSON.parse(row.json_data).floor;
+            expect((await open(showPath)).status).toBe(200);
+            expect(JSON.parse(fieldRow(showPath).json_data).floor).toEqual(
+                floor,
+            );
+            expect(
+                withDb(showPath, (db) =>
+                    db.prepare("SELECT count(*) AS n FROM library_items").get(),
+                ),
+            ).toEqual({ n: 1 });
+            expect(stateOf(showPath).userVersion).toBe(9);
+        });
+
+        it("still opens a show whose field image isn't an image, unchanged", async () => {
+            expect((await open(showPath)).status).toBe(200);
+            withDb(showPath, (db) => {
+                db.prepare(
+                    "UPDATE field_properties SET image = ? WHERE id = 1",
+                ).run(new TextEncoder().encode("not an image"));
+                db.prepare("PRAGMA user_version = 8").run();
+            });
+
+            expect((await open(showPath)).status).toBe(200);
+
+            expect(fieldRow(showPath).image).not.toBeNull();
+            // Not written as 9, so the next open tries again
+            expect(stateOf(showPath).userVersion).toBe(8);
         });
     });
 
@@ -589,7 +674,7 @@ describe("opening a show with convert on open", () => {
                 expect(connections[0]!.isOpen).toBe(false);
                 expect(result.db).toBe(connections[1]);
                 expect(result.db!.prepare("PRAGMA user_version").get()).toEqual(
-                    { user_version: 8 },
+                    { user_version: 9 },
                 );
                 expect(progress[0]).toEqual({ phase: "backup" });
                 expect(progress.at(-1)).toEqual({
@@ -660,7 +745,7 @@ describe("opening a show with convert on open", () => {
             try {
                 expect(result.status).toBe(200);
                 expect(result.db!.prepare("PRAGMA user_version").get()).toEqual(
-                    { user_version: 8 },
+                    { user_version: 9 },
                 );
             } finally {
                 result.db?.close();
@@ -697,7 +782,7 @@ describe("opening a show with convert on open", () => {
                 expect(result.status).toBe(200);
                 expect(calls).toEqual(["preparing"]);
                 expect(result.db!.prepare("PRAGMA user_version").get()).toEqual(
-                    { user_version: 8 },
+                    { user_version: 9 },
                 );
                 expect(result.db!.prepare("PRAGMA busy_timeout").get()).toEqual(
                     { timeout: 5000 },
@@ -741,9 +826,9 @@ describe("opening a show with convert on open", () => {
             expect(results.map((r) => r.status)).toEqual([200, 200]);
             // The second open only started once the first had converted its file.
             expect(order).toEqual(["first converting", "second preparing"]);
-            expect(firstVersionWhenSecondPrepared).toBe(8);
-            expect(stateOf(showPath).userVersion).toBe(8);
-            expect(stateOf(otherPath).userVersion).toBe(8);
+            expect(firstVersionWhenSecondPrepared).toBe(9);
+            expect(stateOf(showPath).userVersion).toBe(9);
+            expect(stateOf(otherPath).userVersion).toBe(9);
             expect(DatabaseServices.getDbPath()).toBe(otherPath);
         });
     });
