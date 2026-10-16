@@ -20,6 +20,7 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { db } from "@/global/database/db";
 import {
     displayedBeat,
+    isolatedTimeline,
     resolveStoredTimeline,
     selectedStoredTimeline,
     selectionIsRange,
@@ -588,11 +589,11 @@ function PlayingTimeline({
     );
     // UI-25: which of the moves sharing the window's range it stands for
     const resolvedId = useTimelineSelectionStore(
-        (s) => (s.isolation ? null : selectedStoredTimeline(s))?.id ?? null,
+        (s) => s.isolation?.timelineId ?? selectedStoredTimeline(s)?.id ?? null,
     );
     const pairedId = useTimelineSelectionStore((s) => s.pairedTimelineId);
     const resolvedOnClip = useTimelineSelectionStore((s) => {
-        const t = s.isolation ? null : selectedStoredTimeline(s);
+        const t = s.isolation ? isolatedTimeline(s) : selectedStoredTimeline(s);
         return (
             t !== null &&
             !isPageTimeline(t, s.storedTimelines ?? [], s.pageBoxes) &&
