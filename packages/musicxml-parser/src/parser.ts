@@ -27,6 +27,9 @@ import {
     type ParseWarningCode,
 } from "./warnings";
 
+/** Tempos outside this range, in quarters per minute, are reported as likely mistakes. */
+export const UNUSUAL_TEMPO = { below: 20, above: 400 };
+
 /** Quarter notes per minute when a file has no tempo before its first marking. */
 export const DEFAULT_QUARTER_BPM = 120;
 
@@ -387,6 +390,13 @@ function walkTempos(
             const marking = shown(e);
             if (marking.approximate)
                 warn("approximate-tempo", "info", e.measureIndex, {
+                    tempo: formatTempoMarking(marking),
+                });
+            if (
+                marking.quarterBpm < UNUSUAL_TEMPO.below ||
+                marking.quarterBpm > UNUSUAL_TEMPO.above
+            )
+                warn("unusual-tempo", "warning", e.measureIndex, {
                     tempo: formatTempoMarking(marking),
                 });
             if (e.printedQuarterBpm !== undefined)

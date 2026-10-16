@@ -316,3 +316,15 @@ describe("no time signature", () => {
         expect(codes(xml)).toEqual(["no-time-signature"]);
     });
 });
+
+describe("unusual tempos", () => {
+    it("warns about a tempo too slow or fast to be meant", () => {
+        const xml = score(
+            measure(
+                1,
+                time(4, 4) + museScoreTempo("quarter", 0, 5, 5) + rest(4),
+            ),
+        );
+        expect(codes(xml)).toContain("unusual-tempo");
+    });
+});

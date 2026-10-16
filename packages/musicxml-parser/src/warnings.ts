@@ -27,6 +27,8 @@ export type ParseWarningCode =
     | "invalid-tempo"
     /** The printed tempo and the tempo the file plays (`<sound tempo>`) differ; played was used */
     | "printed-tempo-differs"
+    /** A tempo so slow or fast it is likely a mistake in the file */
+    | "unusual-tempo"
     /** An approximate tempo ("c. 132") was read as its number */
     | "approximate-tempo"
     /** A metric modulation (♩. = ♩) with no number; read as "new note = old note" */
@@ -108,6 +110,7 @@ const MESSAGES: Record<ParseWarningCode, string> = {
     "invalid-tempo": 'Tempo "{text}" isn\'t a number; kept {kept}',
     "printed-tempo-differs":
         "The score shows {printed} but plays {tempo}; used {tempo}",
+    "unusual-tempo": "{tempo} is an unusual tempo; check it in the score",
     "approximate-tempo": "Approximate tempo read as {tempo}",
     "metric-modulation":
         "Metric modulation {text} has no number; read as the new note lasting as long as the old one: {tempo}",
