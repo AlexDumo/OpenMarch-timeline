@@ -387,8 +387,7 @@ function readNavigation(measure: XmlElement, marks: NavigationMarks) {
         }
     }
 
-    const sounds = descendants(measure, "sound");
-    for (const sound of sounds) {
+    const applySound = (sound: XmlElement, { fine = true } = {}) => {
         const attr = (name: string) => attrOf(sound, name);
         if (attr("segno") !== undefined) nav.segno = attr("segno") || "segno";
         if (attr("coda") !== undefined) nav.coda = attr("coda") || "coda";
@@ -396,23 +395,32 @@ function readNavigation(measure: XmlElement, marks: NavigationMarks) {
         if (attr("dalsegno") !== undefined)
             nav.dalSegno = attr("dalsegno") || "segno";
         if (attr("dacapo") === "yes") nav.daCapo = true;
-        if (attr("fine") !== undefined) nav.fine = true;
+        if (fine && attr("fine") !== undefined) nav.fine = true;
         if (attr("forward-repeat") === "yes") nav.forwardRepeat = true;
-    }
+    };
+    // <sound> outside directions: straight in the measure, or on a barline
+    for (const sound of childElements(measure, "sound")) applySound(sound);
+    for (const barline of childElements(measure, "barline"))
+        for (const sound of childElements(barline, "sound")) applySound(sound);
 
+    const JUMPS = ["segno", "coda", "tocoda", "dalsegno", "dacapo"];
     for (const direction of childElements(measure, "direction")) {
-        if (firstChild(direction, "sound")) {
-            // A <sound> on this direction already said what it does (read above)
-            const sound = firstChild(direction, "sound")!;
-            if (
-                ["segno", "coda", "tocoda", "dalsegno", "dacapo", "fine"].some(
-                    (a) => sound.hasAttribute(a),
-                )
-            )
-                continue;
-        }
+        const sound = firstChild(direction, "sound");
         const words = directionWords(direction);
         const fromWords = words ? readNavigationWords(words) : [];
+        const wordsJump =
+            fromWords.includes("daCapo") || fromWords.includes("dalSegno");
+        if (sound) {
+            const soundJump = JUMPS.some((a) => sound.hasAttribute(a));
+            // Sibelius writes "D.S. al Fine" with only fine=: the words say what it does
+            if (!soundJump && wordsJump) {
+                applySound(sound, { fine: false });
+            } else {
+                applySound(sound);
+                // A <sound> with a jump or Fine already said what this direction does
+                if (soundJump || sound.hasAttribute("fine")) continue;
+            }
+        }
         for (const kind of fromWords) {
             if (kind === "daCapo") nav.daCapo ??= true;
             if (kind === "dalSegno") nav.dalSegno ??= "segno";

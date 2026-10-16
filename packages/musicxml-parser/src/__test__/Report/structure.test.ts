@@ -328,3 +328,28 @@ describe("unusual tempos", () => {
         expect(codes(xml)).toContain("unusual-tempo");
     });
 });
+
+describe("exporter quirks", () => {
+    it("reads Sibelius's D.S. al Fine, written with only a fine= sound, as the D.S.", () => {
+        const tempo = museScoreTempo("quarter", 0, 60, 60);
+        const xml = score(
+            measure(1, time(2, 4) + tempo + rest(2)) +
+                measure(
+                    2,
+                    `<direction><direction-type><segno/></direction-type></direction>` +
+                        rest(2),
+                ) +
+                measure(
+                    3,
+                    rest(2) +
+                        `<direction><direction-type><words>Fine</words></direction-type><sound fine="3"/></direction>`,
+                ) +
+                measure(
+                    4,
+                    rest(2) +
+                        `<direction><direction-type><words>D.S. al Fine</words></direction-type><sound fine="4"/></direction>`,
+                ),
+        );
+        expect(order(xml)).toEqual(["1", "2", "3", "4", "2x2", "3x2"]);
+    });
+});
