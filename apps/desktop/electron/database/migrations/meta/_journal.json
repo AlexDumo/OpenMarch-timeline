@@ -176,6 +176,13 @@
             "when": 1792162434076,
             "tag": "0024_fat_randall_flagg",
             "breakpoints": true
+        },
+        {
+            "idx": 25,
+            "version": "6",
+            "when": 1792168750467,
+            "tag": "0025_skinny_the_hunter",
+            "breakpoints": true
         }
     ]
 }

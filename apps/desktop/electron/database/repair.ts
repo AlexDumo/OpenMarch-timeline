@@ -66,6 +66,9 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     // Items after the marchers that back them, Outline changes after their item (ADR 0002 D-10)
     "items",
     "item_geometry",
+    // Placement changes after their item and beat, holders and crew after their change
+    "item_placements",
+    "item_placement_marchers",
 ];
 
 /**

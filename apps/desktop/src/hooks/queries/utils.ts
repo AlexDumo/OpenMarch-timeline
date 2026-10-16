@@ -53,6 +53,9 @@ const singleTableNameToQueryKey = (tableName: string): string[][] => {
         // A cue's set members are read with the cue (`useCues.ts`)
         case "cue_marchers":
             return [["cues"]];
+        // A Placement change's holders and crew are read with the change
+        case "item_placement_marchers":
+            return [["item_placements"]];
         default:
             return [[tableName]];
     }

@@ -930,6 +930,85 @@ export const item_geometry = sqliteTable(
     ],
 );
 
+export const PLACEMENT_STATES = ["held", "placed", "off_field"] as const;
+export const HANDS = ["left", "right", "both"] as const;
+export const PLACEMENT_ROLES = ["holder", "crew"] as const;
+
+/**
+ * Where an item is from a beat on (ADR 0002 D-10, props-spec section 4): held by performers
+ * (`item_placement_marchers`), placed at its own position with an optional crew, or Off field.
+ * Latest wins and the change is instant on its beat's click. The rows of an item ripple, one
+ * per item at staggered counts, share a `group_id`. A held row keeps at least one holder, and
+ * only a placed row has crew: the write path keeps both (`itemPlacements.ts`).
+ */
+export const item_placements = sqliteTable(
+    "item_placements",
+    {
+        id: integer().primaryKey(),
+        item_id: integer()
+            .notNull()
+            .references(() => items.id, { onDelete: "cascade" }),
+        beat_id: integer()
+            .notNull()
+            .references(() => beats.id, { onDelete: "cascade" }),
+        /** held, placed or off_field */
+        state: text().notNull(),
+        /** The item ripple this row is part of, or null */
+        group_id: integer(),
+        ...timestamps,
+    },
+    (table) => [
+        unique("item_placements_item_beat_unique").on(
+            table.item_id,
+            table.beat_id,
+        ),
+        index("item_placements_beat_id_idx").on(table.beat_id),
+        index("item_placements_group_id_idx").on(table.group_id),
+        check(
+            "item_placements_state_check",
+            sql.raw(`state IN (${sqlList(PLACEMENT_STATES)})`),
+        ),
+        check(
+            "item_placements_group_id_check",
+            sql`group_id IS NULL OR (typeof(group_id) = 'integer' AND group_id >= 1)`,
+        ),
+    ],
+);
+
+/**
+ * The performers on a Placement change: its holders, each with a hand, or its crew. A surrogate
+ * `id` unique on (placement, marcher), as `cue_marchers` has, so undo restores the same rowid.
+ */
+export const item_placement_marchers = sqliteTable(
+    "item_placement_marchers",
+    {
+        id: integer().primaryKey(),
+        placement_id: integer()
+            .notNull()
+            .references(() => item_placements.id, { onDelete: "cascade" }),
+        marcher_id: integer()
+            .notNull()
+            .references(() => marchers.id, { onDelete: "cascade" }),
+        /** holder or crew */
+        role: text().notNull(),
+        /** left, right or both: holders only */
+        hand: text(),
+    },
+    (table) => [
+        unique("item_placement_marchers_placement_marcher_unique").on(
+            table.placement_id,
+            table.marcher_id,
+        ),
+        index("item_placement_marchers_marcher_id_idx").on(table.marcher_id),
+        check(
+            "item_placement_marchers_role_check",
+            sql.raw(
+                `(role = 'holder' AND hand IS NOT NULL AND hand IN (${sqlList(HANDS)})) OR (role = 'crew' AND hand IS NULL)`,
+            ),
+        ),
+    ],
+);
+
 /* =========================== VIEWS =========================== */
 /**
  * An ordered list of the beats, pages, and measures in the app.
