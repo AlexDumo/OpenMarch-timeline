@@ -1,3 +1,4 @@
+import { performersOnly } from "@/global/classes/Marcher";
 import type { DB } from "@/global/database/db";
 import { toCompressedOpenMarchBytes } from "./dots-to-om";
 import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
@@ -145,13 +146,17 @@ export async function uploadDatabaseToServer(
             );
         }
 
-        const marchers = await dbConnection.query.marchers.findMany({
-            columns: {
-                section: true,
-                drill_prefix: true,
-                drill_order: true,
-            },
-        });
+        // Performers only, as the payload's performers (`toOpenMarchSchema`)
+        const marchers = performersOnly(
+            await dbConnection.query.marchers.findMany({
+                columns: {
+                    section: true,
+                    drill_prefix: true,
+                    drill_order: true,
+                    type: true,
+                },
+            }),
+        );
         const performerLabels = marchers.map(
             (marcher) => `${marcher.drill_prefix}${marcher.drill_order}`,
         );

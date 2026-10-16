@@ -1,12 +1,12 @@
 ---
 phase: C2
 title: Customization, props and items on the timeline
-status: not-started
-owner: none
+status: in-progress
+owner: trevor
 branch: none
 pr: none
 depends_on: [C1]
-updated: 2026-10-11
+updated: 2026-10-16
 ---
 
 # C2: Customization, props and items on the timeline
@@ -35,9 +35,9 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.1: Rebuild PR 1013 on main with the timeline
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-items-v2)
+- Status: in-review
+- PR: #278
 - Parallel: no
 - Depends on: C1.1, C1.3, C3.1
 
@@ -53,9 +53,9 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.2: Keep items out of all-marchers loops
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-items-out-of-loops-v2)
+- Status: in-review
+- PR: #279
 - Parallel: yes
 - Depends on: C2.1
 
@@ -71,9 +71,9 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.3: Item Placement
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-placement-v2)
+- Status: in-review
+- PR: #281
 - Parallel: yes
 - Depends on: C2.1
 
@@ -89,9 +89,9 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.4: Artwork slot assignments
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-slots-v2)
+- Status: in-review
+- PR: #282
 - Parallel: yes
 - Depends on: C2.1, C1.11
 
@@ -107,9 +107,9 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.5: Put-down and Snap to holder
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-putdown-v2)
+- Status: in-review
+- PR: #283
 - Parallel: yes
 - Depends on: C2.3
 
@@ -125,9 +125,9 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.6: The show's notes list
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-putdown-v2)
+- Status: in-review
+- PR: #283
 - Parallel: yes
 - Depends on: C2.3
 
@@ -149,6 +149,100 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ## Handoff notes
 
-Nothing yet.
+- **The 2D editor is the three.js field (#209).** C2.1 was built on Fabric
+  first and ported: items are drawn by `ItemsLayer` from `FieldItems`, hit
+  inside their Outline by the editor's `itemAt` port, resized and turned by
+  item handles (`editor/itemTransform.ts`), and drawn new by the prop tool
+  (`editor/propTool.ts`), a mode like the line tool. Later packages that
+  draw on the field go through the same seams (`docs/field/porting-fabric-features.md`).
+- **Migration numbers:** items are 0024. C2.3's placements and C2.4's slot
+  assignments follow as 0025 and 0026, each registering a rollback in
+  `electron/database/__test__/migrationRollback.ts`.
+- **Feet input** for Outline sizes waits on C1.4's `parseLength`; the Props
+  panel takes meters until then.
+- **Upstream PR 1013** gets closed with a link once the owner says so.
 
 ## Progress log
+
+### 2026-10-16 · trevor (3d/c2-items-v2) · C2.1
+
+- **Done:** migration 0024 (timeline-only) adds `marchers.type` (`marcher`
+  | `item`, ADD COLUMN with a named CHECK), `items` (kind, props-only
+  `surface_type`, an optional pinned Library Version, no FK) and
+  `item_geometry` (beat-keyed Outline: size, height, turn, outline type,
+  size-free custom outline, transition, roll-out and leading edge), in
+  history and repair. `itemGeometryAt` in core eases a change over its
+  transition; an item is Off field before its first change. The field draws
+  each item as its Outline, selects it with a click inside, moves it
+  through the timeline like any marcher, and resizes or turns it with its
+  handles as an Outline change at the playhead, with no move. A Props panel
+  draws new Floor props with PR 1013's five outline tools, lists them with
+  hide and name toggles, and edits one at the playhead. Save prunes the
+  show Library on close and before Save Copy, keeping what items pin.
+- **Fixed on the way:** setting marcher homes returned every `marchers`
+  column, which the page-to-timeline conversion reads before the
+  timeline-only migrations add `type`; it returns ids now.
+- **Checks:** desktop vitest (items, migrations, field, editor); core
+  tests; `e2e/browser/tests/props.spec.mts` in the browser (7 scenarios);
+  type-check, lint, format, spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-items-out-of-loops-v2) · C2.2
+
+- **Done:** `isPerformer` / `performersOnly` (`Marcher.ts`) and
+  `performersQueryOptions`. Items are left out of coordinate sheets and
+  individual drill charts, the mobile export, the marcher list and section
+  appearances, collisions (a performer on a platform isn't colliding with
+  it), the Select tab and Ctrl/Cmd+A on the field, and the 3D View's
+  performer figures. Drill numbering is untouched: items use their own
+  PROP and EQUIP prefixes.
+- **Cross-phase:** cue targets, ripple orders and the Visuals Who list
+  belong to the cue code; check them when items get cues (C3.7).
+- **Checks:** desktop vitest (full suite); type-check, lint, format,
+  spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-placement-v2) · C2.3
+
+- **Done:** migration 0025 (timeline-only): `item_placements` (held,
+  placed, off_field; beat-keyed; optional ripple `group_id`) and
+  `item_placement_marchers` (holders with a hand, crew with none), in
+  history and repair. Core lookups `placementAt`, `handsAt`,
+  `handConflicts` (newest wins), `crewDistances`, `crewOutOfReach`,
+  `handsNeeded`. Writes: set, replace and delete a change, and item
+  ripples by group, each one undo step; deleting a holder deletes a held
+  change left with none. Placement changes on deleted beats carry forward.
+  Show setting `warnPropMovesWithoutCrew`, off by default.
+- **Calls:** whether an item came from a flag isn't stored; the lookup
+  takes it as `origin`. A created item reads as placed before its first
+  row. Holders and crew must be performers.
+- **Left:** no UI yet; the Items tab (C3.7) and put-down (C2.5) use these.
+- **Checks:** desktop and core vitest (full suites); migration tests;
+  type-check, lint, format, spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-slots-v2) · C2.4
+
+- **Done:** migration 0026 (timeline-only): `item_artwork_slots`, one
+  Artwork Version (or none) per item, slot and beat, with fit, pan and pad
+  color, in history and repair. Core: `slotsForItem`, `assignmentAt`,
+  `slotAssignmentsAt`, `dormantAssignments`, `sameSizeSlots`,
+  `effectiveDpi`, `defaultAssignmentScope`. Writes: assign for the show or
+  from the count, replace in place, delete; each one undo step. Slot
+  assignments on deleted beats carry forward per slot. The save prune keeps
+  every Version an assignment names, dormant ones included.
+- **Left:** no UI yet: the Items tab (C3.7) and C5.5 use these.
+- **Checks:** desktop and core vitest (full suites); migration tests;
+  type-check, lint, format, spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-putdown-v2) · C2.5 and C2.6
+
+- **Done (C2.5):** a released item is put down where its holder stands at
+  the release (`itemPutDown.ts`, core `putDownDrifts`): a placed change
+  records where. Editing the holder's drill afterwards raises a put-down
+  drift note, and Snap to holder moves the item to the holder's spot in one
+  undoable step.
+- **Done (C2.6):** the show's notes list (`showNotes.ts`, `useShowNotes`,
+  `ShowNotesList`) with its first four producers: hand conflicts, crew
+  distance, crew-less moves (when the show's warning is on) and put-down
+  drift. Quiet: never a modal, never a block. Shown in the Props panel, and
+  an item's own notes in its editor.
+- **Checks:** desktop and core vitest (full suites); type-check, lint,
+  format, spellcheck.

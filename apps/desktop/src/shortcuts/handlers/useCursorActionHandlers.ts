@@ -2,6 +2,7 @@ import { createCircle } from "@openmarch/core";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useUpdateSelectedMarchersOnSelectedPage } from "@/hooks/queries";
 import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
+import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { useActionHandler } from "../useActionHandler";
 import { useEditorReadiness } from "./useEditorReadiness";
@@ -31,6 +32,12 @@ export function useCursorActionHandlers() {
     // Not gated on `ready`: resetting the alignment event is what clears a half-drawn line
     // (via the listener swap in Canvas), and that must work even while page data is loading.
     useActionHandler("cancelAlignmentUpdates", () => {
+        // Drawing a prop (C2.1): Escape turns the prop tool off, and nothing else
+        const propTool = useItemDrawingStore.getState();
+        if (propTool.drawingMode) {
+            propTool.resetDrawingState();
+            return;
+        }
         if (alignmentEventMarchers.length > 0) {
             setSelectedMarchers(alignmentEventMarchers);
             resetAlignmentEvent();

@@ -1744,12 +1744,87 @@
         "undoWithCtrlZ": "This action is undoable with Ctrl + Z",
         "volume": "Volume"
     },
+    "notes": {
+        "title": "Notes",
+        "empty": "No notes",
+        "count": "{count, plural, one {# note} other {# notes}}",
+        "where": "count {count} of page {page}",
+        "whereAfter": "{count, plural, one {# count} other {# counts}} after page {page}",
+        "whereStart": "at the start",
+        "handConflict": "{item} not put down, {where}",
+        "handConflictDetail": "{other} takes {who}'s hand",
+        "putDownDrift": "{item} put down away from its holder, {where}",
+        "putDownDriftDetail": "{who} is somewhere else now",
+        "crewDistance": "{item}'s crew is away from it, {where}",
+        "crewDistanceDetail": "Out of reach: {who}",
+        "crewlessMove": "{item} moves without a crew, {where}",
+        "snapToHolder": "Snap to holder"
+    },
     "pages": {
         "createFailed": "Failed to create page - {error}",
         "createLastPageFailed": "Failed to create last page - {error}",
         "deletedSuccessfully": "Page deleted successfully",
         "deleteFailed": "Failed to delete page - {error}",
         "updateFailed": "Failed to update page - {error}"
+    },
+    "props": {
+        "back": "Back",
+        "close": "Close",
+        "counts": "counts",
+        "delete": "Delete prop",
+        "depth": "Depth",
+        "draw": {
+            "cancel": "Cancel",
+            "instructions": {
+                "arc": "Click both ends of the arc, then click to set its curve.",
+                "circle": "Drag from the center to set the radius.",
+                "drag": "Drag on the field to draw the prop. It is on the field from the playhead's count.",
+                "polygon": "Click each corner, then double-click to finish."
+            },
+            "title": "Draw a prop"
+        },
+        "edit": "Edit prop",
+        "editTitle": "Edit Prop",
+        "empty": "No props yet. Pick an outline above and draw one on the field.",
+        "errors": {
+            "create": "Couldn't create the prop",
+            "delete": "Couldn't delete the prop",
+            "outline": "Couldn't change the prop's outline",
+            "update": "Couldn't change the prop"
+        },
+        "height": "Height",
+        "hide": "Hide on the field",
+        "name": "Name",
+        "offField": "Off field at the playhead. Move the playhead to a count where the prop is on the field to change its outline.",
+        "outline": {
+            "arc": "Arc",
+            "circle": "Circle",
+            "freehand": "Freehand",
+            "polygon": "Polygon",
+            "rectangle": "Rectangle"
+        },
+        "outlineFrom": "Outline from count {count}",
+        "outlineTitle": "Outline",
+        "rollOut": {
+            "back": "Rolls out from the back",
+            "front": "Rolls out from the front",
+            "label": "Roll-out",
+            "left": "Rolls out from the left",
+            "none": "Doesn't roll out",
+            "right": "Rolls out from the right"
+        },
+        "rotation": "Rotation",
+        "show": "Show on the field",
+        "showNames": "Show all names",
+        "surface": {
+            "floor": "Floor",
+            "obstacle": "Obstacle",
+            "platform": "Platform"
+        },
+        "surfaceLabel": "Surface",
+        "title": "Props",
+        "transition": "Transition",
+        "width": "Width"
     },
     "section": {
         "drumMajor": "Drum Major",

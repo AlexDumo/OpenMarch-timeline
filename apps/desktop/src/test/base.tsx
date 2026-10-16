@@ -18,6 +18,7 @@ import {
     handleSqlProxyWithDbSqlJs,
 } from "./sqlProxyTestUtil";
 import {
+    addLaterMarcherColumns,
     convertFixtureFile,
     pageEraBlankPath,
     timelineFixtureMode,
@@ -138,6 +139,7 @@ const loadSqlIntoDatabase = async (
     db.close();
     // Like opening an older show in the app: convert it to timelines (see ./timelineMode.ts)
     if (timelineFixtureMode()) await convertFixtureFile(dbPath);
+    else addLaterMarcherColumns(dbPath);
 };
 
 /********* FIXTURES *********/
