@@ -2,6 +2,7 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
+import { ensureCountsInTransaction } from "./endlessCounts";
 import {
     planMeasureLineEdit,
     type MeasureLineEdit,
@@ -14,6 +15,10 @@ import {
  * never touched, so counts, timing and drill don't change and the timeline ripple has nothing to
  * do (the same grid, `timelineRipple.ts` `sameGrid`). Nothing here is refused for drill reasons;
  * an edit the measure row never offers (measure 1's line, an unknown measure) throws.
+ *
+ * A line past the stored counts (the measure row draws counts on forever, endless counts) stores
+ * the counts up to it first (`ensureCountsInTransaction`), in the same edit; that is the one write
+ * here that adds beats, and nothing after the last count moves for it.
  *
  * Tempo groups are derived from measures on read (`TempoGroupsFromMeasures`): a new line or mark
  * changes how the Music modal groups the measures, never a beat's duration.
@@ -56,6 +61,25 @@ async function readMeasureLines(tx: DbConnection | DbTransaction) {
     };
 }
 
+/**
+ * The counts `edit` needs stored (a beat count, beat 0 included): a line it starts past the stored
+ * counts needs its beat. 0 when the edit stays inside them.
+ */
+function countsNeeded(
+    lines: readonly { readonly id: number; readonly beat: number }[],
+    beatCount: number,
+    edit: MeasureLineEdit,
+): number {
+    const needs = (beat: number) =>
+        Number.isInteger(beat) && beat >= beatCount ? beat + 1 : 0;
+    if (edit.kind === "start") return needs(edit.beat);
+    if (edit.kind !== "setBeats") return 0;
+    // Only the last measure's length reaches past the counts: the others move the next line
+    const line = lines.find((l) => l.id === edit.measureId);
+    if (!line || lines.some((l) => l.beat > line.beat)) return 0;
+    return needs(line.beat + edit.beats);
+}
+
 /** Applies one measure-row edit inside `tx`. */
 export async function editMeasureLinesInTransaction({
     tx,
@@ -64,7 +88,13 @@ export async function editMeasureLinesInTransaction({
     tx: DbTransaction;
     edit: MeasureLineEdit;
 }): Promise<MeasureLineEditResult> {
-    const { lines, beatIds, bounds } = await readMeasureLines(tx);
+    let read = await readMeasureLines(tx);
+    const through = countsNeeded(read.lines, read.bounds.beatCount, edit);
+    if (through > 0) {
+        await ensureCountsInTransaction({ tx, through });
+        read = await readMeasureLines(tx);
+    }
+    const { lines, beatIds, bounds } = read;
     const plan = planMeasureLineEdit(lines, bounds, edit);
     const beatId = (ordinal: number) => {
         const id = beatIds[ordinal];
@@ -116,9 +146,14 @@ export async function editMeasureLines({
 }): Promise<MeasureLineEditResult> {
     // An edit that changes nothing (renaming C to C) isn't an undo entry
     const { lines, bounds } = await readMeasureLines(db);
-    const plan = planMeasureLineEdit(lines, bounds, edit);
-    if (plan.creates.length + plan.updates.length + plan.deletes.length === 0)
-        return { ...plan, createdIds: [] };
+    if (countsNeeded(lines, bounds.beatCount, edit) === 0) {
+        const plan = planMeasureLineEdit(lines, bounds, edit);
+        if (
+            plan.creates.length + plan.updates.length + plan.deletes.length ===
+            0
+        )
+            return { ...plan, createdIds: [] };
+    }
     return await transactionWithHistory(db, "editMeasureLines", async (tx) =>
         editMeasureLinesInTransaction({ tx, edit }),
     );

@@ -15,6 +15,7 @@ import {
 } from "./timelineRipple";
 import { createBeatsInTransaction, deleteBeatsInTransaction } from "./beat";
 import { createMeasuresInTransaction } from "./measures";
+import { ensureCountsInTransaction } from "./endlessCounts";
 import {
     createPagesInTransaction,
     ensureSecondBeatHasPage,
@@ -1166,13 +1167,11 @@ async function moveFlagInTransaction(
     const { to } = edit;
     if (!Number.isInteger(to) || to <= page.start)
         refuse("a page flag can't move to or before the page's start");
-    if (next ? to >= next.end : to > Math.max(grid.beatIds.length, page.end))
-        refuse(
-            next
-                ? "a page flag can't move to or past the next page's flag"
-                : "the last flag can't move past the show's last count",
-        );
+    if (next && to >= next.end)
+        refuse("a page flag can't move to or past the next page's flag");
     if (to === page.end) refuse("the flag is already there");
+    // The last flag past the stored counts stores them first (endless counts)
+    if (!next) await ensureCountsInTransaction({ tx, through: to });
 
     await withTimelinePageRipple(tx, async () => {
         if (next) {

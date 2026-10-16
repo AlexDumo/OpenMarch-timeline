@@ -4,6 +4,7 @@ import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { refuse } from "./timelineErrors";
 import { setTimelineRangeInTransaction } from "./timelineTransitionsInTransaction";
+import { ensureCountsInTransaction } from "./endlessCounts";
 
 /**
  * Resizing a move: dragging a clip's start or end edge changes its timeline's range
@@ -329,6 +330,8 @@ export async function resizeTimelineInTransaction({
         return { timelineId, from, to: from };
     const refusal = timelineResizeRefusal(limits, start, end);
     if (refusal) refuse(refusal);
+    // A move may run past the show's end; the counts it lands on are stored (endless counts)
+    await ensureCountsInTransaction({ tx, through: end });
     await setTimelineRangeInTransaction({ tx, timelineId, start, end });
     return { timelineId, from, to: { start, end } };
 }
