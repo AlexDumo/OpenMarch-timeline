@@ -16,6 +16,20 @@ const key = (code: string, mods: Partial<Record<string, boolean>> = {}) => ({
     ...mods,
 });
 
+describe("speed keys", () => {
+    it("] and [ hold double and half speed; with Shift they're nothing", () => {
+        expect(playbackActionForKey(key("BracketRight"))).toBe(
+            "holdFasterPlayback",
+        );
+        expect(playbackActionForKey(key("BracketLeft"))).toBe(
+            "holdSlowerPlayback",
+        );
+        expect(
+            playbackActionForKey(key("BracketRight", { shiftKey: true })),
+        ).toBeNull();
+    });
+});
+
 describe("transportState", () => {
     it("allows every step from a middle page while paused", () => {
         expect(transportState(pages, 10, false)).toEqual({

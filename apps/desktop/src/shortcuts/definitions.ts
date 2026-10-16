@@ -328,6 +328,13 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+    previousPlaybackSpeed: {
+        labelKey: "actions.playback.previousSpeed",
+        keywordsKey: "actions.playback.speedKeywords",
+        category: "playback",
+        scope: "global",
+        defaultBindings: [],
+    },
     resetPlaybackSpeed: {
         labelKey: "actions.playback.resetSpeed",
         keywordsKey: "actions.playback.speedKeywords",

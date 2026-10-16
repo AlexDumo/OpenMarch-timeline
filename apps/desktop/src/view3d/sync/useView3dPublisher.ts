@@ -40,7 +40,7 @@ import {
 } from "@/stores/PlaybackSpeedStore";
 import { updateVenueSettingsMutationOptions } from "@/hooks/queries/useVenueSettings";
 import { venueSettingsSchema } from "@/view3d/core/venueSettings";
-import { runAction } from "@/shortcuts/registry";
+import { pressAction } from "@/shortcuts/registry";
 import { subscribeTimelineChanges } from "@/db-functions/timelineChanges";
 import {
     VIEW3D_AUTO_OPEN_SETTING,
@@ -51,6 +51,7 @@ import {
     isView3dPlaybackAction,
     wallNowMs,
     type View3dClock,
+    type View3dPlaybackAction,
     type View3dSelection,
 } from "./protocol";
 
@@ -178,6 +179,7 @@ export function useView3dPublisher() {
             // The window's clock runs at the speed the audio plays at, which takes a speed
             // change when the audio does (1 until playback has started)
             rate: playing ? getLivePlaybackRate() : 1,
+            speed: effectivePlaybackSpeed(usePlaybackSpeedStore.getState()),
         };
         window.electron.publishToView3d(VIEW3D_CLOCK_CHANNEL, clock);
     }, []);
@@ -311,15 +313,40 @@ export function relayTimelineChanges(send: () => void): () => void {
 /**
  * Playback buttons and shortcuts in the 3D View window run the same actions
  * as the editor's own (ADR 0002 D-4, `view3d:playback-request`). An action
- * that is disabled right now does nothing, as in the editor.
+ * that is disabled right now does nothing, as in the editor. A held action (a
+ * playback speed key) lasts until the window lets go of its key, or closes.
  */
 export function useView3dPlaybackRequests() {
     useEffect(() => {
-        if (!window.electron?.onView3dPlaybackRequest) return;
-        return window.electron.onView3dPlaybackRequest((request) => {
-            if (isView3dPlaybackAction(request?.action))
-                runAction(request.action);
-        });
+        const electron = window.electron;
+        if (!electron?.onView3dPlaybackRequest) return;
+        const held = new Map<View3dPlaybackAction, () => void>();
+        const letGo = (action: View3dPlaybackAction) => {
+            const release = held.get(action);
+            held.delete(action);
+            release?.();
+        };
+        const letGoAll = () => [...held.keys()].forEach(letGo);
+        const cleanups = [
+            electron.onView3dPlaybackRequest((request) => {
+                if (!isView3dPlaybackAction(request?.action)) return;
+                // A release, or a second press without one
+                letGo(request.action);
+                if (request.release === true) return;
+                const release = pressAction(request.action);
+                if (release) held.set(request.action, release);
+            }),
+        ];
+        if (electron.onView3dWindowState)
+            cleanups.push(
+                electron.onView3dWindowState((open) => {
+                    if (!open) letGoAll();
+                }),
+            );
+        return () => {
+            cleanups.forEach((cleanup) => cleanup());
+            letGoAll();
+        };
     }, []);
 }
 

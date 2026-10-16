@@ -14,6 +14,7 @@ const clock = (overrides: Partial<View3dClock> = {}): View3dClock => ({
     anchorShowMs: 12_000,
     anchorWallMs: 1_000_000,
     rate: 1,
+    speed: 1,
     ...overrides,
 });
 

@@ -85,6 +85,7 @@
             "holdFaster": "Double speed while held",
             "holdSlower": "Half speed while held",
             "nextSpeed": "Next playback speed",
+            "previousSpeed": "Previous playback speed",
             "resetSpeed": "Normal playback speed",
             "speedKeywords": "speed rate slow fast tempo playback",
             "toggleMetronome": "Toggle metronome",
@@ -1805,7 +1806,9 @@
             "play": "Play (Space)",
             "pause": "Pause (Space)",
             "previousPage": "Previous page (Q)",
-            "nextPage": "Next page (E)"
+            "nextPage": "Next page (E)",
+            "speed": "Playback speed: {speed}",
+            "speedHint": "Click for the next speed, Shift+click for the one before. Hold ] for double speed, [ for half"
         },
         "settings": {
             "title": "View settings",

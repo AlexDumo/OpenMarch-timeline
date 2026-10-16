@@ -5,8 +5,24 @@
  */
 import type { View3dPlaybackAction } from "@/view3d/sync/protocol";
 
-/** Which playback actions would do something right now. */
-export type TransportState = Record<View3dPlaybackAction, boolean>;
+/** Actions that last while their key is held: the playback speed keys */
+export const HELD_PLAYBACK_ACTIONS: ReadonlySet<View3dPlaybackAction> = new Set(
+    ["holdFasterPlayback", "holdSlowerPlayback"],
+);
+
+/** The speed actions, which work any time, playing or not */
+type SpeedAction =
+    | "holdFasterPlayback"
+    | "holdSlowerPlayback"
+    | "nextPlaybackSpeed"
+    | "previousPlaybackSpeed"
+    | "resetPlaybackSpeed";
+
+/** Which play and step actions would do something right now. */
+export type TransportState = Record<
+    Exclude<View3dPlaybackAction, SpeedAction>,
+    boolean
+>;
 
 /**
  * Mirrors the editor's timeline buttons: page steps work only while paused
@@ -37,7 +53,8 @@ export function transportState(
 /**
  * The playback action for a key press, using the editor's shortcuts: Space
  * plays or pauses, Q and E step a page, Shift+Q and Shift+E a beat, and
- * Alt+Q and Alt+E (or Home and End) go to the first and last page. Matches on
+ * Alt+Q and Alt+E (or Home and End) go to the first and last page, and ] and
+ * [ play at double or half speed while held. Matches on
  * `code`, like the editor, so the keys stay put on other layouts.
  */
 export function playbackActionForKey(event: {
@@ -65,6 +82,10 @@ export function playbackActionForKey(event: {
             return event.shiftKey ? null : "firstPage";
         case "End":
             return event.shiftKey ? null : "lastPage";
+        case "BracketRight":
+            return event.shiftKey ? null : "holdFasterPlayback";
+        case "BracketLeft":
+            return event.shiftKey ? null : "holdSlowerPlayback";
         default:
             return null;
     }

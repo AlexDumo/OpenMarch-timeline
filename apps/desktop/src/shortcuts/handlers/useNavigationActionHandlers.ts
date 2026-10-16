@@ -73,5 +73,6 @@ export function useNavigationActionHandlers() {
         onRelease: () => speed().releaseHold("slower"),
     });
     useActionHandler("nextPlaybackSpeed", () => speed().stepSpeed());
+    useActionHandler("previousPlaybackSpeed", () => speed().stepSpeed(true));
     useActionHandler("resetPlaybackSpeed", () => speed().setSpeed(1));
 }
