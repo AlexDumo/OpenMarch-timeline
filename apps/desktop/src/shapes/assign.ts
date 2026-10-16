@@ -1,6 +1,5 @@
-import { hungarianAlgorithm } from "@openmarch/core";
 import { fitCircle } from "./geometry/fit";
-import { walksCross } from "./geometry/segments";
+import { leastTravel, type LeastTravelSolver } from "./leastTravel";
 import type { AnyShapeKind, ShapeContext, Slot, XY } from "./types";
 
 /**
@@ -10,7 +9,7 @@ import type { AnyShapeKind, ShapeContext, Slot, XY } from "./types";
  */
 
 export type OrderMode =
-    /** Least total squared travel, so straight moves don't pass through each other */
+    /** Least travel (see `leastTravel.ts`), so straight moves don't pass through each other */
     | "nearest"
     /** Marchers keep their order along the shape (their current order projected onto it) */
     | "keep"
@@ -53,6 +52,7 @@ export function assignSlots<P>({
     mode,
     reverse = false,
     ctx,
+    solve = leastTravel,
 }: {
     kind: AnyShapeKind;
     params: P;
@@ -61,26 +61,19 @@ export function assignSlots<P>({
     mode: OrderMode;
     reverse?: boolean;
     ctx: ShapeContext;
+    /** Replaces how "nearest" decides who goes where (defaults to `leastTravel`) */
+    solve?: LeastTravelSolver;
 }): number[] {
     const n = marchers.length;
     if (slots.length !== n)
         throw new Error("Each marcher needs exactly one slot");
     if (n === 0) return [];
 
-    if (mode === "nearest" && n <= NEAREST_LIMIT) {
-        const cost = marchers.map((m) =>
-            slots.map((s) => {
-                const p = m.from ?? m.at;
-                return (p.x - s.x) ** 2 + (p.y - s.y) ** 2;
-            }),
+    if (mode === "nearest" && n <= NEAREST_LIMIT)
+        return solve(
+            marchers.map((m) => m.from ?? m.at),
+            slots,
         );
-        // assignment[slot + 1] = marcher + 1
-        const assignment = hungarianAlgorithm(cost, n);
-        const result = new Array<number>(n);
-        for (let slot = 0; slot < n; slot++)
-            result[assignment[slot + 1]! - 1] = slot;
-        return untangle(result, marchers, slots);
-    }
 
     if (mode === "keep") {
         const around = ringOrder(marchers);
@@ -214,36 +207,5 @@ function openRing<P>(
     for (let i = 0; i < n; i++)
         result[around[(pick.start + pick.direction * i + n * n) % n]!] =
             slotOrder[i]!;
-    return result;
-}
-
-/**
- * Swaps the spots of any two marchers whose walks cross, until none do. Each swap shortens the
- * pair's total walk (the two crossing segments are the diagonals of a quadrilateral, longer
- * than either pair of its sides), so the total walk only shrinks and the loop ends with no
- * crossings left. The least-squares match it starts from rarely needs many.
- */
-function untangle(
-    result: number[],
-    marchers: readonly AssignMarcher[],
-    slots: readonly Slot[],
-): number[] {
-    const walk = (i: number) => ({
-        from: marchers[i]!.from ?? marchers[i]!.at,
-        to: slots[result[i]!]!,
-    });
-    const n = result.length;
-    for (let pass = 0; pass < 4 * n + 10; pass++) {
-        let swapped = false;
-        for (let i = 0; i < n; i++) {
-            for (let j = i + 1; j < n; j++) {
-                if (walksCross(walk(i), walk(j))) {
-                    [result[i], result[j]] = [result[j]!, result[i]!];
-                    swapped = true;
-                }
-            }
-        }
-        if (!swapped) break;
-    }
     return result;
 }
