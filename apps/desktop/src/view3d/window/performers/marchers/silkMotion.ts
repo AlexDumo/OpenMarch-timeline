@@ -12,7 +12,11 @@ import {
     turnRateAt,
     type GroundTrack,
 } from "@/view3d/core/marchers/groundMotion";
-import { msAtCount, type CountClock } from "@/view3d/core/marchers/countClock";
+import {
+    msAtCount,
+    type CountClock,
+    secondsPerCount,
+} from "@/view3d/core/marchers/countClock";
 import { headingAt, type MarcherPlan } from "@/view3d/core/marchers/planner";
 import type { SilkMotionFrame } from "./silkSet";
 import { STEP_AHEAD, type ShowPlans } from "./marcherMotion";
@@ -29,8 +33,7 @@ export class SilkMotion {
         private readonly slots: readonly number[],
     ) {
         const n = plans.plans.length;
-        this.secondsPerCount = (k) =>
-            60 / (clock.bpm[Math.min(k, clock.bpm.length - 1)] || 120);
+        this.secondsPerCount = (k) => secondsPerCount(clock, k);
         this.tracks = new Array<GroundTrack | null>(n).fill(null);
         for (const slot of slots) {
             const positions = plans.inputs.positions[slot];

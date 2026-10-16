@@ -19,7 +19,10 @@ import {
 } from "@openmarch/core";
 import type { Manifest } from "@/view3d/render/step-blend.js";
 import type { ShowPositions } from "@/view3d/positions";
-import type { CountClock } from "@/view3d/core/marchers/countClock";
+import {
+    secondsPerCount as countSeconds,
+    type CountClock,
+} from "@/view3d/core/marchers/countClock";
 import {
     crossfadeWeight,
     planMarcher,
@@ -185,8 +188,7 @@ export function planShow(
         sameArray(prev.bpm, clock.bpm) &&
         clock.counts + 1 === (prev.positions.find((p) => p)?.length ?? 0) / 2;
     const prevIndex = new Map((prev?.ids ?? []).map((id, i) => [id, i]));
-    const secondsPerCount = (k: number) =>
-        60 / (clock.bpm[Math.min(k, clock.bpm.length - 1)] || 120);
+    const secondsPerCount = (k: number) => countSeconds(clock, k);
     let replanned = 0;
     const plans = sampled.map((positions, i) => {
         if (!positions) return null;

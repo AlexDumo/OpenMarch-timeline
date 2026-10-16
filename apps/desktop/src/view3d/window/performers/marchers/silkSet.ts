@@ -31,7 +31,7 @@ import {
 import { uniformKey } from "@/view3d/core/marchers/looks";
 import { poseArms } from "./armPose";
 import { instrumentFrames } from "./instrumentGeometry";
-import { HORN_FAR_M, HORN_NEAR_M } from "./hornSet";
+import { isNearCarrier } from "./hornSet";
 import type { MarcherQuality, MarcherSlotLook } from "./marcherBodies";
 
 /** How rough the cloth is: matte, with no sheen (ticket 10). */
@@ -382,18 +382,12 @@ export class SilkSet {
             if (!placed[s.slot]) return;
             let tier = 0;
             if (this.tiers.length > 1 && camera) {
-                const d = Math.hypot(
-                    xz[s.slot * 2] - camera[0],
-                    camera[1] - 1.4,
-                    xz[s.slot * 2 + 1] - camera[2],
+                const near = isNearCarrier(
+                    xz[s.slot * 2],
+                    xz[s.slot * 2 + 1],
+                    camera,
+                    this.near.get(i),
                 );
-                const was = this.near.get(i);
-                const near =
-                    was === undefined
-                        ? d < (HORN_NEAR_M + HORN_FAR_M) / 2
-                        : was
-                          ? d < HORN_FAR_M
-                          : d < HORN_NEAR_M;
                 this.near.set(i, near);
                 tier = near ? 0 : 1;
             }
