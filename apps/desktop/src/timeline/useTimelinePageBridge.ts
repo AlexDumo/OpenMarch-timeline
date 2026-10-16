@@ -71,8 +71,10 @@ export function useTimelinePageBridge(enabled: boolean): void {
             else bridged.current.delete(id);
             return;
         }
-        // Someone else selected it; any write of ours still pending was superseded
-        bridged.current.clear();
+        // Someone else selected it. A write of ours still pending stays known as ours: it can
+        // land after this one (the playhead moved in the same update, as undo's page jump does),
+        // and read back as someone else's it would seek again, and so on (React #185). It's
+        // forgotten when it lands, and the playhead-to-page direction then settles on this page
         const store = useTimelineSelectionStore.getState();
         if (pageAtPlayhead(pages, store.playheadBeat)?.id === id) return;
         const flag = pageFlags(pages).find((f) => f.page.id === id);
