@@ -41,9 +41,9 @@ export default function LaunchPage({ setDatabaseIsReady }: LaunchPageProps) {
     const [newShowOpen, setNewShowOpen] = useState(false);
     const queryClient = useQueryClient();
 
-    // First launch (UI-19): the welcome flow comes before anything else. While
-    // the mode is loading or the flow is open, a request for the new-show
-    // wizard waits for it.
+    // First launch (UI-19): the welcome flow is the page until it's finished.
+    // While the mode is loading or the flow is showing, a request for the
+    // new-show wizard waits for it.
     const editorModeLoaded = useEditorModeStore((state) => state.loaded);
     const editorMode = useEditorModeStore((state) => state.mode);
     const welcomeOpen = shouldShowWelcomeFlow({
@@ -119,23 +119,29 @@ export default function LaunchPage({ setDatabaseIsReady }: LaunchPageProps) {
     return (
         <div className="from-bg-1 to-accent flex h-screen w-screen flex-col bg-linear-to-br from-[60%] to-[150%]">
             <TitleBar />
-            <Tabs.Root
-                value={selectedTab}
-                onValueChange={setSelectedTab}
-                className={clsx(
-                    "text-text z-10 flex h-full min-h-0 w-full min-w-0 gap-8 p-8",
-                )}
-            >
-                <Sidebar
-                    setDatabaseIsReady={setDatabaseIsReady}
-                    onCreateNew={() => void requestOpenNewShowDialog()}
-                    selectedTab={selectedTab}
-                />
-                <FilesContent />
-                <LearnContent />
-            </Tabs.Root>
-
-            <WelcomeFlow open={welcomeOpen} onFinish={handleWelcomeFinish} />
+            {/* First launch: the welcome flow is the whole page until it's
+                finished. Nothing shows while the stored mode is being read. */}
+            {welcomeOpen ? (
+                <WelcomeFlow onFinish={handleWelcomeFinish} />
+            ) : (
+                editorModeLoaded && (
+                    <Tabs.Root
+                        value={selectedTab}
+                        onValueChange={setSelectedTab}
+                        className={clsx(
+                            "text-text z-10 flex h-full min-h-0 w-full min-w-0 gap-8 p-8",
+                        )}
+                    >
+                        <Sidebar
+                            setDatabaseIsReady={setDatabaseIsReady}
+                            onCreateNew={() => void requestOpenNewShowDialog()}
+                            selectedTab={selectedTab}
+                        />
+                        <FilesContent />
+                        <LearnContent />
+                    </Tabs.Root>
+                )
+            )}
             <NewShowDialog
                 open={newShowOpen}
                 onOpenChange={setNewShowOpen}
