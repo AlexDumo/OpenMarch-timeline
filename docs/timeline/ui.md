@@ -1157,6 +1157,11 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Reaching the end of the show** stops, back where Play was pressed, as the loop played once
     always did (lead default, V-273).
   - **Stop when nothing plays** does nothing (owner).
+  - **Where Stop goes back to is marked while playing** (owner, 2026-10-16: "hard to see in Expert,
+    not at all in Basic"). The resting playhead stays drawn as its ghost, a hollow head and a
+    dashed line, while the live playhead moves; it goes when playback ends. It is the same in Basic
+    and Expert, and never takes the pointer. REAPER's edit cursor, which stays while the play
+    cursor moves, is the model (V-275).
   - **The button.** While playing, Play is Stop ("Stop and go back"), and its tooltip is a guide to
     Stop (Space) and Pause (Shift + Space); holding Shift swaps it to Pause ("Pause here"), as Shift
     swaps Play to Play from the playhead. The field line's note for a stop on another page now reads

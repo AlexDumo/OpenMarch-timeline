@@ -3118,6 +3118,51 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     );
 });
 
+/**
+ * Where Stop goes back to, while playing (UI-24): the resting playhead, drawn as its ghost (a
+ * hollow head and a dashed line), so you can see where playback came from, in Basic as in Expert.
+ * REAPER's edit cursor, which stays while the play cursor moves, is the model. It never takes the
+ * pointer: clicks there seek playback, as anywhere else.
+ */
+export const TimelineReturnMarker = memo(function TimelineReturnMarker({
+    beat,
+    pixelsPerBeat,
+    height,
+}: {
+    beat: BeatPosition;
+    pixelsPerBeat: number;
+    height: number;
+}) {
+    const left = Math.round(beatToX(beat, pixelsPerBeat));
+    return (
+        <span
+            aria-hidden="true"
+            data-testid="timeline-return-marker"
+            className="pointer-events-none absolute top-0 z-40 w-12 -translate-x-1/2"
+            style={{ left, height }}
+        >
+            <span
+                className="border-accent absolute top-[10px] left-1/2 -translate-x-1/2 border-l-2 border-dashed opacity-70"
+                style={{ height: height - 10 }}
+            />
+            <svg
+                width="12"
+                height="11"
+                viewBox="0 0 12 11"
+                className="text-accent absolute top-0 left-[calc(50%-6px)]"
+            >
+                <path
+                    d="M1 1 H11 V5.6 L6 9.6 L1 5.6 Z"
+                    fill="var(--color-bg-1, transparent)"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                />
+            </svg>
+        </span>
+    );
+});
+
 /** How far, in pixels, a press on empty timeline space must move to select a range */
 export const TIMELINE_RANGE_DRAG_PX = 4;
 

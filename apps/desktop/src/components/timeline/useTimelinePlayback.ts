@@ -98,6 +98,8 @@ export function useTimelinePlayback({
     const playheadBeat = useTimelineSelectionStore(displayedBeat);
     // UI-17: with looping on (or a move isolated), Play loops
     const playLoops = useTimelineSelectionStore((s) => loopBounds(s) !== null);
+    // UI-24: Stop goes back to the resting playhead, which playing never moves
+    const restingBeat = useTimelineSelectionStore((s) => s.playheadBeat);
     const [liveIndex, setLiveIndex] = useState<number | null>(null);
 
     useEffect(() => {
@@ -140,9 +142,18 @@ export function useTimelinePlayback({
             positionBeat:
                 isPlaying && liveIndex != null ? liveIndex : playheadBeat,
             isPlaying,
+            returnBeat: isPlaying ? restingBeat : undefined,
             playLoops,
             ...commands,
         }),
-        [commands, isPlaying, liveBeat, liveIndex, playheadBeat, playLoops],
+        [
+            commands,
+            isPlaying,
+            liveBeat,
+            liveIndex,
+            playheadBeat,
+            playLoops,
+            restingBeat,
+        ],
     );
 }

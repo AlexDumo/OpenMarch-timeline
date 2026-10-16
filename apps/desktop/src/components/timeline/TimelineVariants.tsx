@@ -39,6 +39,7 @@ import {
     TIMELINE_MIN_PX_PER_BEAT,
     TimelinePageLines,
     TimelinePlayhead,
+    TimelineReturnMarker,
     TimelineRehearsalMarkers,
     TimelineRangePreview,
     TimelineRuler,
@@ -1099,6 +1100,13 @@ const TimelineSurface = memo(function TimelineSurface({
                                 pixelsPerBeat={pixelsPerBeat}
                                 onSeek={props.onSeek}
                                 onRemove={props.onRemoveBasicPoint}
+                            />
+                        )}
+                        {props.isPlaying && props.returnBeat !== undefined && (
+                            <TimelineReturnMarker
+                                beat={props.returnBeat}
+                                pixelsPerBeat={pixelsPerBeat}
+                                height={pinnedHeight}
                             />
                         )}
                         <TimelinePlayhead

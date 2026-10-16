@@ -219,6 +219,8 @@ export interface TimelineInteractionProps {
      * follows `positionBeat`, which changes once per beat.
      */
     readonly livePositionBeat?: () => number | null;
+    /** While playing, where Stop goes back to, in view beats (UI-24) */
+    readonly returnBeat?: BeatPosition;
     readonly isPlaying: boolean;
     readonly selection?: TimelineSelection;
     readonly selectedTarget?: TimelineTarget | null;

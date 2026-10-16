@@ -1834,6 +1834,23 @@ describe("a calmer timeline (UI-12)", () => {
         expect(onPlayingChange).toHaveBeenCalledWith(false);
     });
 
+    it("marks where Stop goes back to while playing, and nothing while stopped (UI-24)", () => {
+        const { rerender } = render(
+            <ExpandedTimeline {...commonProps} showTransport returnBeat={4} />,
+        );
+        expect(screen.queryByTestId("timeline-return-marker")).toBeNull();
+        rerender(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                isPlaying
+                returnBeat={4}
+            />,
+        );
+        const marker = screen.getByTestId("timeline-return-marker");
+        expect(marker.style.left).toBe(`${4 * commonProps.pixelsPerBeat}px`);
+    });
+
     it("keeps page navigation live while playing, where it jumps playback", () => {
         const onNavigate = vi.fn();
         render(
