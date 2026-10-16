@@ -37,7 +37,7 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 - Owner: trevor (3d/c2-items-v2)
 - Status: in-review
-- PR: none
+- PR: #278
 - Parallel: no
 - Depends on: C1.1, C1.3, C3.1
 
