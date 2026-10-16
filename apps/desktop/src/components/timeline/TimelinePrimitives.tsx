@@ -83,6 +83,7 @@ import {
     clipHandleWidth,
     useClipEdgeResize,
     useClipGestureEscape,
+    useReleasedPreview,
     type TimelineClipResizeCommands,
 } from "./TimelineClipResize";
 import { useLatestCallback } from "./useLatestCallback";
@@ -117,6 +118,7 @@ import type {
     TimelinePageFlagMove,
     TimelinePageMarker,
     TimelineRangeChange,
+    TimelineRangeCommitResult,
     TimelineSeek,
     TimelineSeekGesture,
     TimelineSeekOptions,
@@ -1379,7 +1381,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     /** Another clip of the same spec timeline is selected; this one moves with it */
     linked?: boolean;
     onSelect?: (trackId: TimelineTrackId) => void;
-    onRangeCommit?: (change: TimelineRangeChange) => void;
+    onRangeCommit?: (change: TimelineRangeChange) => TimelineRangeCommitResult;
     beatCount?: number;
     /** Page lines the clip's edges snap to while it moves (ui.md UI-2); Alt turns snapping off */
     snapBeats?: readonly number[];
@@ -1410,7 +1412,12 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     resize?: TimelineClipResizeCommands;
 }) {
     const range = getTrackRange(track);
-    const [previewOffset, setPreviewOffset] = useState(0);
+    // A move drag's offset, from the start it was dragged from: once the moved range arrives the
+    // offset no longer applies, even for the frame before the effect below clears it
+    const [movePreview, setMovePreview] = useState<{
+        readonly offset: number;
+        readonly fromStart: number;
+    } | null>(null);
     // The move menu opened from the ⋯ button or the keyboard (UI-14)
     const [menuOpen, setMenuOpen] = useState(false);
     // Rename focuses its field and Delete removes the clip: after those, focus stays put
@@ -1477,17 +1484,22 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         moved: boolean;
     } | null>(null);
 
+    // A dropped clip stays drawn where it was dropped until its range arrives (or the commit
+    // wrote nothing), instead of jumping back for a moment
+    const releasedMove = useReleasedPreview(() => setMovePreview(null));
+    const releaseMove = releasedMove.release;
     useEffect(() => {
         dragRef.current = null;
-        setPreviewOffset(0);
-    }, [range?.endBeatIndex, range?.startBeatIndex]);
+        releaseMove();
+        setMovePreview(null);
+    }, [range?.endBeatIndex, range?.startBeatIndex, releaseMove]);
     // Esc cancels a move drag: nothing moves, and the click that ends it doesn't select (E14)
     const [moving, setMoving] = useState(false);
     useClipGestureEscape(moving, () => {
         dragRef.current = null;
         draggedRef.current = true;
         setMoving(false);
-        setPreviewOffset(0);
+        setMovePreview(null);
     });
     const edgeResize = useClipEdgeResize({
         trackId: track.id,
@@ -1508,6 +1520,10 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     if (!range) return null;
     // While an edge is dragged the clip draws the range it would take (resize-move)
     const drawn = edgeResize.preview ?? range;
+    const previewOffset =
+        movePreview?.fromStart === range.startBeatIndex
+            ? movePreview.offset
+            : 0;
     const left = (drawn.startBeatIndex + previewOffset) * pixelsPerBeat;
     const width = (drawn.endBeatIndex - drawn.startBeatIndex) * pixelsPerBeat;
     const canMove = onRangeCommit != null && beatCount != null;
@@ -1637,6 +1653,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     )
                         return;
                     event.stopPropagation();
+                    releaseMove();
                     dragRef.current = {
                         pointerId: event.pointerId,
                         startClientX: event.clientX,
@@ -1662,7 +1679,10 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         isPageSnapDisabled(event),
                     );
                     drag.offset = offset;
-                    setPreviewOffset(offset);
+                    setMovePreview({
+                        offset,
+                        fromStart: range.startBeatIndex,
+                    });
                 }}
                 onPointerUp={(event) => {
                     const drag = dragRef.current;
@@ -1675,7 +1695,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     // A press that didn't move is a click: it selects (onClick) and moves nothing,
                     // even with an edge near a page line, which a zero offset would snap to
                     if (!drag.moved) {
-                        setPreviewOffset(0);
+                        setMovePreview(null);
                         return;
                     }
                     // Recompute with the release's modifier state, as the selection flags do
@@ -1684,20 +1704,29 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         drag.startClientX,
                         isPageSnapDisabled(event),
                     );
-                    setPreviewOffset(0);
                     // A drag brought back to where it started is cancelled, not a click
                     draggedRef.current = true;
-                    if (offset === 0) return;
-                    onRangeCommit?.({
-                        timelineId: track.id,
-                        startBeatIndex: range.startBeatIndex + offset,
-                        endBeatIndex: range.endBeatIndex + offset,
+                    if (offset === 0 || !onRangeCommit) {
+                        setMovePreview(null);
+                        return;
+                    }
+                    // Drawn where it was dropped until the moved range arrives
+                    setMovePreview({
+                        offset,
+                        fromStart: range.startBeatIndex,
                     });
+                    releasedMove.hold(
+                        onRangeCommit({
+                            timelineId: track.id,
+                            startBeatIndex: range.startBeatIndex + offset,
+                            endBeatIndex: range.endBeatIndex + offset,
+                        }),
+                    );
                 }}
                 onPointerCancel={() => {
                     dragRef.current = null;
                     setMoving(false);
-                    setPreviewOffset(0);
+                    setMovePreview(null);
                 }}
                 className={clsx(
                     // Focus is an offset outline, so it reads apart from the selected clip's
