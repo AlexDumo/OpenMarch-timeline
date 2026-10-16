@@ -39,10 +39,26 @@ export type ParseWarningCode =
     | "a-tempo-unknown"
     /** A fermata: its count keeps its length */
     | "fermata"
-    /** A repeat: the music is counted once, not played out */
+    /** A repeat, read with `repeats: "once"`: the music is counted once, not played out */
     | "repeat"
-    /** D.C. or D.S.: the jump is not played out */
+    /** D.C. or D.S., read with `repeats: "once"`: the jump is not played out */
     | "jump"
+    /** A repeat that was played out */
+    | "repeat-played"
+    /** D.C. or D.S. that was played out */
+    | "jump-played"
+    /** A jump read from words with no symbol or playback mark: worth checking */
+    | "navigation-from-words"
+    /** D.S. with no segno: not played */
+    | "missing-segno"
+    /** To Coda with no coda after it: not played */
+    | "missing-coda"
+    /** An ending no repeat leads to: played straight through */
+    | "unreachable-ending"
+    /** Repeats that would play for too long: stopped */
+    | "endless-repeats"
+    /** Parts with a different number of measures than the first part */
+    | "mismatched-parts"
     /** The file's measure numbers aren't consecutive from here */
     | "measure-numbers";
 
@@ -88,6 +104,17 @@ const MESSAGES: Record<ParseWarningCode, string> = {
     fermata: "Fermata: its count keeps its length",
     repeat: "Repeat: the music is counted once, not played out",
     jump: "{jump}: the jump is not played out",
+    "repeat-played": "Repeat: played {times} times",
+    "jump-played": "{jump}: played out",
+    "navigation-from-words":
+        '"{text}" read as a jump from its words; check where it goes',
+    "missing-segno": "D.S. has no segno to go back to; not played",
+    "missing-coda": "To Coda has no coda after it; not played",
+    "unreachable-ending":
+        "Ending {numbers} has no repeat before it; played straight through",
+    "endless-repeats": "The repeats don't end; stopped after {played} measures",
+    "mismatched-parts":
+        "Some parts have a different number of measures ({parts}); the first part's were used",
     "measure-numbers":
         "The file's measure numbers aren't consecutive after m{previous}; OpenMarch numbers this measure m{appNumber}",
 };

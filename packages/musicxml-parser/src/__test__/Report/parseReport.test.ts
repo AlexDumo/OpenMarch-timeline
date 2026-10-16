@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseMusicXml, parseMusicXmlWithReport } from "../../parser";
+import {
+    parseMusicXml,
+    parseMusicXmlWithReport,
+    type ParseOptions,
+} from "../../parser";
 import { formatTempoMarking } from "../../tempo";
 import {
     measure,
@@ -16,8 +20,8 @@ import {
 
 const durations = (xml: string) =>
     parseMusicXml(xml).map((m) => m.beats.map((b) => b.duration));
-const codes = (xml: string) =>
-    parseMusicXmlWithReport(xml).warnings.map((w) => w.code);
+const codes = (xml: string, options?: ParseOptions) =>
+    parseMusicXmlWithReport(xml, options).warnings.map((w) => w.code);
 
 describe("tempo", () => {
     it("reads a decimal <sound tempo> (MuseScore ♩. = 85 is 127.5 quarters)", () => {
@@ -508,26 +512,39 @@ describe("rit., accel. and a tempo", () => {
 });
 
 describe("things the counts can't show", () => {
-    it("warns about fermatas, repeats and D.C.", () => {
-        const xml = score(
-            measure(
-                1,
-                time(4, 4) + museScoreTempo("quarter", 0, 120, 120) + rest(4),
-            ) +
-                measure(
-                    2,
-                    `<note><pitch><step>C</step><octave>5</octave></pitch><duration>1920</duration><voice>1</voice><type>whole</type><notations><fermata type="upright"/></notations></note>` +
-                        `<barline location="right"><bar-style>light-heavy</bar-style><repeat direction="backward"/></barline>`,
-                ) +
-                measure(
-                    3,
-                    rest(4) +
-                        `<direction><direction-type><words>D.C. al Fine</words></direction-type><sound dacapo="yes"/></direction>`,
-                ),
-        );
-        expect(codes(xml)).toEqual(["fermata", "repeat", "jump"]);
+    it("warns about fermatas, and says repeats and D.C. were played out", () => {
+        const xml = fermataRepeatDaCapo();
+        expect(codes(xml)).toEqual(["fermata", "repeat-played", "jump-played"]);
+    });
+
+    it("warns that repeats and D.C. weren't played out when read once", () => {
+        const xml = fermataRepeatDaCapo();
+        expect(codes(xml, { repeats: "once" })).toEqual([
+            "fermata",
+            "repeat",
+            "jump",
+        ]);
     });
 });
+
+function fermataRepeatDaCapo() {
+    return score(
+        measure(
+            1,
+            time(4, 4) + museScoreTempo("quarter", 0, 120, 120) + rest(4),
+        ) +
+            measure(
+                2,
+                `<note><pitch><step>C</step><octave>5</octave></pitch><duration>1920</duration><voice>1</voice><type>whole</type><notations><fermata type="upright"/></notations></note>` +
+                    `<barline location="right"><bar-style>light-heavy</bar-style><repeat direction="backward"/></barline>`,
+            ) +
+            measure(
+                3,
+                rest(4) +
+                    `<direction><direction-type><words>D.C. al Fine</words></direction-type><sound dacapo="yes"/></direction>`,
+            ),
+    );
+}
 
 describe("summary", () => {
     it("counts measures, tempo changes, marks, meter changes and warnings", () => {

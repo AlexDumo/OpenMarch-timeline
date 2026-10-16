@@ -4,23 +4,24 @@ import {
     meterFromTimeSignature,
     meterLength,
     type Meter,
-    type TimeSignaturePart,
 } from "./meter";
 import {
     formatBeatUnit,
     formatBpm,
     formatTempoMarking,
-    isBeatUnit,
     markingFromQuarterBpm,
-    readPerMinute,
-    readSoundTempo,
-    readTempoText,
-    readTempoWords,
     unitQuarters,
     type BeatUnit,
     type TempoMarking,
-    type TempoWords,
 } from "./tempo";
+import { performanceOrder, type PerformanceIssue } from "./perform";
+import { parseXmlDocument } from "./read";
+import {
+    scanScore,
+    type RawEvent,
+    type RawMeasure,
+    type ScanResult,
+} from "./scan";
 import {
     warningMessage,
     type ParseWarning,
@@ -56,13 +57,17 @@ export interface TempoRamp {
 
 /** What an import would bring in, in numbers, for a preview's summary line. */
 export interface ParseSummary {
+    /** Measures as played (a repeated measure counts once per time it is played) */
     measures: number;
+    /** Measures as written in the file */
+    writtenMeasures: number;
     counts: number;
     /** Markings that change the tempo after the first one, including "a tempo" and "Tempo I" */
     tempoChanges: number;
     /** rit. and accel. that were applied */
     ramps: number;
     meterChanges: number;
+    /** Each rehearsal mark once, in the order first played */
     rehearsalMarks: string[];
     /** Entries of severity "warning" (notes of severity "info" are not counted) */
     warnings: number;
@@ -77,359 +82,14 @@ export interface MusicXmlParseResult {
     warnings: ParseWarning[];
     ramps: TempoRamp[];
     summary: ParseSummary;
-}
-
-// ---------------------------------------------------------------------------
-// Scanning: one measure's elements, in order, with their positions
-// ---------------------------------------------------------------------------
-
-/** A tempo-related thing that happens at a position (in quarter notes) inside a measure. */
-type RawEvent = { pos: number; seq: number } & (
-    | { kind: "tempo"; marking: TempoMarking; needsUnit: boolean }
-    | { kind: "invalid-tempo"; text: string }
-    | { kind: "modulation"; modulation: Modulation }
-    | { kind: "words"; words: TempoWords }
-);
-
-/** A metric modulation printed as "new note = old note", like ♩. = ♩. */
-interface Modulation {
-    newUnit: { unit: BeatUnit; dots: number };
-    oldUnit: { unit: BeatUnit; dots: number };
-}
-
-interface RawMeasure {
-    label: string;
-    implicit: boolean;
-    rehearsalMark?: string;
-    /** Undefined when the measure has no `<time>` */
-    time?:
-        | { kind: "read"; parts: TimeSignaturePart[]; text: string }
-        | { kind: "unknown"; text: string };
-    events: RawEvent[];
-    /** How much music the measure holds, in quarter notes (0 when it has no timed notes) */
-    contentQuarters: number;
-    fermata: boolean;
-    backwardRepeat: boolean;
-    jump?: string;
-}
-
-const ELEMENT =
-    /<(note|backup|forward|direction|attributes|sound|barline)(?=[\s>/])(?:[^>]*\/>|[\s\S]*?<\/\1>)/g;
-
-const firstMatch = (text: string, re: RegExp) => text.match(re)?.[1];
-
-const decodeXml = (text: string) =>
-    text
-        .replace(/<[^>]*>/g, "")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'")
-        .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-        .replace(/&#x([0-9a-f]+);/gi, (_, n) =>
-            String.fromCodePoint(parseInt(n, 16)),
-        )
-        .replace(/&amp;/g, "&")
-        .trim();
-
-const elementDuration = (text: string) =>
-    Number(firstMatch(text, /<duration>\s*([\d.]+)\s*<\/duration>/) ?? 0);
-
-/** Reads the tempo a `<metronome>` prints, or why it isn't one. */
-function readMetronome(
-    metronome: string,
-):
-    | { kind: "marking"; marking: TempoMarking }
-    | { kind: "invalid"; text: string }
-    | { kind: "modulation"; modulation: Modulation }
-    | undefined {
-    const units = [
-        ...metronome.matchAll(
-            /<beat-unit>\s*([^<]*?)\s*<\/beat-unit>((?:\s*<beat-unit-dot\s*\/>)*)/g,
-        ),
-    ].map((m) => ({
-        unit: m[1]!,
-        dots: (m[2]!.match(/<beat-unit-dot/g) ?? []).length,
-    }));
-    const perMinute = firstMatch(
-        metronome,
-        /<per-minute[^>]*>([\s\S]*?)<\/per-minute>/,
-    );
-    const first = units[0];
-    if (perMinute !== undefined && first && isBeatUnit(first.unit)) {
-        const reading = readPerMinute(decodeXml(perMinute));
-        if (!reading.ok) return { kind: "invalid", text: decodeXml(perMinute) };
-        return {
-            kind: "marking",
-            marking: {
-                quarterBpm:
-                    reading.value * unitQuarters(first.unit, first.dots),
-                beatUnit: first.unit,
-                dots: first.dots,
-                perMinute: reading.value,
-                approximate: reading.approximate || undefined,
-            },
-        };
-    }
-    const [left, right] = units;
-    if (left && right && isBeatUnit(left.unit) && isBeatUnit(right.unit))
-        return {
-            kind: "modulation",
-            modulation: {
-                newUnit: { unit: left.unit, dots: left.dots },
-                oldUnit: { unit: right.unit, dots: right.dots },
-            },
-        };
-    if (perMinute !== undefined)
-        return { kind: "invalid", text: decodeXml(perMinute) };
-    return undefined;
-}
-
-/** The tempo events of one `<direction>` at `pos`. */
-// eslint-disable-next-line max-lines-per-function
-function directionEvents(
-    direction: string,
-    pos: number,
-    nextSeq: () => number,
-): RawEvent[] {
-    const events: RawEvent[] = [];
-    const soundAttr = firstMatch(direction, /<sound\b[^>]*\btempo="([^"]*)"/);
-    const sound =
-        soundAttr !== undefined ? readSoundTempo(soundAttr) : undefined;
-    const metronomeText = firstMatch(
-        direction,
-        /<metronome\b[^>]*>([\s\S]*?)<\/metronome>/,
-    );
-    const metronome = metronomeText ? readMetronome(metronomeText) : undefined;
-    const words = [...direction.matchAll(/<words\b[^>]*>([\s\S]*?)<\/words>/g)]
-        .map((m) => decodeXml(m[1]!))
-        .join(" ")
-        .trim();
-    const textMarking = words ? readTempoText(words) : undefined;
-    // With a <sound tempo>, a printed modulation (♪ = ♪) still says which note the tempo is in
-    const modulationUnit =
-        sound !== undefined && metronome?.kind === "modulation"
-            ? metronome.modulation.newUnit
-            : undefined;
-    const printed: TempoMarking | undefined =
-        metronome?.kind === "marking"
-            ? metronome.marking
-            : modulationUnit && sound !== undefined
-              ? {
-                    quarterBpm: sound,
-                    beatUnit: modulationUnit.unit,
-                    dots: modulationUnit.dots,
-                    perMinute:
-                        sound /
-                        unitQuarters(modulationUnit.unit, modulationUnit.dots),
-                }
-              : textMarking;
-
-    if (sound !== undefined) {
-        // <sound tempo> is the playback truth, in quarters; the printed marking is only shown
-        events.push({
-            pos,
-            seq: nextSeq(),
-            kind: "tempo",
-            marking: printed
-                ? { ...printed, quarterBpm: sound, approximate: undefined }
-                : {
-                      quarterBpm: sound,
-                      beatUnit: "quarter",
-                      dots: 0,
-                      perMinute: sound,
-                  },
-            needsUnit: !printed,
-        });
-    } else if (printed) {
-        events.push({
-            pos,
-            seq: nextSeq(),
-            kind: "tempo",
-            marking: printed,
-            needsUnit: false,
-        });
-    } else if (metronome?.kind === "invalid") {
-        events.push({
-            pos,
-            seq: nextSeq(),
-            kind: "invalid-tempo",
-            text: metronome.text,
-        });
-    } else if (soundAttr !== undefined) {
-        events.push({
-            pos,
-            seq: nextSeq(),
-            kind: "invalid-tempo",
-            text: soundAttr,
-        });
-    } else if (metronome?.kind === "modulation") {
-        events.push({
-            pos,
-            seq: nextSeq(),
-            kind: "modulation",
-            modulation: metronome.modulation,
-        });
-    }
-
-    const tempoWords = words ? readTempoWords(words) : undefined;
-    const hasNumber = events.some((e) => e.kind === "tempo");
-    // A number in the same direction says more than "a tempo" or "Allegro" does
-    if (
-        tempoWords &&
-        !(
-            hasNumber &&
-            (tempoWords.kind === "tempo-word" ||
-                tempoWords.kind === "a-tempo" ||
-                tempoWords.kind === "tempo-primo")
-        )
-    )
-        events.push({ pos, seq: nextSeq(), kind: "words", words: tempoWords });
-    return events;
-}
-
-/** Reads a `<time>` element's signature. */
-function readTime(time: string): RawMeasure["time"] {
-    const parts = [
-        ...time.matchAll(
-            /<beats>([^<]*)<\/beats>\s*<beat-type>([^<]*)<\/beat-type>/g,
-        ),
-    ].map((m) => ({ beats: m[1]!, beatType: m[2]! }));
-    const text = parts
-        .map((p) => `${p.beats.trim()}/${p.beatType.trim()}`)
-        .join("+");
-    if (parts.length === 0 || /<senza-misura/.test(time))
-        return { kind: "unknown", text: text || "senza misura" };
-    return { kind: "read", parts, text };
-}
-
-/** Reads one `<measure>` element. `state.divisions` carries over between measures. */
-// eslint-disable-next-line max-lines-per-function
-function scanMeasure(
-    measureText: string,
-    state: { divisions: number; seq: number },
-): RawMeasure {
-    const openTag = measureText.match(/^<measure\b[^>]*>/)?.[0] ?? "";
-    const raw: RawMeasure = {
-        label: firstMatch(openTag, /\bnumber="([^"]*)"/) ?? "",
-        implicit: /\bimplicit="yes"/.test(openTag),
-        events: [],
-        contentQuarters: 0,
-        fermata: /<fermata\b/.test(measureText),
-        backwardRepeat: /<repeat\b[^>]*direction="backward"/.test(measureText),
+    /** About the file itself */
+    score: {
+        title?: string;
+        /** Part names in score order */
+        parts: string[];
+        /** The software that wrote the file, as `<encoding><software>` names it */
+        software: string[];
     };
-    const rehearsal = firstMatch(
-        measureText,
-        /<rehearsal[^>]*>([\s\S]*?)<\/rehearsal>/,
-    );
-    if (rehearsal !== undefined && decodeXml(rehearsal))
-        raw.rehearsalMark = decodeXml(rehearsal);
-    const jump = measureText.match(/<sound\b[^>]*\b(dacapo|dalsegno)="yes"/);
-    if (jump) raw.jump = jump[1] === "dacapo" ? "D.C." : "D.S.";
-
-    const nextSeq = () => state.seq++;
-    let cur = 0;
-    let max = 0;
-    for (const match of measureText.matchAll(ELEMENT)) {
-        const text = match[0];
-        switch (match[1]) {
-            case "attributes": {
-                const divisions = Number(
-                    firstMatch(text, /<divisions>\s*([\d.]+)\s*<\/divisions>/),
-                );
-                if (divisions > 0) state.divisions = divisions;
-                const time = firstMatch(
-                    text,
-                    /<time\b[^>]*>([\s\S]*?)<\/time>/,
-                );
-                if (time !== undefined && raw.time === undefined)
-                    raw.time = readTime(time);
-                break;
-            }
-            case "note":
-                if (/<grace\b/.test(text) || /<chord\s*\/>/.test(text)) break;
-                cur += elementDuration(text);
-                max = Math.max(max, cur);
-                break;
-            case "backup":
-                cur = Math.max(0, cur - elementDuration(text));
-                break;
-            case "forward":
-                cur += elementDuration(text);
-                max = Math.max(max, cur);
-                break;
-            case "direction": {
-                const offset = Number(
-                    firstMatch(
-                        text,
-                        /<offset[^>]*>\s*(-?[\d.]+)\s*<\/offset>/,
-                    ) ?? 0,
-                );
-                const pos = Math.max(0, cur + offset) / state.divisions;
-                raw.events.push(...directionEvents(text, pos, nextSeq));
-                break;
-            }
-            case "sound": {
-                // A <sound> straight inside the measure, outside any direction
-                const tempoAttr = firstMatch(text, /\btempo="([^"]*)"/);
-                if (tempoAttr === undefined) break;
-                const tempo = readSoundTempo(tempoAttr);
-                const pos = cur / state.divisions;
-                raw.events.push(
-                    tempo !== undefined
-                        ? {
-                              pos,
-                              seq: nextSeq(),
-                              kind: "tempo",
-                              marking: {
-                                  quarterBpm: tempo,
-                                  beatUnit: "quarter",
-                                  dots: 0,
-                                  perMinute: tempo,
-                              },
-                              needsUnit: true,
-                          }
-                        : {
-                              pos,
-                              seq: nextSeq(),
-                              kind: "invalid-tempo",
-                              text: tempoAttr,
-                          },
-                );
-                break;
-            }
-        }
-    }
-    raw.contentQuarters = max / state.divisions;
-    return raw;
-}
-
-/** The first part's `<measure>` elements, as text. */
-function measureTexts(xmlText: string): string[] {
-    let text = xmlText;
-    // If the XML has multiple parts, stop after the first part
-    const partStart = text.search(/<part[\s>]/);
-    if (partStart !== -1) {
-        const partEnd = text.indexOf("</part>", partStart);
-        if (partEnd === -1)
-            throw new Error("Malformed XML: Missing closing </part> tag.");
-        text = text.substring(partStart, partEnd + 7);
-    }
-    const texts: string[] = [];
-    const open = /<measure(?=[\s>/])[^>]*?(\/)?>/g;
-    let match: RegExpExecArray | null;
-    while ((match = open.exec(text))) {
-        if (match[1]) {
-            texts.push(match[0]);
-            continue;
-        }
-        const end = text.indexOf("</measure>", match.index);
-        if (end === -1)
-            throw new Error("Malformed XML: Missing closing </measure> tag.");
-        texts.push(text.substring(match.index, end + 10));
-        open.lastIndex = end + 10;
-    }
-    return texts;
 }
 
 // ---------------------------------------------------------------------------
@@ -783,13 +443,31 @@ function countTempos(
     return bpm;
 }
 
-/** Warnings about what the counts can't show, and about the file's measure numbers. */
+/**
+ * Warnings about what the counts can't show, about repeats and jumps, and about the file's
+ * measure numbers. `played` maps each played measure to its written measure.
+ */
+// eslint-disable-next-line max-lines-per-function
 function warnAboutStructure(
     resolved: ResolvedMeasure[],
-    measures: Measure[],
+    written: RawMeasure[],
+    played: PlayedRef[],
+    issues: PerformanceIssue[],
+    repeats: RepeatMode,
     warn: Warn,
 ) {
+    // Where a written measure is first played, for warnings about the written score
+    const firstPlay = new Map<number, number>();
+    played.forEach((p, i) => {
+        if (!firstPlay.has(p.index)) firstPlay.set(p.index, i);
+    });
+    const at = (writtenIndex: number) =>
+        firstPlay.get(writtenIndex) ??
+        // A measure that is never played: warn at the next one that is
+        played.findIndex((p) => p.index > writtenIndex);
+
     resolved.forEach((m, i) => {
+        if (played[i]!.time > 1) return;
         const word = m.raw.events.find(
             (e) => e.kind === "words" && e.words.kind === "tempo-word",
         );
@@ -801,24 +479,83 @@ function warnAboutStructure(
                 text: word.words.text,
             });
         if (m.raw.fermata) warn("fermata", "warning", i, {});
-        if (m.raw.backwardRepeat) warn("repeat", "warning", i, {});
-        if (m.raw.jump) warn("jump", "warning", i, { jump: m.raw.jump });
     });
-    const gap = measures.findIndex(
-        (m, i) =>
-            i > 0 && (m.number < 0 || m.number !== measures[i - 1]!.number + 1),
-    );
-    if (gap > 0)
-        warn("measure-numbers", "warning", gap, {
-            previous: measures[gap - 1]!.label ?? "",
-            appNumber: measures[0]!.number + gap,
+
+    written.forEach((raw, w) => {
+        const nav = raw.navigation;
+        const i = at(w);
+        if (i < 0) return;
+        const jump = nav.daCapo
+            ? "D.C."
+            : nav.dalSegno !== undefined
+              ? "D.S."
+              : undefined;
+        if (repeats === "once") {
+            if (nav.backwardRepeat) warn("repeat", "warning", i, {});
+            if (jump) warn("jump", "warning", i, { jump });
+            return;
+        }
+        if (nav.backwardRepeat)
+            warn("repeat-played", "info", i, {
+                times: nav.backwardRepeat.times,
+            });
+        if (jump) warn("jump-played", "info", i, { jump });
+        for (const words of raw.navigationFromWords ?? [])
+            warn("navigation-from-words", "warning", i, { text: words });
+    });
+    if (repeats === "play")
+        for (const issue of issues) {
+            const i = Math.max(0, at(issue.index));
+            if (issue.code === "endless")
+                warn("endless-repeats", "warning", i, {
+                    played: issue.played,
+                });
+            else if (issue.code === "unreachable-ending")
+                warn("unreachable-ending", "warning", i, {
+                    numbers: issue.numbers.join(", "),
+                });
+            else
+                warn(issue.code, "warning", i, {
+                    name: issue.name,
+                });
+        }
+
+    // Measure numbers, in the written score
+    const gap = written.findIndex((m, w) => {
+        if (w === 0) return false;
+        const previous = parseInt(written[w - 1]!.label);
+        const current = parseInt(m.label);
+        return Number.isNaN(current) || current !== previous + 1;
+    });
+    if (gap > 0 && at(gap) >= 0)
+        warn("measure-numbers", "warning", at(gap), {
+            previous: written[gap - 1]!.label,
+            appNumber: at(gap) + 1,
         });
 }
+
+/** How repeats, endings and jumps are read. */
+export type RepeatMode =
+    /** Played out: the counts follow the music as it is performed (the default) */
+    | "play"
+    /** Each written measure once, in the order it is written */
+    | "once";
+
+export interface ParseOptions {
+    repeats?: RepeatMode;
+}
+
+/** A played measure: which written measure it is, and how many times it has been played. */
+type PlayedRef = { index: number; time: number };
 
 /**
  * Parses a MusicXML string into measures, with a report of what was read: warnings for anything
  * it couldn't read or had to guess, rit./accel. ranges, and a summary.
  *
+ * - Reading: every part is read (see `scan.ts`); the first part's measures set the measure count.
+ * - Order: repeats, endings, D.C., D.S., To Coda and Fine are played out (see `perform.ts`), so
+ *   the measures come in the order they are performed and a repeated measure appears once per
+ *   time it is played, with `time` counting the plays. `repeats: "once"` keeps the written order.
  * - Counts: see `meter.ts` for which note value is the count in each meter. A pickup
  *   (`implicit="yes"` and shorter than its meter) keeps only the counts its music fills.
  * - Tempo: `<sound tempo>` (quarters per minute) when present, otherwise the `<metronome>` mark
@@ -833,14 +570,33 @@ function warnAboutStructure(
  *   as the old one", with a warning to check it.
  * - Measure numbers: each measure keeps the file's `number` attribute as `label` (and its
  *   integer value as `number`), so a pickup reads m0.
+ *
+ * Blank text reads as no measures. Throws when the text isn't well-formed XML or isn't a
+ * MusicXML score.
  */
-export function parseMusicXmlWithReport(xmlText: string): MusicXmlParseResult {
+// eslint-disable-next-line max-lines-per-function
+export function parseMusicXmlWithReport(
+    xmlText: string,
+    { repeats = "play" }: ParseOptions = {},
+): MusicXmlParseResult {
     const warnings: ParseWarning[] = [];
     const warn: Warn = (code, severity, measureIndex, params) =>
         warnings.push({ code, severity, measureIndex, params, message: "" });
 
-    const state = { divisions: 1, seq: 0 };
-    const raws = measureTexts(xmlText).map((t) => scanMeasure(t, state));
+    const scan: ScanResult = xmlText.trim()
+        ? scanScore(parseXmlDocument(xmlText))
+        : { measures: [], parts: [], software: [], mismatchedParts: [] };
+    const written = scan.measures;
+    const performance =
+        repeats === "play"
+            ? performanceOrder(written.map((m) => m.navigation))
+            : {
+                  order: written.map((_, index) => ({ index, time: 1 })),
+                  issues: [],
+              };
+    const played: PlayedRef[] = performance.order;
+    const raws = played.map((p) => written[p.index]!);
+
     const resolved = resolveMeasures(raws, warn);
     const { slots, firstCount, placed } = placeEvents(resolved);
     const { changes, ramps, measureTempo, tempoChanges } = walkTempos(
@@ -870,6 +626,8 @@ export function parseMusicXmlWithReport(xmlText: string): MusicXmlParseResult {
             label: m.raw.label,
             meter: m.meter,
             meterChanged: m.meterChanged,
+            writtenIndex: played[i]!.index,
+            time: played[i]!.time,
         };
         if (m.raw.rehearsalMark) measure.rehearsalMark = m.raw.rehearsalMark;
         if (m.raw.implicit) measure.implicit = true;
@@ -877,7 +635,18 @@ export function parseMusicXmlWithReport(xmlText: string): MusicXmlParseResult {
         if (tempo) measure.tempo = tempo;
         return measure;
     });
-    warnAboutStructure(resolved, measures, warn);
+    if (scan.mismatchedParts.length > 0)
+        warn("mismatched-parts", "warning", 0, {
+            parts: scan.mismatchedParts.join(", "),
+        });
+    warnAboutStructure(
+        resolved,
+        written,
+        played,
+        performance.issues,
+        repeats,
+        warn,
+    );
 
     for (const w of warnings)
         w.message = warningMessage(w, measures[w.measureIndex]?.label);
@@ -889,13 +658,14 @@ export function parseMusicXmlWithReport(xmlText: string): MusicXmlParseResult {
         ramps: ramps.map(({ startCount, endCount, ...ramp }) => ramp),
         summary: {
             measures: measures.length,
+            writtenMeasures: written.length,
             counts: slots.length,
             tempoChanges,
             ramps: ramps.filter((r) => r.applied).length,
             meterChanges: measures.filter((m, i) => i > 0 && m.meterChanged)
                 .length,
             rehearsalMarks: measures.flatMap((m) =>
-                m.rehearsalMark ? [m.rehearsalMark] : [],
+                m.rehearsalMark && m.time === 1 ? [m.rehearsalMark] : [],
             ),
             warnings: warnings.filter((w) => w.severity === "warning").length,
             durationSeconds: measures.reduce(
@@ -903,14 +673,21 @@ export function parseMusicXmlWithReport(xmlText: string): MusicXmlParseResult {
                 0,
             ),
         },
+        score: {
+            title: scan.title,
+            parts: scan.parts,
+            software: scan.software,
+        },
     };
 }
 
 /**
- * Parses a MusicXML string and converts it into an array of musical measures.
- * @param xmlText The raw XML text representing a musical score
- * @returns An array of Measure objects representing the parsed musical composition
+ * Parses a MusicXML string and converts it into an array of musical measures, in the order they
+ * are played. See `parseMusicXmlWithReport`.
  */
-export function parseMusicXml(xmlText: string): Measure[] {
-    return parseMusicXmlWithReport(xmlText).measures;
+export function parseMusicXml(
+    xmlText: string,
+    options: ParseOptions = {},
+): Measure[] {
+    return parseMusicXmlWithReport(xmlText, options).measures;
 }

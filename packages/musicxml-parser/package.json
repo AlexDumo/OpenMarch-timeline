@@ -38,7 +38,11 @@
         "typescript": "catalog:"
     },
     "devDependencies": {
-        "vitest": "^3.2.3",
-        "tsup": "^8.5.0"
+        "tsup": "^8.5.0",
+        "vitest": "^3.2.3"
+    },
+    "dependencies": {
+        "@xmldom/xmldom": "^0.8.15",
+        "jszip": "^3.10.1"
     }
 }
