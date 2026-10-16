@@ -1401,8 +1401,14 @@ function requestSvgBeforeClose(win: BrowserWindow): Promise<string> {
  * db-functions, which stay out of the startup bundle.
  */
 async function pruneShowLibrary() {
-    const { pruneShowLibraryAt } = await import("../database/showLibraryPrune");
-    await pruneShowLibraryAt(DatabaseServices.getDbPath());
+    try {
+        const { pruneShowLibraryAt } =
+            await import("../database/showLibraryPrune");
+        await pruneShowLibraryAt(DatabaseServices.getDbPath());
+    } catch (error) {
+        // Never stops the close or the copy
+        console.error("Couldn't load the show Library prune", error);
+    }
 }
 
 /**

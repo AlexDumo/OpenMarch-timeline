@@ -15,6 +15,9 @@ import { transactionWithHistory } from "./history";
 import { createMarchersInTransaction } from "./marcher";
 import { updateMarcherHomesInTransaction } from "./marcherHome";
 import { beatsAfterDeletion } from "./cues";
+import { hasItemTables } from "./itemLibraryKeeps";
+
+export { itemLibraryKeeps } from "./itemLibraryKeeps";
 
 export type DatabaseItem = typeof schema.items.$inferSelect;
 export type DatabaseItemGeometry = typeof schema.item_geometry.$inferSelect;
@@ -332,46 +335,6 @@ export async function updateItems({
         updateItemsInTransaction({ tx, modifiedItems }),
     );
 }
-
-/**
- * The Library Versions items pin, for the show Library's prune to keep (C1.11, props-spec
- * section 2). Shaped like the prune's `LibraryKeep`.
- */
-export async function itemLibraryKeeps({
-    db,
-}: {
-    db: DbConnection | DbTransaction;
-}): Promise<{ itemId: string; versionHash: string }[]> {
-    // A page-era file has no item tables, and keeps nothing for items
-    if (!(await hasItemTables(db))) return [];
-    const rows = await db
-        .selectDistinct({
-            itemId: schema.items.library_item_id,
-            versionHash: schema.items.library_version_hash,
-        })
-        .from(schema.items)
-        .where(sql`${schema.items.library_item_id} IS NOT NULL`)
-        .orderBy(
-            schema.items.library_item_id,
-            schema.items.library_version_hash,
-        )
-        .all();
-    return rows.flatMap((r) =>
-        r.itemId && r.versionHash
-            ? [{ itemId: r.itemId, versionHash: r.versionHash }]
-            : [],
-    );
-}
-
-/** Whether the file has the item tables: a page-era file gets them when it converts. */
-const hasItemTables = async (db: DbConnection | DbTransaction) =>
-    !!(
-        await db
-            .select({ n: sql<number>`count(*)` })
-            .from(sql`sqlite_schema`)
-            .where(sql`type = 'table' AND name = 'item_geometry'`)
-            .get()
-    )?.n;
 
 /**
  * Carries the Outline changes on beats about to be deleted forward, as cues are carried (ADR

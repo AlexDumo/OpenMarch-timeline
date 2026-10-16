@@ -1,5 +1,5 @@
 import type { LibraryPrunePlan } from "@/view3d/library/showLibraryPrune";
-import { itemLibraryKeeps } from "./items";
+import { itemLibraryKeeps } from "./itemLibraryKeeps";
 import { pruneShowLibraryInTransaction } from "./showLibrary";
 import type { DbConnection } from "./types";
 
