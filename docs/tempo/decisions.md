@@ -1395,3 +1395,14 @@ check.
   converted again.
 - **Choice:** unchanged; a move shifted past the end on such a file now fails at the row trigger
   (still E-T1) rather than at the commit check, since storing the counts runs first.
+
+## EC-15 The export warning
+
+- **Choice:** a warning sits at the top of the Coordinate Sheets, Drill Charts and Video tabs when
+  any stored move ends after the show's end: "1 move runs past the end of the show (Pg 6) and
+  won't be in this export." **Add pages to the end** adds a page every "new page counts" counts
+  (16) up to the end of the last move, with a shorter last page for the rest (FB-7's
+  `appendPagesToEnd`), as one undoable edit; export works as it is either way. The Mobile tab
+  doesn't warn (it exports the whole file). The video preview now ends at the show's end too, as
+  the video already did.
+- **Alternatives:** a confirm on Export; pages of the last page's length.

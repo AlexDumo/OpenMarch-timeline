@@ -106,3 +106,21 @@ export function playbackStopBeat({
             : 0;
     return Math.max(showEndBeat, musicBeat, lastMoveEndBeat);
 }
+
+/**
+ * The moves that run past the show's end (rule 9), which exports leave out: how many end after
+ * it, and where the last one ends (a spec beat). `count` is 0 when every move ends by the end.
+ */
+export function movesPastEnd(
+    timelines: readonly { readonly start: number; readonly end: number }[],
+    showEndBeat: number,
+): { readonly count: number; readonly lastEndBeat: number } {
+    let count = 0;
+    let lastEndBeat = showEndBeat;
+    for (const timeline of timelines)
+        if (timeline.end > showEndBeat) {
+            count++;
+            lastEndBeat = Math.max(lastEndBeat, timeline.end);
+        }
+    return { count, lastEndBeat };
+}
