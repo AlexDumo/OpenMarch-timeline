@@ -20,7 +20,7 @@ export default function ModeStep({
                 aria-label={t("welcomeFlow.mode.title")}
             />
             <p className="text-sub text-text-subtitle text-center">
-                <T keyName="welcomeFlow.mode.note" />
+                <T keyName="welcomeFlow.changeLater" />
             </p>
         </div>
     );

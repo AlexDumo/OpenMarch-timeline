@@ -1,16 +1,18 @@
 import clsx from "clsx";
 import {
+    useCallback,
     useEffect,
     useRef,
     useState,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
-import { clamp, isPageSnapDisabled } from "./TimelineGeometry";
+import { clamp, isPageSnapDisabled, sameRange } from "./TimelineGeometry";
 import { snapEdgeBeat, stepOffForbidden } from "./timelineEdgeSnap";
 import type {
     TimelineBeatRange,
     TimelineRangeChange,
+    TimelineRangeCommitResult,
     TimelineTrackId,
 } from "./TimelineViewModel";
 
@@ -49,7 +51,7 @@ export interface TimelineClipResizeCommands {
         trackId: TimelineTrackId,
     ) => Promise<ClipResizeLimits | null>;
     /** Commits a new range, as one undoable edit */
-    readonly commit: (change: TimelineRangeChange) => void;
+    readonly commit: (change: TimelineRangeChange) => TimelineRangeCommitResult;
 }
 
 /** Pointer travel before a press on a handle becomes a resize (as the clip's move drag). */
@@ -100,9 +102,69 @@ export function useClipGestureEscape(active: boolean, cancel: () => void) {
     }, [active]);
 }
 
+/** The longest a released drag's preview waits for its new range before letting go */
+export const RELEASED_PREVIEW_TIMEOUT_MS = 2000;
+
+/**
+ * Holds a released clip drag's preview until the new range arrives from the database, so the clip
+ * doesn't jump back to where it was for a moment between the release and the reload (owner
+ * 2026-10-16, as a dropped page flag). `hold(result)` starts waiting on a commit's result: a
+ * commit that wrote nothing (`false`) calls `letGo` at once, and so does the timeout, so a preview
+ * can never stick. The clip calls `release` itself when the range changes, or on any other way
+ * the preview ends (Esc, a cancel, a new press), which stops the wait.
+ */
+export function useReleasedPreview(letGo: () => void): {
+    readonly hold: (result: TimelineRangeCommitResult) => void;
+    readonly release: () => void;
+    /** Whether a released drag is waiting for its range */
+    readonly holding: boolean;
+} {
+    const letGoRef = useRef(letGo);
+    letGoRef.current = letGo;
+    const waiting = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [holding, setHolding] = useState(false);
+    const release = useCallback(() => {
+        if (waiting.current !== null) clearTimeout(waiting.current);
+        waiting.current = null;
+        setHolding(false);
+    }, []);
+    const hold = useCallback(
+        (result: TimelineRangeCommitResult) => {
+            release();
+            const timer = setTimeout(() => {
+                if (waiting.current !== timer) return;
+                release();
+                letGoRef.current();
+            }, RELEASED_PREVIEW_TIMEOUT_MS);
+            waiting.current = timer;
+            setHolding(true);
+            void Promise.resolve(result).then(
+                (written) => {
+                    if (written !== false || waiting.current !== timer) return;
+                    release();
+                    letGoRef.current();
+                },
+                () => undefined,
+            );
+        },
+        [release],
+    );
+    useEffect(
+        () => () => {
+            if (waiting.current !== null) clearTimeout(waiting.current);
+            // A commit that settles after unmount finds nothing waiting
+            waiting.current = null;
+        },
+        [],
+    );
+    return { hold, release, holding };
+}
+
 /** A resize in progress, as drawn: the range so far, and why it can't go further. */
 export interface ClipResizePreview extends TimelineBeatRange {
     readonly edge: Edge;
+    /** The range the drag started from, as drawn (a drop still waiting for its range, or the range) */
+    readonly from?: TimelineBeatRange;
     /** Why the edge stopped short of the pointer, if it did */
     readonly stoppedBy: string | null;
     /**
@@ -269,6 +331,8 @@ export function useClipEdgeResize({
     downbeats,
     snapPlayhead,
     resize,
+    held = null,
+    onDragStart,
 }: {
     trackId: TimelineTrackId;
     /** The move's name, which the tag starts with */
@@ -286,6 +350,10 @@ export function useClipEdgeResize({
     /** The playhead, read when a drag starts; an edge lands on it when near (UI-15) */
     snapPlayhead?: () => number;
     resize: TimelineClipResizeCommands | undefined;
+    /** Where the clip is drawn by another gesture's drop that waits for its range (a move) */
+    held?: TimelineBeatRange | null;
+    /** A resize drag starts: another gesture's dropped preview gives way to it */
+    onDragStart?: () => void;
 }): {
     preview: ClipResizePreview | null;
     handles: ReactNode;
@@ -293,14 +361,22 @@ export function useClipEdgeResize({
     swallowClick: () => boolean;
     /** Forgets a swallowed click that never came (a new press on the clip) */
     resetClick: () => void;
+    /** Ends a dropped resize's wait now: another gesture took the clip over */
+    letGo: () => void;
 } {
     const [preview, setPreview] = useState<ClipResizePreview | null>(null);
     const [tagBeside, setTagBeside] = useState(false);
     const dragRef = useRef<{
+        /** Which press this is (`gestures`) */
+        gesture: number;
         pointerId: number;
         edge: Edge;
         startClientX: number;
-        /** The edge's beat when the drag started */
+        /**
+         * The range the drag started from, as drawn, and its edge's beat; set once it moves. A drag
+         * started during a drop's wait starts from the drop, not from the range it replaces
+         */
+        base: TimelineBeatRange | null;
         startBeat: number;
         moved: boolean;
         /** The latest pointer, so the edge can settle when the limits arrive */
@@ -314,18 +390,48 @@ export function useClipEdgeResize({
         limitsRead: Promise<unknown>;
     } | null>(null);
     const swallowRef = useRef(false);
+    /** Counts presses on the handles; the last one that became a drag owns the preview */
+    const gestures = useRef(0);
+    const draggedGesture = useRef(0);
 
-    // A new range from the database ends the preview (as the clip's move drag)
+    // A released resize stays drawn until its range arrives (or the commit wrote nothing)
+    const released = useReleasedPreview(() => setPreview(null));
+    const { release } = released;
+    // A cancelled drag goes back to where it started: a drop still waiting for its range waits on
+    const backToStart = (drag: typeof dragRef.current) => {
+        if (drag?.base && range && !sameRange(drag.base, range)) {
+            setPreview({
+                ...drag.base,
+                edge: drag.edge,
+                stoppedBy: null,
+                blockedBy: null,
+            });
+            released.hold(undefined);
+        } else setPreview(null);
+    };
+    // A new range from the database ends the preview (as the clip's move drag). A drag started
+    // from a drop that was waiting for this range goes on, and so does a press that hasn't moved
+    const rangeStart = range?.startBeatIndex;
+    const rangeEnd = range?.endBeatIndex;
     useEffect(() => {
-        dragRef.current = null;
+        const drag = dragRef.current;
+        const arrived =
+            rangeStart === undefined || rangeEnd === undefined
+                ? null
+                : { startBeatIndex: rangeStart, endBeatIndex: rangeEnd };
+        if (drag?.base && sameRange(drag.base, arrived)) return;
+        if (drag?.moved) dragRef.current = null;
+        release();
         setPreview(null);
-    }, [range?.startBeatIndex, range?.endBeatIndex]);
+    }, [rangeStart, rangeEnd, release]);
 
-    // Esc cancels a resize in progress: nothing is committed or selected (E14)
-    useClipGestureEscape(preview !== null, () => {
+    // Esc cancels a resize in progress: nothing is committed or selected (E14). A released one
+    // is already committed; Esc then goes on to whatever else it does
+    useClipGestureEscape(preview !== null && !released.holding, () => {
+        const drag = dragRef.current;
         dragRef.current = null;
         swallowRef.current = true;
-        setPreview(null);
+        backToStart(drag);
     });
 
     const handleWidth = clipHandleWidth(width);
@@ -341,7 +447,7 @@ export function useClipEdgeResize({
         snapDisabled: boolean,
     ) =>
         resizedRange({
-            range: range!,
+            range: drag.base ?? range!,
             edge: drag.edge,
             beat:
                 drag.startBeat + (clientX - drag.startClientX) / pixelsPerBeat,
@@ -353,6 +459,14 @@ export function useClipEdgeResize({
             beatCount: beatCount!,
             limits: drag.limits,
         });
+    const landWith = (
+        drag: NonNullable<typeof dragRef.current>,
+        clientX: number,
+        snapDisabled: boolean,
+    ): ClipResizePreview => ({
+        ...landAt(drag, clientX, snapDisabled),
+        ...(drag.base ? { from: drag.base } : {}),
+    });
 
     const handleProps = (edge: Edge) => ({
         "data-testid": `timeline-clip-resize-${edge}`,
@@ -363,14 +477,15 @@ export function useClipEdgeResize({
             // handlers and the surface take those
             if (event.button !== 0 || event.ctrlKey || event.metaKey) return;
             event.stopPropagation();
+            // A press during a released resize's wait keeps the wait: only a drag ends it
+            // (below), so a press that never moves can't leave the dropped preview behind
             const drag = {
+                gesture: ++gestures.current,
                 pointerId: event.pointerId,
                 edge,
                 startClientX: event.clientX,
-                startBeat:
-                    edge === "start"
-                        ? range!.startBeatIndex
-                        : range!.endBeatIndex,
+                base: null as TimelineBeatRange | null,
+                startBeat: 0,
                 moved: false,
                 clientX: event.clientX,
                 snapDisabled: isPageSnapDisabled(event),
@@ -390,7 +505,7 @@ export function useClipEdgeResize({
                     drag.limits = limits;
                     if (dragRef.current !== drag) return;
                     if (drag.preview) {
-                        const settled = landAt(
+                        const settled = landWith(
                             drag,
                             drag.clientX,
                             drag.snapDisabled,
@@ -410,11 +525,29 @@ export function useClipEdgeResize({
                 Math.abs(event.clientX - drag.startClientX) < RESIZE_DRAG_PX
             )
                 return;
+            if (!drag.moved) {
+                // It starts from where the clip is drawn: a drop still waiting (this clip's
+                // resize or move) or the range
+                const base = held ?? preview ?? range!;
+                drag.base = {
+                    startBeatIndex: base.startBeatIndex,
+                    endBeatIndex: base.endBeatIndex,
+                };
+                drag.startBeat =
+                    edge === "start" ? base.startBeatIndex : base.endBeatIndex;
+                draggedGesture.current = drag.gesture;
+                released.release();
+                onDragStart?.();
+            }
             drag.moved = true;
             drag.clientX = event.clientX;
             drag.snapDisabled = isPageSnapDisabled(event);
             event.stopPropagation();
-            const next = landAt(drag, event.clientX, isPageSnapDisabled(event));
+            const next = landWith(
+                drag,
+                event.clientX,
+                isPageSnapDisabled(event),
+            );
             drag.preview = next;
             setPreview(next);
         },
@@ -427,31 +560,58 @@ export function useClipEdgeResize({
             if (!drag.moved) return;
             event.stopPropagation();
             swallowRef.current = true;
-            setPreview(null);
             // The modifiers held at release decide, as for the clip's move drag. A release
-            // before the limits arrive waits for them, so it stops where a slower drag would
+            // before the limits arrive waits for them, so it stops where a slower drag would.
+            // Until the new range arrives the clip stays drawn where it was dropped, without
+            // the tag, instead of jumping back for a moment
             const clientX = event.clientX;
             const snapDisabled = isPageSnapDisabled(event);
+            const settle = (next: ClipResizePreview) =>
+                setPreview({ ...next, stoppedBy: null, blockedBy: null });
             const finish = () => {
-                const next = landAt(drag, clientX, snapDisabled);
-                // It commits where it waits: never on a forbidden beat (UI-15)
-                if (
-                    next.startBeatIndex === range!.startBeatIndex &&
-                    next.endBeatIndex === range!.endBeatIndex
-                )
+                const next = landWith(drag, clientX, snapDisabled);
+                // A newer drag started while the limits were read: the drop still commits, but
+                // the preview and the wait are the newer drag's now. A newer press that hasn't
+                // moved leaves them to this one
+                const superseded = draggedGesture.current !== drag.gesture;
+                // Dropped where it started from: nothing new to commit. A drag that started from
+                // a drop still waiting for its range waits on as that drop
+                const from = drag.base ?? range!;
+                if (sameRange(next, from)) {
+                    if (superseded) return;
+                    if (sameRange(from, range!)) {
+                        released.release();
+                        setPreview(null);
+                    } else {
+                        settle(next);
+                        released.hold(undefined);
+                    }
                     return;
-                resize!.commit({
+                }
+                // It commits where it waits: never on a forbidden beat (UI-15)
+                const result = resize!.commit({
                     timelineId: trackId,
                     startBeatIndex: next.startBeatIndex,
                     endBeatIndex: next.endBeatIndex,
                 });
+                if (superseded) return;
+                settle(next);
+                released.hold(result);
             };
             if (drag.limits) finish();
-            else void drag.limitsRead.then(finish);
+            else {
+                // Drawn where the drag left it while the limits are read; `finish` then waits
+                // on the commit instead
+                if (drag.preview) settle(drag.preview);
+                released.hold(undefined);
+                void drag.limitsRead.then(finish);
+            }
         },
+        // A press that never moved leaves a dropped resize's wait alone, as its release does
         onPointerCancel: () => {
+            const drag = dragRef.current;
             dragRef.current = null;
-            setPreview(null);
+            if (drag?.moved) backToStart(drag);
         },
         // A lost capture (the window losing the pointer mid-drag) cancels, as for a page flag's
         // grip: the release may land off the handle, and the preview mustn't stick (E14)
@@ -459,8 +619,9 @@ export function useClipEdgeResize({
             const drag = dragRef.current;
             if (!drag) return;
             dragRef.current = null;
-            if (drag.moved) swallowRef.current = true;
-            setPreview(null);
+            if (!drag.moved) return;
+            swallowRef.current = true;
+            backToStart(drag);
         },
         // The click ending a press on a handle still reaches the clip, which selects on it. Under
         // the start flag (z-40) and the playhead (z-50), which run down over the clip rows: where
@@ -486,7 +647,7 @@ export function useClipEdgeResize({
     ) : null;
 
     const tag =
-        preview && range ? (
+        preview && range && !released.holding ? (
             <span
                 data-testid="timeline-clip-resize-tag"
                 role="status"
@@ -507,7 +668,12 @@ export function useClipEdgeResize({
                           ),
                 )}
             >
-                {clipResizeTagText(range, preview, snapBeats, label)}
+                {clipResizeTagText(
+                    preview.from ?? range,
+                    preview,
+                    snapBeats,
+                    label,
+                )}
             </span>
         ) : null;
 
@@ -517,6 +683,11 @@ export function useClipEdgeResize({
         tag,
         resetClick: () => {
             swallowRef.current = false;
+        },
+        letGo: () => {
+            if (!released.holding) return;
+            released.release();
+            setPreview(null);
         },
         swallowClick: () => {
             const swallowed = swallowRef.current;

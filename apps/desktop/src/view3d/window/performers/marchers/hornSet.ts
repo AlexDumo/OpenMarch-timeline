@@ -14,11 +14,11 @@ import { composedGeometry, writeInstance } from "@/view3d/render/composer";
 import { instrumentModel, type Detail } from "@/view3d/core/instruments";
 import { hold as holdFor } from "@/view3d/core/instruments/holds";
 import {
-    DEFAULT_PRIMARY,
     uniformKey,
     type BodyType,
     type UniformLook,
 } from "@/view3d/core/marchers/looks";
+import { UNIFORM_PRESETS } from "@/view3d/core/marchers/uniformPresets";
 import type { LoadedBody } from "./marcherAssets";
 import { poseArms } from "./armPose";
 import { instrumentGeometry } from "./instrumentGeometry";
@@ -84,7 +84,10 @@ export class HornSet {
                     h,
                     model,
                     look.options.finish,
-                    look.options.carryColor ?? DEFAULT_PRIMARY,
+                    look.options.carryColor ?? undefined,
+                    look.options.silk
+                        ? UNIFORM_PRESETS[look.options.silk].silk
+                        : undefined,
                 );
                 const mesh = new THREE.InstancedMesh(
                     composedGeometry(source, slots.length),

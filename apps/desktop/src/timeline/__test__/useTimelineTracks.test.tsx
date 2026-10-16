@@ -14,7 +14,10 @@ import {
     useTimelineResolverStore,
 } from "../timelineStore";
 import { timelineTrackId } from "../timelineViewModel";
-import { useTimelineTracks } from "../useTimelineTracks";
+import {
+    useTimelineTracks,
+    useTimelineTracksState,
+} from "../useTimelineTracks";
 
 const lockCalls = vi.hoisted(() => ({ count: 0 }));
 vi.mock("@/db-functions/history", async (importOriginal) => {
@@ -205,6 +208,46 @@ describeDbTests("useTimelineTracks", (it) => {
         await waitFor(() => expect(result.current[0]?.label).toBe("Opener"));
         await performRedo(db);
         await waitFor(() => expect(result.current[0]?.label).toBe("Closer"));
+    });
+
+    it("says the tracks aren't current from an edit until they're rebuilt for it", async ({
+        db,
+    }) => {
+        await seedShow(db);
+        await startTimelineResolver(db);
+        const seen: { current: boolean; label?: string }[] = [];
+        const { result } = renderHook(() => {
+            const state = useTimelineTracksState({
+                database: db,
+                enabled: true,
+            });
+            seen.push({
+                current: state.current,
+                label: state.tracks[0]?.label,
+            });
+            return state;
+        });
+        await waitFor(() =>
+            expect(result.current.tracks[0]?.label).toBe("Opener"),
+        );
+        expect(result.current.current).toBe(true);
+        seen.length = 0;
+
+        await transactionWithHistory(db, "renameTimeline", (tx) =>
+            tx
+                .update(schema.timelines)
+                .set({ name: "Closer" })
+                .where(eq(schema.timelines.id, 1)),
+        );
+        await waitFor(() =>
+            expect(result.current.tracks[0]?.label).toBe("Closer"),
+        );
+        expect(result.current.current).toBe(true);
+        // Between the edit and the rebuild: the last tracks, not current
+        expect(seen).toContainEqual({ current: false, label: "Opener" });
+        expect(seen.filter((s) => s.current).map((s) => s.label)).not.toContain(
+            "Opener",
+        );
     });
 
     it("loads once for a write that moves both versions (P7.15)", async ({

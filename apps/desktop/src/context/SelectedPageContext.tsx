@@ -14,7 +14,8 @@ import { useTimingObjects } from "@/hooks";
 // Define the type for the context value
 type SelectedPageContextProps = {
     selectedPage: Page | null;
-    setSelectedPage: (page: { id: number }) => void;
+    /** Selects the page, or waits for it if it isn't listed yet; true if it was selected now */
+    setSelectedPage: (page: { id: number }) => boolean;
     /**
      * A page to select after once it exists. This is good for selecting a page right after it is created,
      * as it might not be immediately available in the pages list.
@@ -78,6 +79,7 @@ export function SelectedPageProvider({ children }: { children: ReactNode }) {
             setSelectedPage(page);
             // A later choice wins over one still waiting for its page
             pageToSelectRef.current = null;
+            return true;
         } else {
             // Not in the page list yet (an undo that just restored it, seen first by the
             // caller): select it if it appears soon, so a page that never comes back can't be
@@ -95,6 +97,7 @@ export function SelectedPageProvider({ children }: { children: ReactNode }) {
                         ? undefined
                         : Date.now() + PENDING_SELECTION_MS,
             };
+            return false;
         }
     }, []);
 
