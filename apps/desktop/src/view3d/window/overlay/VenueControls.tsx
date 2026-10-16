@@ -14,6 +14,14 @@ import {
     lightingForKit,
     type VenueSettings,
 } from "@/view3d/core/venueSettings";
+import {
+    GUARD_UNIFORM_PRESET_IDS,
+    UNIFORM_PRESET_IDS,
+    guardUniformPresetOf,
+    uniformPresetOf,
+    type GuardUniformPresetId,
+    type UniformPresetId,
+} from "@/view3d/core/marchers/uniformPresets";
 import { Segmented } from "./Panel";
 import {
     applyVenueChange,
@@ -87,6 +95,50 @@ export function LightingControl() {
             }
             label={t("view3d.overlay.lighting")}
             testId="view3d-lighting-picker"
+        />
+    );
+}
+
+/** The band's uniform: every built-in preset, two to a row. */
+export function UniformPicker() {
+    const { t } = useTranslate();
+    const { settings, request } = useVenueRequest();
+    return (
+        <Segmented
+            value={settings ? uniformPresetOf(settings.uniforms) : null}
+            options={UNIFORM_PRESET_IDS.map((preset) => ({
+                value: preset,
+                label: t(`view3d.uniformPreset.${preset}`),
+            }))}
+            onChange={(uniforms: UniformPresetId) =>
+                request({ kind: "uniforms", uniforms })
+            }
+            label={t("view3d.settings.uniforms")}
+            testId="view3d-uniform-picker"
+            className="grid! grid-cols-2 [&>*]:justify-start"
+        />
+    );
+}
+
+/** The guard's uniform: the presets with a guard look, two to a row. */
+export function GuardUniformPicker() {
+    const { t } = useTranslate();
+    const { settings, request } = useVenueRequest();
+    return (
+        <Segmented
+            value={
+                settings ? guardUniformPresetOf(settings.guardUniforms) : null
+            }
+            options={GUARD_UNIFORM_PRESET_IDS.map((preset) => ({
+                value: preset,
+                label: t(`view3d.uniformPreset.${preset}`),
+            }))}
+            onChange={(guardUniforms: GuardUniformPresetId) =>
+                request({ kind: "guardUniforms", guardUniforms })
+            }
+            label={t("view3d.settings.guardUniforms")}
+            testId="view3d-guard-uniform-picker"
+            className="grid! grid-cols-2 [&>*]:justify-start"
         />
     );
 }
