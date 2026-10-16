@@ -80,6 +80,32 @@ type PeelState =
 
 const NONE: PeelState = { kind: "none" };
 
+const sameRect = (a: Rect, b: Rect) =>
+    a.left === b.left &&
+    a.top === b.top &&
+    a.width === b.width &&
+    a.height === b.height;
+
+const targetKey = (target: TimelinePeelTarget) =>
+    "trackId" in target ? `clip:${target.trackId}` : `page:${target.pageId}`;
+
+/** Whether `next` draws what `prev` does (verdicts are cached per drag, so compared by identity). */
+const samePeelState = (prev: PeelState, next: PeelState): boolean => {
+    if (prev.kind === "none" || next.kind === "none")
+        return prev.kind === next.kind;
+    if (prev.kind === "split" && next.kind === "split")
+        return (
+            prev.verdict === next.verdict && sameRect(prev.ghost, next.ghost)
+        );
+    if (prev.kind === "merge" && next.kind === "merge")
+        return (
+            prev.verdict === next.verdict &&
+            targetKey(prev.target) === targetKey(next.target) &&
+            sameRect(prev.rect, next.rect)
+        );
+    return false;
+};
+
 const rectOf = (element: Element): Rect => {
     const r = element.getBoundingClientRect();
     return { left: r.left, top: r.top, width: r.width, height: r.height };
@@ -138,7 +164,19 @@ export function useClipPeel({
     const [state, setState] = useState<PeelState>(NONE);
     const latest = useRef<PeelState>(NONE);
     const [active, setActive] = useState(false);
+    // Each target's verdict, worked out once per drag: the selection and the moves can't change
+    // while the pointer is held, and the verdicts read every move's label
+    const verdicts = useRef(new Map<string, TimelinePeelVerdict | null>());
+    const verdictFor = (
+        key: string,
+        compute: () => TimelinePeelVerdict | null,
+    ) => {
+        const cache = verdicts.current;
+        if (!cache.has(key)) cache.set(key, compute());
+        return cache.get(key) ?? null;
+    };
     const update = (next: PeelState) => {
+        if (samePeelState(latest.current, next)) return;
         latest.current = next;
         setState(next);
     };
@@ -148,11 +186,14 @@ export function useClipPeel({
         const own = clipRef.current;
         const hit = targetAt(clientX, clientY, own);
         if (hit) {
-            const verdict = peel.merge(
-                trackId,
-                "trackId" in hit.target
-                    ? { trackId: hit.target.trackId as TimelineTrackId }
-                    : hit.target,
+            const target = hit.target;
+            const verdict = verdictFor(targetKey(target), () =>
+                peel.merge(
+                    trackId,
+                    "trackId" in target
+                        ? { trackId: target.trackId as TimelineTrackId }
+                        : target,
+                ),
             );
             update(
                 verdict
@@ -172,7 +213,7 @@ export function useClipPeel({
             clientY > clip.top + clip.height &&
             clientY - pressY >= PEEL_SPLIT_PX
         ) {
-            const verdict = peel.split(trackId);
+            const verdict = verdictFor("split", () => peel.split(trackId));
             const height = Math.max(clip.height, 18);
             update(
                 verdict
@@ -198,6 +239,7 @@ export function useClipPeel({
     };
     const cancel = () => {
         setActive(false);
+        verdicts.current.clear();
         update(NONE);
     };
     const commit = () => {
