@@ -565,6 +565,8 @@ function partMeasures(root: XmlElement): Map<string, PartMeasure[]> {
 
 interface PartState {
     divisions: number;
+    /** True once the part has said what its divisions are */
+    declared: boolean;
 }
 
 /** What one part says about one measure. */
@@ -593,6 +595,15 @@ function readPartMeasure(
             return type === "stop" || type === "discontinue";
         }),
     };
+    // Some exporters write the first <divisions> after the measure's first note: until a part
+    // says, use the first value in this measure from its start
+    if (!state.declared) {
+        const first = descendants(measure, "divisions")[0];
+        if (numberOf(first) > 0) {
+            state.divisions = numberOf(first);
+            state.declared = true;
+        }
+    }
     // Positions in quarter notes: <divisions> can change in the middle of a measure
     let cur = 0;
     let max = 0;
@@ -600,7 +611,10 @@ function readPartMeasure(
         switch (nameOf(el)) {
             case "attributes": {
                 const divisions = numberOf(firstChild(el, "divisions"));
-                if (divisions > 0) state.divisions = divisions;
+                if (divisions > 0) {
+                    state.divisions = divisions;
+                    state.declared = true;
+                }
                 const time = firstChild(el, "time");
                 if (time && reading.time === undefined)
                     reading.time = readTime(time);
@@ -746,7 +760,9 @@ export function scanScore(doc: {
 
     let seq = 0;
     const nextSeq = () => seq++;
-    const states = parts.map((): PartState => ({ divisions: 1 }));
+    const states = parts.map(
+        (): PartState => ({ divisions: 1, declared: false }),
+    );
     const codaSymbols: number[] = [];
     const endingStops: (number[] | undefined)[] = [];
 

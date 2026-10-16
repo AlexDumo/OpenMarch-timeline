@@ -388,3 +388,17 @@ describe("<sound tempo> mistakes", () => {
         expect(codes(xml)).toContain("printed-tempo-differs");
     });
 });
+
+describe("divisions", () => {
+    it("uses divisions written after the first note from the start of the measure", () => {
+        const late = `<note><rest/><duration>960</duration><voice>1</voice></note><attributes><divisions>480</divisions><time><beats>2</beats><beat-type>4</beat-type></time></attributes>`;
+        const xml = score(
+            measure(1, museScoreTempo("quarter", 0, 60, 60) + late) +
+                measure(2, rest(2)),
+        );
+        expect(seconds(xml)).toEqual([
+            [1, 1],
+            [1, 1],
+        ]);
+    });
+});
