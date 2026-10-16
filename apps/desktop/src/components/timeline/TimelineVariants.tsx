@@ -38,6 +38,7 @@ import {
     TIMELINE_INITIAL_PAGE_WIDTH,
     TIMELINE_MIN_PX_PER_BEAT,
     TimelinePageLines,
+    TimelinePastEndShade,
     TimelinePlayhead,
     TimelineReturnMarker,
     showsReturnMarker,
@@ -1071,6 +1072,13 @@ const TimelineSurface = memo(function TimelineSurface({
                             }
                             holdMarks={props.holdMarks}
                             keepChains={props.keepChains}
+                        />
+                        <TimelinePastEndShade
+                            pages={model.pages}
+                            pixelsPerBeat={pixelsPerBeat}
+                            width={width}
+                            // Basic's bar is its page boxes, which run down the whole pane
+                            height={basic ? timelineHeight : audioTop}
                         />
                         <TimelineRehearsalMarkers
                             model={model}
