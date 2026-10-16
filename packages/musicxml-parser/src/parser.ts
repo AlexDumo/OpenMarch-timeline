@@ -10,6 +10,7 @@ import {
     formatBpm,
     formatTempoMarking,
     markingFromQuarterBpm,
+    UNUSUAL_TEMPO,
     type BeatUnit,
     type TempoMarking,
 } from "./tempo";
@@ -26,9 +27,6 @@ import {
     type ParseWarning,
     type ParseWarningCode,
 } from "./warnings";
-
-/** Tempos outside this range, in quarters per minute, are reported as likely mistakes. */
-export const UNUSUAL_TEMPO = { below: 20, above: 400 };
 
 /** Quarter notes per minute when a file has no tempo before its first marking. */
 export const DEFAULT_QUARTER_BPM = 120;
@@ -398,6 +396,12 @@ function walkTempos(
             )
                 warn("unusual-tempo", "warning", e.measureIndex, {
                     tempo: formatTempoMarking(marking),
+                });
+            if (e.soundIgnored)
+                warn("sound-tempo-ignored", "warning", e.measureIndex, {
+                    tempo: formatTempoMarking(marking),
+                    sound: formatBpm(e.soundIgnored.quarterBpm),
+                    reason: e.soundIgnored.reason,
                 });
             if (e.printedQuarterBpm !== undefined)
                 warn("printed-tempo-differs", "warning", e.measureIndex, {

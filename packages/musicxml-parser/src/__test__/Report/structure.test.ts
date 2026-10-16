@@ -353,3 +353,38 @@ describe("exporter quirks", () => {
         expect(order(xml)).toEqual(["1", "2", "3", "4", "2x2", "3x2"]);
     });
 });
+
+describe("<sound tempo> mistakes", () => {
+    it("uses the printed ♩. = 120 when Notion writes it as tempo=120", () => {
+        const xml = score(
+            measure(
+                1,
+                time(6, 8) + museScoreTempo("quarter", 1, 120, 120) + rest(3),
+            ),
+        );
+        const result = parseMusicXmlWithReport(xml);
+        expect(result.measures[0]!.beats[0]!.duration).toBeCloseTo(0.5);
+        expect(codes(xml)).toContain("sound-tempo-ignored");
+    });
+
+    it("uses the printed ♩ = 76 when the file plays 7602", () => {
+        const xml = score(
+            measure(
+                1,
+                time(4, 4) + museScoreTempo("quarter", 0, 76, 7602) + rest(4),
+            ),
+        );
+        expect(seconds(xml)[0]![0]).toBeCloseTo(60 / 76, 3);
+    });
+
+    it("still plays a <sound tempo> that differs from the print but could be meant", () => {
+        const xml = score(
+            measure(
+                1,
+                time(4, 4) + museScoreTempo("quarter", 0, 180, 80) + rest(4),
+            ),
+        );
+        expect(seconds(xml)[0]![0]).toBeCloseTo(0.75);
+        expect(codes(xml)).toContain("printed-tempo-differs");
+    });
+});

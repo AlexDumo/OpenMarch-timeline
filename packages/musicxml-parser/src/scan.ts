@@ -17,6 +17,7 @@
 import { type TimeSignaturePart } from "./meter";
 import { type MeasureNavigation } from "./perform";
 import {
+    UNUSUAL_TEMPO,
     isBeatUnit,
     readPerMinute,
     readSoundTempo,
@@ -49,6 +50,8 @@ export type RawEvent = { pos: number; seq: number } & (
           needsUnit: boolean;
           /** The printed tempo, in quarters, when `<sound tempo>` plays a different one */
           printedQuarterBpm?: number;
+          /** A `<sound tempo>` that was a mistake, so the printed tempo was used */
+          soundIgnored?: { quarterBpm: number; reason: SoundMistake };
       }
     | { kind: "invalid-tempo"; text: string }
     | { kind: "modulation"; modulation: Modulation }
@@ -62,6 +65,13 @@ export interface BeatGroup {
     /** Length in quarter notes, including notes tied to it */
     quarters: number;
 }
+
+/**
+ * Why a `<sound tempo>` was taken for a mistake: written in the printed note value instead of
+ * quarters (Notion writes ♩. = 120 as tempo="120"), or too slow or fast to be meant while the
+ * printed tempo is not (MuseScore 2 has written ♩ = 76 as tempo="7602").
+ */
+export type SoundMistake = "beat-unit" | "implausible";
 
 /** A metric modulation printed as "new note = old note", like ♩. = ♩. */
 export interface Modulation {
@@ -241,7 +251,30 @@ function directionEvents(
                 }
               : textMarking;
 
-    if (sound !== undefined) {
+    const plausible = (bpm: number) =>
+        bpm >= UNUSUAL_TEMPO.below && bpm <= UNUSUAL_TEMPO.above;
+    const printedMark =
+        metronome?.kind === "marking" ? metronome.marking : undefined;
+    const soundMistake: SoundMistake | undefined =
+        sound === undefined || !printedMark
+            ? undefined
+            : sound === printedMark.perMinute &&
+                Math.abs(printedMark.quarterBpm - sound) > 0.5
+              ? "beat-unit"
+              : !plausible(sound) && plausible(printedMark.quarterBpm)
+                ? "implausible"
+                : undefined;
+
+    if (sound !== undefined && soundMistake && printedMark) {
+        events.push({
+            pos,
+            seq: nextSeq(),
+            kind: "tempo",
+            marking: printedMark,
+            needsUnit: false,
+            soundIgnored: { quarterBpm: sound, reason: soundMistake },
+        });
+    } else if (sound !== undefined) {
         // <sound tempo> is the playback truth, in quarters; the printed marking is only shown
         const differs =
             printed !== undefined &&

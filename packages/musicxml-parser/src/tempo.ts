@@ -38,6 +38,9 @@ export function unitQuarters(unit: BeatUnit, dots = 0): number {
     return base * (2 - 1 / 2 ** dots);
 }
 
+/** Tempos outside this range, in quarters per minute, are reported as likely mistakes. */
+export const UNUSUAL_TEMPO = { below: 20, above: 400 };
+
 /** A tempo as the score shows it. */
 export interface TempoMarking {
     /** Quarter notes per minute: what the counts are timed from */

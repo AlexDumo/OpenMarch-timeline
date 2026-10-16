@@ -27,6 +27,8 @@ export type ParseWarningCode =
     | "invalid-tempo"
     /** The printed tempo and the tempo the file plays (`<sound tempo>`) differ; played was used */
     | "printed-tempo-differs"
+    /** A `<sound tempo>` that was a mistake in the file; the printed tempo was used */
+    | "sound-tempo-ignored"
     /** A tempo so slow or fast it is likely a mistake in the file */
     | "unusual-tempo"
     /** An approximate tempo ("c. 132") was read as its number */
@@ -85,6 +87,11 @@ export interface ParseWarning {
     message: string;
 }
 
+const SOUND_REASONS: Record<string, string> = {
+    "beat-unit": "the printed number in the wrong note value",
+    implausible: "which can't be meant",
+};
+
 const RAMP_REASONS: Record<string, string> = {
     "no-target": "no tempo marking says where it arrives",
     "too-far": "the next tempo marking is more than {window} measures later",
@@ -110,6 +117,8 @@ const MESSAGES: Record<ParseWarningCode, string> = {
     "invalid-tempo": 'Tempo "{text}" isn\'t a number; kept {kept}',
     "printed-tempo-differs":
         "The score shows {printed} but plays {tempo}; used {tempo}",
+    "sound-tempo-ignored":
+        "The file plays {sound} quarters a minute, {reason}; used the printed {tempo}",
     "unusual-tempo": "{tempo} is an unusual tempo; check it in the score",
     "approximate-tempo": "Approximate tempo read as {tempo}",
     "metric-modulation":
@@ -158,6 +167,9 @@ export function warningMessage(
             RAMP_REASONS[String(params.reason)] ?? String(params.reason),
             params,
         );
+    if (warning.code === "sound-tempo-ignored")
+        params.reason =
+            SOUND_REASONS[String(params.reason)] ?? String(params.reason);
     const text = fill(MESSAGES[warning.code], params);
     return measureLabel ? `m${measureLabel}: ${text}` : text;
 }
