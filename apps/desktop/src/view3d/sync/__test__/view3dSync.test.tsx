@@ -17,6 +17,7 @@ import {
     useView3dPublisher,
 } from "../useView3dPublisher";
 import { registerActionHandler } from "@/shortcuts/registry";
+import { usePlaybackSpeedStore } from "@/stores/PlaybackSpeedStore";
 import { emitTimelineChange } from "@/db-functions/timelineChanges";
 import {
     applyInvalidate,
@@ -33,6 +34,7 @@ const clock = (overrides: Partial<View3dClock> = {}): View3dClock => ({
     anchorWallMs: 1000,
     rate: 1,
     speed: 1,
+    chosenSpeed: 1,
     ...overrides,
 });
 
@@ -306,6 +308,17 @@ describe("useView3dPlaybackRequests", () => {
         // A stray release does nothing
         onRequest?.({ action: "holdFasterPlayback", release: true });
         expect(log).toEqual(["press", "release"]);
+    });
+
+    it("chooses a speed the window asks for, within the limits", () => {
+        renderHook(() => useView3dPlaybackRequests());
+        onRequest?.({ action: "setPlaybackSpeed", speed: 0.75 });
+        expect(usePlaybackSpeedStore.getState().speed).toBe(0.75);
+        onRequest?.({ action: "setPlaybackSpeed", speed: 99 });
+        expect(usePlaybackSpeedStore.getState().speed).toBe(8);
+        onRequest?.({ action: "setPlaybackSpeed", speed: "2" });
+        expect(usePlaybackSpeedStore.getState().speed).toBe(8);
+        usePlaybackSpeedStore.getState().setSpeed(1);
     });
 
     it("lets go when the window closes with the key held", () => {

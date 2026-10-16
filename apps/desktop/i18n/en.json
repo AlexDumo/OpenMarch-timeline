@@ -1806,9 +1806,7 @@
             "play": "Play (Space)",
             "pause": "Pause (Space)",
             "previousPage": "Previous page (Q)",
-            "nextPage": "Next page (E)",
-            "speed": "Playback speed: {speed}",
-            "speedHint": "Click for the next speed, Shift+click for the one before. Hold ] for double speed, [ for half"
+            "nextPage": "Next page (E)"
         },
         "settings": {
             "title": "View settings",

@@ -61,10 +61,12 @@ export interface View3dClock {
     /** Show milliseconds per wall millisecond while playing. */
     rate: number;
     /**
-     * The playback speed chosen in the editor, a held speed key included,
+     * The playback speed playing in the editor, a held speed key included,
      * paused too. `rate` follows it once the audio does.
      */
     speed: number;
+    /** The playback speed chosen in the editor, without a held key */
+    chosenSpeed: number;
 }
 
 export interface View3dSelection {
@@ -110,7 +112,15 @@ export interface View3dPlaybackRequest {
      * go. The editor ends the hold.
      */
     release?: unknown;
+    /** With `VIEW3D_SET_SPEED` as the action: the speed to choose */
+    speed?: unknown;
 }
+
+/**
+ * The playback request that chooses a speed (the speed button's slider and
+ * chips), which no editor action does.
+ */
+export const VIEW3D_SET_SPEED = "setPlaybackSpeed";
 
 export function isView3dPlaybackAction(
     value: unknown,
@@ -173,7 +183,8 @@ export function isView3dClock(value: unknown): value is View3dClock {
         isFiniteNumber(value.anchorShowMs) &&
         isFiniteNumber(value.anchorWallMs) &&
         isFiniteNumber(value.rate) &&
-        isFiniteNumber(value.speed)
+        isFiniteNumber(value.speed) &&
+        isFiniteNumber(value.chosenSpeed)
     );
 }
 

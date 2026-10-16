@@ -49,6 +49,7 @@ import {
     VIEW3D_SELECTION_CHANNEL,
     VIEW3D_TIMELINE_QUERY_KEY,
     isView3dPlaybackAction,
+    VIEW3D_SET_SPEED,
     wallNowMs,
     type View3dClock,
     type View3dPlaybackAction,
@@ -180,6 +181,7 @@ export function useView3dPublisher() {
             // change when the audio does (1 until playback has started)
             rate: playing ? getLivePlaybackRate() : 1,
             speed: effectivePlaybackSpeed(usePlaybackSpeedStore.getState()),
+            chosenSpeed: usePlaybackSpeedStore.getState().speed,
         };
         window.electron.publishToView3d(VIEW3D_CLOCK_CHANNEL, clock);
     }, []);
@@ -329,6 +331,12 @@ export function useView3dPlaybackRequests() {
         const letGoAll = () => [...held.keys()].forEach(letGo);
         const cleanups = [
             electron.onView3dPlaybackRequest((request) => {
+                if (request?.action === VIEW3D_SET_SPEED) {
+                    const { speed } = request;
+                    if (typeof speed === "number" && Number.isFinite(speed))
+                        usePlaybackSpeedStore.getState().setSpeed(speed);
+                    return;
+                }
                 if (!isView3dPlaybackAction(request?.action)) return;
                 // A release, or a second press without one
                 letGo(request.action);

@@ -89,6 +89,13 @@ const VIEW3D_API = {
             action,
             release,
         } satisfies View3dPlaybackRequest),
+
+    /** Asks the editor to choose this playback speed (`VIEW3D_SET_SPEED`). */
+    requestPlaybackSpeed: (speed: number) =>
+        ipcRenderer.send("view3d:playback-request", {
+            action: "setPlaybackSpeed",
+            speed,
+        } satisfies View3dPlaybackRequest),
 };
 
 contextBridge.exposeInMainWorld("view3d", VIEW3D_API);

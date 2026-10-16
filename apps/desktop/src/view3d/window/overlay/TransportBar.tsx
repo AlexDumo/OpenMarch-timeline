@@ -12,10 +12,9 @@ import {
     SkipBackIcon,
     SkipForwardIcon,
 } from "@phosphor-icons/react";
-import { Button } from "@openmarch/ui";
-import clsx from "clsx";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
-import { formatPlaybackSpeed } from "@/stores/PlaybackSpeedStore";
+import { PlaybackSpeedButton } from "@/components/timeline/PlaybackSpeedButton";
+import { TransportTooltipProvider } from "@/components/timeline/ShortcutTooltip";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import { Panel, PanelSeparator, ToggleButton } from "./Panel";
 import { transportState } from "./playback";
@@ -82,39 +81,27 @@ export function TransportBar() {
 }
 
 /**
- * The editor's playback speed: a click steps to the next speed, Shift+click
- * back, as the editor's speed button does. Lit off 1×, held keys included.
+ * The editor's playback speed, with the editor's own speed button: its
+ * tooltip, click and Shift+click steps, and right-click slider and chips.
  */
 function SpeedButton() {
-    const { t } = useTranslate();
     const speed = useView3dSyncStore((s) => s.clock?.speed ?? 1);
-    const shown = formatPlaybackSpeed(speed);
-    const label = t("view3d.playback.speed", { speed: shown });
+    const chosen = useView3dSyncStore((s) => s.clock?.chosenSpeed ?? 1);
     return (
-        <Button
-            variant="ghost"
-            size="compact"
-            content="text"
-            aria-label={label}
-            aria-keyshortcuts="BracketRight BracketLeft"
-            tooltipText={`${label}. ${t("view3d.playback.speedHint")}`}
-            tooltipSide="top"
-            onClick={(event: React.MouseEvent) =>
-                window.view3d.requestPlayback(
-                    event.shiftKey
-                        ? "previousPlaybackSpeed"
-                        : "nextPlaybackSpeed",
-                )
-            }
-            data-testid="view3d-speed"
-            className={clsx(
-                "rounded-4 enabled:hover:bg-text/10 h-28 min-w-40 shrink-0 border border-transparent px-6 font-mono text-[11px] tabular-nums",
-                speed !== 1
-                    ? "bg-accent/15 text-accent border-accent enabled:hover:bg-accent/20"
-                    : "text-text",
-            )}
-        >
-            {shown}
-        </Button>
+        <TransportTooltipProvider>
+            <PlaybackSpeedButton
+                speed={chosen}
+                playing={speed}
+                held={speed !== chosen}
+                onStep={(back) =>
+                    window.view3d.requestPlayback(
+                        back ? "previousPlaybackSpeed" : "nextPlaybackSpeed",
+                    )
+                }
+                onSetSpeed={(next) => window.view3d.requestPlaybackSpeed(next)}
+                className="h-28 min-w-40"
+                testId="view3d-speed"
+            />
+        </TransportTooltipProvider>
     );
 }
