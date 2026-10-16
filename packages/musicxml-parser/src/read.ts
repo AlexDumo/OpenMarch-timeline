@@ -37,8 +37,11 @@ export function decodeXmlBytes(data: ArrayBuffer | Uint8Array): string {
         return new TextDecoder("utf-16le").decode(b);
     if (b[0] === 0x00 && b[1] === 0x3c)
         return new TextDecoder("utf-16be").decode(b);
+    // Some files have blank lines before the declaration
     const head = new TextDecoder("latin1").decode(b.subarray(0, 200));
-    const declared = head.match(/^<\?xml[^>]*encoding=["']([^"']+)["']/)?.[1];
+    const declared = head.match(
+        /^\s*<\?xml[^>]*encoding=["']([^"']+)["']/,
+    )?.[1];
     // A declared 16-bit encoding on bytes that aren't 16-bit (no zero bytes, checked above) is a
     // mislabel: some exporters write encoding="UTF-16" on a UTF-8 file
     if (declared && !/^utf-?(8|16|32)/i.test(declared)) {

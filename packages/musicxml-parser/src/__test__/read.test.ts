@@ -42,6 +42,12 @@ describe("reading a file's bytes", () => {
         expect(decodeXmlBytes(bytes)).toBe(latin1);
     });
 
+    it("reads the 8-bit encoding a declaration after blank lines names", () => {
+        const latin1 = `\n  <?xml version="1.0" encoding="ISO-8859-1"?><a>é</a>`;
+        const bytes = new Uint8Array([...latin1].map((c) => c.charCodeAt(0)));
+        expect(decodeXmlBytes(bytes)).toBe(latin1);
+    });
+
     it("finds the score in an .mxl through its container, whatever the file is called", async () => {
         const zip = new JSZip();
         zip.file(
