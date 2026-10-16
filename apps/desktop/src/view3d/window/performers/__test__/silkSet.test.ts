@@ -11,7 +11,15 @@ import { buildCountClock } from "@/view3d/core/marchers/countClock";
 import type { MarcherPlan } from "@/view3d/core/marchers/planner";
 import { SILK_GRID, silkPoint } from "@/view3d/core/instruments/silkWave";
 import type { Composer } from "@/view3d/render/composer";
-import { SilkSet, silkGrid, silkMaterial } from "../marchers/silkSet";
+import {
+    SILK_PATTERN_IDS,
+    SILK_PATTERN_SIZE,
+    SilkSet,
+    silkGrid,
+    silkMaterial,
+    silkPatternTexture,
+} from "../marchers/silkSet";
+import { UNIFORM_PRESETS } from "@/view3d/core/marchers/uniformPresets";
 import { SilkMotion } from "../marchers/silkMotion";
 import type { ShowPlans } from "../marchers/marcherMotion";
 import type { MarcherSlotLook } from "../marchers/marcherBodies";
@@ -201,6 +209,41 @@ describe("silkMaterial", () => {
         );
         expect(vs).not.toContain("#include <skinning_vertex>");
         expect(shader.uniforms.uComposed).toBeDefined();
+        // a patterned silk samples its preset's band of the pattern texture
+        expect(
+            (shader.uniforms.uSilkPatterns as { value: unknown }).value,
+        ).toBe(silkPatternTexture());
+        expect(shader.fragmentShader).toContain("silkPatternColor(vSilkUv");
+    });
+});
+
+describe("silkPatternTexture", () => {
+    it("holds each preset's pattern in its own band, pole to fly and bottom to top", () => {
+        const texture = silkPatternTexture();
+        const { u: w, v: h } = SILK_PATTERN_SIZE;
+        expect(SILK_PATTERN_IDS).toContain("sash");
+        expect(texture.image.width).toBe(w);
+        expect(texture.image.height).toBe(h * SILK_PATTERN_IDS.length);
+        expect(texture.colorSpace).toBe(THREE.SRGBColorSpace);
+        const data = texture.image.data as Uint8Array;
+        SILK_PATTERN_IDS.forEach((id, k) => {
+            const silk = UNIFORM_PRESETS[id].silk!;
+            for (const [i, j] of [
+                [0, 0],
+                [w - 1, 0],
+                [0, h - 1],
+                [w - 1, h - 1],
+                [w >> 1, h >> 2],
+            ]) {
+                const c = silk((i + 0.5) / w, (j + 0.5) / h);
+                const o = ((k * h + j) * w + i) * 4;
+                expect([...data.subarray(o, o + 3)]).toEqual([
+                    (c >> 16) & 255,
+                    (c >> 8) & 255,
+                    c & 255,
+                ]);
+            }
+        });
     });
 });
 
@@ -250,6 +293,45 @@ describe("SilkSet", () => {
         expect([silk[2], silk[3]]).toEqual([1, sk.bones.length]);
         expect([silk[6], silk[7]]).toEqual([-1, handL]);
         set.dispose();
+    });
+
+    it("paints a silk with its preset's pattern unless a fill or a Silk cue makes it plain", async () => {
+        const sk = await skeleton();
+        const guard = (fill?: number): MarcherSlotLook => ({
+            body: defaultPerformerBody(1),
+            uniform: sectionUniform("Color Guard", "up", undefined, fill),
+        });
+        const read = (l: MarcherSlotLook) => {
+            const set = new SilkSet(
+                sk,
+                [l],
+                "low",
+                new THREE.MeshStandardMaterial(),
+            );
+            const f = frame(1);
+            set.writeFrame(f.xz, f.heading, f.placed, f.scale, null);
+            const g = set.meshes[0].geometry.attributes;
+            const out = {
+                pattern: g.aPattern.array[0],
+                color: [...g.aColor.array.slice(0, 3)],
+            };
+            set.dispose();
+            return out;
+        };
+        const linear = (hex: number) => {
+            const c = new THREE.Color(hex);
+            return [c.r, c.g, c.b].map((x) => expect.closeTo(x, 5));
+        };
+        // Royal Sash, the guard default, paints its diagonal
+        expect(read(guard()).pattern).toBe(SILK_PATTERN_IDS.indexOf("sash"));
+        // a section with its own 2D fill gets a plain silk in that fill
+        const filled = read(guard(0x22aa44));
+        expect(filled.pattern).toBe(-1);
+        expect(filled.color).toEqual(linear(0x22aa44));
+        // a Silk cue's color is plain too
+        const cued = read({ ...guard(), silkColor: 0xcc2233 });
+        expect(cued.pattern).toBe(-1);
+        expect(cued.color).toEqual(linear(0xcc2233));
     });
 
     it("splits near and far silks by distance from the camera", async () => {

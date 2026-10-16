@@ -1061,6 +1061,11 @@
         "general.appearance.light": "Claro",
         "general.automaticUpdates": "Descargar e instalar actualizaciones automáticamente",
         "general.description": "Idioma y otras preferencias de toda la aplicación.",
+        "general.editorMode": "Modo del editor",
+        "general.editorMode.basic": "Básico",
+        "general.editorMode.basic.description": "Páginas, como en una hoja de drill. Define cada página; los integrantes se quedan quietos hasta que los vuelvas a mover. Se permiten posiciones a mitad de página.",
+        "general.editorMode.expert": "Experto",
+        "general.editorMode.expert.description": "La línea de tiempo completa: movimientos que cruzan páginas, movimientos superpuestos, la bandera de inicio y los bucles.",
         "general.language": "Idioma",
         "general.showFullDatabasePath": "Mostrar ruta completa del archivo",
         "general.showFullDatabasePath.description": "Muestra la ruta completa del archivo abierto en la barra de título en lugar de solo su nombre.",
@@ -1242,6 +1247,28 @@
     "welcome": {
         "description": "No se encontraron archivos. Cree uno, y asegúrese de consultar las guías. Personalice su tema y navegación en Configuración.",
         "title": "Bienvenido a OpenMarch"
+    },
+    "welcomeFlow": {
+        "back": "Atrás",
+        "changeLater": "Puedes cambiarlo en cualquier momento en Configuración.",
+        "continue": "Continuar",
+        "dialogLabel": "Configurar OpenMarch",
+        "finish": "Terminar",
+        "getStarted": "Comenzar",
+        "language": {
+            "title": "Elige tu idioma"
+        },
+        "mode": {
+            "title": "¿Cómo quieres trabajar?"
+        },
+        "step": "Paso {current} de {total}",
+        "theme": {
+            "title": "¿Claro u oscuro?"
+        },
+        "welcome": {
+            "description": "Bienvenido al futuro del diseño. Vamos a dejarte todo listo.",
+            "title": "Bienvenido a OpenMarch"
+        }
     },
     "workspaceSettings": {
         "audioOffsetSeconds": "Desplazamiento de Audio",

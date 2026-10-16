@@ -188,8 +188,9 @@ export interface MarcherSlotLook {
     body: PerformerBody;
     uniform: UniformLook;
     /**
-     * sRGB: a carried flag's silk, the section's 2D color with no Silk cue
-     * (props-spec.md section 6). Defaults to the look's primary color.
+     * sRGB: a carried flag's silk, plain, from a Silk cue (props-spec.md
+     * section 6). Without one the silk takes the uniform's carry: the
+     * section's 2D fill, else its preset's color and silk pattern.
      */
     silkColor?: number;
 }

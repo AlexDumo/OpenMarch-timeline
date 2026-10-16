@@ -200,8 +200,11 @@ shows only reflections and reads as chrome (owner, 2026-10-09).
 model lists its silks as `SilkSpec`s (size, frame in the instrument frame,
 bone, mirror); `silkSet.ts` draws every silk in the band in one instanced
 cloth mesh per detail tier (24 × 16 cells near, 12 × 8 far and at `low`):
-metalness 0, roughness 0.8, double-sided, no shadows, plain in the
-section's 2D color. The vertex shader waves each silk in its own frame
+metalness 0, roughness 0.8, double-sided, no shadows. A silk is plain in
+the section's 2D fill when it has one; otherwise it takes the guard
+preset's carry color and silk pattern (D-18), which the fragment shader
+samples at the grid's (u, v) from one texture holding every preset's
+pattern (`silkPatternTexture`). The vertex shader waves each silk in its own frame
 before skinning (`silkWave.ts`, the silk prototype's variant B: it hangs
 at rest and billows on the move), from per-instance inputs written by
 count: the show clock, a phase seed, ground speed, distance covered and

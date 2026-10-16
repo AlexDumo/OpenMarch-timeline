@@ -9,8 +9,11 @@
  * instruments. The wave goes in before skinning, so a silk follows its
  * hand through any hold or transition.
  *
- * - Cloth, not metal: metalness 0, matte, double-sided, plain in the
- *   silk's color (the section's 2D color until Silk cues, C5.4).
+ * - Cloth, not metal: metalness 0, matte, double-sided. A silk is plain in
+ *   its color (the section's 2D fill, else its uniform preset's carry), or
+ *   painted with its preset's pattern (`uniformPresets.ts`), sampled from
+ *   {@link silkPatternTexture} at the grid's (u, v). Silk cues (C5.4) come
+ *   later.
  * - No shadows at any quality (props-spec.md section 7, "Rendering").
  * - The wave reads only per-instance inputs written from the count, so a
  *   scrub back to a count draws the same silks as playing there.
@@ -29,6 +32,11 @@ import {
     silkSeed,
 } from "@/view3d/core/instruments/silkWave";
 import { uniformKey } from "@/view3d/core/marchers/looks";
+import {
+    UNIFORM_PRESET_IDS,
+    UNIFORM_PRESETS,
+    type UniformPresetId,
+} from "@/view3d/core/marchers/uniformPresets";
 import { poseArms } from "./armPose";
 import { instrumentFrames } from "./instrumentGeometry";
 import { isNearCarrier } from "./hornSet";
@@ -72,6 +80,47 @@ export function silkGrid(fly: number, header: number): THREE.BufferGeometry {
     return g;
 }
 
+/** The presets that paint their silks, in {@link silkPatternTexture}'s order. */
+export const SILK_PATTERN_IDS: readonly UniformPresetId[] =
+    UNIFORM_PRESET_IDS.filter((id) => UNIFORM_PRESETS[id].silk);
+
+/** One pattern's texels in {@link silkPatternTexture}: u across, v up. */
+export const SILK_PATTERN_SIZE = { u: 128, v: 64 } as const;
+
+let patternTexture: THREE.DataTexture | null = null;
+
+/**
+ * Every silk pattern, one band of {@link SILK_PATTERN_SIZE} each, stacked
+ * up in {@link SILK_PATTERN_IDS}' order and sampled by the silk shader. It
+ * doesn't depend on the show, so one texture serves every silk mesh.
+ */
+export function silkPatternTexture(): THREE.DataTexture {
+    if (patternTexture) return patternTexture;
+    const { u: w, v: h } = SILK_PATTERN_SIZE;
+    const n = Math.max(1, SILK_PATTERN_IDS.length);
+    const data = new Uint8Array(w * h * n * 4);
+    SILK_PATTERN_IDS.forEach((id, k) => {
+        const silk = UNIFORM_PRESETS[id].silk!;
+        for (let j = 0; j < h; j++)
+            for (let i = 0; i < w; i++) {
+                const c = silk((i + 0.5) / w, (j + 0.5) / h);
+                const o = ((k * h + j) * w + i) * 4;
+                data[o] = (c >> 16) & 255;
+                data[o + 1] = (c >> 8) & 255;
+                data[o + 2] = c & 255;
+                data[o + 3] = 255;
+            }
+    });
+    const texture = new THREE.DataTexture(data, w, h * n);
+    // the patterns are sRGB, as the presets' colors are
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+    patternTexture = texture;
+    return texture;
+}
+
 /** Per-instance attributes and how many floats each takes. */
 const INSTANCE_ATTRIBUTES = {
     aSlot: 1,
@@ -85,8 +134,10 @@ const INSTANCE_ATTRIBUTES = {
     aFrame2: 4,
     /** (wave phase, belly phase, ground speed, turn rate): written per frame */
     aMotion: 4,
-    /** Linear RGB. */
+    /** Linear RGB, for a plain silk. */
     aColor: 3,
+    /** The silk's pattern: its index in `SILK_PATTERN_IDS`, or -1 for plain. */
+    aPattern: 1,
 } as const;
 type InstanceAttribute = keyof typeof INSTANCE_ATTRIBUTES;
 const STATIC: InstanceAttribute[] = [
@@ -97,6 +148,7 @@ const STATIC: InstanceAttribute[] = [
     "aFrame1",
     "aFrame2",
     "aColor",
+    "aPattern",
 ];
 
 const SILK_HEAD = /* glsl */ `
@@ -110,7 +162,24 @@ attribute vec4 aFrame1;
 attribute vec4 aFrame2;
 attribute vec4 aMotion;
 attribute vec3 aColor;
+attribute float aPattern;
 varying vec3 vSilkColor;
+varying vec2 vSilkUv;
+varying float vSilkPattern;
+`;
+
+const SILK_FRAGMENT_HEAD = /* glsl */ `
+uniform sampler2D uSilkPatterns;
+uniform float uSilkPatternCount;
+varying vec3 vSilkColor;
+varying vec2 vSilkUv;
+varying float vSilkPattern;
+/** The silk's pattern at (u, v), kept inside its own band of the texture. */
+vec3 silkPatternColor(vec2 uv, float pattern) {
+  float inset = 0.5 / ${SILK_PATTERN_SIZE.v.toFixed(1)};
+  float v = clamp(uv.y, inset, 1.0 - inset);
+  return texture2D(uSilkPatterns, vec2(uv.x, (pattern + v) / uSilkPatternCount)).rgb;
+}
 `;
 
 /**
@@ -127,6 +196,10 @@ export function silkMaterial(composer: Composer): THREE.MeshStandardMaterial {
     });
     material.onBeforeCompile = (shader) => {
         shader.uniforms.uComposed = composer.uniform;
+        shader.uniforms.uSilkPatterns = { value: silkPatternTexture() };
+        shader.uniforms.uSilkPatternCount = {
+            value: Math.max(1, SILK_PATTERN_IDS.length),
+        };
         shader.vertexShader = shader.vertexShader
             .replace("#include <common>", `#include <common>\n${SILK_HEAD}`)
             .replace(
@@ -135,7 +208,9 @@ export function silkMaterial(composer: Composer): THREE.MeshStandardMaterial {
   vec3 silkLocal, silkNormal;
   silkPoint(position.x, position.y, aSilk.xyz, aMotion, aCut, silkLocal, silkNormal);
   vec3 objectNormal = mat3(silkFrame) * silkNormal;
-  vSilkColor = aColor;`,
+  vSilkColor = aColor;
+  vSilkUv = position.xy;
+  vSilkPattern = aPattern;`,
             )
             .replace(
                 "#include <skinbase_vertex>",
@@ -153,11 +228,14 @@ export function silkMaterial(composer: Composer): THREE.MeshStandardMaterial {
         shader.fragmentShader = shader.fragmentShader
             .replace(
                 "#include <common>",
-                "#include <common>\nvarying vec3 vSilkColor;",
+                `#include <common>\n${SILK_FRAGMENT_HEAD}`,
             )
             .replace(
                 "#include <color_fragment>",
-                "#include <color_fragment>\n  diffuseColor.rgb *= vSilkColor;",
+                `#include <color_fragment>
+  diffuseColor.rgb *= vSilkPattern < -0.5
+    ? vSilkColor
+    : silkPatternColor(vSilkUv, floor(vSilkPattern + 0.5));`,
             );
     };
     material.customProgramCacheKey = () => "view3d-silk";
@@ -250,7 +328,15 @@ function silkInstances(
             });
             byLook.set(key, specs);
         }
-        const color = lin(l.silkColor ?? l.uniform.colors.primary);
+        const { carryColor, silk } = l.uniform.options;
+        const color = lin(
+            l.silkColor ?? carryColor ?? l.uniform.colors.primary,
+        );
+        // a fill or a Silk cue (`silkColor`) makes the silk plain
+        const pattern =
+            silk && l.silkColor === undefined
+                ? SILK_PATTERN_IDS.indexOf(silk)
+                : -1;
         specs.forEach(({ spec, bone, frame }, n) =>
             silks.push({
                 slot,
@@ -266,6 +352,7 @@ function silkInstances(
                     aFrame2: frame.slice(8, 12),
                     aMotion: [0, 0, 0, 0],
                     aColor: [color.r, color.g, color.b],
+                    aPattern: [pattern],
                 },
             }),
         );

@@ -38,6 +38,11 @@ import {
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
+import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
+import {
+    guardUniformPresetOf,
+    uniformPresetOf,
+} from "@/view3d/core/marchers/uniformPresets";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { marcherHeading } from "@/view3d/core/marchers/facing";
 import {
@@ -53,7 +58,6 @@ import {
 import {
     defaultPerformerBody,
     bassOptions,
-    DEFAULT_PRIMARY,
     fillToNumber,
     sectionUniform,
 } from "@/view3d/core/marchers/looks";
@@ -138,14 +142,19 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     );
     const count = slots.ids.length;
 
+    // the show's band and guard uniform presets, from its venue settings
+    // (ADR 0002 D-18)
+    const { data: venue } = useVenueSettings();
+    const uniformPreset = uniformPresetOf(venue?.uniforms);
+    const guardUniformPreset = guardUniformPresetOf(venue?.guardUniforms);
     // om-pose marchers (ADR 0002 D-7); the cylinders stand in until they load.
     const { data: sectionAppearances } = useQuery(
         allSectionAppearancesQueryOptions(),
     );
     // Keyed on what a look depends on (marcher IDs, sections, section fills),
     // not on the positions: a drill edit must not rebuild every mesh. The
-    // uniform ignores the fill (Band or Guard default); only what a section
-    // carries, its drum shells and flag silks, takes the fill.
+    // uniform ignores the fill (it comes from the show's preset); only what a
+    // section carries, its drum shells and flag silks, takes the fill.
     const looksKey = useMemo(() => {
         if (!marchers || !sectionAppearances) return null;
         const sectionById = new Map(marchers.map((m) => [m.id, m.section]));
@@ -179,11 +188,20 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 options[i],
                 fill ? fillToNumber(fill) : undefined,
                 guardEquipment === "section" ? undefined : guardEquipment,
+                uniformPreset,
+                guardUniformPreset,
             ),
-            // no Silk cues yet: a plain silk in the section's 2D color
-            silkColor: fill ? fillToNumber(fill) : DEFAULT_PRIMARY,
+            // no Silk cues yet: the silks take the uniform's carry (the
+            // section's 2D fill, else the preset's color and pattern)
         }));
-    }, [looksKey, quality, hornState, guardEquipment]);
+    }, [
+        looksKey,
+        quality,
+        hornState,
+        guardEquipment,
+        uniformPreset,
+        guardUniformPreset,
+    ]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],
