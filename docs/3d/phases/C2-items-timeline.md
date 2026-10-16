@@ -53,8 +53,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.2: Keep items out of all-marchers loops
 
-- Owner: none
-- Status: open
+- Owner: trevor (3d/c2-items-out-of-loops-v2)
+- Status: in-review
 - PR: none
 - Parallel: yes
 - Depends on: C2.1
@@ -185,3 +185,17 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 - **Checks:** desktop vitest (items, migrations, field, editor); core
   tests; `e2e/browser/tests/props.spec.mts` in the browser (7 scenarios);
   type-check, lint, format, spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-items-out-of-loops-v2) · C2.2
+
+- **Done:** `isPerformer` / `performersOnly` (`Marcher.ts`) and
+  `performersQueryOptions`. Items are left out of coordinate sheets and
+  individual drill charts, the mobile export, the marcher list and section
+  appearances, collisions (a performer on a platform isn't colliding with
+  it), the Select tab and Ctrl/Cmd+A on the field, and the 3D View's
+  performer figures. Drill numbering is untouched: items use their own
+  PROP and EQUIP prefixes.
+- **Cross-phase:** cue targets, ripple orders and the Visuals Who list
+  belong to the cue code; check them when items get cues (C3.7).
+- **Checks:** desktop vitest (full suite); type-check, lint, format,
+  spellcheck.
