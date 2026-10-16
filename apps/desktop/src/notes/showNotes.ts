@@ -61,7 +61,7 @@ export interface ShowNotesInput {
     beatCount: number;
     /** The resolver's position, null for a marcher it doesn't have */
     positionAt: (marcherId: number, beat: number) => XY | null;
-    /** How far a crew member may be from its prop, in canvas units */
+    /** How far a crew member may be from its prop, in field units */
     crewReach: number;
     /** The show setting "Warn when a prop moves without a crew" */
     warnPropMovesWithoutCrew: boolean;

@@ -2,7 +2,6 @@ import { expect } from "vitest";
 import { createResolver, putDownDrifts, type XY } from "@openmarch/core";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { getTestWithHistory } from "@/test/history";
-import { setTimelineModeFlag } from "@/test/timelineMode";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import { performRedo, performUndo } from "../history";
 import { createItems } from "../items";
@@ -50,7 +49,6 @@ const movePerformer = (
 
 /** Timeline mode, Alice and Bob placed on their marks by count 8, and a flag item. */
 const setUp = async (db: DbConnection) => {
-    await setTimelineModeFlag(db, true);
     const { beat, ordinal } = await ordinals(db);
     await movePerformer(db, ALICE, { start: 0, end: 8 }, [100, 100]);
     await movePerformer(db, BOB, { start: 0, end: 8 }, [140, 120]);

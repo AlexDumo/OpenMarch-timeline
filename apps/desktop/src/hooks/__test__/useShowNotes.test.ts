@@ -1,7 +1,6 @@
 import { expect } from "vitest";
 import { createResolver, type XY } from "@openmarch/core";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
-import { setTimelineModeFlag } from "@/test/timelineMode";
 import { readTimelineTables } from "@/timeline/timelineRows";
 import {
     createItems,
@@ -75,7 +74,6 @@ describeDbTests("useShowNotes", (it) => {
         marchersAndPages,
     }) => {
         expect(marchersAndPages).toBeDefined();
-        await setTimelineModeFlag(db, true);
         const beats = await db
             .select({ id: schema.beats.id })
             .from(schema.beats)

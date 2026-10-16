@@ -75,7 +75,7 @@ async function itemChangesInTransaction(
 export interface PutDownResult {
     /** The item's marchers row */
     marcherId: number;
-    /** Where it lands, in canvas pixels */
+    /** Where it lands, in field units */
     spot: XY;
     /** The move's range, as beat ordinals: from the held change to the put-down */
     range: { start: number; end: number };
