@@ -13,8 +13,6 @@ import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
 import { APP_LANGUAGES } from "@/utilities/languages";
 
-const languages = APP_LANGUAGES;
-
 export default function GeneralSettings() {
     const tolgee = useTolgee();
     const [currentLanguage, setCurrentLanguage] = useState("en");
@@ -69,7 +67,7 @@ export default function GeneralSettings() {
     };
 
     const currentLanguageName =
-        languages.find((lang) => lang.code === currentLanguage)?.name ||
+        APP_LANGUAGES.find((lang) => lang.code === currentLanguage)?.name ||
         "English";
 
     return (
@@ -88,7 +86,7 @@ export default function GeneralSettings() {
                         className="min-w-[120px]"
                     />
                     <SelectContent>
-                        {languages.map((language) => (
+                        {APP_LANGUAGES.map((language) => (
                             <SelectItem
                                 key={language.code}
                                 value={language.code}

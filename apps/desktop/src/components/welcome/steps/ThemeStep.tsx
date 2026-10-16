@@ -13,9 +13,10 @@ export type ThemeChoice = "light" | "dark";
 /**
  * The preview's colors, from each theme's tokens in packages/ui tailwind.css.
  * Fixed rather than tokens so both previews show at once whatever the app's
- * current theme is.
+ * current theme is; a test keeps `bg`, `stroke` and `accent` equal to the
+ * tokens. The rest are toned-down versions for a small drawing.
  */
-const PREVIEW_COLORS: Record<
+export const PREVIEW_COLORS: Record<
     ThemeChoice,
     {
         bg: string;
@@ -37,7 +38,7 @@ const PREVIEW_COLORS: Record<
     dark: {
         bg: "rgb(15, 14, 19)",
         panel: "rgb(28, 27, 33)",
-        stroke: "rgba(255, 255, 255, 0.08)",
+        stroke: "rgba(255, 255, 255, 0.06)",
         text: "rgba(208, 208, 208, 0.35)",
         accent: "rgb(150, 126, 255)",
         field: "rgb(36, 35, 42)",

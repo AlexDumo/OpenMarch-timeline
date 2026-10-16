@@ -1,17 +1,22 @@
+// cspell:words Bienvenido configuremos
+
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TolgeeProvider } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { useEditorModeStore } from "@/stores/EditorModeStore";
+import { APP_LANGUAGES } from "@/utilities/languages";
 import WelcomeFlow from "../WelcomeFlow";
 
-/** Stands in for the preload's settings bridge (the IPC boundary). */
-function stubElectron(optOutAnalytics: unknown) {
+/**
+ * Stands in for the preload's settings bridge (the IPC boundary). `language`
+ * is the stored setting: undefined when it was never chosen.
+ */
+function stubElectron(optOutAnalytics: unknown, language?: string) {
+    const settings: Record<string, unknown> = { optOutAnalytics, language };
     const electron = {
-        invoke: vi.fn(async (_channel: string, key: string) =>
-            key === "optOutAnalytics" ? optOutAnalytics : undefined,
-        ),
+        invoke: vi.fn(async (_channel: string, key: string) => settings[key]),
         send: vi.fn(),
         getTheme: vi.fn(async () => "dark"),
         setTheme: vi.fn(async () => undefined),
@@ -47,15 +52,21 @@ async function goToModeStep() {
     return screen.findByTestId("editor-mode-card-basic");
 }
 
-beforeEach(() => {
-    useEditorModeStore.setState({ mode: null, loaded: true });
+function setSystemLanguages(languages: string[]) {
     Object.defineProperty(navigator, "languages", {
-        value: ["en-US"],
+        value: languages,
         configurable: true,
     });
+}
+
+beforeEach(() => {
+    useEditorModeStore.setState({ mode: null, loaded: true });
+    setSystemLanguages(["en-US"]);
 });
 afterEach(async () => {
     vi.restoreAllMocks();
+    // Back to jsdom's own navigator.languages.
+    delete (navigator as { languages?: unknown }).languages;
     await tolgee.changeLanguage("en");
 });
 
@@ -126,10 +137,7 @@ describe("WelcomeFlow", () => {
     });
 
     it("starts on the system's language and saves it on Continue", async () => {
-        Object.defineProperty(navigator, "languages", {
-            value: ["es-MX", "en-US"],
-            configurable: true,
-        });
+        setSystemLanguages(["es-MX", "en-US"]);
         const electron = stubElectron(false);
         renderFlow();
 
@@ -142,5 +150,88 @@ describe("WelcomeFlow", () => {
         fireEvent.click(continueButton());
         expect(electron.setLanguage).toHaveBeenCalledWith("es");
         await screen.findByTestId("welcome-theme-options");
+    });
+
+    it("keeps a saved language, even English, instead of the system's", async () => {
+        setSystemLanguages(["es-MX", "en-US"]);
+        const electron = stubElectron(false, "en");
+        renderFlow();
+
+        fireEvent.click(await screen.findByTestId("welcome-continue"));
+        await waitFor(() =>
+            expect(screen.getByTestId("welcome-language-en")).toHaveAttribute(
+                "aria-checked",
+                "true",
+            ),
+        );
+        fireEvent.click(continueButton());
+        await screen.findByTestId("welcome-theme-options");
+        expect(electron.setLanguage).not.toHaveBeenCalled();
+        expect(tolgee.getLanguage()).toBe("en");
+    });
+
+    it("follows the saved language when it is applied after the flow opens", async () => {
+        const electron = stubElectron(false, "fr");
+        renderFlow();
+        fireEvent.click(await screen.findByTestId("welcome-continue"));
+        await screen.findByTestId("welcome-language-options");
+
+        // main.tsx applies the stored language once it has loaded.
+        await tolgee.changeLanguage("fr");
+        await waitFor(() =>
+            expect(screen.getByTestId("welcome-language-fr")).toHaveAttribute(
+                "aria-checked",
+                "true",
+            ),
+        );
+        fireEvent.click(continueButton());
+        await screen.findByTestId("welcome-theme-options");
+        expect(electron.setLanguage).not.toHaveBeenCalled();
+        expect(tolgee.getLanguage()).toBe("fr");
+    });
+
+    it("doesn't undo a language changed in Settings during the flow", async () => {
+        setSystemLanguages(["es-MX", "en-US"]);
+        const electron = stubElectron(false);
+        renderFlow();
+        fireEvent.click(await screen.findByTestId("welcome-continue"));
+        await screen.findByTestId("welcome-language-options");
+
+        // The Settings window saves Japanese and broadcasts it.
+        await tolgee.changeLanguage("ja");
+        await waitFor(() =>
+            expect(screen.getByTestId("welcome-language-ja")).toHaveAttribute(
+                "aria-checked",
+                "true",
+            ),
+        );
+        fireEvent.click(continueButton());
+        await screen.findByTestId("welcome-theme-options");
+        expect(electron.setLanguage).not.toHaveBeenCalled();
+        expect(tolgee.getLanguage()).toBe("ja");
+    });
+
+    it("shows the welcome page in every language, starting on the suggested one", async () => {
+        setSystemLanguages(["es-MX", "en-US"]);
+        stubElectron(false);
+        renderFlow();
+
+        const description = await screen.findByTestId("welcome-description");
+        await waitFor(() =>
+            expect(description.children).toHaveLength(APP_LANGUAGES.length),
+        );
+        const active = () => description.querySelector("[data-active]");
+        await waitFor(() => expect(active()).toHaveAttribute("lang", "es"));
+        expect(active()?.textContent).toMatch(/configuremos/);
+        const greeting = screen.getByTestId("welcome-greeting");
+        expect(greeting.querySelector("[data-active]")?.textContent).toBe(
+            "Bienvenido",
+        );
+
+        // The next step is in the app's language again.
+        fireEvent.click(continueButton());
+        expect(
+            await screen.findByText("Choose your language"),
+        ).toBeInTheDocument();
     });
 });

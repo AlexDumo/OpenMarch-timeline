@@ -1,38 +1,81 @@
-import { useState } from "react";
-import { T, useTolgee } from "@tolgee/react";
+import { useEffect, useMemo, useState } from "react";
+import { T, useTolgee, useTranslate } from "@tolgee/react";
 import { Button } from "@openmarch/ui";
 import { ArrowRightIcon } from "@phosphor-icons/react";
 import OpenMarchLogo from "@/components/OpenMarchLogo";
-import { APP_LANGUAGES } from "@/utilities/languages";
-import CyclingGreeting from "../CyclingGreeting";
+import launchImage from "@/assets/welcome/launch-image.webp";
+import { APP_LANGUAGES, type AppLanguage } from "@/utilities/languages";
+import CyclingText, { useCycleIndex } from "../CyclingText";
 
-/** The team at a booth; hosted, so a missing connection just hides it. */
-export const WELCOME_IMAGE_URL =
-    "https://assets.openmarch.com/desktop/launch-image.webp";
-
-const GREETINGS = APP_LANGUAGES.map((language) => ({
-    key: language.code,
-    text: language.greeting,
-    lang: language.code,
-}));
+/** The page's text that changes language along with the greeting. */
+const CYCLED_KEYS = {
+    description: "welcomeFlow.welcome.description",
+    getStarted: "welcomeFlow.getStarted",
+} as const;
 
 /**
- * The first page: the photo on one side; the logo, "Welcome" in each language
- * and Get started on the other. Narrow windows stack them.
+ * The first page: the photo (bundled, so nothing loads from the internet
+ * before the analytics question) on one side; the logo, a greeting and
+ * Get started on the other. The page's text fades through every app language
+ * together, starting on `startLanguage`; the next step is in the app's
+ * language again. Narrow windows stack the two sides.
  */
+// eslint-disable-next-line max-lines-per-function
 export default function WelcomeStep({
     onStart,
+    startLanguage,
     "aria-label": ariaLabel,
 }: {
     onStart: () => void;
+    /** The language to show first: the one the flow will suggest. */
+    startLanguage: string;
     "aria-label"?: string;
 }) {
-    const tolgee = useTolgee(["language"]);
+    const { t } = useTranslate();
+    const tolgee = useTolgee();
     const [imageFailed, setImageFailed] = useState(false);
-    const startIndex = Math.max(
-        0,
-        APP_LANGUAGES.findIndex((l) => l.code === tolgee.getLanguage()),
+    // Only the app's language is loaded at first; cycle once all are.
+    const [allLoaded, setAllLoaded] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+        tolgee
+            .loadRecords(APP_LANGUAGES.map(({ code }) => ({ language: code })))
+            .then(() => {
+                if (active) setAllLoaded(true);
+            })
+            .catch(() => undefined);
+        return () => {
+            active = false;
+        };
+    }, [tolgee]);
+
+    const languages: readonly AppLanguage[] = useMemo(() => {
+        if (allLoaded) return APP_LANGUAGES;
+        const current = tolgee.getLanguage();
+        return [
+            APP_LANGUAGES.find((l) => l.code === current) ?? APP_LANGUAGES[0],
+        ];
+    }, [allLoaded, tolgee]);
+
+    const index = useCycleIndex(
+        languages.length,
+        Math.max(
+            0,
+            languages.findIndex((l) => l.code === startLanguage),
+        ),
     );
+
+    const texts = (text: (language: AppLanguage) => string) =>
+        languages.map((language) => ({
+            key: language.code,
+            lang: language.code,
+            text: text(language),
+        }));
+    const translated = (key: string) =>
+        texts((language) =>
+            allLoaded ? tolgee.t({ key, language: language.code }) : t(key),
+        );
 
     return (
         <main
@@ -43,7 +86,7 @@ export default function WelcomeStep({
             <div className="bg-fg-2 border-stroke rounded-6 relative h-[30vh] shrink-0 overflow-hidden border md:h-auto md:flex-[1.15]">
                 {!imageFailed && (
                     <img
-                        src={WELCOME_IMAGE_URL}
+                        src={launchImage}
                         alt=""
                         draggable={false}
                         onError={() => setImageFailed(true)}
@@ -55,26 +98,39 @@ export default function WelcomeStep({
             <div className="bg-fg-1 border-stroke rounded-6 flex min-h-0 flex-1 flex-col overflow-y-auto border px-32 py-32">
                 <div className="m-auto flex max-w-[28rem] flex-col items-center gap-24 text-center">
                     <OpenMarchLogo height={64} className="text-text" />
-                    {/* The greeting changes language, so the heading is for screen readers. */}
+                    {/* The visible text changes language, so screen readers
+                        get it in the app's language. */}
                     <h1 className="sr-only">
                         <T keyName="welcomeFlow.welcome.title" />
                     </h1>
-                    <CyclingGreeting
-                        greetings={GREETINGS}
-                        startIndex={startIndex}
+                    <CyclingText
+                        texts={texts((language) => language.greeting)}
+                        index={index}
                         className="text-h1 text-text leading-tight font-medium"
+                        data-testid="welcome-greeting"
                     />
-                    <p className="text-body text-text-subtitle">
-                        <T keyName="welcomeFlow.welcome.description" />
+                    <p className="sr-only">
+                        <T keyName={CYCLED_KEYS.description} />
                     </p>
+                    <CyclingText
+                        texts={translated(CYCLED_KEYS.description)}
+                        index={index}
+                        wrap
+                        className="text-body text-text-subtitle"
+                        data-testid="welcome-description"
+                    />
                     <Button
                         size="default"
                         onClick={onStart}
                         className="mt-8 gap-8 px-24"
+                        aria-label={t(CYCLED_KEYS.getStarted)}
                         data-testid="welcome-continue"
                         autoFocus
                     >
-                        <T keyName="welcomeFlow.getStarted" />
+                        <CyclingText
+                            texts={translated(CYCLED_KEYS.getStarted)}
+                            index={index}
+                        />
                         <ArrowRightIcon size={18} />
                     </Button>
                 </div>

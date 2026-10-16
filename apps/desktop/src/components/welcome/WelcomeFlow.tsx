@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@openmarch/ui";
 import { T, useTolgee, useTranslate } from "@tolgee/react";
 import NewShowProgressIndicator from "@/components/launchpage/newShow/components/NewShowProgressIndicator";
 import { useEditorModeStore, type EditorMode } from "@/stores/EditorModeStore";
+import { useWelcomeFlowStore } from "@/stores/WelcomeFlowStore";
 import OpenMarchLogo from "@/components/OpenMarchLogo";
 import { saveAnalyticsChoice } from "@/utilities/analyticsConsent";
 import { matchAppLanguage } from "@/utilities/languages";
@@ -38,12 +39,19 @@ const STEP_TITLE_KEYS: Record<Exclude<WelcomeStepId, "welcome">, string> = {
 };
 
 /**
- * The language to start the language step on: the app's, unless that is the
- * default English and the system prefers another language the app has.
+ * The language step's selection and where it came from. A `saved` language
+ * was chosen before (or in Settings during the flow) and is left alone; a
+ * `suggested` one, from the system, is saved on Continue; a `picked` one was
+ * saved when it was picked.
  */
-function initialLanguage(current: string | undefined): string {
-    if (current && current !== "en") return current;
-    return matchAppLanguage(navigator.languages ?? []) ?? current ?? "en";
+type LanguageChoice = {
+    code: string;
+    source: "saved" | "suggested" | "picked";
+};
+
+/** The system's language when the app has it, else English. */
+function suggestedLanguage(): string {
+    return matchAppLanguage(navigator.languages ?? []) ?? "en";
 }
 
 /**
@@ -61,15 +69,55 @@ export default function WelcomeFlow({
     const { t } = useTranslate();
     const tolgee = useTolgee();
     const { theme, setTheme } = useTheme();
-    const [language, setLanguage] = useState(() =>
-        initialLanguage(tolgee.getLanguage()),
-    );
+    const [language, setLanguage] = useState<LanguageChoice | null>(null);
+    // Languages this flow switched to, so their (possibly late) language
+    // events aren't mistaken for a change made elsewhere.
+    const switchedTo = useRef(new Set<string>());
     const setMode = useEditorModeStore((state) => state.setMode);
     const [analyticsChoiceMade, setAnalyticsChoiceMade] = useState<
         boolean | null
     >(null);
     const [stepIndex, setStepIndex] = useState(0);
     const [chosenMode, setChosenMode] = useState<EditorMode | null>(null);
+
+    useEffect(() => {
+        const { setShowing } = useWelcomeFlowStore.getState();
+        setShowing(true);
+        return () => setShowing(false);
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+        // The raw setting: unset means never chosen. getLanguage() can't
+        // tell, since it answers "en" for both.
+        void Promise.resolve(window.electron.invoke("settings:get", "language"))
+            .catch(() => undefined)
+            .then((saved: unknown) => {
+                if (!active) return;
+                setLanguage(
+                    (prev) =>
+                        prev ??
+                        (typeof saved === "string" && saved
+                            ? { code: saved, source: "saved" }
+                            : {
+                                  code: suggestedLanguage(),
+                                  source: "suggested",
+                              }),
+                );
+            });
+        // The app's language changing to something else was saved elsewhere:
+        // main.tsx applying the stored one, or the Settings window.
+        const { unsubscribe } = tolgee.on("language", ({ value }) => {
+            if (!active || switchedTo.current.has(value)) return;
+            setLanguage((prev) =>
+                prev?.code === value ? prev : { code: value, source: "saved" },
+            );
+        });
+        return () => {
+            active = false;
+            unsubscribe();
+        };
+    }, [tolgee]);
 
     useEffect(() => {
         let active = true;
@@ -107,7 +155,8 @@ export default function WelcomeFlow({
     );
 
     const chooseLanguage = (code: string) => {
-        setLanguage(code);
+        setLanguage({ code, source: "picked" });
+        switchedTo.current.add(code);
         void tolgee.changeLanguage(code);
         void window.electron.setLanguage(code);
     };
@@ -121,15 +170,22 @@ export default function WelcomeFlow({
         if (willReload) reload();
     };
 
+    // The mode step finishes when the analytics step is skipped. Off the web,
+    // wait for the analytics setting so the question isn't skipped by mistake.
+    const waitingForAnalytics =
+        isLast && !isWebBuild && analyticsChoiceMade === null;
+    const continueDisabled =
+        !canContinueFrom(step, chosenMode) ||
+        (step === "language" && language === null) ||
+        waitingForAnalytics;
+
     const next = () => {
-        if (!canContinueFrom(step, chosenMode)) return;
-        // A language picked for them from the system is saved on Continue.
-        if (step === "language" && language !== tolgee.getLanguage())
-            chooseLanguage(language);
-        // The mode step finishes when the analytics step is skipped. Wait for
-        // the analytics setting so the question isn't skipped by mistake.
+        if (continueDisabled) return;
+        // A language suggested from the system is saved on Continue.
+        if (step === "language" && language?.source === "suggested")
+            chooseLanguage(language.code);
         if (isLast) {
-            if (analyticsChoiceMade !== null) finish();
+            finish();
             return;
         }
         setStepIndex(stepIndex + 1);
@@ -139,6 +195,7 @@ export default function WelcomeFlow({
         return (
             <WelcomeStep
                 onStart={next}
+                startLanguage={language?.code ?? suggestedLanguage()}
                 aria-label={t("welcomeFlow.dialogLabel")}
             />
         );
@@ -177,7 +234,7 @@ export default function WelcomeFlow({
                     <div key={step} className="animate-fade-in">
                         {step === "language" && (
                             <LanguageStep
-                                value={language}
+                                value={language?.code ?? ""}
                                 onChange={chooseLanguage}
                             />
                         )}
@@ -221,10 +278,7 @@ export default function WelcomeFlow({
                             ) : (
                                 <Button
                                     onClick={next}
-                                    disabled={
-                                        !canContinueFrom(step, chosenMode) ||
-                                        (isLast && analyticsChoiceMade === null)
-                                    }
+                                    disabled={continueDisabled}
                                     data-testid="welcome-continue"
                                 >
                                     <T
