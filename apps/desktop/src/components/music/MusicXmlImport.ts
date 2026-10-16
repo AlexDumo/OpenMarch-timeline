@@ -17,6 +17,7 @@ import {
     Measure as ParserMeasure,
     parseMusicXmlWithReport,
     readMusicXmlFile,
+    type MusicXmlParseResult,
 } from "@openmarch/musicxml-parser";
 import { importChecks, type ImportCheck } from "./musicXmlImportChecks";
 import { DatabaseBeat, NewBeatArgs } from "@/db-functions";
@@ -33,6 +34,12 @@ export type MusicXmlImportData = {
     allPages: Page[];
     measures: Measure[];
     allBeats: Beat[];
+};
+
+/** What the database writes need: the parsed score in place of the file. */
+export type MusicXmlImportWrite = Omit<MusicXmlImportData, "file"> & {
+    fileName: string;
+    parsed: MusicXmlParseResult;
 };
 
 export type ImportResult = {
@@ -59,12 +66,28 @@ function generateStandardMeasures(count: number): ParserMeasure[] {
     return measures;
 }
 
+/**
+ * Reads the file's bytes (compressed or not, any text encoding) and parses it, outside any
+ * transaction, so a file that can't be read fails before the import touches the show. Measures
+ * come in the order they are played, repeats played out.
+ */
+export const parseMusicXmlFile = async (
+    file: Pick<Blob, "arrayBuffer">,
+): Promise<MusicXmlParseResult> => {
+    const parsed = parseMusicXmlWithReport(
+        await readMusicXmlFile(await file.arrayBuffer()),
+    );
+    if (parsed.measures.length === 0)
+        throw new Error("The file has no measures");
+    return parsed;
+};
+
 // Database operation functions (private, prefixed with _)
 // eslint-disable-next-line max-lines-per-function
 export const _importMusicXmlFile = async ({
     data,
 }: {
-    data: MusicXmlImportData;
+    data: MusicXmlImportWrite;
 }): Promise<ImportResult> => {
     return await transactionWithHistory(
         db,
@@ -73,17 +96,8 @@ export const _importMusicXmlFile = async ({
         async (tx) =>
             // eslint-disable-next-line max-lines-per-function
             await withTimelinePageRipple(tx, async () => {
-                const { file, allPages, measures, allBeats } = data;
-
-                // Read the file's bytes (compressed or not, any text encoding), then parse it.
-                // Measures come in the order they are played, repeats played out
-                const xmlText = await readMusicXmlFile(
-                    await file.arrayBuffer(),
-                );
-                const parsed = parseMusicXmlWithReport(xmlText);
+                const { fileName, parsed, allPages, measures, allBeats } = data;
                 let parsedMeasures: ParserMeasure[] = parsed.measures;
-                if (parsedMeasures.length === 0)
-                    throw new Error("The file has no measures");
 
                 // Get page count
                 if (!allPages) throw new Error("Failed to fetch pages");
@@ -189,7 +203,7 @@ export const _importMusicXmlFile = async ({
                 return {
                     success: true,
                     message: tolgee.t("music.importSuccess", {
-                        fileName: file.name,
+                        fileName,
                     }),
                     checks: importChecks(parsed),
                 };
@@ -228,7 +242,14 @@ const useMusicXmlMutation = <TArgs>(
 // Public mutation hooks
 export const useImportMusicXml = () => {
     return useMusicXmlMutation(
-        (data: MusicXmlImportData) => _importMusicXmlFile({ data }),
+        async ({ file, ...rest }: MusicXmlImportData) =>
+            _importMusicXmlFile({
+                data: {
+                    ...rest,
+                    fileName: file.name,
+                    parsed: await parseMusicXmlFile(file),
+                },
+            }),
         "music.importError",
     );
 };
