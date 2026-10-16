@@ -1,17 +1,20 @@
 import { Description as DialogDescription } from "@radix-ui/react-dialog";
 import { Button, Dialog, DialogContent, DialogTitle } from "@openmarch/ui";
 import { useWebWelcomeStore } from "@/stores/WebWelcomeStore";
+import { useWelcomeFlowStore } from "@/stores/WelcomeFlowStore";
 
 /**
  * Explains the web build. Opens once per browser session when the app starts
- * and again from the "Web" badge in the title bar.
+ * and again from the "Web" badge in the title bar. It waits while the welcome
+ * flow is on screen.
  */
 export default function WebWelcomeModal() {
     const { open, setOpen } = useWebWelcomeStore();
+    const welcomeFlowShowing = useWelcomeFlowStore((s) => s.showing);
     const save = window.electron.isMacOS ? "⌘S" : "Ctrl+S";
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open && !welcomeFlowShowing} onOpenChange={setOpen}>
             <DialogContent className="w-[40rem]">
                 <DialogTitle>Welcome to OpenMarch on the web!</DialogTitle>
                 <div className="text-text-subtitle flex flex-col gap-16 text-sm">

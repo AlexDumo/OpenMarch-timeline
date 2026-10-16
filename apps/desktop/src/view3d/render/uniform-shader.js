@@ -68,6 +68,12 @@ export const STYLES = {
         about: "A modern look: jacket fades from the secondary colour at the waist to the primary at the chest.",
         defaults: { stripe: false },
     },
+    cadet: {
+        id: 6,
+        label: "Cadet",
+        about: "Academy full dress: rows of braid across the chest in trim, a cross belt in the accent colour with a plate, a pleated cummerbund in the secondary colour.",
+        defaults: { stripe: false },
+    },
 };
 
 export const PRESETS = {
@@ -244,6 +250,29 @@ vec3 uniformColor() {
       vec2 q = vec2(abs(abs(p.x) - 0.05), mod(p.y - ${f(L.belt)} + 0.0325, 0.065) - 0.0325);
       c = mix(c, uTrim, (1.0 - over(length(q) - 0.011)) * front * over(1.37 - p.y) * over(abs(p.x) - 0.02));
       c = mix(c, uTrim, 1.0 - over(p.y - (${f(L.belt)} + 0.03)));
+    }
+    if (uStyle == 6) {  // cadet: chest braid, cross belt and plate, cummerbund
+      // seven rows of braid across the front, widening up the chest, a knot at each end
+      float rows = over(p.y - 1.16) * over(1.415 - p.y) * front;
+      float rowY = p.y - (mod(p.y - 1.17 + 0.02, 0.04) - 0.02);
+      float w = mix(0.08, 0.12, smoothstep(1.16, 1.41, p.y));
+      float braid = band(p.y - rowY, 0.006) * over(w - abs(p.x));
+      float knot = band(length(vec2(abs(p.x) - w - 0.008, p.y - rowY)) - 0.009, 0.0035);
+      c = mix(c, uTrim, max(braid, knot) * rows);
+      // the cross belt, left shoulder to right hip, front and back
+      float d = segDist(p.xy, vec2(0.16, 1.42), vec2(-0.15, ${f(L.belt + 0.06)}));
+      c = mix(c, uAccent, band(d, 0.024));
+      // the breastplate on the belt, gold edged in trim
+      vec2 q = (p.xy - vec2(0.025, 1.25)) / vec2(0.032, 0.04);
+      float plate = 1.0 - over(length(q) - 1.0);
+      c = mix(c, uTrim, plate * front);
+      c = mix(c, uSecondary, (1.0 - over(length(q) - 0.78)) * front);
+      // high-waisted trousers below the cummerbund
+      c = mix(c, uPants, over(${f(L.belt + 0.06)} - p.y));
+      // the cummerbund, right under the braid, with two pleats
+      float cb = over(p.y - ${f(L.belt + 0.06)}) * over(${f(L.belt + 0.18)} - p.y);
+      float pleat = max(band(p.y - ${f(L.belt + 0.1)}, 0.0025), band(p.y - ${f(L.belt + 0.14)}, 0.0025));
+      c = mix(c, mix(uSecondary, uSecondary * 0.72, pleat), cb);
     }
     c = mix(c, uTrim, over(p.y - ${f(L.collar)}) * uCollar);  // high collar
   }

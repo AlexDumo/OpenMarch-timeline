@@ -40,6 +40,8 @@ export function useTimelinePageBridge(enabled: boolean): void {
     /** The page this bridge selected last; once that is seen, older writes are superseded */
     const lastBridged = useRef<number | null>(null);
     const lastSeenPageId = useRef<number | null>(null);
+    /** A write made in this commit (cleared once its effects ran), not yet rendered by anyone */
+    const wroteThisCommit = useRef<number | null>(null);
 
     // Playhead to page
     useEffect(() => {
@@ -53,9 +55,13 @@ export function useTimelinePageBridge(enabled: boolean): void {
             return;
         const page = pageAtPlayhead(pages, playheadBeat);
         if (!page || page.id === selectedPage?.id) return;
+        // Only a write selected now is known as ours. One waiting for its page (the provider's
+        // page list behind this one's) lands in a later commit, maybe after another selection:
+        // the effect below reads it as anyone's, which seeks to it only if the playhead left it
+        if (!setSelectedPage(page)) return;
         bridged.current.add(page.id);
         lastBridged.current = page.id;
-        setSelectedPage(page);
+        wroteThisCommit.current = page.id;
         // Only the playhead and pages drive this direction
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, isPlaying, scrubbing, pages, playheadBeat, setSelectedPage]);
@@ -71,8 +77,13 @@ export function useTimelinePageBridge(enabled: boolean): void {
             else bridged.current.delete(id);
             return;
         }
-        // Someone else selected it; any write of ours still pending was superseded
+        // Someone else selected it: our writes from earlier commits were superseded (rendered
+        // already, or overwritten before they were). One made in this very commit hasn't landed
+        // yet (the playhead moved in the same update as undo's page jump): it stays known as
+        // ours, or read back as someone else's it would seek again, and so on (React #185)
         bridged.current.clear();
+        if (wroteThisCommit.current !== null)
+            bridged.current.add(wroteThisCommit.current);
         const store = useTimelineSelectionStore.getState();
         if (pageAtPlayhead(pages, store.playheadBeat)?.id === id) return;
         const flag = pageFlags(pages).find((f) => f.page.id === id);
@@ -80,4 +91,9 @@ export function useTimelinePageBridge(enabled: boolean): void {
         // Only a change of the selected page drives this direction
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, selectedPage?.id]);
+
+    // After both effects above: a later commit's effects see this commit's write as older
+    useEffect(() => {
+        wroteThisCommit.current = null;
+    });
 }

@@ -30,7 +30,7 @@ import {
     selectionOfPage,
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
-import { useTimelineTracks } from "@/timeline/useTimelineTracks";
+import { useTimelineTracksState } from "@/timeline/useTimelineTracks";
 import { AudioClock } from "./Clock";
 import {
     TimelineCompactButton,
@@ -226,10 +226,15 @@ export default function TimelineModePanel() {
         () => keepHereMenu(keepStates, keepK),
         [keepStates, keepK],
     );
-    const timelines = useTimelineTracks({
-        database: db,
-        enabled: true,
-    });
+    const { tracks: timelines, current: tracksCurrent } =
+        useTimelineTracksState({
+            database: db,
+            enabled: true,
+        });
+    // A page flag move changes the pages and the tracks, and the pages can arrive first: matched
+    // against the new boxes, the old page timelines would flash as clips. Until the tracks catch
+    // up they're matched against the boxes they were built with
+    const clipBoxPages = useHeldWhileStale(pages, tracksCurrent);
     // UI-10: a page box already stands for its page timeline, so only the others get a clip.
     // UI-14: each is a move, labelled by its name ("Move 2" since it was made), named for
     // screen readers in counts, and saying why it is dashed where it is (`describeMoveClips`)
@@ -238,12 +243,12 @@ export default function TimelineModePanel() {
     const { clips: offPage, overridden } = useMemo(
         () =>
             describeMoveClips({
-                clips: timelinesOffPages(timelines, pages),
+                clips: timelinesOffPages(timelines, clipBoxPages),
                 storedTimelines: storedTimelines ?? [],
                 pageBoxes,
                 pages,
             }),
-        [timelines, pages, storedTimelines, pageBoxes],
+        [timelines, clipBoxPages, pages, storedTimelines, pageBoxes],
     );
     // The Move card says it too
     useEffect(() => {
@@ -698,6 +703,13 @@ export function describePageFlagBlock(
     if (block.message.includes("left behind"))
         return `${who} starts or ends on this flag`;
     return `${who} is in the way`;
+}
+
+/** `value` as it was the last time `current` was true, or as it is now while `current` is. */
+export function useHeldWhileStale<T>(value: T, current: boolean): T {
+    const held = useRef(value);
+    if (current) held.current = value;
+    return held.current;
 }
 
 /**
