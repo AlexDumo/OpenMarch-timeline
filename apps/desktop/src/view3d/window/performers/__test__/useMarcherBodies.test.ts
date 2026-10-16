@@ -56,7 +56,7 @@ const looksIn = (hold: HoldState) => [
             ...defaultPerformerBody(1),
             bodyType: "neutral-average" as const,
         },
-        uniform: sectionUniform("Trumpet", null, hold),
+        uniform: sectionUniform("Trumpet", hold),
     },
 ];
 

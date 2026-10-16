@@ -41,7 +41,7 @@ async function setup() {
 }
 const look = (id: number, type: BodyType, section: string) => ({
     body: { ...defaultPerformerBody(id), bodyType: type },
-    uniform: sectionUniform(section, null),
+    uniform: sectionUniform(section),
 });
 const material = () => new THREE.MeshStandardMaterial();
 

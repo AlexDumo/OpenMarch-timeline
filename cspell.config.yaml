@@ -1,4 +1,11 @@
 words:
+  - blocklist
+  - actioned
+  - mattpocock
+  - wayfinder
+  - Wayfinding
+  - nightlies
+  - xattr
   - Kagelok
   - lods
   - Sketchfab
@@ -21,6 +28,14 @@ words:
   - frameless
   - headlessly
   - llvmpipe
+  - libvips
+  - libuv
+  - sandboxed
+  - respawns
+  - dedup
+  - realpath
+  - basenames
+  - unrigged
   - rrggbb
   - toplevel
   - worktree
@@ -50,6 +65,7 @@ words:
   - BRHS
   - Bézier
   - canvas
+  - capi
   - Catmull
   - ccpa
   - Chakravarthi
@@ -88,6 +104,7 @@ words:
   - flac
   - forwardslash
   - français
+  - FREEONCLOSE
   - frontfield
   - frontmatter
   - Geral
@@ -124,6 +141,8 @@ words:
   - musicxml
   - Nativewind
   - noopener
+  - noreferrer
+  - nosniff
   - notarytool
   - NSIS
   - nums
@@ -132,6 +151,7 @@ words:
   - ONTHEMOVE
   - openmarch
   - openmarchdev
+  - opfs
   - OTMDEMO
   - overscan
   - pacman
@@ -149,12 +169,15 @@ words:
   - Rcoords
   - recents
   - rels
+  - RESIZEABLE
   - rgba
   - ritardandos
   - rootfile
+  - rotr
   - rw-r
   - rwxr
   - saario
+  - sahpool
   - samuelmeuli
   - sandboxing
   - Schachner
@@ -239,6 +262,8 @@ ignorePaths:
   - docs/timeline/ref/**
   - node_modules/**
   - docs/3d/ref/**
+  # Verbatim license texts (CC0 1.0, GPL-3.0) in the Blender Starter kit
+  - apps/desktop/starter-kit/**/LICENSE
   - "**/view3d/assets/om-pose/**"
   - "**/view3d/assets/instruments/*.json"
   - "**/node_modules/**"
@@ -263,6 +288,7 @@ ignorePaths:
   - "**/dist-browser/**"
   - "**/dist-browser-host/**"
   - apps/desktop/web/dist/**
+  - "**/dist-web/**"
   - "**/wasm/pkg/**"
   - "**/release/**"
   - "*.svg"

@@ -141,10 +141,15 @@ function stateTimeline(
     let current = defaultSegment(lookup, 0, counts, defaults[0]!);
     let previousCount = 0;
     let previous: CueInput | null = null;
+    // The authored count of the latest state applied. A ripple moves when a
+    // cue lands, not which cue is later: a rippled cue landing after a cue
+    // authored on a later count is beaten by it (rule 2).
+    let latestAuthored = -Infinity;
+    const spansFirst = (e: object) => ("span" in e ? 0 : 1);
     const events = [
         ...defaults.slice(1).map((span) => ({ at: span.at, span })),
         ...states.map((placed) => ({ at: placed.at, placed })),
-    ].sort((a, b) => a.at - b.at || ("span" in a ? -1 : 0));
+    ].sort((a, b) => a.at - b.at || spansFirst(a) - spansFirst(b));
 
     for (const event of events) {
         if ("span" in event) {
@@ -161,7 +166,9 @@ function stateTimeline(
             previous = null;
             continue;
         }
-        const { cue, at: count } = event.placed;
+        const { cue, at: count, count: authored } = event.placed;
+        if (authored < latestAuthored) continue;
+        latestAuthored = authored;
         if (HARD_CUT.has(channel)) {
             if (count > current.from) out.push({ ...current, to: count });
             current = segment(lookup, count, counts, "state", cue.value, cue);

@@ -14,6 +14,7 @@ import { composedGeometry, writeInstance } from "@/view3d/render/composer";
 import { instrumentModel, type Detail } from "@/view3d/core/instruments";
 import { hold as holdFor } from "@/view3d/core/instruments/holds";
 import {
+    DEFAULT_PRIMARY,
     uniformKey,
     type BodyType,
     type UniformLook,
@@ -83,7 +84,7 @@ export class HornSet {
                     h,
                     model,
                     look.options.finish,
-                    look.colors.primary,
+                    look.options.carryColor ?? DEFAULT_PRIMARY,
                 );
                 const mesh = new THREE.InstancedMesh(
                     composedGeometry(source, slots.length),

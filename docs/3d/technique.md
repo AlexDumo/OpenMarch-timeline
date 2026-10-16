@@ -255,13 +255,15 @@ backward march, and so on).
   hand's length from the tube and let the fingertips reach over it.
 - The bass drum arms are one pose for every drum size.
 
-## Counting and facing (for cues, not built yet)
+## Counting and facing
 
-Rules the owner set while designing show-authored cues (2026-10-10). Nothing
-plays them yet; they are here so the cue work starts from them.
+Rules the owner set while designing show-authored cues (2026-10-10). The
+planner plays the Feet and Facing ones (next section); the rest wait for
+their channels.
 
 - **Counts are inclusive, the way staff count.** "A 3-count horn move ending
-  on 7" is 5, 6, 7: the motion starts on the moment of 5 and is in position on 7. A change can be given as its start count or as its length.
+  on 7" is 5, 6, 7: the motion starts on the moment of 5 and is in position
+  on 7. A change can be given as its start count or as its length.
 - **A state lands on its count.** "Horns up on 7" means in position on 7; the
   motion comes before it.
 - **Moves count the same way.** A 3-count toss on 1 releases on 1 and catches

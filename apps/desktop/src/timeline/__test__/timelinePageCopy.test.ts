@@ -8,10 +8,6 @@ import {
     transactionWithHistory,
 } from "@/db-functions/history";
 import {
-    marcherPagesByPageId,
-    updateMarcherPages,
-} from "@/db-functions/marcherPage";
-import {
     moveMarchersInTarget,
     moveMarchersOnPage,
 } from "@/db-functions/timelineMoves";
@@ -20,17 +16,14 @@ import {
     setTimelineTransitionDestinationInTransaction,
     updateTimelineTransitionsInTransaction,
 } from "@/db-functions/timelineTransitions";
-import { toMarcherPagesByMarcher } from "@/global/classes/MarcherPageIndex";
 import type Page from "@/global/classes/Page";
 import {
     setMarchersToNeighborPage,
     type NeighborPageDirection,
     type NeighborPageScope,
 } from "@/utilities/setMarchersToNeighborPage";
-import {
-    convertPagesToTimeline,
-    readShowTiming,
-} from "../convert/writePageConversion";
+import { readShowTiming } from "@/timeline/showTiming";
+import { convertPagesToTimeline } from "@/test/convertPages";
 import { pageEndBeat } from "../timelineCanvas";
 import {
     copyPagePositions,
@@ -44,19 +37,21 @@ import {
     useTimelineResolverStore,
 } from "../timelineStore";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
+import { useEditorModeStore } from "@/stores/EditorModeStore";
 
-// P7.17: these tests set up timeline mode themselves
-keepFixturesInPageMode(
-    "its tests convert the show or write timeline rows, and set the flag, themselves",
-);
+// P7.17: these tests convert the show themselves
+keepFixturesInPageMode("its tests convert the show themselves");
 
 /**
  * "Set all or selected marchers to the previous or next page"
  * (docs/timeline/phases/07-page-parity.md P7.6), through `setMarchersToNeighborPage`, the function
- * `useBatchEditActionHandlers` runs for the four actions, with the flag on and off.
+ * `useBatchEditActionHandlers` runs for the four actions.
  */
 
-afterEach(() => stopTimelineResolver());
+afterEach(() => {
+    stopTimelineResolver();
+    useEditorModeStore.setState({ mode: null, loaded: false });
+});
 
 const sortedPages = async (db: DbConnection): Promise<Page[]> => {
     const { pages } = await readShowTiming(db);
@@ -82,8 +77,6 @@ const tableRows = async (
         out[getTableName(table)] = await db.select().from(table).all();
     return out;
 };
-const pageEraRows = (db: DbConnection) =>
-    tableRows(db, [schema.marcher_pages, schema.pathways]);
 const timelineRows = (db: DbConnection) =>
     tableRows(db, [
         schema.marchers,
@@ -123,7 +116,7 @@ const t = (key: string, params?: Record<string, string | number>) =>
     params ? `${key} ${JSON.stringify(params)}` : key;
 
 /**
- * Runs the action as the handler does, with the flag on: `writeTimeline` is the real
+ * Runs the action as the handler does: `writeTimeline` is the real
  * `moveMarchersInTarget` (the mutation's `mutateAsync` in the app). Returns the result and the
  * spies.
  */
@@ -148,28 +141,24 @@ const runTimeline = async (
     const writeTimeline = vi.fn((request: TimelineNeighborPageRequest) =>
         moveMarchersInTarget({ db, ...request }),
     );
-    const writePages = vi.fn();
     const notify = {
         success: vi.fn(() => onSuccess?.()),
         error: vi.fn(),
     };
     const reportError = vi.fn();
     const result = await setMarchersToNeighborPage({
-        timelineMode: true,
         direction,
         scope,
         selectedPage: page,
         pages,
         selectedMarcherIds: selected,
-        neighborMarcherPages: undefined,
-        writePages,
         writeTimeline,
         notify,
         t,
         reportError,
     });
     await timelineResolverSettled();
-    return { result, writeTimeline, writePages, notify, reportError };
+    return { result, writeTimeline, notify, reportError };
 };
 
 describe("copyPagePositions without a resolver", () => {
@@ -184,107 +173,7 @@ describe("copyPagePositions without a resolver", () => {
     });
 });
 
-describeDbTests("set marchers to the previous or next page, flag off", (it) => {
-    it("page mode is unchanged: copies the neighbor's marcher_pages rows, no timeline write", async ({
-        db,
-        marchersAndPages: _,
-    }) => {
-        await convertPagesToTimeline(db);
-        const pages = await sortedPages(db);
-        const page = pages[3]!;
-        const previousRows = await marcherPagesByPageId({
-            db,
-            pageId: pages[2]!.id,
-        });
-        const timelineBefore = await timelineRows(db);
-        let pending: Promise<unknown> = Promise.resolve();
-        const writeTimeline = vi.fn();
-        const notify = { success: vi.fn(), error: vi.fn() };
-
-        const result = await setMarchersToNeighborPage({
-            timelineMode: false,
-            direction: "previous",
-            scope: "all",
-            selectedPage: page,
-            pages,
-            selectedMarcherIds: [],
-            neighborMarcherPages: toMarcherPagesByMarcher(previousRows),
-            writePages: (modifiedMarcherPages) => {
-                pending = updateMarcherPages({ db, modifiedMarcherPages });
-            },
-            writeTimeline,
-            notify,
-            t,
-        });
-        await pending;
-
-        expect(result).toBe(previousRows.length);
-        const after = await marcherPagesByPageId({ db, pageId: page.id });
-        for (const mp of previousRows)
-            expect(
-                after.find((a) => a.marcher_id === mp.marcher_id),
-            ).toMatchObject({ x: mp.x, y: mp.y });
-        expect(writeTimeline).not.toHaveBeenCalled();
-        expect(await timelineRows(db)).toEqual(timelineBefore);
-        expect(notify.success).toHaveBeenCalledWith(
-            expect.stringContaining(
-                "actions.batchEdit.setAllToPreviousSuccess",
-            ),
-        );
-    });
-
-    it("page mode: selected to next writes only the selected rows; no neighbor rows is an error", async ({
-        db,
-        marchersAndPages: _,
-    }) => {
-        const pages = await sortedPages(db);
-        const page = pages[2]!;
-        const nextRows = toMarcherPagesByMarcher(
-            await marcherPagesByPageId({ db, pageId: pages[3]!.id }),
-        );
-        const writePages = vi.fn();
-        const notify = { success: vi.fn(), error: vi.fn() };
-        const common = {
-            timelineMode: false,
-            direction: "next" as const,
-            selectedPage: page,
-            pages,
-            writePages,
-            writeTimeline: vi.fn(),
-            notify,
-            t,
-        };
-
-        await setMarchersToNeighborPage({
-            ...common,
-            scope: "selected",
-            selectedMarcherIds: [2, 5],
-            neighborMarcherPages: nextRows,
-        });
-        expect(writePages).toHaveBeenCalledTimes(1);
-        expect(
-            writePages.mock.calls[0]![0].map(
-                (c: { marcher_id: number }) => c.marcher_id,
-            ),
-        ).toEqual([2, 5]);
-
-        // The neighbor's rows aren't loaded
-        expect(
-            await setMarchersToNeighborPage({
-                ...common,
-                scope: "all",
-                selectedMarcherIds: [],
-                neighborMarcherPages: undefined,
-            }),
-        ).toBeNull();
-        expect(notify.error).toHaveBeenCalledWith(
-            "actions.batchEdit.noNextPage",
-        );
-        expect(writePages).toHaveBeenCalledTimes(1);
-    });
-});
-
-describeDbTests("set marchers to the previous or next page, flag on", (it) => {
+describeDbTests("set marchers to the previous or next page", (it) => {
     it("all to previous: every marcher takes its previous-page position in one undoable edit; success only after the write", async ({
         db,
         marchersAndPages: _,
@@ -300,26 +189,21 @@ describeDbTests("set marchers to the previous or next page, flag on", (it) => {
         const otherPages = pages
             .filter((p) => p !== page)
             .map((p) => [p, positionsAt(pageEndBeat(p))] as const);
-        const pageEraBefore = await pageEraRows(db);
         expect(before).not.toEqual(target);
 
         // When the success message shows, the edit is already in the resolver
         let atSuccess: unknown;
-        const { result, writeTimeline, writePages, notify } = await runTimeline(
-            db,
-            {
-                page,
-                pages,
-                direction: "previous",
-                scope: "all",
-                onSuccess: () => (atSuccess = positionsAt(endBeat)),
-            },
-        );
+        const { result, writeTimeline, notify } = await runTimeline(db, {
+            page,
+            pages,
+            direction: "previous",
+            scope: "all",
+            onSuccess: () => (atSuccess = positionsAt(endBeat)),
+        });
 
         const count = resolver().marcherIds().length;
         expect(result).toBe(count);
         expect(writeTimeline).toHaveBeenCalledTimes(1);
-        expect(writePages).not.toHaveBeenCalled();
         expect(notify.success).toHaveBeenCalledTimes(1);
         expect(notify.success.mock.calls[0]).toEqual([
             t("actions.batchEdit.setAllToPreviousSuccess", {
@@ -330,12 +214,11 @@ describeDbTests("set marchers to the previous or next page, flag on", (it) => {
         ]);
         expect(atSuccess).toEqual(target);
         expect(positionsAt(endBeat)).toEqual(target);
-        // Only the selected page changes, and marcher_pages is never touched
+        // Only the selected page changes
         for (const [p, positions] of otherPages)
             expect(positionsAt(pageEndBeat(p)), `page ${p.name}`).toEqual(
                 positions,
             );
-        expect(await pageEraRows(db)).toEqual(pageEraBefore);
 
         // One edit: one undo restores every marcher, redo applies it again
         const undo = await performUndo(db);
@@ -631,6 +514,44 @@ describeDbTests("set marchers to the previous or next page, flag on", (it) => {
         const undo = await performUndo(db);
         expect(undo.success, undo.error?.message).toBe(true);
         expect(await timelineRows(db)).toEqual(before);
+    });
+
+    it("Basic: previous clears the marcher's mid-page points too, so it holds from the page before", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        await startTimelineResolver(db);
+        useEditorModeStore.setState({ mode: "basic", loaded: true });
+        const pages = await sortedPages(db);
+        const page = pages[3]!;
+        const previous = pages[2]!;
+        const box = { start: page.beats[0]!.index, end: pageEndBeat(page) };
+        const mid = box.start + 2;
+        expect(mid).toBeLessThan(box.end);
+        // A mid-page point: marcher 1's move on the page is split there, with a detour
+        const [x, y] = positionAt(1, mid);
+        await moveMarchersInTarget({
+            db,
+            target: { kind: "point", beat: mid, box },
+            moves: [{ marcherId: 1, x: x + 8, y: y + 8 }],
+        });
+        await timelineResolverSettled();
+        const held = positionAt(1, pageEndBeat(previous));
+        expect(positionAt(1, mid)).not.toEqual(held);
+
+        const { result, writeTimeline } = await runTimeline(db, {
+            page,
+            pages,
+            direction: "previous",
+            scope: "selected",
+            selected: [1],
+        });
+
+        expect(result).toBe(1);
+        expect(writeTimeline.mock.calls[0]![0].clearOwn).toBe(true);
+        for (let beat = box.start; beat <= box.end; beat++)
+            expect(positionAt(1, beat), `beat ${beat}`).toEqual(held);
     });
 
     it("a shape-backed transition switches to individual destinations", async ({

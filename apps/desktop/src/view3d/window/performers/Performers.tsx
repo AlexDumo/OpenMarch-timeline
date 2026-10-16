@@ -5,7 +5,7 @@
  * - One `InstancedMesh` of cylinders (0.3 m radius, 1.75 m tall) standing on
  *   the ground, one instance per marcher.
  * - Colors and visibility follow the selected page's appearance cascade
- *   (marcher page, tags, section, field theme), the same values the 2D
+ *   (tags, section, field theme), the same values the 2D
  *   canvas applies to its marchers.
  * - Selected marchers get an accent ring at their feet: a second instanced
  *   mesh, drawn only for the selected ones.
@@ -22,7 +22,7 @@ import { pickMarchers } from "../camera/inputMath";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { FieldProperties } from "@openmarch/core";
+import type { FieldProperties, RgbaColor } from "@openmarch/core";
 import {
     Color,
     CylinderGeometry,
@@ -53,9 +53,10 @@ import {
 import {
     defaultPerformerBody,
     bassOptions,
+    fillToNumber,
     sectionUniform,
 } from "@/view3d/core/marchers/looks";
-import { usePerformerTimelines } from "@/view3d/positions";
+import { useShowPositions } from "@/view3d/positions";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
 import type { View3dSelection } from "@/view3d/sync/protocol";
 import { useView3dSceneStore } from "../sceneStore";
@@ -108,7 +109,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         (s) => s.selection.selectedPageId,
     );
     const { data: marchers } = useQuery(allMarchersQueryOptions());
-    const { timelines } = usePerformerTimelines();
+    const { positions } = useShowPositions();
     const { data: appearances } = useQuery({
         ...marcherAppearancesQueryOptions(selectedPageId, queryClient),
         // Keep the last page's colors while the next page's load.
@@ -123,9 +124,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         () =>
             buildPerformerSlots(
                 marcherIdsKey ? marcherIdsKey.split(",").map(Number) : [],
-                timelines,
+                positions,
             ),
-        [marcherIdsKey, timelines],
+        [marcherIdsKey, positions],
     );
     const count = slots.ids.length;
 
@@ -134,7 +135,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         allSectionAppearancesQueryOptions(),
     );
     // Keyed on what a look depends on (marcher IDs, sections, section fills),
-    // not on the timelines: a drill edit must not rebuild every mesh.
+    // not on the positions: a drill edit must not rebuild every mesh. The
+    // uniform ignores the fill (Band or Guard default); only what a section
+    // carries, its drum shells and flag silks, takes the fill.
     const looksKey = useMemo(() => {
         if (!marchers || !sectionAppearances) return null;
         const sectionById = new Map(marchers.map((m) => [m.id, m.section]));
@@ -153,7 +156,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         const rows = JSON.parse(looksKey) as [
             number,
             string,
-            Parameters<typeof sectionUniform>[1],
+            RgbaColor | null,
         ][];
         const options = bassOptions(
             rows.map((r) => r[0]),
@@ -164,9 +167,9 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
             uniform: sectionUniform(
                 section,
-                fill,
                 hornState,
                 options[i],
+                fill ? fillToNumber(fill) : undefined,
                 guardEquipment === "section" ? undefined : guardEquipment,
             ),
         }));
@@ -221,7 +224,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         if (!marcherAssets || !marcherLooks || !cues) return null;
         const planned = planShow(
             slots.ids,
-            slots.timelines,
+            slots.positions,
             marcherLooks.map((l) => l.body.heightClass),
             clock,
             fieldProperties,

@@ -7,6 +7,7 @@ import {
     PaletteIcon,
     PuzzlePieceIcon,
     ShieldCheckIcon,
+    WaveformIcon,
     WrenchIcon,
     type Icon,
 } from "@phosphor-icons/react";
@@ -15,16 +16,19 @@ import { getActionLabel, type Translate } from "@/shortcuts/labels";
 import GeneralSettings from "@/components/launchpage/settings/GeneralSettings";
 import AppearanceSettings from "@/components/launchpage/settings/AppearanceSettings";
 import MouseSettings from "@/components/launchpage/settings/MouseSettings";
+import TimelineSettings from "@/components/launchpage/settings/TimelineSettings";
 import ShortcutSettings from "@/components/launchpage/settings/ShortcutSettings";
 import PluginsContents from "@/components/launchpage/settings/plugins/Plugins";
 import PrivacySettings from "@/components/launchpage/settings/PrivacySettings";
 import DeveloperSettings from "@/components/launchpage/settings/DeveloperSettings";
 import DatabaseRepairSettings from "@/components/launchpage/settings/DatabaseRepairSettings";
+import { isWebBuild } from "@/utilities/webBuild";
 
 export type SettingsSectionId =
     | "general"
     | "appearance"
     | "mouse"
+    | "timeline"
     | "shortcuts"
     | "plugins"
     | "privacy"
@@ -52,7 +56,7 @@ export const SETTINGS_SECTION_STORAGE_KEY = "openmarch:settingsSection";
  * render each group as a collapsible heading above its sections. Not implemented yet
  * because there are only a few sections.
  */
-export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
+const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     {
         id: "general",
         labelKey: "settings.general",
@@ -88,6 +92,22 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
             "settings.mouse.trackpadMode",
             "settings.mouse.trackpadPanSensitivity",
             "settings.mouse.panSensitivity",
+        ],
+    },
+    {
+        id: "timeline",
+        labelKey: "settings.timeline",
+        Icon: WaveformIcon,
+        Component: TimelineSettings,
+        descriptionKey: "settings.timeline.description",
+        searchKeys: [
+            "settings.general.editorMode",
+            "settings.general.editorMode.basic",
+            "settings.general.editorMode.expert",
+            "settings.timeline.waveformStyle",
+            "settings.timeline.waveformStyle.simplified",
+            "settings.timeline.waveformStyle.precise",
+            "settings.timeline.waveformStyle.hidden",
         ],
     },
     {
@@ -148,6 +168,18 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
         searchKeys: ["settings.repairDotsFile.title"],
     },
 ];
+
+/** Sections for things the web build doesn't have: plugins, analytics, Tolgee tools, file repair. */
+const WEB_HIDDEN_SECTIONS: ReadonlySet<string> = new Set([
+    "plugins",
+    "privacy",
+    "developer",
+    "database",
+]);
+
+export const SETTINGS_SECTIONS: readonly SettingsSection[] = isWebBuild
+    ? ALL_SETTINGS_SECTIONS.filter((s) => !WEB_HIDDEN_SECTIONS.has(s.id))
+    : ALL_SETTINGS_SECTIONS;
 
 export function readSavedSection(): SettingsSectionId {
     try {
