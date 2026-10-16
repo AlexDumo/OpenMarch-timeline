@@ -1061,6 +1061,11 @@
         "general.appearance.light": "Claro",
         "general.automaticUpdates": "Baixar e instalar atualizações automaticamente",
         "general.description": "Idioma e outras preferências de todo o aplicativo.",
+        "general.editorMode": "Modo do editor",
+        "general.editorMode.basic": "Básico",
+        "general.editorMode.basic.description": "Páginas, como uma folha de drill. Defina cada página; os integrantes ficam parados até você movê-los de novo. Posições no meio de uma página são permitidas.",
+        "general.editorMode.expert": "Avançado",
+        "general.editorMode.expert.description": "A linha do tempo completa: movimentos que atravessam páginas, movimentos sobrepostos, a bandeira de início e os loops.",
         "general.language": "Idioma",
         "general.showFullDatabasePath": "Mostrar caminho completo do arquivo",
         "general.showFullDatabasePath.description": "Mostra o caminho completo do arquivo aberto na barra de título, em vez de apenas o nome.",
@@ -1242,6 +1247,28 @@
     "welcome": {
         "description": "Nenhum arquivo encontrado. Crie um e não deixe de conferir os guias. Personalize seu tema e navegação em Configurações.",
         "title": "Bem-vindo ao OpenMarch"
+    },
+    "welcomeFlow": {
+        "back": "Voltar",
+        "changeLater": "Você pode mudar isso a qualquer momento nas Configurações.",
+        "continue": "Continuar",
+        "dialogLabel": "Configurar o OpenMarch",
+        "finish": "Concluir",
+        "getStarted": "Começar",
+        "language": {
+            "title": "Escolha seu idioma"
+        },
+        "mode": {
+            "title": "Como você quer trabalhar?"
+        },
+        "step": "Etapa {current} de {total}",
+        "theme": {
+            "title": "Claro ou escuro?"
+        },
+        "welcome": {
+            "description": "Criação de drill gratuita e de código aberto para as artes de marcha. Vamos configurar algumas coisas primeiro. Leva só um minuto.",
+            "title": "Boas-vindas ao OpenMarch"
+        }
     },
     "workspaceSettings": {
         "audioOffsetSeconds": "Deslocamento de Áudio",

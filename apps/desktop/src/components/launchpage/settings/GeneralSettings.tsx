@@ -11,14 +11,9 @@ import { VIEW3D_AUTO_OPEN_SETTING } from "@/view3d/sync/protocol";
 import { isWebBuild } from "@/utilities/webBuild";
 import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
+import { APP_LANGUAGES } from "@/utilities/languages";
 
-const languages = [
-    { code: "en", name: "English" },
-    { code: "es", name: "Español" },
-    { code: "fr", name: "Français" },
-    { code: "pt-BR", name: "Português (Brasil)" },
-    { code: "ja", name: "日本語" },
-];
+const languages = APP_LANGUAGES;
 
 export default function GeneralSettings() {
     const tolgee = useTolgee();

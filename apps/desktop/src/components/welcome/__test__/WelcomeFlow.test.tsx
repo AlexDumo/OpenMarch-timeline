@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TolgeeProvider } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { useEditorModeStore } from "@/stores/EditorModeStore";
 import WelcomeFlow from "../WelcomeFlow";
 
@@ -12,6 +13,9 @@ function stubElectron(optOutAnalytics: unknown) {
             key === "optOutAnalytics" ? optOutAnalytics : undefined,
         ),
         send: vi.fn(),
+        getTheme: vi.fn(async () => "dark"),
+        setTheme: vi.fn(async () => undefined),
+        setLanguage: vi.fn(async () => undefined),
     };
     Object.assign(window, { electron });
     return electron;
@@ -22,7 +26,9 @@ function renderFlow() {
     const reload = vi.fn();
     render(
         <TolgeeProvider tolgee={tolgee} fallback="">
-            <WelcomeFlow open onFinish={onFinish} reload={reload} />
+            <ThemeProvider>
+                <WelcomeFlow open onFinish={onFinish} reload={reload} />
+            </ThemeProvider>
         </TolgeeProvider>,
     );
     return { onFinish, reload };
@@ -30,11 +36,27 @@ function renderFlow() {
 
 const continueButton = () => screen.getByTestId("welcome-continue");
 
+/** From the welcome page through language and theme to the mode step. */
+async function goToModeStep() {
+    expect(await screen.findByTestId("welcome-greeting")).toBeInTheDocument();
+    fireEvent.click(continueButton());
+    await screen.findByTestId("welcome-language-options");
+    fireEvent.click(continueButton());
+    await screen.findByTestId("welcome-theme-options");
+    fireEvent.click(continueButton());
+    return screen.findByTestId("editor-mode-card-basic");
+}
+
 beforeEach(() => {
     useEditorModeStore.setState({ mode: null, loaded: true });
+    Object.defineProperty(navigator, "languages", {
+        value: ["en-US"],
+        configurable: true,
+    });
 });
-afterEach(() => {
+afterEach(async () => {
     vi.restoreAllMocks();
+    await tolgee.changeLanguage("en");
 });
 
 describe("WelcomeFlow", () => {
@@ -42,8 +64,7 @@ describe("WelcomeFlow", () => {
         const electron = stubElectron(undefined);
         const { onFinish, reload } = renderFlow();
 
-        fireEvent.click(await screen.findByTestId("welcome-continue"));
-        const basic = await screen.findByTestId("editor-mode-card-basic");
+        const basic = await goToModeStep();
         expect(basic).toHaveAttribute("aria-checked", "false");
         expect(screen.getByTestId("editor-mode-card-expert")).toHaveAttribute(
             "aria-checked",
@@ -73,8 +94,8 @@ describe("WelcomeFlow", () => {
         const { onFinish, reload } = renderFlow();
         await waitFor(() => expect(electron.invoke).toHaveBeenCalled());
 
-        fireEvent.click(await screen.findByTestId("welcome-continue"));
-        fireEvent.click(await screen.findByTestId("editor-mode-card-expert"));
+        await goToModeStep();
+        fireEvent.click(screen.getByTestId("editor-mode-card-expert"));
         await waitFor(() => expect(continueButton()).toBeEnabled());
         fireEvent.click(continueButton());
 
@@ -83,5 +104,43 @@ describe("WelcomeFlow", () => {
         expect(electron.send).toHaveBeenCalledTimes(1);
         expect(onFinish).toHaveBeenCalledWith({ willReload: false });
         expect(reload).not.toHaveBeenCalled();
+    });
+
+    it("switches and saves the language and theme as they are picked", async () => {
+        const electron = stubElectron(false);
+        renderFlow();
+
+        fireEvent.click(await screen.findByTestId("welcome-continue"));
+        fireEvent.click(await screen.findByTestId("welcome-language-fr"));
+        expect(electron.setLanguage).toHaveBeenCalledWith("fr");
+        await waitFor(() => expect(tolgee.getLanguage()).toBe("fr"));
+        expect(screen.getByTestId("welcome-language-fr")).toHaveAttribute(
+            "aria-checked",
+            "true",
+        );
+
+        fireEvent.click(continueButton());
+        fireEvent.click(await screen.findByTestId("welcome-theme-light"));
+        expect(electron.setTheme).toHaveBeenCalledWith("light");
+        expect(document.documentElement.classList.contains("dark")).toBe(false);
+    });
+
+    it("starts on the system's language and saves it on Continue", async () => {
+        Object.defineProperty(navigator, "languages", {
+            value: ["es-MX", "en-US"],
+            configurable: true,
+        });
+        const electron = stubElectron(false);
+        renderFlow();
+
+        fireEvent.click(await screen.findByTestId("welcome-continue"));
+        expect(
+            await screen.findByTestId("welcome-language-es"),
+        ).toHaveAttribute("aria-checked", "true");
+        expect(electron.setLanguage).not.toHaveBeenCalled();
+
+        fireEvent.click(continueButton());
+        expect(electron.setLanguage).toHaveBeenCalledWith("es");
+        await screen.findByTestId("welcome-theme-options");
     });
 });

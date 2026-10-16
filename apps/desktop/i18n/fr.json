@@ -1061,6 +1061,11 @@
         "general.appearance.light": "Clair",
         "general.automaticUpdates": "Télécharger et installer automatiquement les mises à jour",
         "general.description": "Langue et autres préférences de toute l'application.",
+        "general.editorMode": "Mode d'édition",
+        "general.editorMode.basic": "Basique",
+        "general.editorMode.basic.description": "Des pages, comme une feuille de drill. Réglez chaque page ; les musiciens restent en place jusqu'à ce que vous les déplaciez. Les positions en milieu de page sont permises.",
+        "general.editorMode.expert": "Expert",
+        "general.editorMode.expert.description": "La timeline complète : mouvements qui traversent les pages, mouvements superposés, le drapeau de départ et les boucles.",
         "general.language": "Langue",
         "general.showFullDatabasePath": "Afficher le chemin complet du fichier",
         "general.showFullDatabasePath.description": "Affiche le chemin complet du fichier ouvert dans la barre de titre au lieu de son seul nom.",
@@ -1242,6 +1247,28 @@
     "welcome": {
         "description": "Aucun fichier trouvé. Créez-en un, et assurez-vous de consulter les guides. Personnalisez votre thème et votre navigation dans Paramètres.",
         "title": "Bienvenue à OpenMarch"
+    },
+    "welcomeFlow": {
+        "back": "Retour",
+        "changeLater": "Vous pourrez le modifier à tout moment dans les Paramètres.",
+        "continue": "Continuer",
+        "dialogLabel": "Configurer OpenMarch",
+        "finish": "Terminer",
+        "getStarted": "Commencer",
+        "language": {
+            "title": "Choisissez votre langue"
+        },
+        "mode": {
+            "title": "Comment voulez-vous travailler ?"
+        },
+        "step": "Étape {current} sur {total}",
+        "theme": {
+            "title": "Clair ou sombre ?"
+        },
+        "welcome": {
+            "description": "L'écriture de drill gratuite et open source pour les arts de la marche. Commençons par quelques réglages. Cela ne prend qu'une minute.",
+            "title": "Bienvenue dans OpenMarch"
+        }
     },
     "workspaceSettings": {
         "audioOffsetSeconds": "Décalage Audio",

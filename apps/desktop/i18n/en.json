@@ -2282,15 +2282,23 @@
     },
     "welcomeFlow": {
         "back": "Back",
+        "changeLater": "You can change this any time in Settings.",
         "continue": "Continue",
         "dialogLabel": "Set up OpenMarch",
+        "finish": "Finish",
+        "getStarted": "Get started",
+        "language": {
+            "title": "Choose your language"
+        },
         "mode": {
-            "note": "You can change this any time in Settings.",
             "title": "How do you want to work?"
         },
         "step": "Step {current} of {total}",
+        "theme": {
+            "title": "Light or dark?"
+        },
         "welcome": {
-            "description": "Let's set things up. This takes a few seconds.",
+            "description": "Free, open-source drill writing for the marching arts. Let's set up a few things first. It only takes a minute.",
             "title": "Welcome to OpenMarch"
         }
     },

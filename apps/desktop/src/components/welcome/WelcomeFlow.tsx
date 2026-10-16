@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import clsx from "clsx";
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { Button, Dialog, DialogContent } from "@openmarch/ui";
-import { T, useTranslate } from "@tolgee/react";
+import { T, useTolgee, useTranslate } from "@tolgee/react";
 import NewShowProgressIndicator from "@/components/launchpage/newShow/components/NewShowProgressIndicator";
 import { useEditorModeStore, type EditorMode } from "@/stores/EditorModeStore";
 import { saveAnalyticsChoice } from "@/utilities/analyticsConsent";
+import { matchAppLanguage } from "@/utilities/languages";
+import { isWebBuild } from "@/utilities/webBuild";
+import { useTheme } from "@/context/ThemeContext";
 import {
     canContinueFrom,
     getWelcomeSteps,
@@ -12,6 +16,8 @@ import {
     type WelcomeStepId,
 } from "./welcomeFlowSteps";
 import WelcomeStep from "./steps/WelcomeStep";
+import LanguageStep from "./steps/LanguageStep";
+import ThemeStep from "./steps/ThemeStep";
 import ModeStep from "./steps/ModeStep";
 import AnalyticsStep from "./steps/AnalyticsStep";
 
@@ -28,13 +34,26 @@ export interface WelcomeFlowProps {
 
 const STEP_TITLE_KEYS: Record<WelcomeStepId, string> = {
     welcome: "welcomeFlow.welcome.title",
+    language: "welcomeFlow.language.title",
+    theme: "welcomeFlow.theme.title",
     mode: "welcomeFlow.mode.title",
     analytics: "analyticsOptIn.title",
 };
 
 /**
- * First launch (UI-19): welcome, Basic or Expert, then the analytics opt-in
- * when it hasn't been answered. It can't be dismissed; finishing saves the mode.
+ * The language to start the language step on: the app's, unless that is the
+ * default English and the system prefers another language the app has.
+ */
+function initialLanguage(current: string | undefined): string {
+    if (current && current !== "en") return current;
+    return matchAppLanguage(navigator.languages ?? []) ?? current ?? "en";
+}
+
+/**
+ * First launch (UI-19): a welcome page, then language, light or dark, Basic or
+ * Expert, and the analytics opt-in when it hasn't been answered (never on the
+ * web). It can't be dismissed. Language and theme apply and save as they're
+ * picked; finishing saves the mode.
  */
 // eslint-disable-next-line max-lines-per-function
 export default function WelcomeFlow({
@@ -43,6 +62,11 @@ export default function WelcomeFlow({
     reload = () => window.location.reload(),
 }: WelcomeFlowProps) {
     const { t } = useTranslate();
+    const tolgee = useTolgee();
+    const { theme, setTheme } = useTheme();
+    const [language, setLanguage] = useState(() =>
+        initialLanguage(tolgee.getLanguage()),
+    );
     const setMode = useEditorModeStore((state) => state.setMode);
     const [analyticsChoiceMade, setAnalyticsChoiceMade] = useState<
         boolean | null
@@ -69,16 +93,29 @@ export default function WelcomeFlow({
     // Until the analytics setting is read, assume the question is asked; the
     // first step is the same either way.
     const steps = useMemo(
-        () => getWelcomeSteps(analyticsChoiceMade ?? false),
+        () =>
+            getWelcomeSteps({
+                analyticsChoiceMade: analyticsChoiceMade ?? false,
+                isWeb: isWebBuild,
+            }),
         [analyticsChoiceMade],
     );
     const step = steps[Math.min(stepIndex, steps.length - 1)];
     const isFirst = stepIndex === 0;
     const isLast = stepIndex >= steps.length - 1;
+    // The welcome page isn't counted: the bar and "Step 1 of 4" are the setup.
+    const setupIndex = stepIndex - 1;
+    const setupCount = steps.length - 1;
     const completed = useMemo(
-        () => new Set(Array.from({ length: stepIndex }, (_, i) => i)),
-        [stepIndex],
+        () => new Set(Array.from({ length: setupIndex }, (_, i) => i)),
+        [setupIndex],
     );
+
+    const chooseLanguage = (code: string) => {
+        setLanguage(code);
+        void tolgee.changeLanguage(code);
+        void window.electron.setLanguage(code);
+    };
 
     const finish = (analyticsOptOut?: boolean) => {
         if (!chosenMode) return;
@@ -91,6 +128,9 @@ export default function WelcomeFlow({
 
     const next = () => {
         if (!canContinueFrom(step, chosenMode)) return;
+        // A language picked for them from the system is saved on Continue.
+        if (step === "language" && language !== tolgee.getLanguage())
+            chooseLanguage(language);
         // The mode step finishes when the analytics step is skipped. Wait for
         // the analytics setting so the question isn't skipped by mistake.
         if (isLast) {
@@ -103,7 +143,7 @@ export default function WelcomeFlow({
     return (
         <Dialog open={open}>
             <DialogContent
-                className="w-[44rem] max-w-[calc(100vw-2rem)]"
+                className="min-h-[31rem] w-[46rem] max-w-[calc(100vw-2rem)]"
                 aria-label={t("welcomeFlow.dialogLabel")}
                 aria-describedby={undefined}
                 onEscapeKeyDown={(event) => event.preventDefault()}
@@ -111,23 +151,52 @@ export default function WelcomeFlow({
                 onInteractOutside={(event) => event.preventDefault()}
                 data-testid="welcome-flow"
             >
-                <NewShowProgressIndicator
-                    currentStepIndex={stepIndex}
-                    steps={steps}
-                    completedSteps={completed}
-                />
-                <span className="sr-only">
-                    {t("welcomeFlow.step", {
-                        current: stepIndex + 1,
-                        total: steps.length,
-                    })}
-                </span>
-                <RadixDialog.Title className="text-h4 text-text text-center font-medium">
-                    <T keyName={STEP_TITLE_KEYS[step]} />
-                </RadixDialog.Title>
+                {step === "welcome" ? (
+                    // The greeting cycles through languages, so the title is
+                    // for screen readers only.
+                    <RadixDialog.Title className="sr-only">
+                        <T keyName={STEP_TITLE_KEYS.welcome} />
+                    </RadixDialog.Title>
+                ) : (
+                    <>
+                        <NewShowProgressIndicator
+                            currentStepIndex={setupIndex}
+                            steps={steps.slice(1)}
+                            completedSteps={completed}
+                        />
+                        <div className="flex flex-col items-center gap-4 pt-4">
+                            <span className="text-sub text-text-subtitle tracking-wide uppercase">
+                                {t("welcomeFlow.step", {
+                                    current: setupIndex + 1,
+                                    total: setupCount,
+                                })}
+                            </span>
+                            <RadixDialog.Title className="text-h4 text-text text-center font-medium">
+                                <T keyName={STEP_TITLE_KEYS[step]} />
+                            </RadixDialog.Title>
+                        </div>
+                    </>
+                )}
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-4">
+                <div
+                    key={step}
+                    // The welcome page's photo bleeds over the padding, so
+                    // that page can't clip its overflow.
+                    className={clsx(
+                        "animate-fade-in min-h-0 flex-1",
+                        step === "welcome" ? "" : "overflow-y-auto px-4",
+                    )}
+                >
                     {step === "welcome" && <WelcomeStep />}
+                    {step === "language" && (
+                        <LanguageStep
+                            value={language}
+                            onChange={chooseLanguage}
+                        />
+                    )}
+                    {step === "theme" && (
+                        <ThemeStep value={theme} onChange={setTheme} />
+                    )}
                     {step === "mode" && (
                         <ModeStep value={chosenMode} onChange={setChosenMode} />
                     )}
@@ -140,6 +209,7 @@ export default function WelcomeFlow({
                             <Button
                                 variant="secondary"
                                 onClick={() => setStepIndex(stepIndex - 1)}
+                                data-testid="welcome-back"
                             >
                                 <T keyName="welcomeFlow.back" />
                             </Button>
@@ -171,7 +241,15 @@ export default function WelcomeFlow({
                                 }
                                 data-testid="welcome-continue"
                             >
-                                <T keyName="welcomeFlow.continue" />
+                                <T
+                                    keyName={
+                                        isFirst
+                                            ? "welcomeFlow.getStarted"
+                                            : isLast
+                                              ? "welcomeFlow.finish"
+                                              : "welcomeFlow.continue"
+                                    }
+                                />
                             </Button>
                         )}
                     </div>
