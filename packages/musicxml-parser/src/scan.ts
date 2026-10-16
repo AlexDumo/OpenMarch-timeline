@@ -682,6 +682,46 @@ function readPartMeasure(
     return reading;
 }
 
+/** A time signature's length in quarter notes, or undefined when it isn't read. */
+function timeQuarters(time: RawMeasure["time"]): number | undefined {
+    if (time?.kind !== "read") return undefined;
+    let total = 0;
+    for (const part of time.parts) {
+        const beats = part.beats
+            .split("+")
+            .reduce((sum, t) => sum + Number(t), 0);
+        total += (beats * 4) / Number(part.beatType);
+    }
+    return Number.isFinite(total) && total > 0 ? total : undefined;
+}
+
+/**
+ * A part that never says what its divisions are (some converters leave <divisions> out) was
+ * read with one division per quarter. Its most common measure length, against the meter, says
+ * how many divisions a quarter really has: rescale the part's lengths and positions by that.
+ */
+function inferDivisions(readings: (PartReading | undefined)[][], part: number) {
+    let meter: number | undefined;
+    const ratios = new Map<number, number>();
+    for (const row of readings) {
+        meter = timeQuarters(row.find((r) => r?.time)?.time) ?? meter;
+        const reading = row[part];
+        if (!meter || !reading || reading.contentQuarters <= 0) continue;
+        const ratio = Math.round(reading.contentQuarters / meter);
+        ratios.set(ratio, (ratios.get(ratio) ?? 0) + 1);
+    }
+    const [factor] = [...ratios.entries()].sort((a, b) => b[1] - a[1])[0] ?? [
+        1,
+    ];
+    if (factor <= 1) return;
+    for (const row of readings) {
+        const reading = row[part];
+        if (!reading) continue;
+        reading.contentQuarters /= factor;
+        for (const e of reading.events) e.pos /= factor;
+    }
+}
+
 /** A key that is the same for the same mark written in two parts. */
 function eventKey(e: RawEvent): string {
     switch (e.kind) {
@@ -766,43 +806,54 @@ export function scanScore(doc: {
     const codaSymbols: number[] = [];
     const endingStops: (number[] | undefined)[] = [];
 
-    const measures: RawMeasure[] = [];
+    // Each part's reading of each measure, and the measure's repeats and jumps
+    const readings: (PartReading | undefined)[][] = [];
+    const allMarks: NavigationMarks[] = [];
     for (let i = 0; i < measureCount; i++) {
-        const readings: PartReading[] = [];
         const marks: NavigationMarks = {
             navigation: {},
             fromWords: [],
             codaSymbols: 0,
         };
-        parts.forEach(([, ms], p) => {
-            const m = ms[i];
-            if (!m) return;
-            readings.push(readPartMeasure(m.content, states[p]!, nextSeq));
-            const before = marks.codaSymbols;
-            readNavigation(m.content, marks);
-            // A coda symbol printed in every part is one symbol
-            marks.codaSymbols = Math.min(marks.codaSymbols, before + 1);
-        });
+        readings.push(
+            parts.map(([, ms], p) => {
+                const m = ms[i];
+                if (!m) return undefined;
+                const reading = readPartMeasure(m.content, states[p]!, nextSeq);
+                const before = marks.codaSymbols;
+                readNavigation(m.content, marks);
+                // A coda symbol printed in every part is one symbol
+                marks.codaSymbols = Math.min(marks.codaSymbols, before + 1);
+                return reading;
+            }),
+        );
+        allMarks.push(marks);
+    }
+    states.forEach((state, p) => {
+        if (!state.declared) inferDivisions(readings, p);
+    });
+
+    const measures: RawMeasure[] = [];
+    for (let i = 0; i < measureCount; i++) {
+        const read = readings[i]!.filter((r): r is PartReading => !!r);
+        const marks = allMarks[i]!;
         const first = parts[0]![1][i]!.attrs;
         const raw: RawMeasure = {
             label: first.getAttribute("number") ?? "",
             implicit: first.getAttribute("implicit") === "yes",
-            time: readings.find((r) => r.time)?.time,
-            events: mergeEvents(readings),
-            contentQuarters: Math.max(
-                0,
-                ...readings.map((r) => r.contentQuarters),
-            ),
-            fermata: readings.some((r) => r.fermata),
+            time: read.find((r) => r.time)?.time,
+            events: mergeEvents(read),
+            contentQuarters: Math.max(0, ...read.map((r) => r.contentQuarters)),
+            fermata: read.some((r) => r.fermata),
             navigation: marks.navigation,
         };
-        const rehearsal = readings.find((r) => r.rehearsalMark)?.rehearsalMark;
+        const rehearsal = read.find((r) => r.rehearsalMark)?.rehearsalMark;
         if (rehearsal) raw.rehearsalMark = rehearsal;
         if (marks.fromWords.length > 0)
             raw.navigationFromWords = [...new Set(marks.fromWords)];
         measures.push(raw);
         codaSymbols.push(marks.codaSymbols);
-        endingStops.push(readings.some((r) => r.endingStop) ? [1] : undefined);
+        endingStops.push(read.some((r) => r.endingStop) ? [1] : undefined);
     }
     settleNavigation(measures, codaSymbols, endingStops);
 

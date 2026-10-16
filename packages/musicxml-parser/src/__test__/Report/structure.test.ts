@@ -402,3 +402,24 @@ describe("divisions", () => {
         ]);
     });
 });
+
+describe("missing divisions", () => {
+    it("works out the divisions of a part that never gives them (MEI converters leave them out)", () => {
+        const noDivisions = (n: number) =>
+            measure(
+                n,
+                (n === 1
+                    ? `<attributes><time><beats>4</beats><beat-type>4</beat-type></time></attributes>` +
+                      museScoreTempo("quarter", 0, 60, 60)
+                    : "") +
+                    `<note><rest/><duration>960</duration><voice>1</voice></note>`.repeat(
+                        4,
+                    ),
+            );
+        const xml = score(noDivisions(1) + noDivisions(2));
+        expect(seconds(xml)).toEqual([
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+        ]);
+    });
+});
