@@ -102,6 +102,13 @@ export type FieldEditorPorts = {
     lineFinished?(targets: readonly MarcherPosition[]): void;
     /** The step grid line points round to; null before the field loads. */
     stepGrid?(): StepGrid | null;
+    /**
+     * Whether a marcher row is an item (a prop or equipment, C2.1). Items are
+     * hit by their Outline ({@link itemAt}), not by a dot at their center.
+     */
+    isItem?(id: number): boolean;
+    /** The item whose Outline holds `point`, topmost first, or null. */
+    itemAt?(point: FieldPoint): number | null;
 };
 
 export type DropResult = "saved" | "refused";
@@ -726,13 +733,22 @@ export class FieldEditor {
             this.ports.selection.set(ids);
     }
 
+    /**
+     * The marcher a press at `point` lands on: a performer's dot, else an
+     * item whose Outline holds it, so a performer on a platform is still
+     * pressed.
+     */
     private marcherAt(point: FieldPoint) {
-        return marcherAt(
+        const isItem = this.ports.isItem ?? (() => false);
+        const performer = marcherAt(
             this.ports.marchers(),
             point,
             hitRadius(this.ports.zoom()),
-            (id) => this.ports.canSelect(id),
+            (id) => !isItem(id) && this.ports.canSelect(id),
         );
+        if (performer !== null) return performer;
+        const item = this.ports.itemAt?.(point) ?? null;
+        return item !== null && this.ports.canSelect(item) ? item : null;
     }
 
     /** The primary button, unless the press pans (navigation's rule, `isPanButton`). */

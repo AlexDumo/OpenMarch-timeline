@@ -119,7 +119,29 @@ export interface FieldTestApi {
     fieldImage(): FieldTestImage | null;
     /** The line tool (L) while it's on, or null when it's off (#203). */
     lineTool?(): FieldTestLineTool | null;
+    /**
+     * The props and equipment drawn (C2.1), by ascending marcher id. Items Off
+     * field at the beat shown, or hidden by the user, are left out.
+     */
+    items?(): FieldTestItem[];
 }
+
+/** An item's Outline as the field draws it. */
+export type FieldTestItem = {
+    /** The item's marcher id */
+    id: number;
+    outlineType: string;
+    /** In meters, with any size being dragged */
+    width: number;
+    depth: number;
+    /** In degrees, clockwise on screen */
+    rotation: number;
+    /** Where the timeline (or a drag) has it, in field units */
+    x: number;
+    y: number;
+    /** Its center in the viewport */
+    screen: ScreenPoint;
+};
 
 /** The line tool as the field shows it. Positions are in field units. */
 export type FieldTestLineTool = {
