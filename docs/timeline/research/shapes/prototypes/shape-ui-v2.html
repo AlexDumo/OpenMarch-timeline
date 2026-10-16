@@ -133,6 +133,8 @@
   .chip { z-index: 6; }
   .scrub { font-weight: 700; font-variant-numeric: tabular-nums; padding: 1px 6px; border-radius: 5px; border: 1px solid transparent; cursor: ns-resize; user-select: none; touch-action: none; }
   .scrub.xy { cursor: move; }
+  .scrub.ew { cursor: ew-resize; }
+  body.scrubbing.ew, body.scrubbing.ew * { cursor: ew-resize !important; }
   .scrub:hover, .scrub.live { background: var(--accent2); border-color: var(--accent); }
   .scrubin { width: 58px; font-weight: 700; }
   body.scrubbing, body.scrubbing * { cursor: ns-resize !important; }
@@ -623,8 +625,8 @@ function normDef(pts) { const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y)
 const SCRUB_PX = { size: 16, value: 8 };
 function scrubTok(key, text) {
   if (V.editing === key) return `<input class="scrubin" data-scrubin="${key}" value="${text.replace(" × ", "x")}">`;
-  const xy = key === "size";
-  return `<span class="scrub ${xy ? "xy" : ""} ${V.scrubbing === key ? "live" : ""}" data-scrub="${key}" title="${xy ? "Drag sideways for more across, up or down for more deep · click to type" : "Drag up or down · Alt for tenths · click to type"}">${text}</span>`;
+  const xy = key === "size", ew = key === "across";
+  return `<span class="scrub ${xy ? "xy" : ew ? "ew" : ""} ${V.scrubbing === key ? "live" : ""}" data-scrub="${key}" title="${xy ? "Drag sideways for more across, up or down for more deep · click to type" : ew ? "Drag right or left · Alt for tenths · click to type" : "Drag up or down · Alt for tenths · click to type"}">${text}</span>`;
 }
 function applyScrub(key, s0, value) {
   const n = S.sel.size, iv = intervals(s0, n);
@@ -644,17 +646,17 @@ ov.addEventListener("pointerdown", (e) => {
   const move = (ev) => {
     const dx = ev.clientX - x0, dy = y0 - ev.clientY; // up is positive
     if (!moved && Math.hypot(dx, dy) < 4) return;
-    if (!moved) { moved = true; axis = key === "size" ? (Math.abs(dx) >= Math.abs(dy) ? "x" : "y") : "y"; V.scrubbing = key; document.body.classList.add("scrubbing"); document.body.classList.toggle("xy", key === "size"); }
+    if (!moved) { moved = true; axis = key === "size" ? (Math.abs(dx) >= Math.abs(dy) ? "x" : "y") : key === "across" ? "x" : "y"; V.scrubbing = key; document.body.classList.add("scrubbing"); document.body.classList.toggle("xy", key === "size"); document.body.classList.toggle("ew", key === "across"); }
     if (key === "size") {
       const n = S.sel.size;
       if (axis === "x") applyScrub(key, s0, v0.cols + Math.round(dx / SCRUB_PX.size));
       else { const rows = clamp(v0.rows + Math.round(dy / SCRUB_PX.size), 1, n); applyScrub(key, s0, Math.ceil(n / rows)); }
-    } else { const unit = ev.altKey ? 0.1 : 0.5; const steps = Math.round(dy / SCRUB_PX.value); applyScrub(key, s0, ev.altKey ? Math.round((v0 + steps * unit) * 10) / 10 : snap(v0) + steps * unit); }
+    } else { const unit = ev.altKey ? 0.1 : 0.5; const steps = Math.round((axis === "x" ? dx : dy) / SCRUB_PX.value); applyScrub(key, s0, ev.altKey ? Math.round((v0 + steps * unit) * 10) / 10 : snap(v0) + steps * unit); }
     render();
   };
   const up = () => {
     window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
-    document.body.classList.remove("scrubbing", "xy"); V.scrubbing = null;
+    document.body.classList.remove("scrubbing", "xy", "ew"); V.scrubbing = null;
     if (!moved) V.editing = key;
     S.force = true; render();
   };
@@ -911,7 +913,7 @@ function go() {
    <li><b>Library</b> (right panel): star shapes, save the current one, or make a <b>custom shape</b> by clicking corners.</li>
    <li><b>Type /</b>: answer one question at a time (shape, how many across, steps apart, rotation) with a live preview. "box 4x3 2" fills the steps for you.</li>
    <li><b>Sketch K</b>: draw roughly and it guesses.</li>
-   <li><b>On the field</b>: the chip under the shape. Click a number to type it, or drag it: up or down changes a value, and the box size (6 × 2) drags sideways for more across, up or down for more deep. Grab the center dot to move it (it reads out the yard line). Corners and sides resize. The knob on top rotates around the pivot (set in the Shape panel), and so does just outside a corner (Shift 15°, Alt from center).</li>
+   <li><b>On the field</b>: the chip under the shape. Click a number to type it, or drag it: side-to-side spacing drags right or left, other values drag up or down, and the box size (6 × 2) drags sideways for more across, up or down for more deep. Grab the center dot to move it (it reads out the yard line). Corners and sides resize. The knob on top rotates around the pivot (set in the Shape panel), and so does just outside a corner (Shift 15°, Alt from center).</li>
    <li><b>Shape panel</b> (right): pivot, exact rotate, flip, scale, and the box resize rule.</li>
    <li><b>View tab</b>: fade the rest, or fade only while drawing.</li>
   </ul><div class="muted" style="font-size:11px">Enter places · Esc cancels · scroll zooms · middle-drag pans</div>`;
