@@ -16,8 +16,15 @@ Open <http://localhost:8787>, choose a show, then click **Make collaborative**. 
 window** (or paste the invite link into another browser) to add a collaborator. Each tab is its own
 person. The name is random per tab, and you can change it in the header.
 
-`pnpm smoke` drives the server with two scripted clients. It checks sync, conflicts, delete versus
-edit, the stale-grid refusal, claims and catch-up, and should print `all passed`.
+Two scripted checks run against `pnpm dev`:
+
+- `pnpm smoke` drives the server with two scripted Node clients. It covers sync, conflicts,
+  delete versus edit, the stale-grid refusal, claims and catch-up.
+- `pnpm check:browser` runs `scripts/browser/*.mjs`. These are two-window walkthroughs of each
+  prototype in headless Chromium, using the Playwright browsers the repo already installs. Each one
+  also checks that both windows end with identical moves. Screenshots go to `/tmp/om-sync-shots`.
+
+Both should print `all passed`.
 
 ## How it is built, and how that maps to the report
 
@@ -43,3 +50,4 @@ modeled.
 3. [Soft section claims](03-section-claims/README.md)
 4. [Conflict feedback](04-conflict-feedback/README.md)
 5. [Disconnect behavior](05-disconnect/README.md)
+6. ["Make collaborative"](06-make-collaborative/README.md)

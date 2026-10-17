@@ -137,6 +137,11 @@ export class ShowSession extends DurableObject {
             return Response.json({ headToken });
         }
         if (url.pathname.endsWith("/snapshot")) {
+            if (!this.sessionValue("head_token"))
+                return Response.json(
+                    { error: "No such session" },
+                    { status: 404 },
+                );
             return Response.json({ seq: this.seq(), ...this.snapshot() });
         }
         if (request.headers.get("Upgrade") === "websocket") {

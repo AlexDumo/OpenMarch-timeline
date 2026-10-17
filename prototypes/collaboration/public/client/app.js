@@ -69,14 +69,16 @@ async function boot() {
     $("#my-name").addEventListener("change", (e) => {
         S.user.name = e.target.value.trim() || S.user.name;
         saveUser();
-        if (S.conn) {
+        if (S.conn?.live) {
+            // presence and authorship carry the name, so rejoin under it
             S.conn.user = S.user;
-            toast("Your new name shows after you reconnect.");
+            S.conn.kill();
+            S.conn.reconnect();
         }
     });
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("s");
-    if (sessionId) joinSession(sessionId);
+    if (sessionId) void joinSession(sessionId);
     else showLanding();
     wireField();
     wireTimeline();
@@ -103,6 +105,10 @@ function showLanding() {
         const file = e.target.files[0];
         if (!file) return;
         try {
+            if (file.name.toLowerCase().endsWith(".json")) {
+                const snap = JSON.parse(await file.text());
+                return openSolo(snap, [`Opened ${file.name} solo. It is not linked to the session it came from.`]);
+            }
             const snap = importDots(S.SQL, new Uint8Array(await file.arrayBuffer()), file.name);
             openSolo(snap, snap.notes);
         } catch (err) {
@@ -130,19 +136,94 @@ function enterEditor() {
     refresh();
 }
 
-/** "Make collaborative": upload the local show as the session's first snapshot. */
-async function makeCollaborative() {
+/** "Make collaborative": ask first, then upload the local show as the session's first snapshot. */
+function makeCollaborative() {
     const snapshot = S.mirror.snapshot();
-    const res = await fetch("/api/sessions", { method: "POST", body: JSON.stringify(snapshot) });
+    const body = JSON.stringify(snapshot);
+    const kb = Math.max(1, Math.round(body.length / 1024));
+    modal(`<h2>Make "${escapeHtml(S.show.meta.name ?? "this show")}" collaborative?</h2>
+        <p>A copy of the show goes to a session on the server: ${snapshot.marchers.length} marchers,
+        ${snapshot.moves.length} moves and ${snapshot.pages.length} page flags (${kb} KB).
+        Positions aren't uploaded; every window works them out from the moves.</p>
+        <ul>
+            <li>You become the <b>head drill writer</b>: you can insert time and override claims.</li>
+            <li>Anyone with the invite link can join and edit as a collaborator.</li>
+            <li>While collaborative, editing needs a connection. Offline, the show is read-only.</li>
+            <li>Your local file is left as it was. Use <b>Download a copy</b> to take the session's show away.</li>
+        </ul>`, [
+        ["Cancel", () => {}],
+        ["Make collaborative", () => uploadAndJoin(body), "primary"],
+    ]);
+}
+
+async function uploadAndJoin(body) {
+    const res = await fetch("/api/sessions", { method: "POST", body });
     if (!res.ok) return toast(`Couldn't start a session: ${res.status}`, "bad");
     const { sessionId, headToken } = await res.json();
     sessionStorage.setItem(`om-sync-head:${sessionId}`, headToken);
     window.history.replaceState(null, "", `?s=${sessionId}`);
-    toast("The show is collaborative now. You're the head drill writer. Share the invite link.", "good");
-    joinSession(sessionId);
+    await joinSession(sessionId);
+    showInvite(true);
 }
 
-function joinSession(sessionId) {
+function showInvite(justCreated = false) {
+    modal(`<h2>${justCreated ? "The show is collaborative" : "Invite people"}</h2>
+        <p>Send this link to the people you want to edit with. They join as collaborators.</p>
+        <input id="invite-url" readonly value="${escapeHtml(inviteUrl())}" style="width:100%"/>
+        <p class="muted">The session keeps running when you close this window, and when everyone has left.</p>`, [
+        ["Copy link", async () => {
+            await navigator.clipboard?.writeText(inviteUrl()).catch(() => {});
+            toast("Invite link copied.");
+        }],
+        ["Open a second window", () => window.open(inviteUrl(), "_blank", "noopener,width=1300,height=850")],
+        ["Done", () => {}, "primary"],
+    ]);
+    setTimeout(() => document.querySelector("#invite-url")?.select(), 0);
+}
+
+/** Saves the session's current show, as the server has it, to a file that opens solo. */
+async function downloadCopy() {
+    const res = await fetch(`/api/sessions/${S.sessionId}/snapshot`);
+    if (!res.ok) return toast("Couldn't download the show.", "bad");
+    const snap = await res.json();
+    const name = (S.show.meta.name ?? "show").replace(/[^\w -]+/g, "");
+    const blob = new Blob([JSON.stringify({ name, ...snap }, null, 1)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${name} (session copy, #${snap.seq}).json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast(`Downloaded the show as of edit #${snap.seq}. Open it from the start page to work on it solo.`, "good");
+}
+
+/** A small dialog: HTML body and a row of [label, action, class] buttons. */
+function modal(html, buttons) {
+    const back = document.createElement("div");
+    back.style.cssText = "position:fixed;inset:0;background:#000a;display:grid;place-items:center;z-index:20";
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.width = "520px";
+    card.innerHTML = html;
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:8px;justify-content:flex-end;margin-top:12px";
+    for (const [label, action, cls] of buttons)
+        row.append(button(label, () => {
+            if (label !== "Copy link") back.remove();
+            void action();
+        }, cls ?? ""));
+    card.append(row);
+    back.append(card);
+    document.body.append(back);
+}
+
+async function joinSession(sessionId) {
+    const check = await fetch(`/api/sessions/${sessionId}/snapshot`).catch(() => null);
+    if (!check || check.status === 404 || check.status === 400) {
+        window.history.replaceState(null, "", window.location.pathname);
+        showLanding();
+        $("#landing-note").textContent = "That invite link doesn't lead to a session (it may be from another server). Open a show to start one.";
+        return;
+    }
     S.mode = "session";
     S.sessionId = sessionId;
     S.conn?.kill();
@@ -536,11 +617,9 @@ function renderChrome() {
     if (S.mode === "solo") actions.append(button("Make collaborative", makeCollaborative, "primary"));
     if (S.mode === "session") {
         actions.append(
-            button("Copy invite link", async () => {
-                await navigator.clipboard?.writeText(inviteUrl()).catch(() => {});
-                toast(`Invite link: ${inviteUrl()}`);
-            }),
+            button("Invite", () => showInvite()),
             button("Open a second window", () => window.open(inviteUrl(), "_blank", "noopener,width=1300,height=850")),
+            button("Download a copy", downloadCopy),
         );
     }
     renderAvatars();
