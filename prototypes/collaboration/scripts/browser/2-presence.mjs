@@ -3,33 +3,78 @@ const BASE = process.env.BASE ?? "http://localhost:8787";
 const out = process.env.OUT ?? "/tmp/om-sync-shots";
 const browser = await chromium.launch();
 const errs = [];
-const page = async () => { const p = await (await browser.newContext({ viewport: { width: 1300, height: 820 } })).newPage(); p.on("pageerror", e => errs.push(e.message)); return p; };
+const page = async () => {
+    const p = await (
+        await browser.newContext({ viewport: { width: 1300, height: 820 } })
+    ).newPage();
+    p.on("pageerror", (e) => errs.push(e.message));
+    return p;
+};
 const A = await page();
 await A.goto(BASE);
-await A.evaluate(() => sessionStorage.setItem("om-sync-user", JSON.stringify({ id: "a", name: "Alex", color: "#17bebb" })));
+await A.evaluate(() =>
+    sessionStorage.setItem(
+        "om-sync-user",
+        JSON.stringify({ id: "a", name: "Alex", color: "#17bebb" }),
+    ),
+);
 await A.reload();
 await A.click("text=Generated demo band");
-await A.getByRole("button", { name: "Make collaborative" }).click(); await A.locator(".card").getByRole("button", { name: "Make collaborative" }).click(); await A.getByRole("button", { name: "Done" }).click();
-await A.waitForFunction(() => document.querySelector("#mode").textContent.startsWith("Live"));
+await A.getByRole("button", { name: "Make collaborative" }).click();
+await A.locator(".card")
+    .getByRole("button", { name: "Make collaborative" })
+    .click();
+await A.getByRole("button", { name: "Done" }).click();
+await A.waitForFunction(() =>
+    document.querySelector("#mode").textContent.startsWith("Live"),
+);
 const B = await page();
 await B.goto(BASE);
-await B.evaluate(() => sessionStorage.setItem("om-sync-user", JSON.stringify({ id: "b", name: "Sam", color: "#ff6fb5" })));
+await B.evaluate(() =>
+    sessionStorage.setItem(
+        "om-sync-user",
+        JSON.stringify({ id: "b", name: "Sam", color: "#ff6fb5" }),
+    ),
+);
 await B.goto(A.url());
-await B.waitForFunction(() => document.querySelector("#mode").textContent.startsWith("Live"));
+await B.waitForFunction(() =>
+    document.querySelector("#mode").textContent.startsWith("Live"),
+);
 // B selects guard; A selects battery and makes a time selection, then drags (hold)
-await B.locator("#sections li", { hasText: "Guard" }).locator("button", { hasText: "select" }).click();
+await B.locator("#sections li", { hasText: "Guard" })
+    .locator("button", { hasText: "select" })
+    .click();
 await B.mouse.click(400, 700); // scrub B to some count
-await A.locator("#sections li", { hasText: "Battery" }).locator("button", { hasText: "select" }).click();
-console.log("after select", await A.evaluate(() => [...window.__S.selection].length));
+await A.locator("#sections li", { hasText: "Battery" })
+    .locator("button", { hasText: "select" })
+    .click();
+console.log(
+    "after select",
+    await A.evaluate(() => [...window.__S.selection].length),
+);
 const tl = await A.locator("#timeline").boundingBox();
 await A.keyboard.down("Shift");
-await A.mouse.move(tl.x + 300, tl.y + 10); await A.mouse.down(); await A.mouse.move(tl.x + 420, tl.y + 10, { steps: 4 }); await A.mouse.up();
+await A.mouse.move(tl.x + 300, tl.y + 10);
+await A.mouse.down();
+await A.mouse.move(tl.x + 420, tl.y + 10, { steps: 4 });
+await A.mouse.up();
 await A.keyboard.up("Shift");
-console.log("after range", await A.evaluate(() => [...window.__S.selection].length));
+console.log(
+    "after range",
+    await A.evaluate(() => [...window.__S.selection].length),
+);
 const c = await A.locator('[data-marcher="30"] circle').boundingBox();
-await A.mouse.move(c.x + c.width / 2, c.y + c.height / 2); await A.mouse.down(); await A.mouse.move(c.x + 90, c.y - 70, { steps: 8 });
+await A.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+await A.mouse.down();
+await A.mouse.move(c.x + 90, c.y - 70, { steps: 8 });
 await B.waitForTimeout(400);
-console.log("mid drag", await A.evaluate(() => [[...window.__S.selection].length, JSON.stringify(window.__S.drag)]));
+console.log(
+    "mid drag",
+    await A.evaluate(() => [
+        [...window.__S.selection].length,
+        JSON.stringify(window.__S.drag),
+    ]),
+);
 await B.screenshot({ path: `${out}/p2-B-sees-A-dragging.png` });
 await A.mouse.up();
 await B.waitForTimeout(300);

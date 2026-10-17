@@ -16,5 +16,6 @@ for (const f of ["sql-wasm.js", "sql-wasm.wasm"])
 const demos = join(root, "../../apps/desktop/web/public/demos");
 mkdirSync(join(root, "public/demos"), { recursive: true });
 for (const f of ["part1-demo.dots", "lhb-daft-punk-pt2.dots"])
-    if (existsSync(join(demos, f))) copyFileSync(join(demos, f), join(root, "public/demos", f));
+    if (existsSync(join(demos, f)))
+        copyFileSync(join(demos, f), join(root, "public/demos", f));
 console.log("vendored sql.js and demo shows into public/");

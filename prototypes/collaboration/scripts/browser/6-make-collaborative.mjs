@@ -3,41 +3,93 @@ const BASE = process.env.BASE ?? "http://localhost:8787";
 const out = process.env.OUT ?? "/tmp/om-sync-shots";
 const browser = await chromium.launch();
 const errs = [];
-const page = async () => { const p = await (await browser.newContext({ viewport: { width: 1300, height: 820 }, acceptDownloads: true })).newPage(); p.on("pageerror", e => errs.push(e.message)); return p; };
+const page = async () => {
+    const p = await (
+        await browser.newContext({
+            viewport: { width: 1300, height: 820 },
+            acceptDownloads: true,
+        })
+    ).newPage();
+    p.on("pageerror", (e) => errs.push(e.message));
+    return p;
+};
 const A = await page();
 await A.goto(BASE);
 await A.click("text=part1-demo.dots");
 await A.waitForSelector("#field [data-marcher]");
-await A.evaluate(() => { window.__S.selection = new Set([window.__S.show.marchers[0].id]); });
+await A.evaluate(() => {
+    window.__S.selection = new Set([window.__S.show.marchers[0].id]);
+});
 await A.keyboard.press("ArrowRight");
-const soloEdit = await A.evaluate(() => JSON.stringify(window.__S.show.moves.filter(m => m.marcher_id === window.__S.show.marchers[0].id).sort((a,b)=>a.id-b.id)));
+const soloEdit = await A.evaluate(() =>
+    JSON.stringify(
+        window.__S.show.moves
+            .filter((m) => m.marcher_id === window.__S.show.marchers[0].id)
+            .sort((a, b) => a.id - b.id),
+    ),
+);
 await A.getByRole("button", { name: "Make collaborative" }).click();
 await A.screenshot({ path: `${out}/p6-confirm.png` });
-await A.locator(".card").getByRole("button", { name: "Make collaborative" }).click();
+await A.locator(".card")
+    .getByRole("button", { name: "Make collaborative" })
+    .click();
 await A.waitForSelector("#invite-url");
-await A.waitForFunction(() => document.querySelector("#mode").textContent.startsWith("Live"));
+await A.waitForFunction(() =>
+    document.querySelector("#mode").textContent.startsWith("Live"),
+);
 await A.screenshot({ path: `${out}/p6-invite.png` });
 const link = await A.inputValue("#invite-url");
 await A.getByRole("button", { name: "Done" }).click();
 const B = await page();
 await B.goto(link);
-await B.waitForFunction(() => document.querySelector("#mode").textContent.startsWith("Live"));
-const bSees = await B.evaluate(() => JSON.stringify(window.__S.show.moves.filter(m => m.marcher_id === window.__S.show.marchers[0].id).sort((a,b)=>a.id-b.id)));
-console.log("B has the solo edit:", bSees === soloEdit, "| B mode:", await B.locator("#mode").innerText());
+await B.waitForFunction(() =>
+    document.querySelector("#mode").textContent.startsWith("Live"),
+);
+const bSees = await B.evaluate(() =>
+    JSON.stringify(
+        window.__S.show.moves
+            .filter((m) => m.marcher_id === window.__S.show.marchers[0].id)
+            .sort((a, b) => a.id - b.id),
+    ),
+);
+console.log(
+    "B has the solo edit:",
+    bSees === soloEdit,
+    "| B mode:",
+    await B.locator("#mode").innerText(),
+);
 // B edits, A downloads a copy
-await B.evaluate(() => { window.__S.selection = new Set([window.__S.show.marchers[1].id]); });
+await B.evaluate(() => {
+    window.__S.selection = new Set([window.__S.show.marchers[1].id]);
+});
 await B.keyboard.press("ArrowDown");
 await A.waitForTimeout(400);
-const [dl] = await Promise.all([A.waitForEvent("download"), A.getByRole("button", { name: "Download a copy" }).click()]);
+const [dl] = await Promise.all([
+    A.waitForEvent("download"),
+    A.getByRole("button", { name: "Download a copy" }).click(),
+]);
 const file = `${out}/${dl.suggestedFilename()}`;
 await dl.saveAs(file);
 console.log("downloaded", dl.suggestedFilename());
 const C = await page();
 await C.goto(BASE);
-await C.waitForSelector("#landing:not([hidden])"); await C.setInputFiles("#file", file);
+await C.waitForSelector("#landing:not([hidden])");
+await C.setInputFiles("#file", file);
 await C.waitForSelector("#field [data-marcher]");
-const cmp = async (P) => P.evaluate(() => JSON.stringify(window.__S.show.moves.map(m => [m.id, m.x, m.y, m.start_beat, m.end_beat]).sort()));
-console.log("reopened copy matches session:", (await cmp(C)) === (await cmp(A)), "| C mode:", await C.locator("#mode").innerText());
+const cmp = async (P) =>
+    P.evaluate(() =>
+        JSON.stringify(
+            window.__S.show.moves
+                .map((m) => [m.id, m.x, m.y, m.start_beat, m.end_beat])
+                .sort(),
+        ),
+    );
+console.log(
+    "reopened copy matches session:",
+    (await cmp(C)) === (await cmp(A)),
+    "| C mode:",
+    await C.locator("#mode").innerText(),
+);
 // dead link
 const D = await page();
 await D.goto(`${BASE}/?s=${"ab".repeat(32)}`);

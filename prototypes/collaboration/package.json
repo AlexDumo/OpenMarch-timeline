@@ -1,5 +1,5 @@
 {
-    "name": "openmarch-collab-prototypes",
+    "name": "openmarch-sync-prototypes",
     "private": true,
     "type": "module",
     "description": "Throwaway real-time collaboration prototypes (docs/collaboration/REPORT.md). Not part of the workspace.",

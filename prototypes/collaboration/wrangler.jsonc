@@ -1,6 +1,6 @@
 {
     // Local only: run with `pnpm dev` (wrangler dev). Never deployed.
-    "name": "openmarch-collab-prototype",
+    "name": "openmarch-sync-prototype",
     "main": "server/worker.js",
     "compatibility_date": "2026-05-01",
     "assets": {

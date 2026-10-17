@@ -9,10 +9,18 @@ import { fileURLToPath } from "node:url";
 const dir = join(dirname(fileURLToPath(import.meta.url)), "browser");
 mkdirSync(process.env.OUT ?? "/tmp/om-sync-shots", { recursive: true });
 let failed = 0;
-for (const file of readdirSync(dir).filter((f) => f.endsWith(".mjs")).sort()) {
-    const run = spawnSync(process.execPath, [join(dir, file)], { encoding: "utf8", timeout: 180_000 });
+for (const file of readdirSync(dir)
+    .filter((f) => f.endsWith(".mjs"))
+    .sort()) {
+    const run = spawnSync(process.execPath, [join(dir, file)], {
+        encoding: "utf8",
+        timeout: 180_000,
+    });
     const output = `${run.stdout}${run.stderr}`;
-    const ok = run.status === 0 && /errors \[\]/.test(output) && !/\bfalse\b/.test(output);
+    const ok =
+        run.status === 0 &&
+        /errors \[\]/.test(output) &&
+        !/\bfalse\b/.test(output);
     if (!ok) failed++;
     console.log(`${ok ? "ok  " : "FAIL"} ${file}`);
     if (!ok || process.env.VERBOSE) console.log(output.replace(/^/gm, "    "));

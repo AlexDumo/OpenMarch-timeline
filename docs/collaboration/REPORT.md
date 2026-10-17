@@ -187,11 +187,19 @@ Nothing above the data layer needs to know whether a change came from a person, 
 client keeps a queue of unacknowledged ops. A remote change to a field that has a pending local
 write is skipped, as in Figma's LWW model; the server's ack brings the final value.
 
+A skipped value is not thrown away. It becomes the `prev` of the earliest pending op that writes
+that field, so if that op is refused, the revert lands on the server's value, not a stale one. The
+prototype's stale-grid case depends on this: an insert-time op arrives while a resize is pending.
+
 On a **reject**, the client does three things:
 
 1. Applies the op's `prev` images in reverse order, skipping fields that a later pending op rewrote.
 2. Applies the server's catch-up.
-3. Shows a toast.
+3. Shows a toast that gives the server's reason.
+
+**On disconnect**, the client reverts every unacknowledged op and refuses edits until it is
+reconnected. Ops belong to the connection they were sent on: a message queued before a drop must
+never go out on the next socket.
 
 ### 4.3 Local SQLite during a session
 
@@ -345,5 +353,41 @@ clients derive positions themselves.
 
 ## 8. Prototypes
 
-See [`prototypes/collaboration/`](../../prototypes/collaboration/README.md). Each prototype is listed
-there with how to run it and what it taught. This section is filled in as they land.
+The prototypes are in [`prototypes/collaboration/`](../../prototypes/collaboration/README.md). They
+are one small app: a Worker and one Durable Object per show, and a plain-JS client whose local
+mirror is sql.js. Built that way, they exercise the architecture above directly:
+
+- Commands write SQL in a local transaction, and capture triggers turn it into an op (§4.1).
+- Remote changes are applied with recording off (§4.2).
+- The Durable Object validates each op by running **the same DDL** (§4.5).
+
+The "move" is a simplified timeline row, and positions are derived on every client.
+
+To run them: `cd prototypes/collaboration && pnpm install --ignore-workspace && pnpm dev`, then
+open <http://localhost:8787>. Two scripted checks run against it:
+
+- `pnpm smoke` covers the server protocol.
+- `pnpm check:browser` runs a two-window walkthrough of each prototype in headless Chromium. Each
+  walkthrough also checks that both windows converge.
+
+Both passed on 2026-10-17.
+
+| #   | Prototype                                                                              | What it taught                                                                                                                                                                                                                                                                         |
+| --- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | [Live sync](../../prototypes/collaboration/01-live-sync/README.md)                     | SQL-layer capture needs nothing from commands. The only design work was IDs (explicit IDs from a per-member block) and the beat grid (ops carry `grid_version`).                                                                                                                       |
+| 2   | [Presence](../../prototypes/collaboration/02-presence/README.md)                       | Presence is a separate channel: relayed, never ordered or stored. The app already holds what it needs (`TimelineSelectionStore`, the field editor's pending drag), except that `SelectedMarchersContext` holds objects, not IDs. A Durable Object socket attachment is capped at 2 KB. |
+| 3   | [Soft section claims](../../prototypes/collaboration/03-section-claims/README.md)      | Claims need a server-side "which marchers does this op touch" function per table. In the real schema that walks shape → transition → assignment → marcher. Structural edits can't respect claims, so they are head-only.                                                               |
+| 4   | [Conflict feedback](../../prototypes/collaboration/04-conflict-feedback/README.md)     | A per-field "last seq and writer" table plus `baseSeq` is enough to tell "replaced unseen work" from an ordinary edit. Feedback works at the row level, and "Put mine back" is just a new op built from `lostValue`.                                                                   |
+| 5   | [Disconnect behavior](../../prototypes/collaboration/05-disconnect/README.md)          | Online-only means three rules: revert unacknowledged ops, refuse edits, catch up from `lastSeq`. The one real bug was a queued message going out on the next socket.                                                                                                                   |
+| 6   | ["Make collaborative"](../../prototypes/collaboration/06-make-collaborative/README.md) | The snapshot is small (about 820 moves and 78 KB for a 95-marcher show) because positions aren't uploaded. The flow is a conversion and should reuse `ConvertShowDialog`'s confirm-first shape. The creator reloads from the server's snapshot, so every client starts identical.      |
+
+**Not prototyped:**
+
+- Per-user undo (§4.4).
+- Moves into shapes, and the derived-layer write-back (§5.1).
+- R2 blobs.
+- Auth: a session is open to anyone with its link, and the head drill writer is whoever holds a
+  token in that tab.
+
+**Tooling note.** The repo's wrangler 4.94 runs workerd 2026-05-28, so the prototype's
+`compatibility_date` is set to 2026-05-01.

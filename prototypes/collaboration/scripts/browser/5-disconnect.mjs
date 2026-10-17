@@ -3,44 +3,95 @@ const BASE = process.env.BASE ?? "http://localhost:8787";
 const out = process.env.OUT ?? "/tmp/om-sync-shots";
 const browser = await chromium.launch();
 const errs = [];
-const page = async (id, name, color) => { const p = await (await browser.newContext({ viewport: { width: 1300, height: 820 } })).newPage(); p.on("pageerror", e => errs.push(name + " " + e.message)); await p.goto(BASE); await p.evaluate((u) => sessionStorage.setItem("om-sync-user", JSON.stringify(u)), { id, name, color }); return p; };
+const page = async (id, name, color) => {
+    const p = await (
+        await browser.newContext({ viewport: { width: 1300, height: 820 } })
+    ).newPage();
+    p.on("pageerror", (e) => errs.push(name + " " + e.message));
+    await p.goto(BASE);
+    await p.evaluate(
+        (u) => sessionStorage.setItem("om-sync-user", JSON.stringify(u)),
+        { id, name, color },
+    );
+    return p;
+};
 const A = await page("a", "Alex", "#17bebb");
 await A.reload();
 await A.click("text=Generated demo band");
-await A.getByRole("button", { name: "Make collaborative" }).click(); await A.locator(".card").getByRole("button", { name: "Make collaborative" }).click(); await A.getByRole("button", { name: "Done" }).click();
-await A.waitForFunction(() => document.querySelector("#mode").textContent.startsWith("Live"));
+await A.getByRole("button", { name: "Make collaborative" }).click();
+await A.locator(".card")
+    .getByRole("button", { name: "Make collaborative" })
+    .click();
+await A.getByRole("button", { name: "Done" }).click();
+await A.waitForFunction(() =>
+    document.querySelector("#mode").textContent.startsWith("Live"),
+);
 const B = await page("b", "Sam", "#ff6fb5");
 await B.goto(A.url());
-await B.waitForFunction(() => document.querySelector("#mode").textContent.startsWith("Live"));
+await B.waitForFunction(() =>
+    document.querySelector("#mode").textContent.startsWith("Live"),
+);
 await B.getByRole("button", { name: "Kill connection" }).click();
 await B.waitForTimeout(300);
-await A.evaluate(() => { window.__S.selection = new Set([20, 21, 22]); });
-await A.keyboard.press("ArrowUp"); await A.waitForTimeout(150); await A.keyboard.press("ArrowUp");
+await A.evaluate(() => {
+    window.__S.selection = new Set([20, 21, 22]);
+});
+await A.keyboard.press("ArrowUp");
+await A.waitForTimeout(150);
+await A.keyboard.press("ArrowUp");
 await A.waitForTimeout(300);
 const c = await B.locator('[data-marcher="30"] circle').boundingBox();
-await B.mouse.move(c.x + c.width / 2, c.y + c.height / 2); await B.mouse.down(); await B.mouse.move(c.x + 60, c.y + 60, { steps: 4 }); await B.mouse.up();
+await B.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+await B.mouse.down();
+await B.mouse.move(c.x + 60, c.y + 60, { steps: 4 });
+await B.mouse.up();
 await B.waitForTimeout(200);
-console.log("B offline mode:", await B.locator("#mode").innerText(), "| banner:", await B.locator("#banner").innerText());
+console.log(
+    "B offline mode:",
+    await B.locator("#mode").innerText(),
+    "| banner:",
+    await B.locator("#banner").innerText(),
+);
 console.log("B toasts:", await B.locator("#toasts").innerText());
 await B.screenshot({ path: `${out}/p5-B-offline.png` });
-console.log("A people while B offline:", (await A.locator("#people").innerText()).replace(/\n/g, " "));
+console.log(
+    "A people while B offline:",
+    (await A.locator("#people").innerText()).replace(/\n/g, " "),
+);
 await B.getByRole("button", { name: "Reconnect" }).click();
-await B.waitForFunction(() => document.querySelector("#mode").textContent.startsWith("Live"));
+await B.waitForFunction(() =>
+    document.querySelector("#mode").textContent.startsWith("Live"),
+);
 await B.waitForTimeout(200);
-console.log("B toasts after reconnect:", await B.locator("#toasts").innerText());
+console.log(
+    "B toasts after reconnect:",
+    await B.locator("#toasts").innerText(),
+);
 await B.screenshot({ path: `${out}/p5-B-caught-up.png` });
-const snap = (P) => P.evaluate(() => JSON.stringify(window.__S.show.moves.map(m => [m.id, m.x, m.y]).sort()));
+const snap = (P) =>
+    P.evaluate(() =>
+        JSON.stringify(
+            window.__S.show.moves.map((m) => [m.id, m.x, m.y]).sort(),
+        ),
+    );
 console.log("converged", (await snap(A)) === (await snap(B)));
 // unsent edit dropped
 await B.selectOption("#network select", "1500");
-await B.evaluate(() => { window.__S.selection = new Set([40]); });
+await B.evaluate(() => {
+    window.__S.selection = new Set([40]);
+});
 await B.keyboard.press("ArrowLeft");
 await B.waitForTimeout(200);
 await B.getByRole("button", { name: "Kill connection" }).click();
 await B.waitForTimeout(300);
-console.log("B toasts after kill with pending:", await B.locator("#toasts").innerText());
+console.log(
+    "B toasts after kill with pending:",
+    await B.locator("#toasts").innerText(),
+);
 await B.getByRole("button", { name: "Reconnect" }).click();
-await B.waitForFunction(() => document.querySelector("#mode").textContent.startsWith("Live"));
+await B.waitForFunction(() =>
+    document.querySelector("#mode").textContent.startsWith("Live"),
+);
 await B.waitForTimeout(3500);
 console.log("converged after drop", (await snap(A)) === (await snap(B)));
 console.log("errors", errs);
