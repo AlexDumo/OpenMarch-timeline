@@ -157,6 +157,17 @@ test("two windows edit one show through the sync server", async ({
     const a = show;
     await allowSyncServer(a.page, server.url);
 
+    // The dev actions are in the command palette
+    await a.page.keyboard.press("Control+k");
+    await a.page.keyboard.type("collaborat");
+    await expect(
+        a.page.getByText("Make show collaborative (dev)"),
+    ).toBeVisible();
+    await expect(
+        a.page.getByText("Join collaboration session (dev)"),
+    ).toBeVisible();
+    await a.page.keyboard.press("Escape");
+
     // A makes the show collaborative
     const { sessionId } = await a.page.evaluate(() =>
         window.__sync!.makeCollaborative(),
