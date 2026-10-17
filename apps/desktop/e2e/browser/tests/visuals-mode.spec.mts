@@ -341,6 +341,36 @@ test("the ramp sets a transition, a copy pastes onto another who, and clashes ar
     await expect(page.getByTestId("visuals-band-flags")).toHaveText(
         "4 flagged cues",
     );
+    // and the result row shows where they set the flutes
+    await expect(
+        page.locator('[data-testid="visuals-result-span"][data-flagged]'),
+    ).not.toHaveCount(0);
+});
+
+test("Ctrl or Cmd+drag on the band draws the timeline's range, not a cue", async ({
+    show,
+}) => {
+    const { page } = show;
+    await expect(page.getByRole("heading", { name: "Page 0" })).toBeVisible();
+    await page.getByTestId("workspace-view-visuals").click();
+    await page.getByTestId("visuals-tab-facing").click();
+    await page.getByTestId("visuals-who-section-Trumpet").click();
+    await expect(page.getByTestId("visuals-lane")).toBeVisible();
+    // the window's count shows for a range that starts off a page line or downbeat
+    const windowCount = page.getByTestId("timeline-selection-count");
+    await expect(windowCount).toBeHidden();
+
+    const from = await laneX(page, 2);
+    const to = await laneX(page, 7);
+    await page.keyboard.down("ControlOrMeta");
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 6 });
+    await page.mouse.up();
+    await page.keyboard.up("ControlOrMeta");
+
+    await expect(windowCount).toBeVisible();
+    expect(await show.query("SELECT id FROM cues")).toEqual([]);
 });
 
 test("a Facing cue's wheel sets its angle and the field gives its point", async ({
