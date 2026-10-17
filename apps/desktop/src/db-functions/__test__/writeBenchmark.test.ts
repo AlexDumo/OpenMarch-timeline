@@ -22,7 +22,7 @@ import { DatabaseSync } from "node:sqlite";
 import fs from "fs-extra";
 import os from "os";
 import path from "path";
-import { describe } from "vitest";
+import { describe, it as vitestIt } from "vitest";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { handleSqlProxyWithDb } from "@/../electron/database/database.services";
 import { handleSqlReadBatchWithDb } from "@/../electron/database/sqlProxy";
@@ -132,9 +132,7 @@ const median = (v: number[]) => {
 const run = OUT
     ? describeDbTests
     : (name: string, tests: Parameters<typeof describeDbTests>[1]) =>
-          describe.skip(name, () =>
-              tests(undefined as never, "better-sqlite3"),
-          );
+          describe.skip(name, () => tests(vitestIt as never, "better-sqlite3"));
 
 run("write benchmark (collaboration spike measurement)", (it) => {
     it(
