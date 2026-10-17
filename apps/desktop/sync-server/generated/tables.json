@@ -1,0 +1,305 @@
+{
+    "generatedBy": "sync-server/scripts/dump-schema.ts",
+    "order": [
+        "beats",
+        "marchers",
+        "phrase_assets",
+        "tags",
+        "cues",
+        "cue_marchers",
+        "field_properties",
+        "marcher_tags",
+        "measures",
+        "pages",
+        "page_performer_settings",
+        "section_appearances",
+        "tag_appearances",
+        "timeline_shapes",
+        "timelines",
+        "timeline_transitions",
+        "timeline_assignments",
+        "timeline_kept_assignments",
+        "timeline_slot_destinations",
+        "utility",
+        "view3d_venue"
+    ],
+    "tables": {
+        "beats": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "duration",
+                "position",
+                "include_in_measure",
+                "notes",
+                "created_at",
+                "updated_at"
+            ],
+            "blobColumns": []
+        },
+        "marchers": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "name",
+                "section",
+                "year",
+                "notes",
+                "drill_prefix",
+                "drill_order",
+                "created_at",
+                "updated_at",
+                "home_x",
+                "home_y"
+            ],
+            "blobColumns": []
+        },
+        "phrase_assets": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "name",
+                "label",
+                "source",
+                "channels_json",
+                "format_version",
+                "data_json",
+                "created_at",
+                "updated_at"
+            ],
+            "blobColumns": []
+        },
+        "tags": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "name",
+                "description",
+                "created_at",
+                "updated_at",
+                "icon",
+                "color_hex"
+            ],
+            "blobColumns": []
+        },
+        "cues": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "channel",
+                "kind",
+                "target_kind",
+                "target_section",
+                "target_tag_id",
+                "beat_id",
+                "value",
+                "phrase_asset_id",
+                "length",
+                "transition_length",
+                "settings_json",
+                "ripple_json",
+                "notes",
+                "created_at",
+                "updated_at"
+            ],
+            "blobColumns": []
+        },
+        "cue_marchers": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": ["id", "cue_id", "marcher_id"],
+            "blobColumns": []
+        },
+        "field_properties": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": ["id", "json_data", "image"],
+            "blobColumns": ["image"]
+        },
+        "marcher_tags": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "marcher_id",
+                "tag_id",
+                "created_at",
+                "updated_at"
+            ],
+            "blobColumns": []
+        },
+        "measures": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "start_beat",
+                "rehearsal_mark",
+                "notes",
+                "created_at",
+                "updated_at"
+            ],
+            "blobColumns": []
+        },
+        "pages": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "is_subset",
+                "notes",
+                "created_at",
+                "updated_at",
+                "start_beat"
+            ],
+            "blobColumns": []
+        },
+        "page_performer_settings": {
+            "key": "page_id",
+            "rowidAlias": true,
+            "columns": ["page_id", "dot_mode"],
+            "blobColumns": []
+        },
+        "section_appearances": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "section",
+                "fill_color",
+                "outline_color",
+                "shape_type",
+                "visible",
+                "label_visible",
+                "equipment_name",
+                "equipment_state",
+                "created_at",
+                "updated_at"
+            ],
+            "blobColumns": []
+        },
+        "tag_appearances": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "tag_id",
+                "start_page_id",
+                "fill_color",
+                "outline_color",
+                "shape_type",
+                "visible",
+                "label_visible",
+                "priority",
+                "created_at",
+                "updated_at",
+                "equipment_name",
+                "equipment_state"
+            ],
+            "blobColumns": []
+        },
+        "timeline_shapes": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": ["id", "name", "kind", "geometry"],
+            "blobColumns": []
+        },
+        "timelines": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": ["id", "name", "start_beat", "end_beat"],
+            "blobColumns": []
+        },
+        "timeline_transitions": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "timeline_id",
+                "dest_shape_id",
+                "path_style",
+                "path_params",
+                "order_mode",
+                "slot_count",
+                "start_beat",
+                "end_beat"
+            ],
+            "blobColumns": []
+        },
+        "timeline_assignments": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "marcher_id",
+                "transition_id",
+                "slot_index",
+                "start_beat",
+                "end_beat",
+                "layer"
+            ],
+            "blobColumns": []
+        },
+        "timeline_kept_assignments": {
+            "key": "assignment_id",
+            "rowidAlias": true,
+            "columns": ["assignment_id", "created_at"],
+            "blobColumns": []
+        },
+        "timeline_slot_destinations": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": ["id", "transition_id", "slot_index", "x", "y"],
+            "blobColumns": []
+        },
+        "utility": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": [
+                "id",
+                "last_page_counts",
+                "default_beat_duration",
+                "updated_at"
+            ],
+            "blobColumns": []
+        },
+        "view3d_venue": {
+            "key": "id",
+            "rowidAlias": true,
+            "columns": ["id", "json_data"],
+            "blobColumns": []
+        }
+    },
+    "excluded": [
+        "table __drizzle_migrations (on __drizzle_migrations)",
+        "table audio_files (on audio_files)",
+        "table history_redo (on history_redo)",
+        "table history_stats (on history_stats)",
+        "table history_undo (on history_undo)",
+        "table library_blobs (on library_blobs)",
+        "table library_items (on library_items)",
+        "table timeline_change_log (on timeline_change_log)",
+        "table view3d_cameras (on view3d_cameras)",
+        "table workspace_settings (on workspace_settings)",
+        "trigger timeline_log_assignments_del (change-log trigger)",
+        "trigger timeline_log_assignments_ins (change-log trigger)",
+        "trigger timeline_log_assignments_upd (change-log trigger)",
+        "trigger timeline_log_marchers_del (change-log trigger)",
+        "trigger timeline_log_marchers_ins (change-log trigger)",
+        "trigger timeline_log_marchers_upd (change-log trigger)",
+        "trigger timeline_log_shapes_del (change-log trigger)",
+        "trigger timeline_log_shapes_ins (change-log trigger)",
+        "trigger timeline_log_shapes_upd (change-log trigger)",
+        "trigger timeline_log_slot_destinations_del (change-log trigger)",
+        "trigger timeline_log_slot_destinations_ins (change-log trigger)",
+        "trigger timeline_log_slot_destinations_upd (change-log trigger)",
+        "trigger timeline_log_transitions_del (change-log trigger)",
+        "trigger timeline_log_transitions_ins (change-log trigger)",
+        "trigger timeline_log_transitions_upd (change-log trigger)"
+    ]
+}
