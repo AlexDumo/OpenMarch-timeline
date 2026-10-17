@@ -113,7 +113,9 @@
             "playPause": "Play / pause audio",
             "previousPage": "Previous page (timeline)",
             "tapBeats": "Add {count} temporary beats",
-            "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again"
+            "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again",
+            "splitSelectedIntoNewMove": "Split selected marchers into a new move",
+            "mergeMoveIntoPage": "Merge this move into its page"
         },
         "ui": {
             "exitTimelineFocus": "Done editing timeline",
@@ -2080,6 +2082,17 @@
             "deleteWithMoves": "Delete page and its moves",
             "followAgain": "Let selected marchers follow again",
             "keepHere": "Keep selected marchers here"
+        },
+        "split": {
+            "menu": "Split {count} selected into new move",
+            "menuNone": "Split selected into new move",
+            "drag": "Split {count, plural, one {# marcher} other {# marchers}}",
+            "done": "Split {count, plural, one {# marcher} other {# marchers}} into {label}"
+        },
+        "merge": {
+            "menuPair": "Merge {source} into {target}",
+            "menuInto": "Merge into {target}",
+            "done": "Merged {source} into {target}"
         }
     },
     "titlebar": {

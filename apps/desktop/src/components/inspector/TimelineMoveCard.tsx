@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type KeyboardEvent,
+} from "react";
 import {
     ArrowLineRightIcon,
+    ArrowsSplitIcon,
     TrashIcon,
     UsersThreeIcon,
 } from "@phosphor-icons/react";
@@ -26,6 +33,14 @@ import {
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { isolatedTimelineName } from "@/components/timeline/TimelineIsolationBar";
 import { useMoveCommands } from "@/components/timeline/useTimelineCommands";
+import { useSplitMergeCommands } from "@/components/timeline/useSplitMergeMoves";
+import {
+    selectedMembers,
+    splitEntryState,
+    splitMergeContext,
+} from "@/components/timeline/splitMergeMoves";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { spaceStaysPlay } from "@/components/timeline/timelineHotkeys";
 import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
@@ -175,6 +190,45 @@ export function TimelineMoveCard({
     const moves = useMoveCommands(db);
     const pages = useTimingObjects()?.pages ?? [];
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
+    // UI-25: **Split N selected into new move**, as in the clip's menu
+    const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
+    const selectedKey = (selectedMarchers ?? []).map((m) => m.id).join(",");
+    const selectedIds = useMemo(
+        () =>
+            new Set(
+                selectedKey === "" ? [] : selectedKey.split(",").map(Number),
+            ),
+        [selectedKey],
+    );
+    const splitMerge = useSplitMergeCommands({
+        database: db,
+        selectedMarcherIds: selectedIds,
+        isPlaying,
+    });
+    const basic = useIsBasicMode();
+    const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
+    const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    const split = useMemo(
+        () =>
+            basic
+                ? null
+                : splitEntryState(
+                      splitMergeContext(
+                          { storedTimelines, pageBoxes },
+                          selectedIds,
+                          isPlaying,
+                      ),
+                      timeline.id,
+                  ),
+        [
+            basic,
+            storedTimelines,
+            pageBoxes,
+            selectedIds,
+            isPlaying,
+            timeline.id,
+        ],
+    );
     const stored = timeline.name ?? "";
     const [name, setName] = useState(stored);
     // The stored name changed (a rename here or on the clip, an undo): show it
@@ -350,7 +404,8 @@ export function TimelineMoveCard({
             </Field>
             <Field label={t("inspector.timeline.move.counts")}>
                 <p className="text-sub" data-testid="timeline-move-card-range">
-                    {isolatedTimelineName(timeline, pages)}
+                    {/* The card is only for moves, which may share a page box's range (UI-25) */}
+                    {isolatedTimelineName(timeline, pages, true)}
                 </p>
             </Field>
             <Field label={t("inspector.timeline.move.path")}>
@@ -439,6 +494,34 @@ export function TimelineMoveCard({
                     {t("inspector.timeline.move.selectMarchers")}
                 </Button>
             </div>
+            {split && (
+                <div className="flex flex-col gap-6">
+                    <Button
+                        size="compact"
+                        variant="secondary"
+                        className={clsx("w-fit whitespace-nowrap", FOCUS_RING)}
+                        data-testid="timeline-move-card-split"
+                        disabled={split.disabledReason !== null}
+                        onClick={() =>
+                            splitMerge.commands.split(
+                                timeline.id,
+                                selectedMembers(
+                                    splitMerge.context(),
+                                    timeline.id,
+                                ),
+                            )
+                        }
+                    >
+                        <ArrowsSplitIcon size={16} />
+                        {split.label}
+                    </Button>
+                    {split.disabledReason !== null && (
+                        <Help testId="timeline-move-card-split-reason">
+                            {split.disabledReason}
+                        </Help>
+                    )}
+                </div>
+            )}
             <div className="flex flex-col gap-6">
                 <Button
                     size="compact"

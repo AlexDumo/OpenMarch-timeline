@@ -22,7 +22,11 @@ import {
     removeMarchersFromTimelineInTransaction,
     type BeatRange,
 } from "./timelineMembership";
-import { deleteTimelinesInTransaction, timelinesWithRange } from "./timelines";
+import {
+    deleteTimelinesInTransaction,
+    oldestOnSharedRange,
+    timelinesWithRange,
+} from "./timelines";
 import { readPageGrid, type PageGrid } from "./timelineRipple";
 import {
     beatWhere,
@@ -474,7 +478,16 @@ export type TimelineEditTarget =
            */
           readonly ghosts?: boolean;
       }
-    | { readonly kind: "range"; readonly start: number; readonly end: number }
+    | {
+          readonly kind: "range";
+          readonly start: number;
+          readonly end: number;
+          /**
+           * UI-25: the selected move over the window when several share its range, which the
+           * marchers the edit adds join (`addMarchersToTimelineInTransaction`'s `into`)
+           */
+          readonly timelineId?: number;
+      }
     /**
      * Basic mode (UI-19): the marchers' positions at `beat` on the page box `box` holding it
      * (`box.start < beat <= box.end`), splitting their moves there as needed
@@ -715,7 +728,8 @@ export const isPageBox = (grid: PageGrid, range: BeatRange): boolean =>
 
 /**
  * Each of `marcherIds`' **own move over the page box** `range`, where it has one: its one-slot
- * shapeless transition (C-11) in a timeline over exactly the box, assigned over the whole box, and
+ * shapeless transition (C-11) in the page's own timeline (the oldest over exactly the box, UI-25),
+ * assigned over the whole box, and
  * the marcher's only row over any of the box's beats. Deleting that row changes nothing before the
  * box, and leaves the marcher holding through the box where the box starts. Empty when `range`
  * isn't a page's box.
@@ -728,6 +742,10 @@ export const ownPageMoves = async (
 ): Promise<Map<number, DatabaseTimelineAssignment>> => {
     const out = new Map<number, DatabaseTimelineAssignment>();
     if (marcherIds.length === 0 || !isPageBox(grid, range)) return out;
+    // UI-25: only the page's own timeline (the oldest over the box); a move split off it keeps
+    // the range but is a move of its own, which dragging back or clearing never deletes
+    const pageTimeline = (await timelinesWithRange(tx, range))[0];
+    if (!pageTimeline) return out;
     const a = schema.timeline_assignments;
     const t = schema.timeline_transitions;
     const l = schema.timelines;
@@ -738,6 +756,7 @@ export const ownPageMoves = async (
             shapeId: t.dest_shape_id,
             transitionStart: t.start_beat,
             transitionEnd: t.end_beat,
+            timelineId: l.id,
             timelineStart: l.start_beat,
             timelineEnd: l.end_beat,
         })
@@ -764,6 +783,7 @@ export const ownPageMoves = async (
         if (list.length !== 1) continue;
         const r = list[0]!;
         if (
+            r.timelineId === pageTimeline.id &&
             r.slotCount === 1 &&
             r.shapeId === null &&
             exact(r.row.start_beat, r.row.end_beat) &&
@@ -783,6 +803,9 @@ export const ownPageMoves = async (
  * transition), a shared transition they leave is compacted (`compact`) and one they empty is
  * deleted, so the edit makes no vacant slot (D-VACANT). A vacancy already in the last slot, or in
  * a transition sharing a marcher with an inheriting follow-the-leader one, stays (`compact`).
+ *
+ * An emptied page timeline that a move split off it still shares the range with is kept, empty
+ * (UI-25, `oldestOnSharedRange`).
  */
 export const clearOwnPageMoves = async (
     tx: DbTransaction,
@@ -823,9 +846,13 @@ export const clearOwnPageMoves = async (
                 .all()
         ).map((r) => r.id),
     );
+    const emptied = timelineIds.filter((id) => !left.has(id));
     await deleteTimelinesInTransaction({
         tx,
-        timelineIds: new Set(timelineIds.filter((id) => !left.has(id))),
+        timelineIds: new Set(emptied),
+        // UI-25: the page's own timeline stays, empty, while a move split off it shares its
+        // range, so that move doesn't become the page's
+        keep: await oldestOnSharedRange(tx, emptied),
     });
 };
 
@@ -863,12 +890,15 @@ export const moveMarchersInRangeInTransaction = async ({
     range,
     moves,
     clearOwn = false,
+    into,
 }: {
     tx: DbTransaction;
     range: BeatRange;
     moves: readonly TimelineMarcherMove[];
     /** Delete the marchers' own moves over the page box `range` (set to previous page) */
     clearOwn?: boolean;
+    /** The selected move over `range` that added marchers join (UI-25) */
+    into?: number;
 }): Promise<TimelineMoveResult> => {
     const result: TimelineMoveResult = {
         homes: [],
@@ -939,6 +969,7 @@ export const moveMarchersInRangeInTransaction = async ({
                 range,
                 marcherIds: toAdd,
                 passThrough: true,
+                ...(into === undefined ? {} : { into }),
             });
         for (const id of toAdd) timelineOf.set(id, timelineId);
         const flags = [
@@ -1142,6 +1173,9 @@ export const moveMarchersInTarget = async ({
                               range: { start: target.start, end: target.end },
                               moves,
                               clearOwn,
+                              ...(target.timelineId === undefined
+                                  ? {}
+                                  : { into: target.timelineId }),
                           })
                         : await setPositionsAtBeatInTransaction({
                               tx,

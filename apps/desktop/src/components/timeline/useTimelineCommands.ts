@@ -90,7 +90,11 @@ export function useTimelineCommands({
                     if (result)
                         useTimelineSelectionStore
                             .getState()
-                            .followTimelineShift(from, shift.delta);
+                            .followTimelineShift(
+                                from,
+                                shift.delta,
+                                shift.timelineId,
+                            );
                     return result !== null;
                 },
                 (error: unknown) => {

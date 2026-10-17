@@ -294,8 +294,8 @@ export const moveLabel = ({
 }): string => name ?? (number === undefined ? "Move" : `Move ${number}`);
 
 /**
- * Every move's label by stored timeline id (UI-14). Moves are the stored timelines off the page
- * boxes (the ones drawn as clips, UI-10). A move made since the review stores its own "Move N"
+ * Every move's label by stored timeline id (UI-14). Moves are the stored timelines that aren't a
+ * page box's own (`pageTimelineIds`; the ones drawn as clips, UI-10, UI-25). A move made since the review stores its own "Move N"
  * (`nextAutoMoveName`), which never changes; a move stored without a name is numbered after the
  * highest of those, by start, then id.
  */
@@ -308,9 +308,9 @@ export function moveLabels(
     }[],
     pageBoxes: readonly { readonly start: number; readonly end: number }[],
 ): Map<number, string> {
-    const boxes = new Set(pageBoxes.map((b) => `${b.start}:${b.end}`));
+    const pages = pageTimelineIds(timelines, pageBoxes);
     const moves = timelines
-        .filter((t) => !boxes.has(`${t.start}:${t.end}`))
+        .filter((t) => !pages.has(t.id))
         .sort((a, b) => a.start - b.start || a.id - b.id);
     let next =
         Math.max(0, ...timelines.map((t) => autoMoveNumber(t.name) ?? 0)) + 1;
@@ -318,6 +318,71 @@ export function moveLabels(
         moves.map((t) => [t.id, t.name ?? moveLabel({ number: next++ })]),
     );
 }
+
+interface StoredRange {
+    readonly id: number;
+    readonly start: number;
+    readonly end: number;
+}
+
+/**
+ * The oldest (lowest id) of `timelines` with exactly `range`, or `null`. A range may hold several
+ * moves since UI-25 (a move split off a page's timeline keeps its range); over a page box the
+ * oldest is the page's own timeline, the one the box stands for.
+ */
+export function oldestOver<T extends StoredRange>(
+    timelines: readonly T[],
+    range: { readonly start: number; readonly end: number },
+): T | null {
+    let oldest: T | null = null;
+    for (const t of timelines)
+        if (
+            t.start === range.start &&
+            t.end === range.end &&
+            (oldest === null || t.id < oldest.id)
+        )
+            oldest = t;
+    return oldest;
+}
+
+/** The page timeline over page box `range` (`oldestOver`), or `null` when `range` isn't a box. */
+export function pageTimelineOver<T extends StoredRange>(
+    timelines: readonly T[],
+    pageBoxes: readonly { readonly start: number; readonly end: number }[],
+    range: { readonly start: number; readonly end: number },
+): T | null {
+    return pageBoxes.some((b) => b.start === range.start && b.end === range.end)
+        ? oldestOver(timelines, range)
+        : null;
+}
+
+/**
+ * The stored timeline each page box stands for (UI-10 "Clips only off the page boxes"; UI-25):
+ * `pageTimelineOver` each box. The other timelines over a box are moves, drawn as clips.
+ */
+export function pageTimelineIds(
+    timelines: readonly StoredRange[],
+    pageBoxes: readonly { readonly start: number; readonly end: number }[],
+): Set<number> {
+    const ids = new Set<number>();
+    for (const box of pageBoxes) {
+        const page = oldestOver(timelines, box);
+        if (page) ids.add(page.id);
+    }
+    return ids;
+}
+
+/** Whether stored timeline `timeline` is the page timeline a page box stands for (`pageTimelineOver`). */
+export const isPageTimeline = (
+    timeline: StoredRange,
+    timelines: readonly StoredRange[],
+    pageBoxes: readonly { readonly start: number; readonly end: number }[],
+): boolean =>
+    pageBoxes.some(
+        (b) => b.start === timeline.start && b.end === timeline.end,
+    ) &&
+    // Nothing older over its range (`timeline` itself need not be in `timelines`)
+    (oldestOver(timelines, timeline)?.id ?? timeline.id) >= timeline.id;
 
 /** The longest name a move keeps (UI-14); a longer one is cut to it. */
 export const MOVE_NAME_MAX_LENGTH = 80;

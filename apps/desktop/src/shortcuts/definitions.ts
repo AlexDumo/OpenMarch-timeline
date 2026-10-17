@@ -581,6 +581,21 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // UI-25: split the selected marchers off the window's move, or merge a split move back into
+    // its page (Expert timeline mode; not registered in Basic, so hidden there)
+    splitSelectedIntoNewMove: {
+        labelKey: "actions.timeline.splitSelectedIntoNewMove",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+    mergeMoveIntoPage: {
+        labelKey: "actions.timeline.mergeMoveIntoPage",
+        category: "timeline",
+        scope: "global",
+        defaultBindings: [],
+    },
+
     // Timeline (audio editor)
     timelinePlayPause: {
         labelKey: "actions.timeline.playPause",
