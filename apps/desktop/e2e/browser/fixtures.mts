@@ -20,7 +20,7 @@ const rendererDir = path.join(desktopDir, "dist-browser");
 const hostBundle = path.join(desktopDir, "dist-browser-host/index.mjs");
 const electronMain = path.join(desktopDir, "dist-electron/main/index.js");
 const migrationsFolder = path.join(desktopDir, "electron/database/migrations");
-const blankShow = path.join(migrationsFolder, "_blank.dots");
+export const blankShow = path.join(migrationsFolder, "_blank.dots");
 
 /** The renderer is served from disk under this origin; nothing listens on it. */
 const APP_ORIGIN = "https://app.openmarch.test";
@@ -42,7 +42,7 @@ const UI_SETTINGS_STORAGE_KEY = "openmarch:uiSettings";
 const QUALITY_NOTICE_KEY = "openmarch:field:qualityNoticeSeen";
 
 /** What the app finds in `localStorage` when it starts. */
-const startupStorage = (qualityNotice: boolean): Record<string, string> =>
+export const startupStorage = (qualityNotice: boolean): Record<string, string> =>
     // Machines here draw WebGL in software: the field would explain its
     // low-quality mode once, in a toast over the app, in every test
     qualityNotice ? {} : { [QUALITY_NOTICE_KEY]: '["software"]' };
@@ -52,7 +52,7 @@ type Query = <T = Record<string, unknown>>(
     ...params: SQLInputValue[]
 ) => Promise<T[]>;
 
-type App = {
+export type App = {
     page: Page;
     query: Query;
     /** Writes one committed state of the show file to `file`, in one step. */
@@ -68,15 +68,24 @@ type App = {
  * The renderer in headless Chromium, with IPC carried to the app's database
  * handlers in this process (`host/index.ts`).
  */
-async function openInBrowser(
+export async function openInBrowser(
     browser: Browser,
     databasePath: string,
     appSettings: Record<string, unknown>,
     storage: Record<string, string>,
     initScript: string | null,
     videoExportPath: string,
+    /**
+     * A name for a second host in this process. The host holds one show per module instance
+     * (`database.services.ts`), and the bundle is one self-contained file, so importing it
+     * again under another URL gives a second, independent host: a second app window.
+     */
+    hostInstance?: string,
 ): Promise<App> {
-    const { openShow } = (await import(pathToFileURL(hostBundle).href)) as {
+    const hostUrl =
+        pathToFileURL(hostBundle).href +
+        (hostInstance ? `?instance=${encodeURIComponent(hostInstance)}` : "");
+    const { openShow } = (await import(hostUrl)) as {
         openShow: typeof import("./host/index").openShow;
     };
     const host = await openShow({
@@ -313,7 +322,7 @@ type Fixtures = {
 };
 
 /** `Show.readSnapshot`: each read copies the file to `outputPath` and reads the copy. */
-function snapshotReader(
+export function snapshotReader(
     app: App,
     outputPath: (name: string) => string,
 ): Show["readSnapshot"] {

@@ -28,6 +28,7 @@ import CanvasZoomControls from "@/components/canvas/CanvasZoomControls";
 import Plugin from "./global/classes/Plugin";
 import Sidebar from "@/components/sidebar/Sidebar";
 import Toaster from "./components/ui/Toaster";
+import SyncHost from "./sync/SyncHost";
 import FocusNotice from "./components/FocusNotice";
 import SvgPreviewHandler from "./utilities/SvgPreviewHandler";
 import { useFullscreenStore } from "./stores/FullscreenStore";
@@ -361,6 +362,7 @@ function App() {
                                                 )}
                                             </div>
                                             <Toaster />
+                                            <SyncHost />
                                         </SelectedAudioFileProvider>
                                     </SelectedMarchersProvider>
                                 </SelectedPageProvider>

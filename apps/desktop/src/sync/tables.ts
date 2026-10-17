@@ -45,11 +45,26 @@ export { quoteIdent };
  */
 export async function readSyncedTables(db: SyncDb): Promise<SyncedTable[]> {
     const existingRows = (await db.all(
-        sql`SELECT name FROM main.sqlite_schema WHERE type = 'table'`,
+        sql`SELECT name, (SELECT schema_version FROM pragma_schema_version) AS v FROM main.sqlite_schema WHERE type = 'table' ORDER BY name`,
     )) as unknown[];
     const existing = new Set(
         existingRows.map((r) => String(rowValue(r, 0, "name"))),
     );
+    // One query instead of three per table on every apply: the answer only changes with the schema
+    const cacheKey = `${String(rowValue(existingRows[0], 1, "v"))}|${[...existing].join(",")}`;
+    const cached = tablesCache.get(cacheKey);
+    if (cached) return cached;
+    const tables = await readSyncedTablesUncached(db, existing);
+    tablesCache.set(cacheKey, tables);
+    return tables;
+}
+
+const tablesCache = new Map<string, SyncedTable[]>();
+
+async function readSyncedTablesUncached(
+    db: SyncDb,
+    existing: ReadonlySet<string>,
+): Promise<SyncedTable[]> {
     const out: SyncedTable[] = [];
     for (const name of syncedTableNames()) {
         if (!existing.has(name)) continue;
