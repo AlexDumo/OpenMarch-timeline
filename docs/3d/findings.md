@@ -402,62 +402,6 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   Iris Xe, `pro`, the shadow pass (still unpatched), and a parity test of
   the composed pose against a mixer-layered one.
 
-### 2026-10-11 · trevor (3d/cue-layering) · step 6, the layered renderer
-
-<!-- cspell:ignore readPixels -->
-
-- Change measured: performer-behavior.md section 8.3 built for the window
-  (`src/view3d/render/`): the per-channel bake (Feet clips once, each hold
-  once as a Horn row, transitions as baked rows, a prop bone on every row),
-  the channel state texture, and the GPU compose pass that bodies and
-  instruments skin from, one matrix per influence. Instruments ride the
-  prop bone. Against `3d/cue-planner` (`b41f94a6`): the same code built
-  before step 6.
-- Method: the compose spike's (above), both builds as static sites
-  (`view3d-web:build`), each with the spike's harness cut down and never
-  committed (a performer-count override and the back-to-back frame loop;
-  in the new build each frame runs the compose pass first). Fall Show 2026
-  demo, headless Chromium, ANGLE Metal, 1920 × 1036 canvas at 1x, 6 paused
-  pages, 100 frames synced with `readPixels`, marchers shown then hidden, 3
-  times, medians, two rounds. Apple M1 Pro. **A base M1, Intel Iris Xe and
-  the `pro` kit were not measured.**
-- GPU ms per frame, whole frame (round 1 / round 2):
-
-  | Tier, n   | before    | step 6    | change      | spike `compose-gpu` |
-  | --------- | --------- | --------- | ----------- | ------------------- |
-  | low, 300  | 2.24/2.15 | 1.89/1.86 | −0.36/−0.29 | −0.21/−0.19         |
-  | low, 600  | 3.07/3.03 | 2.93/2.63 | −0.14/−0.40 | −0.11/−0.34         |
-  | high, 300 | 4.57/4.61 | 3.61/3.63 | −0.97/−0.99 | −0.94/−1.21         |
-  | high, 600 | 9.39/9.40 | 5.64/6.42 | −3.75/−2.98 | −3.89/−3.36         |
-
-  The scene without marchers is 0.93–1.18 ms in every run; CPU submit
-  0.13–0.32 ms, unchanged.
-
-- Bake, whole show (385 performers, high): before, 1,951 rows of 427 clips
-  × 11 holds, 126.6 MB, 1.01 s; step 6, 437 rows (17,587 Feet texture rows,
-  20 Horn), 864 texels wide, 28.3 MB, 0.19 s. Low: 173 rows, 384 wide,
-  12.6 MB, 0.08 s. A horns-down cue on the band adds 5 hold and 5
-  transition rows (165 texture rows).
-- Correctness: the default show drawn by both builds at the same paused
-  page (page 2, Press box), compared with the spike's `compare-shots.mjs`
-  method: 47 of 2,073,600 pixels differ by more than 8/255 at high and 47
-  at low, single pixels on silhouette edges, no cluster over 5 pixels. The
-  GPU pass read back against `composeMath.ts` at the same clock differs by
-  at most 4.8e-7 in any matrix entry (entries up to 2.5). Forcing the CPU
-  fallback draws 16 pixels apart from the GPU pass. Unit tests compare the
-  composed hold row against om-pose's own bake of the clip in that hold
-  (at most 2e-5, turned and not).
-- Horns-down cue, checked in the web preview from a close front-row view:
-  horns up on the cue's first count, bells about halfway down at its
-  middle (the baked transition row's prop bone is 48 of 90 degrees round
-  there), and the brass carry hold on its count, bell to the ground with
-  the mouthpiece at the face. Battery and guard, which the cue doesn't fit,
-  are unchanged.
-- Result against §8.5: layering costs nothing at 300 on an M1 Pro (the
-  frame is about 1 ms cheaper at high); the bake fits 4096 wide with room
-  to spare and takes 0.19 s. The integrated-GPU budget is still
-  unmeasured.
-
 ### 2026-10-16 · trevor (3d/body-look-key) · body draw calls (P7.2)
 
 - Result: 129 draw calls a frame become 57 at high and 42 become 30 at
@@ -516,6 +460,62 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   battery is still open.
 - Next for battery: find what the GPU spends 14 ms on at high (turf,
   shadows, crowd, body fill), by toggling each; draw calls aren't it.
+
+### 2026-10-11 · trevor (3d/cue-layering) · step 6, the layered renderer
+
+<!-- cspell:ignore readPixels -->
+
+- Change measured: performer-behavior.md section 8.3 built for the window
+  (`src/view3d/render/`): the per-channel bake (Feet clips once, each hold
+  once as a Horn row, transitions as baked rows, a prop bone on every row),
+  the channel state texture, and the GPU compose pass that bodies and
+  instruments skin from, one matrix per influence. Instruments ride the
+  prop bone. Against `3d/cue-planner` (`b41f94a6`): the same code built
+  before step 6.
+- Method: the compose spike's (above), both builds as static sites
+  (`view3d-web:build`), each with the spike's harness cut down and never
+  committed (a performer-count override and the back-to-back frame loop;
+  in the new build each frame runs the compose pass first). Fall Show 2026
+  demo, headless Chromium, ANGLE Metal, 1920 × 1036 canvas at 1x, 6 paused
+  pages, 100 frames synced with `readPixels`, marchers shown then hidden, 3
+  times, medians, two rounds. Apple M1 Pro. **A base M1, Intel Iris Xe and
+  the `pro` kit were not measured.**
+- GPU ms per frame, whole frame (round 1 / round 2):
+
+  | Tier, n   | before    | step 6    | change      | spike `compose-gpu` |
+  | --------- | --------- | --------- | ----------- | ------------------- |
+  | low, 300  | 2.24/2.15 | 1.89/1.86 | −0.36/−0.29 | −0.21/−0.19         |
+  | low, 600  | 3.07/3.03 | 2.93/2.63 | −0.14/−0.40 | −0.11/−0.34         |
+  | high, 300 | 4.57/4.61 | 3.61/3.63 | −0.97/−0.99 | −0.94/−1.21         |
+  | high, 600 | 9.39/9.40 | 5.64/6.42 | −3.75/−2.98 | −3.89/−3.36         |
+
+  The scene without marchers is 0.93–1.18 ms in every run; CPU submit
+  0.13–0.32 ms, unchanged.
+
+- Bake, whole show (385 performers, high): before, 1,951 rows of 427 clips
+  × 11 holds, 126.6 MB, 1.01 s; step 6, 437 rows (17,587 Feet texture rows,
+  20 Horn), 864 texels wide, 28.3 MB, 0.19 s. Low: 173 rows, 384 wide,
+  12.6 MB, 0.08 s. A horns-down cue on the band adds 5 hold and 5
+  transition rows (165 texture rows).
+- Correctness: the default show drawn by both builds at the same paused
+  page (page 2, Press box), compared with the spike's `compare-shots.mjs`
+  method: 47 of 2,073,600 pixels differ by more than 8/255 at high and 47
+  at low, single pixels on silhouette edges, no cluster over 5 pixels. The
+  GPU pass read back against `composeMath.ts` at the same clock differs by
+  at most 4.8e-7 in any matrix entry (entries up to 2.5). Forcing the CPU
+  fallback draws 16 pixels apart from the GPU pass. Unit tests compare the
+  composed hold row against om-pose's own bake of the clip in that hold
+  (at most 2e-5, turned and not).
+- Horns-down cue, checked in the web preview from a close front-row view:
+  horns up on the cue's first count, bells about halfway down at its
+  middle (the baked transition row's prop bone is 48 of 90 degrees round
+  there), and the brass carry hold on its count, bell to the ground with
+  the mouthpiece at the face. Battery and guard, which the cue doesn't fit,
+  are unchanged.
+- Result against §8.5: layering costs nothing at 300 on an M1 Pro (the
+  frame is about 1 ms cheaper at high); the bake fits 4096 wide with room
+  to spare and takes 0.19 s. The integrated-GPU budget is still
+  unmeasured.
 
 ## Packaging
 
