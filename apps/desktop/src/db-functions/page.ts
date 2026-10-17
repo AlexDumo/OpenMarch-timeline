@@ -30,6 +30,7 @@ import {
 } from "@/components/music/TempoGroup/TempoGroup";
 import { FIRST_PAGE_ID, realDatabasePageToDatabasePage } from "./rowMappers";
 import { moveTagAppearancesOffPagesInTransaction } from "./tagAppearancePageDelete";
+import { withSessionIds } from "../sync/ids";
 
 export { FIRST_PAGE_ID, realDatabasePageToDatabasePage };
 
@@ -205,7 +206,13 @@ export const createPagesInTransaction = async ({
     // Pages don't own positions: the timeline ripple (`withTimelinePageRipple`) handles motion.
     const createdPages = await tx
         .insert(schema.pages)
-        .values(newPages.map(newPageArgsToRealNewPageArgs))
+        .values(
+            await withSessionIds(
+                tx,
+                schema.pages,
+                newPages.map(newPageArgsToRealNewPageArgs),
+            ),
+        )
         .returning();
 
     return createdPages.map(realDatabasePageToDatabasePage);

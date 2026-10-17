@@ -2,6 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import * as schema from "@om-electron/database/migrations/schema";
 import { DbTransaction } from "./types";
 import { mapDbErrors, refuse } from "./timelineErrors";
+import { withSessionIds } from "../sync/ids";
 
 /** A row of `timeline_assignments`. */
 export type DatabaseTimelineAssignment =
@@ -41,17 +42,18 @@ export const createTimelineAssignmentsInTransaction = async ({
     const created: DatabaseTimelineAssignment[] = [];
     // One insert at a time, so each overlap check sees the ones before it
     for (const a of newAssignments) {
+        const values = await withSessionIds(tx, schema.timeline_assignments, {
+            marcher_id: a.marcherId,
+            transition_id: a.transitionId,
+            slot_index: a.slotIndex,
+            start_beat: a.startBeat,
+            end_beat: a.endBeat,
+            layer: a.layer ?? 0,
+        });
         const row = await mapDbErrors(() =>
             tx
                 .insert(schema.timeline_assignments)
-                .values({
-                    marcher_id: a.marcherId,
-                    transition_id: a.transitionId,
-                    slot_index: a.slotIndex,
-                    start_beat: a.startBeat,
-                    end_beat: a.endBeat,
-                    layer: a.layer ?? 0,
-                })
+                .values(values)
                 .returning()
                 .get(),
         );
@@ -91,22 +93,23 @@ export const insertTimelineAssignmentsBulkInTransaction = async ({
     newAssignments: readonly NewTimelineAssignmentArgs[];
     tx: DbTransaction;
 }): Promise<number> => {
-    for (const chunk of chunked(newAssignments))
-        await mapDbErrors(() =>
-            tx
-                .insert(schema.timeline_assignments)
-                .values(
-                    chunk.map((a) => ({
-                        marcher_id: a.marcherId,
-                        transition_id: a.transitionId,
-                        slot_index: a.slotIndex,
-                        start_beat: a.startBeat,
-                        end_beat: a.endBeat,
-                        layer: a.layer ?? 0,
-                    })),
-                )
-                .run(),
+    for (const chunk of chunked(newAssignments)) {
+        const values = await withSessionIds(
+            tx,
+            schema.timeline_assignments,
+            chunk.map((a) => ({
+                marcher_id: a.marcherId,
+                transition_id: a.transitionId,
+                slot_index: a.slotIndex,
+                start_beat: a.startBeat,
+                end_beat: a.endBeat,
+                layer: a.layer ?? 0,
+            })),
         );
+        await mapDbErrors(() =>
+            tx.insert(schema.timeline_assignments).values(values).run(),
+        );
+    }
     return newAssignments.length;
 };
 

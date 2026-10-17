@@ -7,6 +7,7 @@ import {
     removeDeletedMarchersFromTimelinesInTransaction,
 } from "./timelineMarchers";
 import { deleteEmptySetCuesInTransaction } from "./cues";
+import { withSessionIds } from "../sync/ids";
 
 type DatabaseMarcher = typeof schema.marchers.$inferSelect;
 
@@ -78,7 +79,7 @@ export async function createMarchersInTransaction({
 
     const createdMarchers = await tx
         .insert(schema.marchers)
-        .values(newMarchers)
+        .values(await withSessionIds(tx, schema.marchers, newMarchers))
         .returning();
 
     if (!createdMarchers) {

@@ -18,6 +18,7 @@ import {
     refuse,
     refuseDuplicateIds,
 } from "./timelineErrors";
+import { withSessionIds } from "../sync/ids";
 
 /** A row of `timeline_shapes`; `geometry` is the JSON text (spec 5.2). */
 export type DatabaseTimelineShape = typeof schema.timeline_shapes.$inferSelect;
@@ -87,8 +88,9 @@ export const createTimelineShapesInTransaction = async ({
         kind: shape.kind,
         geometry: prepareShapeGeometry(shape.kind, shape.geometry),
     }));
+    const withIds = await withSessionIds(tx, schema.timeline_shapes, values);
     return await mapDbErrors(() =>
-        tx.insert(schema.timeline_shapes).values(values).returning(),
+        tx.insert(schema.timeline_shapes).values(withIds).returning(),
     );
 };
 

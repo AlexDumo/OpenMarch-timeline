@@ -10,6 +10,7 @@ import {
 } from "@/db-functions";
 import { schema } from "@/global/database/db";
 import type { CueCarryResult } from "./cues";
+import { withSessionIds } from "../sync/ids";
 
 /** How a measure is represented in the database */
 export interface DatabaseMeasure {
@@ -159,7 +160,13 @@ export const createMeasuresInTransaction = async ({
 }): Promise<DatabaseMeasure[]> => {
     const createdItems = await tx
         .insert(schema.measures)
-        .values(newItems.map(newMeasureArgsToRealNewMeasureArgs))
+        .values(
+            await withSessionIds(
+                tx,
+                schema.measures,
+                newItems.map(newMeasureArgsToRealNewMeasureArgs),
+            ),
+        )
         .returning();
 
     return createdItems.map(realDatabaseMeasureToDatabaseMeasure);

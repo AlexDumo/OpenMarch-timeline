@@ -206,6 +206,33 @@ lock. It must not touch undo history:
 timeline `reset` and invalidates every query. Pending local ops, shadowing and revert-on-refusal
 follow `prototypes/collaboration/public/client/connection.js`.
 
+### As built (WP-A, `apps/desktop/src/sync/`)
+
+- Capture: `startCapture(db)` / `stopCapture(db)` in `capture.ts`, run under the write lock. The
+  triggers are `<t>_sync_ins|upd|del`. REAL values are printed with 17 significant digits (as
+  the timeline change log does), so they round-trip exactly. BLOB columns
+  (`field_properties.image`) are left out of every image, snapshot and apply.
+- Keys: every synced table has an `INTEGER PRIMARY KEY`, so `RowChange.id` is the rowid and the
+  key column is also in `row` / `prev`: `id` everywhere except `timeline_kept_assignments`
+  (`assignment_id`) and `page_performer_settings` (`page_id`). `marcher_tags`, `cue_marchers`
+  have their own `id`. `readSyncedTables` refuses a table without one.
+- Session: `setSyncSession({ isLive, onLocalOp, idBase })` in `session.ts`. `onLocalOp({ label,
+changes })` runs after commit, inside the write lock, so ops are handed over in commit order.
+  Refusals are `SyncReadOnlyError` (edit while not live) and `SyncUndoUnavailableError`
+  (`performUndo`, `performRedo`, `performHistoryAction` in a session).
+- IDs: `withSessionIds(tx, table, values)` in `ids.ts`, at every insert site of a table with an
+  `id` key. The first id in a block is `idBase` itself. Tables keyed by another table's id
+  (`timeline_kept_assignments`, `page_performer_settings`) and fixed-id rows (`utility`,
+  `view3d_venue`) keep their explicit keys.
+- **Deviation:** remote apply runs with `PRAGMA foreign_keys = OFF` (as undo does), not deferred
+  foreign keys. The changes already hold every cascade the sender's database ran, so cascading
+  again on the receiver would be wrong, and the server has already checked the result.
+- Join (`replaceAllSyncedTables`) diffs the snapshot against the rows: changed rows are deleted
+  and inserted again (not updated), all deletes children-first, then inserts parents-first,
+  because the timeline invariant triggers check every statement. Beat 0, page 0 and the utility
+  row are updated in place, because their triggers refuse a delete. Parent-first order is
+  computed from `pragma_foreign_key_list`; it is the same rule as the server's `tables.json`.
+
 ## Session states
 
 - `live`: edits allowed.

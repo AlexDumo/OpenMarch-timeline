@@ -12,6 +12,7 @@ import {
     carryCuesPastDeletedBeatsInTransaction,
     type CueCarryResult,
 } from "./cues";
+import { withSessionIds } from "../sync/ids";
 
 export const FIRST_BEAT_ID = 0;
 
@@ -384,7 +385,7 @@ export const createBeatsInTransaction = async ({
 
     const createdBeats = await tx
         .insert(schema.beats)
-        .values(realNewBeats)
+        .values(await withSessionIds(tx, schema.beats, realNewBeats))
         .returning();
     const createdBeatsIds = createdBeats.map((beat) => beat.id);
 

@@ -12,6 +12,7 @@ import {
     AppearanceComponentRawOptional,
     appearanceModelRawToParsed,
 } from "@/entity-components/appearance";
+import { withSessionIds } from "../sync/ids";
 
 /** How a section appearance is represented in the database */
 export interface DatabaseSectionAppearance extends AppearanceComponent {
@@ -163,8 +164,12 @@ const createSectionAppearancesInTransaction = async ({
     const createdItems = await tx
         .insert(schema.section_appearances)
         .values(
-            newItems.map(
-                newSectionAppearanceArgsToRealNewSectionAppearanceArgs,
+            await withSessionIds(
+                tx,
+                schema.section_appearances,
+                newItems.map(
+                    newSectionAppearanceArgsToRealNewSectionAppearanceArgs,
+                ),
             ),
         )
         .returning();

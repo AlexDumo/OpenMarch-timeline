@@ -24,6 +24,13 @@ import {
     undoGroupTouchesDisplayTables,
 } from "./timelineDisplay";
 import { createTriggers, type HistoryType } from "./historyTriggers";
+import {
+    getSyncSession,
+    SyncReadOnlyError,
+    SyncUndoUnavailableError,
+} from "../sync/session";
+import { drainSyncChangeLogInTransaction } from "../sync/changeLog";
+import type { RowChange } from "../sync/types";
 
 export {
     buildHistoryTriggerSql,
@@ -103,6 +110,10 @@ export const transactionWithHistory = async <T>(
 ): Promise<T> => {
     // eslint-disable-next-line max-lines-per-function
     async function runLockedTransactionWithHistory(): Promise<T> {
+        // Collaboration (docs/collaboration/spike/CONTRACT.md): solo, this is the only extra work
+        const session = getSyncSession();
+        if (session && !session.isLive()) throw new SyncReadOnlyError(funcName);
+        let syncChanges: RowChange[] = [];
         let drained: ChangeBatch | undefined;
         let touchedDisplayTables = false;
         // eslint-disable-next-line max-lines-per-function
@@ -201,6 +212,8 @@ export const transactionWithHistory = async <T>(
 
                 // Spec §6: commit-time invariants, then drain the change log
                 drained = await checkAndDrainTimelineChangesInTransaction(tx);
+                if (session)
+                    syncChanges = await drainSyncChangeLogInTransaction(tx);
 
                 // P7.15: edits the change log doesn't carry still refresh the views that read rows
                 touchedDisplayTables = await undoGroupTouchesDisplayTables(
@@ -223,6 +236,13 @@ export const transactionWithHistory = async <T>(
         notifyTimelineBatch(drained);
         if (touchedDisplayTables) bumpTimelineDisplayVersion();
         notifyHistoryChange();
+        if (session && syncChanges.length > 0) {
+            try {
+                session.onLocalOp({ label: funcName, changes: syncChanges });
+            } catch (error) {
+                console.error("The sync session failed to take an edit", error);
+            }
+        }
         return output;
     }
 
@@ -558,6 +578,8 @@ function executeHistoryAction(
     db: DbConnection,
     type: HistoryType,
 ): Promise<HistoryResponse> {
+    // Its whole-row inverses would revert other people's columns (per-user undo is WP-D)
+    if (getSyncSession()) throw new SyncUndoUnavailableError(type);
     // Queue with wrapped edits, so batches reach listeners in commit order and no edit runs
     // while the history triggers are switched to the other mode
     return withTransactionWithHistoryLock(() =>
@@ -947,6 +969,7 @@ export async function performHistoryAction(
     db: DB | DbConnection,
     options: { currentPageId?: number } = {},
 ): Promise<PerformHistoryActionResponse> {
+    if (getSyncSession()) throw new SyncUndoUnavailableError(type);
     // The focus is read in the action's own lock turn, after it commits and delivers its batch, so
     // a queued undo, redo or edit can't run in between (two quick undo actions would otherwise both read
     // the state after the second)
