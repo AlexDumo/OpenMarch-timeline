@@ -1,10 +1,13 @@
 import type { FieldMode } from "@/field/editor/fieldEditor";
 import type { BoxParams } from "../box/boxGeometry";
 import {
-    asCursor,
     boxOutline,
+    drillNumbers,
+    frameDrawing,
     keysOf,
     memoDrawing,
+    shapeCursor,
+    SPOT_LABEL_LIMIT,
 } from "../field/fieldModeBase";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { toolEnvFor } from "./toolEnv";
@@ -24,22 +27,47 @@ const drawingOf = memoDrawing((tool: ToolState) => {
     const field = currentShapeField();
     if (!field) return null;
     const ctx = shapeContextFor(field);
+    const n = tool.marchers.length;
+    const spots = slotsOf(tool, ctx);
+    if (tool.params === null)
+        return { outline: null, spots, walks: [], handles: [] };
+    // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every
+    // other gesture holds who goes where, so the walks follow it live.
+    const drawing = tool.gesture?.type === "draw";
+    const targets = drawing ? [] : targetsOf(tool, ctx);
+    const names = drillNumbers(field);
+    const env = toolEnvFor(field, { shift: false, alt: false });
+    const g =
+        tool.gesture &&
+        tool.gesture.type !== "draw" &&
+        tool.gesture.type !== "edit"
+            ? tool.gesture
+            : null;
     return {
-        outline:
-            tool.params === null
-                ? null
-                : boxOutline(tool.params as BoxParams, tool.marchers.length),
-        spots: slotsOf(tool, ctx),
-        // The walks show once a gesture ends and who goes where is worked out
-        walks: tool.gesture
+        stage: drawing ? ("drawing" as const) : ("open" as const),
+        outline: boxOutline(tool.params as BoxParams, n),
+        spots,
+        walks: targets.map((t) => ({ from: t.from, to: t.to })),
+        labels:
+            n <= SPOT_LABEL_LIMIT
+                ? targets.map((t) => ({
+                      at: t.to,
+                      text: names.get(t.id) ?? "",
+                  }))
+                : [],
+        handles: drawing
             ? []
-            : targetsOf(tool, ctx).map((t) => ({ from: t.from, to: t.to })),
-        handles:
-            tool.params === null
-                ? []
-                : tool.kind
-                      .handles(tool.params, tool.marchers.length)
-                      .map((h) => h.at),
+            : tool.kind.handles(tool.params, n).map((h) => h.at),
+        ...(drawing
+            ? {}
+            : frameDrawing(
+                  tool.kind,
+                  tool.params,
+                  n,
+                  g,
+                  tool.pointer ?? null,
+                  env,
+              )),
     };
 });
 
@@ -82,12 +110,13 @@ export const shapeToolMode: FieldMode = {
             pointer.field,
             toolEnvFor(field, keysOf(pointer)),
         );
-        if (target.type === "move") return "move";
         if (target.type === "draw") return "crosshair";
-        const handle = tool.kind
-            .handles(tool.params, tool.marchers.length)
-            .find((h) => h.key === target.key);
-        return handle ? asCursor(handle.cursor) : "default";
+        return shapeCursor(
+            tool.kind,
+            tool.params,
+            tool.marchers.length,
+            target,
+        );
     },
     drawing: () => drawingOf(useShapeToolStore.getState().tool),
     subscribe: (listener) => useShapeToolStore.subscribe(listener),

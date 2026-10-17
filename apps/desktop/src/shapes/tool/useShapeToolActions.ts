@@ -60,7 +60,7 @@ export function useApplyShape(): () => Promise<void> {
                                 ...(tool.params as object),
                                 spots: targets.length,
                             },
-                            orderMode: "nearest",
+                            orderMode: tool.order,
                             reverse: false,
                         },
                         members: targets.map((t) => ({

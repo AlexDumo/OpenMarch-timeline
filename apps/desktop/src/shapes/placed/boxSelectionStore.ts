@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { BoxParams } from "../box/boxGeometry";
 import type { PlacedBox } from "./placedBox";
 
 /**
@@ -16,3 +17,14 @@ export const useBoxSelectionStore = create<{
 
 export const setInsideBox = (inside: number | null): void =>
     useBoxSelectionStore.setState({ inside });
+
+/**
+ * The selected box as a number in its floating editor is being dragged, before it's saved on
+ * release; null otherwise. The field draws it live.
+ */
+export const usePlacedBoxPreviewStore = create<{
+    readonly params: BoxParams | null;
+}>(() => ({ params: null }));
+
+export const previewPlacedBox = (params: BoxParams | null): void =>
+    usePlacedBoxPreviewStore.setState({ params });

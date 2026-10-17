@@ -5,13 +5,16 @@ import type {
 import { assignSlots, type AssignMarcher } from "../assign";
 import {
     drawBox,
-    footprintOf,
+    boxFrame,
+    snapToGrid,
+    withBoxFrame,
     ranksOf,
     type BoxParams,
 } from "../box/boxGeometry";
 import { blockKind } from "../kinds/block";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeContext, XY } from "../types";
+import { frameToField } from "../frame/frame";
 
 /**
  * Placed boxes (docs/timeline/research/shapes/07-placed-boxes.md): a box's recipe, read back.
@@ -218,14 +221,15 @@ export function closeUp(
     marchers: readonly AssignMarcher[],
     ctx: ShapeContext,
 ): BoxRecipe {
-    const front = footprintOf(params, spots).bottom;
+    // In the box's own axes, however it's turned: the front rank is local +y
+    const frame = boxFrame(params, spots);
     const ranks = ranksOf(params, marchers.length);
     const closed: BoxParams = {
         ...params,
-        center: {
-            x: params.center.x,
-            y: front - ((ranks - 1) / 2) * params.deep,
-        },
+        center: frameToField(frame, {
+            x: 0,
+            y: frame.halfDepth - ((ranks - 1) / 2) * params.deep,
+        }),
     };
     return placeOn(closed, marchers, ctx);
 }
@@ -241,13 +245,23 @@ export function resplit(
     env: ToolEnv,
     ctx: ShapeContext,
 ): BoxRecipe {
-    const f = footprintOf(params, spots);
-    const redrawn =
-        drawBox(
-            { x: f.left, y: f.top },
-            { x: f.right, y: f.bottom },
-            marchers.length,
-            env,
-        ) ?? params;
+    // Drawn again in the box's own axes, then turned and flipped back as it was
+    const frame = boxFrame(params, spots);
+    const flat = drawBox(
+        { x: -frame.halfWidth, y: -frame.halfDepth },
+        { x: frame.halfWidth, y: frame.halfDepth },
+        marchers.length,
+        { ...env, gridSnap: (p) => p },
+    );
+    const redrawn = flat
+        ? snapToGrid(
+              withBoxFrame(flat, {
+                  ...frame,
+                  center: frameToField(frame, flat.center),
+              }),
+              marchers.length,
+              env,
+          )
+        : params;
     return placeOn(redrawn, marchers, ctx);
 }

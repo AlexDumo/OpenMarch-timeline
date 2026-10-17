@@ -1,46 +1,45 @@
-// cspell:words nesw nwse
 import { blockKind } from "../kinds/block";
+import { resizeCursor } from "../frame/frame";
 import type { ToolKind } from "../tool/toolKind";
 import {
     type BoxHandleKey,
     type BoxParams,
+    boxFrame,
+    boxHandlePoint,
     drawBox,
-    footprintOf,
+    handleDirection,
     handleKeysOf,
-    handlePoint,
     insideBox,
     moveBox,
+    snapToGrid,
     stretchBox,
+    withBoxFrame,
 } from "./boxGeometry";
-
-const CURSORS: Readonly<Record<BoxHandleKey, string>> = {
-    nw: "nwse-resize",
-    se: "nwse-resize",
-    ne: "nesw-resize",
-    sw: "nesw-resize",
-    n: "ns-resize",
-    s: "ns-resize",
-    e: "ew-resize",
-    w: "ew-resize",
-};
 
 /**
  * The box tool: drawn corner to corner, stretched by its corners and sides (the handles sit on the
- * edge marchers), moved from inside
+ * edge marchers), moved from inside, and turned and flipped through its frame like every kind
  */
 export const boxTool: ToolKind<BoxParams> = {
     shape: blockKind,
     draw: drawBox,
     handles(params, n) {
-        const f = footprintOf(params, n);
+        const frame = boxFrame(params, n);
         return handleKeysOf(params, n).map((key) => ({
             key,
-            at: handlePoint(f, key),
-            cursor: CURSORS[key],
+            at: boxHandlePoint(params, n, key),
+            // The cursor faces the way the handle does, however the box is turned
+            cursor: resizeCursor(
+                frame,
+                handleDirection(key, { halfWidth: 1, halfDepth: 1 }),
+            ),
         }));
     },
     dragHandle: (base, n, key, to, env) =>
         stretchBox(base, n, key as BoxHandleKey, to, env),
     contains: insideBox,
     move: moveBox,
+    frameOf: boxFrame,
+    withFrame: (params, _n, frame) => withBoxFrame(params, frame),
+    settle: snapToGrid,
 };

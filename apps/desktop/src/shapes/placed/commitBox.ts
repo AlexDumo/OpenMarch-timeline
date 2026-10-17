@@ -4,6 +4,7 @@ import { saveShapeRecipeInTransaction } from "@/db-functions/shapeRecipes";
 import { historyKeys } from "@/hooks/queries/useHistory";
 import { transformMarchersInSelection } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import type { OrderMode } from "../assign";
 import type { BoxParams } from "../box/boxGeometry";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { liveTargets } from "./liveBox";
@@ -18,6 +19,8 @@ export async function commitBox(
     box: PlacedBox,
     params: BoxParams,
     queryClient: QueryClient,
+    /** Lay the members out again in this order (the editor's Least travel / Drill order) */
+    order?: OrderMode,
 ): Promise<void> {
     const field = currentShapeField();
     if (!field) return;
@@ -25,6 +28,7 @@ export async function commitBox(
         box,
         params,
         shapeContextFor(field),
+        order,
     );
     const to = new Map(targets.map((t) => [t.marcherId, t]));
     try {
@@ -46,6 +50,7 @@ export async function commitBox(
                     recipe: {
                         ...box.recipe,
                         params: { ...params, spots },
+                        ...(order ? { orderMode: order } : {}),
                     },
                     members: targets,
                     replaces:

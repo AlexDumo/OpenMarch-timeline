@@ -2,7 +2,8 @@
 
 # The shape system: UX spec
 
-Status: owner decisions, 2026-10-15 and 2026-10-16, from two rounds of clickable prototypes. This
+Status: owner decisions, 2026-10-15 and 2026-10-16, from two rounds of clickable prototypes,
+and a grilling on 2026-10-16 about bringing it into the app ([Decisions, 2026-10-16](#decisions-2026-10-16)). This
 spec covers how every shape is reached, drawn, edited, transformed and shown. Each kind's own
 geometry and parameters are specified separately, shape by shape, like
 [06-box-v1.md](06-box-v1.md).
@@ -82,6 +83,10 @@ its first size are chosen.
 
 ### 3. The library (the inspector's Library tab)
 
+- **Changed 2026-10-16:** not an inspector tab. The list is an in-app window (a modal, like
+  Assets) called **Shapes**, opened from the ribbon's **All shapes…**, from **☆ Save**, and from
+  the ⋯ row. "Library" already names the asset Library, so the shape list never uses that word.
+  Saved and custom shapes, and stars, belong to the user across shows for now (app settings).
 - Shapes are grouped as **Basic**, **Saved** and **Custom**. Each row has a star, an icon, a name
   and a note ("Line · 1.5 apart"). Saved and custom rows can be deleted.
 - A star puts the shape in the favorites ring and the Shapes tab.
@@ -138,7 +143,9 @@ editing a shape. Owner choice, 2026-10-15.
 - What appears is the kind's **primary** parameters, declared by the kind. Sizes read as across ×
   deep ("8 × 4"), never as files and ranks.
 - **⋯** opens a second row with the less common actions: rotate 90° each way, flip, who goes
-  where, and "More in inspector →".
+  where, and "More in inspector →" (once the inspector's Shape tab exists).
+- A press on the editor's buttons and numbers doesn't take the keyboard focus, so Enter still
+  places and Esc still cancels after using them. Tab still reaches the numbers.
 - **Place** shows only while the shape is new. A placed shape that is selected saves each edit on
   release, so its editor has no Place.
 - After a sketch, a row of guesses sits above the numbers.
@@ -171,8 +178,8 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
 - A link button at the end of the box's numbers locks its two spacings together. Off by default.
 - While locked, changing one spacing changes the other by the same proportion, whether by
   dragging, typing or a handle.
-- **Open question:** keeping the ratio exact can leave the second spacing off a half step
-  (4.5 makes 5.14). The alternative is to keep both on half steps and the ratio approximate.
+- Both spacings stay on half steps, so the ratio is as near as half steps allow (4.5 makes 5, not
+  5.14). Owner, 2026-10-16. Alt still gives exact values.
 
 ## On the field
 
@@ -183,9 +190,9 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   spacing and change how many across instead.
   - Shift on a corner keeps the proportions. Alt resizes from the center.
 - **A rotate knob** sits above the shape's top edge on a short dashed stem.
-  - It turns with the shape, so after a 90° turn it's on the side. (Open question: or always
-    above on screen.)
-- **Just outside a corner** also rotates, as in design apps.
+  - It turns with the shape, so after a 90° turn it's on the side (owner, 2026-10-16).
+- **Just outside a corner** also rotates, as in design apps: diagonally past the corner, within a
+  short reach of it. Past an edge is still the body, which has a margin.
 - Both rotations turn **around the pivot** chosen in the inspector. While rotating, the pivot
   shows as a yellow dot with a dashed line to the cursor, and a tip shows the angle. Shift snaps
   to 15°.
@@ -193,8 +200,13 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   dragging, a tip reads the position in drill terms ("3.5 in from S2 45 · 8 in front of back
   hash"). It matters most on crowded shapes, where pressing the body tends to land on a marcher.
   Dragging the body still moves the shape too.
-- With a shape open, the nudge keys move the whole shape (07), and `[` and `]` step a box's
-  count across.
+- With a shape open, the nudge keys move the whole shape (07). `[` and `]` don't step a box's
+  count across any more: they hold for playback speed (#216). Dragging the size, and its − and +
+  buttons, do it instead (owner, 2026-10-16).
+- Turning snaps to whole degrees, 15° with Shift; Alt doesn't snap. A turn that lands on a quarter
+  turn puts the box back on the half-step grid, which can shift it by up to a quarter step.
+- A box turned off the field's axes can't stand on the grid: moving it moves it in whole half
+  steps instead.
 - Snapping: positions and spacings snap to half steps; Alt turns snapping off, as in the rest of
   the timeline.
 
@@ -204,15 +216,20 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   with no walks crossing. A line moving into another line keeps its order because that's the
   least travel, not because of the old order.
 - It's decided from where the marchers start the move, not from the spots being replaced.
-- It's held still during any gesture, so marchers don't swap spots under the cursor, and worked
-  out again on release (06).
+- It's held still during any gesture, so marchers don't swap spots under the cursor.
+- **Changed 2026-10-16:** it's worked out again only after a fresh draw or a change in how many
+  across or deep. Stretching, moving, turning and flipping keep each marcher on their own spot, so
+  a turned or flipped form is the same form: a flip mirrors it, and whoever was on the left is on
+  the right. Without this, turning a symmetric box would visibly do nothing.
 - **Drill order** is the other choice, in the inspector and the editor's ⋯ row.
 - The rule lives behind one replaceable function (`shapes/leastTravel.ts`, `LeastTravelSolver`),
   so it can change later without touching kinds or the tool.
 
 ## The inspector
 
-The right panel has two tabs while the shape tool is in use: **Shape** and **Library**
+**Changed 2026-10-16:** the inspector gets two tabs, **Inspector** (what it shows today) and
+**Shape**. The Shape tab switches on by itself when a shape opens or a placed shape is
+selected, and back when it closes. The shape list isn't a tab: it's the **Shapes** window
 ([above](#3-the-library-the-inspectors-library-tab)). The Shape tab is for exact work; most
 people won't need it. Owner choice, 2026-10-15: handles for most people, the panel for those who
 want it.
@@ -227,8 +244,9 @@ The Shape tab, top to bottom:
      default.
    - Rotate: one number you type or drag (see the table above). There are no preset rotate
      buttons. It turns around the pivot.
-4. **Flip**: side to side, and front to back. Around the pivot.
-5. **Scale**: ½, −, + and ×2, around the pivot, and the footprint in steps.
+4. **Flip**: side to side, and front to back. Around the pivot. Flips are on the field's axes,
+   so "side to side" swaps side 1 and side 2 however the shape is turned (2026-10-16).
+5. ~~**Scale**~~: left out for now; the handles and the numbers cover size (owner, 2026-10-16).
 6. **When I resize** (box): **Stretch spacing** (default) or **Keep spacing**. Keep spacing makes
    the handles add or remove marchers across instead.
 7. **Who goes where**: **Least travel** or **Drill order**, with the longest walk and the total
@@ -282,7 +300,7 @@ Every kind must work, and be checked, from 1 marcher to a full band.
 | -------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
 | **B**                      | Box                                                    | Existing                                               |
 | **Enter** / **Esc**        | Place / cancel (innermost first)                       | Existing                                               |
-| `[` / `]`                  | One fewer / one more across                            | Existing                                               |
+| `[` / `]`                  | ~~One fewer / one more across~~                        | Dropped: they hold for playback speed (#216)           |
 | **/**                      | Typed steps                                            | Unbound today; proposed                                |
 | Hold **F**, or right-press | Favorites ring                                         | Unbound today; proposed (S is nudge down)              |
 | Nudge keys (WASD, arrows)  | Move the whole open or selected shape                  | 07                                                     |
@@ -297,18 +315,38 @@ All of these go through the shortcut system and are rebindable.
 - Follow the leader.
 - Copying a placed shape to other marchers.
 
+## Decisions, 2026-10-16
+
+From grilling how to bring this into the app. Built in two pull requests stacked on #181:
+
+- **A**: the shape frame (center, size, turn, flip) under every kind, and the box on it: the
+  knob, turning past a corner, the center dot with a drill-terms readout, flips. The floating
+  editor replaces the box's readouts, for new and placed boxes alike. Fade the rest, with the View
+  setting **While shaping: Fade the rest / Fade only while drawing**.
+- **B**: the inspector's **Inspector** and **Shape** tabs, and the toolbar's **Shapes** tab
+  (between Select and View). Opening a shape another way (B, the inspector, the command palette)
+  doesn't switch the toolbar's tab.
+- Later: **C**, the Shapes window, stars, saved and custom shapes; **D**, the favorites ring and
+  typed steps; then sketch. A and B leave the seams for them: one catalog of shapes, which holds
+  only Box for now, and the ribbon reads its shapes from it.
+
+Further decisions:
+
+- The ribbon shows kinds that aren't rebuilt yet, and Type, Sketch and All shapes…, as greyed
+  icons with a "Not built yet" tooltip, Basic mode included.
+- Basic mode gets the ribbon, the floating editor, the handles, the knob and the center dot, but
+  not the Shape tab, so it always turns around the center.
+- A selected placed shape's Shape tab is the same, minus Place and Cancel, plus a muted "from
+  page N"; ☆ Save stays greyed until C.
+
 ## Open questions for the owner
 
-1. **Ratio lock:** an exact ratio, or both spacings on half steps?
-2. **Rotate knob:** turns with the shape (as built), or always above on screen?
-3. **Pivot on the field:** should the pivot dot be draggable onto any marcher (for example a
+Answered 2026-10-16 (see above): the ratio lock's rounding, the knob, where saved shapes live,
+stars, the ⋯ row and scale buttons, and Basic mode. Still open:
+
+1. **Pivot on the field:** should the pivot dot be draggable onto any marcher (for example a
    pinwheel on T1), perhaps by Alt-dragging the center dot?
-4. **Custom shapes:** marchers spread evenly along the outline (as built), so a corner gets a
+2. **Custom shapes:** marchers spread evenly along the outline (as built), so a corner gets a
    marcher only if the spacing lands on it. Should corners always get one?
-5. **Where saved and custom shapes live:** in the show, in the user's library across shows, or
-   both? Stars feel like a user preference.
-6. **Stars:** one star puts a shape in both the ring and the Shapes ribbon. Keep them together?
-7. **The editor's ⋯ row** still has rotate 90° buttons, and the inspector still has scale
-   buttons. Keep them?
-8. **Basic mode:** which of the five ways in (tab, ring, library, typed steps, sketch) show in
-   Basic mode?
+3. **Flip on the field's axes** (as built in A): "side to side" swaps side 1 and side 2 however
+   the shape is turned. Or should a turned shape flip along its own axes, as some design apps do?

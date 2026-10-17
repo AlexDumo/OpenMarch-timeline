@@ -12,6 +12,7 @@ import {
 import type {
     MarcherLabelForm,
     ShapeOutlines,
+    ShapeFocus,
     MarcherLabelSize,
 } from "@/stores/UiSettingsStore";
 import ActionButton from "@/shortcuts/ActionButton";
@@ -56,6 +57,7 @@ function UiSettingsToolbar() {
             marcherLabelSize: s.uiSettings.marcherLabelSize ?? "normal",
             marcherLabelPosition: s.uiSettings.marcherLabelPosition ?? "above",
             shapes: s.uiSettings.shapes ?? "selected",
+            shapeFocus: s.uiSettings.shapeFocus ?? "rest",
         })),
     );
 
@@ -171,6 +173,32 @@ function UiSettingsToolbar() {
                             </SelectItem>
                             <SelectItem value="off">
                                 {t("toolbar.view.shapesOff")}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </label>
+                {/* Who fades while a shape is open (08-shape-system-ux.md, "Marcher styling") */}
+                <label className="flex items-center gap-8">
+                    <T keyName="toolbar.view.shapeFocus" />
+                    <Select
+                        value={uiSettings.shapeFocus}
+                        onValueChange={(v) =>
+                            setUiSettings({
+                                ...useUiSettingsStore.getState().uiSettings,
+                                shapeFocus: v as ShapeFocus,
+                            })
+                        }
+                    >
+                        <SelectTriggerCompact
+                            label={t("toolbar.view.shapeFocus")}
+                            data-testid="view-shape-focus"
+                        />
+                        <SelectContent>
+                            <SelectItem value="rest">
+                                {t("toolbar.view.shapeFocusRest")}
+                            </SelectItem>
+                            <SelectItem value="drawing">
+                                {t("toolbar.view.shapeFocusDrawing")}
                             </SelectItem>
                         </SelectContent>
                     </Select>

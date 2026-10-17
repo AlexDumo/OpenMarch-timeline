@@ -39,6 +39,13 @@ export interface BlockParams {
      * files there are. Unlocked, dragging the sides stretches the intervals.
      */
     readonly keepIntervals?: boolean;
+    /**
+     * Mirrored side to side (`flipX`) or front to back (`flipY`) in its own axes: each spot moves
+     * to its mirror image, so the marcher who stood on the left stands on the right. Absent in
+     * recipes stored before flips.
+     */
+    readonly flipX?: boolean;
+    readonly flipY?: boolean;
 }
 
 const filesOf = (p: BlockParams) => Math.max(1, Math.round(p.files));
@@ -96,9 +103,10 @@ function localSlots(p: BlockParams, n: number): LocalSlot[] {
         const y = (row - (ranks - 1) / 2) * p.deep;
         for (let i = 0; i < inRank; i++) {
             const file = lead + i;
+            const x = (file - (files - 1) / 2 + shift) * p.across;
             slots.push({
-                x: (file - (files - 1) / 2 + shift) * p.across,
-                y,
+                x: p.flipX ? -x : x,
+                y: p.flipY ? -y : y,
                 row,
                 col: Math.floor(file),
             });
@@ -323,7 +331,12 @@ export const blockKind: ShapeKind<BlockParams> = {
         })),
 
     orderKey(p, point, _ctx, n) {
-        const local = toLocal(p, point);
+        const turned = toLocal(p, point);
+        // Drill order mirrors with the box
+        const local = {
+            x: p.flipX ? -turned.x : turned.x,
+            y: p.flipY ? -turned.y : turned.y,
+        };
         const ranks = ranksOf(p, n);
         const rank =
             p.deep === 0 ? 0 : Math.round(local.y / p.deep + (ranks - 1) / 2);
