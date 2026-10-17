@@ -8,23 +8,6 @@ describe("horn state", () => {
         expect(parseHornState("sideways")).toBe("up");
         expect(parseHornState("trail")).toBe("trail");
     });
-
-    it("starts up in the scene store and changes on request", () => {
-        expect(useView3dSceneStore.getState().hornState).toBe("up");
-        useView3dSceneStore.getState().setHornState("carry");
-        expect(useView3dSceneStore.getState().hornState).toBe("carry");
-        useView3dSceneStore.getState().setHornState("up");
-    });
-});
-
-describe("step-off foot", () => {
-    it("starts on the show's foot and previews another on request", () => {
-        // null plays the show's saved foot
-        expect(useView3dSceneStore.getState().stepOffFoot).toBeNull();
-        useView3dSceneStore.getState().setStepOffFoot("right");
-        expect(useView3dSceneStore.getState().stepOffFoot).toBe("right");
-        useView3dSceneStore.getState().setStepOffFoot(null);
-    });
 });
 
 describe("power settings", () => {

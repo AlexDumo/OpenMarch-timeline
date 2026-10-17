@@ -245,3 +245,33 @@ Nothing yet.
   editor's `takePress`, which now gets the press (field coordinates, the
   dots' space). Step 8 is complete; step 9 (retiring the 3D window's horn
   and guard toggles) is next.
+
+### 2026-10-17 · Trevor (3d/visuals-toggles) · ADR 0004 step 9
+
+Retired the 3D window's toggles (performer-behavior.md section 7.5). None
+was ever saved; all three are kept only as preview overrides, in a new
+**Preview only** section of the settings panel (hint: not saved, cues
+decide in the show), each starting on **Follow cues**
+(`window/performers/previewOverrides.ts`, `sceneStore.ts` now holds null
+for "follow").
+
+- **Horn state:** followed, the Horn/Equipment channel starts horns up and
+  plays the compiled cues; before, the toggle replaced the starting hold
+  and the cues still applied over it. Set to up, carry or trail it holds
+  every carrier in that hold for the whole show, ignoring the cues, to
+  check the poses.
+- **Guard equipment:** followed, each guard section carries its own piece.
+  The compile now always fits cues by each section's usual equipment, as
+  the editor's Visuals mode does (`sectionCueCarry`); before, picking a
+  piece changed which Horn/Equipment cues fit the guard. Picking a piece
+  now changes only what's drawn in their hands. "By section" became
+  Follow cues.
+- **Step-off foot:** followed, the show's saved performer default
+  (`useShowPerformerDefaults`), with Feet cues that set a foot keeping
+  theirs. Picking a foot replaces the show's default for the cues that
+  don't set one; the hint names the show's saved foot.
+
+Tests: `performers/__test__/previewOverrides.test.ts`. No e2e covered
+these controls. Open: the Carry, Silk and Uniform channels aren't read by
+the window yet, so with Follow cues a guard section's piece is still its
+section's usual one, not a Carry cue's (C3.5 and on).
