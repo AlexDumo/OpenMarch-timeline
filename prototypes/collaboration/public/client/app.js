@@ -233,6 +233,54 @@ function explainLocal(err) {
     return msg;
 }
 
+// ---------------------------------------------------------------- claims
+
+/** The claim on a section, if someone holds it. */
+function claimOf(section) {
+    return S.mode === "session" ? S.claims.find((c) => c.section === section) : undefined;
+}
+
+/** Claims held by someone else over any of these marchers. */
+function heldByOthers(ids) {
+    const sections = new Set([...ids].map((id) => marcherById(id)?.section).filter(Boolean));
+    return S.claims.filter((c) => S.mode === "session" && sections.has(c.section) && c.user.id !== S.user.id);
+}
+
+function describeHeld(held) {
+    return held.map((c) => `${c.section} is held by ${c.user.name}`).join("; ");
+}
+
+/**
+ * An edit of marchers someone else has claimed: a collaborator is stopped (the server would
+ * refuse it anyway); the head drill writer is asked, and can override.
+ */
+function guarded(label, ids, fn) {
+    const held = heldByOthers(ids);
+    if (held.length === 0) return submit(label, fn);
+    if (isHead()) {
+        toastAction(`${describeHeld(held)}.`, "Override claim", () => submit(label, fn, { override: true }));
+        return false;
+    }
+    toast(`${describeHeld(held)}. You can look, but not edit.`, "bad");
+    return false;
+}
+
+/** Collaborators can't even start dragging what someone else holds. */
+function canStartEditing(ids) {
+    const held = heldByOthers(ids);
+    if (held.length === 0 || isHead()) return true;
+    toast(`${describeHeld(held)}. You can look, but not edit.`, "bad");
+    return false;
+}
+
+function claimSection(section) {
+    S.conn?.send({ type: "claim", section });
+}
+
+function releaseSection(section) {
+    S.conn?.send({ type: "release", section });
+}
+
 // Commands: plain SQL against the mirror, like db-functions inside transactionWithHistory.
 
 function moveMarchersCommand(ids, dx, dy, range) {
@@ -253,6 +301,11 @@ function moveMarchersCommand(ids, dx, dy, range) {
                 );
         }
     };
+}
+
+function deleteSelectedMove() {
+    const mv = S.show.moves.find((m) => m.id === S.selectedMove);
+    if (mv) guarded("Delete a move", [mv.marcher_id], deleteMoveCommand(mv.id));
 }
 
 function resizeMoveCommand(id, start, end) {
@@ -315,6 +368,10 @@ function onEvent(ev) {
 function onApplied(msg, mine) {
     log({ who: msg.by, text: msg.label, seq: msg.seq });
     if (!mine) flashChanges(msg.changes, msg.by.color);
+    for (const o of msg.overrides ?? []) {
+        if (o.owner.id === S.user.id) toast(`${msg.by.name} (head drill writer) edited ${o.section}, which you hold.`, "bad");
+        log({ who: msg.by, text: `overrode ${o.owner.name}'s claim on ${o.section}`, cls: "conflict" });
+    }
 }
 
 function onRejected(msg) {
@@ -448,7 +505,7 @@ function renderField() {
         const selected = S.selection.has(m.id);
         parts.push(marcherDecorations(m, p));
         parts.push(`<g data-marcher="${m.id}" style="cursor:${canEdit() ? "grab" : "default"}">
-            <circle cx="${p.x}" cy="${p.y}" r="11" fill="${color}" stroke="${selected ? "#fff" : "#0006"}" stroke-width="${selected ? 3 : 1}"/>
+            <circle cx="${p.x}" cy="${p.y}" r="11" opacity="${heldByOthers([m.id]).length ? 0.5 : 1}" fill="${color}" stroke="${selected ? "#fff" : "#0006"}" stroke-width="${selected ? 3 : 1}"/>
             <text x="${p.x}" y="${p.y - 15}" font-size="13" text-anchor="middle" fill="#cfd3dc">${drill(m)}</text>
         </g>`);
     }
@@ -462,6 +519,15 @@ function renderField() {
 /** Others on the field: rings on what they have selected, and a ghost of what they're dragging. */
 function fieldOverlays(pos) {
     const out = [];
+    for (const c of S.mode === "session" ? S.claims : []) {
+        const ids = S.show.marchers.filter((m) => m.section === c.section).map((m) => pos.get(m.id));
+        if (!ids.length) continue;
+        const top = ids.reduce((a, b) => (b.y < a.y ? b : a));
+        const left = Math.min(...ids.map((q) => q.x));
+        const right = Math.max(...ids.map((q) => q.x));
+        const mine = c.user.id === S.user.id;
+        out.push(nameTag((left + right) / 2, top.y - 34, `${c.section}: ${mine ? "yours" : `held by ${c.user.name}`}`, c.user.color, 20));
+    }
     others().forEach((p, i) => {
         const pr = p.presence;
         if (!pr) return;
@@ -501,6 +567,11 @@ function others() {
 
 function marcherDecorations(m, p) {
     const out = [];
+    const claim = claimOf(m.section);
+    if (claim) {
+        const mine = claim.user.id === S.user.id;
+        out.push(`<rect x="${p.x - 15}" y="${p.y - 15}" width="30" height="30" rx="4" fill="${mine ? "none" : claim.user.color}" fill-opacity="0.12" stroke="${claim.user.color}" stroke-width="${mine ? 1.5 : 2.5}" ${mine ? 'stroke-dasharray="2 3"' : ""} pointer-events="none"/>`);
+    }
     const hl = S.highlights.get(m.id);
     if (hl && hl.until > Date.now())
         out.push(`<circle cx="${p.x}" cy="${p.y}" r="18" fill="none" stroke="${hl.color}" class="pulse"/>`);
@@ -548,7 +619,10 @@ function renderTimeline() {
         parts.push(`<text x="${TL.padL}" y="${TL.rowsTop + 14}" fill="#8b90a0" font-size="12">Select marchers to see and edit their moves.</text>`);
     rows.forEach((m, r) => {
         const y = TL.rowsTop + r * TL.rowH;
+        const rowClaim = claimOf(m.section);
         parts.push(`<text x="8" y="${y + 12}" font-size="11" fill="#cfd3dc">${drill(m)}</text>`);
+        if (rowClaim && rowClaim.user.id !== S.user.id)
+            parts.push(`<rect x="${TL.padL}" y="${y + 1}" width="${x(S.total) - TL.padL}" height="15" fill="${rowClaim.user.color}" fill-opacity="0.08" pointer-events="none"/><text x="34" y="${y + 12}" font-size="10" fill="${rowClaim.user.color}">${escapeHtml(rowClaim.user.name)}</text>`);
         // lowest priority first, so the move that wins is drawn on top
         const moves = S.resolver.movesOf(m.id).sort((a, b) => a.start_beat * 1e6 - (a.end_beat - a.start_beat) - (b.start_beat * 1e6 - (b.end_beat - b.start_beat)));
         for (const mv of moves) {
@@ -605,7 +679,7 @@ function renderTransport() {
     const spacer = document.createElement("span");
     spacer.className = "grow";
     t.append(spacer);
-    const del = button("Delete move", () => S.selectedMove && submit("Delete a move", deleteMoveCommand(S.selectedMove)));
+    const del = button("Delete move", () => S.selectedMove && deleteSelectedMove());
     del.disabled = !S.selectedMove || !canEdit();
     const ins = button("Insert 4 counts at playhead", () =>
         submit("Insert 4 counts", insertCountsCommand(Math.round(S.playhead), 4)),
@@ -721,6 +795,18 @@ function renderSections() {
         const count = S.show.marchers.filter((m) => m.section === section).length;
         const li = document.createElement("li");
         li.innerHTML = `<span class="swatch" style="background:${sectionColor(section)}"></span>${escapeHtml(section)} <span class="muted">${count}</span><span class="grow"></span>`;
+        const claim = claimOf(section);
+        if (claim) {
+            const mine = claim.user.id === S.user.id;
+            const online = S.people.some((p) => p.user.id === claim.user.id);
+            const chip = document.createElement("span");
+            chip.className = "chip";
+            chip.style.cssText = `background:${claim.user.color};color:#111`;
+            chip.textContent = mine ? "yours" : `${claim.user.name}${online ? "" : " (away)"}`;
+            chip.title = mine ? "You hold this section" : `Held by ${claim.user.name}: others can look, not edit`;
+            li.append(chip);
+            if (mine || isHead()) li.append(button(mine ? "release" : "take back", () => releaseSection(section)));
+        } else if (S.mode === "session" && S.conn?.live) li.append(button("claim", () => claimSection(section)));
         li.append(button("select", () => {
             S.selection = new Set(S.show.marchers.filter((m) => m.section === section).map((m) => m.id));
             afterLocalUi();
@@ -763,6 +849,21 @@ function toast(text, kind = "") {
     setTimeout(() => div.remove(), kind === "bad" ? 6000 : 4000);
 }
 
+/** A toast with one action button. */
+function toastAction(text, label, action) {
+    const div = document.createElement("div");
+    div.className = "toast";
+    div.textContent = `${text} `;
+    const b = button(label, () => {
+        div.remove();
+        action();
+    }, "primary");
+    b.style.marginLeft = "8px";
+    div.append(b);
+    $("#toasts").append(div);
+    setTimeout(() => div.remove(), 8000);
+}
+
 function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 }
@@ -790,7 +891,7 @@ function wireField() {
                 return;
             }
             if (!S.selection.has(id)) S.selection = new Set([id]);
-            if (canEdit() && beginMarcherDrag()) S.drag = { kind: "marchers", start: p, dx: 0, dy: 0, moved: false };
+            if (canEdit() && canStartEditing(S.selection) && beginMarcherDrag()) S.drag = { kind: "marchers", start: p, dx: 0, dy: 0, moved: false };
             afterLocalUi();
         } else {
             if (!e.shiftKey) S.selection = new Set();
@@ -819,7 +920,7 @@ function wireField() {
         if (drag?.kind === "marchers" && drag.moved) {
             const ids = [...S.selection];
             const range = editRange();
-            submit(`Move ${ids.length} marcher${ids.length > 1 ? "s" : ""} (${range.index ? `page ${range.index}` : `counts ${range.start}–${range.end}`})`, moveMarchersCommand(ids, drag.dx, drag.dy, range), drag.opts);
+            guarded(`Move ${ids.length} marcher${ids.length > 1 ? "s" : ""} (${range.index ? `page ${range.index}` : `counts ${range.start}–${range.end}`})`, ids, moveMarchersCommand(ids, drag.dx, drag.dy, range));
         } else if (drag?.kind === "marquee") {
             const pos = positionsNow();
             const [x0, x1] = [Math.min(drag.a.x, drag.b.x), Math.max(drag.a.x, drag.b.x)];
@@ -851,9 +952,10 @@ function wireKeys() {
             if (!range) return;
             S.playhead = range.end;
             const ids = [...S.selection];
-            submit(`Nudge ${ids.length} marcher${ids.length > 1 ? "s" : ""}`, moveMarchersCommand(ids, nudge[0] * STEP, nudge[1] * STEP, range));
+            if (!canStartEditing(ids)) return;
+            guarded(`Nudge ${ids.length} marcher${ids.length > 1 ? "s" : ""}`, ids, moveMarchersCommand(ids, nudge[0] * STEP, nudge[1] * STEP, range));
         } else if ((e.key === "Delete" || e.key === "Backspace") && S.selectedMove && canEdit()) {
-            submit("Delete a move", deleteMoveCommand(S.selectedMove));
+            deleteSelectedMove();
         } else if (e.key === " ") {
             e.preventDefault();
             togglePlay();
@@ -882,7 +984,7 @@ function wireTimeline() {
             const id = Number(bar.dataset.move);
             const mv = S.show.moves.find((m) => m.id === id);
             S.selectedMove = id;
-            if (canEdit()) {
+            if (canEdit() && canStartEditing([mv.marcher_id])) {
                 const nearStart = Math.abs(px - x(mv.start_beat)) < 7;
                 const nearEnd = Math.abs(px - x(mv.end_beat)) < 7;
                 S.drag = { kind: "move", id, edge: nearEnd ? "end" : nearStart ? "start" : "body", from: b, orig: mv, preview: { s: mv.start_beat, e: mv.end_beat } };
@@ -931,7 +1033,7 @@ function wireTimeline() {
         if (drag?.kind === "move") {
             const { s, e } = drag.preview;
             if (s !== drag.orig.start_beat || e !== drag.orig.end_beat)
-                submit(drag.edge === "body" ? "Shift a move" : "Resize a move", resizeMoveCommand(drag.id, s, e));
+                guarded(drag.edge === "body" ? "Shift a move" : "Resize a move", [drag.orig.marcher_id], resizeMoveCommand(drag.id, s, e));
         }
         afterLocalUi();
     });
