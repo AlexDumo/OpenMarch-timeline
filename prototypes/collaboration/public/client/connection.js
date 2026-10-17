@@ -128,7 +128,7 @@ export class Connection {
         this.pending.push({ op, fields: new Set(changes.flatMap(fieldsOf)) });
         this.send({ type: "op", op });
         this.onEvent({ type: "pending", count: this.pending.length });
-        return { ok: true, changes };
+        return { ok: true, changes, op };
     }
 
     isPending(table, key, col) {

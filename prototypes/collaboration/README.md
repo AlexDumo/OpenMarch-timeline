@@ -51,3 +51,4 @@ modeled.
 4. [Conflict feedback](04-conflict-feedback/README.md)
 5. [Disconnect behavior](05-disconnect/README.md)
 6. ["Make collaborative"](06-make-collaborative/README.md)
+7. [Per-user undo](07-per-user-undo/README.md) (extra: the report's riskiest untested claim)

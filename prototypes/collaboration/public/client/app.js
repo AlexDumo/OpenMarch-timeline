@@ -1,7 +1,8 @@
 // The prototype's editor: a field, a timeline and a side panel over the local mirror. Every edit
 // is a command run through `submit`, the single write path; the UI redraws from the mirror's
 // change events, whether the change was ours, a peer's, or a revert.
-import { Mirror } from "./mirror.js";
+import { Mirror, invertChanges, fieldsOf } from "./mirror.js";
+import { SYNCED, KEY, isStructural, touchesBeats } from "../shared/schema.js";
 import { Connection } from "./connection.js";
 import { createResolver, flagBeats, pageBoxAt, colorFor, sectionColor } from "../shared/model.js";
 import { demoShow, importDots, FIELD } from "../shared/shows.js";
@@ -283,10 +284,15 @@ function fieldView() {
  * transaction, then its changes go to the server as one op.
  */
 function submit(label, fn, opts = {}) {
+    const kind = opts.kind ?? "edit";
     if (S.mode === "solo") {
         try {
-            S.mirror.transact(fn);
+            const changes = S.mirror.transact(fn);
             log({ who: S.user, text: label });
+            if (changes.length) {
+                recordWriters(changes, S.user);
+                pushHistory(kind, label, changes);
+            }
             return true;
         } catch (err) {
             toast(explainLocal(err), "bad");
@@ -300,6 +306,7 @@ function submit(label, fn, opts = {}) {
             toast(res.reason, "bad");
             return false;
         }
+        if (res.op) U.kinds.set(res.op.opId, { kind, label });
         return true;
     } catch (err) {
         toast(explainLocal(err), "bad");
@@ -458,6 +465,14 @@ function onEvent(ev) {
 
 function onApplied(msg, mine) {
     log({ who: msg.by, text: msg.label, seq: msg.seq });
+    recordWriters(msg.changes, msg.by);
+    const mineKind = mine && U.kinds.get(msg.opId);
+    if (mineKind) {
+        U.kinds.delete(msg.opId);
+        // the server's effective changes, whose `prev` is what the server had: the truest inverse
+        pushHistory(mineKind.kind, mineKind.label, msg.changes, msg.seq);
+    }
+    if (!mine && msg.changes.some(touchesBeats)) U.othersBeatSeq = msg.seq;
     if (!mine) flashChanges(msg.changes, msg.by.color);
     reportConflicts(msg);
     for (const o of msg.overrides ?? []) {
@@ -472,6 +487,121 @@ function onRejected(msg, op) {
     if (op) {
         const ids = marchersTouched(op.changes);
         markConflict(ids, op.changes, "not saved");
+    }
+}
+
+// ---------------------------------------------------------------- per-user undo
+
+/**
+ * Per-user, selective undo (report §4.4). The stack holds my own confirmed ops, never trigger
+ * SQL and never anyone else's edits. Undo builds the inverse field by field and keeps only the
+ * fields still holding what I wrote; anything someone changed since is left alone, and I'm told.
+ * The inverse goes out as an ordinary op, so the server checks it like any edit (claims, deletes,
+ * the beat grid).
+ */
+const U = { undo: [], redo: [], kinds: new Map(), writers: new Map(), othersBeatSeq: 0 };
+
+function recordWriters(changes, by) {
+    for (const ch of changes)
+        for (const f of fieldsOf(ch)) U.writers.set(f, by);
+}
+
+function pushHistory(kind, label, changes, seq = 0) {
+    const entry = { label, changes, seq };
+    if (kind === "undo") U.redo.push(entry);
+    else {
+        U.undo.push(entry);
+        if (kind === "edit") U.redo = [];
+    }
+    renderTransport();
+}
+
+function currentRow(table, key) {
+    return S.mirror.all(`SELECT * FROM ${table} WHERE ${KEY[table]} = ?`, [key])[0];
+}
+
+/** Splits an entry's inverse into what can still be undone and what someone else has changed since. */
+function planInverse(entry) {
+    const keep = [];
+    const skipped = [];
+    for (const inv of invertChanges(entry.changes)) {
+        if (inv.table === "meta" && inv.key === "grid_version") continue; // a structural undo moves the grid on, not back
+        const row = currentRow(inv.table, inv.key);
+        if (inv.kind === "update") {
+            if (!row) {
+                skipped.push({ inv, who: U.writers.get(`${inv.table}:${inv.key}:${KEY[inv.table]}`), why: "deleted" });
+                continue;
+            }
+            const set = {};
+            const prev = {};
+            for (const [col, value] of Object.entries(inv.set)) {
+                // `inv.prev[col]` is what I wrote; undo it only if it is still there
+                if (row[col] === inv.prev[col]) {
+                    set[col] = value;
+                    prev[col] = row[col];
+                } else skipped.push({ inv, col, who: U.writers.get(`${inv.table}:${inv.key}:${col}`), why: "changed" });
+            }
+            if (Object.keys(set).length) keep.push({ ...inv, set, prev });
+        } else if (inv.kind === "delete") {
+            // undoing my insert: only if nobody has edited the row since
+            if (!row) continue;
+            const other = SYNCED[inv.table].map((c) => U.writers.get(`${inv.table}:${inv.key}:${c}`)).find((w) => w && w.id !== S.user.id);
+            if (other) skipped.push({ inv, who: other, why: "changed" });
+            else keep.push(inv);
+        } else if (inv.kind === "insert") {
+            // undoing my delete: put the row back with the same id, if nobody did already
+            if (!row) keep.push(inv);
+        }
+    }
+    return { keep, skipped };
+}
+
+function applyPlan(keep, structural) {
+    return (m) => {
+        for (const ch of keep) {
+            const key = KEY[ch.table];
+            if (ch.kind === "update") {
+                const cols = Object.keys(ch.set);
+                m.run(`UPDATE ${ch.table} SET ${cols.map((c) => `${c} = ?`).join(", ")} WHERE ${key} = ?`, [...cols.map((c) => ch.set[c]), ch.key]);
+            } else if (ch.kind === "delete") m.run(`DELETE FROM ${ch.table} WHERE ${key} = ?`, [ch.key]);
+            else m.insertRow(ch.table, ch.row);
+        }
+        if (structural) {
+            const grid = Number(m.meta("grid_version") ?? 1) + 1;
+            m.run("UPDATE meta SET value = ? WHERE key = 'grid_version'", [String(grid)]);
+        }
+    };
+}
+
+function undoOrRedo(which) {
+    if (!canEdit()) return toast(S.mode === "session" ? "You're offline, so the show is read-only." : "Nothing to undo.", "bad");
+    const stack = which === "undo" ? U.undo : U.redo;
+    const entry = stack.pop();
+    if (!entry) return toast(which === "undo" ? "Nothing of yours to undo." : "Nothing to redo.");
+    const structural = entry.changes.some(isStructural);
+    const { keep, skipped } = planInverse(entry);
+    const names = [...new Set(skipped.map((sk) => sk.who?.name ?? "someone"))].join(" and ");
+    if (structural && U.othersBeatSeq > entry.seq) {
+        // moves others wrote on the new grid would land over the wrong music
+        stack.push(entry);
+        return toast(`Can't ${which} "${entry.label}": others have edited moves or pages since.`, "bad");
+    }
+    if (structural && skipped.length) {
+        // half an "insert time" would leave moves over the wrong music: all or nothing
+        stack.push(entry);
+        return toast(`Can't ${which} "${entry.label}": ${names} changed the counts since.`, "bad");
+    }
+    if (keep.length === 0) {
+        renderTransport();
+        return toast(`Nothing left to ${which} in "${entry.label}": ${names} changed all of it since.`, "bad");
+    }
+    const verb = which === "undo" ? "Undo" : "Redo";
+    const ok = submit(`${verb}: ${entry.label}`, applyPlan(keep, structural), { kind: which });
+    if (!ok) return stack.push(entry);
+    if (skipped.length) {
+        const ids = marchersTouched(skipped.map((sk) => sk.inv));
+        markConflict(ids, skipped.map((sk) => sk.inv), `kept ${names}'s`);
+        toast(`${verb === "Undo" ? "Undid" : "Redid"} "${entry.label}", except what ${names} changed since. That was kept.`);
     }
 }
 
@@ -846,6 +976,12 @@ function renderTransport() {
     const spacer = document.createElement("span");
     spacer.className = "grow";
     t.append(spacer);
+    const undo = button(`Undo${U.undo.length ? ` (${U.undo.length})` : ""}`, () => undoOrRedo("undo"));
+    undo.disabled = !U.undo.length || !canEdit();
+    undo.title = U.undo.length ? `Undo your "${U.undo[U.undo.length - 1].label}" (Ctrl+Z). Only your own edits.` : "Nothing of yours to undo";
+    const redo = button("Redo", () => undoOrRedo("redo"));
+    redo.disabled = !U.redo.length || !canEdit();
+    t.append(undo, redo);
     const del = button("Delete move", () => S.selectedMove && deleteSelectedMove());
     del.disabled = !S.selectedMove || !canEdit();
     const ins = button("Insert 4 counts at playhead", () =>
@@ -1137,6 +1273,12 @@ function wireKeys() {
             guarded(`Nudge ${ids.length} marcher${ids.length > 1 ? "s" : ""}`, ids, moveMarchersCommand(ids, nudge[0] * STEP, nudge[1] * STEP, range));
         } else if ((e.key === "Delete" || e.key === "Backspace") && S.selectedMove && canEdit()) {
             deleteSelectedMove();
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+            e.preventDefault();
+            undoOrRedo(e.shiftKey ? "redo" : "undo");
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
+            e.preventDefault();
+            undoOrRedo("redo");
         } else if (e.key === " ") {
             e.preventDefault();
             togglePlay();
