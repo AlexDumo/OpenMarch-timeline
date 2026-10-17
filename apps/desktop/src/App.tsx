@@ -2,7 +2,7 @@ import { threeZoomControls } from "@/field/three/fieldNavigation";
 import Toolbar from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
 import VisualsInspector from "@/components/visuals/VisualsInspector";
-import { VisualsTimelineBandProvider } from "@/components/visuals/VisualsCueBand";
+import { VisualsProvider } from "@/components/visuals/VisualsProvider";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import SidebarModal from "@/components/sidebar/SidebarModal";
 import { SelectedPageProvider } from "@/context/SelectedPageContext";
@@ -309,44 +309,44 @@ function App() {
                                             <SvgPreviewHandler />
                                             <TitleBar showControls />
                                             <FocusNotice />
-                                            <div
-                                                id="app"
-                                                className="flex h-full min-h-0 w-full gap-8 px-8 pb-8"
-                                            >
+                                            <VisualsProvider>
                                                 <div
-                                                    id="workspace"
-                                                    className="relative flex h-full min-h-0 w-full min-w-0 flex-col gap-8"
+                                                    id="app"
+                                                    className="flex h-full min-h-0 w-full gap-8 px-8 pb-8"
                                                 >
                                                     <div
-                                                        className={
-                                                            timelineFocussedClass
-                                                        }
+                                                        id="workspace"
+                                                        className="relative flex h-full min-h-0 w-full min-w-0 flex-col gap-8"
                                                     >
-                                                        <Toolbar />
-                                                    </div>
-                                                    <div
-                                                        className={clsx(
-                                                            "relative flex h-full min-h-0 min-w-0 gap-8",
-                                                            timelineFocussedClass,
-                                                        )}
-                                                    >
-                                                        {!isFullscreen &&
-                                                            !visuals && (
-                                                                <>
-                                                                    <Sidebar />
-                                                                    <SidebarModal />
-                                                                </>
-                                                            )}
-                                                        <Suspense>
-                                                            <ThreeField />
-                                                        </Suspense>
-                                                        <CanvasZoomControls
-                                                            canvas={
-                                                                threeZoomControls
+                                                        <div
+                                                            className={
+                                                                timelineFocussedClass
                                                             }
-                                                        />
-                                                    </div>
-                                                    <VisualsTimelineBandProvider>
+                                                        >
+                                                            <Toolbar />
+                                                        </div>
+                                                        <div
+                                                            className={clsx(
+                                                                "relative flex h-full min-h-0 min-w-0 gap-8",
+                                                                timelineFocussedClass,
+                                                            )}
+                                                        >
+                                                            {!isFullscreen &&
+                                                                !visuals && (
+                                                                    <>
+                                                                        <Sidebar />
+                                                                        <SidebarModal />
+                                                                    </>
+                                                                )}
+                                                            <Suspense>
+                                                                <ThreeField />
+                                                            </Suspense>
+                                                            <CanvasZoomControls
+                                                                canvas={
+                                                                    threeZoomControls
+                                                                }
+                                                            />
+                                                        </div>
                                                         {focussedComponent ===
                                                         "timeline" ? (
                                                             <TimelineContainer />
@@ -355,22 +355,22 @@ function App() {
                                                                 <TimelineContainer />
                                                             </TimelineSplitter>
                                                         )}
-                                                    </VisualsTimelineBandProvider>
-                                                </div>
-                                                {!isFullscreen && (
-                                                    <div
-                                                        className={
-                                                            timelineFocussedClass
-                                                        }
-                                                    >
-                                                        {visuals ? (
-                                                            <VisualsInspector />
-                                                        ) : (
-                                                            <Inspector />
-                                                        )}
                                                     </div>
-                                                )}
-                                            </div>
+                                                    {!isFullscreen && (
+                                                        <div
+                                                            className={
+                                                                timelineFocussedClass
+                                                            }
+                                                        >
+                                                            {visuals ? (
+                                                                <VisualsInspector />
+                                                            ) : (
+                                                                <Inspector />
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </VisualsProvider>
                                             <Toaster />
                                         </SelectedAudioFileProvider>
                                     </SelectedMarchersProvider>

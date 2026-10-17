@@ -11,13 +11,12 @@
  * a count: there is nothing between counts.
  */
 import {
-    useMemo,
     useRef,
     useState,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { T, useTolgee } from "@tolgee/react";
 import clsx from "clsx";
 import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
@@ -27,16 +26,13 @@ import {
     deleteCuesMutationOptions,
     updateCuesMutationOptions,
 } from "@/hooks/queries/useCues";
-import { allTagsQueryOptions } from "@/hooks/queries/tags/queries";
-import { getSectionObjectByName } from "@/global/classes/Sections";
 import { useVisualsStore } from "@/stores/VisualsStore";
-import {
-    TimelineBandProvider,
-    type TimelineBand,
-    type TimelineBandGeometry,
+import type {
+    TimelineBand,
+    TimelineBandGeometry,
 } from "@/components/timeline/TimelineBand";
-import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
-import { useVisualsBandData, type VisualsBandData } from "./useVisualsBandData";
+import type { VisualsBandData } from "./useVisualsBandData";
+import { useTargetLabel } from "./useTargetLabel";
 import {
     newCueValue,
     type LaneCue,
@@ -67,32 +63,6 @@ const CHANNEL_KEYS: Record<VisualsChannel, string> = {
     facing: "visuals.channels.facing",
     body: "visuals.channels.body",
 };
-
-function useTargetLabel() {
-    const { t } = useTolgee();
-    const { data: tags } = useQuery(allTagsQueryOptions());
-    return (target: CueTarget | null): string => {
-        if (!target) return t("visuals.inspector.selection");
-        switch (target.kind) {
-            case "band":
-                return t("visuals.inspector.band");
-            case "section": {
-                const section = getSectionObjectByName(target.section.trim());
-                return section.name === target.section.trim()
-                    ? t(section.tName)
-                    : target.section.trim();
-            }
-            case "tag": {
-                const tag = tags?.find((x) => x.id === target.tagId);
-                return tag?.name?.trim() || `tag-${target.tagId}`;
-            }
-            case "set":
-                return t("visuals.band.marchers", {
-                    count: target.marcherIds.length,
-                });
-        }
-    };
-}
 
 const SOURCE_CLASS: Record<NonNullable<ResultSpan["source"]>, string> = {
     own: "bg-accent/70 text-text-invert",
@@ -560,32 +530,14 @@ function BandBody({
 }
 
 /** Visuals mode's band for the timeline: its height and what it draws. */
-function useVisualsTimelineBand(enabled: boolean): TimelineBand | null {
-    const data = useVisualsBandData(enabled);
-    const collapsed = useVisualsStore((s) => s.bandCollapsed);
-    return useMemo(
-        () =>
-            enabled
-                ? {
-                      height: visualsBandHeight(data, collapsed),
-                      render: (geometry: TimelineBandGeometry) => (
-                          <BandBody data={data} geometry={geometry} />
-                      ),
-                  }
-                : null,
-        [enabled, data, collapsed],
-    );
-}
-
-/**
- * Gives the timeline Visuals mode's cue band while Visuals mode shows, and
- * no band otherwise. Always rendered, so switching modes keeps the timeline.
- */
-export function VisualsTimelineBandProvider({
-    children,
-}: {
-    children: ReactNode;
-}) {
-    const band = useVisualsTimelineBand(useIsVisualsView());
-    return <TimelineBandProvider band={band}>{children}</TimelineBandProvider>;
+export function visualsTimelineBand(
+    data: VisualsBandData | null,
+    collapsed: boolean,
+): TimelineBand {
+    return {
+        height: visualsBandHeight(data, collapsed),
+        render: (geometry: TimelineBandGeometry) => (
+            <BandBody data={data} geometry={geometry} />
+        ),
+    };
 }

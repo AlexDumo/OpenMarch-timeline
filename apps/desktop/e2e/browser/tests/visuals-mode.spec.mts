@@ -218,3 +218,66 @@ test("a drag on the lane adds a phrase, and dragging its end stretches it", asyn
     await page.mouse.up();
     await expect.poll(async () => (await bodyCues())[0]!.length).toBe(10);
 });
+
+test("the inspector edits the picked cue and says why the who does what it does", async ({
+    show,
+}) => {
+    const { page } = show;
+    const stored = async () =>
+        (
+            await show.query<{
+                value: string;
+                transition_length: number | null;
+                ripple_json: string | null;
+                notes: string | null;
+            }>(
+                "SELECT value, transition_length, ripple_json, notes FROM cues ORDER BY id",
+            )
+        )[0];
+    await expect(page.getByRole("heading", { name: "Page 0" })).toBeVisible();
+    await page.getByTestId("workspace-view-visuals").click();
+    await page.getByTestId("visuals-tab-facing").click();
+    await page.getByTestId("visuals-who-section-Trumpet").click();
+
+    // the default, before any cue
+    await expect(page.getByTestId("visuals-why")).toContainText(
+        "Why, at count 1",
+    );
+    await expect(page.getByTestId("visuals-why-group")).toContainText(
+        "The default",
+    );
+
+    const at1 = await laneX(page, 0);
+    await page.mouse.click(at1.x, at1.y);
+    await expect.poll(stored).toMatchObject({ value: "builtin:facing.back" });
+    await expect(page.getByTestId("visuals-cue-panel")).toBeHidden();
+
+    // pick it, and the panel shows it
+    const [{ id }] = await show.query<{ id: number }>("SELECT id FROM cues");
+    await page.getByTestId(`visuals-cue-${id}`).click();
+    await expect(page.getByTestId("visuals-cue-panel")).toContainText(
+        "Trumpet, count 1",
+    );
+    await expect(page.getByTestId("visuals-why-group")).toContainText("Set by");
+
+    await page.getByTestId("visuals-cue-value").click();
+    await page.getByRole("option", { name: "Side 1" }).click();
+    await expect.poll(stored).toMatchObject({ value: "builtin:facing.side1" });
+
+    await page.getByTestId("visuals-cue-transition").fill("3");
+    await page.getByTestId("visuals-cue-transition").press("Enter");
+    await expect.poll(stored).toMatchObject({ transition_length: 3 });
+
+    await page.getByTestId("visuals-cue-ripple").click();
+    await expect
+        .poll(async () => JSON.parse((await stored())!.ripple_json ?? "null"))
+        .toMatchObject({ span: 4, order: "drill" });
+
+    await page.getByTestId("visuals-cue-notes").fill("Snap to the side");
+    await page.getByTestId("visuals-cue-transition").click();
+    await expect.poll(stored).toMatchObject({ notes: "Snap to the side" });
+
+    await page.getByTestId("visuals-cue-delete").click();
+    await expect.poll(stored).toBeUndefined();
+    await expect(page.getByTestId("visuals-cue-panel")).toBeHidden();
+});

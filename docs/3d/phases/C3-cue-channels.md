@@ -220,3 +220,13 @@ Nothing yet.
   counts; the page and downbeat pull (spec section 7.3) comes with V4. A
   marcher's carry is their section's usual equipment, ignoring the 3D
   View's guard equipment toggle, which section 7.5 retires.
+- **V3 built (same branch):** the picked cue's panel in the inspector
+  (value from the channel's library values of its kind, marked where it
+  doesn't fit everyone focused; transition or length; the value's own
+  settings; ripple on or off, its span and order; notes; Delete), each
+  change one undoable edit. Under it, the why readout at the playhead's
+  count: each value the focused who has, how many have it, the cue that set
+  it or where the default comes from, and the cues it beat, from
+  `traceCue`; a cue on the focused who's lane is a link that picks it.
+  `VisualsProvider` compiles once for the band and the inspector. Counts
+  read from 1 in the inspector, as on the timeline.

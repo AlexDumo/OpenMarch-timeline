@@ -2435,6 +2435,72 @@
             "marchers": "{count, plural, one {# marcher} other {# marchers}}",
             "mixed": "Mixed",
             "lane": "Cue lane"
+        },
+        "cue": {
+            "title": "Cue",
+            "delete": "Delete",
+            "where": "{who}, count {count}",
+            "value": "Value",
+            "notForEveryone": "{value} (doesn't fit everyone)",
+            "transition": "Transition (counts)",
+            "length": "Length (counts)",
+            "ripple": "Ripple",
+            "rippleSpan": "Ripple over (counts)",
+            "rippleOrder": "Order",
+            "order": {
+                "drill": "Drill order",
+                "left_right": "Left to right",
+                "right_left": "Right to left",
+                "down_form": "Down the form"
+            },
+            "notes": "Notes"
+        },
+        "why": {
+            "title": "Why, at count {count}",
+            "value": "{value}: {n} of {total}",
+            "setBy": "Set by",
+            "beat": "Beat",
+            "cue": "{value} for {who} on count {count}",
+            "takenOver": "(taken over from {channel})",
+            "default": {
+                "library": "The default",
+                "carry": "The default for what they carry",
+                "section_equipment": "The section's usual equipment",
+                "equipment_fallback": "The usual equipment for the section's name",
+                "marcher_carries": "What they usually carry",
+                "section_color": "The section's 2D color",
+                "band_uniform": "The band uniform",
+                "guard_uniform": "The guard uniform"
+            }
+        },
+        "settings": {
+            "pace": "Pace",
+            "moving": "Moving",
+            "onHolds": "On holds",
+            "stepOffFoot": "Step off",
+            "angle": "Horn angle",
+            "degrees": "Angle (degrees)",
+            "x": "Point x",
+            "y": "Point y",
+            "energy": "Energy"
+        },
+        "options": {
+            "single": "Single",
+            "half": "Half time",
+            "double": "Double time",
+            "straightLeg": "Straight leg",
+            "bentLeg": "Bent leg",
+            "highStep": "High step",
+            "stand": "Stand",
+            "markTime": "Mark time",
+            "highMarkTime": "High mark time",
+            "left": "Left",
+            "right": "Right",
+            "box": "The box",
+            "plus10": "10° above the box",
+            "low": "Low",
+            "medium": "Medium",
+            "high": "High"
         }
     }
 }
