@@ -1,8 +1,12 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as z from "zod";
 import { DbConnection, DbTransaction } from "./types";
 import { schema } from "@/global/database/db";
-import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
+import {
+    type WorkspaceSettings,
+    workspaceSettingsSchema,
+} from "@/settings/workspaceSettings";
+import { Constants } from "@/global/Constants";
 
 export type DatabaseWorkspaceSettings =
     typeof schema.workspace_settings.$inferSelect;
@@ -164,4 +168,78 @@ export async function updateWorkspaceSettingsParsed({
     });
 
     return validatedSettings;
+}
+
+/**
+ * Logs the undo statement for the workspace settings row as it is now, in the current undo group,
+ * and clears the redo stack, as a history trigger would. `workspace_settings` has no standing
+ * history triggers (`tablesWithScopedHistory`), so a write that should be undone with the rest of
+ * its edit calls this before changing the row. Call it inside `transactionWithHistory`; at most
+ * once per row per edit is needed (undo restores the row as it was at the first call).
+ */
+export async function recordWorkspaceSettingsUndoInTransaction(
+    tx: DbTransaction,
+): Promise<void> {
+    const columns = (
+        (await tx.all(
+            sql`SELECT name FROM pragma_table_info('workspace_settings');`,
+        )) as unknown[]
+    ).map((c) =>
+        Array.isArray(c) ? String(c[0]) : String((c as { name: string }).name),
+    );
+    const assignments = columns
+        .map((c) => `"${c}"='||quote("${c}")||'`)
+        .join(",");
+    await tx.run(
+        sql.raw(
+            `INSERT INTO ${Constants.UndoHistoryTableName} ("sequence", "history_group", "sql")
+            SELECT NULL, (SELECT cur_undo_group FROM ${Constants.HistoryStatsTableName}),
+                'UPDATE "workspace_settings" SET ${assignments} WHERE rowid='||rowid
+            FROM workspace_settings;`,
+        ),
+    );
+    await tx.run(sql.raw(`DELETE FROM ${Constants.RedoHistoryTableName};`));
+    await tx.run(
+        sql.raw(
+            `UPDATE ${Constants.HistoryStatsTableName} SET "cur_redo_group" = 0;`,
+        ),
+    );
+}
+
+/**
+ * Reads, changes and writes the workspace settings inside `tx`, recording the change in the
+ * current undo group so it is undone with the rest of the edit. Creates the row with defaults
+ * first if the file has none.
+ *
+ * @param update returns the new settings from the current ones
+ * @returns the settings written
+ */
+export async function updateWorkspaceSettingsWithHistoryInTransaction({
+    tx,
+    update,
+}: {
+    tx: DbTransaction;
+    update: (settings: WorkspaceSettings) => WorkspaceSettings;
+}): Promise<WorkspaceSettings> {
+    let row = await tx.select().from(schema.workspace_settings).get();
+    if (!row) {
+        [row] = await tx
+            .insert(schema.workspace_settings)
+            .values({
+                id: 1,
+                json_data: JSON.stringify(workspaceSettingsSchema.parse({})),
+            })
+            .returning();
+    }
+    const current = workspaceSettingsSchema.parse(JSON.parse(row.json_data));
+    const next = workspaceSettingsSchema.parse(update(current));
+    await recordWorkspaceSettingsUndoInTransaction(tx);
+    await tx
+        .update(schema.workspace_settings)
+        .set({
+            json_data: JSON.stringify(next),
+            updated_at: new Date().toISOString(),
+        })
+        .where(eq(schema.workspace_settings.id, 1));
+    return next;
 }

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
     buildOverlaySegments,
     computeFormatBounds,
+    countTempoBpm,
     drawOverlay,
     formatClock,
     formatClockRange,
+    formatTempo,
     OverlayOptions,
     OverlayTimeline,
     padInteger,
@@ -35,6 +37,12 @@ const measure = (
  * Show fixture: 6 seconds, 1 beat per second.
  * Set 1 (start) -> Set 2 over [0, 4) -> Set 2A over [4, 6)
  * Measures of 2 counts each; rehearsal mark "A" at m1, "B" at m3.
+ *
+ * Counts follow docs/tempo/count-convention.md, as the timeline's readout does: count k of a set
+ * is the k-th beat line after the set's start, so Set 2's counts 1-4 are at 1, 2, 3 and 4 s (its
+ * set is reached on count 4, at 4 s) and Set 2A's are at 5 and 6 s. Before 1 s the marchers are
+ * at the opening set, count 0. These tests used to count "the last beat that has started" (Set
+ * 2's count 1 at 0 s), one count ahead of the timeline at every moment.
  */
 const pages = [
     page("1", 0, 0, [beat(0)]),
@@ -44,13 +52,13 @@ const pages = [
 const measures = [measure(1, 0, "A"), measure(2, 2, null), measure(3, 4, "B")];
 
 describe("OverlayTimeline", () => {
-    it("reports the first transition at time 0", () => {
+    it("reports the opening set at time 0, before the first count", () => {
         const state = new OverlayTimeline(pages, measures).getState(0);
 
-        expect(state.previousSetName).toBe("1");
-        expect(state.setName).toBe("2");
-        expect(state.count).toBe(1);
-        expect(state.totalCounts).toBe(4);
+        expect(state.previousSetName).toBeNull();
+        expect(state.setName).toBe("1");
+        expect(state.count).toBe(0);
+        expect(state.totalCounts).toBe(0);
         expect(state.measureNumber).toBe(1);
         expect(state.rehearsalMark).toBe("A");
         expect(state.tempoBpm).toBe(60);
@@ -65,21 +73,40 @@ describe("OverlayTimeline", () => {
         });
     });
 
+    it("starts the first transition's count 1 one beat in", () => {
+        const state = new OverlayTimeline(pages, measures).getState(1);
+
+        expect(state.previousSetName).toBe("1");
+        expect(state.setName).toBe("2");
+        expect(state.count).toBe(1);
+        expect(state.totalCounts).toBe(4);
+        expect(state.measureNumber).toBe(1);
+    });
+
     it("advances counts and carries the last rehearsal mark forward", () => {
         const timeline = new OverlayTimeline(pages, measures);
         const state = timeline.getState(2.5);
 
+        // Between the lines of counts 2 and 3: the count that has passed
         expect(state.setName).toBe("2");
-        expect(state.count).toBe(3);
+        expect(state.count).toBe(2);
         expect(state.measureNumber).toBe(2);
         // No mark on m2; section "A" is still active
         expect(state.rehearsalMark).toBe("A");
     });
 
-    it("rolls into the next page and rehearsal mark at the boundary", () => {
+    it("reaches the set on its last count at the boundary, then rolls into the next page", () => {
         const timeline = new OverlayTimeline(pages, measures);
-        const state = timeline.getState(4);
+        // On Set 2's flag: its count 4 of 4, which is m3's downbeat, as the timeline reads it
+        const atFlag = timeline.getState(4);
+        expect(atFlag.previousSetName).toBe("1");
+        expect(atFlag.setName).toBe("2");
+        expect(atFlag.count).toBe(4);
+        expect(atFlag.totalCounts).toBe(4);
+        expect(atFlag.measureNumber).toBe(3);
+        expect(atFlag.rehearsalMark).toBe("B");
 
+        const state = timeline.getState(5);
         expect(state.previousSetName).toBe("2");
         expect(state.setName).toBe("2A");
         expect(state.count).toBe(1);
@@ -93,12 +120,12 @@ describe("OverlayTimeline", () => {
         const sets = [0, 1, 2, 3, 4, 5].map(
             (t) => timeline.getState(t).setName,
         );
-        expect(sets).toEqual(["2", "2", "2", "2", "2A", "2A"]);
+        expect(sets).toEqual(["1", "2", "2", "2", "2", "2A"]);
 
         const counts = [0, 1, 2, 3, 4, 5].map(
             (t) => new OverlayTimeline(pages, measures).getState(t).count,
         );
-        expect(counts).toEqual([1, 2, 3, 4, 1, 2]);
+        expect(counts).toEqual([0, 1, 2, 3, 4, 1]);
     });
 
     it("omits measure info when there are no measures", () => {
@@ -106,6 +133,93 @@ describe("OverlayTimeline", () => {
 
         expect(state.measureNumber).toBeNull();
         expect(state.rehearsalMark).toBeNull();
+    });
+});
+
+describe("the opening set", () => {
+    it("shows the set without a count", () => {
+        const state = new OverlayTimeline(pages, measures).getState(0);
+        const segments = buildOverlaySegments(state, {
+            showSet: true,
+            showCounts: true,
+            showMeasures: false,
+            showTempo: false,
+            showClock: false,
+            setLabel: "Set",
+            countLabel: "Count",
+        });
+        expect(segments.map((s) => s.text)).toEqual(["Set 1"]);
+    });
+});
+
+describe("overlay tempo (E2)", () => {
+    const timedBeat = (id: number, timestamp: number, duration: number) =>
+        ({ id, timestamp, duration }) as Beat;
+    const measureOf = (number: number, beats: Beat[]): Measure =>
+        ({
+            number,
+            timestamp: beats[0]!.timestamp,
+            rehearsalMark: null,
+            beats,
+        }) as Measure;
+
+    it("writes an exact decimal tempo as itself, not rounded to a whole number", () => {
+        const b = timedBeat(1, 0, 60 / 152.5);
+        expect(countTempoBpm(b, measureOf(1, [b]))).toBe(152.5);
+        expect(formatTempo(152.5)).toBe("152.5");
+        expect(formatTempo(176)).toBe("176");
+        expect(formatTempo(352 / 3)).toBe("117.33");
+    });
+
+    it("reads a mixed-meter measure at its short beat's tempo, so the long beat doesn't jump", () => {
+        // 7/8 as 2+2+3 at ♩=176: the dotted quarter alone would read 117.33
+        const short = 60 / 176;
+        const beats = [
+            timedBeat(1, 0, short),
+            timedBeat(2, short, short),
+            timedBeat(3, 2 * short, 1.5 * short),
+        ];
+        const m = measureOf(1, beats);
+        expect(beats.map((b) => countTempoBpm(b, m))).toEqual([176, 176, 176]);
+        // Without its measure, the long beat reads its own tempo
+        expect(countTempoBpm(beats[2]!, undefined)).toBe(117.33);
+    });
+
+    it("keeps the tempo steady through a 7/8 bar in the video and sizes the field for 152.5", () => {
+        const short = 60 / 176;
+        const durations = [short, short, 1.5 * short, 60 / 152.5];
+        let t = 0;
+        const beats = durations.map((d, i) => {
+            const b = timedBeat(i + 1, t, d);
+            t += d;
+            return b;
+        });
+        const showPages = [
+            page("1", 0, 0, [timedBeat(0, 0, 0)]),
+            page("2", 0, t, beats),
+        ];
+        const showMeasures = [
+            measureOf(1, beats.slice(0, 3)),
+            measureOf(2, beats.slice(3)),
+        ];
+        const overlay = new OverlayTimeline(showPages, showMeasures);
+        const tempos = beats.map(
+            (b) => overlay.getState(b.timestamp + b.duration / 2).tempoBpm,
+        );
+        expect(tempos).toEqual([176, 176, 176, 152.5]);
+        const state = overlay.getState(t - 0.01);
+        expect(state.formatBounds.tempoDigits).toBe(5);
+        const tempoSegment = buildOverlaySegments(state, {
+            showSet: false,
+            showCounts: false,
+            showMeasures: false,
+            showTempo: true,
+            showClock: false,
+            setLabel: "Set",
+            countLabel: "Count",
+        })[0];
+        expect(tempoSegment?.text).toBe("152.5 bpm");
+        expect(tempoSegment?.layoutText).toBe("88888 bpm");
     });
 });
 
@@ -197,9 +311,10 @@ describe("buildOverlaySegments", () => {
         const state = new OverlayTimeline(pages, measures).getState(2.5);
         const segments = buildOverlaySegments(state, allOptions);
 
+        // At 2.5 s count 2 has passed and count 3 hasn't (count lines at 1, 2, 3 and 4 s)
         expect(segments.map((s) => s.text)).toEqual([
             "Set 1 → 2",
-            "Count 3 / 4",
+            "Count 2 / 4",
             "[A]  m. 2",
             " 60 bpm",
             "0:02 / 0:06",
@@ -229,7 +344,7 @@ describe("buildOverlaySegments", () => {
         const state = new OverlayTimeline(longPages, measures).getState(2.5);
         const segments = buildOverlaySegments(state, allOptions);
 
-        expect(segments[1]?.text).toBe("Count 03 / 16");
+        expect(segments[1]?.text).toBe("Count 02 / 16");
         expect(segments[1]?.layoutText).toBe("Count 88 / 88");
     });
 
@@ -244,7 +359,8 @@ describe("buildOverlaySegments", () => {
             ),
         ];
         const timeline = new OverlayTimeline(longPages, measures);
-        const baseState = timeline.getState(0);
+        // At 1 s, count 1 of the 16-count transition (0 s is the opening set, with no counts)
+        const baseState = timeline.getState(1);
         const countSegment = (count: number) =>
             buildOverlaySegments({ ...baseState, count }, allOptions)[1];
 
@@ -258,8 +374,9 @@ describe("buildOverlaySegments", () => {
             timeline.getState(2.5),
             allOptions,
         )[0];
+        // Set 2A's count 1 is at 5 s; at 4 s the marchers reach Set 2
         const subsetTransition = buildOverlaySegments(
-            timeline.getState(4),
+            timeline.getState(5),
             allOptions,
         )[0];
 
@@ -324,7 +441,8 @@ describe("buildOverlaySegments", () => {
     });
 
     it("omits disabled and unavailable items", () => {
-        const state = new OverlayTimeline(pages, []).getState(0);
+        // At 1 s, in the first transition (0 s is the opening set)
+        const state = new OverlayTimeline(pages, []).getState(1);
         const segments = buildOverlaySegments(state, {
             ...allOptions,
             showCounts: false,

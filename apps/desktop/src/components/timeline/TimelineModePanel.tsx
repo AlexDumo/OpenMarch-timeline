@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTolgee } from "@tolgee/react";
 import {
     pageFlagMoveLimits,
     type AddedPageFlag,
@@ -31,27 +32,53 @@ import {
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
 import { useTimelineTracksState } from "@/timeline/useTimelineTracks";
+import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
+import {
+    useRetimeBeats,
+    useSetTempoSyncedBeatIds,
+    useTempoSyncedBeatIds,
+} from "@/hooks/queries/useTempo";
+import { durationsByBeatId } from "@/db-functions/tempo";
+import {
+    appendPageOfCountsMutationOptions,
+    appendPagesToEndMutationOptions,
+    extendCountsToMutationOptions,
+} from "@/hooks/queries/useShowLength";
+import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { AudioClock } from "./Clock";
+import { TempoMapMenu } from "./TempoMapPanel";
+import { useTempoMapState } from "./useTempoMapState";
+import { countUnits, typedEdgeCounts, typedSections } from "@/timeline/tempo";
 import {
     TimelineCompactButton,
     TimelineLoopButton,
     TimelineSoundButton,
     TimelineSpeedButton,
 } from "./TimelineControls";
-import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useTempoLabFlag, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     Timeline,
     TimelineWaveformProvider,
+    type TimelineAlign,
+    type TimelineCountOverlay,
     type TimelineInput,
     type TimelineProps,
+    type TimelinePunchTapConfig,
     type TimelineSelection,
 } from "./Timeline";
 import {
-    peaksByBeat,
     useAudioEnvelopeStore,
+    waveformWithPastEnd,
+    WAVEFORM_FLOOR_DB,
 } from "@/timeline/timelineWaveform";
 import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
-import { timeAtBeat } from "@/timeline/timeMap";
+import { showEndTime, timeAtBeat } from "@/timeline/timeMap";
+import {
+    countContinuation,
+    formatMinutesSeconds,
+    musicEndSeconds,
+    musicRunsPastCounts,
+} from "@/timeline/showLength";
 import {
     moveCommandBlocker,
     useMoveCommands,
@@ -59,7 +86,21 @@ import {
 } from "./useTimelineCommands";
 import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useTimelinePlayback } from "./useTimelinePlayback";
-import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
+import { useTimelineMeasureRow } from "./useTimelineMeasureRow";
+import { useTimelineDrillEdits } from "./useTimelineDrillEdits";
+import {
+    handlerDelaySeconds,
+    LineUpStrip,
+    TapTheBeatLaneButton,
+    TapTimelineOverlay,
+    useTapTheBeatStore,
+} from "./TapTheBeat";
+import { getLivePlaybackPosition } from "./audio/AudioPlayer";
+import {
+    jumpTimelinePlayback,
+    loopBounds,
+    startTimelinePlayOn,
+} from "@/timeline/timelineTransport";
 import { useLabeledHoldMarks } from "./PageHoldMark";
 import { useTimelineHoldMarks } from "@/timeline/usePageHoldMarks";
 import {
@@ -126,7 +167,19 @@ const LOOP_BUTTONS = (
     </>
 );
 const SPEED_BUTTON = <TimelineSpeedButton />;
-const COMPACT_BUTTON = <TimelineCompactButton />;
+const VIEW_CONTROLS = (
+    <>
+        <TempoMapMenu />
+        <TimelineCompactButton />
+    </>
+);
+const LINE_UP_STRIP = <LineUpStrip />;
+const TAP_LANE_BUTTON = <TapTheBeatLaneButton />;
+
+/** Tap the beat's preview and flash over the timeline (FB-5) */
+const renderTapOverlay: TimelineCountOverlay = (geometry) => (
+    <TapTimelineOverlay {...geometry} />
+);
 
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
 export const toTimelineSelection = (
@@ -161,6 +214,7 @@ export const toTimelineSelection = (
  * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
  * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
  * A clip is a move: its menu, its ⋯ button and Delete edit, rename and delete it (UI-14).
+ * The measure row edits rehearsal marks and measure lines (tempo E8, `useTimelineMeasureRow`).
  */
 export default function TimelineModePanel() {
     const { beats, pages, measures } = useTimingObjects()!;
@@ -169,25 +223,42 @@ export default function TimelineModePanel() {
     const basic = useIsBasicMode();
     const basicExtras = useBasicTimelineExtras(pages);
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
-    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis. Hidden
-    // in settings, the lane goes away as it does with no audio.
+    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis; E1:
+    // and the music past the last count, on counts as the show would go on. Hidden in settings,
+    // the lane goes away as it does with no audio.
     const envelope = useAudioEnvelopeStore((s) => s.envelope);
     const waveformHidden = useUiSettingsStore(
         (s) => s.uiSettings.timelineWaveformStyle === "hidden",
     );
+    const continuation = useMemo(
+        () =>
+            countContinuation({
+                beats,
+                measureStarts: measures.map((m) => m.startBeat.index),
+            }),
+        [beats, measures],
+    );
+    const musicEnd = useMemo(
+        () => (envelope ? musicEndSeconds(envelope, WAVEFORM_FLOOR_DB) : null),
+        [envelope],
+    );
     const waveform = useMemo(() => {
         if (!envelope || waveformHidden) return null;
-        const peaks = peaksByBeat(
+        const peaks = waveformWithPastEnd(
             envelope,
             beats,
             createTimelineBeatAxis(beats).offset,
+            { durationAt: continuation.durationAt, musicEnd },
         );
         // A show with no audio plays a silent placeholder: nothing to draw, so in Basic, where the
         // lane sets the pane's height, it counts as no waveform (UI-19)
-        if (basic && !peaks.some((beat) => beat.some((peak) => peak > 0)))
+        if (
+            basic &&
+            !peaks.peaksByBeat.some((beat) => beat.some((peak) => peak > 0))
+        )
             return null;
-        return { peaksByBeat: peaks };
-    }, [envelope, beats, waveformHidden, basic]);
+        return peaks;
+    }, [envelope, beats, continuation, musicEnd, waveformHidden, basic]);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );
@@ -256,6 +327,15 @@ export default function TimelineModePanel() {
     }, [overridden]);
     // UI-14 round-2 review: a "Select them" selection doesn't follow you to another move
     useClearLeftoverMoveSelection();
+    const punchTap = useTimelinePunchTap(beats.length);
+    const align = useTimelineAlign({
+        beats,
+        envelope,
+        keyBlocked: selectedMarcherIds.size > 0,
+        punchTap,
+    });
+    // Tempo E8: rehearsal marks and measure lines on the measure row
+    const measureRow = useTimelineMeasureRow(measures);
     const commands = useTimelineCommands({
         database: db,
         timelines,
@@ -335,6 +415,21 @@ export default function TimelineModePanel() {
                   },
         [isPlaying, isolated, movePageFlag],
     );
+    // Not while a paused preview holds a frame (UI-11), as **+**
+    const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
+    const showLength = useShowLengthControls({
+        beats,
+        lastFlag: pages.length > 0 ? pageEndBeat(pages[pages.length - 1]!) : 0,
+        continuation,
+        musicEnd,
+        hidden: isPlaying || holding,
+    });
+    // Tempo lab `drillChoices` (E10): count edits that ask what the drill should do
+    const counts = useTimelineDrillEdits({
+        pages,
+        beatCount: beats.length,
+        isPlaying,
+    });
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
     // Change to subset / normal page: one `updatePages` edit, one undo step
     const { mutate: updatePages } = useMutation(
@@ -416,7 +511,10 @@ export default function TimelineModePanel() {
                     timelines={basic ? NO_CLIPS : offPage}
                     transportAccessories={basic ? SPEED_BUTTON : LOOP_BUTTONS}
                     transportSecondary={SOUND_BUTTON}
-                    transportViewControls={basic ? undefined : COMPACT_BUTTON}
+                    transportViewControls={basic ? undefined : VIEW_CONTROLS}
+                    waveformNotice={LINE_UP_STRIP}
+                    waveformAction={TAP_LANE_BUTTON}
+                    countOverlay={renderTapOverlay}
                     holdMarks={holdMarks}
                     keepChains={keepChains}
                     keepHere={keepHere}
@@ -425,6 +523,7 @@ export default function TimelineModePanel() {
                         basic ? undefined : commands.commitTimelineRange
                     }
                     clipResize={basic ? undefined : clipResize}
+                    measureRow={measureRow}
                     onUnpinStart={() =>
                         useTimelineSelectionStore.getState().unpinStart()
                     }
@@ -461,6 +560,10 @@ export default function TimelineModePanel() {
                             ],
                         })
                     }
+                    align={align}
+                    appendCounts={showLength.appendCounts}
+                    musicPastEnd={showLength.musicPastEnd}
+                    drillEdits={counts.drillEdits}
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(
                             pages,
@@ -483,6 +586,7 @@ export default function TimelineModePanel() {
                     }}
                 />
             </TimelineWaveformProvider>
+            {counts.dialog}
         </div>
     );
 }
@@ -592,6 +696,243 @@ function PlayingTimeline({
             onLoopChange={isolation || basic ? undefined : changeLoop}
         />
     );
+}
+
+/**
+ * The Align view's data and writes (E7), when the Tempo lab flag `alignView` is on: the counts'
+ * lengths, the synced counts (stored by beat id) as count indexes, and a retime written as one
+ * undo entry with the offset and synced counts. A press of A doesn't toggle it while marchers are
+ * selected, where A moves them.
+ */
+function useTimelineAlign({
+    beats,
+    envelope,
+    keyBlocked,
+    punchTap,
+}: {
+    beats: readonly { readonly id: number; readonly duration: number }[];
+    envelope: TimelineAlign["envelope"];
+    keyBlocked: boolean;
+    punchTap: TimelinePunchTapConfig | undefined;
+}): TimelineAlign | undefined {
+    const enabled = useTempoLabFlag("alignView") === true;
+    const on = useTimelineSelectionStore((s) => s.alignView);
+    const syncedIds = useTempoSyncedBeatIds();
+    const { data: settings } = useQuery(workspaceSettingsQueryOptions());
+    const { mutateAsync: retime } = useRetimeBeats();
+    const { mutate: setSyncedIds } = useSetTempoSyncedBeatIds();
+    const durations = useMemo(() => beats.map((b) => b.duration), [beats]);
+    const synced = useMemo(() => {
+        const indexOf = new Map(beats.map((b, i) => [b.id, i]));
+        return syncedIds
+            .flatMap((id) => {
+                const index = indexOf.get(id);
+                return index === undefined ? [] : [index];
+            })
+            .sort((a, b) => a - b);
+    }, [beats, syncedIds]);
+    const audioOffsetSeconds = settings?.audioOffsetSeconds ?? 0;
+    const map = useTempoMapState();
+    const tempoMap = useMemo(
+        () => ({
+            units: countUnits(map.state.rows, map.state.durations.length),
+            sections: typedSections(map.state.rows),
+            edges: [...typedEdgeCounts(map.state.rows)],
+        }),
+        [map],
+    );
+    return useMemo(() => {
+        if (!enabled) return undefined;
+        const idsOf = (indexes: readonly number[]) =>
+            indexes.flatMap((i) => (beats[i] ? [beats[i].id] : []));
+        return {
+            on,
+            onToggle: (next) =>
+                useTimelineSelectionStore.getState().setAlignView(next),
+            keyBlocked,
+            durations,
+            synced,
+            audioOffsetSeconds,
+            envelope,
+            onRetime: ({ durations: next, originShift, synced: nextSynced }) =>
+                retime({
+                    newDurationsByBeatId: durationsByBeatId(
+                        beats.map((b) => b.id),
+                        next,
+                    ),
+                    originShift,
+                    syncedBeatIds: idsOf(nextSynced),
+                }).catch(() => {
+                    // The mutation already told the user (`tempo.retimeError`)
+                }),
+            onSetSynced: (next) => setSyncedIds(idsOf(next)),
+            punchTap,
+            tempoMap,
+        };
+    }, [
+        punchTap,
+        tempoMap,
+        audioOffsetSeconds,
+        beats,
+        durations,
+        enabled,
+        envelope,
+        keyBlocked,
+        on,
+        retime,
+        setSyncedIds,
+        synced,
+    ]);
+}
+
+/**
+ * Punch-in tap's app side (E9), when the Tempo lab flag `punchInTap` is on: the live clock, a
+ * count-in (or the user's own loop, UI-17), and the "Lined up" toast with
+ * Undo. Tap the beat's open panel keeps T, and opening it applies the take (DT-1).
+ */
+function useTimelinePunchTap(
+    showEndBeat: number,
+): TimelinePunchTapConfig | undefined {
+    const enabled = useTempoLabFlag("punchInTap") === true;
+    const tapTheBeatOpen = useTapTheBeatStore((s) => s.open);
+    const { setIsPlaying } = useIsPlaying()!;
+    const { mutate: performHistoryAction } = usePerformHistoryAction();
+    const { t } = useTolgee();
+    return useMemo(() => {
+        if (!enabled) return undefined;
+        return {
+            liveTime: (stamp) =>
+                getLivePlaybackPosition() - handlerDelaySeconds(stamp),
+            play: (from) => {
+                const store = useTimelineSelectionStore.getState();
+                // Looping on (or a move isolated) is the user's own window: play that, as Space does
+                const bounds = loopBounds(store);
+                if (bounds) {
+                    store.cue(bounds.from);
+                    store.setPlayback({ kind: "preview", ...bounds });
+                    setIsPlaying(true);
+                    return true;
+                }
+                store.cue(from);
+                return startTimelinePlayOn(showEndBeat, setIsPlaying);
+            },
+            blocked: () => useTapTheBeatStore.getState().open,
+            otherToolOpen: tapTheBeatOpen,
+            onApplied: (message) =>
+                toast.success(message, {
+                    action: {
+                        label: t("tempo.punchTap.undo"),
+                        onClick: () => performHistoryAction("undo"),
+                    },
+                }),
+            onNotice: (message) => toast.info(message),
+        };
+    }, [
+        enabled,
+        performHistoryAction,
+        setIsPlaying,
+        showEndBeat,
+        t,
+        tapTheBeatOpen,
+    ]);
+}
+
+/**
+ * E1, a show as long as its music: **+ N counts** after the last page (N is the show's "new page
+ * counts" setting), and, when the music runs past the last count, the note that offers extending
+ * the counts to its end. Each is one undoable edit; the new page is selected, as **+** selects it.
+ */
+function useShowLengthControls({
+    beats,
+    lastFlag,
+    continuation,
+    musicEnd,
+    hidden,
+}: {
+    beats: Parameters<typeof showEndTime>[0];
+    /** The last page's flag, a spec beat position */
+    lastFlag: number;
+    continuation: ReturnType<typeof countContinuation>;
+    musicEnd: number | null;
+    hidden: boolean;
+}) {
+    const { t } = useTolgee();
+    const queryClient = useQueryClient();
+    const counts =
+        useQuery(workspaceSettingsQueryOptions()).data?.defaultNewPageCounts ??
+        16;
+    const { mutate: appendPage } = useMutation(
+        appendPageOfCountsMutationOptions(queryClient, selectAddedPage),
+    );
+    const { mutate: extend } = useMutation(
+        extendCountsToMutationOptions(queryClient, (added) => {
+            if (added > 0)
+                toast.success(
+                    t("timeline.showLength.extended", { counts: added }),
+                );
+        }),
+    );
+    const { mutate: pagesToEnd } = useMutation(
+        appendPagesToEndMutationOptions(queryClient, (added) => {
+            if (added > 0)
+                toast.success(
+                    t("timeline.showLength.pagesAdded", { pages: added }),
+                );
+        }),
+    );
+    const countsEnd = showEndTime(beats);
+    // Counts already past the last flag (a show made from an MP3): the pill adds a page over them,
+    // and says so, and one more offers pages to the end (FB-7)
+    const countsPast = beats.length - lastFlag;
+    const overExisting = countsPast >= counts;
+    const appendCounts = hidden
+        ? undefined
+        : {
+              label: t(
+                  overExisting
+                      ? "timeline.showLength.appendPage"
+                      : "timeline.showLength.appendCounts",
+                  { counts },
+              ),
+              title: t(
+                  overExisting
+                      ? "timeline.showLength.appendPageTitle"
+                      : "timeline.showLength.appendCountsTitle",
+                  { counts },
+              ),
+              onAppend: () => appendPage(counts),
+              ...(countsPast > counts
+                  ? {
+                        toEnd: {
+                            label: t("timeline.showLength.pagesToEnd", {
+                                counts,
+                            }),
+                            title: t("timeline.showLength.pagesToEndTitle", {
+                                counts,
+                            }),
+                            onAppend: () => pagesToEnd(counts),
+                        },
+                    }
+                  : {}),
+          };
+    const musicPastEnd =
+        !hidden &&
+        musicEnd !== null &&
+        musicRunsPastCounts({
+            countsEndSeconds: countsEnd,
+            musicEnd,
+            continuation,
+        })
+            ? {
+                  message: t("timeline.showLength.musicPastEnd", {
+                      countsEnd: formatMinutesSeconds(countsEnd),
+                      musicEnd: formatMinutesSeconds(musicEnd),
+                  }),
+                  actionLabel: t("timeline.showLength.extendToEnd"),
+                  onExtend: () => extend(musicEnd),
+              }
+            : undefined;
+    return { appendCounts, musicPastEnd };
 }
 
 /**

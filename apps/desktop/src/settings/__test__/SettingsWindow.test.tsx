@@ -57,6 +57,7 @@ describe("SettingsWindow", () => {
             "shortcuts",
             "plugins",
             "privacy",
+            "tempoLab",
             "developer",
             "database",
         ]);

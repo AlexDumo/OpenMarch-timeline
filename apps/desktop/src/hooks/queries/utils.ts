@@ -53,6 +53,9 @@ const singleTableNameToQueryKey = (tableName: string): string[][] => {
         // A cue's set members are read with the cue (`useCues.ts`)
         case "cue_marchers":
             return [["cues"]];
+        // Undo and redo of a retime can restore the settings row (tablesWithScopedHistory)
+        case "workspace_settings":
+            return [["workspaceSettings"]];
         default:
             return [[tableName]];
     }
