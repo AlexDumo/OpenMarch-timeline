@@ -13,7 +13,7 @@ under `apps/desktop/` unless they start with `packages/` or `docs/`.
   triggers already watch. The timeline tables already have a working change feed (`timeline_change_log`, drained per
   transaction). If that feed is extended to every synced table, each committed transaction becomes
   one op, with **no call-site refactor**.
-- **About eight paths are case-by-case.** They are `workspace_settings`, `view3d_cameras`,
+- **Six paths are case-by-case.** They are `workspace_settings`, `view3d_cameras`,
   `audio_files` (raw SQL in the main process), the Library tables, the undo/redo replay, and the file
   lifecycle (create, convert, repair, migrate). The table in §3 lists each one, with an estimated effort.
 - **The hard work is semantics, not plumbing.** Four problems carry most of the cost:
@@ -21,7 +21,7 @@ under `apps/desktop/` unless they start with `packages/` or `docs/`.
   - Timeline rows reference **beat ordinals** that every beat or page edit rewrites.
   - Undo replays full-row SQL by rowid, which would wipe out other people's edits.
   - `timeline_assignments.layer` is stored but is meant to be derived.
-    All four have contained fixes (§5).
+    All four have contained fixes (§4 and §5).
 - **Recommended shape.** Keep local SQLite as the session's working mirror, so all existing reads,
   the resolver, the field and the 3D view work unchanged:
   - A client runs a command locally, and the transaction's row changes are sent as the op.
@@ -218,7 +218,7 @@ Use per-user, selective undo, as Figma and Google Docs do:
 - Undo builds the inverse from the op's own `prev`/`row` images, **field by field**. A field whose
   current value no longer equals what this user wrote has been changed by someone since; it is
   skipped, and a toast names who changed it.
-- An insert's inverse is a delete, which is skipped if others now reference the row. A delete's
+- An insert's inverse is a delete, which is skipped if others have edited the row since. A delete's
   inverse re-inserts the row with the same ID; global IDs make that safe.
 - The inverse goes out as an ordinary op, and redo is its inverse.
 
@@ -284,8 +284,8 @@ clients derive positions themselves.
    (`withTimelinePageRipple`). An op computed on the old grid would land 4 beats off.
    - **v1:** every client tracks a `gridVersion`, bumped by any op that touches `beats`, `pages`
      or `measures`. Ops that write beat columns carry their `gridVersion`; a stale one is rejected,
-     and the client retries on the new grid with a toast. Structural edits are rare and could be
-     head-writer only.
+     and the client retries on the new grid with a toast. Structural edits are rare; the prototype
+     makes them head-writer only and exempt from claims.
    - **Later:** store timeline edges as `beats.id` (as `pages`, `measures` and `cues` already do),
      so ordinals become derived and the ripple disappears for beat inserts. That is an ADR 0001
      change, and the resolver keeps integer beats through a map at the host.
@@ -354,6 +354,9 @@ clients derive positions themselves.
    always produce a new copy?
 4. Should the migration of timeline edges to `beats.id` happen before collaboration ships? It is
    the single change that most reduces risk.
+5. Who may join a session: anyone with the link (as in the prototypes), or only signed-in people
+   the head drill writer invites? The app already has an account system (`src/auth`), so roles
+   could hang off it.
 
 ## 8. Prototypes
 
