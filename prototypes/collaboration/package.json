@@ -1,0 +1,16 @@
+{
+    "name": "openmarch-collab-prototypes",
+    "private": true,
+    "type": "module",
+    "description": "Throwaway real-time collaboration prototypes (docs/collaboration/REPORT.md). Not part of the workspace.",
+    "scripts": {
+        "vendor": "node scripts/vendor.mjs",
+        "dev": "node scripts/vendor.mjs && wrangler dev --port 8787 --ip 0.0.0.0",
+        "smoke": "node scripts/smoke.mjs"
+    },
+    "devDependencies": {
+        "sql.js": "1.14.1",
+        "wrangler": "4.94.0",
+        "ws": "8.21.0"
+    }
+}

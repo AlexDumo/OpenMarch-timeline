@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>OpenMarch collaboration prototype</title>
+        <link rel="stylesheet" href="style.css" />
+        <script src="vendor/sql-wasm.js"></script>
+    </head>
+    <body>
+        <header id="bar">
+            <strong id="show-name">OpenMarch collaboration prototype</strong>
+            <span id="mode" class="chip">…</span>
+            <span id="pending" class="muted"></span>
+            <span class="grow"></span>
+            <div id="avatars"></div>
+            <label class="muted">You are <input id="my-name" size="8" /></label>
+            <span id="actions"></span>
+        </header>
+        <div id="banner" hidden></div>
+        <main id="app">
+            <section id="landing" hidden>
+                <div class="card">
+                    <h1>Open a show</h1>
+                    <p class="muted">
+                        It opens locally first, the way every show opens today: solo, nothing
+                        leaves this window. Then make it collaborative.
+                    </p>
+                    <div class="stack">
+                        <button data-open="demo">Generated demo band (46 marchers)</button>
+                        <button data-open="demos/part1-demo.dots">part1-demo.dots (page model, 95 marchers)</button>
+                        <button data-open="demos/lhb-daft-punk-pt2.dots">lhb-daft-punk-pt2.dots (page model)</button>
+                        <label class="file">Open a .dots file… <input type="file" id="file" accept=".dots" /></label>
+                    </div>
+                    <p id="landing-note" class="muted"></p>
+                </div>
+            </section>
+            <section id="editor" hidden>
+                <div id="field-wrap">
+                    <svg id="field"></svg>
+                    <div id="hint" class="muted">
+                        Click or drag a box to select · drag selected marchers to move them at the
+                        playhead's page · arrows nudge · Shift-drag the ruler for a time selection
+                    </div>
+                </div>
+                <aside id="side">
+                    <h3>People</h3>
+                    <ul id="people"></ul>
+                    <h3>Sections</h3>
+                    <ul id="sections"></ul>
+                    <h3>Network</h3>
+                    <div id="network"></div>
+                    <h3>Activity</h3>
+                    <ol id="log"></ol>
+                </aside>
+                <div id="timeline-wrap">
+                    <div id="transport"></div>
+                    <svg id="timeline"></svg>
+                </div>
+            </section>
+        </main>
+        <div id="toasts"></div>
+        <script type="module" src="client/app.js"></script>
+    </body>
+</html>
