@@ -1,6 +1,6 @@
 /**
- * Visuals mode's cue band under the timeline's clip rows
- * (performer-behavior.md sections 7.1 and 7.2): for the focused who on the
+ * Visuals mode's cue lanes, the main lanes of its own timeline
+ * (`VisualsTimeline`; performer-behavior.md sections 7.1 and 7.2): for the focused who on the
  * current tab, read-only rows of broader cues, the editable lane, rows of
  * exceptions, then the result row, colored by where each value comes from
  * and hatched where the who is mixed.
@@ -20,7 +20,6 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { T, useTolgee } from "@tolgee/react";
 import clsx from "clsx";
-import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
 import type { CueFlagKind, CueTarget } from "@openmarch/core";
 import {
     allCuesQueryOptions,
@@ -54,20 +53,17 @@ import {
 } from "./visualsLanes";
 import type { VisualsChannel } from "./visualsWho";
 
-const HEADER = 22;
-const GREY_ROW = 14;
-const LANE = 28;
-const RESULT = 18;
-const GAP = 4;
+const HEADER = 26;
+const GREY_ROW = 20;
+const LANE = 40;
+const RESULT = 24;
+const GAP = 6;
 
 /** The band's height for what it shows. */
-export function visualsBandHeight(
-    data: VisualsBandData | null,
-    collapsed: boolean,
-): number {
-    if (!data || collapsed) return HEADER;
+export function visualsBandHeight(data: VisualsBandData | null): number {
+    if (!data) return HEADER;
     const rows = data.lanes.broader.length + data.lanes.exceptions.length;
-    return HEADER + rows * GREY_ROW + LANE + RESULT + GAP * 3;
+    return HEADER + rows * GREY_ROW + LANE + RESULT + GAP * (rows + 2);
 }
 
 const CHANNEL_KEYS: Record<VisualsChannel, string> = {
@@ -549,8 +545,6 @@ function BandBody({
     geometry: TimelineBandGeometry;
 }) {
     const { t } = useTolgee();
-    const collapsed = useVisualsStore((s) => s.bandCollapsed);
-    const toggle = useVisualsStore((s) => s.toggleBandCollapsed);
     const toggleFocus = useVisualsStore((s) => s.toggleFocus);
     const label = useTargetLabel();
     const { pixelsPerBeat, top, width, snapBeats } = geometry;
@@ -601,33 +595,25 @@ function BandBody({
         <div
             data-testid="visuals-band"
             className="border-stroke absolute left-0 border-t"
-            style={{ top, width, height: visualsBandHeight(data, collapsed) }}
+            style={{ top, width, height: visualsBandHeight(data) }}
             onPointerDown={(e) => e.stopPropagation()}
         >
             <div
                 className="sticky left-0 flex w-fit items-center gap-4"
                 style={{ height: HEADER }}
             >
-                <button
-                    type="button"
-                    className="text-text-subtitle hover:text-text flex items-center gap-4 px-4 text-[11px]"
-                    onClick={toggle}
-                    aria-expanded={!collapsed}
-                    data-testid="visuals-band-toggle"
+                <span
+                    className="text-text-subtitle px-4 text-[11px]"
+                    data-testid="visuals-band-title"
                 >
-                    {collapsed ? (
-                        <CaretRightIcon size={10} />
-                    ) : (
-                        <CaretDownIcon size={10} />
-                    )}
-                    <span data-testid="visuals-band-title">{title}</span>
-                </button>
+                    {title}
+                </span>
                 {data && !data.target && (
                     <span className="text-yellow text-[11px]">
                         <T keyName="visuals.band.selectFirst" />
                     </span>
                 )}
-                {canPaste && !collapsed && (
+                {canPaste && (
                     <button
                         type="button"
                         className="text-accent text-[11px] hover:underline"
@@ -639,7 +625,7 @@ function BandBody({
                         })}
                     </button>
                 )}
-                {flags.size > 0 && !collapsed && (
+                {flags.size > 0 && (
                     <span
                         className="text-red text-[11px]"
                         data-testid="visuals-band-flags"
@@ -648,7 +634,7 @@ function BandBody({
                     </span>
                 )}
             </div>
-            {data && !collapsed && (
+            {data && (
                 <div className="flex flex-col" style={{ gap: GAP }}>
                     {data.lanes.broader.map((row) => (
                         <GreyRow
@@ -687,13 +673,12 @@ function BandBody({
     );
 }
 
-/** Visuals mode's band for the timeline: its height and what it draws. */
+/** Visuals mode's lanes for its timeline: their height and what they draw. */
 export function visualsTimelineBand(
     data: VisualsBandData | null,
-    collapsed: boolean,
 ): TimelineBand {
     return {
-        height: visualsBandHeight(data, collapsed),
+        height: visualsBandHeight(data),
         render: (geometry: TimelineBandGeometry) => (
             <BandBody data={data} geometry={geometry} />
         ),

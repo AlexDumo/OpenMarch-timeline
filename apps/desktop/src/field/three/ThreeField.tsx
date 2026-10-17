@@ -93,6 +93,7 @@ import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
 import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
+import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -377,6 +378,9 @@ function ThreeFieldView() {
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
     useFieldLineTool(editor);
+    // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1)
+    const visuals = useIsVisualsView();
+    useEffect(() => editor.setReadOnly(visuals), [editor, visuals]);
     // A finished line follows its marchers to another page
     useEffect(
         () => marchers.subscribe(() => editor.refreshLineTool()),
@@ -444,7 +448,8 @@ function ThreeFieldView() {
             data-testid="threeField"
         >
             <TimelineIsolationBar />
-            <TimelineFromStartBadge />
+            {/* What a drop edits: nothing drops in Visuals mode */}
+            {!visuals && <TimelineFromStartBadge />}
             <FieldBenchmark
                 frames={benchFrames}
                 view={benchView}

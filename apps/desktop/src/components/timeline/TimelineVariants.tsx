@@ -1,4 +1,3 @@
-import { useTimelineBand } from "./TimelineBand";
 import { wheelScrollsSideways } from "./timelineWheel";
 import {
     memo,
@@ -685,13 +684,13 @@ const TimelineSurface = memo(function TimelineSurface({
             ? basicAudioTop + basicWaveformHeight + 4
             : basicAudioTop
         : rowsLayout.trackTop;
-    // Visuals mode's cue lanes (performer-behavior.md section 7.1) under the clip rows
-    const band = useTimelineBand();
-    const bandTop = rowsLayout.timelineHeight;
-    const bandHeight = band && !basic ? band.height : 0;
+    // Lanes in place of the clip rows (Visuals mode's cue lanes, performer-behavior.md 7.1)
+    const band = basic ? undefined : props.band;
     const timelineHeight = basic
         ? TIMELINE_PAGE_ROW_BOTTOM + basicBodyHeight
-        : rowsLayout.timelineHeight + bandHeight;
+        : band
+          ? trackTop + band.height
+          : rowsLayout.timelineHeight;
     // The pane can be taller than the tracks (the splitter): the grid, page lines and playhead
     // fill it, the track rows keep their height. Only a pane with its own height: a fitted pane
     // is as tall as the surface (`TimelinePaneStretchContext`)
@@ -775,9 +774,9 @@ const TimelineSurface = memo(function TimelineSurface({
     const pointer = useTimelinePointer({
         seekSnapBeats,
         onSeek: props.onSeek,
-        // Basic draws no ranges: every drag scrubs
+        // Basic and a read-only timeline draw no ranges: every drag scrubs
         onRangeSelect:
-            onSelectionChange && !basic
+            onSelectionChange && !basic && !props.readOnly
                 ? (range) =>
                       onSelectionChange({ kind: "range", range, drawn: true })
                 : undefined,
@@ -1011,15 +1010,13 @@ const TimelineSurface = memo(function TimelineSurface({
                                 />
                             )),
                         )}
-                        {band &&
-                            !basic &&
-                            band.render({
-                                top: bandTop,
-                                width,
-                                pixelsPerBeat,
-                                beatCount: model.beatCount,
-                                snapBeats: seekSnapBeats,
-                            })}
+                        {band?.render({
+                            top: trackTop,
+                            width,
+                            pixelsPerBeat,
+                            beatCount: model.beatCount,
+                            snapBeats: seekSnapBeats,
+                        })}
                     </div>
                     {/* Pinned to the viewport's top, over the tracks: the ruler and the measure
                         row, which hide the tracks scrolled under them, and the layers that span

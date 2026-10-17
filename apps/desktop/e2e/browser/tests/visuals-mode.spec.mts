@@ -1,14 +1,24 @@
 // cspell:words choreo
 import { test, expect } from "../fixtures.mjs";
 import type { Page } from "@playwright/test";
-import { clickMarcher, drawnMarchers } from "../app.mjs";
+import {
+    clickMarcher,
+    dragFrom,
+    dragMarcher,
+    drawnMarchers,
+    selectedDrillNumbers,
+    waitForIdle,
+} from "../app.mjs";
+import { savedPosition } from "../positions.mjs";
 import { seedShowSql } from "../seed.mjs";
 
 /**
- * Visuals mode (performer-behavior.md section 7.1): the workspace switch
- * swaps the toolbar and the inspector, and focusing a who in the Who list
- * dims everyone else on the field. Dimmed marchers stay selectable, since
- * the selection is a who too.
+ * Visuals mode (performer-behavior.md section 7.1, owner note 2026-10-17):
+ * its own workspace, as the Light Designer is. The switch swaps the
+ * toolbar, the inspector and the timeline: Visuals' timeline has the cue
+ * lanes in place of the drill clips and edits no drill, and the field only
+ * selects there. Focusing a who in the Who list dims everyone else on the
+ * field; dimmed marchers stay selectable, since the selection is a who too.
  */
 
 test.use({
@@ -391,4 +401,124 @@ test("a Facing cue's wheel sets its angle and the field gives its point", async 
     await expect(page.getByTestId("visuals-who-selection")).toContainText(
         "Nothing selected",
     );
+});
+
+test("Visuals has its own timeline, and the field only selects there", async ({
+    show,
+}) => {
+    const { page } = show;
+    await expect(page.getByRole("heading", { name: "Page 0" })).toBeVisible();
+    const t1 = await savedPosition(show, 1);
+
+    await page.getByTestId("workspace-view-visuals").click();
+    await expect(page.locator("main")).toHaveAttribute(
+        "data-workspace",
+        "visuals",
+    );
+    // the cue lanes are the timeline's lanes: no drill clips, no + and no window
+    await expect(page.getByTestId("visuals-band")).toBeVisible();
+    await expect(page.getByTestId("timeline-clip")).toHaveCount(0);
+    await expect(page.getByTestId("timeline-add-page-flag")).toHaveCount(0);
+    await expect(page.getByTestId("timeline-selection-range")).toHaveCount(0);
+    // a page box still goes to its page
+    const position = (name: string) =>
+        page.getByRole("button", {
+            name: new RegExp(`^Playback position: ${name}\\b`),
+        });
+    await page.getByRole("button", { name: "Page 1", exact: true }).click();
+    await expect(position("Page 1")).toBeVisible();
+    await page.getByTestId("timeline-initial-page").click();
+    await expect(position("Home")).toBeVisible();
+
+    // a click and a marquee select; a drag moves no one
+    await clickMarcher(page, "T1");
+    await expect.poll(() => selectedDrillNumbers(page)).toEqual(["T1"]);
+    await dragMarcher(page, "T1", { x: 80, y: 60 });
+    await waitForIdle(page);
+    expect(await savedPosition(show, 1)).toEqual(t1);
+    await expect.poll(() => selectedDrillNumbers(page)).toEqual(["T1"]);
+    const marchers = await drawnMarchers(page);
+    const at = (drill: string) =>
+        marchers.find((m) => m.drillNumber === drill)!.screen;
+    const [f1, f2] = [at("F1"), at("F2")];
+    await dragFrom(
+        page,
+        { x: f1.x - 15, y: f1.y - 15 },
+        { x: f2.x - f1.x + 30, y: f2.y - f1.y + 30 },
+    );
+    await expect.poll(() => selectedDrillNumbers(page)).toEqual(["F1", "F2"]);
+    // nor do the arrow keys nudge
+    const f1Saved = await savedPosition(show, 3);
+    await page.keyboard.press("ArrowUp");
+    await waitForIdle(page);
+    expect(await savedPosition(show, 3)).toEqual(f1Saved);
+
+    // back in the Editor, the drill timeline and dragging are back
+    await page.getByTestId("workspace-view-editor").click();
+    await expect(page.locator("main")).toHaveAttribute(
+        "data-workspace",
+        "editor",
+    );
+    await expect(page.getByTestId("visuals-band")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Page 0" })).toBeVisible();
+    await dragMarcher(page, "T1", { x: 80, y: 60 });
+    await expect
+        .poll(async () => (await savedPosition(show, 1)).x)
+        .toBeGreaterThan(t1.x + 10);
+});
+
+test.describe("with a move off the page boxes", () => {
+    // As move-and-drop's show: page 2 moves only T1 and T2, so the drill
+    // timeline draws a clip for a move that isn't a page's
+    test.use({
+        seedSql: seedShowSql({
+            beats: 48,
+            pageStarts: [16, 32],
+            measureStarts: Array.from({ length: 12 }, (_, i) => 1 + i * 4),
+            marchers: [1, 2, 3, 4].map((id) => ({
+                id,
+                section: "Trumpet",
+                prefix: "T",
+                order: id,
+            })),
+            positions: [
+                [
+                    [1, 500, 300],
+                    [2, 600, 350],
+                    [3, 700, 280],
+                    [4, 800, 400],
+                ],
+                [
+                    [1, 520, 450],
+                    [2, 640, 470],
+                    [3, 760, 430],
+                    [4, 880, 500],
+                ],
+                [
+                    [1, 540, 380],
+                    [2, 660, 400],
+                ],
+            ],
+        }),
+    });
+
+    test("the drill clips are the Editor's: Visuals' timeline has none", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await expect(
+            page.getByRole("heading", { name: "Page 0" }),
+        ).toBeVisible();
+        const clips = page.getByTestId("timeline-clip");
+        await expect(clips.first()).toBeVisible();
+        const count = await clips.count();
+
+        await page.getByTestId("workspace-view-visuals").click();
+        await expect(page.getByTestId("visuals-band")).toBeVisible();
+        await expect(clips).toHaveCount(0);
+
+        await page.getByTestId("workspace-view-editor").click();
+        await expect(clips).toHaveCount(count);
+        await expect(page.getByTestId("visuals-band")).toHaveCount(0);
+    });
 });

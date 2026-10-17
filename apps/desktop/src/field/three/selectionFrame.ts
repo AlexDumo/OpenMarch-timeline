@@ -17,14 +17,15 @@ export type DrawnSelectionBox = Omit<SelectionFrame, "pad">;
  * fewer than two marchers are selected (a single marcher gets its ring and
  * no box or handles). It fits the selected marchers where they're drawn,
  * except while a rotation is dragged, when it turns with them (#198). None
- * while the line tool is on: its handles do nothing then (#203). The overlay
- * draws it and the field test API reads its handles.
+ * while the line tool is on, nor while the editor is read-only (Visuals
+ * mode): its handles do nothing then (#203). The overlay draws it and the
+ * field test API reads its handles.
  */
 export function drawnSelectionBox(
     marchers: FieldMarchers,
     editor: FieldEditor,
 ): DrawnSelectionBox | null {
-    if (editor.lineToolShape()) return null;
+    if (editor.lineToolShape() || editor.isReadOnly()) return null;
     const rotating = editor.rotationFrame();
     if (rotating) return rotating;
     const { selected, positions, hidden } = marchers;

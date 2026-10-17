@@ -27,6 +27,7 @@ import {
     ExpandedTimeline,
 } from "./TimelineVariants";
 import type { LabeledHoldMarks } from "./PageHoldMark";
+import type { TimelineBand } from "./TimelineBand";
 import type { PageKeepChains } from "./PageKeepChain";
 import type {
     TimelineAddMarchersMenu,
@@ -228,6 +229,15 @@ export interface TimelineProps {
     readonly onRemoveBasicPoint?: (beat: number) => void;
     /** UI-19 Basic: per page id, how many marchers on it use Expert moves */
     readonly expertMarks?: ReadonlyMap<string | number, number>;
+    /**
+     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): no clips,
+     * no window, no page flag or move edits, no ranges drawn. Page boxes and home still select
+     * (`onSelectionChange`, to go to that page), and the ruler and the surface scrub. The editing
+     * commands given are ignored
+     */
+    readonly readOnly?: boolean;
+    /** Lanes drawn in place of the clip rows, under the waveform (Visuals mode's cue lanes) */
+    readonly band?: TimelineBand;
 }
 
 const TimelineWaveformContext = createContext<TimelineWaveform | null>(null);
@@ -362,7 +372,11 @@ export const selectionToSpec = (
           }
         : selection;
 
+const NO_TIMELINES: readonly TimelineInput[] = [];
+
 export function Timeline(props: TimelineProps) {
+    const { readOnly = false } = props;
+    const timelines = readOnly ? NO_TIMELINES : props.timelines;
     const axis = useMemo(
         () => createTimelineBeatAxis(props.beats),
         [props.beats],
@@ -374,18 +388,11 @@ export function Timeline(props: TimelineProps) {
                 beats: props.beats,
                 pages: props.pages,
                 measures: props.measures,
-                timelines: props.timelines,
+                timelines,
                 waveform,
                 axis,
             }),
-        [
-            axis,
-            props.beats,
-            props.measures,
-            props.pages,
-            props.timelines,
-            waveform,
-        ],
+        [axis, props.beats, props.measures, props.pages, timelines, waveform],
     );
     const playback = props.playback ?? STOPPED_AT_START;
     const [ownPixelsPerBeat, setOwnPixelsPerBeat] = useState(16);
@@ -467,7 +474,7 @@ export function Timeline(props: TimelineProps) {
                   })
             : undefined,
     );
-    const { onTimelineRangeCommit, onCreateTrack, timelines } = props;
+    const { onTimelineRangeCommit, onCreateTrack } = props;
     // A clip move keeps its length: send the spec range shifted by the move, so a clip whose start
     // was hidden with beat 0 moves by exactly the beats it was dragged
     const commitRange = useLatestCallback(
@@ -747,24 +754,8 @@ export function Timeline(props: TimelineProps) {
             ? (viewBeat: number) => onRemoveBasicPoint(axis.toSpec(viewBeat))
             : undefined,
     );
-    const commonProps = {
-        model,
-        positionBeat,
-        livePositionBeat,
-        returnBeat,
-        isPlaying: playback.isPlaying,
-        pixelsPerBeat,
+    const editing = {
         selection,
-        selectedTarget: props.selectedTarget,
-        className: props.className,
-        onSeek: seekToBeat,
-        onPlayingChange: useLatestCallback(playback.onPlayingChange),
-        playLoops: playback.playLoops,
-        onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
-        onNavigate: useLatestCallback(playback.onNavigate),
-        onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
-        zoomFitted: props.zoomFitted,
-        onZoomFittedChange: useLatestCallback(props.onZoomFittedChange),
         onSelectionChange: changeSelection,
         onCreateTrack: createTrack,
         addSelectedMarchers: addMarchersMenu,
@@ -777,6 +768,33 @@ export function Timeline(props: TimelineProps) {
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
         onUnpinStart: useLatestCallback(props.onUnpinStart),
+        holdMarks: props.holdMarks,
+        keepChains: props.keepChains,
+        basicPoints: viewBasicPoints,
+        onRemoveBasicPoint: removeBasicPoint,
+        expertMarks: props.expertMarks,
+    };
+    const commonProps = {
+        model,
+        positionBeat,
+        livePositionBeat,
+        returnBeat,
+        isPlaying: playback.isPlaying,
+        pixelsPerBeat,
+        selectedTarget: props.selectedTarget,
+        className: props.className,
+        onSeek: seekToBeat,
+        onPlayingChange: useLatestCallback(playback.onPlayingChange),
+        playLoops: playback.playLoops,
+        onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
+        onNavigate: useLatestCallback(playback.onNavigate),
+        onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
+        zoomFitted: props.zoomFitted,
+        onZoomFittedChange: useLatestCallback(props.onZoomFittedChange),
+        // Read-only (Visuals mode): page boxes still select, to go to their page
+        ...(readOnly
+            ? { readOnly, onSelectionChange: changeSelection }
+            : editing),
         loop: viewLoop,
         onLoopChange: changeLoop,
         transportSecondary: props.transportSecondary,
@@ -784,11 +802,7 @@ export function Timeline(props: TimelineProps) {
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,
-        holdMarks: props.holdMarks,
-        keepChains: props.keepChains,
-        basicPoints: viewBasicPoints,
-        onRemoveBasicPoint: removeBasicPoint,
-        expertMarks: props.expertMarks,
+        band: props.band,
     };
 
     return props.mode === "basic" ? (

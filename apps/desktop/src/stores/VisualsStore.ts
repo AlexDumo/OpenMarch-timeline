@@ -51,9 +51,6 @@ interface VisualsState {
     /** The copied cues, for pasting onto any who on the same channel. */
     clipboard: VisualsClipboard | null;
     setClipboard(clipboard: VisualsClipboard): void;
-    /** Whether the timeline's cue band is folded to its title. */
-    bandCollapsed: boolean;
-    toggleBandCollapsed(): void;
 }
 
 export const useVisualsStore = create<VisualsState>((set) => ({
@@ -83,7 +80,4 @@ export const useVisualsStore = create<VisualsState>((set) => ({
     clearSelectedCues: () => set({ selectedCueIds: [] }),
     clipboard: null,
     setClipboard: (clipboard) => set({ clipboard }),
-    bandCollapsed: false,
-    toggleBandCollapsed: () =>
-        set((state) => ({ bandCollapsed: !state.bandCollapsed })),
 }));

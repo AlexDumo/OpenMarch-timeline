@@ -195,6 +195,8 @@ export class FieldEditor {
     private lineTool: LineTool | null = null;
     /** A right press during the line tool, until its release: a click clears the line. */
     private rightPress: FieldPointer | null = null;
+    /** Presses only select: nothing moves, scales, rotates or draws a line ({@link setReadOnly}). */
+    private readOnly = false;
     private readonly listeners = new Set<() => void>();
     private readonly now: () => number;
     private readonly areaPorts: AreaPorts;
@@ -377,6 +379,7 @@ export class FieldEditor {
             this.emit();
             return;
         }
+        if (this.readOnly) return;
         this.cancelGesture();
         this.press = null;
         this.lastClick = null;
@@ -417,9 +420,36 @@ export class FieldEditor {
             : null;
     }
 
-    /** Whether the selection can be scaled and rotated: two or more marchers drawn. */
+    /** Whether the selection can be scaled and rotated: two or more marchers drawn, and not read-only. */
     canTransform(): boolean {
-        return this.drawnPositions(this.ports.selection.get()).length >= 2;
+        return (
+            !this.readOnly &&
+            this.drawnPositions(this.ports.selection.get()).length >= 2
+        );
+    }
+
+    /**
+     * Turns read-only on or off (Visuals mode, performer-behavior.md
+     * section 7.1, where the selection is who a cue is for): clicks, the
+     * marquee and the lasso still select, but nothing is dragged, scaled,
+     * rotated or lined up, and the selection box has no handles. Turning it
+     * on ends any drag, line and typed rotation without saving them.
+     */
+    setReadOnly(readOnly: boolean): void {
+        if (readOnly === this.readOnly) return;
+        if (readOnly) {
+            this.cancelGesture();
+            this.press = null;
+            this.cancelRotation();
+            this.lineTool = null;
+        }
+        this.readOnly = readOnly;
+        this.emit();
+    }
+
+    /** Whether presses only select ({@link setReadOnly}). */
+    isReadOnly(): boolean {
+        return this.readOnly;
     }
 
     /** The rotation typed into the inspector and not yet saved, in degrees; 0 with none. */
@@ -443,7 +473,7 @@ export class FieldEditor {
      * from where that drop is drawn, and is dropped if that drop is refused.
      */
     rotateSelection(degrees: number): void {
-        if (this.gesture || this.lineTool) return;
+        if (this.gesture || this.lineTool || this.readOnly) return;
         if (!this.typed) {
             const starts = this.drawnPositions(this.ports.selection.get());
             const box = boundsOf(starts);
@@ -519,6 +549,9 @@ export class FieldEditor {
      */
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     protected startDrag(press: FieldPress, pointer: FieldPointer) {
+        // Read-only: a drag from empty field still draws a marquee or lasso; from a marcher, nothing
+        if (this.readOnly)
+            return press.hit === null ? this.startArea(press) : null;
         return (
             this.startTransform(press) ??
             this.startMove(press) ??
@@ -555,8 +588,9 @@ export class FieldEditor {
         return { box, pad: this.ports.selectionBoxPadding?.() ?? 0, angle: 0 };
     }
 
-    /** The handle of the selection box at `point`, or null. */
+    /** The handle of the selection box at `point`, or null; none while read-only. */
     private handleAt(point: FieldPoint): HandleId | null {
+        if (this.readOnly) return null;
         const frame = this.selectionFrame();
         if (!frame) return null;
         const zoom = this.ports.zoom();

@@ -245,3 +245,39 @@ Nothing yet.
   editor's `takePress`, which now gets the press (field coordinates, the
   dots' space). Step 8 is complete; step 9 (retiring the 3D window's horn
   and guard toggles) is next.
+
+### 2026-10-17 · Trevor (3d/visuals-workspace) · C3.3 workspace
+
+- **Owner decision:** "All of these needs to be behind a ui like lighting.
+  Where it is a deeper editing experience separate from the normal 2d
+  editing of the timeline." Recorded in performer-behavior.md section 7.1;
+  it replaces "below Alex's clip rows".
+- **Built:** Visuals mode's own timeline (`VisualsTimeline`, through
+  `TimelineNavigationPanel`): the drill timeline (`Timeline`) with a
+  `readOnly` flag and a `band` prop. Read-only drops the clips and every
+  drill edit (window, start pin, **+**, page flag grips, move menus, range
+  menu, double-click isolation, clip moves and resizes) and draws no
+  Ctrl+drag range; page boxes still select, to go to their page, and the
+  ruler and the surface scrub. The cue band is its lanes, drawn under the
+  waveform where clip rows go, always open (the fold is gone) with taller
+  rows; the timeline scrolls when they're tall. `TimelineBand` is now a
+  prop's type, not a context: the Editor's timeline never gets a band and
+  is as on `timeline/main`.
+- **The field only selects in Visuals:** `FieldEditor.setReadOnly`, on
+  while Visuals shows. Clicks, the marquee and the lasso select; a drag
+  from a marcher does nothing, the selection box has no handles, and the
+  line tool and typed rotations are refused (any in progress end unsaved).
+  The field point pick (`takeFieldPress`) runs first, as before.
+- **Shortcuts:** `isActionOffInWorkspace` turns the drill edits off in
+  Visuals mode (movement, alignment, batch edit, cursor and shape actions,
+  and K), from a key, the palette or a button; selection, playback, page
+  navigation, view and undo stay. Entering Visuals ends any alignment
+  event.
+- **Reads as its own mode:** `<main>` gets an accent gradient tint (theme
+  tokens) and `data-workspace`. The switch stays top right; Basic has no
+  Visuals mode, as before.
+- **Tests:** `TimelineReadOnly.test.tsx`, `workspaceActions.test.ts`,
+  read-only cases in `fieldEditor.test.ts`; `visuals-mode.spec.mts` checks
+  Visuals' timeline has no clips, + or window, page boxes go to their page,
+  a drag and the arrows move no one while click and marquee select, and
+  the Editor has its clips and drags back.

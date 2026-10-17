@@ -76,6 +76,8 @@ import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useBasicLocksStore } from "@/timeline/basicLocks";
 import { useBasicPoints } from "./useBasicPoints";
 import type Page from "@/global/classes/Page";
+import type Beat from "@/global/classes/Beat";
+import type { TimelineBand } from "./TimelineBand";
 
 const NO_WAVEFORM = { peaksByBeat: [] };
 const NO_CLIPS: TimelineInput[] = [];
@@ -128,6 +130,80 @@ const LOOP_BUTTONS = (
 const SPEED_BUTTON = <TimelineSpeedButton />;
 const COMPACT_BUTTON = <TimelineCompactButton />;
 
+/**
+ * UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis. Hidden
+ * in settings, the lane goes away as it does with no audio.
+ */
+function useTimelineWaveformLane(beats: readonly Beat[], basic: boolean) {
+    const envelope = useAudioEnvelopeStore((s) => s.envelope);
+    const waveformHidden = useUiSettingsStore(
+        (s) => s.uiSettings.timelineWaveformStyle === "hidden",
+    );
+    return useMemo(() => {
+        if (!envelope || waveformHidden) return null;
+        const peaks = peaksByBeat(
+            envelope,
+            beats,
+            createTimelineBeatAxis(beats).offset,
+        );
+        // A show with no audio plays a silent placeholder: nothing to draw, so in Basic, where the
+        // lane sets the pane's height, it counts as no waveform (UI-19)
+        if (basic && !peaks.some((beat) => beat.some((peak) => peak > 0)))
+            return null;
+        return { peaksByBeat: peaks };
+    }, [envelope, beats, waveformHidden, basic]);
+}
+
+/**
+ * The timeline as a ruler for someone else's lanes (Visuals mode, performer-behavior.md section
+ * 7.1): the same pages, measures, waveform, playhead, transport and zoom as the drill timeline,
+ * read-only (`TimelineProps.readOnly`), with `band` in place of the clip rows. Always expanded.
+ */
+export function TimelineNavigationPanel({ band }: { band: TimelineBand }) {
+    const { beats, pages, measures } = useTimingObjects()!;
+    const waveform = useTimelineWaveformLane(beats, false);
+    const { isPlaying } = useIsPlaying()!;
+    // A page box or home goes to that page, as in the drill timeline (UI-9), without the loop
+    const goTo = (next: TimelineSelection) => {
+        if (isPlaying && next?.kind === "home") {
+            jumpTimelinePlayback(beats, 0);
+            return;
+        }
+        if (isPlaying) return;
+        const store = useTimelineSelectionStore.getState();
+        if (next?.kind === "home") store.selectHome();
+        else if (next?.kind === "range")
+            store.selectRange(
+                next.range.startBeatIndex,
+                next.range.endBeatIndex,
+            );
+    };
+    const zoomFitted = useUiSettingsStore(
+        (s) => s.uiSettings.timelineZoomFitted,
+    );
+    const setZoomFitted = useUiSettingsStore((s) => s.setTimelineZoomFitted);
+    return (
+        <TimelineWaveformProvider waveform={waveform ?? NO_WAVEFORM}>
+            <PlayingTimeline
+                mode="expanded"
+                readOnly
+                band={band}
+                showTransport
+                zoomFitted={zoomFitted}
+                onZoomFittedChange={setZoomFitted}
+                className="w-full"
+                beats={beats}
+                pages={pages}
+                measures={measures}
+                timelines={NO_CLIPS}
+                transportAccessories={LOOP_BUTTONS}
+                transportSecondary={SOUND_BUTTON}
+                onSelectionChange={goTo}
+            />
+        </TimelineWaveformProvider>
+    );
+}
+
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
 export const toTimelineSelection = (
     selection: TimelineEditSelection,
@@ -169,25 +245,7 @@ export default function TimelineModePanel() {
     const basic = useIsBasicMode();
     const basicExtras = useBasicTimelineExtras(pages);
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
-    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis. Hidden
-    // in settings, the lane goes away as it does with no audio.
-    const envelope = useAudioEnvelopeStore((s) => s.envelope);
-    const waveformHidden = useUiSettingsStore(
-        (s) => s.uiSettings.timelineWaveformStyle === "hidden",
-    );
-    const waveform = useMemo(() => {
-        if (!envelope || waveformHidden) return null;
-        const peaks = peaksByBeat(
-            envelope,
-            beats,
-            createTimelineBeatAxis(beats).offset,
-        );
-        // A show with no audio plays a silent placeholder: nothing to draw, so in Basic, where the
-        // lane sets the pane's height, it counts as no waveform (UI-19)
-        if (basic && !peaks.some((beat) => beat.some((peak) => peak > 0)))
-            return null;
-        return { peaksByBeat: peaks };
-    }, [envelope, beats, waveformHidden, basic]);
+    const waveform = useTimelineWaveformLane(beats, basic);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );

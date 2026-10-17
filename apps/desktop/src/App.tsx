@@ -259,7 +259,15 @@ function App() {
                 {process.env.NODE_ENV !== "production" && (
                     <ReactQueryDevtools initialIsOpen={false} />
                 )}
-                <main className="bg-bg-1 text-text outline-accent flex h-screen min-h-0 w-screen min-w-0 flex-col overflow-hidden font-sans">
+                <main
+                    data-workspace={visuals ? "visuals" : "editor"}
+                    className={clsx(
+                        "bg-bg-1 text-text outline-accent relative flex h-screen min-h-0 w-screen min-w-0 flex-col overflow-hidden font-sans",
+                        // Visuals mode is its own workspace (performer-behavior.md 7.1): a tint says so
+                        visuals &&
+                            "before:to-accent/10 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-linear-to-b before:from-transparent",
+                    )}
+                >
                     {analyticsConsent === null &&
                         !isCodegen &&
                         !welcomeFlowAsksAnalytics && (
