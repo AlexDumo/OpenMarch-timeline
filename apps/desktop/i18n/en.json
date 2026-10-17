@@ -2225,9 +2225,6 @@
             "qualityAutoLowered": "Switched to Low because the view was stuttering. Choose High to keep full quality.",
             "pauseWhenIdle": "Pause drawing when nothing moves",
             "saveOnBattery": "Save power on battery",
-            "previewSection": "Preview only",
-            "previewHint": "Not saved. These change only what this window draws; in the show, cues decide. Set them back to Follow cues to see the show.",
-            "followCues": "Follow cues",
             "hornState": "Horn state",
             "hornStateMode": {
                 "up": "Up",
@@ -2251,6 +2248,9 @@
             },
             "stepOffFootHint": "The performer's own foot, whichever way they face. Facing you, their left foot is on your right. Follow cues steps off on the show's saved foot ({foot}), or the foot a Feet cue sets.",
             "keysSection": "Keyboard and mouse",
+            "previewSection": "Preview only",
+            "previewHint": "Not saved. These change only what this window draws; in the show, cues decide. Set them back to Follow cues to see the show.",
+            "followCues": "Follow cues",
             "uniforms": "Band uniform",
             "guardUniforms": "Guard uniform"
         },

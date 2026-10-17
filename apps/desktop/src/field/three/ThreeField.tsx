@@ -49,6 +49,8 @@ import {
 } from "@/field/fieldQuality";
 import { FieldEditor } from "@/field/editor/fieldEditor";
 import { ruledMove } from "@/field/editor/moveRules";
+import { VisualsFieldEditor } from "@/field/editor/visualsFieldEditor";
+import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
 import { publishLinePreviews, useFieldLineTool } from "@/field/fieldLineTool";
@@ -93,7 +95,6 @@ import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
 import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
-import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -310,7 +311,7 @@ function ThreeFieldView() {
 
     const editor = useMemo(
         () =>
-            new FieldEditor(
+            new VisualsFieldEditor(
                 {
                     selection: {
                         get: () => selection.current,
@@ -372,15 +373,15 @@ function ThreeFieldView() {
         setActiveFieldEditor(editor);
         return () => setActiveFieldEditor(null);
     }, [editor]);
+    // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1)
+    const visuals = useIsVisualsView();
+    useEffect(() => editor.setReadOnly(visuals), [editor, visuals]);
     // A rotation typed into the inspector belongs to its selection and page:
     // when either changes before it's saved, it's dropped (#198)
     useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
     useFieldLineTool(editor);
-    // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1)
-    const visuals = useIsVisualsView();
-    useEffect(() => editor.setReadOnly(visuals), [editor, visuals]);
     // A finished line follows its marchers to another page
     useEffect(
         () => marchers.subscribe(() => editor.refreshLineTool()),
@@ -448,8 +449,7 @@ function ThreeFieldView() {
             data-testid="threeField"
         >
             <TimelineIsolationBar />
-            {/* What a drop edits: nothing drops in Visuals mode */}
-            {!visuals && <TimelineFromStartBadge />}
+            <TimelineFromStartBadge />
             <FieldBenchmark
                 frames={benchFrames}
                 view={benchView}

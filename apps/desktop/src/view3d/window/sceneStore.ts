@@ -60,12 +60,10 @@ import {
     saveQualityMode,
     type QualityMode,
 } from "./qualityPreference";
-import type {
-    GuardEquipmentOverride,
-    HornOverride,
-    StepOffFootOverride,
-} from "./performers/previewOverrides";
+import type { HoldState } from "./hornState";
+import type { GuardModelId } from "@/view3d/core/instruments/model";
 import { loadPowerPrefs, savePowerPrefs, type PowerPrefs } from "./drawPolicy";
+import type { StepOffFoot } from "./performers/marchers/marcherBodies";
 
 /** People within this many meters of a seat camera are hidden (ui.md UI-3). */
 export const CROWD_CLEAR_RADIUS = 4.9;
@@ -83,12 +81,12 @@ export interface View3dSceneState {
     lighting: LightingPreset | null;
     quality: View3dQuality;
     setQuality: (quality: View3dQuality) => void;
-    hornState: HornOverride;
-    setHornState: (state: HornOverride) => void;
-    guardEquipment: GuardEquipmentOverride;
-    setGuardEquipment: (equipment: GuardEquipmentOverride) => void;
-    stepOffFoot: StepOffFootOverride;
-    setStepOffFoot: (foot: StepOffFootOverride) => void;
+    hornState: HoldState | null;
+    setHornState: (state: HoldState | null) => void;
+    guardEquipment: GuardModelId | null;
+    setGuardEquipment: (equipment: GuardModelId | null) => void;
+    stepOffFoot: StepOffFoot | null;
+    setStepOffFoot: (foot: StepOffFoot | null) => void;
     powerPrefs: PowerPrefs;
     setPowerPrefs: (prefs: PowerPrefs) => void;
     onBattery: boolean;

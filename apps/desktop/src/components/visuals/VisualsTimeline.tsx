@@ -5,7 +5,7 @@
  * its lanes in place of the drill clips.
  */
 import { useMemo } from "react";
-import { TimelineNavigationPanel } from "@/components/timeline/TimelineModePanel";
+import { TimelineNavigationPanel } from "@/components/timeline/TimelineNavigationPanel";
 import { useVisualsData } from "./VisualsProvider";
 import { visualsTimelineBand } from "./VisualsCueBand";
 

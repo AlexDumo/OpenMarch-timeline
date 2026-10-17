@@ -141,6 +141,15 @@ const STOPPED_AT_START: TimelinePlayback = {
  * (`createTimelineBeatAxis`), and converts at this boundary, the selection included.
  */
 export interface TimelineProps {
+    /**
+     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): no clips,
+     * no window, no page flag or move edits, no ranges drawn. Page boxes and home still select
+     * (`onSelectionChange`, to go to that page), and the ruler and the surface scrub. The editing
+     * commands given are ignored
+     */
+    readonly readOnly?: boolean;
+    /** Lanes drawn in place of the clip rows, under the waveform (Visuals mode's cue lanes) */
+    readonly band?: TimelineBand;
     readonly mode: TimelineMode;
     readonly beats: readonly Beat[];
     readonly pages: readonly Page[];
@@ -229,15 +238,6 @@ export interface TimelineProps {
     readonly onRemoveBasicPoint?: (beat: number) => void;
     /** UI-19 Basic: per page id, how many marchers on it use Expert moves */
     readonly expertMarks?: ReadonlyMap<string | number, number>;
-    /**
-     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): no clips,
-     * no window, no page flag or move edits, no ranges drawn. Page boxes and home still select
-     * (`onSelectionChange`, to go to that page), and the ruler and the surface scrub. The editing
-     * commands given are ignored
-     */
-    readonly readOnly?: boolean;
-    /** Lanes drawn in place of the clip rows, under the waveform (Visuals mode's cue lanes) */
-    readonly band?: TimelineBand;
 }
 
 const TimelineWaveformContext = createContext<TimelineWaveform | null>(null);
@@ -373,6 +373,28 @@ export const selectionToSpec = (
         : selection;
 
 const NO_TIMELINES: readonly TimelineInput[] = [];
+
+/** What a read-only timeline leaves out of its variant's props: the window and every edit */
+const READ_ONLY_EDITS = {
+    readOnly: true,
+    selection: undefined,
+    onCreateTrack: undefined,
+    addSelectedMarchers: undefined,
+    moveCommands: undefined,
+    onAddPageFlag: undefined,
+    onAddSubsetPage: undefined,
+    addPageNames: undefined,
+    pageFlagMove: undefined,
+    onOpenRange: undefined,
+    onTimelineRangeCommit: undefined,
+    clipResize: undefined,
+    onUnpinStart: undefined,
+    holdMarks: undefined,
+    keepChains: undefined,
+    basicPoints: undefined,
+    onRemoveBasicPoint: undefined,
+    expertMarks: undefined,
+} as const;
 
 export function Timeline(props: TimelineProps) {
     const { readOnly = false } = props;
@@ -754,8 +776,24 @@ export function Timeline(props: TimelineProps) {
             ? (viewBeat: number) => onRemoveBasicPoint(axis.toSpec(viewBeat))
             : undefined,
     );
-    const editing = {
+    const commonProps = {
+        model,
+        positionBeat,
+        livePositionBeat,
+        returnBeat,
+        isPlaying: playback.isPlaying,
+        pixelsPerBeat,
         selection,
+        selectedTarget: props.selectedTarget,
+        className: props.className,
+        onSeek: seekToBeat,
+        onPlayingChange: useLatestCallback(playback.onPlayingChange),
+        playLoops: playback.playLoops,
+        onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
+        onNavigate: useLatestCallback(playback.onNavigate),
+        onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
+        zoomFitted: props.zoomFitted,
+        onZoomFittedChange: useLatestCallback(props.onZoomFittedChange),
         onSelectionChange: changeSelection,
         onCreateTrack: createTrack,
         addSelectedMarchers: addMarchersMenu,
@@ -768,33 +806,6 @@ export function Timeline(props: TimelineProps) {
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
         onUnpinStart: useLatestCallback(props.onUnpinStart),
-        holdMarks: props.holdMarks,
-        keepChains: props.keepChains,
-        basicPoints: viewBasicPoints,
-        onRemoveBasicPoint: removeBasicPoint,
-        expertMarks: props.expertMarks,
-    };
-    const commonProps = {
-        model,
-        positionBeat,
-        livePositionBeat,
-        returnBeat,
-        isPlaying: playback.isPlaying,
-        pixelsPerBeat,
-        selectedTarget: props.selectedTarget,
-        className: props.className,
-        onSeek: seekToBeat,
-        onPlayingChange: useLatestCallback(playback.onPlayingChange),
-        playLoops: playback.playLoops,
-        onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
-        onNavigate: useLatestCallback(playback.onNavigate),
-        onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
-        zoomFitted: props.zoomFitted,
-        onZoomFittedChange: useLatestCallback(props.onZoomFittedChange),
-        // Read-only (Visuals mode): page boxes still select, to go to their page
-        ...(readOnly
-            ? { readOnly, onSelectionChange: changeSelection }
-            : editing),
         loop: viewLoop,
         onLoopChange: changeLoop,
         transportSecondary: props.transportSecondary,
@@ -802,15 +813,24 @@ export function Timeline(props: TimelineProps) {
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,
-        band: props.band,
+        holdMarks: props.holdMarks,
+        keepChains: props.keepChains,
+        basicPoints: viewBasicPoints,
+        onRemoveBasicPoint: removeBasicPoint,
+        expertMarks: props.expertMarks,
     };
 
+    // Read-only (Visuals mode): no window and no edits; page boxes still select, to go to their page
+    const shownProps = readOnly
+        ? { ...commonProps, ...READ_ONLY_EDITS, band: props.band }
+        : { ...commonProps, band: props.band };
+
     return props.mode === "basic" ? (
-        <BasicTimeline {...commonProps} />
+        <BasicTimeline {...shownProps} />
     ) : props.mode === "expanded" ? (
-        <ExpandedTimeline {...commonProps} />
+        <ExpandedTimeline {...shownProps} />
     ) : (
-        <CollapsedTimeline {...commonProps} />
+        <CollapsedTimeline {...shownProps} />
     );
 }
 

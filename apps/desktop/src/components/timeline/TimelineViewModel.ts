@@ -1,7 +1,7 @@
 import type { LabeledHoldMarks } from "./PageHoldMark";
+import type { TimelineBand } from "./TimelineBand";
 import type { PageKeepChains } from "./PageKeepChain";
 import type { TimelineClipResizeCommands } from "./TimelineClipResize";
-import type { TimelineBand } from "./TimelineBand";
 import type { ReactNode } from "react";
 import type {
     TimelineAddMarchersMenu,
@@ -270,6 +270,14 @@ export interface TimelineCommonProps
     readonly showTransport?: boolean;
     /** The playback clock shown in the transport. The app passes its audio clock; stories pass none. */
     readonly transportClock?: ReactNode;
+    /**
+     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): page
+     * boxes select and the ruler seeks, but nothing draws a range. The owner passes no editing
+     * commands
+     */
+    readonly readOnly?: boolean;
+    /** Lanes drawn where the clip rows go, under the waveform (Visuals mode's cue lanes) */
+    readonly band?: TimelineBand;
     /** Extra transport controls, such as volume, the metronome and fullscreen */
     readonly transportAccessories?: ReactNode;
     readonly className?: string;
@@ -298,14 +306,6 @@ export interface TimelineCommonProps
     readonly onRemoveBasicPoint?: (beat: number) => void;
     /** UI-19 Basic: per page id, how many marchers on it use Expert moves (locked in Basic) */
     readonly expertMarks?: ReadonlyMap<string | number, number>;
-    /**
-     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): page
-     * boxes select and the ruler seeks, but nothing draws a range. The owner passes no editing
-     * commands
-     */
-    readonly readOnly?: boolean;
-    /** Lanes drawn where the clip rows go, under the waveform (Visuals mode's cue lanes) */
-    readonly band?: TimelineBand;
 }
 
 /** A mid-page position on a Basic page box (UI-19): its beat and its count in words */

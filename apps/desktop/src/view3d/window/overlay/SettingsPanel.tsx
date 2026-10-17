@@ -94,11 +94,6 @@ export function SettingsPanel({
                 >
                     <QualityRow />
                     <PowerRows />
-                </Section>
-                <Section
-                    title={t("view3d.settings.previewSection")}
-                    hint={t("view3d.settings.previewHint")}
-                >
                     <HornStateRow />
                     <GuardEquipmentRow />
                     <StepOffFootRow />
@@ -383,70 +378,34 @@ function PowerRows() {
     );
 }
 
-/** "Follow cues", the segmented controls' value for no preview override. */
-const FOLLOW = "follow";
-type Follow = typeof FOLLOW;
-
-/**
- * A preview override's control: "Follow cues" (null, the start) or one of
- * `values`. Window state only, never saved (performer-behavior.md 7.5).
- */
-function PreviewRow<T extends string>({
-    name,
-    value,
-    values,
-    onChange,
-    testId,
-    className,
-    hint,
-}: {
-    /** `view3d.settings.<name>`, `<name>Mode.<value>` and `<name>Hint`. */
-    name: "hornState" | "guardEquipment" | "stepOffFoot";
-    value: T | null;
-    values: readonly T[];
-    onChange: (value: T | null) => void;
-    testId: string;
-    className?: string;
-    /** In place of `<name>Hint`. */
-    hint?: string;
-}) {
-    const { t } = useTranslate();
-    const label = t(`view3d.settings.${name}`);
-    return (
-        <Row label={label} stacked>
-            <Segmented<T | Follow>
-                value={value ?? FOLLOW}
-                options={[
-                    { value: FOLLOW, label: t("view3d.settings.followCues") },
-                    ...values.map((v) => ({
-                        value: v,
-                        label: t(`view3d.settings.${name}Mode.${v}`),
-                    })),
-                ]}
-                onChange={(next) => onChange(next === FOLLOW ? null : next)}
-                label={label}
-                testId={testId}
-                className={className}
-            />
-            <p className="text-sub text-text/60">
-                {hint ?? t(`view3d.settings.${name}Hint`)}
-            </p>
-        </Row>
-    );
-}
-
-/** Which hold every carrier plays, to check the poses; off, the cues decide. */
+/** Which hold the brass plays: a test control until per-page horn states exist. */
 function HornStateRow() {
+    // Every carrier in one hold, to check the poses; "Follow cues", the Horn cues decide.
+    // The first of the preview rows, so it heads them
+    const { t } = useTranslate();
     const state = useView3dSceneStore((s) => s.hornState);
     const setState = useView3dSceneStore((s) => s.setHornState);
     return (
-        <PreviewRow
-            name="hornState"
-            value={state}
-            values={HOLD_STATES}
-            onChange={setState}
-            testId="view3d-horn-state-picker"
-        />
+        <>
+            <div
+                className="border-stroke flex flex-col gap-2 border-t pt-8"
+                data-testid="view3d-preview-section"
+            >
+                <h3 className="text-sub text-text/60 font-mono tracking-wide uppercase">
+                    {t("view3d.settings.previewSection")}
+                </h3>
+                <p className="text-sub text-text/60">
+                    {t("view3d.settings.previewHint")}
+                </p>
+            </div>
+            <PreviewRow
+                name="hornState"
+                value={state}
+                values={HOLD_STATES}
+                onChange={setState}
+                testId="view3d-horn-state-picker"
+            />
+        </>
     );
 }
 
@@ -522,5 +481,57 @@ function ShortcutList() {
                 </div>
             ))}
         </dl>
+    );
+}
+
+/** "Follow cues", the segmented controls' value for no preview override. */
+const FOLLOW = "follow";
+type Follow = typeof FOLLOW;
+
+/**
+ * A preview override's control: "Follow cues" (null, the start) or one of
+ * `values`. Window state only, never saved (performer-behavior.md 7.5).
+ */
+function PreviewRow<T extends string>({
+    name,
+    value,
+    values,
+    onChange,
+    testId,
+    className,
+    hint,
+}: {
+    /** `view3d.settings.<name>`, `<name>Mode.<value>` and `<name>Hint`. */
+    name: "hornState" | "guardEquipment" | "stepOffFoot";
+    value: T | null;
+    values: readonly T[];
+    onChange: (value: T | null) => void;
+    testId: string;
+    className?: string;
+    /** In place of `<name>Hint`. */
+    hint?: string;
+}) {
+    const { t } = useTranslate();
+    const label = t(`view3d.settings.${name}`);
+    return (
+        <Row label={label} stacked>
+            <Segmented<T | Follow>
+                value={value ?? FOLLOW}
+                options={[
+                    { value: FOLLOW, label: t("view3d.settings.followCues") },
+                    ...values.map((v) => ({
+                        value: v,
+                        label: t(`view3d.settings.${name}Mode.${v}`),
+                    })),
+                ]}
+                onChange={(next) => onChange(next === FOLLOW ? null : next)}
+                label={label}
+                testId={testId}
+                className={className}
+            />
+            <p className="text-sub text-text/60">
+                {hint ?? t(`view3d.settings.${name}Hint`)}
+            </p>
+        </Row>
     );
 }

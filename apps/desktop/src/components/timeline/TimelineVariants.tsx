@@ -684,21 +684,20 @@ const TimelineSurface = memo(function TimelineSurface({
             ? basicAudioTop + basicWaveformHeight + 4
             : basicAudioTop
         : rowsLayout.trackTop;
-    // Lanes in place of the clip rows (Visuals mode's cue lanes, performer-behavior.md 7.1)
-    const band = basic ? undefined : props.band;
     const timelineHeight = basic
         ? TIMELINE_PAGE_ROW_BOTTOM + basicBodyHeight
-        : band
-          ? trackTop + band.height
-          : rowsLayout.timelineHeight;
+        : rowsLayout.timelineHeight;
     // The pane can be taller than the tracks (the splitter): the grid, page lines and playhead
     // fill it, the track rows keep their height. Only a pane with its own height: a fitted pane
     // is as tall as the surface (`TimelinePaneStretchContext`)
     const viewportHeight = useElementHeight(viewportRef);
     const stretch = useContext(TimelinePaneStretchContext);
+    // Lanes in place of the clip rows (Visuals mode's cue lanes, performer-behavior.md 7.1)
+    const band = basic ? undefined : props.band;
+    const contentHeight = band ? trackTop + band.height : timelineHeight;
     const surfaceHeight = stretch
-        ? Math.max(timelineHeight, viewportHeight)
-        : timelineHeight;
+        ? Math.max(contentHeight, viewportHeight)
+        : contentHeight;
     // The ruler, measure row and the layers spanning the pane stay pinned at the viewport's top
     // while the tracks scroll under them, so they are as tall as the visible pane
     const pinnedHeight =

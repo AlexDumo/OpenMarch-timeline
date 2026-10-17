@@ -325,3 +325,23 @@ Tests: `performers/__test__/previewOverrides.test.ts`. No e2e covered
 these controls. Open: the Carry, Silk and Uniform channels aren't read by
 the window yet, so with Follow cues a guard section's piece is still its
 section's usual one, not a Carry cue's (C3.5 and on).
+
+### 2026-10-17 · Trevor (3d/visuals-workspace) · kept clear of the open PRs
+
+Reworked so the branch merges cleanly with every open PR on the fork,
+including Alex's shape modes (#288, #181), tempo (#280, #182) and split
+move (#266), the C2 props stack and #290's graphics settings:
+
+- **Field:** read-only and the field point pick moved out of
+  `FieldEditor` into `field/editor/visualsFieldEditor.ts`, a subclass built
+  on the editor's ports and public methods (its drop refuses and its live
+  preview draws nothing while read-only). `fieldEditor.ts`,
+  `selectionFrame.ts` and `takeFieldPress.ts` are as on main. Left over:
+  the selection box and its handles still draw in Visuals mode, inert;
+  hide them once #288's modes land (`ownsSelectionBox`).
+- **Timeline:** `TimelineNavigationPanel` has its own file; the drill
+  panel only exports `PlayingTimeline`. `Timeline` adds the read-only
+  overrides after its common props instead of splitting them.
+- **3D window:** the preview rows stay in the Graphics section, headed
+  "Preview only" by the first of them, until #290 moves the quality rows
+  out.

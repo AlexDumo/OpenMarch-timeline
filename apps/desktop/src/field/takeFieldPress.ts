@@ -1,6 +1,4 @@
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import type { FieldPointer } from "./editor/fieldEditor";
-import { takeFieldPoint } from "./fieldPointPick";
 
 /**
  * Whether the app takes an edit press on the field for itself, so the
@@ -13,12 +11,8 @@ import { takeFieldPoint } from "./fieldPointPick";
  *
  * The line tool's presses are the editor's own (`FieldEditor.setLineTool`,
  * #203), and select no marcher.
- *
- * A press while something asks for a field point (`requestFieldPoint`, a
- * Facing cue toward a point) is that point, and nothing more.
  */
-export function takeFieldPress(pointer?: FieldPointer): boolean {
-    if (pointer && takeFieldPoint(pointer.field)) return true;
+export function takeFieldPress(): boolean {
     const timeline = useTimelineSelectionStore.getState();
     if (timeline.cursorBeat === null || timeline.playback !== null)
         return false;
