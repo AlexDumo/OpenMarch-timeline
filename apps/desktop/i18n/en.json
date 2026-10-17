@@ -2402,5 +2402,31 @@
             "seconds": "seconds"
         },
         "unsavedChanges": "You have unsaved changes"
+    },
+    "visuals": {
+        "workspace": {
+            "label": "Workspace",
+            "editor": "Editor",
+            "visuals": "Visuals"
+        },
+        "channels": {
+            "feet": "Feet",
+            "horn": "Horn",
+            "equipment": "Equipment",
+            "hornEquipment": "Horn / Equipment",
+            "facing": "Facing",
+            "body": "Body"
+        },
+        "inspector": {
+            "title": "Visuals",
+            "who": "Who",
+            "band": "Band",
+            "selection": "Selection",
+            "selectionCount": "{count, plural, =0 {Nothing selected} one {# selected} other {# selected}}",
+            "sections": "Sections",
+            "tags": "Tags",
+            "clearFocus": "Clear focus",
+            "focusHint": "Click a who to focus it. Everyone else dims on the field."
+        }
     }
 }

@@ -64,8 +64,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C3.3: ADR 0004 step 8 merged (Visuals mode)
 
-- Owner: human
-- Status: open
+- Owner: Trevor (3d/visuals-mode)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: —
@@ -183,3 +183,25 @@ Nothing yet.
 - 2026-10-12, lead: `3d-async` merged into `main` (PR #129, `dc38f1a1`) and
   was deleted, so the C3.1 to C3.3 trackers now track `main`: each is done
   when its ADR 0004 step is merged into `main`.
+
+### 2026-10-16 · Trevor (3d/visuals-mode) · C3.3
+
+- **Claimed:** ADR 0004 step 8, built as a stack of PRs off `main`, each
+  merging `main` in as it moves:
+  1. V1, this branch: the Editor / Visuals workspace switch (top right of
+     the toolbar; not in Basic), one tab per behavior channel with its cue
+     count (Horn/Equipment names itself by the focused who), and the Who
+     list in the inspector (band, sections, tags, the selection). Focusing
+     a who dims everyone else on the field through `FieldDimming`, ahead of
+     a timeline isolation; dimmed marchers stay selectable.
+  2. V2: the cue band under the timeline's clip rows: the editable lane,
+     the read-only rows and the result row, with add, move and length
+     gestures and count snapping.
+  3. V3: the inspector's selected-cue settings and the why readout
+     (`traceCue`).
+  4. V4: copy and paste, clash and take-over flags on the lanes, the ramp
+     drag, the facing wheel and picking a field point.
+- **Not yet:** hand-picked groups in the Who list ("Marchers in this
+  move"), and hover highlighting on the field (the field has no hover
+  highlight yet). The workspace view isn't saved; every session opens in
+  the Editor.

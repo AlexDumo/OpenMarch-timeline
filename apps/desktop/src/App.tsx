@@ -1,6 +1,8 @@
 import { threeZoomControls } from "@/field/three/fieldNavigation";
 import Toolbar from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
+import VisualsInspector from "@/components/visuals/VisualsInspector";
+import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import SidebarModal from "@/components/sidebar/SidebarModal";
 import { SelectedPageProvider } from "@/context/SelectedPageContext";
 import { SelectedMarchersProvider } from "@/context/SelectedMarchersContext";
@@ -94,6 +96,7 @@ function App() {
     );
     const pluginsLoadedRef = useRef(false);
     const { isFullscreen } = useFullscreenStore();
+    const visuals = useIsVisualsView();
 
     // Check if running in codegen mode
     const isCodegen = window.electron.isCodegen;
@@ -326,12 +329,13 @@ function App() {
                                                             timelineFocussedClass,
                                                         )}
                                                     >
-                                                        {!isFullscreen && (
-                                                            <>
-                                                                <Sidebar />
-                                                                <SidebarModal />
-                                                            </>
-                                                        )}
+                                                        {!isFullscreen &&
+                                                            !visuals && (
+                                                                <>
+                                                                    <Sidebar />
+                                                                    <SidebarModal />
+                                                                </>
+                                                            )}
                                                         <Suspense>
                                                             <ThreeField />
                                                         </Suspense>
@@ -356,7 +360,11 @@ function App() {
                                                             timelineFocussedClass
                                                         }
                                                     >
-                                                        <Inspector />
+                                                        {visuals ? (
+                                                            <VisualsInspector />
+                                                        ) : (
+                                                            <Inspector />
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
