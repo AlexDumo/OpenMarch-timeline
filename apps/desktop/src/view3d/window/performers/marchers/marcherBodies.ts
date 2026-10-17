@@ -1,9 +1,12 @@
 /**
  * The 3D View's marchers drawn with the instanced renderer (ADR 0002 D-7,
- * performer-behavior.md section 8.3): one `InstancedMesh` per (body type,
- * `bodyKey`), skinned from the composer's texture, which composes each
- * performer's channels once a frame from the per-channel bake.
+ * performer-behavior.md section 8.3): one `InstancedMesh` per body type,
+ * skinned from the composer's texture, which composes each performer's
+ * channels once a frame from the per-channel bake.
  *
+ * - Every look shares one material: each instance reads its look's palette,
+ *   style and options from the look texture (`render/lookTexture.ts`,
+ *   package C4.3), so more uniforms add no draws.
  * - `high` quality draws the seven v4u bodies; `low` draws om-pose's block
  *   bodies (264 triangles against 1,796), which play the same clips.
  * - A look that carries an instrument gets a second `InstancedMesh` over
@@ -34,8 +37,9 @@ import {
 } from "@/view3d/render/composer";
 import type { ChannelPlay, FeetPlay } from "@/view3d/render/channelState";
 import { createUniformMaterial } from "@/view3d/render/uniform-shader.js";
+import { LookTexture, perLookUniforms } from "@/view3d/render/lookTexture";
 import {
-    bodyKey,
+    BODY_TYPES,
     partVisible,
     type BodyType,
     type PerformerBody,
@@ -81,43 +85,16 @@ function contactAlpha(size = 64): THREE.DataTexture {
     return t;
 }
 
-/** The uniform shader's glove line (`render/uniform-shader.js`). */
-export const GLOVE_LINE = "if (part == 5) return uGloves;";
-/** The per-instance skin tone, as `composedSkinning` declares it. */
-const BARE_HAND_LINE = "if (part == 5) return vSkinTone;";
-
 /**
- * Patches a material from `composedSkinning` so its hands (the gloves part)
- * show each instance's skin tone instead of the glove color: a look without
- * gloves. Call it after `composedSkinning`, which declares `vSkinTone`.
- */
-export function bareHands(material: THREE.Material): THREE.Material {
-    const base = material.onBeforeCompile;
-    const key = material.customProgramCacheKey();
-    material.onBeforeCompile = (shader, renderer) => {
-        base.call(material, shader, renderer);
-        if (!shader.fragmentShader.includes(GLOVE_LINE))
-            console.warn(
-                "bareHands: uniform shader's glove line not found; the hands keep the glove color",
-            );
-        shader.fragmentShader = shader.fragmentShader.replace(
-            GLOVE_LINE,
-            BARE_HAND_LINE,
-        );
-    };
-    material.customProgramCacheKey = () => key + "|bare-hands";
-    return material;
-}
-
-/**
- * The source's triangles that a look shows: parts the look doesn't wear
- * (other instruments, the aussie hat, the cape, the shako on guard) are
- * left out of the draw instead of skinned and then discarded. Every v4u
- * triangle belongs to one part, so this draws exactly what the shader would.
+ * The source's triangles that some look in a set shows: parts none of them
+ * wear (the placeholder instruments, the aussie hat, the cape, the shako
+ * when only the guard is drawn) are left out of the draw instead of skinned
+ * and then discarded. A part only some looks wear stays, and the shader
+ * discards it per instance. Every v4u triangle belongs to one part.
  */
 export function visibleIndex(
     source: THREE.BufferGeometry,
-    look: UniformLook,
+    looks: readonly UniformLook[],
 ): THREE.BufferAttribute | null {
     const index = source.index;
     const part = source.getAttribute("_part");
@@ -125,7 +102,8 @@ export function visibleIndex(
     const keep: number[] = [];
     for (let t = 0; t < index.count; t += 3) {
         const a = index.getX(t);
-        if (partVisible(look, Math.round(part.getX(a))))
+        const p = Math.round(part.getX(a));
+        if (looks.some((look) => partVisible(look, p)))
             keep.push(a, index.getX(t + 1), index.getX(t + 2));
     }
     if (keep.length === index.count) return null;
@@ -291,6 +269,8 @@ export class MarcherBodies {
     readonly bake: ChannelBake;
     /** Composes every slot's channels each frame; bodies and instruments skin from it. */
     readonly composer: Composer;
+    /** Every look's row, read by the one body material. */
+    readonly looks: LookTexture;
     private readonly entries: MeshEntry[] = [];
     private readonly materials: THREE.Material[] = [];
     /** The instruments, one group per look, near and far detail (`hornSet.ts`). */
@@ -330,47 +310,44 @@ export class MarcherBodies {
             const anyBody = bodies.values().next().value!;
             this.blockSource = blockGeometry(THREE, anyBody.mesh.skeleton);
         }
-        // Group the slots by mesh: (body type, body look) at high, body look
-        // at low. Looks that differ only in what they carry share a mesh.
-        const groups = new Map<
-            string,
-            { type: BodyType; look: UniformLook; slots: number[] }
-        >();
+        // One mesh per body type at high, one in all at low: the looks are
+        // rows of the look texture, read per instance.
+        this.looks = new LookTexture(looks.map((l) => l.uniform));
+        const groups = new Map<BodyType, { type: BodyType; slots: number[] }>();
         looks.forEach((l, i) => {
-            const u = bodyKey(l.uniform);
-            const key = quality === "low" ? u : `${l.body.bodyType}|${u}`;
+            const type = l.body.bodyType;
+            const key = quality === "low" ? BODY_TYPES[0] : type;
             let g = groups.get(key);
             if (!g) {
-                g = { type: l.body.bodyType, look: l.uniform, slots: [] };
+                g = { type, slots: [] };
                 groups.set(key, g);
             }
             g.slots.push(i);
             this.scaleOf[i] = l.body.heightClass;
         });
-        const materialByLook = new Map<string, THREE.Material>();
+        const material = perLookUniforms(
+            composedSkinning(createUniformMaterial(THREE), this.composer),
+            this.looks,
+        );
+        this.materials.push(material);
         for (const g of groups.values()) {
-            const u = bodyKey(g.look);
-            let material = materialByLook.get(u);
-            if (!material) {
-                material = composedSkinning(
-                    createUniformMaterial(THREE, {
-                        style: g.look.style,
-                        colors: g.look.colors,
-                        options: g.look.options,
-                    }),
-                    this.composer,
-                );
-                if (!g.look.options.gloves) bareHands(material);
-                materialByLook.set(u, material);
-                this.materials.push(material);
-            }
-            const { mesh, own } = this.buildMesh(bodies, material, g);
+            const { mesh, own } = this.buildMesh(
+                bodies,
+                material,
+                g,
+                g.slots.map((slot) => looks[slot].uniform),
+            );
+            const aLook = mesh.geometry.getAttribute(
+                "aLook",
+            ) as THREE.InstancedBufferAttribute;
             const entry = this.entries.length;
             g.slots.forEach((slot, k) => {
                 this.meshOf[slot] = entry;
                 this.instanceOf[slot] = k;
                 writeInstance(mesh, k, slot, looks[slot].body.skinTone);
+                aLook.array[k] = this.looks.indexOf(looks[slot].uniform);
             });
+            aLook.needsUpdate = true;
             this.entries.push({ mesh, slots: g.slots, own });
             this.group.add(mesh);
         }
@@ -383,17 +360,25 @@ export class MarcherBodies {
         }
     }
 
-    /** One InstancedMesh for a group of slots sharing a body and a look. */
+    /** One InstancedMesh for a group of slots sharing a body, in `looks`. */
     private buildMesh(
         bodies: ReadonlyMap<BodyType, LoadedBody>,
         material: THREE.Material,
-        g: { type: BodyType; look: UniformLook; slots: number[] },
+        g: { type: BodyType; slots: number[] },
+        looks: readonly UniformLook[],
     ) {
         const source = this.blockSource ?? bodies.get(g.type)!.mesh.geometry;
-        const filtered = this.blockSource ? null : visibleIndex(source, g.look);
+        const filtered = this.blockSource ? null : visibleIndex(source, looks);
         const own: MeshEntry["own"] = filtered ? "index" : "shared";
         const geometry = composedGeometry(source, g.slots.length);
         if (filtered) geometry.setIndex(filtered);
+        geometry.setAttribute(
+            "aLook",
+            new THREE.InstancedBufferAttribute(
+                new Float32Array(g.slots.length),
+                1,
+            ),
+        );
         const mesh = new THREE.InstancedMesh(
             geometry,
             material,
@@ -497,6 +482,7 @@ export class MarcherBodies {
         this.horns?.dispose();
         for (const m of this.materials) m.dispose();
         this.composer.dispose();
+        this.looks.dispose();
         this.blockSource?.dispose();
         this.contact.geometry.dispose();
         const cm = this.contact.material as THREE.MeshBasicMaterial;

@@ -5,22 +5,20 @@ import fs from "node:fs";
 import path from "node:path";
 import type { BufferGeometry, SkinnedMesh } from "three";
 import type * as THREE from "three";
-import { MeshStandardMaterial } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
     bassOptions,
     sectionUniform,
     type BodyType,
+    type UniformLook,
 } from "@/view3d/core/marchers/looks";
 import type { LoadedBody } from "../marchers/marcherAssets";
 import { defaultPerformerBody } from "@/view3d/core/marchers/looks";
 import { mirrorRow } from "@/view3d/core/marchers/planner";
 import {
     MarcherBodies,
-    GLOVE_LINE,
     NO_HOLD,
     bakeForBodies,
-    bareHands,
     clipForBake,
     clipsToLoad,
     slotHoldId,
@@ -475,88 +473,149 @@ describe("stepping off on the right foot", () => {
     });
 });
 
-describe("bare hands", () => {
-    /** Runs a material's shader patch on a stand-in fragment shader. */
-    function compiledFragment(m: THREE.Material): string {
-        const shader = {
-            uniforms: {},
-            vertexShader: "#include <begin_vertex>",
-            fragmentShader: `vec3 uniformColor() {\n  ${GLOVE_LINE}\n}`,
-        };
-        m.onBeforeCompile(
-            shader as unknown as THREE.WebGLProgramParametersWithUniforms,
-            undefined as unknown as THREE.WebGLRenderer,
-        );
-        return shader.fragmentShader;
-    }
+describe("looks from the look texture", () => {
+    const slot = (
+        id: number,
+        uniform: UniformLook,
+        bodyType: BodyType = "neutral-average",
+    ) => ({
+        body: { ...defaultPerformerBody(id), bodyType },
+        uniform,
+    });
 
-    it("gives the hands the instance's skin tone and its own program", async () => {
-        const bodies = await loadedBodies();
-        const clip = await clip8to5();
-        const bake = bakeForBodies(bodies, { "8to5": clip });
-        const look = (id: number, section: string) => ({
-            body: {
-                ...defaultPerformerBody(id),
-                bodyType: "neutral-average" as const,
-            },
-            uniform: sectionUniform(section),
+    /** Sixteen looks that differ in what they draw on the body, carrying nothing. */
+    const sixteen = () =>
+        Array.from({ length: 16 }, (_, i) => {
+            const look = sectionUniform(i % 2 ? "Drum Major" : "Dancer");
+            return {
+                ...look,
+                colors: { ...look.colors, primary: 0x101010 * (i + 1) },
+            };
         });
+
+    const bodyMeshes = (set: MarcherBodies) =>
+        set.group.children.filter((o) =>
+            o.name.startsWith("view3d-marchers-"),
+        ) as THREE.InstancedMesh[];
+
+    it("draws 16 uniform looks with the same calls as one", async () => {
+        const bodies = await loadedBodies();
+        const bake = bakeForBodies(bodies, { "8to5": await clip8to5() });
+        const one = new MarcherBodies(
+            bodies,
+            bake,
+            [slot(1, sectionUniform("Drum Major"))],
+            "high",
+        );
+        const many = new MarcherBodies(
+            bodies,
+            bake,
+            sixteen().map((u, i) => slot(i + 1, u)),
+            "high",
+        );
+        expect(many.looks.count).toBe(16);
+        expect(many.drawCalls).toBe(one.drawCalls);
+        expect(bodyMeshes(many).length).toBe(1);
+        one.dispose();
+        many.dispose();
+    });
+
+    it("points each instance at its look's row", async () => {
+        const bodies = await loadedBodies();
+        const bake = bakeForBodies(bodies, { "8to5": await clip8to5() });
         const set = new MarcherBodies(
             bodies,
             bake,
-            [look(1, "Dancer"), look(2, "Drum Major")],
+            sixteen().map((u, i) => slot(i + 1, u)),
             "high",
         );
-        const materials = set.group.children
-            .filter((o) => o.name.startsWith("view3d-marchers-"))
-            .map((o) => (o as THREE.InstancedMesh).material as THREE.Material);
-        expect(materials.length).toBe(2);
-        const bare = (m: THREE.Material) =>
-            m.customProgramCacheKey().includes("bare-hands");
-        // only the guard look (Dancer) goes without gloves
-        const guard = materials.find(bare)!;
-        const band = materials.find((m) => !bare(m))!;
-        expect(guard).toBeDefined();
-        expect(band).toBeDefined();
-        expect(guard).not.toBe(band);
-        expect(compiledFragment(guard)).toContain(
-            "if (part == 5) return vSkinTone;",
-        );
-        expect(compiledFragment(band)).toContain(GLOVE_LINE);
+        const [mesh] = bodyMeshes(set);
+        const aLook = mesh.geometry.getAttribute("aLook");
+        const aSlot = mesh.geometry.getAttribute("aSlot");
+        const rows = Array.from({ length: 16 }, (_, k) => [
+            aSlot.getX(k),
+            aLook.getX(k),
+        ]);
+        expect(rows).toEqual(Array.from({ length: 16 }, (_, i) => [i, i]));
         set.dispose();
     });
 
-    it("leaves gloved looks alone", () => {
-        const m = new MeshStandardMaterial();
-        m.onBeforeCompile = (shader) => {
-            shader.fragmentShader += "\n// base";
-        };
-        bareHands(m);
-        const out = compiledFragment(m);
-        expect(out).toContain("vSkinTone");
-        expect(out).toContain("// base");
-        expect(m.customProgramCacheKey()).toContain("bare-hands");
+    it("shares one material between gloved and bare-handed looks", async () => {
+        const bodies = await loadedBodies();
+        bodies.set("neutral-slim", bodies.get("neutral-average")!);
+        const bake = bakeForBodies(bodies, { "8to5": await clip8to5() });
+        const set = new MarcherBodies(
+            bodies,
+            bake,
+            [
+                slot(1, sectionUniform("Dancer")),
+                slot(2, sectionUniform("Drum Major")),
+                slot(3, sectionUniform("Trumpet"), "neutral-slim"),
+            ],
+            "high",
+        );
+        const materials = new Set(bodyMeshes(set).map((m) => m.material));
+        expect(materials.size).toBe(1);
+        const [material] = materials as Set<THREE.Material>;
+        expect(material.customProgramCacheKey()).toContain("per-look");
+        set.dispose();
+    });
+
+    it("draws one mesh per body type at high quality and one at low", async () => {
+        const bodies = await loadedBodies();
+        bodies.set("neutral-slim", bodies.get("neutral-average")!);
+        const bake = bakeForBodies(bodies, { "8to5": await clip8to5() });
+        const looks = [
+            slot(1, sectionUniform("Dancer")),
+            slot(2, sectionUniform("Drum Major"), "neutral-slim"),
+            slot(3, sectionUniform("Mellophone")),
+        ];
+        const high = new MarcherBodies(bodies, bake, looks, "high");
+        const low = new MarcherBodies(bodies, bake, looks, "low");
+        expect(bodyMeshes(high).length).toBe(2);
+        expect(bodyMeshes(low).length).toBe(1);
+        high.dispose();
+        low.dispose();
+    });
+
+    it("frees the look texture with the set", async () => {
+        const bodies = await loadedBodies();
+        const bake = bakeForBodies(bodies, { "8to5": await clip8to5() });
+        const set = new MarcherBodies(
+            bodies,
+            bake,
+            [slot(1, sectionUniform("Dancer"))],
+            "high",
+        );
+        const dispose = vi.spyOn(set.looks.texture, "dispose");
+        set.dispose();
+        expect(dispose).toHaveBeenCalledTimes(1);
     });
 });
 
 describe("part-filtered index", () => {
-    it("draws only the parts a look wears", async () => {
+    it("draws only the parts some look in the set wears", async () => {
         const geo = await body();
         expect(geo.index!.count / 3).toBe(1796);
-        const triangles = (section: string) =>
-            visibleIndex(geo, sectionUniform(section))!.count / 3;
+        const triangles = (...sections: string[]) =>
+            visibleIndex(
+                geo,
+                sections.map((s) => sectionUniform(s)),
+            )!.count / 3;
         // no aussie hat (64), no cape (116), no placeholder instruments (360)
         expect(triangles("Trumpet")).toBe(1256);
         // no instrument at all (360)
         expect(triangles("Flute")).toBe(1256);
         // and no shako (80)
         expect(triangles("Color Guard")).toBe(1176);
+        // the guard's shako stays in the mesh for the band, hidden per instance
+        expect(triangles("Color Guard", "Trumpet")).toBe(1256);
     });
 
     it("keeps whole triangles of visible parts only", async () => {
         const geo = await body();
         const part = geo.getAttribute("_part");
-        const index = visibleIndex(geo, sectionUniform("Mellophone"))!;
+        const index = visibleIndex(geo, [sectionUniform("Mellophone")])!;
         const parts = new Set<number>();
         for (let i = 0; i < index.count; i++)
             parts.add(Math.round(part.getX(index.getX(i))));
