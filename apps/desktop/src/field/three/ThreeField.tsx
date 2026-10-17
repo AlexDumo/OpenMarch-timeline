@@ -93,6 +93,7 @@ import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
 import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
+import { SyncFieldPresence } from "@/sync/presence";
 import {
     CHECKPOINT_FONT,
     COLLISION_FONT,
@@ -570,6 +571,7 @@ function ThreeFieldView() {
                     marks={keptMarks}
                     elements={keptMarkElements}
                 />
+                <SyncFieldPresence marchers={marchers} />
             </div>
             <KeptMarkTooltipView tooltip={keptMarkTooltip} />
         </div>

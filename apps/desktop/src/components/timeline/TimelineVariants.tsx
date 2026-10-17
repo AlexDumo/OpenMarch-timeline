@@ -71,6 +71,7 @@ import type {
     TimelineTarget,
     TimelineTrackId,
 } from "./TimelineViewModel";
+import { SyncTimelinePresence } from "@/sync/presence";
 import {
     TimelineBasicBodies,
     TimelineBasicExpertMarks,
@@ -1123,6 +1124,10 @@ const TimelineSurface = memo(function TimelineSurface({
                                     height={pinnedHeight}
                                 />
                             )}
+                        <SyncTimelinePresence
+                            pixelsPerBeat={pixelsPerBeat}
+                            height={pinnedHeight}
+                        />
                         <TimelinePlayhead
                             model={model}
                             positionBeat={positionBeat}

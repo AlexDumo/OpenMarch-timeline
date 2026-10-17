@@ -27,16 +27,13 @@ import {
 } from "./apply";
 import { startCapture, stopCapture } from "./capture";
 import { setSyncSession } from "./session";
-import type { LocalOp, RowChange, SyncSnapshot } from "./types";
+import { isStructural, UserUndo, type UndoNotice } from "./undo";
+import type { LocalOp, RowChange, SyncSnapshot, SyncUser } from "./types";
 
 // ---------------------------------------------------------------------------------------------
 // Wire types (the server's messages, CONTRACT.md "As built (WP-B)")
 
-export interface SyncUser {
-    id: string;
-    name: string;
-    color: string;
-}
+export type { SyncUser } from "./types";
 
 export type SyncConflict =
     | {
@@ -116,6 +113,8 @@ export interface SyncStoreState {
     serverUrl: string | null;
     pending: number;
     people: PeopleMessage["people"];
+    /** This window's user id, to tell myself apart in `people` */
+    userId: string | null;
     lastError: string | null;
 }
 
@@ -126,13 +125,25 @@ export const useSyncStore = create<SyncStoreState>(() => ({
     serverUrl: null,
     pending: 0,
     people: [],
+    userId: null,
     lastError: null,
 }));
 
 /** What the UI is told about, beyond the store: refusals and conflicts (it shows toasts). */
 export type SyncNotice =
     | { kind: "rejected"; code: string; message: string; label?: string }
-    | { kind: "conflict"; conflict: SyncConflict; by: SyncUser; mine: boolean }
+    | {
+          kind: "conflict";
+          /** One row's conflicts of one kind, for one loser */
+          conflicts: SyncConflict[];
+          by: SyncUser;
+          /** I made the op that won */
+          mine: boolean;
+          /** My edit is the one that was replaced (or deleted) */
+          iLost: boolean;
+      }
+    | { kind: "read-only"; label: string }
+    | UndoNotice
     | { kind: "dropped"; count: number }
     | { kind: "error"; message: string };
 
@@ -228,14 +239,6 @@ export const syncEvents = (): readonly SyncEvent[] => events;
 // ---------------------------------------------------------------------------------------------
 // The connection
 
-/** Changes in `beats`/`pages`/`measures` that move the grid (the server's `isStructural`). */
-const isStructural = (ch: RowChange) =>
-    ch.table === "measures" ||
-    ((ch.table === "beats" || ch.table === "pages") &&
-        (ch.kind !== "update" ||
-            "position" in ch.set ||
-            "start_beat" in ch.set));
-
 const fieldsOf = (ch: RowChange): string[] => {
     const cols = Object.keys(
         ch.kind === "insert" ? ch.row : ch.kind === "update" ? ch.set : ch.prev,
@@ -260,6 +263,7 @@ class Connection {
     private pending: Pending[] = [];
     private chain: Promise<void> = Promise.resolve();
     private welcomed: (() => void) | null = null;
+    readonly undo: UserUndo;
     private failed: ((error: Error) => void) | null = null;
 
     constructor(
@@ -271,6 +275,22 @@ class Connection {
         private idBase: number,
     ) {
         this.seq = lastSeq;
+        this.undo = new UserUndo({
+            db,
+            me: () => this.user,
+            settled: () => this.settled(),
+            notify,
+            changed: () =>
+                void queryClient?.invalidateQueries({ queryKey: ["history"] }),
+        });
+    }
+
+    /** Resolves once every local op sent so far is answered, or after `timeoutMs`. */
+    async settled(timeoutMs = 3000): Promise<void> {
+        const deadline = Date.now() + timeoutMs;
+        while (this.pending.length > 0 && Date.now() < deadline)
+            await new Promise((r) => setTimeout(r, 15));
+        await this.chain;
     }
 
     get live() {
@@ -284,6 +304,13 @@ class Connection {
         return {
             isLive: () => self.live,
             onLocalOp: (op: LocalOp) => self.onLocalOp(op),
+            historyAction: (
+                type: "undo" | "redo",
+                options: { currentPageId?: number },
+            ) => self.undo.run(type, options),
+            historyStackLength: (type: "undo" | "redo") =>
+                self.undo.length(type),
+            onRefused: (label: string) => notify({ kind: "read-only", label }),
             get idBase() {
                 return self.idBase;
             },
@@ -321,7 +348,8 @@ class Connection {
         ws.onmessage = (e) => {
             const received = Date.now();
             const msg = JSON.parse(String(e.data)) as ServerMessage;
-            this.enqueue(() => this.onMessage(msg, received));
+            if (this.held) this.held.push({ msg, received });
+            else this.enqueue(() => this.onMessage(msg, received));
         };
         ws.onclose = () => this.onClosed(ws);
         ws.onerror = () => {};
@@ -339,6 +367,44 @@ class Connection {
     /** Waits until every queued message has been handled. */
     idle(): Promise<void> {
         return this.chain;
+    }
+
+    /** While set (tests only), received messages wait here, to make edits concurrent */
+    private held: { msg: ServerMessage; received: number }[] | null = null;
+
+    hold(on: boolean) {
+        if (on) {
+            this.held ??= [];
+            return;
+        }
+        const held = this.held ?? [];
+        this.held = null;
+        for (const { msg, received } of held)
+            this.enqueue(() => this.onMessage(msg, received));
+    }
+
+    private presence: unknown = null;
+    private presenceSent = "";
+    private presenceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /**
+     * Tells peers what I'm looking at (relayed by the server, never stored). Throttled to one
+     * message per 50 ms, and an unchanged presence isn't sent again.
+     */
+    setPresence(presence: unknown) {
+        this.presence = presence;
+        if (this.presenceTimer) return;
+        this.presenceTimer = setTimeout(() => {
+            this.presenceTimer = null;
+            const text = JSON.stringify(this.presence);
+            const ws = this.ws;
+            if (text === this.presenceSent || !this.live) return;
+            if (ws?.readyState !== WebSocket.OPEN) return;
+            this.presenceSent = text;
+            ws.send(
+                JSON.stringify({ type: "presence", presence: this.presence }),
+            );
+        }, 50);
     }
 
     disconnect() {
@@ -397,6 +463,7 @@ class Connection {
             structural,
         };
         this.pending.push(entry);
+        this.undo.tagLocal(op.opId, label);
         useSyncStore.setState({ pending: this.pending.length });
         record({ kind: "local", opId: op.opId, label, at: Date.now() });
         const ws = this.ws;
@@ -439,6 +506,7 @@ class Connection {
 
     private async revert(entry: Pending) {
         this.pending = this.pending.filter((p) => p !== entry);
+        this.undo.dropped(entry.op.opId);
         useSyncStore.setState({ pending: this.pending.length });
         const result = await applyRemoteChanges(
             db,
@@ -491,9 +559,28 @@ class Connection {
                 writeMs: Date.now() - started,
             });
         }
+        this.undo.applied(msg, !!mine);
         this.seq = msg.seq;
-        for (const conflict of msg.conflicts ?? [])
-            notify({ kind: "conflict", conflict, by: msg.by, mine: !!mine });
+        this.reportConflicts(msg, !!mine);
+    }
+
+    /** One notice per loser, row and kind (a drag's x and y conflict together). */
+    private reportConflicts(msg: AppliedMessage, mine: boolean) {
+        const groups = new Map<string, SyncConflict[]>();
+        for (const c of msg.conflicts ?? []) {
+            const k = `${c.loser.id}:${c.table}:${c.id}:${c.kind}`;
+            const group = groups.get(k);
+            if (group) group.push(c);
+            else groups.set(k, [c]);
+        }
+        for (const conflicts of groups.values())
+            notify({
+                kind: "conflict",
+                conflicts,
+                by: msg.by,
+                mine,
+                iLost: conflicts[0]!.loser.id === this.user.id,
+            });
     }
 
     private async onMessage(msg: ServerMessage, received?: number) {
@@ -502,6 +589,7 @@ class Connection {
             this.idBase = msg.you.idBase;
             this.gridVersion = msg.gridVersion;
             if (msg.snapshot) {
+                this.undo.reset();
                 await stopCapture(db);
                 const result = await replaceAllSyncedTables(db, msg.snapshot);
                 await startCapture(db);
@@ -513,6 +601,9 @@ class Connection {
             }
             this.gridVersion = msg.gridVersion;
             useSyncStore.setState({ state: "live", lastError: null });
+            // A new socket: peers know nothing of me yet
+            this.presenceSent = "";
+            if (this.presence !== null) this.setPresence(this.presence);
             this.welcomed?.();
             this.welcomed = this.failed = null;
             return;
@@ -561,6 +652,7 @@ async function begin(
         0,
     );
     useSyncStore.setState({
+        userId: connection.user.id,
         sessionId,
         serverUrl,
         state: "connecting",
@@ -663,4 +755,17 @@ export function syncedSnapshot(): Promise<SyncSnapshot> {
 
 export function syncSeq(): number {
     return connection?.seq ?? -1;
+}
+
+/** Publishes this window's presence (see `Connection.setPresence`); nothing outside a session. */
+export function setSyncPresence(presence: unknown): void {
+    connection?.setPresence(presence);
+}
+
+/**
+ * Tests only: holds received messages until called with false, so this window's next edit is
+ * made without having seen what others did meanwhile (a concurrent edit, for conflicts).
+ */
+export function holdIncoming(on: boolean): void {
+    connection?.hold(on);
 }

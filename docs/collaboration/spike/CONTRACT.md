@@ -239,5 +239,39 @@ changes })` runs after commit, inside the write lock, so ops are handed over in 
 - `connecting` / `offline`: `transactionWithHistory` refuses with a typed error, and the UI shows
   read-only. Unacknowledged ops are reverted on disconnect.
 
-Built-in undo/redo (`performHistoryAction`) is refused in a session until per-user undo (WP-D)
-replaces it.
+In a session, `performHistoryAction` hands undo and redo to the session's per-user undo (WP-D);
+the raw `history_undo` replay (`performUndo`, `performRedo`) is still refused there.
+
+### As built (WP-D, `src/sync/undo.ts`, `presence.tsx`)
+
+- **Delegation.** `SyncSession` has optional `historyAction(type, { currentPageId })`,
+  `historyStackLength(type)` and `onRefused(label)`. `performHistoryAction` returns
+  `historyAction`'s result (the same response shape), and `getUndoStackLength` /
+  `getRedoStackLength` read the per-user stacks, so the shortcut, buttons and focus code are
+  unchanged. A session without `historyAction` still throws `SyncUndoUnavailableError`.
+- **Stacks.** An entry is the server's effective `changes` of one of my ops, pushed on its
+  `applied`; local ops are tagged edit, undo or redo when sent (an undo tags its own op from inside
+  its transaction). A refused or dropped undo puts its entry back. Undo first waits (up to 3 s) for
+  my pending ops to be acknowledged, so an edit just made is on the stack.
+- **Planning** (`planInverse`, pure): field by field against a last-writer map fed from every
+  `applied` (a delete records its user under column `*`). `created_at`/`updated_at` are never
+  reported, and a row with only those left is not written. Structural entries (CONTRACT's
+  `isStructural`) are refused if anyone else's beat-writing op (structural, or `start_beat` /
+  `end_beat` of the timeline tables) has seq above theirs, or if any field was skipped.
+- **Order** (`orderForTriggers`): deletes children first, then updates in inverse order, then
+  inserts parents first (table order from `readSyncedTables`).
+- **Cascades.** After writing, the undo reads `temp.sync_change_log`; a row touched beyond the
+  plan (a foreign-key cascade) whose last writer is someone else refuses the undo.
+- **Focus.** The undo's timeline batch is caught from `subscribeTimelineChanges` and given to
+  `timelineHistoryFocus`, as solo undo does.
+- **Feedback.** `onRefused` raises one "offline, read-only" toast (sonner id `sync-read-only`);
+  conflicts are grouped per loser, row and kind; the loser of an overwrite gets "Put mine back",
+  which writes `lostValue`s back through `transactionWithHistory`.
+- **Presence** is `{ selection: number[], playhead, loop }` (spec beats), published from
+  `SelectedMarchersContext` and `TimelineSelectionStore`, at most every 50 ms and only when it
+  changes, and again after each `welcome`. Rendered by `SyncPeopleList` (chip popover, "Go to"
+  seeks my playhead and sets my loop), `SyncTimelinePresence` (one line in
+  `TimelineVariants.tsx`) and `SyncFieldPresence` (one line in `ThreeField.tsx`, reading the
+  field's `FieldMarchers` and view store).
+- **Test hook.** `window.__sync.holdIncoming(on)` holds received messages, to make two edits
+  concurrent in a scenario.
