@@ -1,0 +1,11 @@
+{
+    "name": "openmarch-sync-server-spike",
+    "private": true,
+    "type": "module",
+    "description": "Collaboration spike server (docs/collaboration/spike/CONTRACT.md). Not part of the pnpm workspace; uses the repo's root wrangler.",
+    "scripts": {
+        "dump-schema": "cd .. && tsx sync-server/scripts/dump-schema.ts",
+        "dev": "wrangler dev --port 8790 --ip 127.0.0.1",
+        "smoke": "node scripts/smoke.mjs"
+    }
+}

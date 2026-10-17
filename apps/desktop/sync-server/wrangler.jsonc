@@ -1,0 +1,13 @@
+{
+    // Local only: `wrangler dev` (see README.md). Never deployed.
+    "name": "openmarch-sync-spike",
+    "main": "server/worker.js",
+    // wrangler 4.94's workerd supports compatibility dates up to 2026-05-28
+    "compatibility_date": "2026-05-01",
+    // generated/schema.sql is imported as text
+    "rules": [{ "type": "Text", "globs": ["**/*.sql"], "fallthrough": true }],
+    "durable_objects": {
+        "bindings": [{ "name": "SHOWS", "class_name": "ShowSession" }],
+    },
+    "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ShowSession"] }],
+}

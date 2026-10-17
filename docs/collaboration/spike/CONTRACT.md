@@ -160,6 +160,36 @@ Each op is applied atomically (`transactionSync`, deferred foreign keys) and che
 The op log is kept for catch-up. Every connected member is an editor; the owner is identified by
 `ownerToken`, with no extra powers in the spike.
 
+### As built (WP-B, `apps/desktop/sync-server/`)
+
+These pin down details the sections above leave open:
+
+- Every WebSocket message has a `type` field naming it: `{ type: "hello", user, ownerToken,
+lastSeq }`, `{ type: "op", op }`, `{ type: "applied", ... }` and so on.
+- `welcome.ops` are full `applied` messages (with `type: "applied"` and `gridVersion`).
+- Changes and conflicts use `id`, not the prototype's `key`. Conflicts are `{ kind: "overwrite",
+table, id, col, loser, lostValue, value, marcherId }` and `{ kind: "deleted-edited", table, id,
+col, loser, marcherId }`; `marcherId` is set for `marchers` and `timeline_assignments` rows.
+- An op whose `opId` is already in the log is not applied again; its stored `applied` message is
+  sent back to the sender only.
+- An `insert` row may omit its key column; the server sets it to the change's `id`, and refuses a
+  row whose key differs from `id`. An `update` can't change a row's key.
+- Blob columns (`field_properties.image`) are not synced: an op writing one is `NOT_ALLOWED`, and
+  `POST /api/sessions` drops them from the snapshot and lists them in its response as
+  `droppedColumns`. Snapshots from the server never contain them.
+- `POST /api/sessions` answers 400 `{ error }` for a snapshot that names an unsynced table or
+  column, or that breaks a constraint or `timeline_commit_violations`.
+- Snapshot rows must be inserted parent-first (the `order` in `generated/tables.json`): the
+  timeline `BEFORE INSERT` triggers look up parent rows at once, whatever the FK deferral. This
+  applies to the client's join (replace-all) too.
+- The order of checks is: shape (`MALFORMED`), allowlist, grid version, then the apply with
+  constraints, foreign keys and `timeline_commit_violations` (each refused as `CONSTRAINT`), with
+  LWW conflicts recorded as rows are written. Timeline trigger messages pass through as they are
+  (`E-A1/E-A2: assignment outside transition range or slot_count`); commit violations read
+  `E-T6: shapeless transition has 1 of 2 destinations (transition 1)`.
+- Deferred foreign keys are checked with `PRAGMA foreign_key_check` before the transaction ends,
+  because a failing commit resets a Durable Object (see the server's README).
+
 ## Remote apply (client)
 
 `applyRemoteChanges(changes, { skip })` sits beside `executeHistoryAction`, under the same write
