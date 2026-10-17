@@ -23,8 +23,7 @@ import {
     useStoredCues,
     type StoredCues,
 } from "@/view3d/window/performers/useStoredCues";
-import { carryForSection } from "@/view3d/core/instruments/catalog";
-import { performerCarryOf } from "@/view3d/core/marchers/hornChannel";
+import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
 import { useVisualsStore } from "@/stores/VisualsStore";
 import {
     countIndex,
@@ -39,10 +38,6 @@ import {
 import type { VisualsChannel, VisualsWho } from "./visualsWho";
 
 const NO_TAGS: ReadonlyMap<number, readonly number[]> = new Map();
-
-/** What a marcher carries, for the cues that fit them: their section's usual equipment. */
-export const sectionCarries = (section: string): PerformerCarry =>
-    performerCarryOf(carryForSection(section)?.family ?? null);
 
 export interface VisualsBandData {
     channel: VisualsChannel;
@@ -79,7 +74,7 @@ function compileShow(
             section: m.section,
             tagIds: [...(stored.tagIds.get(m.id) ?? [])],
             drillOrder: i,
-            carries: sectionCarries(m.section),
+            carries: sectionCueCarry(m.section),
         })),
         cues: stored.cues,
         phraseAssets: stored.phraseAssets,
@@ -146,7 +141,7 @@ export function useVisualsBandData(enabled = true): VisualsBandData | null {
             compiled,
             flags,
             carries: [
-                ...new Set(focused.map((m) => sectionCarries(m.section))),
+                ...new Set(focused.map((m) => sectionCueCarry(m.section))),
             ],
             marcherCount: focused.length,
         };

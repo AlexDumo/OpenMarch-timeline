@@ -243,9 +243,10 @@ backward march, and so on).
   the pole along the arm, ready to start swinging; swings and other guard
   work come later as animations (owner, 2026-10-09).
 - Flag and Color Guard sections carry the 6 ft flag and Rifle sections the
-  rifle. The Guard equipment setting puts any one piece in every guard
-  section's hands, to see the others, until sections store their equipment
-  (`guardEquipment` in `window/sceneStore.ts`).
+  rifle. The 3D window's Guard equipment preview puts any one piece in
+  every guard section's hands, to see the others; it is never saved, starts
+  on Follow cues and doesn't change which cues fit (`guardEquipment` in
+  `window/sceneStore.ts`, performer-behavior.md section 7.5).
 - The front ensemble and speakers are props, not dots: they need geometry
   but don't march.
 

@@ -331,12 +331,12 @@ points and where the elbows go.
   shoulder. Carry and trail: at the right hip, blade up along the
   shoulder, left arm down.
 
-**Which hold plays when.** The show stores no horn state. Default: brass,
-woodwinds and battery play their _up_ hold while the band moves or marks
-time, and brass drops to _carry_ during full-band holds at attention.
-_Down_ and _trail_ exist as holds and are reachable in the settings panel
-("Horn state: automatic, up, carry, down, trail") so they can be seen and
-checked. A per-page horn state is a later schema change.
+**Which hold plays when.** Horn/Equipment cues decide (performer-behavior.md
+sections 3 and 7). Without one, brass, woodwinds and battery play their _up_
+hold. The 3D window's settings panel has a Horn state preview (Follow cues,
+up, carry, trail) that holds every carrier in one hold for the whole show
+so the poses can be checked; it is never saved and Follow cues is the
+start (section 7.5).
 
 **Tuning.** Each hold is a table of eight quaternions tuned by eye against
 the photos, with the instrument attached, in the web preview in a real

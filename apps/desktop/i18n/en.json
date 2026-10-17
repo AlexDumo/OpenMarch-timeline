@@ -2225,29 +2225,31 @@
             "qualityAutoLowered": "Switched to Low because the view was stuttering. Choose High to keep full quality.",
             "pauseWhenIdle": "Pause drawing when nothing moves",
             "saveOnBattery": "Save power on battery",
+            "previewSection": "Preview only",
+            "previewHint": "Not saved. These change only what this window draws; in the show, cues decide. Set them back to Follow cues to see the show.",
+            "followCues": "Follow cues",
             "hornState": "Horn state",
             "hornStateMode": {
                 "up": "Up",
                 "carry": "Carry",
                 "trail": "Trail"
             },
-            "hornStateHint": "Shows always play horns up. The other positions are here to check the poses.",
+            "hornStateHint": "Holds every horn and drum in one position for the whole show, to check the poses. Follow cues plays the Horn/Equipment cues, horns up where there are none.",
             "guardEquipment": "Guard equipment",
             "guardEquipmentMode": {
-                "section": "By section",
                 "flag6": "6 ft flag",
                 "swingFlag": "Swing flag",
                 "doubleSwingFlag": "Double swing",
                 "rifle": "Rifle",
                 "sabre": "Sabre"
             },
-            "guardEquipmentHint": "By section gives flags the 6 ft flag and rifles the rifle. Pick one piece to put it in every guard member's hands.",
+            "guardEquipmentHint": "Puts one piece in every guard member's hands, to see it. Follow cues gives each section its own: flags the 6 ft flag, rifles the rifle.",
             "stepOffFoot": "Step off",
             "stepOffFootMode": {
                 "left": "Performer's left",
                 "right": "Performer's right"
             },
-            "stepOffFootHint": "The performer's own foot, whichever way they face. Facing you, their left foot is on your right. Starts on the show's saved foot; the other one is a preview and isn't saved.",
+            "stepOffFootHint": "The performer's own foot, whichever way they face. Facing you, their left foot is on your right. Follow cues steps off on the show's saved foot ({foot}), or the foot a Feet cue sets.",
             "keysSection": "Keyboard and mouse",
             "uniforms": "Band uniform",
             "guardUniforms": "Guard uniform"
