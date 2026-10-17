@@ -1,16 +1,23 @@
-# Collaboration spike: results (WP-E)
+# Collaboration spike: results
 
 <!-- cspell:words collab swiftshader numstat -->
 
-Measured on 2026-10-17 at `research/collab-spike` `b85b297b2` (WP-A, WP-B, WP-C merged), against
-`timeline/main` `72976f001` (the merge base). WP-D (per-user undo, presence) was still in progress
-in another worktree; its rows say **WP-D pending**. Machine: the 12-core Linux box, shared with
-other agents (load average about 2), so treat small differences as noise.
+Measured on 2026-10-17 against `timeline/main` `72976f001` (the merge base), on the 12-core Linux
+box, which other agents shared (load average about 2), so treat small differences as noise.
+Sections 1 to 6 were measured at `b85b297b2` (WP-A, WP-B and WP-C merged). WP-D (per-user undo,
+conflict feedback, presence) landed after that, at `dbdaaf0f5`. Its effect on the audit and the
+acceptance table is folded in below, and both two-window scenarios pass on the merged branch.
 
 ## Verdict
 
+**Go, on the evidence of the spike.** Every acceptance criterion is met locally. What is left
+unverified is scale and real networks, not the architecture.
+
 - **Kill criterion: not triggered.** No feature knows about sync. Outside `src/sync/`,
-  `src/db-functions/` and `sync-server/`, one product file changed: `src/App.tsx`, by 2 lines.
+  `src/db-functions/` and `sync-server/`, three product files changed, by 9 lines in all:
+  - `src/App.tsx` (2), which mounts `<SyncHost />`;
+  - `src/field/three/ThreeField.tsx` (2) and `src/components/timeline/TimelineVariants.tsx` (5),
+    which mount the presence overlays (WP-D).
 - **Solo is unchanged.** Solo edits run exactly the same SQL statements as on `main`, and the time
   per edit is within noise.
 - **A peer's edit is drawn in 20 to 100 ms** against a local server, in the browser harness and in
@@ -30,7 +37,7 @@ other agents (load average about 2), so treat small differences as noise.
 | `src/db-functions/` ids  | `beat`, `cues`, `marcher`, `measures`, `page`, `phraseAssets`, `sectionAppearance`, `tag`, `timelineAssignments`, `timelineShapesInTransaction`, `timelineTransitionsInTransaction`, `timelines` (12 files) |                   127 / 67 | **All mechanical**: 17 insert sites wrap their values in `withSessionIds(tx, table, values)`, plus the import. Most of the line count is re-indentation (`timelineAssignments` 25/22, `timelineTransitions` 25/14). No other logic changed. |
 | `sync-server/` (new)     | 10 files (2 generated)                                                                                                                                                                                      |                   2571 / 0 | Worker + Durable Object, schema dump script, smoke test                                                                                                                                                                                     |
 | Tests / harness          | `e2e/browser/collab.mts` (new), `tests/collaboration.spec.mts` (new), `e2e/browser/fixtures.mts`                                                                                                            |                    503 / 6 | `fixtures.mts`: 5 things exported, plus an optional `hostInstance` so a second window can run in the same process                                                                                                                           |
-| **Other product files**  | `src/App.tsx`                                                                                                                                                                                               |                      2 / 0 | Mounts `<SyncHost />`                                                                                                                                                                                                                       |
+| **Other product files**  | `src/App.tsx`; after WP-D also `src/field/three/ThreeField.tsx` and `src/components/timeline/TimelineVariants.tsx`                                                                                          |                      9 / 0 | Mount `<SyncHost />`, `<SyncFieldPresence />` and `<SyncTimelinePresence />`                                                                                                                                                                |
 
 **Insert sites.** `grep -rn "\.insert(" src | grep -v __test__` finds 25 in product code. 17 are
 wrapped. The other 8 are fine as they are:
@@ -197,10 +204,10 @@ see every write, as on desktop.
 | --- | ------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | A peer's edit shows in < 250 ms | **Met (locally)**   | Medians 28–67 ms, worst 100 ms (§4, §5). Loopback only: add the real round trip to a Cloudflare location.                                                                                                                                                                                                                          |
 | 2   | Local edits as fast as solo     | **Met, small cost** | Optimistic, with no wait on the server. +0.08 to 0.5 ms and 2–3 statements per edit at the database layer (§3).                                                                                                                                                                                                                    |
-| 3   | No silent overwrite             | **Partly**          | The server's LWW records conflicts, which the smoke test covers. `SyncHost` shows toasts, but they use raw table and column names. No app scenario has two people editing the same field. Conflict feedback: **WP-D pending**.                                                                                                     |
+| 3   | No silent overwrite             | **Met (locally)**   | The server's LWW records each overwrite. Both people get a toast, grouped by row, and the person who lost gets **Put mine back**. `collaboration-undo.spec.mts` covers a real concurrent overwrite and its restore, made concurrent with `window.__sync.holdIncoming`. Wording is still rough: raw table and column names.         |
 | 4   | No silent loss                  | **Partly**          | Refused ops are reverted, with a toast. Unconfirmed ops are reverted on disconnect, with a "dropped" toast. Edits made offline are refused under a read-only banner, which the scenario covers. An edit in flight at disconnect is lost (with a notice), because the spike is online-only. Not tested with a conflicting scenario. |
-| 5   | Undo never touches others' work | **WP-D pending**    | Today, undo and redo are refused in a session (`SyncUndoUnavailableError`).                                                                                                                                                                                                                                                        |
-| 6   | Presence always visible         | **WP-D pending**    | Today, only the "live · N here" chip exists (screenshot above).                                                                                                                                                                                                                                                                    |
+| 5   | Undo never touches others' work | **Met**             | Per-user undo (`src/sync/undo.ts`) through the existing shortcut and buttons. A's undo reverts only A's edit; a partial undo keeps B's later change and says so; undoing a delete restores the same id in both windows. Structural undo is all or nothing. Undo is refused if a cascade would delete others' rows.                 |
+| 6   | Presence always visible         | **Met, rough**      | Other people's selection shows as rings on the field and their playhead on the timeline, plus a people list with page, count, selection and **Go to**. The ring is small, and their playhead updates only when they pause or seek, not during playback.                                                                            |
 | 7   | Solo unchanged, by measurement  | **Met**             | Identical statements, timings within noise, no migration and no persistent object (§2).                                                                                                                                                                                                                                            |
 
 ## 8. Known gaps (from CONTRACT "As built" and MIGRATIONS.md)
@@ -212,8 +219,10 @@ see every write, as on desktop.
   - `view3d_cameras`, `audio_files` and the Library tables.
 - **Remote apply runs with foreign keys `OFF`** (CONTRACT deviation). It relies on the sender's
   cascades being in the op and on the server's check.
-- **Online only.** Unconfirmed ops are reverted on disconnect. Built-in undo is refused in a
-  session until WP-D lands.
+- **Online only.** Unconfirmed ops are reverted on disconnect.
+- **Double error on offline edits.** A refused edit shows the sync toast and the feature's own
+  error toast ("Error moving marchers"). A shipped version needs features to recognize
+  `SyncReadOnlyError`, or the UI to disable editing while offline.
 - **Beat ids are not built.** Ops that write beats, pages, measures or timeline beat ranges carry a
   grid version and are refused `STALE_GRID` when stale. Every beat or page edit still rewrites
   later timeline rows.

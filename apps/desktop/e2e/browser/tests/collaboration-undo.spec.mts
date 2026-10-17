@@ -271,6 +271,12 @@ test("per-user undo, put mine back, offline toast and presence", async ({
             `[data-testid="sync-person"][data-user-name="${aName}"]`,
         );
         await expect(person).toContainText("1 selected");
+        // Optional pictures of what B sees, for reviewing the spike by eye
+        const shots = process.env.SPIKE_SHOTS;
+        if (shots) {
+            await b.page.screenshot({ path: `${shots}/presence-b.png` });
+            await a.page.screenshot({ path: `${shots}/presence-a.png` });
+        }
         const playheadLabel = (page: Page) =>
             page.getByTestId("timeline-playhead").getAttribute("aria-label");
         expect(await playheadLabel(b.page)).not.toEqual(
