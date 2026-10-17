@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import {
     BUILTIN_ASSET_ROOTS,
     checkBuiltinLicenses,
+    FOLDER_LICENSES,
     THIRD_PARTY_LICENSES,
+    type BuiltinLicenses,
     type ThirdPartyEntry,
 } from "../builtinLicenses";
-import thirdParty from "../../assets/third-party.json";
+import manifest from "../../assets/licenses.json";
 
 const DESKTOP = path.resolve(__dirname, "../../../..");
 
@@ -23,27 +26,49 @@ const trumpet: ThirdPartyEntry = {
     modified: true,
 };
 
-/** A tree with one licensed folder and the trumpet listed. */
+const BODY = "src/view3d/assets/om-pose/bodies/neutral-average.glb";
+const TEMPLATE = "starter-kit/templates/silk.blend";
+
+/** A tree with the trumpet listed and two folders under their LICENSE. */
 const files = [
     "src/view3d/assets/instruments/trumpet.json",
     "src/view3d/assets/instruments/CREDITS.md",
     "src/view3d/assets/om-pose/LICENSE",
-    "src/view3d/assets/om-pose/bodies/neutral-average.glb",
+    BODY,
+    "starter-kit/templates/LICENSE",
+    TEMPLATE,
 ];
+const texts: Record<string, string> = {
+    "src/view3d/assets/om-pose/LICENSE":
+        "These assets are in the counsel gate.",
+    "starter-kit/templates/LICENSE": "Creative Commons\n\nCC0 1.0 Universal\n",
+};
+const licenseText = (p: string) => texts[p] ?? null;
+
+const good: BuiltinLicenses = {
+    folders: [
+        {
+            path: "src/view3d/assets/om-pose",
+            license: "LicenseRef-Counsel-Gate",
+        },
+        { path: "starter-kit/templates", license: "CC0-1.0" },
+    ],
+    entries: [trumpet],
+};
+
+const check = (manifest: BuiltinLicenses, tree = files) =>
+    checkBuiltinLicenses({ manifest, files: tree, licenseText });
 
 describe("checkBuiltinLicenses", () => {
-    it("passes a listed CC-BY item and a file under a folder LICENSE", () => {
-        expect(checkBuiltinLicenses({ entries: [trumpet], files })).toEqual([]);
+    it("passes a listed CC-BY item and folders whose LICENSE says their license", () => {
+        expect(check(good)).toEqual([]);
     });
 
     it.each(["CC-BY-SA-4.0", "CC-BY-NC-4.0", "CC-BY-ND-4.0", "MIT", ""])(
-        "fails an entry licensed %s, outside the allow-list",
+        "fails a third-party entry licensed %s, outside the allow-list",
         (license) => {
             expect(
-                checkBuiltinLicenses({
-                    entries: [{ ...trumpet, license }],
-                    files,
-                }),
+                check({ ...good, entries: [{ ...trumpet, license }] }),
             ).toEqual([
                 `Trumpet: license "${license}" isn't allowed (${THIRD_PARTY_LICENSES.join(", ")})`,
             ]);
@@ -54,25 +79,22 @@ describe("checkBuiltinLicenses", () => {
         "fails an entry without its %s",
         (field) => {
             expect(
-                checkBuiltinLicenses({
-                    entries: [{ ...trumpet, [field]: " " }],
-                    files,
-                }),
+                check({ ...good, entries: [{ ...trumpet, [field]: " " }] }),
             ).toEqual([`Trumpet: ${field} is missing`]);
         },
     );
 
     it("fails a source that isn't an https URL and a date that isn't YYYY-MM-DD", () => {
         expect(
-            checkBuiltinLicenses({
+            check({
+                ...good,
                 entries: [
                     {
                         ...trumpet,
-                        sourceUrl: "sketchfab.com/trumpet",
+                        sourceUrl: "sketchfab.com/x",
                         retrieved: "Oct 9",
                     },
                 ],
-                files,
             }),
         ).toEqual([
             "Trumpet: sourceUrl isn't an https URL",
@@ -80,56 +102,93 @@ describe("checkBuiltinLicenses", () => {
         ]);
     });
 
-    it("fails a listed file that isn't there", () => {
+    it("fails a listed file that isn't a tracked built-in", () => {
+        const extra = "src/view3d/assets/x.json";
         expect(
-            checkBuiltinLicenses({
-                entries: [
-                    {
-                        ...trumpet,
-                        files: [...trumpet.files, "src/view3d/assets/x.json"],
-                    },
-                ],
-                files,
+            check({
+                ...good,
+                entries: [{ ...trumpet, files: [...trumpet.files, extra] }],
+            }),
+        ).toEqual([`Trumpet: ${extra} isn't a tracked built-in`]);
+    });
+
+    it("fails a file two entries list", () => {
+        expect(
+            check({
+                ...good,
+                entries: [trumpet, { ...trumpet, name: "Again" }],
             }),
         ).toEqual([
-            "Trumpet: src/view3d/assets/x.json isn't in the repository",
+            "src/view3d/assets/instruments/trumpet.json is listed by both Trumpet and Again",
         ]);
     });
 
-    it("fails a built-in that neither the manifest nor a folder LICENSE covers", () => {
+    it("fails a built-in that nothing declares", () => {
+        expect(check({ ...good, entries: [] })).toEqual([
+            "src/view3d/assets/instruments/trumpet.json has no license: list it in licenses.json, or put its folder there with a LICENSE",
+        ]);
+    });
+
+    it("fails a folder license outside the allow-list, or a LICENSE that doesn't say it", () => {
         expect(
-            checkBuiltinLicenses({
-                entries: [],
-                files,
+            check({
+                ...good,
+                folders: [
+                    { path: "src/view3d/assets/om-pose", license: "MIT" },
+                    {
+                        path: "starter-kit/templates",
+                        license: "GPL-3.0-or-later",
+                    },
+                ],
             }),
         ).toEqual([
-            "src/view3d/assets/instruments/trumpet.json has no license: list it in third-party.json or add a LICENSE to its folder",
+            `src/view3d/assets/om-pose: license "MIT" isn't allowed (${Object.keys(FOLDER_LICENSES).join(", ")})`,
+            "starter-kit/templates: LICENSE doesn't say GPL-3.0-or-later",
         ]);
+    });
+
+    it("fails a declared folder without its LICENSE", () => {
+        expect(
+            check(
+                good,
+                files.filter((f) => f !== "starter-kit/templates/LICENSE"),
+            ).filter((p) => p.startsWith("starter-kit")),
+        ).toEqual(["starter-kit/templates: LICENSE is missing"]);
+    });
+
+    it("refuses one license for a whole asset root", () => {
+        expect(
+            check({
+                folders: [{ path: "src/view3d/assets", license: "CC0-1.0" }],
+                entries: [],
+            })[0],
+        ).toBe("src/view3d/assets: a whole asset root can't take one license");
     });
 });
 
-/** Every file under the built-in asset roots, relative to apps/desktop. */
-function assetFiles(): string[] {
-    const out: string[] = [];
-    const walk = (dir: string) => {
-        for (const entry of fs.readdirSync(path.join(DESKTOP, dir), {
-            withFileTypes: true,
-        })) {
-            const rel = `${dir}/${entry.name}`;
-            if (entry.isDirectory()) walk(rel);
-            else out.push(rel);
-        }
-    };
-    BUILTIN_ASSET_ROOTS.forEach(walk);
-    return out.sort();
+/** Every tracked file under the built-in asset roots, relative to apps/desktop. */
+function trackedAssetFiles(): string[] {
+    return execFileSync("git", ["ls-files", "--", ...BUILTIN_ASSET_ROOTS], {
+        cwd: DESKTOP,
+        encoding: "utf8",
+    })
+        .split("\n")
+        .filter(Boolean)
+        .sort();
 }
 
 describe("the built-ins in the repository", () => {
-    it("carry their license fields, inside the allow-list", () => {
+    it("carry their license fields, inside the allow-lists", () => {
         expect(
             checkBuiltinLicenses({
-                entries: thirdParty.entries,
-                files: assetFiles(),
+                manifest,
+                files: trackedAssetFiles(),
+                licenseText: (p) => {
+                    const file = path.join(DESKTOP, p);
+                    return fs.existsSync(file)
+                        ? fs.readFileSync(file, "utf8")
+                        : null;
+                },
             }),
         ).toEqual([]);
     });

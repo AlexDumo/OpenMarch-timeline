@@ -238,7 +238,13 @@ for (const h of heights) {
         `${classTag(h)}: ${clips.length} clips, ${tracks} tracks identical, ${(packed.length / 1e6).toFixed(2)} MB`,
     );
 }
+// The folder's LICENSE is the repository's, not om-pose's: keep it.
+const licensePath = path.join(dest, "LICENSE");
+const license = fs.existsSync(licensePath)
+    ? fs.readFileSync(licensePath)
+    : null;
 fs.rmSync(dest, { recursive: true, force: true });
+if (license) write("LICENSE", license);
 for (const { rel, packed } of packs) write(rel, packed);
 for (const f of fs
     .readdirSync(path.join(src, "assets/body-v4u"))
@@ -258,11 +264,11 @@ fs.writeFileSync(
                 manifest: "out/body/manifest.json",
             },
             license:
-                "Not under the app's license: no license is granted yet (see LICENSE). The clips wait on counsel (lawyer Q3); the bodies and skeleton take CC0 1.0 once Q3 is answered and om-pose adopts a license upstream (ADR 0002 D-7, D-21)",
+                "Not under the app's license (see LICENSE): the clips are in the counsel gate (lawyer Q3); the meshes take CC0 1.0 once Q3 is answered and om-pose adopts a license upstream (ADR 0002 D-7, D-21)",
             files,
         },
         null,
-        2,
+        4,
     ) + "\n",
 );
 console.log(

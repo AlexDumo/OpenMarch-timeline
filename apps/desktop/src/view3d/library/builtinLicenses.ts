@@ -1,20 +1,42 @@
 /**
  * The built-in catalog's licenses (props-spec.md section 10, ADR 0002 D-21,
- * package C5.8). Every file under the built-in asset roots is declared one
- * of two ways: a `LICENSE` in its folder or a folder above it (OpenMarch-made
- * content, the om-pose assets), or an entry in `assets/third-party.json`
- * carrying its SPDX license, author, source, attribution and retrieval date.
- * Third-party built-ins are CC0 or CC-BY 4.0 only. A test runs the check over
- * the repository, so CI fails on an entry outside the allow-list.
+ * package C5.8). `assets/licenses.json` declares every built-in one of two
+ * ways: a folder with its license, whose `LICENSE` file must say so
+ * (OpenMarch-made content, the add-on, the om-pose assets), or a third-party
+ * entry with its SPDX license, author, source, attribution and retrieval
+ * date. Third-party built-ins are CC0 or CC-BY 4.0 only. A desktop test runs
+ * the check over the repository's tracked files, so CI fails on an entry
+ * outside the allow-list or a built-in nothing declares.
  */
 
 /** The folders, relative to `apps/desktop`, whose files ship as built-ins. */
 export const BUILTIN_ASSET_ROOTS = ["src/view3d/assets", "starter-kit"];
 
+/** The manifest itself, relative to `apps/desktop`. */
+export const LICENSES_MANIFEST = "src/view3d/assets/licenses.json";
+
 /** The licenses a third-party built-in may carry: no BY-SA, NC, ND or store licenses. */
 export const THIRD_PARTY_LICENSES = ["CC0-1.0", "CC-BY-4.0"] as const;
 
-/** One third-party built-in in `assets/third-party.json`. */
+/**
+ * The licenses an OpenMarch folder may declare, each with text its `LICENSE`
+ * must contain: CC0 for OpenMarch-made content, GPL for the Blender add-on,
+ * and the counsel gate for the om-pose assets (ADR 0002 D-7 correction).
+ */
+export const FOLDER_LICENSES: Readonly<Record<string, string>> = {
+    "CC0-1.0": "CC0 1.0 Universal",
+    "GPL-3.0-or-later": "GNU GENERAL PUBLIC LICENSE",
+    "LicenseRef-Counsel-Gate": "counsel gate",
+};
+
+/** A folder of built-ins under one license. */
+export interface LicensedFolder {
+    /** Relative to `apps/desktop`. */
+    path: string;
+    license: string;
+}
+
+/** One third-party built-in. */
 export interface ThirdPartyEntry {
     name: string;
     /** Its files, relative to `apps/desktop`. */
@@ -31,27 +53,37 @@ export interface ThirdPartyEntry {
     modified: boolean;
 }
 
+export interface BuiltinLicenses {
+    folders: readonly LicensedFolder[];
+    entries: readonly ThirdPartyEntry[];
+}
+
 /** Files that describe a folder rather than ship in it. */
-const NOT_ASSETS = new Set([
-    "LICENSE",
-    "CREDITS.md",
-    "README.md",
-    "third-party.json",
-]);
+const NOT_ASSETS = new Set(["LICENSE", "CREDITS.md", "README.md"]);
 
 const REQUIRED = ["author", "sourceUrl", "attribution", "retrieved"] as const;
 
-const dirOf = (file: string) => file.slice(0, file.lastIndexOf("/"));
 const baseOf = (file: string) => file.slice(file.lastIndexOf("/") + 1);
+const within = (file: string, dir: string) => file.startsWith(`${dir}/`);
 
-/** Whether a `LICENSE` sits in the file's folder or a folder above it, within its root. */
-function folderLicensed(file: string, licenses: ReadonlySet<string>): boolean {
-    const root = BUILTIN_ASSET_ROOTS.find((r) => file.startsWith(`${r}/`));
-    for (let dir = dirOf(file); dir.length > 0; dir = dirOf(dir)) {
-        if (licenses.has(dir)) return true;
-        if (dir === root || !dir.includes("/")) break;
-    }
-    return false;
+function folderProblems(
+    folder: LicensedFolder,
+    present: ReadonlySet<string>,
+    licenseText: (path: string) => string | null,
+): string[] {
+    if (BUILTIN_ASSET_ROOTS.includes(folder.path))
+        return [`${folder.path}: a whole asset root can't take one license`];
+    const marker = FOLDER_LICENSES[folder.license];
+    if (marker === undefined)
+        return [
+            `${folder.path}: license "${folder.license}" isn't allowed (${Object.keys(FOLDER_LICENSES).join(", ")})`,
+        ];
+    const licensePath = `${folder.path}/LICENSE`;
+    const text = present.has(licensePath) ? licenseText(licensePath) : null;
+    if (text === null) return [`${folder.path}: LICENSE is missing`];
+    if (!text.includes(marker))
+        return [`${folder.path}: LICENSE doesn't say ${folder.license}`];
+    return [];
 }
 
 function entryProblems(
@@ -72,34 +104,50 @@ function entryProblems(
         out.push(`${entry.name}: retrieved isn't a YYYY-MM-DD date`);
     for (const file of entry.files)
         if (!present.has(file))
-            out.push(`${entry.name}: ${file} isn't in the repository`);
+            out.push(`${entry.name}: ${file} isn't a tracked built-in`);
     return out;
 }
 
 /**
  * The problems with the built-ins' licenses, empty when every built-in
- * carries its license fields inside the allow-list.
+ * carries its license fields inside the allow-lists.
  */
 export function checkBuiltinLicenses({
-    entries,
+    manifest,
     files,
+    licenseText,
 }: {
-    entries: readonly ThirdPartyEntry[];
-    /** Every file under the asset roots, relative to `apps/desktop`. */
+    manifest: BuiltinLicenses;
+    /** Every tracked file under the asset roots, relative to `apps/desktop`. */
     files: readonly string[];
+    /** A file's text, or null when it isn't there. */
+    licenseText: (path: string) => string | null;
 }): string[] {
     const present = new Set(files);
-    const listed = new Set(entries.flatMap((e) => e.files));
-    const licenses = new Set(
-        files.filter((f) => baseOf(f) === "LICENSE").map(dirOf),
-    );
-    const problems = entries.flatMap((e) => entryProblems(e, present));
+    const problems = [
+        ...manifest.folders.flatMap((f) =>
+            folderProblems(f, present, licenseText),
+        ),
+        ...manifest.entries.flatMap((e) => entryProblems(e, present)),
+    ];
+    const listedBy = new Map<string, string>();
+    for (const entry of manifest.entries)
+        for (const file of entry.files) {
+            const other = listedBy.get(file);
+            if (other !== undefined)
+                problems.push(
+                    `${file} is listed by both ${other} and ${entry.name}`,
+                );
+            else listedBy.set(file, entry.name);
+        }
     for (const file of files) {
-        if (NOT_ASSETS.has(baseOf(file)) || listed.has(file)) continue;
-        if (!folderLicensed(file, licenses))
-            problems.push(
-                `${file} has no license: list it in third-party.json or add a LICENSE to its folder`,
-            );
+        if (file === LICENSES_MANIFEST || NOT_ASSETS.has(baseOf(file)))
+            continue;
+        if (listedBy.has(file)) continue;
+        if (manifest.folders.some((f) => within(file, f.path))) continue;
+        problems.push(
+            `${file} has no license: list it in licenses.json, or put its folder there with a LICENSE`,
+        );
     }
     return problems;
 }
