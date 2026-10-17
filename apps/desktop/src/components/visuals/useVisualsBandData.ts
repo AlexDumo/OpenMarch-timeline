@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
     compileCues,
     type CompiledCues,
+    type CueFlagKind,
     type CueTarget,
     type PerformerCarry,
 } from "@openmarch/core";
@@ -20,12 +21,14 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import {
     useShowPerformerDefaults,
     useStoredCues,
+    type StoredCues,
 } from "@/view3d/window/performers/useStoredCues";
 import { carryForSection } from "@/view3d/core/instruments/catalog";
 import { performerCarryOf } from "@/view3d/core/marchers/hornChannel";
 import { useVisualsStore } from "@/stores/VisualsStore";
 import {
     countIndex,
+    flagsByCue,
     resultRow,
     targetOfWho,
     visualsLanes,
@@ -49,10 +52,39 @@ export interface VisualsBandData {
     result: ResultSpan[];
     counts: CountIndex;
     compiled: CompiledCues;
+    /** Each cue's flags that reach a focused marcher (`flagsByCue`). */
+    flags: ReadonlyMap<number, readonly CueFlagKind[]>;
     /** What the focused marchers carry, each kind once. */
     carries: PerformerCarry[];
     /** How many marchers are focused. */
     marcherCount: number;
+}
+
+/** The show's cues compiled over its counts, as the 3D View compiles them. */
+function compileShow(
+    beats: readonly { id: number; duration: number }[],
+    counts: CountIndex,
+    marchers: readonly { id: number; section: string }[],
+    stored: StoredCues,
+    defaults: { stepOffFoot: "left" | "right" },
+): CompiledCues {
+    const duration = new Map(beats.map((b) => [b.id, b.duration]));
+    return compileCues({
+        beats: counts.beatIdOfCount.map((id) => ({
+            id,
+            duration: duration.get(id)!,
+        })),
+        marchers: marchers.map((m, i) => ({
+            id: m.id,
+            section: m.section,
+            tagIds: [...(stored.tagIds.get(m.id) ?? [])],
+            drillOrder: i,
+            carries: sectionCarries(m.section),
+        })),
+        cues: stored.cues,
+        phraseAssets: stored.phraseAssets,
+        showDefaults: { stepOffFoot: defaults.stepOffFoot },
+    });
 }
 
 /** `enabled` false (outside Visuals mode) skips the compile and returns null. */
@@ -67,34 +99,24 @@ export function useVisualsBandData(enabled = true): VisualsBandData | null {
     const stored = useStoredCues();
     const defaults = useShowPerformerDefaults();
     const { selectedMarchers } = useSelectedMarchers()!;
+    // Only a focused selection reads it, so clicking marchers with another
+    // who focused doesn't redo the lanes and the result row
+    const selection = focus?.kind === "selection" ? selectedMarchers : null;
 
     const counts = useMemo(() => countIndex(beats), [beats]);
-    const compiled = useMemo(() => {
-        if (!enabled || !marchers || !stored) return null;
-        const duration = new Map(beats.map((b) => [b.id, b.duration]));
-        return compileCues({
-            beats: counts.beatIdOfCount.map((id) => ({
-                id,
-                duration: duration.get(id)!,
-            })),
-            marchers: marchers.map((m, i) => ({
-                id: m.id,
-                section: m.section,
-                tagIds: [...(stored.tagIds.get(m.id) ?? [])],
-                drillOrder: i,
-                carries: sectionCarries(m.section),
-            })),
-            cues: stored.cues,
-            phraseAssets: stored.phraseAssets,
-            showDefaults: { stepOffFoot: defaults.stepOffFoot },
-        });
-    }, [enabled, marchers, stored, counts, beats, defaults.stepOffFoot]);
+    const compiled = useMemo(
+        () =>
+            enabled && marchers && stored
+                ? compileShow(beats, counts, marchers, stored, defaults)
+                : null,
+        [enabled, marchers, stored, counts, beats, defaults],
+    );
 
     return useMemo(() => {
         if (!focus || !focusIds || !marchers || !cues || !compiled) return null;
         const target = targetOfWho(
             focus,
-            selectedMarchers.map((m) => m.id),
+            (selection ?? []).map((m) => m.id),
         );
         const lanes = visualsLanes({
             cues,
@@ -106,6 +128,7 @@ export function useVisualsBandData(enabled = true): VisualsBandData | null {
             counts,
         });
         const focused = marchers.filter((m) => focusIds.has(m.id));
+        const flags = flagsByCue(compiled.flags, focusIds);
         return {
             channel,
             focus,
@@ -117,9 +140,11 @@ export function useVisualsBandData(enabled = true): VisualsBandData | null {
                 focusIds,
                 countCount: counts.beatIdOfCount.length,
                 lanes,
+                flagged: new Set(flags.keys()),
             }),
             counts,
             compiled,
+            flags,
             carries: [
                 ...new Set(focused.map((m) => sectionCarries(m.section))),
             ],
@@ -131,7 +156,7 @@ export function useVisualsBandData(enabled = true): VisualsBandData | null {
         marchers,
         cues,
         compiled,
-        selectedMarchers,
+        selection,
         channel,
         byTag,
         counts,

@@ -2,16 +2,16 @@
  * Visuals mode's cue lanes, the main lanes of its own timeline
  * (`VisualsTimeline`; performer-behavior.md sections 7.1 and 7.2): for the focused who on the
  * current tab, read-only rows of broader cues, the editable lane, rows of
- * exceptions, then the result row, colored by where each value comes from
- * and hatched where the who is mixed.
+ * exceptions, then the result row, colored by where each value comes from,
+ * hatched where the who is mixed and ringed where a flagged cue sets it.
  *
  * On the lane, a click on empty space adds a state on that count, and a drag
  * adds a phrase of that length; dragging a cue moves it, dragging a phrase's
  * end sets its length, and Delete removes the picked cue. Everything lands on
- * a count: there is nothing between counts.
+ * a count: there is nothing between counts. A Ctrl or Cmd press is the
+ * timeline's everywhere on the band (a drawn range), never a cue gesture.
  */
 import {
-    useMemo,
     useRef,
     useState,
     type PointerEvent as ReactPointerEvent,
@@ -44,7 +44,6 @@ import { useTargetLabel } from "./useTargetLabel";
 import {
     copyCues,
     countAtBeatIndex,
-    flagsByCue,
     newCueValue,
     pastedCues,
     type LaneCue,
@@ -173,8 +172,12 @@ function GreyRow({
                         flags.has(cue.id) && FLAG_RING,
                     )}
                     rampClassName="bg-gradient-to-r from-transparent to-text/25"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={() => onGo(row.target)}
+                    onPointerDown={(e) => {
+                        if (!isTimelinePress(e)) e.stopPropagation();
+                    }}
+                    onClick={(e) => {
+                        if (!isTimelinePress(e)) onGo(row.target);
+                    }}
                 >
                     {label}: {cue.label}
                 </CueBlock>
@@ -194,6 +197,15 @@ type Gesture =
     | { kind: "ramp"; cue: LaneCue; from: number };
 
 const FLAG_RING = "ring-red ring-2";
+const NO_FLAGS: ReadonlyMap<number, readonly CueFlagKind[]> = new Map();
+
+/**
+ * Whether a press is the timeline's (section 7.2): Ctrl or Cmd is never a
+ * cue gesture, so the band lets it through to the timeline's own handlers.
+ * Visuals' timeline is read-only and draws no range: such a drag scrubs.
+ */
+const isTimelinePress = (e: { ctrlKey: boolean; metaKey: boolean }) =>
+    e.ctrlKey || e.metaKey;
 
 function EditableLane({
     data,
@@ -226,7 +238,14 @@ function EditableLane({
     const clearSelectedCues = useVisualsStore((s) => s.clearSelectedCues);
     const setClipboard = useVisualsStore((s) => s.setClipboard);
     const laneRef = useRef<HTMLDivElement>(null);
-    const [gesture, setGesture] = useState<Gesture | null>(null);
+    const [gesture, setGestureState] = useState<Gesture | null>(null);
+    // The gesture as of the last pointer event, so a release reads the last
+    // move even before React has drawn it
+    const gestureRef = useRef<Gesture | null>(null);
+    const setGesture = (next: Gesture | null) => {
+        gestureRef.current = next;
+        setGestureState(next);
+    };
     const countTotal = data.counts.beatIdOfCount.length;
     const clamp = (c: number, max = countTotal - 1) =>
         Math.max(0, Math.min(max, c));
@@ -263,10 +282,11 @@ function EditableLane({
     };
 
     const onLanePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+        if (isTimelinePress(e)) return;
         // the lane's gestures, not the timeline's scrub or range
         e.stopPropagation();
         laneRef.current?.focus();
-        if (e.button !== 0 || !target) return;
+        if (e.button !== 0 || !target || countTotal === 0) return;
         const start = clamp(beatAt(e.clientX, e.altKey));
         e.currentTarget.setPointerCapture(e.pointerId);
         clearSelectedCues();
@@ -275,6 +295,7 @@ function EditableLane({
     const startCueGesture =
         (cue: LaneCue, kind: "move" | "length" | "ramp") =>
         (e: ReactPointerEvent<HTMLDivElement>) => {
+            if (isTimelinePress(e)) return;
             e.stopPropagation();
             laneRef.current?.focus();
             if (e.button !== 0) return;
@@ -296,6 +317,7 @@ function EditableLane({
             else setGesture({ kind, cue, from: cue.from });
         };
     const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+        const gesture = gestureRef.current;
         if (!gesture) return;
         const beat = beatAt(e.clientX, e.altKey);
         switch (gesture.kind) {
@@ -319,7 +341,7 @@ function EditableLane({
         }
     };
     const onPointerUp = () => {
-        const g = gesture;
+        const g = gestureRef.current;
         setGesture(null);
         if (!g) return;
         if (g.kind === "create") add(g.start, g.end);
@@ -518,9 +540,11 @@ function ResultRow({
                     key={s.from}
                     data-testid="visuals-result-span"
                     data-source={s.mixed ? "mixed" : s.source}
+                    data-flagged={s.flagged || undefined}
                     className={clsx(
                         "absolute top-0 flex items-center overflow-hidden border-r border-r-black/10 px-4 text-[10px] leading-none whitespace-nowrap",
                         s.mixed ? "text-text" : SOURCE_CLASS[s.source!],
+                        s.flagged && FLAG_RING,
                     )}
                     style={{
                         left: s.from * pixelsPerBeat,
@@ -548,7 +572,6 @@ function BandBody({
     const toggleFocus = useVisualsStore((s) => s.toggleFocus);
     const label = useTargetLabel();
     const { pixelsPerBeat, top, width, snapBeats } = geometry;
-    const focusIds = useVisualsStore((s) => s.focusMarcherIds);
     const clipboard = useVisualsStore((s) => s.clipboard);
     const beatIndex = useTimelineSelectionStore(displayedBeat);
     const { beats } = useTimingObjects();
@@ -556,13 +579,7 @@ function BandBody({
     const { mutate: createCues } = useMutation(
         createCuesMutationOptions(queryClient),
     );
-    const flags = useMemo(
-        () =>
-            data && focusIds
-                ? flagsByCue(data.compiled.flags, focusIds)
-                : new Map<number, CueFlagKind[]>(),
-        [data, focusIds],
-    );
+    const flags = data?.flags ?? NO_FLAGS;
     // a paste goes on the same channel only (section 7.4)
     const canPaste =
         !!data?.target && !!clipboard && clipboard.channel === data.channel;
@@ -596,7 +613,9 @@ function BandBody({
             data-testid="visuals-band"
             className="border-stroke absolute left-0 border-t"
             style={{ top, width, height: visualsBandHeight(data) }}
-            onPointerDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => {
+                if (!isTimelinePress(e)) e.stopPropagation();
+            }}
         >
             <div
                 className="sticky left-0 flex w-fit items-center gap-4"

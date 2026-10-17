@@ -245,6 +245,15 @@ Nothing yet.
   editor's `takePress`, which now gets the press (field coordinates, the
   dots' space). Step 8 is complete; step 9 (retiring the 3D window's horn
   and guard toggles) is next.
+- **Review fixes (same branch):** a Ctrl or Cmd press on the band is the
+  timeline's again (section 7.2: it draws a range, never a cue); the result
+  row rings the counts a flagged cue sets; a phrase draws as long as
+  compile plays it (its value's length range); the facing wheel's arrows
+  no longer also nudge marchers; the focus stays current with the
+  inspector hidden (fullscreen). Not fixed: compile runs the whole show
+  (about 250 ms at 2,000 marchers × 500 counts) on every cue edit, as the
+  3D View does; compile's channel-only `recompile` saves little there,
+  since take-overs and flags are always redone.
 
 ### 2026-10-17 · Trevor (3d/visuals-workspace) · C3.3 workspace
 
@@ -281,3 +290,6 @@ Nothing yet.
   Visuals' timeline has no clips, + or window, page boxes go to their page,
   a drag and the arrows move no one while click and marquee select, and
   the Editor has its clips and drags back.
+- **Merged with the review fixes:** the band still lets Ctrl/Cmd presses
+  through (they are never a cue), but Visuals' read-only timeline draws no
+  range, so such a drag scrubs; the review's scenario now checks that.

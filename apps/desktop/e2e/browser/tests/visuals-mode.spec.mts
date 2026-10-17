@@ -351,8 +351,43 @@ test("the ramp sets a transition, a copy pastes onto another who, and clashes ar
     await expect(page.getByTestId("visuals-band-flags")).toHaveText(
         "4 flagged cues",
     );
+    // and the result row shows where they set the flutes
+    await expect(
+        page.locator('[data-testid="visuals-result-span"][data-flagged]'),
+    ).not.toHaveCount(0);
 });
 
+// The review fix (8b46cd0ef) let Ctrl/Cmd presses through the band to draw the drill
+// timeline's range. Visuals has its own read-only timeline now (owner note 2026-10-17), which
+// draws no range: the press still isn't a cue, and the drag scrubs instead.
+test("Ctrl or Cmd+drag on the band adds no cue and draws no range: it scrubs", async ({
+    show,
+}) => {
+    const { page } = show;
+    await expect(page.getByRole("heading", { name: "Page 0" })).toBeVisible();
+    await page.getByTestId("workspace-view-visuals").click();
+    await page.getByTestId("visuals-tab-facing").click();
+    await page.getByTestId("visuals-who-section-Trumpet").click();
+    await expect(page.getByTestId("visuals-lane")).toBeVisible();
+
+    const from = await laneX(page, 2);
+    const to = await laneX(page, 7);
+    await page.keyboard.down("ControlOrMeta");
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 6 });
+    await expect(page.getByTestId("timeline-range-preview")).toHaveCount(0);
+    await page.mouse.up();
+    await page.keyboard.up("ControlOrMeta");
+
+    await expect(page.getByTestId("timeline-selection-count")).toHaveCount(0);
+    await expect(page.getByTestId("timeline-selection-range")).toHaveCount(0);
+    expect(await show.query("SELECT id FROM cues")).toEqual([]);
+    // the scrub moved the playhead off home
+    await expect(
+        page.getByRole("button", { name: /^Playback position: Page 1\b/ }),
+    ).toBeVisible();
+});
 test("a Facing cue's wheel sets its angle and the field gives its point", async ({
     show,
 }) => {

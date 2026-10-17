@@ -7,6 +7,7 @@ import { useVisualsStore } from "@/stores/VisualsStore";
 import { whoMarcherIds } from "./visualsWho";
 
 const NO_TAGS: ReadonlyMap<number, readonly number[]> = new Map();
+const NO_IDS: readonly number[] = [];
 
 /**
  * Keeps the Visuals store's `focusMarcherIds` current: the focused who's
@@ -19,9 +20,12 @@ export function useVisualsFocusSync(): void {
     const { data: marchers } = useQuery(allMarchersQueryOptions());
     const { data: byTag } = useQuery(marcherIdsForAllTagIdsQueryOptions());
     const { selectedMarchers } = useSelectedMarchers()!;
+    // Only a focused selection follows it: another who keeps its set, so
+    // what reads it (the band, the dimming) doesn't redo its work per click
+    const following = focus?.kind === "selection";
     const selectedIds = useMemo(
-        () => selectedMarchers.map((m) => m.id),
-        [selectedMarchers],
+        () => (following ? selectedMarchers.map((m) => m.id) : NO_IDS),
+        [following, selectedMarchers],
     );
 
     useEffect(() => {

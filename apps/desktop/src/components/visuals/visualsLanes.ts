@@ -72,6 +72,8 @@ export interface ResultSpan {
     /** Where it came from; null where mixed. */
     source: ResultSource | null;
     mixed: boolean;
+    /** A flagged cue sets it for one or more of the who (section 7.2). */
+    flagged: boolean;
 }
 
 /** Each beat's count (beats with a duration, in order), and back. */
@@ -166,7 +168,10 @@ export function laneCue(cue: DatabaseCue, counts: CountIndex): LaneCue | null {
     const value = cueLibraryValue(cue.value);
     const label = value?.label ?? cue.value;
     if (cue.kind === "phrase") {
-        const length = Math.max(2, cue.length ?? value?.minLength ?? 2);
+        // as compile plays it: held to the value's range, never under 2
+        const min = Math.max(2, value?.minLength ?? 2);
+        const max = Math.max(min, value?.maxLength ?? Infinity);
+        const length = Math.min(max, Math.max(min, cue.length ?? min));
         return {
             id: cue.id,
             kind: "phrase",
@@ -219,6 +224,9 @@ export function visualsLanes({
     const ownRank = target ? RANK[target.kind] : RANK.set;
     const own: LaneCue[] = [];
     const rows = new Map<string, LaneRow>();
+    // Whether each target reaches a focused marcher, worked out once per
+    // target: a show's cues share few targets, and a band holds everyone
+    const reaches = new Map<string, boolean>();
     for (const cue of cues) {
         if (cue.channel !== channel) continue;
         const placed = laneCue(cue, counts);
@@ -228,8 +236,21 @@ export function visualsLanes({
             own.push(placed);
             continue;
         }
-        const reach = targetMarcherIds(cue.target, marchers, marcherIdsByTagId);
-        if (![...reach].some((id) => focusIds.has(id))) continue;
+        let reach = reaches.get(key);
+        if (reach === undefined) {
+            reach = false;
+            for (const id of targetMarcherIds(
+                cue.target,
+                marchers,
+                marcherIdsByTagId,
+            ))
+                if (focusIds.has(id)) {
+                    reach = true;
+                    break;
+                }
+            reaches.set(key, reach);
+        }
+        if (!reach) continue;
         const row = rows.get(key) ?? { key, target: cue.target, cues: [] };
         row.cues.push(placed);
         rows.set(key, row);
@@ -262,7 +283,8 @@ export function visualsLanes({
 
 /**
  * What the focused marchers do on `channel` at each count's click, merged
- * into spans: one value and where it came from, or mixed where they differ.
+ * into spans: one value and where it came from, or mixed where they differ,
+ * and flagged where any of them follows a cue in `flagged`.
  */
 export function resultRow({
     compiled,
@@ -270,12 +292,15 @@ export function resultRow({
     focusIds,
     countCount,
     lanes,
+    flagged = new Set(),
 }: {
     compiled: CompiledCues;
     channel: VisualsChannel;
     focusIds: ReadonlySet<number>;
     countCount: number;
     lanes: Lanes;
+    /** The cues with a flag that reaches a focused marcher (`flagsByCue`). */
+    flagged?: ReadonlySet<number>;
 }): ResultSpan[] {
     const sourceOf = new Map<number, ResultSource>();
     for (const c of lanes.own) sourceOf.set(c.id, "own");
@@ -289,6 +314,7 @@ export function resultRow({
     const cueId: (number | null)[] = new Array(countCount).fill(null);
     const seen = new Array<boolean>(countCount).fill(false);
     const mixed = new Array<boolean>(countCount).fill(false);
+    const flaggedAt = new Array<boolean>(countCount).fill(false);
     for (const id of focusIds) {
         const segments = compiled.segments(id, channel);
         let s = 0;
@@ -299,6 +325,7 @@ export function resultRow({
                 seg && seg.from <= k
                     ? { label: seg.label, cue: seg.cueId }
                     : { label: null, cue: null };
+            if (here.cue !== null && flagged.has(here.cue)) flaggedAt[k] = true;
             if (!seen[k]) {
                 seen[k] = true;
                 label[k] = here.label;
@@ -311,25 +338,26 @@ export function resultRow({
     const spans: ResultSpan[] = [];
     for (let k = 0; k < countCount; k++) {
         if (!seen[k]) continue;
-        const span: ResultSpan = mixed[k]
-            ? { from: k, to: k + 1, label: null, source: null, mixed: true }
-            : {
-                  from: k,
-                  to: k + 1,
-                  label: label[k],
-                  source:
-                      cueId[k] === null
-                          ? "default"
-                          : (sourceOf.get(cueId[k]!) ?? "exception"),
-                  mixed: false,
-              };
+        const span: ResultSpan = {
+            from: k,
+            to: k + 1,
+            label: mixed[k] ? null : (label[k] ?? null),
+            source: mixed[k]
+                ? null
+                : cueId[k] === null
+                  ? "default"
+                  : (sourceOf.get(cueId[k]!) ?? "exception"),
+            mixed: mixed[k]!,
+            flagged: flaggedAt[k]!,
+        };
         const last = spans[spans.length - 1];
         if (
             last &&
             last.to === k &&
             last.mixed === span.mixed &&
             last.label === span.label &&
-            last.source === span.source
+            last.source === span.source &&
+            last.flagged === span.flagged
         )
             last.to = k + 1;
         else spans.push(span);

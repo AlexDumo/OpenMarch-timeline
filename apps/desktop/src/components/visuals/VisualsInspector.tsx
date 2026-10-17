@@ -17,7 +17,6 @@ import {
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { getSectionObjectByName } from "@/global/classes/Sections";
 import { useVisualsStore } from "@/stores/VisualsStore";
-import { useVisualsFocusSync } from "./useVisualsFocusSync";
 import VisualsCuePanel from "./VisualsCuePanel";
 import VisualsWhyReadout from "./VisualsWhyReadout";
 import {
@@ -79,7 +78,6 @@ function Heading({ children }: { children: React.ReactNode }) {
 }
 
 export default function VisualsInspector() {
-    useVisualsFocusSync();
     const { t } = useTolgee();
     const { data: marchers } = useQuery(allMarchersQueryOptions());
     const { data: tags } = useQuery(allTagsQueryOptions());

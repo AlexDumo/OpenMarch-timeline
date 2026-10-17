@@ -100,6 +100,24 @@ describe("laneCue", () => {
         // the library's label
         expect(state!.label).not.toMatch(/^builtin:/);
     });
+
+    it("draws a phrase as long as compile plays it, inside its value's range", () => {
+        // Choreography is 8 counts, whatever the cue stores
+        const choreo = (length: number) =>
+            laneCue(
+                cue({
+                    channel: "body",
+                    kind: "phrase",
+                    target: { kind: "band" },
+                    value: "builtin:body.choreo",
+                    beatId: beatOf(2),
+                    length,
+                }),
+                counts,
+            );
+        expect(choreo(3)).toMatchObject({ from: 2, to: 10, holdTo: 10 });
+        expect(choreo(12)).toMatchObject({ from: 2, to: 10, holdTo: 10 });
+    });
 });
 
 describe("visualsLanes", () => {
@@ -200,6 +218,21 @@ describe("visualsLanes", () => {
         // transition into 10), and trumpet 1 doesn't
         expect(at(12)).toMatchObject({ mixed: true, label: null });
         expect(spans[spans.length - 1]!.to).toBe(16);
+
+        // a flagged cue flags the counts it sets for the who (section 7.2)
+        const flagged = resultRow({
+            compiled,
+            channel: "facing",
+            focusIds,
+            countCount: 16,
+            lanes,
+            flagged: new Set([trumpets.id]),
+        });
+        const flaggedAt = (k: number) =>
+            flagged.find((s) => s.from <= k && k < s.to)!;
+        expect(flaggedAt(8)).toMatchObject({ source: "own", flagged: true });
+        expect(flaggedAt(0)).toMatchObject({ flagged: false });
+        expect(flaggedAt(5)).toMatchObject({ flagged: false });
     });
 });
 

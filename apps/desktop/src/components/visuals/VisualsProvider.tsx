@@ -9,10 +9,14 @@ import { createContext, useContext, type ReactNode } from "react";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { useVisualsBandData, type VisualsBandData } from "./useVisualsBandData";
 import { useVisualsWorkspaceLock } from "./useVisualsWorkspaceLock";
+import { useVisualsFocusSync } from "./useVisualsFocusSync";
 
 const VisualsDataContext = createContext<VisualsBandData | null>(null);
 
 export function VisualsProvider({ children }: { children: ReactNode }) {
+    // here, not in the inspector, so the focus stays current while the
+    // inspector is hidden (fullscreen)
+    useVisualsFocusSync();
     const visuals = useIsVisualsView();
     const data = useVisualsBandData(visuals);
     useVisualsWorkspaceLock(visuals);
