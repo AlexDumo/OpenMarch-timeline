@@ -1437,3 +1437,11 @@ check.
 - **Alternatives:** presets 4–32 (built first); a number field on the pill; only in Workspace
   settings.
 - **Validate:** V-304.
+
+## EC-17 Main's newer playback rules with endless counts (rebase on main 826d6a463, 2026-10-17)
+
+- **Choice:** reaching the stop point stops as Stop does, back to where Play was pressed (UI-24),
+  and the playhead isn't held at the show's end anywhere: a start flag released on the playhead
+  at the show's end pushes the playhead a count past it (UI-21), as it does elsewhere. The 3D
+  view and the three.js field follow playback on the count grid too, so marchers follow moves past
+  the end there as well.
