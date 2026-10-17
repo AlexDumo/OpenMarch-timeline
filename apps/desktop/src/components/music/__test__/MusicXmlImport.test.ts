@@ -97,6 +97,22 @@ describeDbTests("MusicXML import", (it) => {
         expect(new Set(startBeats).size).toBe(startBeats.length);
     });
 
+    it("numbers a rehearsal mark played again by a repeat", async ({ db }) => {
+        const marked = MEASURE.replace(
+            "</attributes>",
+            `</attributes><direction><direction-type><rehearsal>A</rehearsal></direction-type></direction>`,
+        ).replace(
+            "</note>",
+            `</note><barline location="right"><repeat direction="backward"/></barline>`,
+        );
+        await importScore(db, score(marked));
+
+        const marks = (await getMeasures({ db }))
+            .map((m) => m.rehearsal_mark)
+            .filter(Boolean);
+        expect(marks).toEqual(["A", "A-2"]);
+    });
+
     it("leaves the show alone when the file can't be imported", async ({
         db,
     }) => {

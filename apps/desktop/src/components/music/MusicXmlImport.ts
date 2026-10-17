@@ -147,7 +147,13 @@ export const _importMusicXmlFile = async ({
                 const newMeasures: NewMeasureArgs[] = parsedMeasures.map(
                     (measure, i) => ({
                         start_beat: dbBeats[measureStartBeatPositions[i]].id,
-                        rehearsal_mark: measure.rehearsalMark,
+                        // Each pass of a repeated section gets its own mark: A, A-2, A-3
+                        rehearsal_mark:
+                            measure.rehearsalMark &&
+                            measure.time &&
+                            measure.time > 1
+                                ? `${measure.rehearsalMark}-${measure.time}`
+                                : measure.rehearsalMark,
                         // A measure played again by a repeat says which written measure it is
                         notes:
                             measure.notes ??
