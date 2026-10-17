@@ -614,9 +614,9 @@ function PlayingTimeline({
     | "onLoopChange"
     | "onViewportExtent"
 > & {
-    /** The counts as they go on past the stored ones (endless counts) */
-    countGrid: CountGrid;
-}) {
+        /** The counts as they go on past the stored ones (endless counts) */
+        countGrid: CountGrid;
+    }) {
     const { beats, pages } = props;
     const playback = useTimelinePlayback({ countGrid, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);

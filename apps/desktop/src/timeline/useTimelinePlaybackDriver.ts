@@ -37,6 +37,7 @@ import { usePlaybackStopBeat } from "./usePlaybackStopBeat";
  *
  * Nothing follows playback while `enabled` is false.
  */
+// eslint-disable-next-line max-lines-per-function
 export function useTimelinePlaybackDriver(enabled: boolean): void {
     const { beats, countGrid: grid } = useTimingObjects();
     const isPlayingContext = useIsPlaying();

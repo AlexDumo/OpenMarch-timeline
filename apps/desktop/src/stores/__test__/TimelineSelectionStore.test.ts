@@ -697,7 +697,7 @@ describe("dragging the start flag or the playhead by its line (UI-21)", () => {
         expect(store().playheadRevision).toBe(revision + 1);
     });
 
-    it("a start flag released on the playhead at the show's end pushes nothing past it", () => {
+    it("a start flag released on the playhead at the show's end pushes it a count on: the counts never end (endless counts)", () => {
         store().setShowEndBeat(25);
         store().selectRange(17, 25);
         store().beginLineDrag("start");
@@ -705,8 +705,8 @@ describe("dragging the start flag or the playhead by its line (UI-21)", () => {
         store().endLineDrag();
         expect(store().selection).toEqual({
             kind: "range",
-            start: 24,
-            end: 25,
+            start: 25,
+            end: 26,
         });
     });
 

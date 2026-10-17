@@ -244,7 +244,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         audio.seconds = 1;
         frame();
         act(() => {
-            seekTimeline(result.current.beats, 14, undefined, {
+            seekTimeline(result.current.countGrid, 14, undefined, {
                 isPlaying: true,
                 setIsPlaying: result.current.playing.setIsPlaying,
             });
@@ -407,10 +407,12 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         audio.seconds = 10; // beat 21, past the stored counts: it plays on
         frame();
         expect(result.current.playing.isPlaying).toBe(true);
+        const pressedAt = store().playheadBeat;
         audio.seconds = 14.5; // beat 30, the last move's end
         frame();
         expect(result.current.playing.isPlaying).toBe(false);
-        expect(store().playheadBeat).toBe(30);
+        // It stops as Stop does, back to where Play was pressed (UI-24)
+        expect(store().playheadBeat).toBe(pressedAt);
     });
 
     it("played from past where it stops, it plays on in silence until stopped (endless counts)", async ({

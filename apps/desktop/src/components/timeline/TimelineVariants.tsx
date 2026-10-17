@@ -2070,10 +2070,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                 onContextMenu={(event) => {
                                     const { counts, onCountsChange } =
                                         props.appendCounts ?? {};
-                                    if (
-                                        counts === undefined ||
-                                        !onCountsChange
-                                    )
+                                    if (counts === undefined || !onCountsChange)
                                         return;
                                     event.preventDefault();
                                     event.stopPropagation();
