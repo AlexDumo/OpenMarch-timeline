@@ -18,7 +18,6 @@ import { expect, type Page } from "playwright/test";
 import type { ElectronApplication } from "playwright";
 import { seedShowSql } from "../browser/seed.mjs";
 import { selectTimelinePage as selectPage } from "../utils/timeline.mjs";
-import { classifyGlRenderer, type GlKind } from "../../src/field/fieldQuality";
 
 /** The largest difference allowed between the window's and the editor's show time. */
 const SYNC_TOLERANCE_MS = 50;
@@ -287,7 +286,13 @@ async function expectVenue(
     }
 }
 
-/** What draws WebGL in the window, which decides whether the scene draws. */
+/**
+ * What draws WebGL in the window, which decides whether the scene draws.
+ * Mirrors `classifyGlRenderer` in `src/field/fieldQuality.ts`; the spec can't
+ * import it, as Playwright loads app sources as CommonJS.
+ */
+type GlKind = "hardware" | "software" | "none";
+const SOFTWARE_RENDERERS = /swiftshader|llvmpipe|softpipe|basic render/i;
 async function glKind(view3d: Page): Promise<GlKind> {
     const renderer = await view3d.evaluate(() => {
         const canvas = document.createElement("canvas");
@@ -301,7 +306,8 @@ async function glKind(view3d: Page): Promise<GlKind> {
             ),
         );
     });
-    return classifyGlRenderer(renderer);
+    if (renderer === null) return "none";
+    return SOFTWARE_RENDERERS.test(renderer) ? "software" : "hardware";
 }
 
 // eslint-disable-next-line max-lines-per-function
