@@ -272,9 +272,9 @@ from it. The spec still wins on the model; this file decides presentation.
     assignment in the selected timeline (a converted or shape-cast show), a
     canvas edit of it is refused with a hint to use the inspector. UI-9's own
     flows never make a second row.
-  - **New marchers and overlaps** (_lead default_). A new marcher joins
-    stored timelines in start order and skips one that only partly overlaps a
-    timeline it has already joined.
+  - **New marchers and overlaps** (_lead default_). Superseded: since the
+    2026-10-08 amendment a new marcher stands at home with no moves, and
+    since 2026-10-16 partial overlaps are allowed (spec §6.2).
   - **Deleting a flag.** Deleting page N's flag deletes N's row and moves
     page N+1's start back to N's start, the exact inverse of **+**: N+1 keeps
     its flag, id and data (per-page data follows the page that keeps its
@@ -311,10 +311,15 @@ from it. The spec still wins on the model; this file decides presentation.
     any moved marcher that isn't in it (UI-9's own transition and layer rules),
     and sets their endings. There is no **Add selected marchers** step; the
     menu item is removed. A window that crosses page flags passes through
-    (project owner, 2026-10-04; research/ownership/10-cross-page-windows.md):
-    the drag overrides the moved marchers' moves inside the window, which stay
-    stored underneath and come back when it is deleted, and a move the window
-    runs into partway catches up after it (R-5). An info toast names what was
+    (project owner, 2026-10-04; research/ownership/10-cross-page-windows.md).
+    Who plays inside the window follows spec §6.2 like everywhere else
+    (project owner, 2026-10-16): the drag wins over page moves and over moves
+    that started before the window, which stay stored underneath and come back
+    when it is deleted; a move that starts inside the window wins from its
+    start. One that also ends inside the window hands the marchers back, so
+    they still arrive where they were dropped. One that runs past P means they
+    aren't at the dropped spot at P, and the toast names the move that takes
+    over. A move the window runs into partway catches up after it (R-5). An info toast names what was
     passed through, including page flags with no stored move under sparse rows,
     and offers **Start from Page N** (was "Only change Page N", renamed by
     defined-coordinates 07c §2), which moves them from the last flag before P
@@ -1205,7 +1210,7 @@ These belong in the inspector (P8.5), not the timeline:
 (`TimelineInspectorSection`, timeline mode only) explains each selected marcher
 (up to 10) at the selected page's end beat from `explain`: span kind with a
 plain-language note, its beats, the transition and the spec timeline it belongs
-to, the assignment's layer (read-only), slot, progress, origin (home, or the end of the
+to, which move it is following there and why (spec §6.2), slot, progress, origin (home, or the end of the
 previous span), path style, bulge, waypoints, destination, and for
 follow-the-leader spans the member order place, order source and target. It
 then lists that marcher's diagnostics, and below it every diagnostic of the

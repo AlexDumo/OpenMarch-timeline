@@ -12,9 +12,12 @@ normative rules are spec §6.2 (L-1 to L-6, D-18) and the ADR 0001 amendment of 
 3. **On the same start, the shorter one wins.** The longer one picks the marcher back up when the
    shorter one ends.
 
-Together these nest like brackets: when a move starts, the marcher follows it until it ends, then
-goes back to the move it came from, starting from where they actually are and finishing on time
-(spec R-5, D-12). Two of one marcher's moves (other than page moves) over exactly the same counts
+Put together: at any count the marcher follows the move that started most recently among those
+still running (the shortest on a tie). A move inside another nests like brackets: when it ends,
+the marcher goes back to the outer move, starting from where they actually are and finishing on
+time (spec R-5, D-12). A move that only partly overlaps an earlier one cuts it off for good. A
+marcher who joins a move partway ranks by the count they join. Page moves rank the same way among
+themselves (after a flag insert or delete, two can overlap), always below every other move. Two of one marcher's moves of the same kind (two page moves, or two others) over exactly the same counts
 can't be ranked, so that edit is refused (L-4).
 
 Nobody types or picks a layer. The layer module works every layer out from these rules at the end
@@ -75,7 +78,7 @@ up. Every verdict below was checked against the simulator's output.
 
 ### 1. Drag a split move back into Page 1
 
-The split move now starts at count 5, after Page 1's move, so it takes over there. Both rules agree.
+The split move now covers counts 5 to 13. It isn't a page's move, so it wins over Page 1's move from count 5 (rule 1). Both rules agree.
 
 ![Case 1, rule B](images/case1-B.gif)
 
@@ -163,13 +166,19 @@ are hidden whenever the long move was made or nudged after them.
 
 ## What can still surprise
 
-- **One move never hides another**, since that would need the same start and a later end, which
-  makes it the longer one. Several shorter moves inside a long one can still cover all of it.
+- **One move never hides another, except a page's move**, since that would need the same start
+  and a later end, which makes it the longer one. A single move can hide a page's move entirely. Several shorter moves inside a long one can still cover all of it.
   That's the designer's choice, and the long move's faded counts show it.
 - **Catch-up sprints** (case 7): a move that hands marchers back with little time left makes them
   rush. A warning for that is a separate question.
 - **No override.** A designer who wants a long move to win over one inside it shortens or deletes
   the inner move.
+- **Dragging marchers on the field over a window** (UI-10) follows the same rule (owner,
+  2026-10-16): a move that starts inside the window wins from its start. If it runs past the
+  window's end, the marchers aren't at the dropped spot there, and the toast says which move takes
+  over.
+- **Follow the leader**: who founds an FTL move depends on which rows win at its start, so
+  changing the end of one of two rows that start together can change an FTL move's founders.
 
 ## How it shows in the app
 

@@ -116,7 +116,7 @@ The four concepts are strictly separated. Merging any two of them is the failure
 | D-3 | **Cache at the boundaries, not the interior.** The cached state is where marchers are when each span starts, plus FTL trails. Nothing between boundaries is cached. | Decided | A start state is fixed once the authored data is fixed. Caching it removes the recursive walk up the chain from the per-frame path (§9.6). |
 | D-4 | **Slots are separate from marchers.** Transitions own anonymous slots, and assignments put marchers into them. | Decided | Lets a designer author "a 16-person circle" before deciding who is in it. |
 | D-5 | **Shapes are absolute.** No shape or path is positioned relative to upstream geometry. | Decided | An upstream edit makes the drill *look worse*: marchers take a longer approach and move faster. It never makes the drill *invalid*, so there are no cascading conflicts to resolve. §8.11 makes this hold numerically too. |
-| D-6 | **Precedence is an explicit integer `layer`.** It is not inferred from "narrowest range" or "most recent". | Decided | Stays predictable when steals are stacked. Cost: the UI eventually has to show layers. *Amended by D-18: the stored integer stays, but the app derives it, and the UI shows stacking order and overridden counts instead of numbers.* |
+| D-6 | **Precedence is an explicit integer `layer`.** The resolver reads it as stored and never infers precedence itself. | Decided | Stays predictable when steals are stacked. Cost: the UI eventually has to show layers. *Amended by D-18 (2026-10-16): the stored integer stays, but the app derives it from the ranges (base rows lowest, then the later start, then the shorter on a shared start). That ranking is a fixed function of what the timeline shows, so it stays predictable when steals stack, which was D-6's concern with inference by "most recent". The UI shows stacking order and overridden counts instead of numbers.* |
 | D-7 | **Progress is measured against the transition's natural end** (`T.end_beat`), not against the end of the span after clipping. | Decided | This is what makes steals correct. A marcher stolen halfway through is halfway there, not at the destination. |
 | D-8 | **Invalidation pushes, recompute pulls.** An edit marks dependents dirty straight away. Nothing is recomputed until something reads it. | Decided | Work scales with what the playhead needs, not with the length of the show. |
 | D-9 | **Order is a runtime input that only order-sensitive styles read.** It is not glue that users maintain everywhere. | Decided | Avoids Pyware's gluing model, which forces an ordering onto shapes (such as boxes) that don't need one. |
@@ -500,19 +500,19 @@ That argument needs four things. The schema in §5.1 meets all four, and they ar
 
 The resolver only reads `layer` (R-2). This section says how the app's write path chooses it, so that who wins depends only on what the timeline shows, never on the order of edits. Cases, a simulator and animations: [research/layer-priority](research/layer-priority/README.md).
 
-- **L-1: base rows are underneath.** A base row loses to every non-base row of the same marcher where they overlap. One marcher's base rows never overlap each other, because pages don't overlap.
-- **L-2: the later start wins.** Of two overlapping non-base rows of one marcher, the one with the later `start_beat` wins.
-- **L-3: on the same start, the shorter wins.** If they start on the same beat, the one with the earlier `end_beat` wins, and the longer one resumes after it (R-5, D-12). With L-2, moves nest like brackets: a marcher follows a row until it ends, then goes back to the row it came from.
-- **L-4: identical ranges are refused.** Two non-base rows of one marcher with the same start and end can't be ranked, so a write that would make them is refused (`E-ARGS`, naming the marcher and the move it already has there).
-- **L-5: the number.** `layer(r)` is 0 if `r` beats no row it overlaps. Otherwise it is one more than the highest layer among the overlapping rows it beats. Base rows are therefore always 0. A row that would need a layer above 1000 (I-N2) is refused (`E-A3`).
-- **L-6: one writer.** Every edit that writes, moves or deletes assignments ends by setting the layers of the marchers it touched from L-1 to L-5, in the same transaction. No other code chooses a layer, and no UI edits one. So that every intermediate state stays valid in both directions (§6.1), the edit first gives each touched row a distinct temporary layer, then makes its changes, then writes the derived layers.
+- **L-1: base rows are underneath.** A base row loses to every non-base row of the same marcher where they overlap. One marcher's base rows can overlap each other (a flag inserted inside a page leaves the old move marked while a new one is made on the new page; a flag delete leaves two marked moves in the merged page); among themselves they rank by L-2 and L-3, still below every non-base row.
+- **L-2: the later start wins.** Of two overlapping rows of one marcher of the same kind (both base or both non-base), the one with the later `start_beat` wins. The row's own `start_beat` counts, so a marcher who joins a move partway ranks by the beat they join.
+- **L-3: on the same start, the shorter wins.** If they start on the same beat, the one with the earlier `end_beat` wins, and the longer one resumes after it (R-5, D-12). Put together: at any beat the marcher follows the row that started most recently among those still running (the shortest on a tie). A move inside another nests like brackets and hands the marcher back when it ends; a move that only partly overlaps an earlier one cuts it off, and the earlier one never resumes.
+- **L-4: identical ranges are refused.** Two rows of one marcher of the same kind with the same start and end can't be ranked, so a write that would make them is refused (`E-ARGS`, naming the marcher and the move it already has there). Range edits that would land there (an edge drag, a flag drag that moves an end attached to the flag, a beat delete that shrinks a row) stop short of it, like other walls.
+- **L-5: the number.** `layer(r)` is 0 if `r` beats no row it overlaps. Otherwise it is one more than the highest layer among the overlapping rows it beats. A base row is 0 unless it overlaps another base row it beats. A row that would need a layer above 1000 (I-N2) is refused (`E-A3`).
+- **L-6: one writer.** Every edit that writes, moves or deletes assignments, or adds, moves or removes a page's mark, ends by setting the layers of the marchers it touched from L-1 to L-5, in the same transaction. No other code chooses a layer, and no UI edits one. So that every intermediate state stays valid in both directions (§6.1), the edit first moves every row it will move, and every row of a touched marcher whose derived layer will change, to a distinct negative temporary layer in `[−1000, −1]`. Then it makes its changes, then writes the derived layers. Derived layers are never negative, so the final writes can't collide with a temporary one in any order, and undo replays through the same valid states. Statement-ordering tricks that kept same-layer rows apart during an edit are no longer needed.
 
 | ID | Invariant | Enforced by | Error |
 |---|---|---|---|
 | I-L1 | Every stored layer equals L-5's | The layer module on every write; a test after every command | test failure |
-| I-L2 | No two non-base rows of one marcher share the same range | Write path (L-4) | `E-ARGS` |
+| I-L2 | No two rows of one marcher of the same kind share the same range | Write path (L-4) | `E-ARGS` |
 
-Steals are unchanged: an overridden row keeps running hypothetically, and a row that picks a marcher back up rebases (D-12). One non-base row can never hide another entirely, since hiding it would need the same start and a later end. Several shorter rows inside a longer one can still cover all of it; that's the designer's choice, shown by the longer row's faded counts.
+Steals are unchanged: an overridden row keeps running hypothetically, and a row that picks a marcher back up rebases (D-12). **Follow-the-leader founders depend on layers** (R-9, QA-REG-4): a row that a higher layer overrides at an FTL transition's start makes that marcher a joiner. So an edit that changes a marcher's ranking, such as moving the end of one of two rows that start together, can change who founds an FTL move and shift every member's target, even though the edited row isn't in that move. The FTL diagnostics report it. One non-base row can never hide another entirely, since hiding it would need the same start and a later end. Several shorter rows inside a longer one can still cover all of it; that's the designer's choice, shown by the longer row's faded counts.
 
 ---
 
@@ -1624,7 +1624,7 @@ The reviewer accepted the core design and found no new structural contradiction.
 |---|---|
 | §2 | **Layer** says it's derived; new term **base row** |
 | §4 | D-6 amended; new D-18 |
-| §6.2 | New: L-1 to L-6, I-L1, I-L2 |
+| §6.2 | New: L-1 to L-6, I-L1, I-L2, and a note on FTL founders |
 | §13 | Q-8 resolved |
 
 **Unchanged:** the schema, the triggers (I-A3 still guards every write), R-2 and every other resolution rule, `ref/`, and the QA catalogue. The app stores which timeline is a page's own (ADR 0001), which is an app table, not part of §5.
@@ -1643,3 +1643,6 @@ The reviewer accepted the core design and found no new structural contradiction.
 | QA-LP-8 | A row that would need layer 1001 | Refused, `E-A3` |
 | QA-LP-9 | Undo and redo of an edit that changed layers | Layers restored exactly; every intermediate state valid |
 | QA-LP-10 | Property: random rows for one marcher | I-L1 holds, and R-2's winner matches L-1 to L-3 at every beat |
+| QA-LP-11 | Two base rows `[0,16)` (old page move, marked) and `[0,8)` (new page after a flag insert) | `[0,8)` wins on 0 to 8; layers 0 and 1 |
+| QA-LP-12 | An FTL transition whose founder also has a same-start row elsewhere; shorten that row so it wins at the FTL start | The marcher becomes a joiner; founders and targets update; diagnostic raised |
+| QA-LP-13 | A flag drag that would give one marcher two non-base rows with the same range | The drag stops one beat short |
