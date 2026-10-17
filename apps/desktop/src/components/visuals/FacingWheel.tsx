@@ -65,12 +65,20 @@ export default function FacingWheel({
                     onCommit(dragging);
                 setDragging(null);
             }}
+            onPointerCancel={() => setDragging(null)}
             onKeyDown={(e) => {
                 const step = e.shiftKey ? 45 : 5;
-                if (e.key === "ArrowRight" || e.key === "ArrowUp")
-                    onCommit((degrees + step) % 360);
-                else if (e.key === "ArrowLeft" || e.key === "ArrowDown")
-                    onCommit((degrees - step + 360) % 360);
+                const turn =
+                    e.key === "ArrowRight" || e.key === "ArrowUp"
+                        ? step
+                        : e.key === "ArrowLeft" || e.key === "ArrowDown"
+                          ? -step
+                          : 0;
+                if (!turn) return;
+                // the wheel's arrows, not the app's nudge or page step
+                e.preventDefault();
+                e.stopPropagation();
+                onCommit((degrees + turn + 360) % 360);
             }}
         >
             <circle
