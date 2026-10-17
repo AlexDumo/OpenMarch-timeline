@@ -24,19 +24,32 @@ interface VisualsState {
      */
     focusMarcherIds: ReadonlySet<number> | null;
     setFocusMarcherIds(ids: ReadonlySet<number> | null): void;
+    /** The cue picked on the editable lane, or null. */
+    selectedCueId: number | null;
+    setSelectedCueId(id: number | null): void;
+    /** Whether the timeline's cue band is folded to its title. */
+    bandCollapsed: boolean;
+    toggleBandCollapsed(): void;
 }
 
 export const useVisualsStore = create<VisualsState>((set) => ({
     channel: "feet",
-    setChannel: (channel) => set({ channel }),
+    // a picked cue is on one channel's lane for one who
+    setChannel: (channel) => set({ channel, selectedCueId: null }),
     focus: null,
     toggleFocus: (who) =>
         set((state) =>
             sameWho(state.focus, who)
-                ? { focus: null, focusMarcherIds: null }
-                : { focus: who },
+                ? { focus: null, focusMarcherIds: null, selectedCueId: null }
+                : { focus: who, selectedCueId: null },
         ),
-    clearFocus: () => set({ focus: null, focusMarcherIds: null }),
+    clearFocus: () =>
+        set({ focus: null, focusMarcherIds: null, selectedCueId: null }),
     focusMarcherIds: null,
     setFocusMarcherIds: (focusMarcherIds) => set({ focusMarcherIds }),
+    selectedCueId: null,
+    setSelectedCueId: (selectedCueId) => set({ selectedCueId }),
+    bandCollapsed: false,
+    toggleBandCollapsed: () =>
+        set((state) => ({ bandCollapsed: !state.bandCollapsed })),
 }));

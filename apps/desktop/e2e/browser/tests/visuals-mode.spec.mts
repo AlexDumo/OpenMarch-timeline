@@ -1,4 +1,6 @@
+// cspell:words choreo
 import { test, expect } from "../fixtures.mjs";
+import type { Page } from "@playwright/test";
 import { clickMarcher, drawnMarchers } from "../app.mjs";
 import { seedShowSql } from "../seed.mjs";
 
@@ -75,4 +77,144 @@ test("focusing a who dims everyone else, and the Editor brings them back", async
     await page.getByTestId("workspace-view-editor").click();
     await expect(page.getByTestId("visuals-inspector")).toBeHidden();
     await expect.poll(() => lit(page)).toHaveLength(5);
+});
+
+interface StoredCue {
+    id: number;
+    channel: string;
+    kind: string;
+    target_kind: string;
+    target_section: string | null;
+    beat_id: number;
+    value: string;
+    length: number | null;
+}
+
+// Beats 1 to 16 are counts 0 to 15 (beat 0 is the show's zero-length start)
+const COUNTS = 16;
+
+/** Where count `count`'s click is on the lane, a little inside its count. */
+async function laneX(page: Page, count: number) {
+    const box = (await page.getByTestId("visuals-lane").boundingBox())!;
+    const perCount = box.width / COUNTS;
+    return {
+        x: box.x + count * perCount + perCount * 0.2,
+        y: box.y + box.height / 2,
+        perCount,
+    };
+}
+
+test("a click on the lane adds a state, and it moves and deletes", async ({
+    show,
+}) => {
+    const { page } = show;
+    const cues = () =>
+        show.query<StoredCue>(
+            "SELECT id, channel, kind, target_kind, target_section, beat_id, value, length FROM cues ORDER BY id",
+        );
+    await expect(page.getByRole("heading", { name: "Page 0" })).toBeVisible();
+    await page.getByTestId("workspace-view-visuals").click();
+    await expect(page.getByTestId("visuals-band-title")).toHaveText(
+        /focus a who/,
+    );
+
+    await page.getByTestId("visuals-tab-facing").click();
+    await page.getByTestId("visuals-who-section-Trumpet").click();
+    await expect(page.getByTestId("visuals-band-title")).toHaveText(
+        "Editing: Facing for Trumpet",
+    );
+
+    // a click adds a state on that count
+    const at4 = await laneX(page, 4);
+    await page.mouse.click(at4.x, at4.y);
+    await expect.poll(cues).toEqual([
+        expect.objectContaining({
+            channel: "facing",
+            kind: "state",
+            target_kind: "section",
+            target_section: "Trumpet",
+            beat_id: 5,
+            value: "builtin:facing.back",
+        }),
+    ]);
+    const [state] = await cues();
+    await expect(page.getByTestId(`visuals-cue-${state!.id}`)).toHaveAttribute(
+        "data-count",
+        "4",
+    );
+    // the result row shows the trumpets' own cue from count 4
+    await expect(
+        page.locator('[data-testid="visuals-result-span"][data-source="own"]'),
+    ).toHaveCount(1);
+
+    // a state holds until the next cue, but a click there still adds one
+    const at12 = await laneX(page, 12);
+    await page.mouse.click(at12.x, at12.y);
+    await expect.poll(async () => (await cues()).length).toBe(2);
+
+    // dragging a cue moves it, count by count
+    const cue = page.getByTestId(`visuals-cue-${state!.id}`);
+    const cueBox = (await cue.boundingBox())!;
+    const startX = cueBox.x + cueBox.width - 3;
+    await page.mouse.move(startX, at4.y);
+    await page.mouse.down();
+    await page.mouse.move(startX + at4.perCount * 3, at4.y, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(async () => (await cues())[0]!.beat_id).toBe(8);
+
+    // Delete removes the picked cue
+    await page.keyboard.press("Delete");
+    await expect
+        .poll(async () => (await cues()).map((c) => c.beat_id))
+        .toEqual([13]);
+});
+
+test("a drag on the lane adds a phrase, and dragging its end stretches it", async ({
+    show,
+}) => {
+    const { page } = show;
+    const cues = () =>
+        show.query<StoredCue>(
+            "SELECT id, channel, kind, target_kind, target_section, beat_id, value, length FROM cues ORDER BY id",
+        );
+    await expect(page.getByRole("heading", { name: "Page 0" })).toBeVisible();
+    await page.getByTestId("workspace-view-visuals").click();
+    await page.getByTestId("visuals-who-section-Trumpet").click();
+
+    // on Body, a drag adds a phrase as long as the drag
+    await page.getByTestId("visuals-tab-body").click();
+    const from = await laneX(page, 2);
+    const to = await laneX(page, 9);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 6 });
+    await page.mouse.up();
+    const bodyCues = async () =>
+        (await cues()).filter((c) => c.channel === "body");
+    await expect.poll(bodyCues).toEqual([
+        expect.objectContaining({
+            channel: "body",
+            kind: "phrase",
+            beat_id: 3,
+            value: "builtin:body.choreo",
+            length: 8,
+        }),
+    ]);
+
+    // dragging its end sets its length
+    const [phrase] = await bodyCues();
+    const end = (await page
+        .getByTestId(`visuals-cue-${phrase!.id}-end`)
+        .boundingBox())!;
+    await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(
+        end.x + end.width / 2 + from.perCount * 2,
+        end.y + end.height / 2,
+        {
+            steps: 4,
+        },
+    );
+    await page.mouse.up();
+    await expect.poll(async () => (await bodyCues())[0]!.length).toBe(10);
 });

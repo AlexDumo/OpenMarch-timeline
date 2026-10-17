@@ -2427,6 +2427,14 @@
             "tags": "Tags",
             "clearFocus": "Clear focus",
             "focusHint": "Click a who to focus it. Everyone else dims on the field."
+        },
+        "band": {
+            "editing": "Editing: {channel} for {who}",
+            "focusFirst": "Visuals: focus a who in the inspector to edit its cues",
+            "selectFirst": "Select marchers on the field to make cues for the selection",
+            "marchers": "{count, plural, one {# marcher} other {# marchers}}",
+            "mixed": "Mixed",
+            "lane": "Cue lane"
         }
     }
 }

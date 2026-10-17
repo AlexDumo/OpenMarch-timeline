@@ -2,6 +2,7 @@ import { threeZoomControls } from "@/field/three/fieldNavigation";
 import Toolbar from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
 import VisualsInspector from "@/components/visuals/VisualsInspector";
+import { VisualsTimelineBandProvider } from "@/components/visuals/VisualsCueBand";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import SidebarModal from "@/components/sidebar/SidebarModal";
 import { SelectedPageProvider } from "@/context/SelectedPageContext";
@@ -345,14 +346,16 @@ function App() {
                                                             }
                                                         />
                                                     </div>
-                                                    {focussedComponent ===
-                                                    "timeline" ? (
-                                                        <TimelineContainer />
-                                                    ) : (
-                                                        <TimelineSplitter>
+                                                    <VisualsTimelineBandProvider>
+                                                        {focussedComponent ===
+                                                        "timeline" ? (
                                                             <TimelineContainer />
-                                                        </TimelineSplitter>
-                                                    )}
+                                                        ) : (
+                                                            <TimelineSplitter>
+                                                                <TimelineContainer />
+                                                            </TimelineSplitter>
+                                                        )}
+                                                    </VisualsTimelineBandProvider>
                                                 </div>
                                                 {!isFullscreen && (
                                                     <div

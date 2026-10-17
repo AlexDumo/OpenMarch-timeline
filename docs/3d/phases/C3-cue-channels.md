@@ -205,3 +205,18 @@ Nothing yet.
   move"), and hover highlighting on the field (the field has no hover
   highlight yet). The workspace view isn't saved; every session opens in
   the Editor.
+- **V2 built (same branch):** the cue band under the timeline's clip rows
+  (`TimelineBand` context, so the timeline needs no Visuals props): the
+  title ("Editing: Facing for Trumpet", folds to itself), grey rows for
+  broader targets above and narrower or overlapping ones below (a click
+  goes to that who), the editable lane and the result row, which reads a
+  compile of the show's cues (colored own, broader, exception or default,
+  hatched where the focused marchers differ). A state draws as its ramp,
+  then its value holding to the next cue; the hold is paint, so a click
+  there adds a cue. Gestures: click adds a state (the channel's first state
+  that fits everyone focused and isn't their default), drag adds a phrase
+  (its first phrase that fits; Feet and Facing have none, so a state),
+  drag moves, a phrase's end stretches, Delete removes. Everything lands on
+  counts; the page and downbeat pull (spec section 7.3) comes with V4. A
+  marcher's carry is their section's usual equipment, ignoring the 3D
+  View's guard equipment toggle, which section 7.5 retires.

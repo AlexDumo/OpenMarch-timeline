@@ -1,0 +1,219 @@
+// cspell:words choreo
+import { describe, expect, it } from "vitest";
+import { compileCues } from "@openmarch/core";
+import type { DatabaseCue } from "@/db-functions/cues";
+import {
+    countIndex,
+    laneCue,
+    newCueValue,
+    resultRow,
+    targetKey,
+    targetOfWho,
+    visualsLanes,
+} from "../visualsLanes";
+
+// Beat 0 is the zero-length start; counts are beats 1..16 at 0.5 s each
+const beats = [
+    { id: 100, position: 0, duration: 0 },
+    ...Array.from({ length: 16 }, (_, i) => ({
+        id: 101 + i,
+        position: i + 1,
+        duration: 0.5,
+    })),
+];
+const counts = countIndex(beats);
+const beatOf = (count: number) => counts.beatIdOfCount[count]!;
+
+const marchers = [
+    { id: 1, section: "Trumpet" },
+    { id: 2, section: "Trumpet" },
+    { id: 3, section: "Tuba" },
+    { id: 4, section: "Color Guard" },
+];
+const byTag = new Map<number, number[]>([[7, [2, 3]]]);
+
+let nextId = 1;
+const cue = (
+    over: Partial<DatabaseCue> & Pick<DatabaseCue, "target" | "value">,
+): DatabaseCue => ({
+    id: nextId++,
+    channel: "facing",
+    kind: "state",
+    beatId: beatOf(4),
+    phraseAssetId: null,
+    length: null,
+    transitionLength: null,
+    settings: {},
+    ripple: null,
+    notes: null,
+    createdAt: "",
+    updatedAt: "",
+    ...over,
+});
+
+describe("countIndex", () => {
+    it("counts beats with a duration, in order", () => {
+        expect(counts.countOfBeatId.get(100)).toBeUndefined();
+        expect(counts.countOfBeatId.get(101)).toBe(0);
+        expect(counts.beatIdOfCount).toHaveLength(16);
+    });
+});
+
+describe("laneCue", () => {
+    it("ramps a state into its count and spans a phrase's counts", () => {
+        const state = laneCue(
+            cue({
+                target: { kind: "band" },
+                value: "builtin:facing.back",
+                beatId: beatOf(6),
+                transitionLength: 3,
+            }),
+            counts,
+        );
+        expect(state).toMatchObject({
+            kind: "state",
+            count: 6,
+            from: 4,
+            to: 6,
+        });
+        const phrase = laneCue(
+            cue({
+                channel: "body",
+                kind: "phrase",
+                target: { kind: "band" },
+                value: "builtin:body.choreo",
+                beatId: beatOf(2),
+                length: 8,
+            }),
+            counts,
+        );
+        expect(phrase).toMatchObject({
+            kind: "phrase",
+            count: 2,
+            from: 2,
+            to: 10,
+        });
+        // the library's label
+        expect(state!.label).not.toMatch(/^builtin:/);
+    });
+});
+
+describe("visualsLanes", () => {
+    const band = cue({
+        target: { kind: "band" },
+        value: "builtin:facing.back",
+    });
+    const trumpets = cue({
+        target: { kind: "section", section: " trumpet" },
+        value: "builtin:facing.side1",
+        beatId: beatOf(8),
+    });
+    const tuba = cue({
+        target: { kind: "section", section: "Tuba" },
+        value: "builtin:facing.side2",
+    });
+    const tag = cue({
+        target: { kind: "tag", tagId: 7 },
+        value: "builtin:facing.front",
+        beatId: beatOf(10),
+    });
+    const otherChannel = cue({
+        channel: "body",
+        target: { kind: "section", section: "Trumpet" },
+        value: "builtin:body.kneel",
+    });
+    const cues = [band, trumpets, tuba, tag, otherChannel];
+
+    it("puts the focused who's cues on its lane, broader rows above and exceptions below", () => {
+        const target = targetOfWho({ kind: "section", section: "Trumpet" }, []);
+        const lanes = visualsLanes({
+            cues,
+            channel: "facing",
+            target,
+            focusIds: new Set([1, 2]),
+            marchers,
+            marcherIdsByTagId: byTag,
+            counts,
+        });
+        expect(lanes.own.map((c) => c.id)).toEqual([trumpets.id]);
+        // a state holds to the show's end with nothing after it on its row
+        expect(lanes.own[0]!.holdTo).toBe(16);
+        expect(lanes.broader.map((r) => r.key)).toEqual(["band"]);
+        // the tag reaches trumpet 2; the tubas' cue reaches no trumpet
+        expect(lanes.exceptions.map((r) => r.key)).toEqual(["tag:7"]);
+    });
+
+    it("gives the selection a set of exactly those marchers", () => {
+        expect(targetOfWho({ kind: "selection" }, [3, 1])).toEqual({
+            kind: "set",
+            marcherIds: [1, 3],
+        });
+        expect(targetOfWho({ kind: "selection" }, [])).toBeNull();
+        expect(targetKey({ kind: "set", marcherIds: [3, 1] })).toBe(
+            targetKey({ kind: "set", marcherIds: [1, 3] }),
+        );
+    });
+
+    it("reads the result from compile: where it came from, and mixed where the who differs", () => {
+        const target = targetOfWho({ kind: "section", section: "Trumpet" }, []);
+        const focusIds = new Set([1, 2]);
+        const lanes = visualsLanes({
+            cues,
+            channel: "facing",
+            target,
+            focusIds,
+            marchers,
+            marcherIdsByTagId: byTag,
+            counts,
+        });
+        const compiled = compileCues({
+            beats: beats
+                .filter((b) => b.duration > 0)
+                .map((b) => ({ id: b.id, duration: b.duration })),
+            marchers: marchers.map((m, i) => ({
+                id: m.id,
+                section: m.section,
+                tagIds: [...byTag.entries()]
+                    .filter(([, ids]) => ids.includes(m.id))
+                    .map(([tagId]) => tagId),
+                drillOrder: i,
+                carries: m.section === "Color Guard" ? "flag" : "winds",
+            })),
+            cues,
+        });
+        const spans = resultRow({
+            compiled,
+            channel: "facing",
+            focusIds,
+            countCount: 16,
+            lanes,
+        });
+        const at = (k: number) => spans.find((s) => s.from <= k && k < s.to)!;
+        expect(at(0)).toMatchObject({ source: "default", mixed: false });
+        expect(at(5)).toMatchObject({ source: "broader", mixed: false });
+        expect(at(8)).toMatchObject({ source: "own", mixed: false });
+        // trumpet 2 ramps into the tag's cue from 9 (Facing's two-count
+        // transition into 10), and trumpet 1 doesn't
+        expect(at(12)).toMatchObject({ mixed: true, label: null });
+        expect(spans[spans.length - 1]!.to).toBe(16);
+    });
+});
+
+describe("newCueValue", () => {
+    it("adds a state that isn't the default, and a phrase only where the channel has one", () => {
+        expect(newCueValue("facing", "state", ["winds"])).toBe(
+            "builtin:facing.back",
+        );
+        expect(newCueValue("horn_equipment", "state", ["winds"])).toBe(
+            "builtin:horn.down",
+        );
+        expect(newCueValue("facing", "phrase", ["winds"])).toBeNull();
+        expect(newCueValue("horn_equipment", "phrase", ["flag"])).toBe(
+            "builtin:flag.dropSpin",
+        );
+        // winds and guard together share no horn state
+        expect(
+            newCueValue("horn_equipment", "state", ["winds", "flag"]),
+        ).toBeNull();
+    });
+});
