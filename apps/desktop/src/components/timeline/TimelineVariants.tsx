@@ -123,11 +123,7 @@ import {
     usePunchTap,
 } from "./TimelinePunchTap";
 import { TimelineAppendCountsMenu } from "./TimelineAppendCountsMenu";
-import {
-    fitSeconds,
-    TimelineShowEnd,
-    useViewportExtent,
-} from "./TimelineShowEnd";
+import { fitSeconds, useViewportExtent } from "./useViewportExtent";
 import type {
     TimelineBeatRange,
     TimelineCommonProps,
@@ -1083,12 +1079,6 @@ const TimelineSurface = memo(function TimelineSurface({
         pixelsPerBeat,
         keepChains: props.keepChains,
     });
-    // The END line can't go back past the last page's start (it is that page's flag)
-    const lastPageStart = model.pages.reduce(
-        (start, page) =>
-            page.isInitial ? start : Math.max(start, page.atBeat),
-        0,
-    );
     const lastFlagBeat = Math.min(
         model.beatCount,
         model.pages.reduce(
@@ -2120,26 +2110,6 @@ const TimelineSurface = memo(function TimelineSurface({
                             axis={axis}
                             height={pinnedHeight}
                         />
-                        {props.showEndBeat !== undefined && (
-                            <TimelineShowEnd
-                                beat={props.showEndBeat}
-                                minBeat={lastPageStart + 1}
-                                axis={axis}
-                                top={TIMELINE_PAGE_ROW_BOTTOM}
-                                height={pinnedHeight}
-                                snapBeats={seekSnapBeats}
-                                labelSide={
-                                    model.measures.length > 0
-                                        ? "left"
-                                        : "right"
-                                }
-                                onMove={
-                                    props.isPlaying
-                                        ? undefined
-                                        : props.onShowEndMove
-                                }
-                            />
-                        )}
                         {/* The loop bar works in counts; the Align view draws seconds */}
                         {props.loop && !showAlign && (
                             <TimelineLoopBar

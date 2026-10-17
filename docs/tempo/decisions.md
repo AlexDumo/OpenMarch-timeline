@@ -1294,7 +1294,12 @@ check.
   (20,000) new counts in one edit, about an hour at 300 BPM. E1's `countsToReach` had the same cap.
 - **Alternatives:** no cap; a cap on the show's total counts.
 
-## EC-2 The END line moves the end, not the moves
+## EC-2 The END line (removed 2026-10-16)
+
+- **Changed 2026-10-16 (owner):** the END line, its label and its drag (`moveShowEnd`) are gone.
+  The page row shaded past the last page's flag (fork #268) already shows where the show ends,
+  and the last flag's grip changes the last page's length. Spec decision 13 is withdrawn. What
+  follows is the record of what was built first.
 
 - **Context:** rule 4 says the END line's drag changes the last page's length "with no effect on
   drill". The END line is the last page's flag, which already has a grip in the ruler (UI-16) that

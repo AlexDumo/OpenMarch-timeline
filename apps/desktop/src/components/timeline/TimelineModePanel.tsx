@@ -46,7 +46,6 @@ import {
     appendPageOfCountsMutationOptions,
     appendPagesToEndMutationOptions,
 } from "@/hooks/queries/useShowLength";
-import { moveShowEndMutationOptions } from "@/hooks/queries/usePageFlags";
 import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { AudioClock } from "./Clock";
 import { TempoMapMenu } from "./TempoMapPanel";
@@ -410,14 +409,11 @@ export default function TimelineModePanel() {
     );
     // Not while a paused preview holds a frame (UI-11), as **+**
     const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
-    // The show's end (endless counts rule 4) is the last page's flag; playback and Fit go on to
-    // the latest of it, the music's end and the last move's end (rule 6)
+    // The show's end (endless counts rule 4) is the last page's flag, shaded past it in the page
+    // row; playback and Fit go on to the latest of it, the music's end and the last move's end
     const lastPage = pages[pages.length - 1];
     const showEndBeat = lastPage ? pageEndBeat(lastPage) : 0;
     const stopBeat = usePlaybackStopBeat();
-    const { mutate: moveShowEnd } = useMutation(
-        moveShowEndMutationOptions(queryClient),
-    );
     const showLength = useShowLengthControls({
         lastFlag: showEndBeat,
         musicEndBeat:
@@ -566,14 +562,6 @@ export default function TimelineModePanel() {
                     appendCounts={showLength.appendCounts}
                     countGrid={countGrid}
                     fitBeat={stopBeat}
-                    showEndBeat={
-                        lastPage && lastPage.counts > 0
-                            ? showEndBeat
-                            : undefined
-                    }
-                    onShowEndMove={
-                        isolated ? undefined : (beat) => moveShowEnd(beat)
-                    }
                     drillEdits={counts.drillEdits}
                     onDeletePageFlag={(pageId) => {
                         const after = selectionAfterFlagDelete(

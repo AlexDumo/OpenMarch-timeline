@@ -34,9 +34,9 @@ Creative tools with a timeline don't ask for that: the grid just keeps going.
    scrubbing and playing store nothing.
 4. **The show's end is the end of the last page:** its flag plus its counts (`last_page_counts`).
    Those counts are always stored (rule 3). Exports end there, as they do now, video included.
-   The timeline draws a thin, quiet **END** line there. It isn't a wall: you can place, drag,
-   select, loop and play across it. Dragging the END line changes the last page's length (like
-   #111's page edge drag), storing counts if needed, in one undo step, with no effect on drill.
+   The page row is shaded past it (no END line; decision 13 was withdrawn). It isn't a wall: you
+   can place, drag, select, loop and play across it. Dragging the last flag's grip changes the
+   last page's length, storing counts if needed, in one undo step.
 5. **Moves can go past the show's end.** A timeline move can be placed or resized anywhere; the
    last page doesn't grow to cover it. Exports leave it out (rule 9).
 6. **Playback goes on past the show's end.** It stops at the latest of the show's end, the end of
@@ -179,5 +179,6 @@ Made by the owner, 2026-10-16:
 11. **Video export ends at the show's end**, not the music's (rule 4).
 12. **Loops and selections can cross the end** and store nothing (rules 3 and 4).
 13. **A quiet END line marks the show's end**, and dragging it changes the last page's length
-    (rule 4).
+    (rule 4). _Withdrawn 2026-10-16 after building it: the page row shaded past the last flag
+    marks the end, and the last flag's grip changes the last page's length (decisions.md EC-2)._
 14. **Exports warn about moves past the end** and offer pages to cover them (rule 9).
