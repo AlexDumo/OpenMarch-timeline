@@ -9,8 +9,9 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import { filesOf, footprintOf, ranksOf } from "../box/boxGeometry";
-import { formatSteps } from "../tool/ShapeToolReadout";
+import { boxBounds, boxFrame, filesOf, ranksOf } from "../box/boxGeometry";
+import { frameCorners } from "../frame/frame";
+import { formatSteps } from "../editor/format";
 import { useShapeToolStore } from "../tool/shapeToolStore";
 import { useBoxSelectionStore } from "./boxSelectionStore";
 import type { PlacedBox } from "./placedBox";
@@ -30,6 +31,8 @@ export interface PlacedBoxDrawing {
         readonly right: number;
         readonly bottom: number;
     };
+    /** Its outline as drawn, half a step out, turned with it: back-left first */
+    readonly corners: readonly { readonly x: number; readonly y: number }[];
     readonly label: string;
 }
 
@@ -102,15 +105,22 @@ export function PlacedBoxesOverlay({
                         box.recipe.members.some((m) => ids.has(m.marcherId))),
             )
             .map((box): PlacedBoxDrawing => {
-                const f = footprintOf(box.params, box.spots);
+                const frame = boxFrame(box.params, box.spots);
+                const corners = frameCorners({
+                    ...frame,
+                    halfWidth: frame.halfWidth + pad,
+                    halfDepth: frame.halfDepth + pad,
+                });
+                const f = boxBounds(box.params, box.spots);
                 return {
                     id: box.recipe.id,
                     rect: {
-                        left: Math.min(f.left, f.right) - pad,
-                        top: Math.min(f.top, f.bottom) - pad,
-                        right: Math.max(f.left, f.right) + pad,
-                        bottom: Math.max(f.top, f.bottom) + pad,
+                        left: f.left - pad,
+                        top: f.top - pad,
+                        right: f.right + pad,
+                        bottom: f.bottom + pad,
                     },
+                    corners,
                     label: boxLabel(box, stepPx),
                 };
             });
@@ -142,16 +152,18 @@ export function PlacedBoxesOverlay({
             className="pointer-events-none absolute inset-0 h-full w-full"
             data-testid="placedBoxes"
         >
-            {drawings.map(({ id, rect, label }) => {
-                const a = fieldToElement(view, rect.left, rect.top);
-                const b = fieldToElement(view, rect.right, rect.bottom);
+            {drawings.map(({ id, corners, label }) => {
+                const points = corners.map((c) =>
+                    fieldToElement(view, c.x, c.y),
+                );
+                // The label sits over the corner highest on screen
+                const a = points.reduce((top, p) => (p.y < top.y ? p : top));
                 return (
                     <g key={id} data-testid="placedBox">
-                        <rect
-                            x={a.x}
-                            y={a.y}
-                            width={b.x - a.x}
-                            height={b.y - a.y}
+                        <polygon
+                            points={points
+                                .map((p) => `${p.x},${p.y}`)
+                                .join(" ")}
                             fill="none"
                             stroke={color}
                             strokeWidth={1}

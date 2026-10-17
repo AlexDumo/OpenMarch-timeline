@@ -59,8 +59,8 @@ import {
     drawnPlacedBoxes,
     PlacedBoxesOverlay,
 } from "@/shapes/placed/PlacedBoxesOverlay";
-import { PlacedBoxReadout } from "@/shapes/placed/PlacedBoxReadout";
-import { ShapeToolReadout } from "@/shapes/tool/ShapeToolReadout";
+import { ShapeEditor } from "@/shapes/editor/ShapeEditorBar";
+import { useShapeFocus } from "@/shapes/field/useShapeFocus";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
@@ -291,6 +291,7 @@ function ThreeFieldView() {
         fieldProperties,
     });
     const { dimming } = timeline;
+    useShapeFocus(dimming);
     const keptMarks = useFieldKeptMarks({
         enabled: timeline.ready,
         isPlaying,
@@ -616,14 +617,7 @@ function ThreeFieldView() {
                     />
                 )}
                 {fieldProperties && (
-                    <>
-                        <ShapeToolReadout
-                            stepPx={fieldProperties.pixelsPerStep}
-                        />
-                        <PlacedBoxReadout
-                            stepPx={fieldProperties.pixelsPerStep}
-                        />
-                    </>
+                    <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
                 )}
                 <KeptMarksOverlay
                     marks={keptMarks}

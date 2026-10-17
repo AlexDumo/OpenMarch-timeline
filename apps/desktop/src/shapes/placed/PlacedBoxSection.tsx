@@ -10,7 +10,7 @@ import {
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { currentShapeField } from "../field/shapeFieldContext";
 import { useBoxSelectionStore } from "./boxSelectionStore";
-import { placedBoxSummary, useDrawnOnPage } from "./PlacedBoxReadout";
+import { placedBoxSummary, useDrawnOnPage } from "./placedBoxText";
 import { placedBoxesAt, usePlacedBoxStore } from "./placedBoxStore";
 import { selectOnField } from "./boxSelection";
 import { stepPlacedBoxFiles } from "./PlacedBoxKeys";

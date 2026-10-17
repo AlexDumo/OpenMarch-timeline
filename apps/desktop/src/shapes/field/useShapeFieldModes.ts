@@ -4,7 +4,10 @@ import type { FieldEditor } from "@/field/editor/fieldEditor";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useBoxSelection } from "../placed/boxSelection";
-import { useBoxSelectionStore } from "../placed/boxSelectionStore";
+import {
+    previewPlacedBox,
+    useBoxSelectionStore,
+} from "../placed/boxSelectionStore";
 import { LiveBoxMode } from "../placed/liveBoxMode";
 import { closeShapeTool, useShapeToolStore } from "../tool/shapeToolStore";
 import { shapeToolMode } from "../tool/shapeToolMode";
@@ -36,6 +39,8 @@ export function useShapeFieldModes(
     );
     useEffect(() => {
         if (box) live?.setBox(box);
+        // The box read back (or another one) replaces a number drag's preview
+        previewPlacedBox(null);
     }, [live, box]);
 
     useEffect(() => {

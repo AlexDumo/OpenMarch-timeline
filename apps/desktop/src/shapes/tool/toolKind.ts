@@ -1,3 +1,4 @@
+import type { PivotKey, ShapeFrame } from "../frame/frame";
 import type { AnyShapeKind, XY } from "../types";
 
 /**
@@ -14,6 +15,10 @@ export interface ToolEnv {
     readonly gridSnap: (p: XY) => XY;
     /** How far from a handle a press still takes it, in field units */
     readonly hitRadius: number;
+    /** What turns, flips and resizes go around (the inspector's pivot); back-left when absent */
+    readonly pivot?: PivotKey;
+    /** The box's ratio lock: changing one spacing changes the other in proportion */
+    readonly ratioLocked?: boolean;
 }
 
 /** A handle the canvas draws, and the cursor it shows on hover */
@@ -49,6 +54,15 @@ export interface ToolKind<P> {
     contains(params: P, n: number, at: XY): boolean;
     /** `base` moved by `delta` */
     move(base: P, n: number, delta: XY, env: ToolEnv): P;
+    /**
+     * The shape's frame (08-shape-system-ux.md): center, size, turn and flip. Turning, flipping
+     * and the center dot work on it, the same for every kind.
+     */
+    frameOf(params: P, n: number): ShapeFrame;
+    /** The params with `frame`'s center, turn and flip; the kind keeps its own size */
+    withFrame(params: P, n: number, frame: ShapeFrame): P;
+    /** After a turn or flip: the shape put back on the grid, if it snaps to one */
+    settle?(params: P, n: number, env: ToolEnv): P;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

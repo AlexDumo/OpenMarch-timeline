@@ -1,4 +1,9 @@
-import { NUDGE_ACTION_IDS } from "@/shortcuts/definitions";
+import { useRef } from "react";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { discardShapeTool } from "./discardToast";
+import { NUDGE_ACTION_IDS, type NudgeArgs } from "@/shortcuts/definitions";
+import { resolveNudgeDistance } from "@/shortcuts/nudge";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     useActionHandler,
     useActionHandlerGroup,
@@ -7,11 +12,14 @@ import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { changeFiles, type BoxParams } from "../box/boxGeometry";
 import { toolEnvFor } from "./toolEnv";
 import { cancelGesture, edit, redo, undo } from "./toolMachine";
-import {
-    closeShapeTool,
-    updateTool,
-    useShapeToolStore,
-} from "./shapeToolStore";
+import { updateTool, useShapeToolStore } from "./shapeToolStore";
+
+const NUDGE_DIRECTIONS = {
+    up: { x: 0, y: -1 },
+    down: { x: 0, y: 1 },
+    left: { x: -1, y: 0 },
+    right: { x: 1, y: 0 },
+} as const;
 
 /** Adds `delta` files to the open box, as one undo step */
 export function stepFiles(delta: number): void {
@@ -34,18 +42,43 @@ export function stepFiles(delta: number): void {
  * The keys the open shape tool takes over. Mounted only while it's open, after the editor's own
  * handlers, so these sit on top of them and the keys go back once the tool closes.
  *
- * - Escape: a gesture goes back to where it started; otherwise the tool closes, placing nothing.
+ * - Escape: a gesture goes back to where it started; otherwise the tool closes, placing nothing,
+ *   and a toast offers to bring the shape back.
  * - Undo and Redo step through the shape's own edits; the show is untouched until Place.
- * - The nudge keys do nothing, rather than move the marchers under the shape.
+ * - The nudge keys move the whole shape, as one undo step each (08), not the marchers under it.
  */
 export function ShapeToolKeys(): null {
+    // The selection now, for the discard toast's Undo
+    const selected = useSelectedMarchers()?.selectedMarchers;
+    const selection = useRef<readonly number[]>([]);
+    selection.current = (selected ?? []).map((m) => m.id);
+    const rounding = useUiSettingsStore((s) => s.uiSettings.coordinateRounding);
     useActionHandler("cancelAlignmentUpdates", () => {
         const { tool } = useShapeToolStore.getState();
         if (tool?.gesture) updateTool(cancelGesture);
-        else closeShapeTool();
+        else discardShapeTool(() => selection.current);
     });
     useActionHandler("performUndo", () => updateTool(undo));
     useActionHandler("performRedo", () => updateTool(redo));
-    useActionHandlerGroup(NUDGE_ACTION_IDS, () => {});
+    useActionHandlerGroup(NUDGE_ACTION_IDS, (_id, args) => {
+        const field = currentShapeField();
+        if (!field) return;
+        const nudge = args as unknown as NudgeArgs;
+        const d = NUDGE_DIRECTIONS[nudge.direction];
+        const px =
+            resolveNudgeDistance(nudge, rounding) *
+            field.fieldProperties.pixelsPerStep;
+        const env = toolEnvFor(field, { shift: false, alt: !nudge.snap });
+        updateTool((tool) => {
+            if (tool.params === null || tool.gesture) return tool;
+            const params = tool.kind.move(
+                tool.params,
+                tool.marchers.length,
+                { x: d.x * px, y: d.y * px },
+                env,
+            );
+            return edit(tool, params, shapeContextFor(field));
+        });
+    });
     return null;
 }

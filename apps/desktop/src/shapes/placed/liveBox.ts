@@ -1,14 +1,11 @@
-import { assignSlots } from "../assign";
-import {
-    changeFiles,
-    filesOf,
-    insideBox,
-    moveBox,
-    stretchBox,
-    type BoxHandleKey,
-    type BoxParams,
-} from "../box/boxGeometry";
+import { assignSlots, type OrderMode } from "../assign";
+import { changeFiles, filesOf, type BoxParams } from "../box/boxGeometry";
 import { boxTool } from "../box/boxTool";
+import {
+    dragShape,
+    startShapeGesture,
+    type ShapeGesture,
+} from "../frame/gestures";
 import { blockKind } from "../kinds/block";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeContext, XY } from "../types";
@@ -16,20 +13,21 @@ import type { PlacedBox } from "./placedBox";
 
 /**
  * A selected placed box, edited in place (docs/timeline/research/shapes/07-placed-boxes.md): its
- * handles stretch it and a drag inside moves it, like the Box tool's, but each gesture is saved
- * when it ends instead of waiting for Place. Presses anywhere else belong to the canvas. A box
- * with holes keeps them: each member keeps its spot in the box. Everything here is pure.
+ * handles stretch it, its knob and corners turn it, its center dot and body move it, like the Box
+ * tool's (the gestures are `frame/gestures.ts`), but each gesture is saved when it ends instead of
+ * waiting for Place. Presses anywhere else belong to the canvas. A box with holes keeps them: each
+ * member keeps its spot in the box. Everything here is pure.
  */
 
-export type LiveGesture =
-    | { readonly type: "handle"; readonly key: BoxHandleKey }
-    | { readonly type: "move"; readonly grab: XY };
+export type LiveGesture = ShapeGesture;
 
 export interface LiveBox {
     readonly box: PlacedBox;
     /** The box as the gesture has it; the saved one when no gesture is going */
     readonly params: BoxParams;
     readonly gesture: LiveGesture | null;
+    /** Where the pointer is during a gesture, for the guides drawn by it */
+    readonly pointer?: XY;
 }
 
 export const openLive = (box: PlacedBox): LiveBox => ({
@@ -40,37 +38,21 @@ export const openLive = (box: PlacedBox): LiveBox => ({
 
 /** The gesture a press at `at` starts, or null when the box doesn't take it */
 export function pressLive(live: LiveBox, at: XY, env: ToolEnv): LiveBox | null {
-    let best: { key: string; d: number } | null = null;
-    for (const h of boxTool.handles(live.params, live.box.spots)) {
-        const d = Math.hypot(h.at.x - at.x, h.at.y - at.y);
-        if (d <= env.hitRadius && (!best || d < best.d))
-            best = { key: h.key, d };
-    }
-    if (best)
-        return {
-            ...live,
-            gesture: { type: "handle", key: best.key as BoxHandleKey },
-        };
-    if (insideBox(live.params, live.box.spots, at))
-        return { ...live, gesture: { type: "move", grab: at } };
-    return null;
+    const gesture = startShapeGesture(
+        boxTool,
+        live.box.params,
+        live.box.spots,
+        at,
+        env,
+    );
+    return gesture ? { ...live, gesture, pointer: at } : null;
 }
 
 export function moveLive(live: LiveBox, at: XY, env: ToolEnv): LiveBox {
     const g = live.gesture;
     if (!g) return live;
-    const base = live.box.params;
-    const spots = live.box.spots;
-    const params =
-        g.type === "handle"
-            ? stretchBox(base, spots, g.key, at, env)
-            : moveBox(
-                  base,
-                  spots,
-                  { x: at.x - g.grab.x, y: at.y - g.grab.y },
-                  env,
-              );
-    return { ...live, params };
+    const params = dragShape(boxTool, live.box.spots, g, at, env) as BoxParams;
+    return { ...live, params, pointer: at };
 }
 
 const sameParams = (a: BoxParams, b: BoxParams) =>
@@ -78,6 +60,9 @@ const sameParams = (a: BoxParams, b: BoxParams) =>
     a.center.y === b.center.y &&
     a.across === b.across &&
     a.deep === b.deep &&
+    a.rotation === b.rotation &&
+    (a.flipX ?? false) === (b.flipX ?? false) &&
+    (a.flipY ?? false) === (b.flipY ?? false) &&
     filesOf(a) === filesOf(b);
 
 /** Ends the gesture: `changed` when there is something to save */
@@ -108,12 +93,14 @@ export function liveTargets(
     box: PlacedBox,
     params: BoxParams,
     ctx: ShapeContext,
+    /** Lay the members out again in this order, even with the same count across */
+    layOutAgain?: OrderMode,
 ): {
     members: { marcherId: number; slot: number; x: number; y: number }[];
     spots: number;
 } {
     const members = box.recipe.members;
-    if (filesOf(params) === filesOf(box.params)) {
+    if (!layOutAgain && filesOf(params) === filesOf(box.params)) {
         const slots = blockKind.generate(params, box.spots, ctx);
         return {
             members: members.map((m) => ({
@@ -134,7 +121,7 @@ export function liveTargets(
             at: { x: m.x, y: m.y },
             drillRank: i,
         })),
-        mode: "nearest",
+        mode: layOutAgain ?? orderOf(box),
         ctx,
     });
     return {
@@ -147,3 +134,11 @@ export function liveTargets(
 }
 
 const xyOf = (p: XY): XY => ({ x: p.x, y: p.y });
+
+/** Whether a turn or flip kept the members on their spots, so it's neither order any more */
+export const keptOf = (box: PlacedBox): boolean =>
+    box.recipe.orderMode === "kept";
+
+/** How the box's members were laid out: drill order, or Least travel (the default, and "kept") */
+export const orderOf = (box: PlacedBox): "nearest" | "drill" =>
+    box.recipe.orderMode === "drill" ? "drill" : "nearest";

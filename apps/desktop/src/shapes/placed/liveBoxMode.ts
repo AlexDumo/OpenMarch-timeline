@@ -2,16 +2,20 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { FieldMode, FieldPointer } from "@/field/editor/fieldEditor";
 import { boxTool } from "../box/boxTool";
 import {
-    asCursor,
     boxOutline,
+    drillNumbers,
+    frameDrawing,
     keysOf,
     memoDrawing,
+    shapeCursor,
+    SPOT_LABEL_LIMIT,
 } from "../field/fieldModeBase";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
-import { blockKind } from "../kinds/block";
+import { shapeTargetAt } from "../frame/gestures";
 import { toolEnvFor } from "../tool/toolEnv";
 import { commitBox } from "./commitBox";
 import {
+    liveTargets,
     moveLive,
     openLive,
     pressLive,
@@ -19,20 +23,51 @@ import {
     type LiveBox,
 } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
+import type { BoxParams } from "../box/boxGeometry";
 import { enterBox } from "./boxSelection";
+import { usePlacedBoxPreviewStore } from "./boxSelectionStore";
 
-const drawingOf = memoDrawing((live: LiveBox) => {
+/** The box as drawn: mid-gesture, or as a number dragged in its floating editor has it */
+interface Shown {
+    readonly live: LiveBox;
+    readonly preview: BoxParams | null;
+}
+
+const drawingOf = memoDrawing(({ live: saved, preview }: Shown) => {
+    const live =
+        preview && !saved.gesture ? { ...saved, params: preview } : saved;
+    const changing = live.gesture !== null || preview !== null;
     const field = currentShapeField();
+    if (!field) return null;
     const n = live.box.spots;
+    const ctx = shapeContextFor(field);
+    // Each member keeps their spot (or the box is laid out again for a new count across)
+    const targets = changing
+        ? liveTargets(live.box, live.params, ctx).members
+        : [];
+    const names = drillNumbers(field);
     return {
+        stage: "open" as const,
         outline: boxOutline(live.params, n),
-        // While a gesture goes, where the marchers will stand
-        spots:
-            live.gesture && field
-                ? blockKind.generate(live.params, n, shapeContextFor(field))
-                : [],
+        // While a gesture goes, where the marchers will stand, and who
+        spots: targets,
         walks: [],
+        labels:
+            targets.length <= SPOT_LABEL_LIMIT
+                ? targets.map((t) => ({
+                      at: t,
+                      text: names.get(t.marcherId) ?? "",
+                  }))
+                : [],
         handles: boxTool.handles(live.params, n).map((h) => h.at),
+        ...frameDrawing(
+            boxTool,
+            live.params,
+            n,
+            live.gesture,
+            live.pointer ?? null,
+            toolEnvFor(field, { shift: false, alt: false }),
+        ),
     };
 });
 
@@ -47,9 +82,12 @@ export class LiveBoxMode implements FieldMode {
     private live: LiveBox;
     private readonly listeners = new Set<() => void>();
     readonly ownsSelectionBox = true;
-    // A box doesn't turn (box v1): a typed rotation would take its members off their spots
+    // The box turns with its own knob; the selection's typed rotation would take its members off
+    // their spots
     readonly locksSelection = true;
     readonly gesture = { kind: "box", always: false } as const;
+
+    private shown: Shown | null = null;
 
     constructor(
         box: PlacedBox,
@@ -101,23 +139,39 @@ export class LiveBoxMode implements FieldMode {
     }
 
     cursorAt(pointer: FieldPointer) {
-        const pressed = this.pressed(pointer);
-        if (!pressed?.gesture) return null;
-        if (pressed.gesture.type === "move") return "move";
-        const key = pressed.gesture.key;
-        const handle = boxTool
-            .handles(this.live.params, this.live.box.spots)
-            .find((h) => h.key === key);
-        return handle ? asCursor(handle.cursor) : null;
+        const field = currentShapeField();
+        if (!field) return null;
+        const target = shapeTargetAt(
+            boxTool,
+            this.live.params,
+            this.live.box.spots,
+            pointer.field,
+            toolEnvFor(field, keysOf(pointer)),
+        );
+        return target
+            ? shapeCursor(
+                  boxTool,
+                  this.live.params,
+                  this.live.box.spots,
+                  target,
+              )
+            : null;
     }
 
     drawing() {
-        return drawingOf(this.live);
+        const preview = usePlacedBoxPreviewStore.getState().params;
+        if (this.shown?.live !== this.live || this.shown.preview !== preview)
+            this.shown = { live: this.live, preview };
+        return drawingOf(this.shown);
     }
 
     subscribe(listener: () => void): () => void {
         this.listeners.add(listener);
-        return () => this.listeners.delete(listener);
+        const unsubscribe = usePlacedBoxPreviewStore.subscribe(listener);
+        return () => {
+            this.listeners.delete(listener);
+            unsubscribe();
+        };
     }
 
     private pressed(pointer: FieldPointer): LiveBox | null {
