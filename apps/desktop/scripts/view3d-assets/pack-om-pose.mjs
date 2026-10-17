@@ -258,7 +258,7 @@ fs.writeFileSync(
                 manifest: "out/body/manifest.json",
             },
             license:
-                "om-pose is OpenMarch's own repository; these files ship under the app's license",
+                "Not under the app's license: no license is granted yet (see LICENSE). The clips wait on counsel (lawyer Q3); the bodies and skeleton take CC0 1.0 once Q3 is answered and om-pose adopts a license upstream (ADR 0002 D-7, D-21)",
             files,
         },
         null,

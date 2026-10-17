@@ -1,0 +1,15 @@
+om-pose assets
+
+The files in this folder (bodies/, clips/ and manifest.json) come from
+OpenMarch's om-pose repository; SOURCE.json records the commit. They are not
+covered by the OpenMarch application's license, and no license is granted for
+them yet. All rights reserved.
+
+- The reference bodies and the v4 skeleton are to be released under CC0 1.0
+  once counsel has answered the open licensing question and om-pose adopts a
+  license upstream.
+- The motion clips are derived from performance footage and are held for
+  legal review: no release that ships them goes out before counsel answers.
+
+See docs/adr/0002-3d-view.md (D-7 and D-21) and docs/3d/props-spec.md
+section 10.
