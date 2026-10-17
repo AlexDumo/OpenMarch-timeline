@@ -230,3 +230,18 @@ Nothing yet.
   `traceCue`; a cue on the focused who's lane is a link that picks it.
   `VisualsProvider` compiles once for the band and the inspector. Counts
   read from 1 in the inspector, as on the timeline.
+- **V4 built (same branch):** every lane drag lands on the count under the
+  pointer, pulled to page lines and downbeats as the playhead is
+  (`snapSeekBeat`; Alt turns it off). A state's ramp start drags to set its
+  transition. Shift-click picks several cues; Cmd/Ctrl+C copies them
+  (spacing in counts, values, settings, transitions, ripples, notes) and
+  Cmd/Ctrl+V, or the band's Paste, puts them at the playhead on the
+  focused who, same channel only, as one undoable edit. Compile's flags
+  that reach the focused marchers ring their cues in red on the lane and
+  the grey rows, with what's wrong in the tooltip, and the band counts
+  them. A Facing angle cue gets a top-down wheel (audience down, side 2
+  right; Shift for 45° steps); a toward-a-point cue picks its point with
+  the next click on the field, through `requestFieldPoint` and the field
+  editor's `takePress`, which now gets the press (field coordinates, the
+  dots' space). Step 8 is complete; step 9 (retiring the 3D window's horn
+  and guard toggles) is next.

@@ -35,6 +35,12 @@ import {
 import { useVisualsStore } from "@/stores/VisualsStore";
 import { useVisualsData } from "./VisualsProvider";
 import { useTargetLabel } from "./useTargetLabel";
+import FacingWheel from "./FacingWheel";
+import {
+    cancelFieldPoint,
+    requestFieldPoint,
+    useIsPickingFieldPoint,
+} from "@/field/fieldPointPick";
 
 /** A number field that saves on Enter or when it loses focus; empty saves null. */
 function NumberField({
@@ -165,8 +171,10 @@ function SettingField({
 export default function VisualsCuePanel() {
     const { t } = useTolgee();
     const queryClient = useQueryClient();
-    const selectedCueId = useVisualsStore((s) => s.selectedCueId);
-    const setSelectedCueId = useVisualsStore((s) => s.setSelectedCueId);
+    // the panel shows one picked cue; several picked (for copying) show none
+    const picked = useVisualsStore((s) => s.selectedCueIds);
+    const selectedCueId = picked.length === 1 ? picked[0]! : null;
+    const clearSelectedCues = useVisualsStore((s) => s.clearSelectedCues);
     const data = useVisualsData();
     const targetLabel = useTargetLabel();
     const { data: cues } = useQuery(allCuesQueryOptions());
@@ -206,7 +214,7 @@ export default function VisualsCuePanel() {
                     data-testid="visuals-cue-delete"
                     onClick={() => {
                         deleteCues(new Set([cue.id]));
-                        setSelectedCueId(null);
+                        clearSelectedCues();
                     }}
                 >
                     <T keyName="visuals.cue.delete" />
@@ -266,6 +274,23 @@ export default function VisualsCuePanel() {
                         }
                     />
                 </Field>
+            )}
+            {cue.value === "builtin:facing.angle" && (
+                <div className="flex justify-center py-4">
+                    <FacingWheel
+                        degrees={Number(cue.settings.degrees ?? 0)}
+                        onCommit={(degrees) =>
+                            update({ settings: { ...cue.settings, degrees } })
+                        }
+                    />
+                </div>
+            )}
+            {cue.value === "builtin:facing.point" && (
+                <PickPointButton
+                    onPoint={(x, y) =>
+                        update({ settings: { ...cue.settings, x, y } })
+                    }
+                />
             )}
             {(value?.settings ?? []).map((field) => (
                 <SettingField
@@ -383,5 +408,52 @@ function NotesField({
             }}
             className="mt-4 min-h-[3rem]"
         />
+    );
+}
+
+/**
+ * Picks a Facing cue's point on the field: the next click on the field is
+ * the point, in the dots' space. Escape, or the button again, cancels.
+ */
+function PickPointButton({
+    onPoint,
+}: {
+    onPoint: (x: number, y: number) => void;
+}) {
+    const picking = useIsPickingFieldPoint();
+    useEffect(() => {
+        if (!picking) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") cancelFieldPoint();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [picking]);
+    // a request left open when the panel goes away would eat a field click
+    useEffect(() => cancelFieldPoint, []);
+    return (
+        <Button
+            variant={picking ? "primary" : "secondary"}
+            size="compact"
+            data-testid="visuals-pick-point"
+            onClick={() =>
+                picking
+                    ? cancelFieldPoint()
+                    : requestFieldPoint((p) =>
+                          onPoint(
+                              Math.round(p.x * 10) / 10,
+                              Math.round(p.y * 10) / 10,
+                          ),
+                      )
+            }
+        >
+            <T
+                keyName={
+                    picking
+                        ? "visuals.cue.pickingPoint"
+                        : "visuals.cue.pickPoint"
+                }
+            />
+        </Button>
     );
 }

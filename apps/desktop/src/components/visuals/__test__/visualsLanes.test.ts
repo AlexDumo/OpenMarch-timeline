@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import { compileCues } from "@openmarch/core";
 import type { DatabaseCue } from "@/db-functions/cues";
 import {
+    copyCues,
+    countAtBeatIndex,
     countIndex,
+    flagsByCue,
+    pastedCues,
     laneCue,
     newCueValue,
     resultRow,
@@ -215,5 +219,67 @@ describe("newCueValue", () => {
         expect(
             newCueValue("horn_equipment", "state", ["winds", "flag"]),
         ).toBeNull();
+    });
+});
+
+describe("copy and paste", () => {
+    it("keeps the cues' spacing and settings, and drops what lands past the end", () => {
+        const a = cue({
+            target: { kind: "band" },
+            value: "builtin:facing.back",
+            beatId: beatOf(3),
+            transitionLength: 2,
+            notes: "first",
+        });
+        const b = cue({
+            target: { kind: "band" },
+            value: "builtin:facing.side1",
+            beatId: beatOf(7),
+            ripple: { span: 4, order: "drill" },
+        });
+        const clipboard = copyCues([b, a], [a.id, b.id], counts)!;
+        expect(clipboard.channel).toBe("facing");
+        expect(clipboard.cues.map((c) => c.offset)).toEqual([0, 4]);
+
+        const target = { kind: "section", section: "Tuba" } as const;
+        const pasted = pastedCues(clipboard, 10, target, counts);
+        expect(pasted).toEqual([
+            expect.objectContaining({
+                target,
+                beatId: beatOf(10),
+                value: "builtin:facing.back",
+                transitionLength: 2,
+                notes: "first",
+            }),
+            expect.objectContaining({
+                beatId: beatOf(14),
+                ripple: { span: 4, order: "drill" },
+            }),
+        ]);
+        // from count 13 the second would land on count 17, past the show
+        expect(pastedCues(clipboard, 13, target, counts)).toHaveLength(1);
+    });
+});
+
+describe("flagsByCue", () => {
+    it("keeps the flags that reach a focused marcher", () => {
+        const byCue = flagsByCue(
+            [
+                { kind: "clash", cueIds: [1, 2], marcherIds: [3] },
+                { kind: "fits_nobody", cueIds: [2], marcherIds: [9] },
+                { kind: "phrase_overlap", cueIds: [2], marcherIds: [3, 4] },
+            ],
+            new Set([3]),
+        );
+        expect(byCue.get(1)).toEqual(["clash"]);
+        expect(byCue.get(2)).toEqual(["clash", "phrase_overlap"]);
+    });
+});
+
+describe("countAtBeatIndex", () => {
+    it("reads the zero-length start as count 0 and a beat as its count", () => {
+        expect(countAtBeatIndex(beats, 0, counts)).toBe(0);
+        expect(countAtBeatIndex(beats, 5, counts)).toBe(4);
+        expect(countAtBeatIndex(beats, 99, counts)).toBe(15);
     });
 });

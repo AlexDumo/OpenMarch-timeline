@@ -1018,6 +1018,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                 width,
                                 pixelsPerBeat,
                                 beatCount: model.beatCount,
+                                snapBeats: seekSnapBeats,
                             })}
                     </div>
                     {/* Pinned to the viewport's top, over the tracks: the ruler and the measure

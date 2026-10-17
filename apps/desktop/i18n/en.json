@@ -2434,7 +2434,9 @@
             "selectFirst": "Select marchers on the field to make cues for the selection",
             "marchers": "{count, plural, one {# marcher} other {# marchers}}",
             "mixed": "Mixed",
-            "lane": "Cue lane"
+            "lane": "Cue lane",
+            "paste": "{count, plural, one {Paste # cue at the playhead} other {Paste # cues at the playhead}}",
+            "flagged": "{count, plural, one {# flagged cue} other {# flagged cues}}"
         },
         "cue": {
             "title": "Cue",
@@ -2453,7 +2455,10 @@
                 "right_left": "Right to left",
                 "down_form": "Down the form"
             },
-            "notes": "Notes"
+            "notes": "Notes",
+            "facingWheel": "Facing angle",
+            "pickPoint": "Pick the point on the field",
+            "pickingPoint": "Click a point on the field (Esc cancels)"
         },
         "why": {
             "title": "Why, at count {count}",
@@ -2501,6 +2506,14 @@
             "low": "Low",
             "medium": "Medium",
             "high": "High"
+        },
+        "flags": {
+            "clash": "clashes with another cue on the same count",
+            "phrase_overlap": "overlaps another phrase",
+            "takeover_while_moving": "takes over the feet while the dot moves",
+            "fits_nobody": "fits none of its marchers",
+            "kind_not_allowed": "a phrase on a channel that takes states only",
+            "transition_cut": "its transition starts before the cue before it lands"
         }
     }
 }

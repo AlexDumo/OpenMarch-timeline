@@ -12,10 +12,13 @@ import {
     cueLibraryValue,
     defaultCueValue,
     type CompiledCues,
+    type CueFlag,
+    type CueFlagKind,
     type CueTarget,
     type PerformerCarry,
 } from "@openmarch/core";
-import type { DatabaseCue } from "@/db-functions/cues";
+import type { DatabaseCue, NewCueArgs } from "@/db-functions/cues";
+import type { VisualsClipboard } from "@/stores/VisualsStore";
 import {
     sectionKey,
     type VisualsChannel,
@@ -357,4 +360,105 @@ export function newCueValue(
         candidates[0]?.id ??
         null
     );
+}
+
+/**
+ * Copies `cueIds` (performer-behavior.md section 7.4): their channel and
+ * each one's spacing in counts from the first, with values, settings,
+ * transitions, ripples and notes; not their who. Null when none are on a
+ * counted beat.
+ */
+export function copyCues(
+    cues: readonly DatabaseCue[],
+    cueIds: readonly number[],
+    counts: CountIndex,
+): VisualsClipboard | null {
+    const picked = cues
+        .filter((c) => cueIds.includes(c.id))
+        .map((c) => ({ cue: c, count: counts.countOfBeatId.get(c.beatId) }))
+        .filter(
+            (p): p is { cue: DatabaseCue; count: number } =>
+                p.count !== undefined,
+        )
+        .sort((a, b) => a.count - b.count);
+    if (picked.length === 0) return null;
+    const first = picked[0]!.count;
+    return {
+        channel: picked[0]!.cue.channel as VisualsChannel,
+        cues: picked.map(({ cue, count }) => ({
+            offset: count - first,
+            kind: cue.kind,
+            value: cue.value,
+            length: cue.length,
+            transitionLength: cue.transitionLength,
+            settings: cue.settings,
+            ripple: cue.ripple,
+            notes: cue.notes,
+        })),
+    };
+}
+
+/**
+ * The cues a paste at `count` makes for `target`, keeping their spacing;
+ * any that would land past the show's last count are left out.
+ */
+export function pastedCues(
+    clipboard: VisualsClipboard,
+    count: number,
+    target: CueTarget,
+    counts: CountIndex,
+): NewCueArgs[] {
+    return clipboard.cues.flatMap((c) => {
+        const beatId = counts.beatIdOfCount[count + c.offset];
+        if (beatId === undefined) return [];
+        return [
+            {
+                channel: clipboard.channel,
+                kind: c.kind,
+                target,
+                beatId,
+                value: c.value,
+                length: c.length,
+                transitionLength: c.transitionLength,
+                settings: c.settings,
+                ripple: c.ripple,
+                notes: c.notes,
+            },
+        ];
+    });
+}
+
+/** Each cue's flags (clash, overlap, take-over…) that reach a focused marcher. */
+export function flagsByCue(
+    flags: readonly CueFlag[],
+    focusIds: ReadonlySet<number>,
+): Map<number, CueFlagKind[]> {
+    const byCue = new Map<number, CueFlagKind[]>();
+    for (const flag of flags) {
+        if (!flag.marcherIds.some((id) => focusIds.has(id))) continue;
+        for (const id of flag.cueIds) {
+            const kinds = byCue.get(id) ?? [];
+            if (!kinds.includes(flag.kind)) kinds.push(flag.kind);
+            byCue.set(id, kinds);
+        }
+    }
+    return byCue;
+}
+
+/**
+ * The count at the playhead: the count of the beat at `beatIndex` among the
+ * show's beats in order, or of the last counted beat before it (the
+ * zero-length start reads as count 0). Null in a show with no counts.
+ */
+export function countAtBeatIndex(
+    beats: readonly { id: number; position: number }[],
+    beatIndex: number,
+    counts: CountIndex,
+): number | null {
+    const sorted = [...beats].sort((a, b) => a.position - b.position);
+    for (let i = Math.min(beatIndex, sorted.length - 1); i >= 0; i--) {
+        const c = counts.countOfBeatId.get(sorted[i]!.id);
+        if (c !== undefined) return c;
+    }
+    return counts.beatIdOfCount.length > 0 ? 0 : null;
 }

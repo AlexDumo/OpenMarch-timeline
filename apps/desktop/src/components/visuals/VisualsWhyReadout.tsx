@@ -19,27 +19,22 @@ import { useVisualsStore } from "@/stores/VisualsStore";
 import { useVisualsData } from "./VisualsProvider";
 import { useTargetLabel } from "./useTargetLabel";
 import { whyAt } from "./visualsWhy";
+import { countAtBeatIndex } from "./visualsLanes";
 
 export default function VisualsWhyReadout() {
     const { t } = useTolgee();
     const data = useVisualsData();
     const focusIds = useVisualsStore((s) => s.focusMarcherIds);
-    const setSelectedCueId = useVisualsStore((s) => s.setSelectedCueId);
+    const selectCue = useVisualsStore((s) => s.selectCue);
     const beatIndex = useTimelineSelectionStore(displayedBeat);
     const { beats } = useTimingObjects();
     const { data: cues } = useQuery(allCuesQueryOptions());
     const targetLabel = useTargetLabel();
 
-    // The playhead's beat as a count; on the zero-length start, the first count
-    const count = useMemo(() => {
-        if (!data) return null;
-        const sorted = [...beats].sort((a, b) => a.position - b.position);
-        for (let i = Math.min(beatIndex, sorted.length - 1); i >= 0; i--) {
-            const c = data.counts.countOfBeatId.get(sorted[i]!.id);
-            if (c !== undefined) return c;
-        }
-        return data.counts.beatIdOfCount.length > 0 ? 0 : null;
-    }, [data, beats, beatIndex]);
+    const count = useMemo(
+        () => (data ? countAtBeatIndex(beats, beatIndex, data.counts) : null),
+        [data, beats, beatIndex],
+    );
 
     const groups = useMemo(() => {
         if (!data || !focusIds || count === null) return [];
@@ -69,7 +64,7 @@ export default function VisualsWhyReadout() {
             <button
                 type="button"
                 className="text-accent hover:underline"
-                onClick={() => setSelectedCueId(id)}
+                onClick={() => selectCue(id)}
             >
                 {describe(id)}
             </button>

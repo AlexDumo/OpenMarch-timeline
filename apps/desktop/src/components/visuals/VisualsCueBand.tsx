@@ -11,22 +11,31 @@
  * a count: there is nothing between counts.
  */
 import {
+    useMemo,
     useRef,
     useState,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
 } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { T, useTolgee } from "@tolgee/react";
 import clsx from "clsx";
 import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
-import type { CueTarget } from "@openmarch/core";
+import type { CueFlagKind, CueTarget } from "@openmarch/core";
 import {
+    allCuesQueryOptions,
     createCuesMutationOptions,
     deleteCuesMutationOptions,
     updateCuesMutationOptions,
 } from "@/hooks/queries/useCues";
 import { useVisualsStore } from "@/stores/VisualsStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
+import { useTimingObjects } from "@/hooks/useTimingObjects";
+import { snapSeekBeat } from "@/components/timeline/TimelinePrimitives";
+import { isPageSnapDisabled } from "@/components/timeline/TimelineGeometry";
 import type {
     TimelineBand,
     TimelineBandGeometry,
@@ -34,7 +43,11 @@ import type {
 import type { VisualsBandData } from "./useVisualsBandData";
 import { useTargetLabel } from "./useTargetLabel";
 import {
+    copyCues,
+    countAtBeatIndex,
+    flagsByCue,
     newCueValue,
+    pastedCues,
     type LaneCue,
     type LaneRow,
     type ResultSpan,
@@ -137,11 +150,13 @@ function GreyRow({
     row,
     label,
     pixelsPerBeat,
+    flags,
     onGo,
 }: {
     row: LaneRow;
     label: string;
     pixelsPerBeat: number;
+    flags: ReadonlyMap<number, readonly CueFlagKind[]>;
     onGo: (target: CueTarget) => void;
 }) {
     return (
@@ -156,7 +171,11 @@ function GreyRow({
                     cue={cue}
                     pixelsPerBeat={pixelsPerBeat}
                     height={GREY_ROW - 3}
-                    className="bg-text/15 text-text-subtitle hover:bg-text/25 cursor-pointer"
+                    data-flagged={flags.has(cue.id) || undefined}
+                    className={clsx(
+                        "bg-text/15 text-text-subtitle hover:bg-text/25 cursor-pointer",
+                        flags.has(cue.id) && FLAG_RING,
+                    )}
                     rampClassName="bg-gradient-to-r from-transparent to-text/25"
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => onGo(row.target)}
@@ -169,19 +188,34 @@ function GreyRow({
 }
 
 type Gesture =
+    /** A drag on empty lane: a state on one count, a phrase over several. */
     | { kind: "create"; start: number; end: number }
-    | { kind: "move"; cue: LaneCue; startX: number; delta: number }
-    | { kind: "length"; cue: LaneCue; startX: number; delta: number };
+    /** A cue dragged by `grab` counts from its count. */
+    | { kind: "move"; cue: LaneCue; grab: number; count: number }
+    /** A phrase's end dragged: the count after its last. */
+    | { kind: "length"; cue: LaneCue; to: number }
+    /** A state's ramp start dragged: its transition's first count. */
+    | { kind: "ramp"; cue: LaneCue; from: number };
+
+const FLAG_RING = "ring-red ring-2";
 
 function EditableLane({
     data,
     pixelsPerBeat,
+    snapBeats,
+    flags,
+    pasteAt,
 }: {
     data: VisualsBandData;
     pixelsPerBeat: number;
+    snapBeats: readonly number[];
+    flags: ReadonlyMap<number, readonly CueFlagKind[]>;
+    /** Pastes the clipboard at the playhead onto the focused who. */
+    pasteAt: () => void;
 }) {
     const { t } = useTolgee();
     const queryClient = useQueryClient();
+    const { data: cues } = useQuery(allCuesQueryOptions());
     const { mutate: createCues } = useMutation(
         createCuesMutationOptions(queryClient),
     );
@@ -191,15 +225,24 @@ function EditableLane({
     const { mutate: deleteCues } = useMutation(
         deleteCuesMutationOptions(queryClient),
     );
-    const selectedCueId = useVisualsStore((s) => s.selectedCueId);
-    const setSelectedCueId = useVisualsStore((s) => s.setSelectedCueId);
+    const selected = useVisualsStore((s) => s.selectedCueIds);
+    const selectCue = useVisualsStore((s) => s.selectCue);
+    const clearSelectedCues = useVisualsStore((s) => s.clearSelectedCues);
+    const setClipboard = useVisualsStore((s) => s.setClipboard);
     const laneRef = useRef<HTMLDivElement>(null);
     const [gesture, setGesture] = useState<Gesture | null>(null);
-    const lastCount = data.counts.beatIdOfCount.length - 1;
-    const clampCount = (c: number) => Math.max(0, Math.min(lastCount, c));
-    const countAt = (clientX: number) => {
+    const countTotal = data.counts.beatIdOfCount.length;
+    const clamp = (c: number, max = countTotal - 1) =>
+        Math.max(0, Math.min(max, c));
+    /** The count at `clientX`, pulled to a page line or downbeat unless Alt is down. */
+    const beatAt = (clientX: number, alt: boolean) => {
         const left = laneRef.current?.getBoundingClientRect().left ?? 0;
-        return clampCount(Math.round((clientX - left) / pixelsPerBeat));
+        return snapSeekBeat(
+            (clientX - left) / pixelsPerBeat,
+            snapBeats,
+            pixelsPerBeat,
+            isPageSnapDisabled({ altKey: alt }),
+        );
     };
     const { target, channel, carries } = data;
 
@@ -226,71 +269,128 @@ function EditableLane({
     const onLanePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
         // the lane's gestures, not the timeline's scrub or range
         e.stopPropagation();
+        laneRef.current?.focus();
         if (e.button !== 0 || !target) return;
-        const start = countAt(e.clientX);
+        const start = clamp(beatAt(e.clientX, e.altKey));
         e.currentTarget.setPointerCapture(e.pointerId);
-        setSelectedCueId(null);
+        clearSelectedCues();
         setGesture({ kind: "create", start, end: start });
     };
     const startCueGesture =
-        (cue: LaneCue, kind: "move" | "length") =>
+        (cue: LaneCue, kind: "move" | "length" | "ramp") =>
         (e: ReactPointerEvent<HTMLDivElement>) => {
             e.stopPropagation();
-            if (e.button !== 0) return;
-            laneRef.current?.setPointerCapture(e.pointerId);
-            setSelectedCueId(cue.id);
             laneRef.current?.focus();
-            setGesture({ kind, cue, startX: e.clientX, delta: 0 });
+            if (e.button !== 0) return;
+            // Shift adds the cue to the picked ones, or takes it out; no drag
+            if (e.shiftKey && kind === "move") {
+                selectCue(cue.id, true);
+                return;
+            }
+            laneRef.current?.setPointerCapture(e.pointerId);
+            if (!selected.includes(cue.id)) selectCue(cue.id);
+            if (kind === "move")
+                setGesture({
+                    kind,
+                    cue,
+                    grab: Math.round(beatAt(e.clientX, true)) - cue.count,
+                    count: cue.count,
+                });
+            else if (kind === "length") setGesture({ kind, cue, to: cue.to });
+            else setGesture({ kind, cue, from: cue.from });
         };
     const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
         if (!gesture) return;
-        if (gesture.kind === "create")
-            setGesture({ ...gesture, end: countAt(e.clientX) });
-        else
-            setGesture({
-                ...gesture,
-                delta: Math.round((e.clientX - gesture.startX) / pixelsPerBeat),
-            });
+        const beat = beatAt(e.clientX, e.altKey);
+        switch (gesture.kind) {
+            case "create":
+                setGesture({ ...gesture, end: clamp(beat) });
+                break;
+            case "move":
+                setGesture({ ...gesture, count: clamp(beat - gesture.grab) });
+                break;
+            case "length":
+                setGesture({
+                    ...gesture,
+                    to: clamp(beat, countTotal),
+                });
+                break;
+            case "ramp":
+                setGesture({
+                    ...gesture,
+                    from: Math.min(gesture.cue.count, clamp(beat)),
+                });
+        }
     };
     const onPointerUp = () => {
         const g = gesture;
         setGesture(null);
         if (!g) return;
         if (g.kind === "create") add(g.start, g.end);
-        else if (g.kind === "move" && g.delta !== 0) {
-            const count = clampCount(g.cue.count + g.delta);
-            if (count !== g.cue.count)
-                updateCues([
-                    {
-                        id: g.cue.id,
-                        beatId: data.counts.beatIdOfCount[count]!,
-                    },
-                ]);
-        } else if (g.kind === "length" && g.delta !== 0) {
-            const length = Math.max(2, g.cue.to - g.cue.from + g.delta);
-            updateCues([{ id: g.cue.id, length }]);
+        else if (g.kind === "move" && g.count !== g.cue.count)
+            updateCues([
+                {
+                    id: g.cue.id,
+                    beatId: data.counts.beatIdOfCount[g.count]!,
+                },
+            ]);
+        else if (g.kind === "length" && g.to !== g.cue.to)
+            updateCues([
+                { id: g.cue.id, length: Math.max(2, g.to - g.cue.from) },
+            ]);
+        else if (g.kind === "ramp" && g.from !== g.cue.from)
+            updateCues([
+                {
+                    id: g.cue.id,
+                    transitionLength: g.cue.count - g.from + 1,
+                },
+            ]);
+    };
+    const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        const mod = e.metaKey || e.ctrlKey;
+        if ((e.key === "Delete" || e.key === "Backspace") && selected.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            deleteCues(new Set(selected));
+            clearSelectedCues();
+        } else if (mod && e.key.toLowerCase() === "c" && selected.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            const copied = copyCues(cues ?? [], selected, data.counts);
+            if (copied) setClipboard(copied);
+        } else if (mod && e.key.toLowerCase() === "v") {
+            e.preventDefault();
+            e.stopPropagation();
+            pasteAt();
         }
     };
 
     // what the lane draws while a gesture runs
-    const shown = data.lanes.own.map((cue) => {
+    const shown = data.lanes.own.map((cue): LaneCue => {
         if (gesture?.kind === "move" && gesture.cue.id === cue.id) {
-            const count = clampCount(cue.count + gesture.delta);
-            const shift = count - cue.count;
+            const shift = gesture.count - cue.count;
             return {
                 ...cue,
-                count,
+                count: gesture.count,
                 from: cue.from + shift,
                 to: cue.to + shift,
                 holdTo: cue.holdTo + shift,
             };
         }
         if (gesture?.kind === "length" && gesture.cue.id === cue.id) {
-            const to = Math.max(cue.from + 2, cue.to + gesture.delta);
+            const to = Math.max(cue.from + 2, gesture.to);
             return { ...cue, to, holdTo: to };
         }
+        if (gesture?.kind === "ramp" && gesture.cue.id === cue.id)
+            return { ...cue, from: gesture.from };
         return cue;
     });
+    const flagTitle = (cue: LaneCue) => {
+        const kinds = flags.get(cue.id);
+        return kinds
+            ? `${cue.label}: ${kinds.map((k) => t(`visuals.flags.${k}`)).join(", ")}`
+            : cue.label;
+    };
 
     return (
         <div
@@ -308,20 +408,12 @@ function EditableLane({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={() => setGesture(null)}
-            onKeyDown={(e) => {
-                if (
-                    (e.key === "Delete" || e.key === "Backspace") &&
-                    selectedCueId !== null
-                ) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    deleteCues(new Set([selectedCueId]));
-                    setSelectedCueId(null);
-                }
-            }}
+            onKeyDown={onKeyDown}
         >
-            {shown.map((cue) =>
-                cue.kind === "phrase" ? (
+            {shown.map((cue) => {
+                const picked = selected.includes(cue.id);
+                const flagged = flags.has(cue.id);
+                return cue.kind === "phrase" ? (
                     // a phrase's span is the phrase: grab it anywhere
                     <CueBlock
                         key={cue.id}
@@ -330,10 +422,13 @@ function EditableLane({
                         height={LANE}
                         data-testid={`visuals-cue-${cue.id}`}
                         data-count={cue.count}
-                        aria-selected={selectedCueId === cue.id}
+                        data-flagged={flagged || undefined}
+                        aria-selected={picked}
+                        title={flagTitle(cue)}
                         className={clsx(
                             "bg-accent/40 border-accent cursor-grab border pr-6 text-[11px]",
-                            selectedCueId === cue.id && "ring-text ring-1",
+                            picked && "ring-text ring-1",
+                            flagged && FLAG_RING,
                         )}
                         onPointerDown={startCueGesture(cue, "move")}
                     >
@@ -348,7 +443,8 @@ function EditableLane({
                     </CueBlock>
                 ) : (
                     // a state: its hold is paint, so a click there adds a cue;
-                    // its ramp and its own count are the grip
+                    // its ramp and its own count are the grip, and the ramp's
+                    // start sets its transition
                     <div key={cue.id}>
                         <CueBlock
                             cue={cue}
@@ -356,7 +452,8 @@ function EditableLane({
                             height={LANE}
                             className={clsx(
                                 "bg-accent/15 border-accent/40 pointer-events-none border pr-6 text-[11px]",
-                                selectedCueId === cue.id && "ring-text ring-1",
+                                picked && "ring-text ring-1",
+                                flagged && FLAG_RING,
                             )}
                             rampClassName="bg-gradient-to-r from-transparent to-accent/50"
                         >
@@ -365,8 +462,9 @@ function EditableLane({
                         <div
                             data-testid={`visuals-cue-${cue.id}`}
                             data-count={cue.count}
-                            aria-selected={selectedCueId === cue.id}
-                            title={cue.label}
+                            data-flagged={flagged || undefined}
+                            aria-selected={picked}
+                            title={flagTitle(cue)}
                             className="absolute top-0 cursor-grab"
                             style={{
                                 left: cue.from * pixelsPerBeat,
@@ -377,10 +475,16 @@ function EditableLane({
                                 height: LANE,
                             }}
                             onPointerDown={startCueGesture(cue, "move")}
-                        />
+                        >
+                            <div
+                                data-testid={`visuals-cue-${cue.id}-ramp`}
+                                className="absolute top-0 left-0 h-full w-6 cursor-ew-resize"
+                                onPointerDown={startCueGesture(cue, "ramp")}
+                            />
+                        </div>
                     </div>
-                ),
-            )}
+                );
+            })}
             {gesture?.kind === "create" && (
                 <div
                     className="bg-accent/30 rounded-4 pointer-events-none absolute top-0"
@@ -449,7 +553,33 @@ function BandBody({
     const toggle = useVisualsStore((s) => s.toggleBandCollapsed);
     const toggleFocus = useVisualsStore((s) => s.toggleFocus);
     const label = useTargetLabel();
-    const { pixelsPerBeat, top, width } = geometry;
+    const { pixelsPerBeat, top, width, snapBeats } = geometry;
+    const focusIds = useVisualsStore((s) => s.focusMarcherIds);
+    const clipboard = useVisualsStore((s) => s.clipboard);
+    const beatIndex = useTimelineSelectionStore(displayedBeat);
+    const { beats } = useTimingObjects();
+    const queryClient = useQueryClient();
+    const { mutate: createCues } = useMutation(
+        createCuesMutationOptions(queryClient),
+    );
+    const flags = useMemo(
+        () =>
+            data && focusIds
+                ? flagsByCue(data.compiled.flags, focusIds)
+                : new Map<number, CueFlagKind[]>(),
+        [data, focusIds],
+    );
+    // a paste goes on the same channel only (section 7.4)
+    const canPaste =
+        !!data?.target && !!clipboard && clipboard.channel === data.channel;
+    const pasteAt = () => {
+        if (!data?.target || !clipboard || !canPaste) return;
+        const count = countAtBeatIndex(beats, beatIndex, data.counts);
+        if (count === null) return;
+        const made = pastedCues(clipboard, count, data.target, data.counts);
+        // one undoable edit for the whole paste
+        if (made.length) createCues(made);
+    };
 
     // a grey row's cue goes to its who; a hand-picked set isn't one yet
     const goTo = (target: CueTarget) => {
@@ -497,6 +627,26 @@ function BandBody({
                         <T keyName="visuals.band.selectFirst" />
                     </span>
                 )}
+                {canPaste && !collapsed && (
+                    <button
+                        type="button"
+                        className="text-accent text-[11px] hover:underline"
+                        onClick={pasteAt}
+                        data-testid="visuals-band-paste"
+                    >
+                        {t("visuals.band.paste", {
+                            count: clipboard!.cues.length,
+                        })}
+                    </button>
+                )}
+                {flags.size > 0 && !collapsed && (
+                    <span
+                        className="text-red text-[11px]"
+                        data-testid="visuals-band-flags"
+                    >
+                        {t("visuals.band.flagged", { count: flags.size })}
+                    </span>
+                )}
             </div>
             {data && !collapsed && (
                 <div className="flex flex-col" style={{ gap: GAP }}>
@@ -506,16 +656,24 @@ function BandBody({
                             row={row}
                             label={label(row.target)}
                             pixelsPerBeat={pixelsPerBeat}
+                            flags={flags}
                             onGo={goTo}
                         />
                     ))}
-                    <EditableLane data={data} pixelsPerBeat={pixelsPerBeat} />
+                    <EditableLane
+                        data={data}
+                        pixelsPerBeat={pixelsPerBeat}
+                        snapBeats={snapBeats}
+                        flags={flags}
+                        pasteAt={pasteAt}
+                    />
                     {data.lanes.exceptions.map((row) => (
                         <GreyRow
                             key={row.key}
                             row={row}
                             label={label(row.target)}
                             pixelsPerBeat={pixelsPerBeat}
+                            flags={flags}
                             onGo={goTo}
                         />
                     ))}

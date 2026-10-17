@@ -281,3 +281,114 @@ test("the inspector edits the picked cue and says why the who does what it does"
     await expect.poll(stored).toBeUndefined();
     await expect(page.getByTestId("visuals-cue-panel")).toBeHidden();
 });
+
+test("the ramp sets a transition, a copy pastes onto another who, and clashes are flagged", async ({
+    show,
+}) => {
+    const { page } = show;
+    const cues = () =>
+        show.query<StoredCue & { transition_length: number | null }>(
+            "SELECT id, channel, kind, target_kind, target_section, beat_id, value, length, transition_length FROM cues ORDER BY id",
+        );
+    await expect(page.getByRole("heading", { name: "Page 0" })).toBeVisible();
+    await page.getByTestId("workspace-view-visuals").click();
+    await page.getByTestId("visuals-tab-facing").click();
+    await page.getByTestId("visuals-who-section-Trumpet").click();
+
+    for (const count of [6, 10]) {
+        const at = await laneX(page, count);
+        await page.mouse.click(at.x, at.y);
+    }
+    await expect.poll(async () => (await cues()).length).toBe(2);
+    const [first, second] = await cues();
+
+    // Facing's ramp is two counts; dragging its start back two more makes four
+    const ramp = (await page
+        .getByTestId(`visuals-cue-${first!.id}-ramp`)
+        .boundingBox())!;
+    const { perCount } = await laneX(page, 0);
+    await page.mouse.move(ramp.x + 2, ramp.y + ramp.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(ramp.x + 2 - perCount * 2, ramp.y + ramp.height / 2, {
+        steps: 4,
+    });
+    await page.mouse.up();
+    await expect.poll(async () => (await cues())[0]!.transition_length).toBe(4);
+
+    // Shift picks both; copy, focus the flutes, paste at the playhead
+    await page.getByTestId(`visuals-cue-${first!.id}`).click();
+    await page
+        .getByTestId(`visuals-cue-${second!.id}`)
+        .click({ modifiers: ["Shift"] });
+    await page.keyboard.press("ControlOrMeta+c");
+    await page.getByTestId("visuals-who-section-Flute").click();
+    await page.getByTestId("visuals-band-paste").click();
+    await expect
+        .poll(async () =>
+            (await cues())
+                .filter((c) => c.target_section === "Flute")
+                .map((c) => [c.beat_id, c.transition_length]),
+        )
+        // at the playhead (count 0), four counts apart, the ramp kept
+        .toEqual([
+            [1, 4],
+            [5, null],
+        ]);
+
+    // pasting again puts a second flute cue on each count: they clash
+    await page.getByTestId("visuals-band-paste").click();
+    await expect.poll(async () => (await cues()).length).toBe(6);
+    await expect(page.getByTestId("visuals-band-flags")).toHaveText(
+        "4 flagged cues",
+    );
+});
+
+test("a Facing cue's wheel sets its angle and the field gives its point", async ({
+    show,
+}) => {
+    const { page } = show;
+    const settings = async () =>
+        JSON.parse(
+            (
+                await show.query<{ settings_json: string }>(
+                    "SELECT settings_json FROM cues",
+                )
+            )[0]?.settings_json ?? "{}",
+        );
+    await expect(page.getByRole("heading", { name: "Page 0" })).toBeVisible();
+    await page.getByTestId("workspace-view-visuals").click();
+    await page.getByTestId("visuals-tab-facing").click();
+    await page.getByTestId("visuals-who-section-Trumpet").click();
+    const at = await laneX(page, 2);
+    await page.mouse.click(at.x, at.y);
+    const ids = () => show.query<{ id: number }>("SELECT id FROM cues");
+    await expect.poll(async () => (await ids()).length).toBe(1);
+    const [{ id }] = await ids();
+    await page.getByTestId(`visuals-cue-${id}`).click();
+
+    await page.getByTestId("visuals-cue-value").click();
+    await page.getByRole("option", { name: "Angle" }).click();
+    // a press on the wheel's right edge: side 2
+    const wheel = (await page
+        .getByTestId("visuals-facing-wheel")
+        .boundingBox())!;
+    await page.mouse.click(
+        wheel.x + wheel.width - 4,
+        wheel.y + wheel.height / 2,
+    );
+    await expect.poll(settings).toMatchObject({ degrees: 90 });
+
+    await page.getByTestId("visuals-cue-value").click();
+    await page.getByRole("option", { name: "Toward a point" }).click();
+    await page.getByTestId("visuals-pick-point").click();
+    const f1 = (await drawnMarchers(page)).find((m) => m.drillNumber === "F1")!;
+    await page.mouse.click(f1.screen.x, f1.screen.y);
+    await expect.poll(settings).toMatchObject({
+        x: expect.closeTo(f1.x, 0),
+        y: expect.closeTo(f1.y, 0),
+    });
+    // the press picked the point and selected no one
+    await expect(page.getByTestId("visuals-who-selection")).toContainText(
+        "Nothing selected",
+    );
+});

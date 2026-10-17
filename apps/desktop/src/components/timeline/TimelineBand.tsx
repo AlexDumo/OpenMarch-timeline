@@ -9,6 +9,8 @@ export interface TimelineBandGeometry {
     width: number;
     pixelsPerBeat: number;
     beatCount: number;
+    /** The beats a drag pulls to: page lines and downbeats (`snapSeekBeat`). */
+    snapBeats: readonly number[];
 }
 
 /**

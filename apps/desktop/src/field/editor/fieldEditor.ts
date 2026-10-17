@@ -77,7 +77,7 @@ export type FieldEditorPorts = {
      * first press after a paused preview clears the preview) and returns
      * true when it takes it, so the editor selects, drags and drops nothing.
      */
-    takePress?(): boolean;
+    takePress?(pointer: FieldPointer): boolean;
     /**
      * How far the selection box drawn around a multi-selection reaches past
      * its outermost marchers, in field units. A drag from inside it moves the
@@ -228,7 +228,7 @@ export class FieldEditor {
         }
         this.cancelGesture();
         this.ignoredButton = null;
-        const taken = this.ports.takePress?.() ?? false;
+        const taken = this.ports.takePress?.(pointer) ?? false;
         if (taken || this.lineTool) {
             // Captured all the same, so its moves and release do nothing either.
             // Nor is it half of a double-click: the next press can't start a lasso
