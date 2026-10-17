@@ -12,12 +12,7 @@ import {
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { readPageGrid } from "../timelineRipple";
 import { ensureCountsInTransaction } from "../endlessCounts";
-import {
-    addPageFlag,
-    movePageFlag,
-    moveShowEnd,
-    pageFlagMoveLimits,
-} from "../pageFlags";
+import { addPageFlag, movePageFlag, pageFlagMoveLimits } from "../pageFlags";
 import { editMeasureLines } from "../measureLines";
 import { endlessIdOf } from "@/timeline/endlessTimeline";
 import { resizeTimeline } from "../timelineResize";
@@ -199,28 +194,6 @@ describeDbTests("writes past the last stored count", (it) => {
             expect(await beatCount(db)).toBe(130);
             expect((await grid(db)).slice(-1)).toEqual([[6, 41, 130]]);
             await roundTrip(db, before, await snapshot(db));
-        });
-
-        it("the END line sets the last page's length past the end, and no move follows it", async ({
-            db,
-            marchersAndPages: _,
-        }) => {
-            await setUp(db);
-            const timelineBefore = await snapshot(db, TIMELINE_TABLES);
-            const before = await snapshot(db);
-
-            const moved = await moveShowEnd({ db, beat: 120 });
-
-            expect(moved).toEqual({ pageId: 6, from: 49, to: 120 });
-            expect(await beatCount(db)).toBe(120);
-            expect((await grid(db)).slice(-1)).toEqual([[6, 41, 120]]);
-            expect(await snapshot(db, TIMELINE_TABLES)).toEqual(timelineBefore);
-            await roundTrip(db, before, await snapshot(db));
-            // Dropped where it is, it writes nothing
-            await moveShowEnd({ db, beat: 120 });
-            const undo = await performUndo(db);
-            expect(undo.success).toBe(true);
-            expect(await snapshot(db)).toEqual(before);
         });
     });
 

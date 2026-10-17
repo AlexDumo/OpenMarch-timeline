@@ -291,13 +291,6 @@ export interface TimelineInteractionProps {
     readonly pageFlagMove?: TimelinePageFlagMove;
     /** **+ N counts** after the last page's flag (E1); without it, none */
     readonly appendCounts?: TimelineAppendCounts;
-    /**
-     * The show's end (docs/tempo/endless-counts.md rule 4): the END line, in view beats here. Exports
-     * end there; the timeline goes on. Without it, none.
-     */
-    readonly showEndBeat?: BeatPosition;
-    /** Dragging the END line changes the last page's length (rule 4), in view beats here */
-    readonly onShowEndMove?: (beat: BeatPosition) => void;
     /** The beats Fit fits (rule 7: where playback stops), in view beats; without it, every beat */
     readonly fitBeatCount?: number;
     /** The scroller's width in counts (rule 7) */

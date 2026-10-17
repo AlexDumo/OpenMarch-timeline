@@ -7,8 +7,8 @@ import { Timeline, TimelineWaveformProvider } from "../Timeline";
 import type { TimelineAppendCounts } from "../TimelineViewModel";
 
 /**
- * The end of the show on the timeline: **+ N counts** after the last page's flag (E1), and the
- * END line where the counts go on past it (endless counts).
+ * The end of the show on the timeline: **+ N counts** after the last page's flag (E1), and its
+ * right-click menu (endless counts).
  */
 
 afterEach(cleanup);
@@ -71,8 +71,6 @@ const show = ({
     appendCounts,
     onAddPageFlag,
     beats = BEATS,
-    showEndBeat,
-    onShowEndMove,
     measures = [],
 }: {
     positionBeat?: number;
@@ -80,8 +78,6 @@ const show = ({
     appendCounts?: TimelineAppendCounts;
     onAddPageFlag?: () => void;
     beats?: Beat[];
-    showEndBeat?: number;
-    onShowEndMove?: (beat: number) => void;
     measures?: Measure[];
 }) =>
     render(
@@ -103,8 +99,6 @@ const show = ({
                 onSelectionChange={vi.fn()}
                 onAddPageFlag={onAddPageFlag}
                 appendCounts={appendCounts}
-                showEndBeat={showEndBeat}
-                onShowEndMove={onShowEndMove}
             />
         </TimelineWaveformProvider>,
     );
@@ -236,85 +230,5 @@ describe("changing how many counts + N counts adds", () => {
         show({ appendCounts: appendCounts() });
         fireEvent.contextMenu(pill()!);
         expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
-    });
-});
-
-describe("the END line (endless counts rule 4)", () => {
-    it("draws a quiet line at the show's end, with the counts going on past it", () => {
-        // 16 stored counts, and 24 more drawn past them (as the panel draws endless counts)
-        show({ beats: appBeats(40), showEndBeat: 17 });
-        const line = screen.getByTestId("timeline-show-end");
-        expect(parseFloat(line.style.left)).toBe(16 * PX);
-        expect(screen.getByText("END")).toBeTruthy();
-        const surface = screen.getByTestId("timeline-pointer-surface");
-        expect(parseFloat(surface.style.width)).toBe(40 * PX);
-    });
-
-    it("puts its label left of the line beside measure numbers, right of it without measures", () => {
-        const beats = appBeats(40);
-        const measure = (start: number, number: number): Measure => ({
-            id: number,
-            startBeat: beats[start]!,
-            number,
-            rehearsalMark: null,
-            notes: null,
-            duration: 2,
-            counts: 4,
-            beats: beats.slice(start, start + 4),
-            timestamp: beats[start]!.timestamp,
-        });
-        show({
-            beats,
-            showEndBeat: 17,
-            measures: [
-                measure(1, 1),
-                measure(5, 2),
-                measure(9, 3),
-                measure(13, 4),
-                measure(17, 5),
-            ],
-        });
-        // The end is m5's downbeat: its number sits right of the line, so END goes left
-        expect(screen.getByText("END").className).toContain(
-            "-translate-x-full",
-        );
-        cleanup();
-        show({ beats, showEndBeat: 17 });
-        expect(screen.getByText("END").className).not.toContain(
-            "-translate-x-full",
-        );
-    });
-
-    it("drags on whole counts, not before the last page's start, and commits on release", () => {
-        const onShowEndMove = vi.fn();
-        show({ beats: appBeats(40), showEndBeat: 17, onShowEndMove });
-        const grip = screen.getByTestId("timeline-show-end-grip");
-        grip.setPointerCapture = vi.fn();
-        fireEvent.pointerDown(grip, { button: 0, pointerId: 1, clientX: 256 });
-        fireEvent.pointerMove(grip, { pointerId: 1, clientX: 24.6 * PX });
-        expect(
-            parseFloat(screen.getByTestId("timeline-show-end").style.left),
-        ).toBe(25 * PX);
-        fireEvent.pointerUp(grip, { pointerId: 1, clientX: 24.6 * PX });
-        // View beat 25 is spec beat 26
-        expect(onShowEndMove).toHaveBeenCalledWith(26);
-        // Back before page 2's start, it stops one count after it
-        fireEvent.pointerDown(grip, { button: 0, pointerId: 2, clientX: 256 });
-        fireEvent.pointerUp(grip, { pointerId: 2, clientX: 0 });
-        expect(onShowEndMove).toHaveBeenLastCalledWith(10);
-    });
-
-    it("can't be dragged while playing, and isn't there without a show end", () => {
-        show({
-            beats: appBeats(40),
-            showEndBeat: 17,
-            onShowEndMove: vi.fn(),
-            isPlaying: true,
-        });
-        expect(screen.queryByTestId("timeline-show-end-grip")).toBeNull();
-        expect(screen.getByTestId("timeline-show-end")).toBeTruthy();
-        cleanup();
-        show({});
-        expect(screen.queryByTestId("timeline-show-end")).toBeNull();
     });
 });

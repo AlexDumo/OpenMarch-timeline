@@ -22,7 +22,7 @@ import {
 import { applyTapTheBeat } from "../tapTheBeat";
 import { editMeasureLines } from "../measureLines";
 import { appendPageOfCounts } from "../showLength";
-import { moveShowEnd } from "../pageFlags";
+import { addPageFlag } from "../pageFlags";
 import { applyMusicXmlReimport } from "../musicXmlReimport";
 import { commitDrillEdit } from "../drillEdits";
 
@@ -141,12 +141,12 @@ describeDbTests("Undo turns on after every tempo write", (it) => {
             );
         });
 
-        it("the END line past the stored counts", async ({
+        it("+ far past the stored counts", async ({
             db,
             marchersAndPages: _,
         }) => {
             await setUp(db);
-            await expectUndoAfter(db, () => moveShowEnd({ db, beat: 120 }));
+            await expectUndoAfter(db, () => addPageFlag({ db, beat: 120 }));
         });
     });
 
