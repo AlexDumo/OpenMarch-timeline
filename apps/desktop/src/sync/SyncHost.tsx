@@ -36,6 +36,7 @@ import {
 import { db } from "@/global/database/db";
 import { putValuesBack, type LostValue } from "./undo";
 import { SyncReadOnlyError } from "./session";
+import { SyncPeopleList, usePublishPresence } from "./presence";
 
 const SYNC_DEV_STORAGE_KEY = "openmarch:syncDev";
 
@@ -214,6 +215,7 @@ function JoinDialog({ onClose }: { onClose: () => void }) {
 
 function StatusChip() {
     const { state, pending, people, sessionId } = useSyncStore();
+    const [open, setOpen] = useState(false);
     if (state === "none") return null;
     const color =
         state === "live"
@@ -222,22 +224,40 @@ function StatusChip() {
               ? "bg-yellow"
               : "bg-red";
     return (
-        <button
-            type="button"
-            data-testid="sync-status"
-            data-sync-state={state}
-            data-sync-pending={pending}
-            title={`Session ${sessionId}. Click to copy the id.`}
-            onClick={() =>
-                sessionId && void navigator.clipboard?.writeText(sessionId)
-            }
-            className="border-stroke bg-modal text-sub text-text fixed bottom-12 left-12 z-[400] flex items-center gap-6 rounded-full border px-10 py-4"
-        >
-            <span className={`h-8 w-8 rounded-full ${color}`} />
-            {state}
-            {pending > 0 && ` · ${pending} pending`}
-            {state === "live" && ` · ${people.length} here`}
-        </button>
+        <div className="fixed bottom-12 left-12 z-[400] flex flex-col items-start gap-6">
+            {open && (
+                <div
+                    data-testid="sync-people-popover"
+                    className="border-stroke bg-modal rounded-6 flex min-w-[320px] flex-col gap-8 border p-10"
+                >
+                    <SyncPeopleList />
+                    <button
+                        type="button"
+                        className="text-sub text-text-subtitle self-start underline"
+                        onClick={() =>
+                            sessionId &&
+                            void navigator.clipboard?.writeText(sessionId)
+                        }
+                    >
+                        Copy session id
+                    </button>
+                </div>
+            )}
+            <button
+                type="button"
+                data-testid="sync-status"
+                data-sync-state={state}
+                data-sync-pending={pending}
+                title={`Session ${sessionId}`}
+                onClick={() => setOpen((o) => !o)}
+                className="border-stroke bg-modal text-sub text-text flex items-center gap-6 rounded-full border px-10 py-4"
+            >
+                <span className={`h-8 w-8 rounded-full ${color}`} />
+                {state}
+                {pending > 0 && ` · ${pending} pending`}
+                {state === "live" && ` · ${people.length} here`}
+            </button>
+        </div>
     );
 }
 
@@ -269,6 +289,7 @@ export default function SyncHost() {
     }, [queryClient]);
 
     useEffect(() => subscribeSyncNotices(showNotice), []);
+    usePublishPresence();
 
     useEffect(() => {
         if (!enabled) return;

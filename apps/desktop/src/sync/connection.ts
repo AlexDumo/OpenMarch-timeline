@@ -113,6 +113,8 @@ export interface SyncStoreState {
     serverUrl: string | null;
     pending: number;
     people: PeopleMessage["people"];
+    /** This window's user id, to tell myself apart in `people` */
+    userId: string | null;
     lastError: string | null;
 }
 
@@ -123,6 +125,7 @@ export const useSyncStore = create<SyncStoreState>(() => ({
     serverUrl: null,
     pending: 0,
     people: [],
+    userId: null,
     lastError: null,
 }));
 
@@ -365,6 +368,30 @@ class Connection {
         return this.chain;
     }
 
+    private presence: unknown = null;
+    private presenceSent = "";
+    private presenceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /**
+     * Tells peers what I'm looking at (relayed by the server, never stored). Throttled to one
+     * message per 50 ms, and an unchanged presence isn't sent again.
+     */
+    setPresence(presence: unknown) {
+        this.presence = presence;
+        if (this.presenceTimer) return;
+        this.presenceTimer = setTimeout(() => {
+            this.presenceTimer = null;
+            const text = JSON.stringify(this.presence);
+            const ws = this.ws;
+            if (text === this.presenceSent || !this.live) return;
+            if (ws?.readyState !== WebSocket.OPEN) return;
+            this.presenceSent = text;
+            ws.send(
+                JSON.stringify({ type: "presence", presence: this.presence }),
+            );
+        }, 50);
+    }
+
     disconnect() {
         this.killed = true;
         if (this.retryTimer) clearTimeout(this.retryTimer);
@@ -559,6 +586,9 @@ class Connection {
             }
             this.gridVersion = msg.gridVersion;
             useSyncStore.setState({ state: "live", lastError: null });
+            // A new socket: peers know nothing of me yet
+            this.presenceSent = "";
+            if (this.presence !== null) this.setPresence(this.presence);
             this.welcomed?.();
             this.welcomed = this.failed = null;
             return;
@@ -607,6 +637,7 @@ async function begin(
         0,
     );
     useSyncStore.setState({
+        userId: connection.user.id,
         sessionId,
         serverUrl,
         state: "connecting",
@@ -709,4 +740,9 @@ export function syncedSnapshot(): Promise<SyncSnapshot> {
 
 export function syncSeq(): number {
     return connection?.seq ?? -1;
+}
+
+/** Publishes this window's presence (see `Connection.setPresence`); nothing outside a session. */
+export function setSyncPresence(presence: unknown): void {
+    connection?.setPresence(presence);
 }
