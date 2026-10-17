@@ -11,10 +11,14 @@ import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { useVisualsStore } from "@/stores/VisualsStore";
 import { useVisualsBandData, type VisualsBandData } from "./useVisualsBandData";
 import { visualsTimelineBand } from "./VisualsCueBand";
+import { useVisualsFocusSync } from "./useVisualsFocusSync";
 
 const VisualsDataContext = createContext<VisualsBandData | null>(null);
 
 export function VisualsProvider({ children }: { children: ReactNode }) {
+    // here, not in the inspector, so the focus stays current while the
+    // inspector is hidden (fullscreen)
+    useVisualsFocusSync();
     const visuals = useIsVisualsView();
     const data = useVisualsBandData(visuals);
     const collapsed = useVisualsStore((s) => s.bandCollapsed);

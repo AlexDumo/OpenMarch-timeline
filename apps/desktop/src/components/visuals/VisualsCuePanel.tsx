@@ -287,6 +287,8 @@ export default function VisualsCuePanel() {
             )}
             {cue.value === "builtin:facing.point" && (
                 <PickPointButton
+                    // another picked cue drops a pick left open for this one
+                    key={cue.id}
                     onPoint={(x, y) =>
                         update({ settings: { ...cue.settings, x, y } })
                     }
