@@ -17,7 +17,10 @@ import {
     NewMarcherArgs,
     ModifiedMarcherArgs,
 } from "@/db-functions";
-import Marcher, { dbMarcherToMarcher } from "@/global/classes/Marcher";
+import Marcher, {
+    dbMarcherToMarcher,
+    performersOnly,
+} from "@/global/classes/Marcher";
 import { DEFAULT_STALE_TIME } from "./constants";
 import { invalidateCueQueries } from "./useCues";
 
@@ -63,6 +66,17 @@ export const allMarchersQueryOptions = () => {
             return await marcherQueries.getAll(db);
         },
         staleTime: DEFAULT_STALE_TIME,
+    });
+};
+
+/**
+ * The performers in the show: the marchers query (same key and cache) without items, the props
+ * and equipment rows (`performersOnly`). Use it wherever "every marcher" means performers.
+ */
+export const performersQueryOptions = () => {
+    return queryOptions<Marcher[]>({
+        ...allMarchersQueryOptions(),
+        select: performersOnly,
     });
 };
 

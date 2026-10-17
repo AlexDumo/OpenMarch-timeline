@@ -101,6 +101,28 @@ export async function pageEraBlankPath(): Promise<string> {
 }
 
 /**
+ * `marchers` columns the timeline-only migrations add (0024's `type`). App code reads every
+ * column of `marchers`, so a page-mode fixture, which tests write timeline rows into and call
+ * app functions on, gets them too; `finishTestConversion` then skips adding them again.
+ */
+export const LATER_MARCHER_COLUMNS = [
+    {
+        name: "type",
+        sql: `ALTER TABLE \`marchers\` ADD COLUMN \`type\` text DEFAULT 'marcher' NOT NULL CONSTRAINT "marchers_type_check" CHECK(type IN ('marcher', 'item'))`,
+    },
+] as const;
+
+/** Adds {@link LATER_MARCHER_COLUMNS} to the page-era file at `dbPath`. */
+export function addLaterMarcherColumns(dbPath: string): void {
+    const db = new DatabaseSync(dbPath);
+    try {
+        for (const column of LATER_MARCHER_COLUMNS) db.exec(column.sql);
+    } finally {
+        db.close();
+    }
+}
+
+/**
  * Converts the page-era file at `dbPath` the way the app does when someone opens it and
  * confirms: timeline rows, the marker, the timeline-only migrations and version 8. No backup.
  */

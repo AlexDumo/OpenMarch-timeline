@@ -169,6 +169,27 @@
             "when": 1792157312422,
             "tag": "0023_even_gunslinger",
             "breakpoints": true
+        },
+        {
+            "idx": 24,
+            "version": "6",
+            "when": 1792162434076,
+            "tag": "0024_fat_randall_flagg",
+            "breakpoints": true
+        },
+        {
+            "idx": 25,
+            "version": "6",
+            "when": 1792168750467,
+            "tag": "0025_skinny_the_hunter",
+            "breakpoints": true
+        },
+        {
+            "idx": 26,
+            "version": "6",
+            "when": 1792169561480,
+            "tag": "0026_yellow_carmella_unuscione",
+            "breakpoints": true
         }
     ]
 }

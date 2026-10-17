@@ -14,6 +14,7 @@ import {
 } from "../../MarcherCoordinateSheet";
 import {
     buildCoordinateSheets,
+    coordinateSheetMarchers,
     type CoordinateSheetOptions,
 } from "../coordinateSheets";
 import {
@@ -218,5 +219,46 @@ describe("buildCoordinateSheets", () => {
 
             expect(after).not.toEqual(before);
         });
+    });
+
+    describe("items", () => {
+        it.each(optionSets)(
+            "gives the performers the same sheets with items in the show (quarterPages: $quarterPages)",
+            (options) => {
+                const data = show(13);
+                const prop = {
+                    ...data.marchers[0]!,
+                    id: 9001,
+                    name: "",
+                    section: "Prop",
+                    drill_prefix: "PROP",
+                    drill_order: 1,
+                    drill_number: "PROP1",
+                    type: "item",
+                };
+                const positions = pagePositionMapFromRows([
+                    ...data.positions,
+                    ...data.positions
+                        .filter((p) => p.marcher_id === data.marchers[0]!.id)
+                        .map((p) => ({ ...p, marcher_id: prop.id })),
+                ]);
+                const sheets = (marchers: Marcher[]) =>
+                    buildCoordinateSheets({
+                        marchers: coordinateSheetMarchers(marchers),
+                        pages: data.pages,
+                        positions,
+                        fieldProperties,
+                        options,
+                        t,
+                    });
+
+                const withItem = sheets([...data.marchers, prop]);
+
+                expect(withItem).toEqual(sheets(data.marchers));
+                expect(withItem.map((s) => s.drillNumber)).not.toContain(
+                    "PROP1",
+                );
+            },
+        );
     });
 });

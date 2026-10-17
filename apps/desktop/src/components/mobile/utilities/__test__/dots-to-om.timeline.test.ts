@@ -2,9 +2,10 @@ import { afterEach, describe, expect, it as plainIt, vi } from "vitest";
 import { FieldProperties } from "@openmarch/core";
 import type { OpenMarchShowData } from "@openmarch/schema";
 import { safeValidateOpenMarchData } from "@openmarch/schema";
-import { DbConnection, describeDbTests } from "@/test/base";
+import { DbConnection, describeDbTests, schema } from "@/test/base";
 import { FieldPropertiesSchema } from "@/components/field/fieldPropertiesSchema";
 import type { DB } from "@/global/database/db";
+import { createItems } from "@/db-functions/items";
 import { createMarchers } from "@/db-functions/marcher";
 import { createLastPage, deletePages } from "@/db-functions/page";
 import { transactionWithHistory } from "@/db-functions/history";
@@ -285,6 +286,46 @@ describeDbTests("dots-to-om positions", (it) => {
         expect(last.ySteps - first.ySteps).toBeCloseTo(
             -(y1 - y0) / pixelsPerStep,
             9,
+        );
+    });
+
+    it("gives the performers the same export with items in the show", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const without = await exportShow(db);
+        const [beat] = await db
+            .select({ id: schema.beats.id })
+            .from(schema.beats)
+            .orderBy(schema.beats.position)
+            .limit(1)
+            .all();
+        await createItems({
+            db,
+            newItems: [
+                {
+                    kind: "prop",
+                    name: "Riser",
+                    home: [120, 80],
+                    beatId: beat!.id,
+                    geometry: { outlineType: "rectangle", width: 2, depth: 1 },
+                },
+                {
+                    kind: "equipment",
+                    home: [40, 40],
+                    beatId: beat!.id,
+                    geometry: { outlineType: "rectangle", width: 1, depth: 1 },
+                },
+            ],
+        });
+
+        const withItems = await exportShow(db);
+
+        expect(safeValidateOpenMarchData(withItems).success).toBe(true);
+        expect(withItems.performers).toEqual(without.performers);
+        expectSameCoordinates(withItems.coordinates, without.coordinates);
+        expect(withItems.performerAppearance).toEqual(
+            without.performerAppearance,
         );
     });
 
