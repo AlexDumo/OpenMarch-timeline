@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readView3dWindowParams } from "../View3dRoot";
+import { readView3dWindowParams, viewportFallback } from "../View3dRoot";
 
 describe("readView3dWindowParams", () => {
     it("reads the show name, theme and language main passes", () => {
@@ -25,5 +25,24 @@ describe("readView3dWindowParams", () => {
             theme: "dark",
             language: "en",
         });
+    });
+});
+
+describe("viewportFallback", () => {
+    it("draws the scene only on a GPU", () => {
+        expect(viewportFallback("hardware")).toBeNull();
+        expect(viewportFallback("software")).toBe(
+            "view3d.window.gpuUnavailable",
+        );
+        expect(viewportFallback("none")).toBe(
+            "view3d.window.graphicsUnavailable",
+        );
+    });
+
+    it("draws in software when the viewer allows it", () => {
+        expect(viewportFallback("software", true)).toBeNull();
+        expect(viewportFallback("none", true)).toBe(
+            "view3d.window.graphicsUnavailable",
+        );
     });
 });

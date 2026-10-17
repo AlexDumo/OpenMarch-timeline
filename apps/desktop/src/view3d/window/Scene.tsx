@@ -73,6 +73,8 @@ import {
     stepQualityFallback,
 } from "./qualityFallback";
 import Performers from "./performers/Performers";
+import { warmLightingPresets } from "./warmLighting";
+import { maxPixelRatio } from "./renderPrefs";
 
 /** Default vertical field of view, as in the reference demo. */
 export const DEFAULT_FOV_DEG = 45;
@@ -128,6 +130,7 @@ export default function Scene() {
     const saveOnBattery = useView3dSceneStore(
         (s) => s.powerPrefs.saveOnBattery,
     );
+    const resolution = useView3dSceneStore((s) => s.resolution);
 
     // Cameras load first too, so a venue opens on the show's first camera.
     const ready =
@@ -144,11 +147,12 @@ export default function Scene() {
                 // Draw only when something changes (`DrawWhenNeeded`).
                 frameloop="demand"
                 // `low` renders at 1x so HiDPI screens on integrated GPUs keep
-                // up; so does battery power when saving power is on.
+                // up; so does battery power when saving power is on. Otherwise
+                // the Resolution setting caps it (`renderPrefs.ts`).
                 dpr={
                     quality === "low" || (onBattery && saveOnBattery)
                         ? 1
-                        : [1, 2]
+                        : [1, maxPixelRatio(resolution)]
                 }
                 camera={{
                     fov: DEFAULT_FOV_DEG,
@@ -182,6 +186,9 @@ interface SceneContentsProps {
     fieldProperties: FieldProperties;
     image: ImageBitmap | null;
 }
+
+/** How long the scene must add no shaders before the warm-up runs (ms). */
+const WARM_AFTER_MS = 1000;
 
 // eslint-disable-next-line max-lines-per-function
 function SceneContents({
@@ -313,6 +320,36 @@ function SceneContents({
         litKitRef.current = kit;
         useView3dSceneStore.getState()._setLighting(preset);
     }, [gl, env, kit, settings.lighting]);
+
+    // Shaders for the kit's other lighting presets, compiled in the
+    // background once the scene stops adding shaders (`warmLighting.ts`).
+    // New materials, such as rebuilt marchers, start the wait again. Only
+    // where the GPU compiles in parallel: elsewhere the compile would block
+    // the window, so it waits for the switch the viewer asked for.
+    const envRef = useRef(env);
+    envRef.current = env;
+    const warmRef = useRef({ programs: -1, timer: 0 });
+    useFrame(() => {
+        if (!gl.extensions.has("KHR_parallel_shader_compile")) return;
+        const warm = warmRef.current;
+        const programs = gl.info.programs?.length ?? 0;
+        if (programs === warm.programs) return;
+        warm.programs = programs;
+        window.clearTimeout(warm.timer);
+        warm.timer = window.setTimeout(() => {
+            const { kit, lighting } = useView3dSceneStore.getState();
+            const environment = envRef.current;
+            if (!kit || !environment || !lighting) return;
+            void warmLightingPresets(gl, scene, camera, {
+                env: environment,
+                kit,
+                current: lighting,
+            });
+            // What it just compiled doesn't start another wait.
+            warm.programs = gl.info.programs?.length ?? 0;
+        }, WARM_AFTER_MS);
+    });
+    useEffect(() => () => window.clearTimeout(warmRef.current.timer), []);
 
     // Environment map: what brass and glossy surfaces reflect, in the
     // preset's sky (instruments.md §4). Rebuilt for a new preset.

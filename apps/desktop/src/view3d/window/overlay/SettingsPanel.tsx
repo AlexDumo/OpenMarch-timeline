@@ -5,7 +5,9 @@
  * - Venue, saved with the show: the venue, its lighting, the crowd and its
  *   colors, and the end-zone lettering. Every change goes to the editor,
  *   which saves it with undo.
- * - Graphics, saved on this computer: render quality.
+ * - This computer: preview controls for horns, guard equipment and the
+ *   step-off foot. Quality, resolution and power live in the app's Settings
+ *   window (3D View section), with the other per-computer choices.
  * - The keyboard and mouse controls, so they can be found.
  *
  * It floats at the right and doesn't block the scene, so the viewer can
@@ -17,7 +19,6 @@ import { XIcon } from "@phosphor-icons/react";
 import { Input, Switch } from "@openmarch/ui";
 import clsx from "clsx";
 import { useView3dSceneStore } from "../sceneStore";
-import { QUALITY_MODES } from "../qualityPreference";
 import { HOLD_STATES } from "../hornState";
 import { GUARD_EQUIPMENT } from "@/view3d/core/instruments/catalog";
 import type { GuardEquipment } from "../sceneStore";
@@ -93,8 +94,6 @@ export function SettingsPanel({
                     title={t("view3d.settings.graphicsSection")}
                     hint={t("view3d.settings.graphicsHint")}
                 >
-                    <QualityRow />
-                    <PowerRows />
                     <HornStateRow />
                     <GuardEquipmentRow />
                     <StepOffFootRow />
@@ -314,68 +313,6 @@ function ColorField({
                 className="border-stroke rounded-4 size-28 shrink-0 cursor-pointer border bg-transparent p-2"
             />
         </label>
-    );
-}
-
-function QualityRow() {
-    const { t } = useTranslate();
-    const mode = useView3dSceneStore((s) => s.qualityMode);
-    const setMode = useView3dSceneStore((s) => s.setQualityMode);
-    const autoLowered = useView3dSceneStore((s) => s.autoLowered);
-    const hint =
-        mode === "auto" && autoLowered
-            ? t("view3d.settings.qualityAutoLowered")
-            : t(`view3d.settings.qualityHint.${mode}`);
-    return (
-        <Row label={t("view3d.settings.quality")} stacked>
-            <Segmented
-                value={mode}
-                options={QUALITY_MODES.map((value) => ({
-                    value,
-                    label: t(`view3d.settings.qualityMode.${value}`),
-                }))}
-                onChange={setMode}
-                label={t("view3d.settings.quality")}
-                testId="view3d-quality-picker"
-            />
-            <p
-                className="text-sub text-text/60"
-                data-testid="view3d-quality-hint"
-            >
-                {hint}
-            </p>
-        </Row>
-    );
-}
-
-/** Battery savers: stop drawing when nothing moves, and cap the frame rate on battery. */
-function PowerRows() {
-    const { t } = useTranslate();
-    const prefs = useView3dSceneStore((s) => s.powerPrefs);
-    const setPrefs = useView3dSceneStore((s) => s.setPowerPrefs);
-    return (
-        <>
-            <Row label={t("view3d.settings.pauseWhenIdle")}>
-                <Switch
-                    checked={prefs.pauseWhenIdle}
-                    onCheckedChange={(pauseWhenIdle) =>
-                        setPrefs({ ...prefs, pauseWhenIdle })
-                    }
-                    aria-label={t("view3d.settings.pauseWhenIdle")}
-                    data-testid="view3d-pause-when-idle"
-                />
-            </Row>
-            <Row label={t("view3d.settings.saveOnBattery")}>
-                <Switch
-                    checked={prefs.saveOnBattery}
-                    onCheckedChange={(saveOnBattery) =>
-                        setPrefs({ ...prefs, saveOnBattery })
-                    }
-                    aria-label={t("view3d.settings.saveOnBattery")}
-                    data-testid="view3d-save-on-battery"
-                />
-            </Row>
-        </>
     );
 }
 

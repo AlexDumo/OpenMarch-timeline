@@ -38,6 +38,11 @@
  *   or `high`), saved per computer. Set it with `setQualityMode`. In `auto`
  *   the scene lowers `quality` once with `_autoLower()` when frames are slow
  *   (P5.1), and `autoLowered` says so.
+ * - `resolution`: the most device pixels drawn per screen pixel
+ *   (`renderPrefs.ts`), saved per computer.
+ *
+ * The app's Settings window saves the quality, power and resolution choices;
+ * `startPrefsSync()` picks them up while the window is open.
  *
  * Read it in React with `useView3dSceneStore(selector)`, and in `useFrame` or
  * event handlers with `useView3dSceneStore.getState()`.
@@ -59,6 +64,7 @@ import type {
     VenueKitId,
 } from "@/view3d/core/types";
 import {
+    QUALITY_STORAGE_KEY,
     initialQuality,
     loadQualityMode,
     saveQualityMode,
@@ -66,7 +72,17 @@ import {
 } from "./qualityPreference";
 import type { HoldState } from "./hornState";
 import type { GuardModelId } from "@/view3d/core/instruments/model";
-import { loadPowerPrefs, savePowerPrefs, type PowerPrefs } from "./drawPolicy";
+import {
+    POWER_STORAGE_KEY,
+    loadPowerPrefs,
+    savePowerPrefs,
+    type PowerPrefs,
+} from "./drawPolicy";
+import {
+    RESOLUTION_STORAGE_KEY,
+    loadResolution,
+    type Resolution,
+} from "./renderPrefs";
 import type { StepOffFoot } from "./performers/marchers/marcherBodies";
 
 /** People within this many meters of a seat camera are hidden (ui.md UI-3). */
@@ -106,6 +122,9 @@ export interface View3dSceneState {
     autoLowered: boolean;
     /** Scene only: the automatic fallback fired. */
     _autoLower: () => void;
+    resolution: Resolution;
+    /** Rereads a choice saved elsewhere: a storage key, or null for all. */
+    _loadPref: (key: string | null) => void;
     /** Scene only. */
     _setKit: (kitId: VenueKitId | null, kit: KitResult | null) => void;
     /** Scene only: the show's camera lists changed. */
@@ -168,6 +187,22 @@ export const useView3dSceneStore = create<View3dSceneState>()((set, get) => ({
     },
     autoLowered: false,
     _autoLower: () => set({ quality: "low", autoLowered: true }),
+    resolution: loadResolution(),
+    _loadPref: (key) => {
+        if (key === null || key === QUALITY_STORAGE_KEY) {
+            const mode = loadQualityMode();
+            if (mode !== get().qualityMode)
+                set({
+                    qualityMode: mode,
+                    quality: initialQuality(mode),
+                    autoLowered: false,
+                });
+        }
+        if (key === null || key === POWER_STORAGE_KEY)
+            set({ powerPrefs: loadPowerPrefs() });
+        if (key === null || key === RESOLUTION_STORAGE_KEY)
+            set({ resolution: loadResolution() });
+    },
     _setKit: (kitId, kit) =>
         set({
             kitId,
@@ -183,3 +218,14 @@ export const useView3dSceneStore = create<View3dSceneState>()((set, get) => ({
     _setCrowd: (crowd) => set({ crowd }),
     _setLighting: (lighting) => set({ lighting }),
 }));
+
+/**
+ * Applies the quality, power and resolution choices the Settings window
+ * saves, as it saves them. Returns the function that stops listening.
+ */
+export function startPrefsSync(): () => void {
+    const onStorage = (event: StorageEvent) =>
+        useView3dSceneStore.getState()._loadPref(event.key);
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+}

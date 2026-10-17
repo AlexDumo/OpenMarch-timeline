@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import {
+    CubeIcon,
     CursorClickIcon,
     DatabaseIcon,
     GearSixIcon,
@@ -17,6 +18,7 @@ import GeneralSettings from "@/components/launchpage/settings/GeneralSettings";
 import AppearanceSettings from "@/components/launchpage/settings/AppearanceSettings";
 import MouseSettings from "@/components/launchpage/settings/MouseSettings";
 import TimelineSettings from "@/components/launchpage/settings/TimelineSettings";
+import View3dSettings from "@/components/launchpage/settings/View3dSettings";
 import ShortcutSettings from "@/components/launchpage/settings/ShortcutSettings";
 import PluginsContents from "@/components/launchpage/settings/plugins/Plugins";
 import PrivacySettings from "@/components/launchpage/settings/PrivacySettings";
@@ -29,6 +31,7 @@ export type SettingsSectionId =
     | "appearance"
     | "mouse"
     | "timeline"
+    | "view3d"
     | "shortcuts"
     | "plugins"
     | "privacy"
@@ -108,6 +111,20 @@ const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
             "settings.timeline.waveformStyle.simplified",
             "settings.timeline.waveformStyle.precise",
             "settings.timeline.waveformStyle.hidden",
+        ],
+    },
+    {
+        id: "view3d",
+        labelKey: "settings.view3d",
+        Icon: CubeIcon,
+        Component: View3dSettings,
+        descriptionKey: "settings.view3d.description",
+        searchKeys: [
+            "settings.view3d.quality",
+            "settings.view3d.resolution",
+            "settings.view3d.pauseWhenIdle",
+            "settings.view3d.saveOnBattery",
+            "settings.view3d.drawWithoutGpu",
         ],
     },
     {
