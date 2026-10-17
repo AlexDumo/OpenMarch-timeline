@@ -229,7 +229,7 @@ describeDbTests("completeNewShow", (it) => {
         draftFilePath: "/tmp/draft.dots",
     });
 
-    it("tempo only with audio: measures run to the end of the recording, pages stay at the start (E1)", async ({
+    it("tempo only with audio stores only the starter pages' 20 measures (endless counts, T-8)", async ({
         task,
         db,
     }) => {
@@ -238,7 +238,6 @@ describeDbTests("completeNewShow", (it) => {
             .mockResolvedValue([
                 { id: 1, path: "song.mp3", nickname: "song", selected: true },
             ]);
-        const readAudioDuration = vi.fn().mockResolvedValue(151);
         const form = wizardStateToFormState(
             withAudio(task.id, {
                 method: "tempo_only",
@@ -246,57 +245,31 @@ describeDbTests("completeNewShow", (it) => {
                 timeSignature: "4/4",
             }),
         );
-        await completeNewShow(form, queryClient, readAudioDuration);
+        await completeNewShow(form, queryClient);
 
-        expect(readAudioDuration).toHaveBeenCalledOnce();
-        // 2:31 at 120 in 4/4 is 75.5 measures: 76, ending at 2:32
         const beats = await queryClient.fetchQuery(
             allDatabaseBeatsQueryOptions(),
         );
-        expect(beats.length).toBe(1 + 76 * 4);
-        expect(beats.reduce((sum, b) => sum + b.duration, 0)).toBe(152);
-        const measures = await queryClient.fetchQuery(
-            allDatabaseMeasuresQueryOptions(),
-        );
-        expect(measures.length).toBe(76);
-        const pages = await queryClient.fetchQuery(
-            allDatabasePagesQueryOptions(),
-        );
-        expect(pages.length).toBe(6);
-        expect((await getUtility({ db }))?.last_page_counts).toBe(8);
-
-        // A retry doesn't add a second set
-        await completeNewShow(form, queryClient, readAudioDuration);
-        expect(
-            (await queryClient.fetchQuery(allDatabaseBeatsQueryOptions()))
-                .length,
-        ).toBe(1 + 76 * 4);
-    });
-
-    it("tempo only with short or unreadable audio keeps the 20 starter measures", async ({
-        task,
-        db: _db,
-    }) => {
-        window.electron.getAudioFilesDetails = vi
-            .fn()
-            .mockResolvedValue([
-                { id: 1, path: "song.mp3", nickname: "song", selected: true },
-            ]);
-        const form = wizardStateToFormState(
-            withAudio(task.id, {
-                method: "tempo_only",
-                tempo: 120,
-                timeSignature: "4/4",
-            }),
-        );
-        await completeNewShow(form, queryClient, async () => null);
+        expect(beats.length).toBe(1 + 20 * 4);
         expect(
             (await queryClient.fetchQuery(allDatabaseMeasuresQueryOptions()))
                 .length,
         ).toBe(20);
+        expect(
+            (await queryClient.fetchQuery(allDatabasePagesQueryOptions()))
+                .length,
+        ).toBe(6);
+        expect((await getUtility({ db }))?.last_page_counts).toBe(8);
+
+        // A retry doesn't add a second set
+        await completeNewShow(form, queryClient);
+        expect(
+            (await queryClient.fetchQuery(allDatabaseBeatsQueryOptions()))
+                .length,
+        ).toBe(1 + 20 * 4);
     });
 
-    it("skip with audio: counts run to the end of the recording (E1)", async ({
+    it("skip with audio stores the starter pages' 128 counts (endless counts, T-8)", async ({
         task,
         db: _db,
     }) => {
@@ -308,20 +281,16 @@ describeDbTests("completeNewShow", (it) => {
         const form = wizardStateToFormState(
             withAudio(task.id, { method: "skip" }),
         );
-        await completeNewShow(form, queryClient, async () => 151);
+        await completeNewShow(form, queryClient);
 
         const beats = await queryClient.fetchQuery(
             allDatabaseBeatsQueryOptions(),
         );
-        expect(beats.length).toBe(1 + 302);
+        expect(beats.length).toBe(1 + 128);
         const pages = await queryClient.fetchQuery(
             allDatabasePagesQueryOptions(),
         );
         expect(pages.length).toBe(8);
-        expect(
-            (await queryClient.fetchQuery(allDatabaseMeasuresQueryOptions()))
-                .length,
-        ).toBe(0);
     });
 
     it("aborts when audio method is audio but no audio files exist", async ({

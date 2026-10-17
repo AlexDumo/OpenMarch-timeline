@@ -14,6 +14,9 @@ import {
     useQueryClient,
 } from "@tanstack/react-query";
 import { safelyInvalidateQueries } from "./utils";
+import { takeStoredCounts } from "@/db-functions/endlessCounts";
+import { invalidatePageQueries } from "./usePages";
+import { measureKeys } from "./useMeasures";
 import { allMarchersQueryOptions } from "./useMarchers";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -60,7 +63,15 @@ export const refreshHistoryOnWrites = (qc: QueryClient): (() => void) => {
     const unsubscribeMutations = qc.getMutationCache().subscribe((event) => {
         if (event?.type === "updated") refresh();
     });
-    const unsubscribeWrites = subscribeHistoryWrites(refresh);
+    const unsubscribeWrites = subscribeHistoryWrites(() => {
+        refresh();
+        // A write that stored counts past the last one (endless counts) changed the beats and
+        // measures, whatever it set out to change
+        if (takeStoredCounts())
+            void invalidatePageQueries(qc).then(() =>
+                qc.invalidateQueries({ queryKey: measureKeys.all() }),
+            );
+    });
     return () => {
         unsubscribeMutations();
         unsubscribeWrites();

@@ -34,7 +34,7 @@ import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { timeAtBeat, type BeatTiming } from "@/timeline/timeMap";
+import type { CountClock } from "@/timeline/countGrid";
 import { loopBounds } from "@/timeline/timelineTransport";
 import {
     effectivePlaybackSpeed,
@@ -76,13 +76,13 @@ const PLAY_SETTLE_MS = 150;
  */
 export function currentAnchorShowMs(
     isPlaying: boolean,
-    beats: readonly BeatTiming[],
+    clock: CountClock,
     pausedBeat: number,
 ): number {
     if (isPlaying && playbackStartInfoRef.current) {
         return getLivePlaybackPosition() * 1000;
     }
-    return timeAtBeat(beats, pausedBeat) * 1000;
+    return clock.timeAtBeat(pausedBeat) * 1000;
 }
 
 /**
@@ -135,7 +135,8 @@ export function useView3dPublisher() {
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
     const selectedPage = useSelectedPage()?.selectedPage ?? null;
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
-    const { beats } = useTimingObjects();
+    // Past the stored counts too: the counts go on (endless counts)
+    const { countGrid } = useTimingObjects();
     const pausedBeat = useTimelineSelectionStore(displayedBeat);
     // The playhead also moves while playing; only a paused one re-anchors the clock
     const heldBeat = isPlaying ? null : pausedBeat;
@@ -166,7 +167,7 @@ export function useView3dPublisher() {
         isPlaying,
         selectedPage,
         selectedMarcherIdsKey,
-        beats,
+        countGrid,
         pausedBeat,
         playLoops,
     });
@@ -174,7 +175,7 @@ export function useView3dPublisher() {
         isPlaying,
         selectedPage,
         selectedMarcherIdsKey,
-        beats,
+        countGrid,
         pausedBeat,
         playLoops,
     };
@@ -182,14 +183,14 @@ export function useView3dPublisher() {
     const sendClock = useCallback(() => {
         const {
             isPlaying: playing,
-            beats: b,
+            countGrid: grid,
             pausedBeat: beat,
             playLoops: loops,
         } = latest.current;
         const clock: View3dClock = {
             seq: ++seqRef.current,
             playing,
-            anchorShowMs: currentAnchorShowMs(playing, b, beat),
+            anchorShowMs: currentAnchorShowMs(playing, grid, beat),
             anchorWallMs: wallNowMs(),
             // The window's clock runs at the speed the audio plays at, which takes a speed
             // change when the audio does (1 until playback has started)
@@ -294,7 +295,7 @@ export function useView3dPublisher() {
         windowOpen,
         isPlaying,
         heldBeat,
-        beats,
+        countGrid,
         playbackSpeed,
         chosenSpeed,
         playLoops,

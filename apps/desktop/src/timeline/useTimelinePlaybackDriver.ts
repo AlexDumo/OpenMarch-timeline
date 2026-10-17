@@ -7,13 +7,13 @@ import {
     restartLivePlaybackAt,
 } from "@/components/timeline/audio/AudioPlayer";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { beatAtTime, timeAtBeat } from "./timeMap";
 import { playbackStep } from "./timelinePlayhead";
 import {
     consumeEndRequest,
     consumeSuspendRequest,
     stopTimelinePlayback,
 } from "./timelineTransport";
+import { usePlaybackStopBeat } from "./usePlaybackStopBeat";
 
 /**
  * Timeline mode's playback rules while playing (docs/timeline/ui.md UI-9 Play, UI-11; P8.11), once
@@ -22,7 +22,10 @@ import {
  *
  * - **Stop** (Space, `stopTimelinePlayback`, UI-24) goes back to where Play was pressed: the
  *   cursor clears, and the start flag and P, which playing never moved, are the edit window again.
- *   Reaching the end of the show stops the same way.
+ *   Playing on stops the same way where it reaches the stop point (docs/tempo/endless-counts.md
+ *   rule 6: the latest of the show's end, the music's end and the last move's end); started or
+ *   jumped at or past it, it plays on in silence until stopped. Show time and counts convert on
+ *   the count grid, so playback goes on past the stored counts.
  * - **Pause** (Shift+Space, `pauseTimelinePlayback`, UI-24) stays where it is: P moves to the last
  *   whole beat played (`seek`), and an unpinned start flag follows P, as it does when a scrub ends
  *   (UI-12 review), so the window doesn't silently span pages; a pinned one stays. Paused within
@@ -34,21 +37,23 @@ import {
  *
  * Nothing follows playback while `enabled` is false.
  */
+// eslint-disable-next-line max-lines-per-function
 export function useTimelinePlaybackDriver(enabled: boolean): void {
-    const { beats } = useTimingObjects();
+    const { beats, countGrid: grid } = useTimingObjects();
     const isPlayingContext = useIsPlaying();
     const isPlaying = isPlayingContext?.isPlaying ?? false;
     const setIsPlaying = isPlayingContext?.setIsPlaying;
     const lastLiveBeat = useRef<number | null>(null);
     // Where playing on started (the cue), so a stop within Play's first beat changes nothing
     const startedAt = useRef<number | null>(null);
+    const stopBeat = usePlaybackStopBeat();
 
-    // The furthest the playhead can go
+    // Where playing on stops
     useEffect(() => {
         const store = useTimelineSelectionStore.getState();
-        // Unknown (no clamp) until the beats load
-        store.setShowEndBeat(enabled && beats.length > 0 ? beats.length : null);
-    }, [enabled, beats.length]);
+        // Unknown until the beats load
+        store.setShowEndBeat(enabled && beats.length > 0 ? stopBeat : null);
+    }, [enabled, beats.length, stopBeat]);
 
     // Pausing
     useEffect(() => {
@@ -74,8 +79,7 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
         // Paused before the audio started, nothing played, so there is nowhere else to stop. Nor
         // when Play from the start flag pauses within its first beat: the flag is the page
         // before's end flag, and stopping on it would move the window back a page
-        const stopAt =
-            live === null ? null : Math.min(Math.floor(live), beats.length);
+        const stopAt = live === null ? null : Math.floor(live);
         if (
             end === "stop" ||
             (run.kind === "preview" && end !== "pause") ||
@@ -86,31 +90,42 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
             return;
         }
         store.seek(stopAt);
-    }, [enabled, isPlaying, beats.length]);
+    }, [enabled, isPlaying]);
 
     useEffect(() => {
         if (!enabled || !isPlaying || !setIsPlaying) return;
         let frame = 0;
+        // Where the last frame was, or where a cue (the start, a jump, a loop) put playback, so
+        // playing on stops only where it plays across the stop point, never where it jumped past
+        let previous: number | null = null;
+        let revision = -1;
         const tick = () => {
             const store = useTimelineSelectionStore.getState();
+            if (store.playheadRevision !== revision) {
+                revision = store.playheadRevision;
+                previous = store.cursorBeat ?? store.playheadBeat;
+            }
             // No live position until the audio player has started
             if (playbackStartInfoRef.current && store.playback) {
-                const live = beatAtTime(beats, getLivePlaybackPosition());
+                const live = grid.beatAtTime(getLivePlaybackPosition());
                 lastLiveBeat.current = live;
+                const stop = store.showEndBeat ?? Infinity;
                 const step = playbackStep(
                     store.playback,
                     live,
-                    beats.length,
+                    stop,
                     store.isolation,
+                    previous ?? live,
                 );
-                // The end of the show stops, back to where Play was pressed (UI-24)
+                previous = live;
+                // The stop point stops, back to where Play was pressed (UI-24)
                 if (step === "stop") {
-                    lastLiveBeat.current = beats.length;
+                    lastLiveBeat.current = stop;
                     stopTimelinePlayback(setIsPlaying);
                     return;
                 }
                 if (step) {
-                    restartLivePlaybackAt(timeAtBeat(beats, step.loopTo));
+                    restartLivePlaybackAt(grid.timeAtBeat(step.loopTo));
                     lastLiveBeat.current = step.loopTo;
                     store.cue(step.loopTo);
                 }
@@ -119,5 +134,5 @@ export function useTimelinePlaybackDriver(enabled: boolean): void {
         };
         frame = requestAnimationFrame(tick);
         return () => cancelAnimationFrame(frame);
-    }, [enabled, isPlaying, beats, setIsPlaying]);
+    }, [enabled, isPlaying, grid, setIsPlaying]);
 }

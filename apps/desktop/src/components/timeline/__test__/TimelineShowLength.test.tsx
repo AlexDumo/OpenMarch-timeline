@@ -2,18 +2,28 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
+import type Measure from "@/global/classes/Measure";
 import { Timeline, TimelineWaveformProvider } from "../Timeline";
-import type {
-    TimelineAppendCounts,
-    TimelineMusicPastEnd,
-} from "../TimelineViewModel";
+import type { TimelineAppendCounts } from "../TimelineViewModel";
 
 /**
- * E1, a show as long as its music, on the timeline: **+ N counts** after the last page's flag,
- * the music past the last count drawn dimmed, and the note that offers extending the counts.
+ * The end of the show on the timeline: **+ N counts** after the last page's flag (E1), and its
+ * right-click menu (endless counts).
  */
 
 afterEach(cleanup);
+
+// jsdom has no PointerEvent, so fireEvent's pointer events would lose clientX
+if (typeof window.PointerEvent === "undefined") {
+    class TestPointerEvent extends MouseEvent {
+        readonly pointerId: number;
+        constructor(type: string, init: PointerEventInit = {}) {
+            super(type, init);
+            this.pointerId = init.pointerId ?? 1;
+        }
+    }
+    window.PointerEvent = TestPointerEvent as unknown as typeof PointerEvent;
+}
 
 /** The zero-length beat 0, then `count` timed beats */
 const appBeats = (count: number): Beat[] =>
@@ -59,29 +69,28 @@ const show = ({
     positionBeat = 5,
     isPlaying = false,
     appendCounts,
-    musicPastEnd,
     onAddPageFlag,
-    pastEnd = 0,
+    beats = BEATS,
+    measures = [],
 }: {
     positionBeat?: number;
     isPlaying?: boolean;
     appendCounts?: TimelineAppendCounts;
-    musicPastEnd?: TimelineMusicPastEnd;
     onAddPageFlag?: () => void;
-    pastEnd?: number;
+    beats?: Beat[];
+    measures?: Measure[];
 }) =>
     render(
         <TimelineWaveformProvider
             waveform={{
                 peaksByBeat: Array.from({ length: 16 }, () => [0.5, 0.5]),
-                peaksPastEnd: Array.from({ length: pastEnd }, () => [1, 1]),
             }}
         >
             <Timeline
                 mode="expanded"
-                beats={BEATS}
+                beats={beats}
                 pages={PAGES}
-                measures={[]}
+                measures={measures}
                 timelines={[]}
                 showTransport={false}
                 pixelsPerBeat={PX}
@@ -90,7 +99,6 @@ const show = ({
                 onSelectionChange={vi.fn()}
                 onAddPageFlag={onAddPageFlag}
                 appendCounts={appendCounts}
-                musicPastEnd={musicPastEnd}
             />
         </TimelineWaveformProvider>,
     );
@@ -116,27 +124,29 @@ describe("+ N counts after the last page (E1)", () => {
         expect(onAppend).toHaveBeenCalledTimes(1);
     });
 
-    it("offers pages to the end next to it when counts run on (FB-7)", () => {
+    it("offers pages to the end in its right-click menu, not as a pill (FB-7)", () => {
         const onPages = vi.fn();
         show({
             appendCounts: {
                 ...appendCounts(),
-                label: "page of 16 counts",
+                counts: 16,
+                onCountsChange: vi.fn(),
                 toEnd: {
-                    label: "Pages every 16 counts to the end",
+                    label: "Create pages every 16 counts to the end",
                     title: "Add pages every 16 counts to the end of the music",
                     onAppend: onPages,
                 },
             },
         });
-        const toEnd = screen.getByRole("button", {
-            name: "Add pages every 16 counts to the end of the music",
-        });
-        expect(parseFloat(toEnd.style.left)).toBeGreaterThan(
-            parseFloat(pill()!.style.left) + 84,
+        expect(screen.queryByTestId("timeline-pages-to-end")).toBeNull();
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        fireEvent.click(
+            screen.getByRole("menuitem", {
+                name: "Create pages every 16 counts to the end",
+            }),
         );
-        fireEvent.click(toEnd);
         expect(onPages).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
     });
 
     it("moves past + at the playhead instead of hiding under it", () => {
@@ -160,40 +170,65 @@ describe("+ N counts after the last page (E1)", () => {
     });
 });
 
-describe("the music past the last count (E1)", () => {
-    it("draws it dimmed after the last count, and leaves room for it", () => {
-        show({ pastEnd: 30 });
-        const lane = screen.getByTestId("timeline-waveform-past-end");
-        const surface = screen.getByTestId("timeline-pointer-surface");
-        // After home's box and the 16 counts
-        expect(parseFloat(lane.style.left)).toBe(
-            parseFloat(surface.style.left) + 16 * PX,
-        );
-        expect(parseFloat(lane.style.width)).toBe(30 * PX);
-        // The music past the end can't be scrubbed: it has no counts yet
-        expect(parseFloat(surface.style.width)).toBe(16 * PX);
-        expect(
-            parseFloat(surface.parentElement!.style.width),
-        ).toBeGreaterThanOrEqual(46 * PX);
+describe("changing how many counts + N counts adds", () => {
+    it("right-click asks for the number, and sets the default", () => {
+        const onCountsChange = vi.fn();
+        show({
+            appendCounts: { ...appendCounts(), counts: 16, onCountsChange },
+        });
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        expect(screen.getByTestId("timeline-append-counts-menu")).toBeTruthy();
+        expect(screen.queryAllByRole("menuitem")).toEqual([]);
+        const field = screen.getByRole("textbox", {
+            name: "Counts for new pages",
+        }) as HTMLInputElement;
+        expect(field.value).toBe("16");
+        expect(screen.queryByRole("button", { name: "Set" })).toBeNull();
+        // Not a whole number: leaving the box keeps 16, and closes the menu
+        fireEvent.change(field, { target: { value: "0" } });
+        fireEvent.blur(field);
+        expect(onCountsChange).not.toHaveBeenCalled();
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
+        // Enter saves and closes
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        const again = screen.getByRole("textbox", {
+            name: "Counts for new pages",
+        });
+        fireEvent.change(again, { target: { value: "20" } });
+        fireEvent.submit(again.closest("form")!);
+        expect(onCountsChange).toHaveBeenCalledWith(20);
+        expect(onCountsChange).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
     });
 
-    it("offers extending the counts, in words, while paused", () => {
-        const onExtend = vi.fn();
-        const musicPastEnd = {
-            message: "Counts end at 0:08; the music runs to 0:23.",
-            actionLabel: "Extend counts to the end",
-            onExtend,
-        };
-        show({ pastEnd: 30, musicPastEnd });
-        const note = screen.getByTestId("timeline-music-past-end");
-        expect(note.textContent).toContain(musicPastEnd.message);
-        expect(parseFloat(note.style.left)).toBeGreaterThan(16 * PX);
-        fireEvent.click(
-            screen.getByRole("button", { name: "Extend counts to the end" }),
-        );
-        expect(onExtend).toHaveBeenCalledTimes(1);
+    it("saves when the box loses focus, and Escape cancels", () => {
+        const onCountsChange = vi.fn();
+        show({
+            appendCounts: { ...appendCounts(), counts: 16, onCountsChange },
+        });
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        let field = screen.getByRole("textbox", {
+            name: "Counts for new pages",
+        });
+        fireEvent.change(field, { target: { value: "12" } });
+        fireEvent.blur(field);
+        expect(onCountsChange).toHaveBeenCalledWith(12);
         cleanup();
-        show({ pastEnd: 30, musicPastEnd, isPlaying: true });
-        expect(screen.queryByTestId("timeline-music-past-end")).toBeNull();
+        onCountsChange.mockClear();
+        show({
+            appendCounts: { ...appendCounts(), counts: 16, onCountsChange },
+        });
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        field = screen.getByRole("textbox", { name: "Counts for new pages" });
+        fireEvent.change(field, { target: { value: "9" } });
+        fireEvent.keyDown(field, { key: "Escape" });
+        fireEvent.blur(field);
+        expect(onCountsChange).not.toHaveBeenCalled();
+    });
+
+    it("without the command, a right-click opens no menu", () => {
+        show({ appendCounts: appendCounts() });
+        fireEvent.contextMenu(pill()!);
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
     });
 });

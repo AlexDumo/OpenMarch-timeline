@@ -115,48 +115,6 @@ export function peaksByBeat(
     );
 }
 
-/**
- * The waveform lane with the music past the show's last count (E1): `peaksByBeat` as above, and
- * `peaksPastEnd`, the music after the last count on counts that continue the show
- * (`durationAt(k)` is the `k`th one's length, as appending counts would make them), until the
- * music ends at `musicEnd`. Both share one scale, set by the show's loudest moment (UI-12), so
- * applause or a tail past the last count can't shrink the show's waveform; louder music past the
- * end is clipped at the top.
- */
-export function waveformWithPastEnd(
-    envelope: AudioEnvelope,
-    beats: readonly { readonly timestamp: number; readonly duration: number }[],
-    offset: number,
-    pastEnd: { durationAt(k: number): number; musicEnd: number | null },
-    perBeat = WAVEFORM_PEAKS_PER_BEAT,
-): { peaksByBeat: number[][]; peaksPastEnd: number[][] } {
-    const last = beats[beats.length - 1];
-    const extra: { timestamp: number; duration: number }[] = [];
-    if (pastEnd.musicEnd !== null) {
-        let time = last ? last.timestamp + last.duration : 0;
-        // A hair short of the end is the end; 20 000 counts is far past any show
-        while (time < pastEnd.musicEnd - 1e-6 && extra.length < 20_000) {
-            const duration = pastEnd.durationAt(extra.length);
-            if (!(duration > 0)) break;
-            extra.push({ timestamp: time, duration });
-            time += duration;
-        }
-    }
-    const shown = beats.slice(offset);
-    const shownRaw = shown.map((beat) => beatPeaks(envelope, beat, perBeat));
-    const all = normalizedPeaks(
-        [
-            ...shownRaw,
-            ...extra.map((beat) => beatPeaks(envelope, beat, perBeat)),
-        ],
-        shownRaw.length > 0 ? loudestOf(shownRaw) : undefined,
-    );
-    return {
-        peaksByBeat: all.slice(0, shown.length),
-        peaksPastEnd: all.slice(shown.length),
-    };
-}
-
 /** One beat's `perBeat` raw peaks, or none past the end of the audio */
 function beatPeaks(
     envelope: AudioEnvelope,
@@ -190,8 +148,8 @@ function loudestOf(raw: number[][]): number {
 }
 
 /** Raw peaks in decibels below the loudest of them, mapped onto 0 .. 1 (see `peaksByBeat`) */
-function normalizedPeaks(raw: number[][], reference?: number): number[][] {
-    const loudest = reference ?? loudestOf(raw);
+function normalizedPeaks(raw: number[][]): number[][] {
+    const loudest = loudestOf(raw);
     if (loudest <= 0) return raw.map((beat) => beat.map(() => 0));
     return raw.map((beat) => beat.map((peak) => Math.min(1, peak / loudest)));
 }

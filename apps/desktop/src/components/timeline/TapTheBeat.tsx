@@ -376,9 +376,7 @@ function TapTheBeatPanelBody() {
     const [applied, setApplied] = useState<Applied | null>(null);
     const [busy, setBusy] = useState(false);
     /** A `tempo.tapTheBeat` key */
-    const [hint, setHint] = useState<"playFirst" | "nothingToPlay" | null>(
-        null,
-    );
+    const [hint, setHint] = useState<"playFirst" | null>(null);
     // "From here" is the playhead's count when Play or the first tap of a run happened: pausing a
     // play-on run moves the playhead (UI-12), so it can't be read live
     const [hereFrom, setHereFrom] = useState<number | null>(null);
@@ -529,8 +527,8 @@ function TapTheBeatPanelBody() {
             if (from > 1) store.cue(Math.max(1, from - PRE_ROLL_COUNTS));
         }
         setHint(null);
-        if (!startTimelinePlayOn(beats.length, setIsPlaying))
-            setHint("nothingToPlay");
+        // The counts go on past the stored ones (endless counts): there is always something to play
+        startTimelinePlayOn(setIsPlaying);
     };
 
     const refresh = () => queryClient.invalidateQueries();
@@ -623,7 +621,7 @@ function TapTheBeatPanelBody() {
         if (startKind === "start") store.selectHome();
         else if (hereFrom !== null && hereFrom > 1)
             store.cue(Math.max(1, hereFrom - PRE_ROLL_COUNTS));
-        startTimelinePlayOn(beats.length, setIsPlaying);
+        startTimelinePlayOn(setIsPlaying);
     };
 
     const startOver = () => {

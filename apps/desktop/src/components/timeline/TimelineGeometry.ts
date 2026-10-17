@@ -464,7 +464,7 @@ export const getPlayheadPlace = (
 /**
  * The playhead's page, count and measure, as the transport shows them (UI-13, D6): "Pg 2 · ct
  * 7/16" and "m4 beat 4"; on a flag "C · end of Pg 10 · Pg 11 starts" and "m9 beat 1"; or "Home",
- * or "After pg 4 · +4". `compact` is the page part for a narrow transport ("Pg 10 ct 16 → 11").
+ * or "END +4". `compact` is the page part for a narrow transport ("Pg 10 ct 16 → 11").
  * `spoken` spells them out for screen readers. `measure` is null when the show has no measure
  * there.
  */

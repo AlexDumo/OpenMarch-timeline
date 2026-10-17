@@ -47,7 +47,6 @@ import type {
     TimelineBeatRange,
     TimelineCountOverlay,
     TimelineCreateTrackRequest,
-    TimelineMusicPastEnd,
     TimelineNavigation,
     TimelinePageFlagMove,
     TimelineRangeChange,
@@ -55,6 +54,7 @@ import type {
     TimelineSeekOptions,
     TimelineSelection,
     TimelineTarget,
+    TimelineViewportExtent,
     TimelineTrack,
     TimelineTrackDiagnostics,
     TimelineTrackTargetType,
@@ -213,8 +213,10 @@ export interface TimelineProps {
     readonly onSetPageSubset?: (pageId: number, subset: boolean) => void;
     /** **+ N counts** after the last page (E1), shown while paused */
     readonly appendCounts?: TimelineAppendCounts;
-    /** The note past the last count when the music runs on (E1) */
-    readonly musicPastEnd?: TimelineMusicPastEnd;
+    /** The beats Fit fits (rule 7, where playback stops), in spec beats; without it, every beat */
+    readonly fitBeat?: number;
+    /** The scroller's width in counts, so the owner leaves room past where playback stops */
+    readonly onViewportExtent?: (extent: TimelineViewportExtent) => void;
     /** The page box menu's **Delete page** (UI-9 Deleting a flag), by page id */
     readonly onDeletePageFlag?: (pageId: number) => void;
     /** The page box menu's **Delete page and its moves**, by page id */
@@ -301,12 +303,19 @@ export function TimelineWaveformProvider({
     );
 }
 
+const NO_PEAKS: readonly number[] = [];
+
+/** The injected waveform on `beatCount` beats: beats after the music (or with none) have no peaks */
 const useTimelineWaveform = (beatCount: number): TimelineWaveform => {
     const injected = useContext(TimelineWaveformContext);
     return useMemo(() => {
-        if (injected?.peaksByBeat.length === beatCount) return injected;
+        const peaks = injected?.peaksByBeat ?? [];
+        if (injected && peaks.length === beatCount) return injected;
         return {
-            peaksByBeat: Array.from({ length: beatCount }, () => []),
+            peaksByBeat: Array.from(
+                { length: beatCount },
+                (_, i) => peaks[i] ?? NO_PEAKS,
+            ),
         };
     }, [beatCount, injected]);
 };
@@ -897,7 +906,11 @@ export function Timeline(props: TimelineProps) {
         pageFlagMove,
         drillFlagMove,
         appendCounts: props.appendCounts,
-        musicPastEnd: props.musicPastEnd,
+        fitBeatCount:
+            props.fitBeat === undefined
+                ? undefined
+                : Math.min(axis.toView(props.fitBeat), axis.beatCount),
+        onViewportExtent: useLatestCallback(props.onViewportExtent),
         onOpenRange: openRange,
         measureRow: viewMeasureRow,
         onTimelineRangeCommit: commitRange,

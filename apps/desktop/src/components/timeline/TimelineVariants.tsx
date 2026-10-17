@@ -122,6 +122,8 @@ import {
     TimelinePunchTapLayer,
     usePunchTap,
 } from "./TimelinePunchTap";
+import { TimelineAppendCountsMenu } from "./TimelineAppendCountsMenu";
+import { fitSeconds, useViewportExtent } from "./useViewportExtent";
 import type {
     TimelineBeatRange,
     TimelineCommonProps,
@@ -169,18 +171,9 @@ export function fitBackZoom(
     return Math.min(back, maxScale);
 }
 
-/** No waveform past the end of the show */
-const NO_PEAKS: readonly (readonly number[])[] = [];
-
 /** About how wide **+ N counts** is, and the room kept for it after the last beat (E1) */
 const APPEND_COUNTS_WIDTH = 84;
 const APPEND_COUNTS_ROOM = APPEND_COUNTS_WIDTH + 16;
-/** About how wide a pill in the top row is for `label` (10px text, icon and padding) */
-const pillWidth = (label: string) =>
-    Math.max(APPEND_COUNTS_WIDTH, Math.ceil(label.length * 5.6) + 24);
-
-/** About how wide the note that the music runs on is, and the room kept for it (E1) */
-const MUSIC_PAST_END_NOTE_WIDTH = 420;
 
 /** How much one pixel of wheel or pinch delta zooms */
 const WHEEL_ZOOM_RATE = 0.0025;
@@ -870,31 +863,13 @@ const TimelineSurface = memo(function TimelineSurface({
     }, [cancelAlignEdit, showAlign]);
 
     const width = axis.width;
-    // E1: the music past the last count, drawn dimmed after it. The Align view draws the whole
-    // recording in time already, so there it has none.
-    const peaksPastEnd = showAlign
-        ? NO_PEAKS
-        : (model.waveform.peaksPastEnd ?? NO_PEAKS);
-    const pastEndWidth = peaksPastEnd.length * pixelsPerBeat;
-    // E1: room after the last beat for the music past it, **+ N counts** and the note
-    const trailingWidth = Math.max(
-        pastEndWidth,
-        props.musicPastEnd ? MUSIC_PAST_END_NOTE_WIDTH : 0,
-        props.appendCounts ? APPEND_COUNTS_ROOM : 0,
-    );
-    // Where the counts end: the surface's end on the normal timeline; in Align the recording may
-    // run on past them
-    const countsEndX = axis.x(model.beatCount);
+    // The owner draws the counts on past where playback stops, with some room (endless counts,
+    // EC-9), so the surface is as wide as the counts
     const surfaceWidth =
-        Math.max(
-            width + TIMELINE_END_INSET,
-            baseAxis.width,
-            countsEndX + Math.max(trailingWidth, TIMELINE_END_INSET),
-        ) + initialPageWidth;
+        Math.max(width + TIMELINE_END_INSET, baseAxis.width) + initialPageWidth;
     const showWaveform = showAlign
         ? envelope !== null
-        : model.waveform.peaksByBeat.some((peaks) => peaks.length > 0) ||
-          peaksPastEnd.some((peaks) => peaks.length > 0);
+        : model.waveform.peaksByBeat.some((peaks) => peaks.length > 0);
     const waveformStyle = useUiSettingsStore(
         (state) => state.uiSettings.timelineWaveformStyle,
     );
@@ -974,19 +949,15 @@ const TimelineSurface = memo(function TimelineSurface({
     const zoom = useTimelineZoom({
         viewportRef,
         pixelsPerBeat: showAlign ? pixelsPerSecond : pixelsPerBeat,
-        // The beats Fit fits, and any music drawn past the show's end (E1)
+        // Fit fits up to where playback stops (endless counts rule 7), not the counts drawn past it
         beatCount: showAlign
-            ? baseAxis.extent
-            : model.beatCount + peaksPastEnd.length,
+            ? fitSeconds(baseAxis, props.fitBeatCount)
+            : (props.fitBeatCount ?? model.beatCount),
         leadingInset: initialPageWidth,
-        // Fitted, the note and its Extend button stay in view (E1)
+        // Fitted, **+ N counts** stays in view (E1)
         trailingInset: Math.max(
             TIMELINE_END_INSET,
-            props.musicPastEnd
-                ? MUSIC_PAST_END_NOTE_WIDTH
-                : props.appendCounts
-                  ? APPEND_COUNTS_ROOM
-                  : 0,
+            props.appendCounts ? APPEND_COUNTS_ROOM : 0,
         ),
         playheadBeat: showAlign ? playheadTime : positionBeat,
         onPixelsPerBeatChange: showAlign
@@ -1088,10 +1059,12 @@ const TimelineSurface = memo(function TimelineSurface({
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [align, alignKeyBlocked, toggleAlign]);
 
-    // E1: the waveform past the end, as its own lane model so the canvas keeps its memo
-    const pastEndWaveform = useMemo(
-        () => ({ peaksByBeat: peaksPastEnd }),
-        [peaksPastEnd],
+    // Endless counts rule 7: say how many counts a screen holds, for the room past the end
+    useViewportExtent(
+        viewportRef,
+        axis,
+        model.beatCount,
+        props.onViewportExtent,
     );
     // E1: **+ N counts** goes after the last page's flag; when **+** at the playhead would cover
     // it, it moves just past that one, so both stay clickable
@@ -1122,20 +1095,11 @@ const TimelineSurface = memo(function TimelineSurface({
             : atFlag;
     })();
     const showAppendCounts = props.appendCounts != null && !props.isPlaying;
-    const appendWidth = props.appendCounts
-        ? pillWidth(props.appendCounts.label)
-        : APPEND_COUNTS_WIDTH;
-    const toEndWidth = props.appendCounts?.toEnd
-        ? pillWidth(props.appendCounts.toEnd.label)
-        : 0;
-    const appendTotalWidth = appendWidth + (toEndWidth ? toEndWidth + 6 : 0);
-    // The note sits in the top row past the last count, over no page boxes and clear of the
-    // music drawn below it, after **+ N counts** when that is at the end too
-    const musicNoteLeft =
-        initialPageWidth +
-        (showAppendCounts && appendCountsX + appendTotalWidth > countsEndX
-            ? appendCountsX + appendTotalWidth + 8
-            : countsEndX + 8);
+    // Right-clicking **+ N counts** sets how many counts new pages get
+    const [appendMenuAt, setAppendMenuAt] = useState<{
+        x: number;
+        y: number;
+    } | null>(null);
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
     // UI-12: clicks and scrubs land on a nearby downbeat or page line; Basic's on any count
@@ -2103,6 +2067,18 @@ const TimelineSurface = memo(function TimelineSurface({
                                     event.stopPropagation()
                                 }
                                 onClick={props.appendCounts.onAppend}
+                                onContextMenu={(event) => {
+                                    const { counts, onCountsChange } =
+                                        props.appendCounts ?? {};
+                                    if (counts === undefined || !onCountsChange)
+                                        return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setAppendMenuAt({
+                                        x: event.clientX,
+                                        y: event.clientY,
+                                    });
+                                }}
                                 className="border-accent text-accent bg-bg-1 hover:bg-accent hover:text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex h-16 items-center gap-2 rounded-full border px-6 text-[10px] leading-none font-medium whitespace-nowrap outline-hidden focus-visible:ring-2"
                                 style={{
                                     left: appendCountsX,
@@ -2113,26 +2089,19 @@ const TimelineSurface = memo(function TimelineSurface({
                                 {props.appendCounts.label}
                             </button>
                         )}
-                        {showAppendCounts && props.appendCounts?.toEnd && (
-                            <button
-                                type="button"
-                                data-testid="timeline-pages-to-end"
-                                data-timeline-interactive="true"
-                                aria-label={props.appendCounts.toEnd.title}
-                                title={props.appendCounts.toEnd.title}
-                                onPointerDown={(event) =>
-                                    event.stopPropagation()
-                                }
-                                onClick={props.appendCounts.toEnd.onAppend}
-                                className="border-accent text-accent bg-bg-1 hover:bg-accent hover:text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex h-16 items-center gap-2 rounded-full border border-dashed px-6 text-[10px] leading-none font-medium whitespace-nowrap outline-hidden focus-visible:ring-2"
-                                style={{
-                                    left: appendCountsX + appendWidth + 6,
-                                    top: TIMELINE_PAGE_ROW_TOP + 6,
-                                }}
-                            >
-                                {props.appendCounts.toEnd.label}
-                            </button>
-                        )}
+                        {appendMenuAt &&
+                            props.appendCounts?.counts !== undefined &&
+                            props.appendCounts.onCountsChange && (
+                                <TimelineAppendCountsMenu
+                                    at={appendMenuAt}
+                                    counts={props.appendCounts.counts}
+                                    onCountsChange={
+                                        props.appendCounts.onCountsChange
+                                    }
+                                    toEnd={props.appendCounts.toEnd}
+                                    onClose={() => setAppendMenuAt(null)}
+                                />
+                            )}
                         <TimelineRangePreview
                             preview={pointer.rangePreview}
                             axis={axis}
@@ -2196,48 +2165,6 @@ const TimelineSurface = memo(function TimelineSurface({
                         )}
                     </div>
                 </div>
-                {showWaveform && peaksPastEnd.length > 0 && (
-                    <div
-                        data-testid="timeline-waveform-past-end"
-                        aria-hidden="true"
-                        className="rounded-4 pointer-events-none absolute overflow-hidden opacity-40"
-                        style={{
-                            left: initialPageWidth + width,
-                            top: audioTop,
-                            width: pastEndWidth,
-                            height: waveformHeight,
-                        }}
-                    >
-                        <TimelineWaveformCanvas
-                            waveform={pastEndWaveform}
-                            width={pastEndWidth}
-                            height={waveformHeight}
-                            pixelsPerBeat={pixelsPerBeat}
-                            waveformStyle={waveformStyle}
-                            tone="rest"
-                        />
-                    </div>
-                )}
-                {props.musicPastEnd && !props.isPlaying && (
-                    <div
-                        data-testid="timeline-music-past-end"
-                        className="border-stroke bg-bg-1 text-text rounded-6 absolute z-[55] flex h-22 items-center gap-8 border px-8 text-[11px] whitespace-nowrap shadow-sm"
-                        style={{
-                            left: musicNoteLeft,
-                            top: TIMELINE_PAGE_ROW_TOP + 3,
-                        }}
-                    >
-                        <span>{props.musicPastEnd.message}</span>
-                        <button
-                            type="button"
-                            data-timeline-interactive="true"
-                            onClick={props.musicPastEnd.onExtend}
-                            className="text-accent focus-visible:ring-accent rounded-4 font-medium outline-hidden hover:underline focus-visible:ring-2"
-                        >
-                            {props.musicPastEnd.actionLabel}
-                        </button>
-                    </div>
-                )}
                 {rangeMenu.element}
             </div>
         </TimelineShell>

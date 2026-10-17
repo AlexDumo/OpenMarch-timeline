@@ -106,7 +106,7 @@ export function placeAt(
 
 /**
  * A place as it is written: "C · end of Pg 10 · Pg 11 starts", "end of Pg 6" (the last flag),
- * "Pg 2 · ct 7/16", "the start", "After pg 4 · +4"; compact, "C · Pg 10 ct 16 → 11" and
+ * "Pg 2 · ct 7/16", "the start", "END +4"; compact, "C · Pg 10 ct 16 → 11" and
  * "Pg 2 ct 7".
  */
 export function formatPlace(place: Place, style: PlaceStyle = "full"): string {
@@ -114,9 +114,8 @@ export function formatPlace(place: Place, style: PlaceStyle = "full"): string {
         case "start":
             return "the start";
         case "after":
-            return style === "compact"
-                ? `Pg ${place.page} +${place.count}`
-                : `After pg ${place.page} · +${place.count}`;
+            // Past the show's end the counts belong to no page (endless counts rule 8)
+            return `END +${place.count}`;
         case "count":
             return style === "compact"
                 ? `Pg ${place.page} ct ${place.count}`
@@ -136,7 +135,9 @@ export function spokenPlace(place: Place): string {
         case "start":
             return "The start";
         case "after":
-            return `${place.count} counts after page ${place.page}`;
+            return place.count === 1
+                ? "1 count past the end of the show"
+                : `${place.count} counts past the end of the show`;
         case "count":
             return `Page ${place.page}, count ${place.count}${place.total != null ? ` of ${place.total}` : ""}`;
         case "flag":

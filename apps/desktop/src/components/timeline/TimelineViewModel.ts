@@ -132,14 +132,11 @@ export interface TimelineTrack {
 }
 
 export interface TimelineWaveform {
-    /** Normalized peak magnitudes (0..1), grouped by beat. */
-    readonly peaksByBeat: readonly (readonly number[])[];
     /**
-     * The music after the show's last count (E1), on the beats the show would have if it went on
-     * at its last tempo, on the same scale. Drawn dimmed past the end, so the music that has no
-     * counts yet shows. Empty or missing without music there.
+     * Normalized peak magnitudes (0..1), grouped by beat. It may stop before the timeline's last
+     * beat (the music ends); the beats after it have none.
      */
-    readonly peaksPastEnd?: readonly (readonly number[])[];
+    readonly peaksByBeat: readonly (readonly number[])[];
 }
 
 /**
@@ -152,7 +149,14 @@ export interface TimelineAppendCounts {
     /** Its tooltip and accessible name, such as "Add a page of 16 counts after the last page" */
     readonly title: string;
     readonly onAppend: () => void;
-    /** "Add pages every 16 counts to the end", when counts run on past the last page (FB-7) */
+    /** The page length it adds now; with `onCountsChange`, a right-click changes it */
+    readonly counts?: number;
+    /** Sets the file's default new page counts, from the pill's right-click menu */
+    readonly onCountsChange?: (counts: number) => void;
+    /**
+     * "Create pages every 16 counts to the end", when the music runs on past the last page (FB-7):
+     * an entry in the pill's right-click menu
+     */
     readonly toEnd?: {
         readonly label: string;
         readonly title: string;
@@ -160,13 +164,10 @@ export interface TimelineAppendCounts {
     };
 }
 
-/** The music runs past the last count (E1): a note past the end that offers extending the counts */
-export interface TimelineMusicPastEnd {
-    /** Such as "Counts end at 0:40; the music runs to 2:31." */
-    readonly message: string;
-    /** Such as "Extend counts to the end" */
-    readonly actionLabel: string;
-    readonly onExtend: () => void;
+/** What the timeline's scroller shows, so its owner can leave room past the show (endless counts) */
+export interface TimelineViewportExtent {
+    /** How many counts one screen holds now */
+    readonly screenBeats: number;
 }
 
 export interface TimelineViewModel {
@@ -290,8 +291,10 @@ export interface TimelineInteractionProps {
     readonly pageFlagMove?: TimelinePageFlagMove;
     /** **+ N counts** after the last page's flag (E1); without it, none */
     readonly appendCounts?: TimelineAppendCounts;
-    /** The note past the last count when the music runs on (E1); without it, none */
-    readonly musicPastEnd?: TimelineMusicPastEnd;
+    /** The beats Fit fits (rule 7: where playback stops), in view beats; without it, every beat */
+    readonly fitBeatCount?: number;
+    /** The scroller's width in counts (rule 7) */
+    readonly onViewportExtent?: (extent: TimelineViewportExtent) => void;
     /** Double-clicking a page box or clip opens (isolates) its range, in view beats here */
     readonly onOpenRange?: (target: TimelineMenuTarget) => void;
     /**
