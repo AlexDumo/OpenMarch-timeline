@@ -49,6 +49,7 @@ import clsx from "clsx";
 import AlertModal from "./components/AlertModal";
 import ConvertShowDialog from "./components/ConvertShowDialog";
 import ShortcutsDialog from "./components/ShortcutsDialog";
+import MusicXmlChecksDialog from "./components/music/MusicXmlChecksDialog";
 import WebWelcomeModal from "./components/WebWelcomeModal";
 import { isWebBuild } from "./utilities/webBuild";
 import { useLoadFileErrorHandler } from "./hooks/useLoadFileErrorHandler";
@@ -276,6 +277,7 @@ function App() {
                     <ShortcutDispatcher />
                     <CommandPalette />
                     <ShortcutsDialog />
+                    <MusicXmlChecksDialog />
                     {/* Always show LaunchPage when no file is selected, regardless of database state */}
                     {!databaseIsReady ? (
                         <SelectedAudioFileProvider>
