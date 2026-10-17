@@ -39,3 +39,4 @@ modeled.
 ## Prototypes
 
 1. [Live sync](01-live-sync/README.md)
+2. [Presence](02-presence/README.md)

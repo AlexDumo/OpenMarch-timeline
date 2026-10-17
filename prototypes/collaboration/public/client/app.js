@@ -296,6 +296,8 @@ function onEvent(ev) {
             toast(`Reconnected. Caught up on ${ev.caughtUp} edit${ev.caughtUp > 1 ? "s" : ""} from while you were away.`, "good");
             for (const op of ev.ops) log({ who: op.by, text: `${op.label} (while you were offline)` });
         } else toast(`Joined as ${role}.`);
+        lastPresence = "";
+        sendPresence();
         renderChrome();
     } else if (ev.type === "applied") onApplied(ev.msg, ev.mine);
     else if (ev.type === "rejected") onRejected(ev.msg);
@@ -312,6 +314,7 @@ function onEvent(ev) {
 
 function onApplied(msg, mine) {
     log({ who: msg.by, text: msg.label, seq: msg.seq });
+    if (!mine) flashChanges(msg.changes, msg.by.color);
 }
 
 function onRejected(msg) {
@@ -321,6 +324,29 @@ function onRejected(msg) {
 
 /** A short ring on marchers a peer just changed, so remote edits don't happen silently. */
 function flashChangedFromRemote() {}
+
+/** The marchers a list of changes touches. */
+function marchersTouched(changes) {
+    const ids = new Set();
+    for (const ch of changes) {
+        if (ch.table === "marchers") ids.add(ch.key);
+        else if (ch.table === "moves") {
+            const row = ch.row ?? ch.prev ?? {};
+            const mv = S.show.moves.find((m) => m.id === ch.key);
+            const id = row.marcher_id ?? mv?.marcher_id;
+            if (id !== undefined) ids.add(id);
+        }
+    }
+    return ids;
+}
+
+function flashChanges(changes, color, ms = 1600) {
+    const until = Date.now() + ms;
+    for (const id of marchersTouched(changes)) S.highlights.set(id, { until, color });
+    for (const ch of changes) if (ch.table === "moves") S.moveHighlights.set(ch.key, until);
+    render();
+    setTimeout(render, ms + 20);
+}
 
 // ---------------------------------------------------------------- rendering
 
@@ -433,9 +459,44 @@ function renderField() {
     svg.innerHTML = parts.join("");
 }
 
-/** Hooks for later prototypes: what others are doing on the field. */
+/** Others on the field: rings on what they have selected, and a ghost of what they're dragging. */
 function fieldOverlays(pos) {
-    return "";
+    const out = [];
+    others().forEach((p, i) => {
+        const pr = p.presence;
+        if (!pr) return;
+        const r = 15 + 4 * i;
+        for (const id of pr.selection ?? []) {
+            const q = pos.get(id);
+            if (q) out.push(`<circle cx="${q.x}" cy="${q.y}" r="${r}" fill="none" stroke="${p.user.color}" stroke-width="2.5" stroke-dasharray="5 3" opacity="0.9"/>`);
+        }
+        if (pr.drag && (pr.drag.dx || pr.drag.dy)) {
+            let first = null;
+            for (const id of pr.selection ?? []) {
+                const q = pos.get(id);
+                if (!q) continue;
+                const gx = q.x + pr.drag.dx, gy = q.y + pr.drag.dy;
+                first ??= { x: gx, y: gy };
+                out.push(`<circle cx="${gx}" cy="${gy}" r="11" fill="${p.user.color}" fill-opacity="0.25" stroke="${p.user.color}" stroke-width="2"/>`);
+            }
+            if (first) out.push(nameTag(first.x, first.y - 26, `${p.user.name} is moving these`, p.user.color));
+        } else if (pr.selection?.length) {
+            const q = pos.get(pr.selection[0]);
+            if (q) out.push(nameTag(q.x, q.y - r - 8, p.user.name, p.user.color));
+        }
+    });
+    return out.join("");
+}
+
+function nameTag(x, y, text, color, size = 24) {
+    const w = text.length * size * 0.58 + 10;
+    return `<g pointer-events="none"><rect x="${x - w / 2}" y="${y - size}" width="${w}" height="${size + 6}" rx="4" fill="${color}"/>
+        <text x="${x}" y="${y}" font-size="${size}" text-anchor="middle" fill="#111" font-weight="600">${escapeHtml(text)}</text></g>`;
+}
+
+/** Everyone in the session but me. */
+function others() {
+    return S.mode === "session" ? S.people.filter((p) => p.user.id !== S.user.id) : [];
 }
 
 function marcherDecorations(m, p) {
@@ -505,9 +566,26 @@ function renderTimeline() {
     svg.innerHTML = parts.join("");
 }
 
-/** Hooks for later prototypes: others' playhead lines and time selections. */
+/** Others on the timeline: their time selections and their playhead lines, in their colors. */
 function timelineOverlays(x, h) {
-    return "";
+    const out = [];
+    others().forEach((p, i) => {
+        const pr = p.presence;
+        if (!pr) return;
+        const c = p.user.color;
+        if (pr.range) {
+            out.push(`<rect x="${x(pr.range[0])}" y="${TL.rulerH}" width="${x(pr.range[1]) - x(pr.range[0])}" height="${h - TL.rulerH}" fill="${c}" fill-opacity="0.12" stroke="${c}" stroke-opacity="0.6" pointer-events="none"/>`);
+        }
+        const px = x(pr.playhead ?? 0);
+        out.push(`<line x1="${px}" y1="${TL.rulerH}" x2="${px}" y2="${h}" stroke="${c}" stroke-width="2" stroke-dasharray="4 3" pointer-events="none"/>`);
+        out.push(`<path d="M${px - 5},${TL.rulerH} L${px + 5},${TL.rulerH} L${px},${TL.rulerH + 8} Z" fill="${c}" pointer-events="none"/>`);
+        const label = `${p.user.name}${pr.playing ? " ▶" : ""}`;
+        const w = label.length * 6.6 + 10;
+        const lx = Math.min(px + 4, x(S.total) - w);
+        const ly = TL.rulerH + 2 + (i % 2) * 11;
+        out.push(`<g pointer-events="none"><rect x="${lx}" y="${ly}" width="${w}" height="13" rx="3" fill="${c}"/><text x="${lx + 5}" y="${ly + 10}" font-size="11" fill="#111" font-weight="600">${escapeHtml(label)}</text></g>`);
+    });
+    return out.join("");
 }
 
 function renderTransport() {
@@ -564,7 +642,51 @@ function afterLocalUi() {
     sendPresence();
 }
 
-function sendPresence() {}
+let presenceTimer = null;
+let lastPresence = "";
+
+/** Tells peers what I'm looking at and doing. Never stored: the server only relays it. */
+function sendPresence() {
+    if (S.mode !== "session" || !S.conn?.live || presenceTimer) return;
+    presenceTimer = setTimeout(() => {
+        presenceTimer = null;
+        if (!S.conn?.live) return;
+        const drag = S.drag?.kind === "marchers" ? { dx: S.drag.dx, dy: S.drag.dy } : null;
+        const presence = {
+            selection: [...S.selection].slice(0, 200),
+            playhead: Math.round(S.playhead * 100) / 100,
+            range: S.range,
+            playing: S.playing,
+            drag,
+        };
+        const text = JSON.stringify(presence);
+        if (text === lastPresence) return;
+        lastPresence = text;
+        S.conn.send({ type: "presence", presence });
+    }, 50);
+}
+
+/** Jump to where someone else is: their playhead, their selection. */
+function goTo(person) {
+    const pr = person.presence;
+    if (!pr) return;
+    S.playhead = pr.playhead ?? 0;
+    S.range = pr.range ?? null;
+    afterLocalUi();
+    toast(`Went to ${person.user.name}'s playhead (count ${Math.round(S.playhead)}).`);
+}
+
+function describePresence(p) {
+    const pr = p.presence;
+    if (!pr) return "just joined";
+    const box = pageBoxAt(S.flags, pr.playhead ?? 0);
+    const bits = [`page ${box?.index ?? "–"} · count ${Math.round(pr.playhead ?? 0)}`];
+    if (pr.playing) bits.push("playing");
+    if (pr.range) bits.push(`selecting ${pr.range[0]}–${pr.range[1]}`);
+    if (pr.selection?.length) bits.push(`${pr.selection.length} selected`);
+    if (pr.drag) bits.push("dragging");
+    return bits.join(" · ");
+}
 
 // ---------------------------------------------------------------- side panel
 
@@ -576,7 +698,15 @@ function renderSide() {
     } else
         for (const p of S.people) {
             const li = document.createElement("li");
-            li.innerHTML = `<span class="swatch" style="background:${p.user.color}"></span><b>${escapeHtml(p.user.name)}</b>${p.user.id === S.user.id ? " (you)" : ""} <span class="muted">${p.role === "head" ? "head" : ""}</span>`;
+            const me = p.user.id === S.user.id;
+            li.style.flexWrap = "wrap";
+            li.innerHTML = `<span class="swatch" style="background:${p.user.color}"></span><b>${escapeHtml(p.user.name)}</b>${me ? " (you)" : ""} <span class="muted">${p.role === "head" ? "head" : ""}</span><span class="grow"></span>`;
+            if (!me) li.append(button("go to", () => goTo(p)));
+            const what = document.createElement("div");
+            what.className = "muted";
+            what.style.cssText = "width:100%;font-size:11px;padding-left:16px";
+            what.textContent = me ? "" : describePresence(p);
+            li.append(what);
             people.append(li);
         }
     renderSections();
@@ -689,7 +819,7 @@ function wireField() {
         if (drag?.kind === "marchers" && drag.moved) {
             const ids = [...S.selection];
             const range = editRange();
-            submit(`Move ${ids.length} marcher${ids.length > 1 ? "s" : ""} (page ${range.index ?? `${range.start}–${range.end}`})`, moveMarchersCommand(ids, drag.dx, drag.dy, range), drag.opts);
+            submit(`Move ${ids.length} marcher${ids.length > 1 ? "s" : ""} (${range.index ? `page ${range.index}` : `counts ${range.start}–${range.end}`})`, moveMarchersCommand(ids, drag.dx, drag.dy, range), drag.opts);
         } else if (drag?.kind === "marquee") {
             const pos = positionsNow();
             const [x0, x1] = [Math.min(drag.a.x, drag.b.x), Math.max(drag.a.x, drag.b.x)];
