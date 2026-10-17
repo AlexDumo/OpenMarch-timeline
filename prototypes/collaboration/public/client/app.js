@@ -353,7 +353,7 @@ function onEvent(ev) {
         sendPresence();
         renderChrome();
     } else if (ev.type === "applied") onApplied(ev.msg, ev.mine);
-    else if (ev.type === "rejected") onRejected(ev.msg);
+    else if (ev.type === "rejected") onRejected(ev.msg, ev.op);
     else if (ev.type === "people") {
         S.people = ev.people;
         render();
@@ -368,15 +368,91 @@ function onEvent(ev) {
 function onApplied(msg, mine) {
     log({ who: msg.by, text: msg.label, seq: msg.seq });
     if (!mine) flashChanges(msg.changes, msg.by.color);
+    reportConflicts(msg);
     for (const o of msg.overrides ?? []) {
         if (o.owner.id === S.user.id) toast(`${msg.by.name} (head drill writer) edited ${o.section}, which you hold.`, "bad");
         log({ who: msg.by, text: `overrode ${o.owner.name}'s claim on ${o.section}`, cls: "conflict" });
     }
 }
 
-function onRejected(msg) {
+function onRejected(msg, op) {
     toast(`Not saved: ${msg.message}`, "bad");
     log({ who: S.user, text: `refused: ${msg.message}`, cls: "rejected" });
+    if (op) {
+        const ids = marchersTouched(op.changes);
+        markConflict(ids, op.changes, "not saved");
+    }
+}
+
+// ---------------------------------------------------------------- conflicts
+
+/** What a changed field is, in words. */
+function describeField(c) {
+    if (c.table === "moves") {
+        const mv = S.show.moves.find((m) => m.id === c.key);
+        const who = marcherById(c.marcherId ?? mv?.marcher_id);
+        const what = c.col === "x" || c.col === "y" ? "spot" : c.col === "start_beat" || c.col === "end_beat" ? "counts" : c.col;
+        return `${who ? drill(who) : "a marcher"}'s ${what}${mv ? ` (counts ${mv.start_beat}–${mv.end_beat})` : ""}`;
+    }
+    if (c.table === "marchers") {
+        const m = marcherById(c.key);
+        return `${m ? drill(m) : "a marcher"}'s ${c.col === "home_x" || c.col === "home_y" ? "starting spot" : c.col}`;
+    }
+    return `${c.table}.${c.col}`;
+}
+
+/** Marks marchers (and their moves) where something collided, for a few seconds. */
+function markConflict(ids, changes, label, ms = 3500) {
+    const until = Date.now() + ms;
+    for (const id of ids) S.highlights.set(id, { until, color: "#ff6b6b", label });
+    for (const ch of changes) if (ch.table === "moves") S.moveHighlights.set(ch.key, until);
+    render();
+    setTimeout(render, ms + 20);
+}
+
+/**
+ * Conflicts the server found while applying an op: a field someone else had changed, which this
+ * op replaced without having seen it (last writer wins), or a row deleted after someone edited it.
+ * Both sides are told, and the one who lost can put their value back.
+ */
+function reportConflicts(msg) {
+    const conflicts = msg.conflicts ?? [];
+    if (!conflicts.length) return;
+    // one notice per person and row
+    const groups = new Map();
+    for (const c of conflicts) {
+        const k = `${c.loser.id}:${c.table}:${c.key}:${c.kind}`;
+        if (!groups.has(k)) groups.set(k, { ...c, cols: [] });
+        groups.get(k).cols.push(c);
+    }
+    for (const g of groups.values()) {
+        const what = describeField(g);
+        const ids = g.marcherId !== null && g.marcherId !== undefined ? [g.marcherId] : [];
+        const iLost = g.loser.id === S.user.id;
+        const iWon = msg.by.id === S.user.id;
+        if (g.kind === "deleted-edited") {
+            if (iLost) toast(`${msg.by.name} deleted ${what.replace(/'s (spot|counts).*/, "'s move")}, which you had just edited.`, "bad");
+            else if (iWon) toast(`You deleted a move ${g.loser.name} had just edited.`);
+            log({ who: msg.by, text: `deleted a move ${g.loser.name} had just edited`, cls: "conflict" });
+            markConflict(ids, [], `${msg.by.name} deleted it`);
+            continue;
+        }
+        if (iLost) {
+            const restore = g.cols.map((c) => ({ table: c.table, key: c.key, col: c.col, value: c.lostValue }));
+            toastAction(
+                `${msg.by.name} changed ${what} at the same time as you, and theirs landed last, so it replaced yours.`,
+                "Put mine back",
+                () => submit("Put my change back", (m) => {
+                    for (const r of restore) m.run(`UPDATE ${r.table} SET ${r.col} = ? WHERE id = ?`, [r.value, r.key]);
+                }),
+            );
+            markConflict(ids, [{ table: g.table, key: g.key }], `${msg.by.name} won`);
+        } else if (iWon) {
+            toast(`You and ${g.loser.name} changed ${what} at the same time. Yours landed last, so it replaced theirs.`);
+            markConflict(ids, [{ table: g.table, key: g.key }], `replaced ${g.loser.name}'s`);
+        }
+        log({ who: msg.by, text: `replaced ${g.loser.name}'s change to ${what}`, cls: "conflict" });
+    }
 }
 
 /** A short ring on marchers a peer just changed, so remote edits don't happen silently. */
@@ -555,7 +631,7 @@ function fieldOverlays(pos) {
 }
 
 function nameTag(x, y, text, color, size = 24) {
-    const w = text.length * size * 0.58 + 10;
+    const w = text.length * size * 0.66 + 12;
     return `<g pointer-events="none"><rect x="${x - w / 2}" y="${y - size}" width="${w}" height="${size + 6}" rx="4" fill="${color}"/>
         <text x="${x}" y="${y}" font-size="${size}" text-anchor="middle" fill="#111" font-weight="600">${escapeHtml(text)}</text></g>`;
 }
@@ -573,8 +649,10 @@ function marcherDecorations(m, p) {
         out.push(`<rect x="${p.x - 15}" y="${p.y - 15}" width="30" height="30" rx="4" fill="${mine ? "none" : claim.user.color}" fill-opacity="0.12" stroke="${claim.user.color}" stroke-width="${mine ? 1.5 : 2.5}" ${mine ? 'stroke-dasharray="2 3"' : ""} pointer-events="none"/>`);
     }
     const hl = S.highlights.get(m.id);
-    if (hl && hl.until > Date.now())
+    if (hl && hl.until > Date.now()) {
         out.push(`<circle cx="${p.x}" cy="${p.y}" r="18" fill="none" stroke="${hl.color}" class="pulse"/>`);
+        if (hl.label) out.push(nameTag(p.x, p.y + 44, hl.label, hl.color, 20));
+    }
     return out.join("");
 }
 

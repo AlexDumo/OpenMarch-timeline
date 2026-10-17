@@ -22,8 +22,8 @@ export class Connection {
         this.latencyMs = 0;
         this.killed = false;
         this.retryMs = 500;
-        this.outQueue = Promise.resolve();
-        this.inQueue = Promise.resolve();
+        this.outAt = 0;
+        this.inAt = 0;
     }
 
     connect() {
@@ -73,20 +73,21 @@ export class Connection {
         this.onEvent({ type: "state", state });
     }
 
-    /** Runs `fn` after the simulated network delay, keeping messages in order. */
+    /**
+     * Runs `fn` after the simulated network delay. Each message is delayed by the same amount
+     * (not one after another), and messages keep their order.
+     */
     delayed(direction, fn) {
-        const key = direction === "in" ? "inQueue" : "outQueue";
-        const wait = this.latencyMs;
-        this[key] = this[key].then(
-            () => new Promise((resolve) => setTimeout(() => {
-                try {
-                    fn();
-                } catch (err) {
-                    console.error(err);
-                }
-                resolve();
-            }, wait)),
-        );
+        const key = direction === "in" ? "inAt" : "outAt";
+        const at = Math.max(performance.now() + this.latencyMs, this[key] ?? 0);
+        this[key] = at;
+        setTimeout(() => {
+            try {
+                fn();
+            } catch (err) {
+                console.error(err);
+            }
+        }, at - performance.now());
     }
 
     rawSend(message) {
