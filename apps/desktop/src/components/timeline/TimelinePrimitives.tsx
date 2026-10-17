@@ -62,6 +62,7 @@ import {
     TIMELINE_PAGE_ROW_BOTTOM,
     TIMELINE_PAGE_ROW_HEIGHT,
     TIMELINE_PAGE_ROW_TOP,
+    getLastFlagBeat,
 } from "./TimelineGeometry";
 import {
     KEEP_MENU_EVENTS,
@@ -82,6 +83,7 @@ import {
     clipHandleWidth,
     useClipEdgeResize,
     useClipGestureEscape,
+    useReleasedPreview,
     type TimelineClipResizeCommands,
 } from "./TimelineClipResize";
 import {
@@ -121,6 +123,7 @@ import type {
     TimelinePageFlagMove,
     TimelinePageMarker,
     TimelineRangeChange,
+    TimelineRangeCommitResult,
     TimelineSeek,
     TimelineSeekGesture,
     TimelineSeekOptions,
@@ -1216,6 +1219,38 @@ export const TimelinePageLines = memo(function TimelinePageLines({
     );
 });
 
+/**
+ * The page row past the last page's flag, shaded darker: the pages have run out there. The counts
+ * under it stay as they are, and it takes no presses.
+ */
+export const TimelinePastEndShade = memo(function TimelinePastEndShade({
+    pages,
+    pixelsPerBeat,
+    width,
+}: {
+    pages: readonly TimelinePageMarker[];
+    pixelsPerBeat: number;
+    width: number;
+}) {
+    const lastFlag = getLastFlagBeat({ pages });
+    if (lastFlag === null) return null;
+    const left = Math.round(beatToX(lastFlag, pixelsPerBeat)) + 1;
+    if (left >= width) return null;
+    return (
+        <div
+            aria-hidden="true"
+            data-testid="timeline-past-end-shade"
+            className="pointer-events-none absolute bg-black/[0.07] dark:bg-black/40"
+            style={{
+                top: TIMELINE_PAGE_ROW_TOP,
+                left,
+                width: width - left,
+                height: TIMELINE_PAGE_ROW_HEIGHT,
+            }}
+        />
+    );
+});
+
 /** The ⋯ button's width, and its least height (UI-14): a 16px target at least */
 const CLIP_MENU_BUTTON_WIDTH = 18;
 const CLIP_MENU_BUTTON_MIN_HEIGHT = 16;
@@ -1360,7 +1395,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         trackId: TimelineTrackId,
         options?: { readonly extend?: boolean },
     ) => void;
-    onRangeCommit?: (change: TimelineRangeChange) => void;
+    onRangeCommit?: (change: TimelineRangeChange) => TimelineRangeCommitResult;
     beatCount?: number;
     /** Page lines the clip's edges snap to while it moves (ui.md UI-2); Alt turns snapping off */
     snapBeats?: readonly number[];
@@ -1393,7 +1428,13 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     peel?: TimelineClipPeel;
 }) {
     const range = getTrackRange(track);
-    const [previewOffset, setPreviewOffset] = useState(0);
+    // Where a move drag draws the clip, on the view axis. It's where it's drawn, not an offset
+    // from the range, so the moved range arriving can't shift it again, even for the frame before
+    // the effect below clears it (and even for a move stored from spec beat 0, whose start the
+    // view folds onto beat 1)
+    const [movePreview, setMovePreview] = useState<TimelineBeatRange | null>(
+        null,
+    );
     // The move menu opened from the ⋯ button or the keyboard (UI-14)
     const [menuOpen, setMenuOpen] = useState(false);
     // Rename focuses its field and Delete removes the clip: after those, focus stays put
@@ -1464,20 +1505,51 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         startClientY: number;
         /** UI-25: the drag is up or down (split or merge), locked once it moves */
         vertical: boolean;
+        /**
+         * Where the clip was drawn when the drag started, set once it moves: a drop still waiting
+         * for its range (a move or a resize), or the range
+         */
+        from: TimelineBeatRange | null;
     } | null>(null);
     const peeling = useClipPeel({ trackId: track.id, peel, clipRef });
 
-    useEffect(() => {
-        dragRef.current = null;
-        setPreviewOffset(0);
-    }, [range?.endBeatIndex, range?.startBeatIndex]);
-    // Esc cancels a move drag: nothing moves, and the click that ends it doesn't select (E14)
+    // A dropped clip stays drawn where it was dropped until its range arrives (or the commit
+    // wrote nothing), instead of jumping back for a moment
+    const releasedMove = useReleasedPreview(() => setMovePreview(null));
+    const releaseMove = releasedMove.release;
     const [moving, setMoving] = useState(false);
+    // A new range ends a dropped clip's wait. A drag started from the drop that was waiting for
+    // this range goes on, and so does a press that hasn't moved; any other drag ends
+    const rangeStart = range?.startBeatIndex;
+    const rangeEnd = range?.endBeatIndex;
+    useEffect(() => {
+        const drag = dragRef.current;
+        const arrived =
+            rangeStart === undefined || rangeEnd === undefined
+                ? null
+                : { startBeatIndex: rangeStart, endBeatIndex: rangeEnd };
+        if (drag?.from && sameRange(drag.from, arrived)) return;
+        if (drag?.moved) {
+            dragRef.current = null;
+            setMoving(false);
+        }
+        releaseMove();
+        setMovePreview(null);
+    }, [rangeStart, rangeEnd, releaseMove]);
+    // A cancelled drag goes back to where it started: a drop still waiting for its range waits on
+    const backToStart = (from: TimelineBeatRange | null) => {
+        if (from && range && !sameRange(from, range)) {
+            setMovePreview(from);
+            releasedMove.hold(undefined);
+        } else setMovePreview(null);
+    };
+    // Esc cancels a move drag: nothing moves, and the click that ends it doesn't select (E14)
     useClipGestureEscape(moving, () => {
+        const from = dragRef.current?.from ?? null;
         dragRef.current = null;
         draggedRef.current = true;
         setMoving(false);
-        setPreviewOffset(0);
+        backToStart(from);
         peeling.cancel();
     });
     const edgeResize = useClipEdgeResize({
@@ -1494,29 +1566,42 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         downbeats,
         snapPlayhead,
         resize,
+        // An edge dragged during a dropped move's wait starts from the drop, which gives way
+        held: movePreview,
+        onDragStart: () => {
+            releaseMove();
+            setMovePreview(null);
+        },
     });
 
     if (!range) return null;
-    // While an edge is dragged the clip draws the range it would take (resize-move)
-    const drawn = edgeResize.preview ?? range;
-    const left = (drawn.startBeatIndex + previewOffset) * pixelsPerBeat;
+    // While it's dragged, or dropped and waiting for its range, the clip draws where it was left;
+    // while an edge is dragged, the range it would take (resize-move)
+    const drawn = movePreview ?? edgeResize.preview ?? range;
+    const left = drawn.startBeatIndex * pixelsPerBeat;
     const width = (drawn.endBeatIndex - drawn.startBeatIndex) * pixelsPerBeat;
     const canMove = onRangeCommit != null && beatCount != null;
+    /** The drag's offset from `from`, where the clip was drawn when it started */
     const getOffset = (
         clientX: number,
         startClientX: number,
         snapDisabled: boolean,
+        from: TimelineBeatRange,
     ) => {
         const requested = snapRangeOffset({
-            range,
+            range: from,
             offset: (clientX - startClientX) / pixelsPerBeat,
             snapBeats: snapDisabled ? [] : snapBeats,
             pixelsPerBeat,
         });
-        const minimum = -range.startBeatIndex;
-        const maximum = Math.max(minimum, beatCount! - range.endBeatIndex);
+        const minimum = -from.startBeatIndex;
+        const maximum = Math.max(minimum, beatCount! - from.endBeatIndex);
         return clamp(requested, minimum, maximum);
     };
+    const shifted = (from: TimelineBeatRange, offset: number) => ({
+        startBeatIndex: from.startBeatIndex + offset,
+        endBeatIndex: from.endBeatIndex + offset,
+    });
 
     // UI-14: the ⋯ button sits at the clip's right end, or just past it when the clip is too
     // narrow for it, so the way in never hides; the label shows where it fits beside it
@@ -1631,6 +1716,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     )
                         return;
                     event.stopPropagation();
+                    // A press during a dropped clip's wait keeps it: only a drag ends it (below),
+                    // so a click (to select it) doesn't send it back for a moment
                     dragRef.current = {
                         pointerId: event.pointerId,
                         startClientX: event.clientX,
@@ -1638,6 +1725,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         offset: 0,
                         moved: false,
                         vertical: false,
+                        from: null,
                     };
                     event.currentTarget.setPointerCapture?.(event.pointerId);
                 }}
@@ -1675,15 +1763,25 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     )
                         return;
                     if (!canMove) return;
-                    if (!drag.moved) setMoving(true);
+                    if (!drag.moved) {
+                        drag.from = {
+                            startBeatIndex: drawn.startBeatIndex,
+                            endBeatIndex: drawn.endBeatIndex,
+                        };
+                        releaseMove();
+                        edgeResize.letGo();
+                        setMoving(true);
+                    }
                     drag.moved = true;
+                    const from = drag.from!;
                     const offset = getOffset(
                         event.clientX,
                         drag.startClientX,
                         isPageSnapDisabled(event),
+                        from,
                     );
                     drag.offset = offset;
-                    setPreviewOffset(offset);
+                    setMovePreview(shifted(from, offset));
                 }}
                 onPointerUp={(event) => {
                     const drag = dragRef.current;
@@ -1695,35 +1793,44 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     );
                     // A press that didn't move is a click: it selects (onClick) and moves nothing,
                     // even with an edge near a page line, which a zero offset would snap to
-                    if (!drag.moved) {
-                        setPreviewOffset(0);
-                        return;
-                    }
+                    if (!drag.moved) return;
                     if (drag.vertical) {
                         draggedRef.current = true;
                         peeling.commit();
                         return;
                     }
+                    const from = drag.from!;
                     // Recompute with the release's modifier state, as the selection flags do
                     const offset = getOffset(
                         event.clientX,
                         drag.startClientX,
                         isPageSnapDisabled(event),
+                        from,
                     );
-                    setPreviewOffset(0);
-                    // A drag brought back to where it started is cancelled, not a click
+                    // A drag brought back to where it started is cancelled, not a click. One that
+                    // started from a drop still waiting for its range waits on as that drop
                     draggedRef.current = true;
-                    if (offset === 0) return;
-                    onRangeCommit?.({
-                        timelineId: track.id,
-                        startBeatIndex: range.startBeatIndex + offset,
-                        endBeatIndex: range.endBeatIndex + offset,
-                    });
+                    if (offset === 0 || !onRangeCommit) {
+                        backToStart(from);
+                        return;
+                    }
+                    // Drawn where it was dropped until the moved range arrives. The commit is a
+                    // shift (`shiftTimeline`), so from a drop still waiting it adds to that drop
+                    setMovePreview(shifted(from, offset));
+                    releasedMove.hold(
+                        onRangeCommit({
+                            timelineId: track.id,
+                            startBeatIndex: range.startBeatIndex + offset,
+                            endBeatIndex: range.endBeatIndex + offset,
+                        }),
+                    );
                 }}
                 onPointerCancel={() => {
+                    const drag = dragRef.current;
                     dragRef.current = null;
                     setMoving(false);
-                    setPreviewOffset(0);
+                    // A press that never moved leaves a dropped clip's wait alone
+                    if (drag?.moved) backToStart(drag.from);
                     peeling.cancel();
                 }}
                 className={clsx(

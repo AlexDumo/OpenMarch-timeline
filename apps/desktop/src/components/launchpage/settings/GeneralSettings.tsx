@@ -11,14 +11,7 @@ import { VIEW3D_AUTO_OPEN_SETTING } from "@/view3d/sync/protocol";
 import { isWebBuild } from "@/utilities/webBuild";
 import SettingRow from "@/settings/SettingRow";
 import SettingsPanel from "@/settings/SettingsPanel";
-
-const languages = [
-    { code: "en", name: "English" },
-    { code: "es", name: "Español" },
-    { code: "fr", name: "Français" },
-    { code: "pt-BR", name: "Português (Brasil)" },
-    { code: "ja", name: "日本語" },
-];
+import { APP_LANGUAGES } from "@/utilities/languages";
 
 export default function GeneralSettings() {
     const tolgee = useTolgee();
@@ -74,7 +67,7 @@ export default function GeneralSettings() {
     };
 
     const currentLanguageName =
-        languages.find((lang) => lang.code === currentLanguage)?.name ||
+        APP_LANGUAGES.find((lang) => lang.code === currentLanguage)?.name ||
         "English";
 
     return (
@@ -93,7 +86,7 @@ export default function GeneralSettings() {
                         className="min-w-[120px]"
                     />
                     <SelectContent>
-                        {languages.map((language) => (
+                        {APP_LANGUAGES.map((language) => (
                             <SelectItem
                                 key={language.code}
                                 value={language.code}

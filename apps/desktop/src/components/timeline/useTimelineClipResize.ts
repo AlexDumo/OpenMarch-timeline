@@ -62,6 +62,12 @@ export function resizeBoundReason(
     }
 }
 
+/** A commit that threw: its refusal is a toast, and nothing was written. */
+const refused = (error: unknown) => {
+    toastTimelineError(error);
+    return false;
+};
+
 export function useTimelineClipResize({
     database,
     timelines,
@@ -116,7 +122,8 @@ export function useTimelineClipResize({
             commit: (change) => {
                 const timelineId = timelineIdOf(change.timelineId);
                 const track = timelines.find((t) => t.id === change.timelineId);
-                if (timelineId === null || !track) return;
+                if (timelineId === null || !track)
+                    return Promise.resolve(false);
                 const from = {
                     start: track.startBeatIndex,
                     end: track.endBeatIndex,
@@ -125,19 +132,17 @@ export function useTimelineClipResize({
                     start: change.startBeatIndex,
                     end: change.endBeatIndex,
                 };
-                resizeTimeline({
+                return resizeTimeline({
                     db: database,
                     timelineId,
                     ...to,
-                }).then(
-                    (result) => {
-                        if (result)
-                            useTimelineSelectionStore
-                                .getState()
-                                .followTimelineRange(from, to, timelineId);
-                    },
-                    (error: unknown) => toastTimelineError(error),
-                );
+                }).then((result) => {
+                    if (result)
+                        useTimelineSelectionStore
+                            .getState()
+                            .followTimelineRange(from, to, timelineId);
+                    return result !== null;
+                }, refused);
             },
         };
     }, [database, timelines]);

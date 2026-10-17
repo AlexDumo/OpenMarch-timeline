@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import {
     queryOptions,
     mutationOptions,
+    notifyManager,
+    Query,
     QueryClient,
 } from "@tanstack/react-query";
 import { conToastError } from "@/utilities/utils";
@@ -11,7 +13,9 @@ import {
     DbConnection,
     DatabasePage,
     createPages,
+    getBeats,
     getPages,
+    getUtility,
     realDatabasePageToDatabasePage,
     transactionWithHistory,
     updatePagesInTransaction,
@@ -41,16 +45,63 @@ export const pageKeys = {
     single: (pageId: number) => [KEY_BASE, "single", pageId] as const,
 };
 
-export const invalidatePageQueries = async (qc: QueryClient) => {
-    await qc.invalidateQueries({
-        queryKey: beatKeys.all(),
+/**
+ * After a page write. The beats, pages and `last_page_counts` are read first and land in the cache
+ * in one notification: fetched again one by one, the UI drew a frame with the new pages and the old
+ * last page length (a page added past the last flag showed the old length, past the playhead).
+ * `onShown` runs in that same notification, so state set from it (a selection of the new page)
+ * draws in the same frame. The narrower page and beat queries refetch after. This only helps while
+ * something observes the lists themselves (`useTimingObjects` does); otherwise it is a plain
+ * invalidation.
+ */
+export const invalidatePageQueries = async (
+    qc: QueryClient,
+    onShown?: () => void,
+) => {
+    const lists = [beatKeys.all(), pageKeys.all(), utilityKeys.all()];
+    const shown = lists.some(
+        (queryKey) =>
+            (qc
+                .getQueryCache()
+                .find({ queryKey, exact: true })
+                ?.getObserversCount() ?? 0) > 0,
+    );
+    // A fetch already running may have read the rows from before the write; once these land it
+    // would put them back
+    if (shown)
+        await Promise.all(
+            lists.map((queryKey) =>
+                qc.cancelQueries({ queryKey, exact: true }),
+            ),
+        );
+    const read = shown
+        ? Promise.all([
+              getBeats({ db }),
+              getPages({ db }),
+              getUtility({ db }),
+          ]).catch(() => null)
+        : null;
+    const rows = await read;
+    if (!rows) {
+        // Nothing draws them, or the read failed: refetch the usual way
+        await Promise.all(
+            lists.map((queryKey) => qc.invalidateQueries({ queryKey })),
+        );
+        onShown?.();
+        return;
+    }
+    const [beats, pageRows, utility] = rows;
+    notifyManager.batch(() => {
+        qc.setQueryData(beatKeys.all(), beats);
+        qc.setQueryData(pageKeys.all(), pageRows);
+        qc.setQueryData(utilityKeys.all(), utility);
+        if (onShown) notifyManager.schedule(onShown);
     });
-    await qc.invalidateQueries({
-        queryKey: pageKeys.all(),
-    });
-    await qc.invalidateQueries({
-        queryKey: utilityKeys.all(),
-    });
+    const narrower = (query: Query) => query.queryKey.length > 1;
+    await Promise.all([
+        qc.invalidateQueries({ queryKey: beatKeys.all(), predicate: narrower }),
+        qc.invalidateQueries({ queryKey: pageKeys.all(), predicate: narrower }),
+    ]);
 };
 
 const pageQueries = {

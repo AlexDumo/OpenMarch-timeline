@@ -291,7 +291,9 @@ export interface TimelineCommonProps
     /** Extra transport controls, such as volume, the metronome and fullscreen */
     readonly transportAccessories?: ReactNode;
     readonly className?: string;
-    readonly onTimelineRangeCommit?: (change: TimelineRangeChange) => void;
+    readonly onTimelineRangeCommit?: (
+        change: TimelineRangeChange,
+    ) => TimelineRangeCommitResult;
     /** Resizing a clip by its edges (resize-move), in view beats; without it clips have no handles */
     readonly clipResize?: TimelineClipResizeCommands;
     /** UI-25: dragging a clip down splits the selected marchers off; onto a move, merges */
@@ -328,6 +330,13 @@ export interface TimelineBasicPoint {
 export interface TimelineRangeChange extends TimelineBeatRange {
     readonly timelineId: TimelineTrackId;
 }
+
+/**
+ * What committing a clip's new range (a move or resize) returns: a promise of whether it was
+ * written, so a released drag knows to let go of its preview at once when it wasn't (refused or
+ * failed). It never rejects. Nothing (`void`) leaves the preview until the new range arrives.
+ */
+export type TimelineRangeCommitResult = Promise<boolean> | void;
 
 export interface TimelineCreateTrackRequest {
     readonly target: TimelineTarget;

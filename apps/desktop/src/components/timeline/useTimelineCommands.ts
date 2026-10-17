@@ -25,6 +25,7 @@ import type { TimelineAddMarchersMenu } from "./TimelineRangeMenu";
 import type {
     TimelineBeatRange,
     TimelineRangeChange,
+    TimelineRangeCommitResult,
 } from "./TimelineViewModel";
 
 /**
@@ -76,15 +77,15 @@ export function useTimelineCommands({
     selectedMarcherIds: ReadonlySet<number>;
 }) {
     const commitTimelineRange = useCallback(
-        (change: TimelineRangeChange) => {
+        (change: TimelineRangeChange): TimelineRangeCommitResult => {
             const shift = timelineShiftFor(change, timelines);
             const track = timelines.find((t) => t.id === change.timelineId);
-            if (!shift || !track) return;
+            if (!shift || !track) return Promise.resolve(false);
             const from = {
                 start: track.startBeatIndex,
                 end: track.endBeatIndex,
             };
-            shiftTimeline({ db: database, ...shift }).then(
+            return shiftTimeline({ db: database, ...shift }).then(
                 (result) => {
                     if (result)
                         useTimelineSelectionStore
@@ -94,8 +95,12 @@ export function useTimelineCommands({
                                 shift.delta,
                                 shift.timelineId,
                             );
+                    return result !== null;
                 },
-                (error: unknown) => toastTimelineError(error),
+                (error: unknown) => {
+                    toastTimelineError(error);
+                    return false;
+                },
             );
         },
         [database, timelines],

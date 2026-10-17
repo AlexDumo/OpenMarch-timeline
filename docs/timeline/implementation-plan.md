@@ -190,8 +190,9 @@ Phase 0. Record outcomes in the ADR (`docs/adr/0001-timeline-motion-model.md`).
     - A marcher has at most one transition per timeline. Adding it gives it
       its own one-slot shapeless `direct` transition spanning the timeline
       (C-11), with its destination set to its position at the timeline's
-      end. It sits one layer above the marcher's timelines that wholly
-      contain it (R-2). Partial overlaps are refused (E-ARGS).
+      end. _Amended 2026-10-16:_ its layer follows spec §6.2 (a page's own
+      move is underneath; otherwise the later start wins, then the shorter),
+      and partial overlaps are allowed.
     - Adding or deleting a flag writes only page rows (and
       `last_page_counts` at the end of the show); no timeline is created or
       deleted, so motion is unchanged. On insert, the split page keeps its
