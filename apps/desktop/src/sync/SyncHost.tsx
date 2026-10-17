@@ -30,8 +30,12 @@ import {
     syncSeq,
     syncedSnapshot,
     useSyncStore,
+    type SyncConflict,
     type SyncNotice,
 } from "./connection";
+import { db } from "@/global/database/db";
+import { putValuesBack, type LostValue } from "./undo";
+import { SyncReadOnlyError } from "./session";
 
 const SYNC_DEV_STORAGE_KEY = "openmarch:syncDev";
 
@@ -61,6 +65,10 @@ declare global {
 
 const describeTable = (table: string) => table.replace(/_/g, " ");
 
+function describeConflict(conflict: SyncConflict, cols: string[]) {
+    return `${describeTable(conflict.table)} ${conflict.id} (${cols.join(", ")})`;
+}
+
 function showNotice(notice: SyncNotice) {
     if (notice.kind === "rejected")
         toast.error(
@@ -71,20 +79,65 @@ function showNotice(notice: SyncNotice) {
         toast.warning(
             `Connection lost: ${notice.count} unsent change${notice.count === 1 ? " was" : "s were"} undone`,
         );
-    else if (notice.kind === "conflict") {
-        const { conflict, by, mine } = notice;
-        const what = `${describeTable(conflict.table)} ${conflict.id} (${conflict.col})`;
-        if (mine)
-            toast.info(
-                `You replaced ${conflict.loser.name}'s change to ${what}`,
-            );
-        else
+    else if (notice.kind === "read-only")
+        // One toast however many edits were refused (a drag refuses several)
+        toast.warning("You're offline, so the show is read-only", {
+            id: "sync-read-only",
+            description: `"${notice.label}" was not saved. Edits work again once the session reconnects.`,
+        });
+    else if (notice.kind === "undo-partial")
+        toast.info(
+            `${notice.which === "undo" ? "Undid" : "Redid"} "${notice.label}", except what ${notice.names.join(" and ")} changed since. That was kept.`,
+        );
+    else if (notice.kind === "undo-refused") toast.warning(notice.message);
+    else if (notice.kind === "conflict") showConflict(notice);
+    else toast.error("Collaboration error", { description: notice.message });
+}
+
+function showConflict(notice: Extract<SyncNotice, { kind: "conflict" }>) {
+    const { conflicts, by, mine, iLost } = notice;
+    const first = conflicts[0]!;
+    const what = describeConflict(
+        first,
+        conflicts.map((c) => c.col),
+    );
+    if (first.kind === "deleted-edited") {
+        if (iLost)
             toast.warning(
-                conflict.kind === "deleted-edited"
-                    ? `${by.name} deleted ${what}, which ${conflict.loser.name} had edited`
-                    : `${by.name} replaced ${conflict.loser.name}'s change to ${what}`,
+                `${by.name} deleted ${describeTable(first.table)} ${first.id}, which you had just edited`,
             );
-    } else toast.error("Collaboration error", { description: notice.message });
+        else if (mine)
+            toast.info(
+                `You deleted ${describeTable(first.table)} ${first.id}, which ${first.loser.name} had just edited`,
+            );
+        return;
+    }
+    if (iLost) {
+        const lost: LostValue[] = conflicts.flatMap((c) =>
+            c.kind === "overwrite"
+                ? [{ table: c.table, id: c.id, col: c.col, value: c.lostValue }]
+                : [],
+        );
+        toast.warning(
+            `${by.name} changed ${what} at the same time as you, and theirs landed last`,
+            {
+                duration: 15_000,
+                action: {
+                    label: "Put mine back",
+                    onClick: () =>
+                        void putValuesBack(db, lost).catch((error) => {
+                            if (!(error instanceof SyncReadOnlyError))
+                                toast.error("Could not put your change back", {
+                                    description: String(error),
+                                });
+                        }),
+                },
+            },
+        );
+    } else if (mine)
+        toast.info(
+            `You and ${first.loser.name} changed ${what} at the same time. Yours landed last.`,
+        );
 }
 
 async function runMakeCollaborative() {

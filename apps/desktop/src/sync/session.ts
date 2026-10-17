@@ -17,6 +17,28 @@ export interface SyncSession {
     onLocalOp(op: LocalOp): void;
     /** This member's id block start (`memberIndex * 2 ** 40`, from `welcome`) */
     idBase: number;
+    /**
+     * Per-user undo and redo (WP-D): `performHistoryAction` hands the action here instead of
+     * replaying `history_undo`, whose whole-row inverses would revert other people's columns.
+     * A session without it refuses undo with `SyncUndoUnavailableError`.
+     */
+    historyAction?(
+        type: "undo" | "redo",
+        options: { currentPageId?: number },
+    ): Promise<SyncHistoryResponse>;
+    /** How many of this user's ops can be undone (or redone) now, for the toolbar buttons */
+    historyStackLength?(type: "undo" | "redo"): number;
+    /** An edit was refused because the session is not live (before `SyncReadOnlyError` is thrown) */
+    onRefused?(label: string): void;
+}
+
+/** `performHistoryAction`'s response, as a session's per-user undo returns it. */
+export interface SyncHistoryResponse {
+    pageIdToGoTo: number | undefined;
+    marcherIdsToSelect: Set<number> | undefined;
+    queriesToInvalidate: string[][] | undefined;
+    nothingToDo?: boolean;
+    failure?: { kind: "error"; message: string };
 }
 
 /** The size of each member's id block. */
@@ -44,7 +66,10 @@ export class SyncReadOnlyError extends Error {
     }
 }
 
-/** Built-in undo and redo were refused because a session is active (per-user undo is WP-D). */
+/**
+ * Built-in undo and redo were refused because a session is active: the raw `history_undo` replay
+ * never runs in a session (per-user undo replaces `performHistoryAction` there).
+ */
 export class SyncUndoUnavailableError extends Error {
     readonly code = "SYNC_UNDO_UNAVAILABLE";
     constructor(readonly action: "undo" | "redo") {

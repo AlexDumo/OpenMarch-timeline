@@ -28,3 +28,10 @@ export interface LocalOp {
 
 /** A full copy of the synced tables: table name to its rows (images as in a `RowChange`). */
 export type SyncSnapshot = Record<string, RowValues[]>;
+
+/** A session member as the server names them (dev identities in the spike). */
+export interface SyncUser {
+    id: string;
+    name: string;
+    color: string;
+}

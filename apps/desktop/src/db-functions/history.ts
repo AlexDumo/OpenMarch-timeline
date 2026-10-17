@@ -112,7 +112,10 @@ export const transactionWithHistory = async <T>(
     async function runLockedTransactionWithHistory(): Promise<T> {
         // Collaboration (docs/collaboration/spike/CONTRACT.md): solo, this is the only extra work
         const session = getSyncSession();
-        if (session && !session.isLive()) throw new SyncReadOnlyError(funcName);
+        if (session && !session.isLive()) {
+            session.onRefused?.(funcName);
+            throw new SyncReadOnlyError(funcName);
+        }
         let syncChanges: RowChange[] = [];
         let drained: ChangeBatch | undefined;
         let touchedDisplayTables = false;
@@ -825,6 +828,8 @@ export async function getCurrentRedoGroup(db: DbConnection | DB) {
 }
 
 export async function getUndoStackLength(db: DbConnection): Promise<number> {
+    const session = getSyncSession();
+    if (session?.historyStackLength) return session.historyStackLength("undo");
     const result = await db
         .select({ count: count() })
         .from(schema.history_undo)
@@ -833,6 +838,8 @@ export async function getUndoStackLength(db: DbConnection): Promise<number> {
 }
 
 export async function getRedoStackLength(db: DbConnection): Promise<number> {
+    const session = getSyncSession();
+    if (session?.historyStackLength) return session.historyStackLength("redo");
     const result = await db
         .select({ count: count() })
         .from(schema.history_redo)
@@ -969,7 +976,12 @@ export async function performHistoryAction(
     db: DB | DbConnection,
     options: { currentPageId?: number } = {},
 ): Promise<PerformHistoryActionResponse> {
-    if (getSyncSession()) throw new SyncUndoUnavailableError(type);
+    // In a session, undo is per user (src/sync/undo.ts): never the whole-row history replay
+    const session = getSyncSession();
+    if (session) {
+        if (!session.historyAction) throw new SyncUndoUnavailableError(type);
+        return session.historyAction(type, options);
+    }
     // The focus is read in the action's own lock turn, after it commits and delivers its batch, so
     // a queued undo, redo or edit can't run in between (two quick undo actions would otherwise both read
     // the state after the second)

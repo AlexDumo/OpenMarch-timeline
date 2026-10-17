@@ -350,3 +350,30 @@ export async function replaceAllSyncedTables(
         return touched;
     });
 }
+
+/**
+ * Writes `changes` as ordinary statements inside the caller's transaction (no recording change,
+ * no history clean-up): per-user undo and "Put mine back" run them inside `transactionWithHistory`,
+ * so they are captured and sent like any edit.
+ */
+export async function writeChangesInTransaction(
+    tx: DbTransaction,
+    changes: readonly RowChange[],
+): Promise<Set<string>> {
+    return await writeChanges(tx, await tableInfoMap(tx), changes, () => false);
+}
+
+/** A row's JSON image as the capture triggers write it, or undefined if there is no such row. */
+export async function readRowImage(
+    db: SyncDb,
+    table: SyncedTable,
+    id: number,
+): Promise<RowValues | undefined> {
+    const rows = (await db.all(
+        sql.raw(
+            `SELECT ${rowImageSql(table, quoteIdent(table.name))} AS img FROM ${quoteIdent(table.name)} WHERE rowid = ${Number(id)}`,
+        ),
+    )) as unknown[];
+    if (rows.length === 0) return undefined;
+    return JSON.parse(String(rowValue(rows[0], 0, "img"))) as RowValues;
+}
