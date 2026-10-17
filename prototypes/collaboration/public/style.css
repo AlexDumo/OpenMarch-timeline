@@ -232,7 +232,7 @@ main {
 #toasts {
     position: fixed;
     right: 296px;
-    top: 56px;
+    top: 96px;
     display: flex;
     flex-direction: column;
     gap: 6px;

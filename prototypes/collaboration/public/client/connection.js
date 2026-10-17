@@ -37,7 +37,7 @@ export class Connection {
             this.retryMs = 500;
             this.rawSend({ type: "hello", user: this.user, headToken: this.headToken, lastSeq: this.seq });
         };
-        ws.onmessage = (e) => this.delayed("in", () => this.onMessage(JSON.parse(e.data)));
+        ws.onmessage = (e) => this.delayed("in", () => this.ws === ws && this.onMessage(JSON.parse(e.data)));
         ws.onclose = () => this.onClosed(ws);
         ws.onerror = () => {};
     }
@@ -95,7 +95,9 @@ export class Connection {
     }
 
     send(message) {
-        this.delayed("out", () => this.rawSend(message));
+        // a message still "in flight" when its socket drops is lost with it, as on a real network
+        const ws = this.ws;
+        this.delayed("out", () => this.ws === ws && this.rawSend(message));
     }
 
     get live() {

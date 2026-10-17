@@ -338,8 +338,15 @@ function editRange() {
 // ---------------------------------------------------------------- events from the session
 
 function onEvent(ev) {
-    if (ev.type === "state") renderChrome();
-    else if (ev.type === "pending") renderChrome();
+    if (ev.type === "state") {
+        if (ev.state === "offline") {
+            // what others were doing is unknown now; don't show it as if it were live
+            S.people = [];
+            S.drag = null;
+        }
+        render();
+    }
+    else if (ev.type === "pending") render();
     else if (ev.type === "welcome") {
         if (ev.snapshot) S.view = null;
         refresh();
@@ -347,7 +354,10 @@ function onEvent(ev) {
         const role = ev.you.role === "head" ? "head drill writer" : "collaborator";
         if (ev.caughtUp > 0) {
             toast(`Reconnected. Caught up on ${ev.caughtUp} edit${ev.caughtUp > 1 ? "s" : ""} from while you were away.`, "good");
-            for (const op of ev.ops) log({ who: op.by, text: `${op.label} (while you were offline)` });
+            for (const op of ev.ops) {
+                log({ who: op.by, text: `${op.label} (while you were offline)` });
+                flashChanges(op.changes, op.by.color, 2500);
+            }
         } else toast(`Joined as ${role}.`);
         lastPresence = "";
         sendPresence();
@@ -847,6 +857,8 @@ function renderSide() {
     people.replaceChildren();
     if (S.mode !== "session") {
         people.innerHTML = `<li class="muted">Just you (solo).</li>`;
+    } else if (!S.conn?.live) {
+        people.innerHTML = `<li class="muted">Offline: you can't see who else is here.</li>`;
     } else
         for (const p of S.people) {
             const li = document.createElement("li");
@@ -906,6 +918,17 @@ function renderNetwork() {
         S.conn.latencyMs = Number(e.target.value);
     };
     box.append(lat);
+    const status = document.createElement("div");
+    status.className = "muted";
+    const pending = S.conn.pending.length;
+    status.textContent = `${S.conn.state === "live" ? "Connected" : S.conn.state === "offline" ? "Offline" : "Connecting"} · synced to #${Math.max(0, S.conn.seq)}${pending ? ` · ${pending} unconfirmed` : ""}`;
+    box.append(status);
+    if (S.conn.state === "offline" && S.conn.killed) box.append(button("Reconnect", () => S.conn.reconnect(), "primary"));
+    else if (S.conn.state !== "offline")
+        box.append(button("Kill connection", () => {
+            S.conn.kill();
+            toast("Connection cut. You're read-only until you reconnect.", "bad");
+        }));
 }
 
 // ---------------------------------------------------------------- log and toasts
@@ -969,6 +992,7 @@ function wireField() {
                 return;
             }
             if (!S.selection.has(id)) S.selection = new Set([id]);
+            if (S.mode === "session" && !S.conn?.live) toast("You're offline, so the show is read-only. You can still look around and play.", "bad");
             if (canEdit() && canStartEditing(S.selection) && beginMarcherDrag()) S.drag = { kind: "marchers", start: p, dx: 0, dy: 0, moved: false };
             afterLocalUi();
         } else {

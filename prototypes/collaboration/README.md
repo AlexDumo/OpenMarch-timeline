@@ -42,3 +42,4 @@ modeled.
 2. [Presence](02-presence/README.md)
 3. [Soft section claims](03-section-claims/README.md)
 4. [Conflict feedback](04-conflict-feedback/README.md)
+5. [Disconnect behavior](05-disconnect/README.md)
