@@ -8,21 +8,27 @@
  * - 7: page model. 7 is left over from the pre-Drizzle migration system; every
  *   Drizzle-era file before timelines is at 7. The app converts it to 8 when it
  *   opens it, once the person confirms (`convertOnOpen.ts`).
- * - 8: timeline model. New files start here.
+ * - 8: timeline model.
+ * - 9: floor model (ADR 0002 D-23). The show's field image is its floor, an embedded Base floor
+ *   Artwork named in the field properties; `field_properties.image` is legacy. New files start
+ *   here, and opening an 8 converts its field image and writes 9 (`convertFieldImage.ts`), so a
+ *   build that only knows 8 refuses the file instead of editing a field image nothing reads.
  */
 import type { DatabaseSync } from "node:sqlite";
 
 /** Version of a page-model file. */
 export const PAGE_MODEL_USER_VERSION = 7;
-/** Version of a timeline-model file (new files, and files the conversion wrote). */
+/** Version of a timeline-model file (what the page conversion writes). */
 export const TIMELINE_MODEL_USER_VERSION = 8;
+/** Version of a file whose field image is its floor (new files, and 8s once opened). */
+export const FLOOR_MODEL_USER_VERSION = 9;
 
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /** Newest version this build opens. Anything higher was written by a newer release. */
-export const MAX_SUPPORTED_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
-/** Version written into a brand-new file: a new show is a timeline show. */
-export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
+export const MAX_SUPPORTED_USER_VERSION = FLOOR_MODEL_USER_VERSION;
+/** Version written into a brand-new file: a new show is a timeline show with a floor. */
+export const NEW_FILE_USER_VERSION = FLOOR_MODEL_USER_VERSION;
 
 /**
  * Status code that `setDbPath` returns for a file from a newer release.

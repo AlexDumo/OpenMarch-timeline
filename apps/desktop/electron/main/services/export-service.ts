@@ -12,6 +12,8 @@ import sanitizeHtml from "sanitize-html";
 
 import Store from "electron-store";
 import { getOrmConnection } from "../../database/database.services";
+import { getFieldFloorImage } from "../../../src/db-functions/fieldFloor";
+import { sniffArtworkFormat } from "../artwork-import/formats";
 import { measureRangeString as _measureRangeString } from "../../../src/global/classes/Page.utils";
 import logoSvgRaw from "@/assets/open-march-logo.svg?raw";
 
@@ -555,20 +557,22 @@ export class PDFExportService {
         }
 
         try {
-            // Access the database in the main process
-            const db = getOrmConnection();
-            const result = await db.query.field_properties.findFirst({
-                columns: { image: true },
+            // The field image is the show's floor (ADR 0002 D-23): its display texture
+            const image = await getFieldFloorImage({
+                db: getOrmConnection() as never,
             });
 
-            if (!result?.image) {
+            if (!image) {
                 this.fieldImageCache = null;
                 return null;
             }
 
-            // Convert Uint8Array to base64
-            const base64 = Buffer.from(result.image).toString("base64");
-            const mimeType = "image/png"; // Adjust if you detect the actual format
+            const base64 = Buffer.from(image).toString("base64");
+            // A floor's display texture is PNG, or JPEG for a large opaque image
+            const mimeType =
+                sniffArtworkFormat(image) === "jpeg"
+                    ? "image/jpeg"
+                    : "image/png";
             const dataUri = `data:${mimeType};base64,${base64}`;
 
             // Cache the result

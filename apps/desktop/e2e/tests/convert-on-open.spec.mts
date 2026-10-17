@@ -121,7 +121,8 @@ test("Confirm backs up an old show, converts it and opens it", async ({}, testIn
     // (a consistent copy made with `VACUUM INTO`, so not byte for byte)
     expect(readShow(backupPath)).toEqual(readShow(pageEraShow));
     const converted = readShow(showPath);
-    expect(converted.version).toBe(8);
+    // Timelines (8), then the floor model (9, ADR 0002 D-23)
+    expect(converted.version).toBe(9);
     expect(converted.tables).toContain("timelines");
     expect(converted.tables).not.toContain("marcher_pages");
 });

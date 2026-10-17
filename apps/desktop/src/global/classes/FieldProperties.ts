@@ -2,6 +2,10 @@ import { FieldProperties } from "@openmarch/core";
 import { db, schema } from "../database/db";
 import { eq } from "drizzle-orm";
 import { transactionWithHistory } from "../../db-functions/history";
+import {
+    getFieldFloorImage,
+    writeFieldJsonKeepingFloorInTransaction,
+} from "../../db-functions/fieldFloor";
 
 const { field_properties } = schema;
 
@@ -26,19 +30,13 @@ export async function getFieldProperties(): Promise<FieldProperties> {
 export async function updateFieldsPropertiesJSON(
     fieldPropertiesJson: string,
 ): Promise<string> {
-    const result = await transactionWithHistory(
-        db,
-        "updateFieldsPropertiesJSON",
-        async (tx) => {
-            return await tx
-                .update(field_properties)
-                .set({ json_data: fieldPropertiesJson })
-                .where(eq(field_properties.id, 1))
-                .returning()
-                .get();
-        },
+    // The floor is set only by setFieldFloor (D-23): a template or a stale edit keeps it
+    return transactionWithHistory(db, "updateFieldsPropertiesJSON", (tx) =>
+        writeFieldJsonKeepingFloorInTransaction({
+            tx,
+            json: fieldPropertiesJson,
+        }),
     );
-    return result.json_data;
 }
 
 export async function updateFieldProperties(
@@ -50,42 +48,10 @@ export async function updateFieldProperties(
     return new FieldProperties(JSON.parse(result));
 }
 
-export async function updateFieldPropertiesImage(
-    image: Uint8Array,
-): Promise<void> {
-    await transactionWithHistory(
-        db,
-        "updateFieldPropertiesImage",
-        async (tx) => {
-            return await tx
-                .update(field_properties)
-                .set({ image: image })
-                .where(eq(field_properties.id, 1))
-                .run();
-        },
-    );
-}
-
+/**
+ * The field image: the show's floor's display texture (ADR 0002 D-23), or null. The legacy
+ * `field_properties.image` column is read only by convert on open.
+ */
 export async function getFieldPropertiesImage(): Promise<Uint8Array | null> {
-    const result = await db
-        .select({ image: field_properties.image })
-        .from(field_properties)
-        .where(eq(field_properties.id, 1))
-        .prepare()
-        .get();
-    return result?.image ?? null;
-}
-
-export async function deleteFieldPropertiesImage(): Promise<void> {
-    await transactionWithHistory(
-        db,
-        "deleteFieldPropertiesImage",
-        async (tx) => {
-            return await tx
-                .update(field_properties)
-                .set({ image: null })
-                .where(eq(field_properties.id, 1))
-                .run();
-        },
-    );
+    return getFieldFloorImage({ db });
 }

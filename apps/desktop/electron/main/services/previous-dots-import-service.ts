@@ -16,6 +16,8 @@ import { parseFromWorkspaceSettings } from "@/components/launchpage/parseFromWor
 import { getLastPageNumber } from "@openmarch/core";
 import type { DbConnection } from "@/db-functions/types";
 import { readSourceTimelinePositions } from "@/timeline/sourceTimelinePositions";
+import { getFieldFloorPart } from "@/db-functions/fieldFloor";
+import { fieldForNewShow } from "./previousDotsField";
 
 export interface PreviousDotsMarcherImport {
     name?: string | null;
@@ -251,13 +253,19 @@ export async function readPreviousDotsFile(
             sourcePageNumberOffset ?? 0,
         );
 
-        const fieldImage = fieldProperties.image
-            ? new Uint8Array(fieldProperties.image)
-            : null;
+        // D-23: the previous show's floor comes across as its original bytes, without its
+        // reference, and the new show makes its own floor from them
+        const { fieldPropertiesJson, fieldImage } = fieldForNewShow(
+            fieldProperties.json_data,
+            fieldProperties.image
+                ? new Uint8Array(fieldProperties.image)
+                : null,
+            await previousFloorOriginal(orm),
+        );
 
         return {
             sourcePath,
-            fieldPropertiesJson: fieldProperties.json_data,
+            fieldPropertiesJson,
             fieldImage,
             marchers: marchers.map(({ id: _id, ...marcher }) => marcher),
             coordinates,
@@ -295,4 +303,17 @@ export async function choosePreviousDotsFile(
 
     if (result.canceled || !result.filePaths[0]) return null;
     return await readPreviousDotsFile(result.filePaths[0]);
+}
+
+/** The previous show's floor original, or null; a file from before the Library tables has none. */
+async function previousFloorOriginal(orm: DB): Promise<Uint8Array | null> {
+    try {
+        const original = await getFieldFloorPart({
+            db: orm as never,
+            role: "original",
+        });
+        return original ? new Uint8Array(original) : null;
+    } catch {
+        return null;
+    }
 }

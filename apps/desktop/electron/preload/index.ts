@@ -367,6 +367,9 @@ const APP_API = {
         ipcRenderer.invoke(
             "newShow:choosePreviousDotsFile",
         ) as Promise<PreviousDotsImportResult | null>,
+    /** Makes a previous show's field image the new show's floor (ADR 0002 D-23). */
+    setNewShowFloorFromImage: (image: Uint8Array) =>
+        ipcRenderer.invoke("newShow:setFloorFromImage", image) as Promise<void>,
 
     export: {
         pdf: (params: {

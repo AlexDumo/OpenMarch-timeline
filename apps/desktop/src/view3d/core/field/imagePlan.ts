@@ -9,7 +9,7 @@ import type { ImageSize, PlanContext, PlanImage } from "./plan";
  * "fill" is treated as "fit", as in 2D.
  */
 export function planImage(
-    ctx: PlanContext,
+    ctx: Pick<PlanContext, "fieldProperties">,
     image: ImageSize,
     opacity: number,
 ): PlanImage {
