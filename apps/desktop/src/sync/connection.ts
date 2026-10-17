@@ -348,7 +348,8 @@ class Connection {
         ws.onmessage = (e) => {
             const received = Date.now();
             const msg = JSON.parse(String(e.data)) as ServerMessage;
-            this.enqueue(() => this.onMessage(msg, received));
+            if (this.held) this.held.push({ msg, received });
+            else this.enqueue(() => this.onMessage(msg, received));
         };
         ws.onclose = () => this.onClosed(ws);
         ws.onerror = () => {};
@@ -366,6 +367,20 @@ class Connection {
     /** Waits until every queued message has been handled. */
     idle(): Promise<void> {
         return this.chain;
+    }
+
+    /** While set (tests only), received messages wait here, to make edits concurrent */
+    private held: { msg: ServerMessage; received: number }[] | null = null;
+
+    hold(on: boolean) {
+        if (on) {
+            this.held ??= [];
+            return;
+        }
+        const held = this.held ?? [];
+        this.held = null;
+        for (const { msg, received } of held)
+            this.enqueue(() => this.onMessage(msg, received));
     }
 
     private presence: unknown = null;
@@ -745,4 +760,12 @@ export function syncSeq(): number {
 /** Publishes this window's presence (see `Connection.setPresence`); nothing outside a session. */
 export function setSyncPresence(presence: unknown): void {
     connection?.setPresence(presence);
+}
+
+/**
+ * Tests only: holds received messages until called with false, so this window's next edit is
+ * made without having seen what others did meanwhile (a concurrent edit, for conflicts).
+ */
+export function holdIncoming(on: boolean): void {
+    connection?.hold(on);
 }

@@ -339,6 +339,7 @@ export class UserUndo {
     }
 
     /** `performHistoryAction` in a session. */
+    // eslint-disable-next-line max-lines-per-function
     async run(
         which: "undo" | "redo",
         options: { currentPageId?: number },
