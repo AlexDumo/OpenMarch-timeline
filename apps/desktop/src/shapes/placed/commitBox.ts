@@ -5,10 +5,30 @@ import { historyKeys } from "@/hooks/queries/useHistory";
 import { transformMarchersInSelection } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import type { OrderMode } from "../assign";
-import type { BoxParams } from "../box/boxGeometry";
+import { filesOf, type BoxParams } from "../box/boxGeometry";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { liveTargets } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
+
+/**
+ * How the box's members are laid out after an edit: the order picked, or "kept" when a turn or
+ * flip kept everyone on their own spot (so it's neither Least travel nor Drill order any more),
+ * or as it was
+ */
+function orderAfter(
+    box: PlacedBox,
+    params: BoxParams,
+    order: OrderMode | undefined,
+): string {
+    if (order) return order;
+    const turned =
+        params.rotation !== box.params.rotation ||
+        (params.flipX ?? false) !== (box.params.flipX ?? false) ||
+        (params.flipY ?? false) !== (box.params.flipY ?? false);
+    return turned && filesOf(params) === filesOf(box.params)
+        ? "kept"
+        : box.recipe.orderMode;
+}
 
 /**
  * Saves a selected box drawn with `params`: its members move to their spots in it and its recipe
@@ -50,7 +70,7 @@ export async function commitBox(
                     recipe: {
                         ...box.recipe,
                         params: { ...params, spots },
-                        ...(order ? { orderMode: order } : {}),
+                        orderMode: orderAfter(box, params, order),
                     },
                     members: targets,
                     replaces:

@@ -5,6 +5,7 @@ import {
     flipFrame,
     frameCorners,
     frameToField,
+    DEFAULT_PIVOT,
     normalizeAngle,
     pivotPoint,
     rotateFrame,
@@ -129,7 +130,10 @@ export function startShapeGesture(
         case "move":
             return { type: "move", base: params, grab: at };
         case "rotate": {
-            const pivot = pivotPoint(kind.frameOf(params, n), env.pivot ?? "c");
+            const pivot = pivotPoint(
+                kind.frameOf(params, n),
+                env.pivot ?? DEFAULT_PIVOT,
+            );
             return {
                 type: "rotate",
                 from: target.from,

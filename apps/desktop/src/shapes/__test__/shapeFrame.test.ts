@@ -27,7 +27,11 @@ import {
     startShapeGesture,
 } from "../frame/gestures";
 import {
+    acrossIsDeep,
     flipBox,
+    onField,
+    scrubRotation,
+    withFieldCount,
     scrubSize,
     scrubSpacing,
     turnBy,
@@ -183,7 +187,7 @@ describe("a turned box", () => {
 describe("frame gestures", () => {
     it("the knob above the back edge turns the box around the pivot", () => {
         const b = box4x2();
-        const e = env();
+        const e = env({ pivot: "c" });
         const { knob } = frameControls(boxTool, b, 8, e);
         expect(shapeTargetAt(boxTool, b, 8, knob, e)).toEqual({
             type: "rotate",
@@ -330,17 +334,16 @@ describe("who goes where, held through turns and flips", () => {
 describe("the floating editor's numbers", () => {
     it("spacing drags half a step per 8 px, tenths with Alt, from where it started", () => {
         const b = box4x2();
-        expect(scrubSpacing(b, "across", 16, 0, 8, env()).across).toBe(20);
-        // Up for more front to back
-        expect(scrubSpacing(b, "deep", 0, -8, 8, env()).deep).toBe(15);
+        expect(scrubSpacing(b, "across", 16, 8, env()).across).toBe(20);
+        expect(scrubSpacing(b, "deep", 8, 8, env()).deep).toBe(15);
         expect(
-            scrubSpacing(b, "across", 8, 0, 8, env({ snap: false })).across,
+            scrubSpacing(b, "across", 8, 8, env({ snap: false })).across,
         ).toBeCloseTo(11);
         // Back where it started: unchanged, not rounded
         const odd = { ...b, across: 12.3 };
-        expect(scrubSpacing(odd, "across", 3, 0, 8, env())).toBe(odd);
+        expect(scrubSpacing(odd, "across", 3, 8, env())).toBe(odd);
         // Never under half a step
-        expect(scrubSpacing(b, "across", -400, 0, 8, env()).across).toBe(5);
+        expect(scrubSpacing(b, "across", -400, 8, env()).across).toBe(5);
     });
 
     it("the ratio lock moves the other spacing, both on half steps", () => {
@@ -366,11 +369,11 @@ describe("the floating editor's numbers", () => {
         expect(r.deep).toBe(50);
     });
 
-    it("the size drags sideways for across, up or down for deep", () => {
+    it("the size drags one per 16 px, across or deep on the field", () => {
         const b = box4x2();
-        expect(filesOf(scrubSize(b, "x", 32, 0, 8, env()))).toBe(6);
-        // Up for one more rank: 8 in 3 deep is 3 across
-        expect(filesOf(scrubSize(b, "y", 0, -16, 8, env()))).toBe(3);
+        expect(filesOf(scrubSize(b, "across", 32, 8, env()))).toBe(6);
+        // One more rank: 8 in 3 deep is 3 across
+        expect(filesOf(scrubSize(b, "deep", 16, 8, env()))).toBe(3);
         // 13 in 2 deep is 7 across
         expect(
             filesOf(
@@ -396,5 +399,83 @@ describe("the floating editor's numbers", () => {
         expect(parseSize("6")).toEqual({ across: 6 });
         expect(parseSize("x")).toBe(null);
         expect(scrubValue(4, 0, -20, { axis: "y", px: 8, step: 1 })).toBe(6);
+    });
+});
+
+describe("the decisions of 2026-10-17", () => {
+    it("the numbers follow the field once the box is turned past 45°", () => {
+        expect(acrossIsDeep(0)).toBe(false);
+        expect(acrossIsDeep(45 * DEGREE)).toBe(false);
+        expect(acrossIsDeep(46 * DEGREE)).toBe(true);
+        expect(acrossIsDeep(90 * DEGREE)).toBe(true);
+        expect(acrossIsDeep(135 * DEGREE)).toBe(false);
+        expect(acrossIsDeep(270 * DEGREE)).toBe(true);
+        // A 4 × 2 box turned a quarter reads 2 × 4 on the field, and + makes it wider on the field
+        const t = turnBy(box4x2(), 8, 90, "c", env());
+        expect(onField(t, 8)).toMatchObject({ across: 2, deep: 4 });
+        const wider = withFieldCount(t, 8, "across", 3, env());
+        expect(onField(wider, 8).across).toBe(3);
+        // Its side-to-side spacing is the box's own deep
+        expect(onField(t, 8).acrossKey).toBe("deep");
+    });
+
+    it("a resize keeps the back-left corner where it was", () => {
+        const b = box4x2();
+        const before = boxFrame(b, 8);
+        for (const out of [
+            withSpacing(b, "across", 2, 8, env()),
+            withFieldCount(b, 8, "across", 3, env()),
+        ]) {
+            const f = boxFrame(out, 8);
+            expect(f.center.x - f.halfWidth).toBeCloseTo(
+                before.center.x - before.halfWidth,
+                6,
+            );
+            expect(f.center.y - f.halfDepth).toBeCloseTo(
+                before.center.y - before.halfDepth,
+                6,
+            );
+        }
+    });
+
+    it("the rotation drags 1° per 2 px, 15° with Shift, and back to the start changes nothing", () => {
+        const b = box4x2();
+        expect(
+            rotationDegrees(scrubRotation(b, 60, 8, "c", env()).rotation),
+        ).toBe(30);
+        expect(
+            rotationDegrees(
+                scrubRotation(b, 44, 8, "c", env({ shift: true })).rotation,
+            ),
+        ).toBe(15);
+        expect(
+            rotationDegrees(scrubRotation(b, -20, 8, "c", env()).rotation),
+        ).toBe(350);
+        expect(scrubRotation(b, 1, 8, "c", env())).toBe(b);
+    });
+
+    it("after a turn or flip, who goes where is kept, and neither order is lit until one is picked", () => {
+        const t = drawnTool();
+        expect(t.kept).toBe(false);
+        const flipped = edit(
+            t,
+            flipBox(t.params as BoxParams, 8, "across", "c", env()),
+            ctx,
+        );
+        expect(flipped.kept).toBe(true);
+        // Least travel picked again works it out again: the flip's mirror is gone
+        const again = setOrder(flipped, "nearest", ctx);
+        expect(again.kept).toBe(false);
+        targetsOf(again, ctx).forEach((a, i) =>
+            close(a.to, targetsOf(t, ctx)[i]!.to),
+        );
+        // A stretch keeps spots too, but it isn't a turn or flip
+        expect(
+            edit(
+                t,
+                withSpacing(t.params as BoxParams, "across", 2, 8, env()),
+                ctx,
+            ).kept,
+        ).toBe(false);
     });
 });

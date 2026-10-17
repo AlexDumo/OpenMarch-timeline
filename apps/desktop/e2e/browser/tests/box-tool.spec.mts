@@ -260,44 +260,64 @@ test("change: the knob turns the box and ⋯ flips it, each marcher keeping thei
     );
     const before = overlay.walks;
 
-    // Drag the knob a quarter turn clockwise around the center dot
+    // Drag the knob a quarter turn clockwise around the pivot: the box's
+    // back-left corner by default (owner, 2026-10-17)
+    const xs0 = before.map((w) => w.to.x);
+    const ys0 = before.map((w) => w.to.y);
+    const pivot = { x: Math.min(...xs0), y: Math.min(...ys0) };
+    const pivotScreen = await toScreen(page, pivot);
     const knob = overlay.knob!;
-    const center = overlay.centerDot!;
-    const r = Math.hypot(knob.x - center.x, knob.y - center.y);
-    await drag(page, knob, { x: center.x + r, y: center.y }, { steps: 20 });
+    const v = { x: knob.x - pivotScreen.x, y: knob.y - pivotScreen.y };
+    await drag(
+        page,
+        knob,
+        { x: pivotScreen.x - v.y, y: pivotScreen.y + v.x },
+        { steps: 20 },
+    );
     overlay = (await shapeOverlay(page))!;
-    // Half a turn later the spots are where a quarter turn of the box puts
-    // them, everyone keeping their own spot: each walk's end turned 90°
-    // around the center
-    const field = await toFieldOf(page, center);
-    // A quarter turn lands back on the half-step grid, which can shift the
-    // box by up to a quarter step
+    // Everyone keeps their own spot: each walk's end turned 90° around the
+    // pivot. A quarter turn lands back on the half-step grid, which can shift
+    // the box by up to a quarter step.
     const slack = grid.pixelsPerStep / 4 + 1;
     overlay.walks.forEach((w, i) => {
         const was = before[i].to;
         expect(w.from).toEqual(before[i].from);
         expect(
-            Math.abs(w.to.x - (field.x - (was.y - field.y))),
+            Math.abs(w.to.x - (pivot.x - (was.y - pivot.y))),
         ).toBeLessThanOrEqual(slack);
         expect(
-            Math.abs(w.to.y - (field.y + (was.x - field.x))),
+            Math.abs(w.to.y - (pivot.y + (was.x - pivot.x))),
         ).toBeLessThanOrEqual(slack);
     });
+    // The numbers follow the field: 4 × 2 turned a quarter reads 2 × 4
+    expect(await readout(page)).toMatch(/^2 × 4 · /);
 
-    // ⋯ → flip side to side: mirrored about the center, same marchers
+    // ⋯ → flip side to side: mirrored about the pivot's line, same marchers;
+    // neither order is lit after it
     const turned = overlay.walks;
     await page.getByTestId("shape-editor-more").click();
     await page.getByTestId("shape-editor-flip-across").click();
+    // Those on the pivot's line stay; everyone else crosses to the other side
     await expect
-        .poll(async () => (await shapeOverlay(page))!.walks[0].to)
-        .not.toEqual(turned[0].to);
+        .poll(async () =>
+            (await shapeOverlay(page))!.walks.some(
+                (w, i) => Math.abs(w.to.x - turned[i].to.x) > 1,
+            ),
+        )
+        .toBe(true);
     const flipped = (await shapeOverlay(page))!.walks;
-    const xs = turned.map((w) => w.to.x);
-    const mid = (Math.min(...xs) + Math.max(...xs)) / 2;
     flipped.forEach((w, i) => {
-        expect(w.to.x).toBeCloseTo(2 * mid - turned[i].to.x, 3);
+        expect(
+            Math.abs(w.to.x - (2 * pivot.x - turned[i].to.x)),
+        ).toBeLessThanOrEqual(slack);
         expect(w.to.y).toBeCloseTo(turned[i].to.y, 3);
     });
+    await expect(page.getByTestId("shape-editor-order-kept")).toBeVisible();
+    await expect(
+        page.getByTestId("shape-editor-order").getByRole("radio", {
+            checked: true,
+        }),
+    ).toHaveCount(0);
 
     // Nobody moves until Place. Enter still places after a click on the
     // editor's buttons: they don't keep the focus
@@ -339,15 +359,45 @@ const screenOf = async (page: Page, id: number): Promise<[number, number]> => {
     return [m.screen.x, m.screen.y];
 };
 
-/** A viewport point in field units */
-async function toFieldOf(page: Page, p: Point): Promise<Point> {
-    const [marcher] = await drawnMarchers(page);
-    const { zoom } = (await readField(page)).viewport;
-    return {
-        x: marcher.x + (p.x - marcher.screen.x) / zoom,
-        y: marcher.y + (p.y - marcher.screen.y) / zoom,
-    };
-}
+test("change: Escape discards an open box and its toast's Undo brings it back", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const spots = (await shapeOverlay(page))!.spots;
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect((await shapeOverlay(page))!.spots).toEqual(spots);
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+});
+
+test("change: the rotation is a number in ⋯ you type, and Tab goes from number to number", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    await page.getByTestId("shape-editor-more").click();
+    await page.getByTestId("shape-editor-rotation").click();
+    await page.keyboard.type("90");
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-editor-rotation")).toHaveText("90°");
+    // Turned a quarter, across is still side to side on the field
+    await expect.poll(() => readout(page)).toMatch(/^2 × 4 · /);
+    // + makes it one wider on the field
+    await page.getByRole("button", { name: "One more across" }).click();
+    await expect.poll(() => readout(page)).toMatch(/^3 × 3 · /);
+
+    // Tab: from the side-to-side spacing straight into front to back
+    await page.getByTestId("shape-editor-across").click();
+    await page.keyboard.type("2");
+    await page.keyboard.press("Tab");
+    await expect(page.getByTestId("shape-editor-deep-input")).toBeFocused();
+    await page.keyboard.type("3");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => readout(page)).toBe("3 × 3 · 2 × 3 steps");
+});
 
 test("Enter places the marchers on the spots as one undo step, and Escape cancels", async ({
     show,

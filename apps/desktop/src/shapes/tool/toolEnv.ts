@@ -1,6 +1,7 @@
 import { getRoundCoordinates2 } from "@/utilities/CoordinateActions";
 import type { ShapeField } from "../field/shapeField";
 import { useShapeEditorStore } from "../frame/shapeEditorStore";
+import { DEFAULT_PIVOT } from "../frame/frame";
 import { isBasicMode } from "@/stores/EditorModeStore";
 import type { ToolEnv } from "./toolKind";
 
@@ -33,8 +34,8 @@ export function toolEnvFor(
             return { x: r.xPixels, y: r.yPixels };
         },
         hitRadius: HANDLE_REACH_PX / (field.zoom() || 1),
-        // Basic has no pivot grid: it always turns around the center
-        pivot: isBasicMode() ? "c" : editor.pivot,
+        // Basic has no pivot grid: it always uses the default
+        pivot: isBasicMode() ? DEFAULT_PIVOT : editor.pivot,
         ratioLocked: editor.ratioLocked,
     };
 }

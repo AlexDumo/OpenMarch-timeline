@@ -8,7 +8,7 @@ import {
     usePlacedBoxPreviewStore,
 } from "../placed/boxSelectionStore";
 import { commitBox } from "../placed/commitBox";
-import { orderOf } from "../placed/liveBox";
+import { keptOf, orderOf } from "../placed/liveBox";
 import { useDrawnOnPage } from "../placed/placedBoxText";
 import {
     beginEdit,
@@ -34,6 +34,8 @@ export interface ShapeEditTarget {
     /** Spots no member stands on any more (a placed box's holes) */
     readonly empty: number;
     readonly order: ToolOrder;
+    /** Who goes where was kept through a turn or flip: neither order is lit */
+    readonly kept: boolean;
     /** Place, for a new shape; absent for a placed one */
     readonly place?: () => void;
     /** "Page 3", when a placed shape was drawn on an earlier page than the one shown */
@@ -63,6 +65,7 @@ export function useToolEditTarget(): ShapeEditTarget | null {
             spots: tool.marchers.length,
             empty: 0,
             order: tool.order,
+            kept: tool.kept,
             place: () => void place(),
             drawnOn: null,
             begin: () => updateTool(beginEdit),
@@ -99,6 +102,7 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
             spots: box.spots,
             empty: box.spots - box.recipe.members.length,
             order: orderOf(box),
+            kept: keptOf(box),
             drawnOn,
             begin: () => previewPlacedBox(box.params),
             preview: (params) => previewPlacedBox(params),

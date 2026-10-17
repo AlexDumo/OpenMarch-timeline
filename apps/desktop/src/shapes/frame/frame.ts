@@ -29,6 +29,13 @@ export interface ShapeFrame {
  */
 export type PivotKey = "nw" | "n" | "ne" | "w" | "c" | "e" | "sw" | "s" | "se";
 
+/**
+ * What a shape turns, flips and resizes around until the user picks another point: its back-left
+ * corner, so a box stays where it was drawn when it grows (owner, 2026-10-17). Basic mode, which
+ * has no pivot grid, always uses it.
+ */
+export const DEFAULT_PIVOT: PivotKey = "nw";
+
 export const PIVOT_KEYS: readonly PivotKey[] = [
     "nw",
     "n",

@@ -2,8 +2,10 @@ import type { BlockParams } from "../kinds/block";
 import type { XY } from "../types";
 import type { ToolEnv } from "../tool/toolKind";
 import {
+    DEFAULT_PIVOT,
     fieldToFrame,
     frameToField,
+    pivotPoint,
     squareToField,
     type ShapeFrame,
 } from "../frame/frame";
@@ -458,7 +460,7 @@ export function moveBox(
     );
 }
 
-/** The box with `delta` more files (fewer when negative): same intervals, same center */
+/** The box with `delta` more files (fewer when negative): same intervals, grown from the pivot */
 export function changeFiles(
     p: BoxParams,
     n: number,
@@ -467,7 +469,34 @@ export function changeFiles(
 ): BoxParams {
     const files = Math.min(Math.max(1, n), Math.max(1, filesOf(p) + delta));
     if (files === filesOf(p)) return p;
-    return snapToGrid({ ...p, files }, n, env);
+    return grownFromPivot(p, { ...p, files }, n, env);
+}
+
+/**
+ * `after`, a resize of `before` (a new count or spacing), moved so the pivot stays where it was:
+ * by default the back-left corner, so a box stays where it was drawn and grows right and toward
+ * the front (owner, 2026-10-17). Then back on the grid.
+ */
+export function grownFromPivot(
+    before: BoxParams,
+    after: BoxParams,
+    n: number,
+    env: ToolEnv,
+): BoxParams {
+    const key = env.pivot ?? DEFAULT_PIVOT;
+    const was = pivotPoint(boxFrame(before, n), key);
+    const now = pivotPoint(boxFrame(after, n), key);
+    return snapToGrid(
+        {
+            ...after,
+            center: {
+                x: after.center.x + was.x - now.x,
+                y: after.center.y + was.y - now.y,
+            },
+        },
+        n,
+        env,
+    );
 }
 
 /**

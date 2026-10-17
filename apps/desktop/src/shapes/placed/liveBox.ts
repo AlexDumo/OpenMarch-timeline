@@ -135,6 +135,10 @@ export function liveTargets(
 
 const xyOf = (p: XY): XY => ({ x: p.x, y: p.y });
 
-/** How the box's members were laid out: drill order, or Least travel (the default) */
+/** Whether a turn or flip kept the members on their spots, so it's neither order any more */
+export const keptOf = (box: PlacedBox): boolean =>
+    box.recipe.orderMode === "kept";
+
+/** How the box's members were laid out: drill order, or Least travel (the default, and "kept") */
 export const orderOf = (box: PlacedBox): "nearest" | "drill" =>
     box.recipe.orderMode === "drill" ? "drill" : "nearest";

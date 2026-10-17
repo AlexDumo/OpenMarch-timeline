@@ -1,8 +1,6 @@
 import clsx from "clsx";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
-    ArrowClockwiseIcon,
-    ArrowCounterClockwiseIcon,
     DotsThreeIcon,
     FlipHorizontalIcon,
     FlipVerticalIcon,
@@ -12,13 +10,8 @@ import {
     PlusIcon,
 } from "@phosphor-icons/react";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
-import {
-    boxBounds,
-    filesOf,
-    ranksOf,
-    shortBy,
-    type BoxParams,
-} from "../box/boxGeometry";
+import { boxBounds, shortBy, type BoxParams } from "../box/boxGeometry";
+import { DEFAULT_PIVOT, rotationDegrees } from "../frame/frame";
 import { currentShapeField } from "../field/shapeFieldContext";
 import {
     toggleRatioLock,
@@ -29,11 +22,12 @@ import type { ToolEnv } from "../tool/toolKind";
 import { useShapeToolStore } from "../tool/shapeToolStore";
 import {
     flipBox,
+    onField,
+    scrubRotation,
     scrubSize,
     scrubSpacing,
-    turnBy,
-    withFiles,
-    withRanks,
+    turnTo,
+    withFieldCount,
     withSpacing,
 } from "./boxEdits";
 import {
@@ -42,7 +36,7 @@ import {
     type ShapeEditTarget,
 } from "./editTargets";
 import { formatSteps } from "./format";
-import { parseSize, parseSteps } from "./scrub";
+import { parseDegrees, parseSize, parseSteps, scrubDistance } from "./scrub";
 import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
 import { isBasicMode } from "@/stores/EditorModeStore";
 
@@ -55,8 +49,9 @@ const GAP_PX = 14;
  * change most. It moves with the shape and flips above it when there's no room below. Before a
  * shape is drawn, a hint at the top of the field says how to draw one.
  *
- * For a box: `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`. Every number can be typed or dragged.
- * ⋯ opens a second row: turn 90° each way, flip, and who goes where. Place shows only for a new
+ * For a box: `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`. Every number can be typed or dragged,
+ * and follows the field: across is side to side however the box is turned. ⋯ opens a second row:
+ * the rotation (typed or dragged), flips, and who goes where. Place shows only for a new
  * shape; a selected placed shape saves each edit on release.
  */
 export function ShapeEditor({ stepPx }: { stepPx: number }) {
@@ -109,12 +104,13 @@ function ShapeEditorBar({
     // The box at the press of a number's drag
     const base = useRef<BoxParams>(params);
 
-    const files = filesOf(params);
-    const ranks = ranksOf(params, spots);
+    // Across is side to side on the field, however the box is turned (owner, 2026-10-17)
+    const field = onField(params, spots);
     const short = shortBy(params, spots);
-    const across = formatSteps(params.across / stepPx);
-    const deep = formatSteps(params.deep / stepPx);
-    const turnPivot = isBasicMode() ? "c" : pivot;
+    const across = formatSteps(field.acrossSpacing / stepPx);
+    const deep = formatSteps(field.deepSpacing / stepPx);
+    const degrees = rotationDegrees(params.rotation);
+    const turnPivot = isBasicMode() ? DEFAULT_PIVOT : pivot;
 
     /** One change at once, worked out with no keys held */
     const apply = (change: (env: ToolEnv) => BoxParams) => {
@@ -135,6 +131,13 @@ function ShapeEditorBar({
         },
         onScrubEnd: (keep: boolean) => target.end(keep),
     });
+    /** A spacing as typed: steps, the field's across or deep */
+    const typeSpacing = (key: "across" | "deep") => (text: string) => {
+        const steps = parseSteps(text);
+        if (steps === null) return false;
+        apply((env) => withSpacing(params, key, steps, spots, env));
+        return true;
+    };
 
     return (
         <div
@@ -142,6 +145,7 @@ function ShapeEditorBar({
             className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex -translate-x-1/2 flex-col gap-4 border px-6 py-4 whitespace-nowrap"
             style={place.style}
             data-testid={testId}
+            data-shape-editor
             data-placement={place.above ? "above" : "below"}
             onPointerDown={(e) => e.stopPropagation()}
         >
@@ -152,41 +156,71 @@ function ShapeEditorBar({
                 >
                     <IconButton
                         label="One fewer across"
-                        disabled={files <= 1}
+                        disabled={field.across <= 1}
                         onClick={() =>
                             apply((env) =>
-                                withFiles(params, spots, files - 1, env),
+                                withFieldCount(
+                                    params,
+                                    spots,
+                                    "across",
+                                    field.across - 1,
+                                    env,
+                                ),
                             )
                         }
                     >
                         <MinusIcon size={12} />
                     </IconButton>
                     <ScrubNumber
-                        display={`${files} × ${ranks}`}
-                        editText={`${files} × ${ranks}`}
+                        display={`${field.across} × ${field.deep}`}
                         axis="both"
                         label="Size, across × deep"
                         testId="shape-editor-size"
                         {...scrub((b, m, env) =>
-                            scrubSize(b, m.axis, m.dx, m.dy, spots, env),
+                            scrubSize(
+                                b,
+                                m.axis === "x" ? "across" : "deep",
+                                scrubDistance(m.axis, m.dx, m.dy),
+                                spots,
+                                env,
+                            ),
                         )}
                         onType={(text) => {
                             const size = parseSize(text);
                             if (!size) return false;
                             apply((env) =>
-                                size.across !== files || size.deep === undefined
-                                    ? withFiles(params, spots, size.across, env)
-                                    : withRanks(params, spots, size.deep, env),
+                                size.across !== field.across ||
+                                size.deep === undefined
+                                    ? withFieldCount(
+                                          params,
+                                          spots,
+                                          "across",
+                                          size.across,
+                                          env,
+                                      )
+                                    : withFieldCount(
+                                          params,
+                                          spots,
+                                          "deep",
+                                          size.deep,
+                                          env,
+                                      ),
                             );
                             return true;
                         }}
                     />
                     <IconButton
                         label="One more across"
-                        disabled={files >= spots}
+                        disabled={field.across >= spots}
                         onClick={() =>
                             apply((env) =>
-                                withFiles(params, spots, files + 1, env),
+                                withFieldCount(
+                                    params,
+                                    spots,
+                                    "across",
+                                    field.across + 1,
+                                    env,
+                                ),
                             )
                         }
                     >
@@ -205,7 +239,7 @@ function ShapeEditorBar({
                     <>
                         <Divider />
                         <span className="flex items-center gap-2">
-                            {files > 1 && (
+                            {field.across > 1 && (
                                 <>
                                     <span className="text-text/60" aria-hidden>
                                         ↔
@@ -218,31 +252,17 @@ function ShapeEditorBar({
                                         {...scrub((b, m, env) =>
                                             scrubSpacing(
                                                 b,
-                                                "across",
-                                                m.dx,
-                                                m.dy,
+                                                field.acrossKey,
+                                                scrubDistance("x", m.dx, m.dy),
                                                 spots,
                                                 env,
                                             ),
                                         )}
-                                        onType={(text) => {
-                                            const steps = parseSteps(text);
-                                            if (steps === null) return false;
-                                            apply((env) =>
-                                                withSpacing(
-                                                    params,
-                                                    "across",
-                                                    steps,
-                                                    spots,
-                                                    env,
-                                                ),
-                                            );
-                                            return true;
-                                        }}
+                                        onType={typeSpacing(field.acrossKey)}
                                     />
                                 </>
                             )}
-                            {ranks > 1 && (
+                            {field.deep > 1 && (
                                 <>
                                     <span className="text-text/60" aria-hidden>
                                         ↕
@@ -255,32 +275,18 @@ function ShapeEditorBar({
                                         {...scrub((b, m, env) =>
                                             scrubSpacing(
                                                 b,
-                                                "deep",
-                                                m.dx,
-                                                m.dy,
+                                                field.deepKey,
+                                                scrubDistance("y", m.dx, m.dy),
                                                 spots,
                                                 env,
                                             ),
                                         )}
-                                        onType={(text) => {
-                                            const steps = parseSteps(text);
-                                            if (steps === null) return false;
-                                            apply((env) =>
-                                                withSpacing(
-                                                    params,
-                                                    "deep",
-                                                    steps,
-                                                    spots,
-                                                    env,
-                                                ),
-                                            );
-                                            return true;
-                                        }}
+                                        onType={typeSpacing(field.deepKey)}
                                     />
                                 </>
                             )}
                             <span className="text-text/60">steps</span>
-                            {files > 1 && ranks > 1 && (
+                            {field.across > 1 && field.deep > 1 && (
                                 <IconButton
                                     label={
                                         ratioLocked
@@ -306,7 +312,7 @@ function ShapeEditorBar({
                 )}
                 <Divider />
                 <IconButton
-                    label="More"
+                    label="More: turn, flip, who goes where"
                     pressed={more}
                     onClick={() => setMore((m) => !m)}
                     testId="shape-editor-more"
@@ -333,30 +339,41 @@ function ShapeEditorBar({
                     className="flex items-center gap-6"
                     data-testid="shape-editor-more-row"
                 >
-                    <IconButton
-                        label="Turn 90° counterclockwise"
-                        onClick={() =>
-                            apply((env) =>
-                                turnBy(params, spots, -90, turnPivot, env),
-                            )
-                        }
-                        testId="shape-editor-turn-left"
-                    >
-                        <ArrowCounterClockwiseIcon size={14} />
-                    </IconButton>
-                    <IconButton
-                        label="Turn 90° clockwise"
-                        onClick={() =>
-                            apply((env) =>
-                                turnBy(params, spots, 90, turnPivot, env),
-                            )
-                        }
-                        testId="shape-editor-turn-right"
-                    >
-                        <ArrowClockwiseIcon size={14} />
-                    </IconButton>
+                    <span className="flex items-center gap-2">
+                        <span className="text-text/60">Turn</span>
+                        <ScrubNumber
+                            display={`${degrees}°`}
+                            editText={String(degrees)}
+                            axis="x"
+                            label="Rotation, in degrees clockwise"
+                            testId="shape-editor-rotation"
+                            {...scrub((b, m, env) =>
+                                scrubRotation(
+                                    b,
+                                    scrubDistance("x", m.dx, m.dy),
+                                    spots,
+                                    turnPivot,
+                                    env,
+                                ),
+                            )}
+                            onType={(text) => {
+                                const typed = parseDegrees(text);
+                                if (typed === null) return false;
+                                apply((env) =>
+                                    turnTo(
+                                        params,
+                                        spots,
+                                        typed,
+                                        turnPivot,
+                                        env,
+                                    ),
+                                );
+                                return true;
+                            }}
+                        />
+                    </span>
                     <Divider />
-                    <IconButton
+                    <TextButton
                         label="Flip side to side"
                         onClick={() =>
                             apply((env) =>
@@ -372,8 +389,9 @@ function ShapeEditorBar({
                         testId="shape-editor-flip-across"
                     >
                         <FlipHorizontalIcon size={14} />
-                    </IconButton>
-                    <IconButton
+                        Flip ↔
+                    </TextButton>
+                    <TextButton
                         label="Flip front to back"
                         onClick={() =>
                             apply((env) =>
@@ -383,18 +401,29 @@ function ShapeEditorBar({
                         testId="shape-editor-flip-deep"
                     >
                         <FlipVerticalIcon size={14} />
-                    </IconButton>
+                        Flip ↕
+                    </TextButton>
                     <Divider />
                     <span className="text-text/60">Who goes where</span>
-                    <Segmented
-                        value={target.order}
-                        options={[
-                            { value: "nearest", label: "Least travel" },
-                            { value: "drill", label: "Drill order" },
-                        ]}
-                        onChange={target.setOrder}
-                        testId="shape-editor-order"
-                    />
+                    <span className="flex flex-col gap-1">
+                        <Segmented
+                            value={target.kept ? null : target.order}
+                            options={[
+                                { value: "nearest", label: "Least travel" },
+                                { value: "drill", label: "Drill order" },
+                            ]}
+                            onChange={target.setOrder}
+                            testId="shape-editor-order"
+                        />
+                        {target.kept && (
+                            <span
+                                className="text-text/60 text-xs"
+                                data-testid="shape-editor-order-kept"
+                            >
+                                Kept from your turn or flip · pick one to redo
+                            </span>
+                        )}
+                    </span>
                 </div>
             )}
         </div>
@@ -445,6 +474,33 @@ function usePlacement(params: BoxParams, spots: number) {
  */
 const keepFocus = (e: { preventDefault(): void }) => e.preventDefault();
 
+/** A button in the ⋯ row: an icon and a word, so nobody has to guess (sims, F1) */
+function TextButton({
+    label,
+    onClick,
+    testId,
+    children,
+}: {
+    label: string;
+    onClick: () => void;
+    testId?: string;
+    children: ReactNode;
+}) {
+    return (
+        <button
+            type="button"
+            title={label}
+            aria-label={label}
+            onPointerDown={keepFocus}
+            onClick={onClick}
+            data-testid={testId}
+            className="rounded-4 hover:text-accent hover:bg-fg-2 flex items-center gap-4 px-4 py-2"
+        >
+            {children}
+        </button>
+    );
+}
+
 function Divider() {
     return <span className="bg-stroke h-16 w-px" aria-hidden />;
 }
@@ -490,7 +546,8 @@ function Segmented<V extends string>({
     onChange,
     testId,
 }: {
-    value: V;
+    /** Null when none is chosen */
+    value: V | null;
     options: readonly { value: V; label: string }[];
     onChange: (value: V) => void;
     testId?: string;

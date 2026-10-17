@@ -1950,6 +1950,10 @@
     },
     "shapes": {
         "box": {
+            "discarded": {
+                "message": "Box discarded",
+                "undo": "Undo"
+            },
             "label": "Box {files} × {ranks} · {interval} steps",
             "left": {
                 "closeUp": "Close up",

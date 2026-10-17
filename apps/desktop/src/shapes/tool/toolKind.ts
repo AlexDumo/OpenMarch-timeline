@@ -15,7 +15,7 @@ export interface ToolEnv {
     readonly gridSnap: (p: XY) => XY;
     /** How far from a handle a press still takes it, in field units */
     readonly hitRadius: number;
-    /** What turns and flips go around (the inspector's pivot); the center when absent */
+    /** What turns, flips and resizes go around (the inspector's pivot); back-left when absent */
     readonly pivot?: PivotKey;
     /** The box's ratio lock: changing one spacing changes the other in proportion */
     readonly ratioLocked?: boolean;

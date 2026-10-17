@@ -3,12 +3,12 @@ import {
     keepRatio,
     ranksOf,
     snapInterval,
-    snapToGrid,
+    grownFromPivot,
     type BoxParams,
 } from "../box/boxGeometry";
 import { turnShape, flipShape } from "../frame/gestures";
 import { boxTool } from "../box/boxTool";
-import { DEGREE, type PivotKey } from "../frame/frame";
+import { DEGREE, rotationDegrees, type PivotKey } from "../frame/frame";
 import type { ToolEnv } from "../tool/toolKind";
 import {
     COUNT_RATE,
@@ -19,8 +19,8 @@ import {
 
 /**
  * What the floating editor's numbers and buttons do to a box (08-shape-system-ux.md, "The floating
- * editor"). A size change keeps the spacing and the center; a spacing change keeps the count and
- * the center. Everything here is pure; `spots` is how many spots the box has (holes included).
+ * editor"). A size change keeps the spacing, a spacing change keeps the count, and both grow from
+ * the pivot (back-left by default). Everything here is pure; `spots` is how many spots the box has (holes included).
  */
 
 /** The box with `files` across (clamped to 1 to `spots`), its spacing and center kept */
@@ -35,7 +35,7 @@ export function withFiles(
         Math.max(1, Math.round(files)),
     );
     if (clamped === filesOf(p)) return p;
-    return snapToGrid({ ...p, files: clamped }, spots, env);
+    return grownFromPivot(p, { ...p, files: clamped }, spots, env);
 }
 
 /**
@@ -74,55 +74,107 @@ export function withSpacing(
             env,
         ));
     if (across === p.across && deep === p.deep) return p;
-    return snapToGrid({ ...p, across, deep }, spots, env);
+    return grownFromPivot(p, { ...p, across, deep }, spots, env);
 }
 
-/** A spacing dragged `dx`, `dy` px from the box at the press: ½ step per 8 px, Alt for tenths */
+/**
+ * Whether the box is turned far enough that its own deep runs side to side on the field: between
+ * 45° and 135° (or 225° and 315°). The editor's numbers then follow the field, so "across" is
+ * always side to side as people see it (owner, 2026-10-17). Exactly 45° keeps the box's own.
+ */
+export function acrossIsDeep(rotation: number): boolean {
+    const d = rotationDegrees(rotation) % 180;
+    return d > 45 && d < 135;
+}
+
+/** The box's counts and spacings as the field shows them: across is side to side */
+export function onField(p: BoxParams, spots: number) {
+    const swap = acrossIsDeep(p.rotation);
+    const files = filesOf(p);
+    const ranks = ranksOf(p, spots);
+    return {
+        swap,
+        across: swap ? ranks : files,
+        deep: swap ? files : ranks,
+        acrossSpacing: swap ? p.deep : p.across,
+        deepSpacing: swap ? p.across : p.deep,
+        /** The box's own parameter each field number edits */
+        acrossKey: (swap ? "deep" : "across") as "across" | "deep",
+        deepKey: (swap ? "across" : "deep") as "across" | "deep",
+    };
+}
+
+/** The box with `count` across (or deep) on the field */
+export function withFieldCount(
+    p: BoxParams,
+    spots: number,
+    axis: "across" | "deep",
+    count: number,
+    env: ToolEnv,
+): BoxParams {
+    const ownFiles = (axis === "across") !== acrossIsDeep(p.rotation);
+    return ownFiles
+        ? withFiles(p, spots, count, env)
+        : withRanks(p, spots, count, env);
+}
+
+/**
+ * A spacing (the box's own `which`) dragged `distance` px for more: ½ step per 8 px, tenths with
+ * Alt, from where it started
+ */
 export function scrubSpacing(
     base: BoxParams,
     which: "across" | "deep",
-    dx: number,
-    dy: number,
+    distance: number,
     spots: number,
     env: ToolEnv,
 ): BoxParams {
-    const steps = scrubValue(
-        (which === "across" ? base.across : base.deep) / env.stepPx,
-        dx,
-        dy,
-        {
-            // Side to side drags sideways; front to back up and down
-            axis: which === "across" ? "x" : "y",
-            px: SPACING_RATE.px,
-            step: env.snap ? SPACING_RATE.step : SPACING_FINE_STEP,
-        },
-    );
     const was = (which === "across" ? base.across : base.deep) / env.stepPx;
+    const steps = scrubValue(was, distance, 0, {
+        axis: "x",
+        px: SPACING_RATE.px,
+        step: env.snap ? SPACING_RATE.step : SPACING_FINE_STEP,
+    });
     // A drag that ends where it started changes nothing; it doesn't round the value
     if (steps === was) return base;
     return withSpacing(base, which, steps, spots, env);
 }
 
-/** The size dragged: sideways for more or fewer across, up or down for more or fewer deep */
+/** The count across (or deep) on the field dragged `distance` px for more: one per 16 px */
 export function scrubSize(
     base: BoxParams,
-    axis: "x" | "y",
-    dx: number,
-    dy: number,
+    axis: "across" | "deep",
+    distance: number,
     spots: number,
     env: ToolEnv,
 ): BoxParams {
-    if (axis === "x")
-        return withFiles(
-            base,
-            spots,
-            scrubValue(filesOf(base), dx, dy, { axis, ...COUNT_RATE }),
-            env,
-        );
-    const ranks = ranksOf(base, spots);
-    const target = scrubValue(ranks, dx, dy, { axis, ...COUNT_RATE });
-    return target === ranks ? base : withRanks(base, spots, target, env);
+    const field = onField(base, spots);
+    const was = axis === "across" ? field.across : field.deep;
+    const count = scrubValue(was, distance, 0, { axis: "x", ...COUNT_RATE });
+    return count === was ? base : withFieldCount(base, spots, axis, count, env);
 }
+
+/** The rotation dragged `distance` px clockwise: 1° per 2 px, 15° with Shift, free with Alt */
+export function scrubRotation(
+    base: BoxParams,
+    distance: number,
+    spots: number,
+    pivot: PivotKey,
+    env: ToolEnv,
+): BoxParams {
+    const turn = distance / ROTATION_PX_PER_DEGREE;
+    if (Math.trunc(turn) === 0 && env.snap) return base;
+    const degrees = rotationDegrees(base.rotation) + turn;
+    const snapped = !env.snap
+        ? degrees
+        : env.shift
+          ? Math.round(degrees / 15) * 15
+          : Math.round(degrees);
+    return turnTo(base, spots, snapped, pivot, env);
+}
+
+/** Pixels of drag per degree on the rotation number */
+export const ROTATION_PX_PER_DEGREE = 2;
 
 /** The box turned by `degrees` (clockwise on the field) about the pivot */
 export function turnBy(

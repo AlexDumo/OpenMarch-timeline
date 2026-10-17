@@ -169,8 +169,9 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   snaps to 15°.
 - A number lights up while it's being dragged, and its cursor shows its drag direction.
 - A drag that ends where it started changes nothing; it doesn't round the value.
-- A size change keeps the spacing and the center. A box squashed to one rank and dragged back
-  gets its old front-to-back spacing back.
+- A size change keeps the spacing and grows from the pivot (back-left by default; changed
+  2026-10-17). A box squashed to one rank and dragged back gets its old front-to-back spacing
+  back.
 - These pixel rates are first guesses, to be tuned by feel.
 
 ### The ratio lock (box)
@@ -338,6 +339,27 @@ Further decisions:
   not the Shape tab, so it always turns around the center.
 - A selected placed shape's Shape tab is the same, minus Place and Cancel, plus a muted "from
   page N"; ☆ Save stays greyed until C.
+
+## Decisions, 2026-10-17
+
+From the first round of simulated users on A (`~/ux-sim/shapes/f1/SUMMARY.md`: typing numbers
+scored best, surprises worst):
+
+- **The numbers follow the field.** Across is side to side on the field however the box is
+  turned: past 45° (up to 135°, and the same the other way round) the bar's size, spacings, − and
+  - swap to the box's own deep. Exactly 45° keeps the box's own.
+- **The rotation is a number in the ⋯ row**, typed or dragged like the inspector's (right turns
+  clockwise, 1° per 2 px, Shift 15°, Alt free). The 90° turn buttons are gone.
+- **Resizing grows from the pivot**, and the default pivot is the **back-left corner**, so a
+  box stays where it was drawn and grows right and toward the front. The knob and flips turn
+  around the same point. Basic mode, with no pivot grid, always uses back-left.
+- **Escape on an open, drawn shape** closes it and a toast offers **Undo**, which brings it back
+  while the same marchers are still selected. The undo lives only in the toast.
+- **After a turn or flip**, who goes where is kept, so neither Least travel nor Drill order is
+  lit, with "Kept from your turn or flip · pick one to redo". Picking one works it out again.
+- Tab and Shift+Tab move between the bar's numbers while typing. The ⋯ row's flips have words
+  ("Flip ↔", "Flip ↕"). On shapes too big to label every spot (over 24), the spot under the
+  pointer shows who will stand there.
 
 ## Open questions for the owner
 

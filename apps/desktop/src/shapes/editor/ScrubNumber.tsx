@@ -59,29 +59,53 @@ export function ScrubNumber({
     } | null>(null);
     const [dragging, setDragging] = useState(false);
     const [typing, setTyping] = useState<string | null>(null);
+    const wrapper = useRef<HTMLSpanElement>(null);
 
     if (typing !== null) {
         const apply = () => {
             if (onType(typing)) setTyping(null);
         };
+        /** Tab and Shift+Tab: apply this one and type into the next or previous number */
+        const tabTo = (step: 1 | -1) => {
+            if (!onType(typing)) return;
+            const own = wrapper.current;
+            const all = [
+                ...(own
+                    ?.closest("[data-shape-editor]")
+                    ?.querySelectorAll<HTMLElement>("[data-scrub-number]") ??
+                    []),
+            ];
+            const next = own ? all[all.indexOf(own) + step] : undefined;
+            setTyping(null);
+            // After this one closes; a click with no pointer opens the next for typing
+            requestAnimationFrame(() =>
+                next?.querySelector<HTMLButtonElement>("button")?.click(),
+            );
+        };
         return (
-            <input
-                autoFocus
-                aria-label={label}
-                data-testid={testId && `${testId}-input`}
-                className="rounded-4 border-accent bg-fg-1 text-sub text-text w-[5ch] border px-2 text-center tabular-nums outline-none"
-                style={{ width: `${Math.max(typing.length, 3) + 1}ch` }}
-                value={typing}
-                onFocus={(e) => e.currentTarget.select()}
-                onChange={(e) => setTyping(e.currentTarget.value)}
-                onBlur={apply}
-                onKeyDown={(e) => {
-                    // The number's own keys: the shape tool doesn't see them
-                    e.stopPropagation();
-                    if (e.key === "Enter") apply();
-                    else if (e.key === "Escape") setTyping(null);
-                }}
-            />
+            <span ref={wrapper} data-scrub-number>
+                <input
+                    autoFocus
+                    aria-label={label}
+                    data-testid={testId && `${testId}-input`}
+                    className="rounded-4 border-accent bg-fg-1 text-sub text-text w-[5ch] border px-2 text-center tabular-nums outline-none"
+                    style={{ width: `${Math.max(typing.length, 3) + 1}ch` }}
+                    value={typing}
+                    onFocus={(e) => e.currentTarget.select()}
+                    onChange={(e) => setTyping(e.currentTarget.value)}
+                    onBlur={apply}
+                    onKeyDown={(e) => {
+                        // The number's own keys: the shape tool doesn't see them
+                        e.stopPropagation();
+                        if (e.key === "Enter") apply();
+                        else if (e.key === "Escape") setTyping(null);
+                        else if (e.key === "Tab") {
+                            e.preventDefault();
+                            tabTo(e.shiftKey ? -1 : 1);
+                        }
+                    }}
+                />
+            </span>
         );
     }
 
@@ -124,32 +148,38 @@ export function ScrubNumber({
     };
 
     return (
-        <button
-            type="button"
-            aria-label={label}
-            title={`${label}: click to type, drag to change`}
-            data-testid={testId}
-            className={clsx(
-                "rounded-4 px-2 tabular-nums select-none",
-                dragging
-                    ? "bg-accent text-text-invert"
-                    : "hover:bg-fg-2 hover:text-accent",
-            )}
-            style={{ cursor: CURSORS[axis], touchAction: "none" }}
-            onPointerDown={down}
-            onPointerMove={move}
-            onPointerUp={() => up(true)}
-            onPointerCancel={() => up(false)}
-            onLostPointerCapture={() => up(true)}
-            onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setTyping(editText);
-                }
-            }}
-        >
-            {display}
-        </button>
+        <span ref={wrapper} data-scrub-number>
+            <button
+                type="button"
+                aria-label={label}
+                title={`${label}: click to type, drag to change`}
+                data-testid={testId}
+                className={clsx(
+                    "rounded-4 px-2 tabular-nums select-none",
+                    dragging
+                        ? "bg-accent text-text-invert"
+                        : "hover:bg-fg-2 hover:text-accent",
+                )}
+                style={{ cursor: CURSORS[axis], touchAction: "none" }}
+                onPointerDown={down}
+                onPointerMove={move}
+                onPointerUp={() => up(true)}
+                onPointerCancel={() => up(false)}
+                onLostPointerCapture={() => up(true)}
+                onClick={(e) => {
+                    // Not a pointer (Tab from the number before, or a script): type into it
+                    if (e.detail === 0) setTyping(editText);
+                }}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setTyping(editText);
+                    }
+                }}
+            >
+                {display}
+            </button>
+        </span>
     );
 }
