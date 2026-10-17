@@ -22,6 +22,7 @@ import {
     TimelineWriteError,
 } from "./timelineErrors";
 import { chunked } from "./timelineAssignments";
+import { withSessionIds } from "../sync/ids";
 
 /** A row of `timeline_transitions`; `path_params` is JSON text (spec 5.2). */
 export type DatabaseTimelineTransition =
@@ -99,7 +100,15 @@ const insertDestinations = async (
         y: p[1],
     }));
     for (const chunk of chunked(rows))
-        await tx.insert(schema.timeline_slot_destinations).values(chunk);
+        await tx
+            .insert(schema.timeline_slot_destinations)
+            .values(
+                await withSessionIds(
+                    tx,
+                    schema.timeline_slot_destinations,
+                    chunk,
+                ),
+            );
 };
 
 const refuseFtlWithoutShape = (): never => {
@@ -197,19 +206,21 @@ const insertTimelineTransitions = async (
         const row = await mapDbErrors(async () => {
             const inserted = await tx
                 .insert(schema.timeline_transitions)
-                .values({
-                    timeline_id: t.timelineId,
-                    dest_shape_id:
-                        t.destination.kind === "shape"
-                            ? t.destination.shapeId
-                            : null,
-                    path_style: t.pathStyle ?? "direct",
-                    path_params: paramsToJson(t.pathParams),
-                    order_mode: t.orderMode ?? "inherit",
-                    slot_count: t.slotCount,
-                    start_beat: t.startBeat,
-                    end_beat: t.endBeat,
-                })
+                .values(
+                    await withSessionIds(tx, schema.timeline_transitions, {
+                        timeline_id: t.timelineId,
+                        dest_shape_id:
+                            t.destination.kind === "shape"
+                                ? t.destination.shapeId
+                                : null,
+                        path_style: t.pathStyle ?? "direct",
+                        path_params: paramsToJson(t.pathParams),
+                        order_mode: t.orderMode ?? "inherit",
+                        slot_count: t.slotCount,
+                        start_beat: t.startBeat,
+                        end_beat: t.endBeat,
+                    }),
+                )
                 .returning()
                 .get();
             if (t.destination.kind === "individual")

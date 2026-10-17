@@ -14,6 +14,7 @@ import {
     AppearanceComponentRawOptional,
     appearanceModelRawToParsed,
 } from "@/entity-components/appearance";
+import { withSessionIds } from "../sync/ids";
 
 // ============================================================================
 // TAGS
@@ -96,7 +97,7 @@ export const _createTagsInTransaction = async ({
 }): Promise<DatabaseTag[]> => {
     const createdTags = await tx
         .insert(schema.tags)
-        .values(newTags)
+        .values(await withSessionIds(tx, schema.tags, newTags))
         .returning();
 
     return createdTags;
@@ -401,7 +402,13 @@ export const createTagAppearancesInTransaction = async ({
 }): Promise<TagAppearance[]> => {
     const createdItems = await tx
         .insert(schema.tag_appearances)
-        .values(newItems.map(newTagAppearanceArgsToRealNewTagAppearanceArgs))
+        .values(
+            await withSessionIds(
+                tx,
+                schema.tag_appearances,
+                newItems.map(newTagAppearanceArgsToRealNewTagAppearanceArgs),
+            ),
+        )
         .returning();
 
     return createdItems.map(realDatabaseTagAppearanceToDatabaseTagAppearance);
@@ -656,7 +663,7 @@ export const _createMarcherTagsInTransaction = async ({
 }): Promise<DatabaseMarcherTag[]> => {
     const createdMarcherTags = await tx
         .insert(schema.marcher_tags)
-        .values(newMarcherTags)
+        .values(await withSessionIds(tx, schema.marcher_tags, newMarcherTags))
         .returning();
 
     return createdMarcherTags;

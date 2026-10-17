@@ -18,6 +18,7 @@ import { schema } from "@/global/database/db";
 import { CUE_CHANNELS } from "@om-electron/database/migrations/schema";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
+import { withSessionIds } from "../sync/ids";
 
 export { CUE_CHANNELS };
 export type { CueChannel, CueRipple, CueTarget };
@@ -278,7 +279,10 @@ const insertMembersInTransaction = async (
         marcher_id,
     }));
     if (values.length > 0)
-        await tx.insert(schema.cue_marchers).values(values).run();
+        await tx
+            .insert(schema.cue_marchers)
+            .values(await withSessionIds(tx, schema.cue_marchers, values))
+            .run();
 };
 
 /** Creates cues and their set members. Throws if a set target has no marchers. */
@@ -294,7 +298,13 @@ export const createCuesInTransaction = async ({
         assertSetHasMembers(args.target);
         const row = await tx
             .insert(schema.cues)
-            .values(newCueArgsToRealNewCue(args))
+            .values(
+                await withSessionIds(
+                    tx,
+                    schema.cues,
+                    newCueArgsToRealNewCue(args),
+                ),
+            )
             .returning()
             .get();
         if (args.target.kind === "set")

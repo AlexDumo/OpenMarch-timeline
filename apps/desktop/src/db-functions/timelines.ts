@@ -6,6 +6,7 @@ import {
     deleteTimelineTransitionRowsInTransaction,
     setTimelineRangeInTransaction,
 } from "./timelineTransitionsInTransaction";
+import { withSessionIds } from "../sync/ids";
 
 /** A row of `timelines`. */
 export type DatabaseTimeline = typeof schema.timelines.$inferSelect;
@@ -93,17 +94,17 @@ export const createTimelinesInTransaction = async ({
             );
         seen.add(key);
     }
+    const values = await withSessionIds(
+        tx,
+        schema.timelines,
+        newTimelines.map((t) => ({
+            name: t.name ?? null,
+            start_beat: t.startBeat,
+            end_beat: t.endBeat,
+        })),
+    );
     return await mapDbErrors(() =>
-        tx
-            .insert(schema.timelines)
-            .values(
-                newTimelines.map((t) => ({
-                    name: t.name ?? null,
-                    start_beat: t.startBeat,
-                    end_beat: t.endBeat,
-                })),
-            )
-            .returning(),
+        tx.insert(schema.timelines).values(values).returning(),
     );
 };
 

@@ -8,6 +8,7 @@ import { schema } from "@/global/database/db";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import type { CueChannel } from "./cues";
+import { withSessionIds } from "../sync/ids";
 
 export type PhraseAssetSource = "copied_builtin" | "posed" | "imported";
 
@@ -85,15 +86,19 @@ export const createPhraseAssetsInTransaction = async ({
     const rows = await tx
         .insert(schema.phrase_assets)
         .values(
-            newPhraseAssets.map(
-                (args): RealNewPhraseAsset => ({
-                    name: args.name,
-                    label: args.label,
-                    source: args.source,
-                    channels_json: JSON.stringify(args.channels),
-                    format_version: args.formatVersion,
-                    data_json: JSON.stringify(args.data),
-                }),
+            await withSessionIds(
+                tx,
+                schema.phrase_assets,
+                newPhraseAssets.map(
+                    (args): RealNewPhraseAsset => ({
+                        name: args.name,
+                        label: args.label,
+                        source: args.source,
+                        channels_json: JSON.stringify(args.channels),
+                        format_version: args.formatVersion,
+                        data_json: JSON.stringify(args.data),
+                    }),
+                ),
             ),
         )
         .returning();
