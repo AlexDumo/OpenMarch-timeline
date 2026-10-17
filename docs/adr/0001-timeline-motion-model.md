@@ -225,6 +225,10 @@ merge it back. So the first rule above is relaxed:
 - Neither edit changes motion: a timeline has no effect on resolution (R-1). There is no schema,
   file-format or change-log change; the rows that move are `timeline_transitions.timeline_id`,
   plus, for a peeled slot, an assignment and a one-slot transition with the slot's destination.
+  Under the layer amendment below, a split move is not a page's move, so it ranks above page
+  moves (spec §6.2, L-1). Where a marcher's split-off row also overlaps a move of theirs that
+  started earlier and isn't a page's, the derived ranking can then change who plays there; the
+  layer-priority change decides whether split and merge keep motion in that case.
 
 The interaction is UI-25 in `docs/timeline/ui.md`.
 

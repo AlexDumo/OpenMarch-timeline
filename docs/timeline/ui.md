@@ -1181,14 +1181,15 @@ from it. The spec still wins on the model; this file decides presentation.
   command palette.
   - **Several moves over one range** (owner). The page box still stands for the page's original
     timeline: the oldest stored timeline (lowest id) with exactly its range, the one
-    `findTimelineByRange` returned before (`pageTimelineIds`, `isPageTimeline`). A move split off
+    `findTimelineByRange` returned before (`pageTimelineIds`, `isPageTimeline`). A stored page-move
+    mark replaces this inference in the layer-priority change (ADR 0001, 2026-10-16). A move split off
     it always draws as its own clip, even on the page's flags, with its own label ("Move 6"). A
-    clicked clip's move is the window's (`windowTimelineId` in the selection store) until the
-    window leaves its range, so the clip, not the page box, shows selected, the Move card and the
-    inspector are about it, the field line names it ("Editing Move 6 (Page 3, counts 1–8)"), and a
-    canvas drag there adds marchers to it. Flag drags move timelines
-    that share a range together. Undo and redo keep the window, as UI-9 says, and an isolated move
-    that undo takes away ends isolation (09-isolation.md).
+    clicked clip's move is the window's (`windowTimelineId` in the selection store) until the window
+    leaves its range, so the clip, not the page box, shows selected, the Move card and the inspector
+    are about it, the field line names it ("Editing Move 6 (Page 3, counts 1–8)"), and a canvas drag
+    there adds marchers to it. Flag drags move timelines that share a range together. Undo and redo
+    keep the window, as UI-9 says, and an isolated move that undo takes away ends isolation
+    (09-isolation.md).
   - **Split N selected into new move** (owner, option A). With marchers selected that are in a
     move, right-clicking the move's clip, or the page box of a page's timeline, offers it; so do
     the clip's ⋯ menu, the Move card (under "N marchers · Select them") and ⌘K ("Split selected
@@ -1199,14 +1200,16 @@ from it. The spec still wins on the model; this file decides presentation.
     the move, and when all of them are (that would only rename it). The entry shows, disabled,
     with no marchers selected too, so it can be found (_lead default_, V-287).
   - **No motion changes** (owner). Each chosen marcher's transition moves to the new timeline as it
-    is: destination, path and layer, and a kept marker with it, as one undoable edit
-    (`splitMarchersIntoNewMove`). A converted page's shared transition (one slot per marcher,
-    P9.10) is split slot by slot: each leaving marcher gets its own one-slot transition with its
-    slot's destination and the same path, and the old one is compacted, so no slot is left vacant.
-    A transition into a shape, a follow-the-leader one, or one whose marchers are in an inheriting
-    follow-the-leader order can't be split apart; the split is refused naming the marchers who move
-    together ("…move into one shape together with … Select them all, or none of them"), and
-    selecting them all moves that whole transition.
+    is: destination and path, and a kept marker with it, as one undoable edit
+    (`splitMarchersIntoNewMove`). Who plays follows spec §6.2: a split move is not a page's own move,
+    so it ranks above page moves, and against other moves by its start and end like any move. Until
+    the layer-priority change lands, the split keeps each row's stored layer. A converted page's
+    shared transition (one slot per marcher, P9.10) is split slot by slot: each leaving marcher gets
+    its own one-slot transition with its slot's destination and the same path, and the old one is
+    compacted, so no slot is left vacant. A transition into a shape, a follow-the-leader one, or one
+    whose marchers are in an inheriting follow-the-leader order can't be split apart; the split is
+    refused naming the marchers who move together ("…move into one shape together with … Select them
+    all, or none of them"), and selecting them all moves that whole transition.
   - **Drag out** (owner, option C, _experimental_: the owner wants to feel it). With marchers
     selected that are in a move, drag its clip down: a ghost clip under the pointer says "Split 8
     marchers", and releasing does the same split. The drag locks to an axis when it starts
@@ -1236,13 +1239,15 @@ from it. The spec still wins on the model; this file decides presentation.
     a marcher two transitions in one move.
   - **Toasts.** "Split 8 marchers into Move 6" and "Merged Move 6 into Page 3", each with **Undo**,
     which runs the app's undo and closes on the next edit, undo or redo (UI-14's delete toast).
-  - **Growing past the page** (owner, 2026-10-16, V-290). A split move keeps its marchers' layer,
-    so the next page's move sits right against its end on the same layer. Resizing it (or any
-    move) grows over a page's own moves anyway: its rows go one layer above them, it overrides
-    them where it now runs, and the page's move catches up from its set by the page's end (as a
-    move made over the pages already did, E4). It still stops at other moves (V-121), and at a
-    page's moves when the marcher has another move above it inside this one, which raising it
-    would override.
+  - **Growing past the page** (owner, 2026-10-16, V-290). A split move is not a page's own move,
+    so it ranks above page moves (spec §6.2, L-1). Growing it (or any move) over a page's move
+    makes it win there, and the page's move catches up from its set by the page's end (R-5, as a
+    move made over the pages already did, E4). Until the layer-priority change derives layers
+    (L-6), the code gets there with an interim raise: the resize puts the grown rows one layer
+    above the page's moves they now overlap (`growOverLayers` in `timelineResize.ts`). For now
+    it still stops at other moves (V-121), and at a page's moves when the marcher has another
+    move above it inside this one, which the raise would override; §6.2 drops the stop at other
+    moves when it lands (ADR 0001, 2026-10-16 amendment).
   - **What still goes by range** (_lead default_, V-288, V-289). Resizing a move or moving a clip
     onto exactly another move's counts is still refused (UI-15, V-127): only Split makes a shared
     range. Deleting a page's own timeline (Delete page and its moves) leaves a split move as the
