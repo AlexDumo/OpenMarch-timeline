@@ -35,6 +35,47 @@ under `apps/desktop/` unless they start with `packages/` or `docs/`.
   about 1.5, and the Durable Object about 1.5–2, plus presence, claims and the remaining paths. The
   solo path changes only by gaining a dormant trigger and an ID helper.
 
+## Decisions from the review (2026-10-17)
+
+The project owner settled these after reading the first version of this report. They override
+anything below that disagrees, which is marked _superseded_.
+
+- **Cloud shows, like Figma.** A collaborative show has no `.dots` file. It is opened by link or
+  from "Shared shows", and its working copy is hidden in the app's data folder. Downloading is an
+  export. The original local file keeps its session id and offers "Open the live version?".
+  Non-collaborative shows are unchanged.
+- **Who:** an OpenMarch account is required. There are edit links and view-only links, and anyone
+  with an edit link can edit. Sessions run whether or not the owner is online.
+- **Head drill writer = owner.** The owner manages links, removes people, transfers ownership,
+  archives or deletes the show, and restores versions. They have no extra editing powers.
+- **Anyone can edit time.** Timeline rows will refer to `beats.id` (its own project, shipped solo
+  first); only ops that add or remove beat rows take turns (a beats-version check).
+- **No claims in v1.** Presence plus conflict feedback instead.
+- **Ops are row changes** captured by triggers; undo is per user.
+- **Only timeline-model files** can be made collaborative. It ships on desktop and the web editor
+  together. Audio and Library files go to R2. Sessions are sized for about 10 people at once.
+- **Version history:** automatic snapshots (hourly while editing, plus daily) and named versions;
+  an owner-only restore arrives as an ordinary edit. Offline, a cloud show opens read-only from its
+  last synced copy.
+- **Accounts and limits:** collaborative shows are account-gated, with a per-account limit the
+  server enforces; pricing is decided separately. Before a show is deleted, collaborators get a
+  notice and a chance to download a copy; an owner must transfer ownership before deleting their
+  account.
+- **Acceptance bar:**
+  - A peer's edit shows up in under 250 ms.
+  - Local edits are as fast as solo.
+  - No silent overwrite and no silent loss.
+  - Undo never touches others' work.
+  - Presence is always visible.
+  - Solo is unchanged, by measurement.
+- **Go/no-go spike first.** It runs 1–2 weeks in the real app, from fork `main` only, syncing
+  marchers and timeline moves between two windows. It stops if it needs per-feature sync code
+  beyond registering tables, or touches more than a handful of files outside `db-functions` and the
+  sync module.
+- **Isolation.** No feature freeze, and collaboration work never changes another PR. What
+  in-progress work needs is recorded in [MIGRATIONS.md](MIGRATIONS.md) and migrated after it lands.
+  The rules are [GUARDRAILS.md](GUARDRAILS.md), as documentation only until the spike.
+
 ## 2. How data flows today
 
 | Kind of state       | Where it lives                                                                                                                                                                                                                                                                                                                                                                              | Source of truth        |
@@ -284,8 +325,8 @@ clients derive positions themselves.
    (`withTimelinePageRipple`). An op computed on the old grid would land 4 beats off.
    - **v1:** every client tracks a `gridVersion`, bumped by any op that touches `beats`, `pages`
      or `measures`. Ops that write beat columns carry their `gridVersion`; a stale one is rejected,
-     and the client retries on the new grid with a toast. Structural edits are rare; the prototype
-     makes them head-writer only and exempt from claims.
+     and the client retries on the new grid with a toast. _Superseded: anyone edits time, and with
+     beat ids only ops that add or remove beat rows need the check._
    - **Later:** store timeline edges as `beats.id` (as `pages`, `measures` and `cues` already do),
      so ordinals become derived and the ripple disappears for beat inserts. That is an ADR 0001
      change, and the resolver keeps integer beats through a map at the host.
@@ -344,19 +385,7 @@ clients derive positions themselves.
   up with ops after its last `seq` (or a snapshot).
 - Audio, artwork and Library blobs go to R2 by content hash. Only metadata rows sync.
 
-**Open questions for you:**
-
-1. Do structural edits (beats, pages, tempo, inserting time) need to be head-writer only in v1? It
-   would remove most `gridVersion` rejections.
-2. Should claims be by **section**, by **marcher set**, or by **time range** (for example "I own
-   counts 1–64")? Time-range claims fit the timeline model and partitioned choreography well.
-3. Does a session file stay linked to the local file ("save back"), or does leaving a session
-   always produce a new copy?
-4. Should the migration of timeline edges to `beats.id` happen before collaboration ships? It is
-   the single change that most reduces risk.
-5. Who may join a session: anyone with the link (as in the prototypes), or only signed-in people
-   the head drill writer invites? The app already has an account system (`src/auth`), so roles
-   could hang off it.
+**Open questions:** all answered in the review; see "Decisions from the review" above.
 
 ## 8. Prototypes
 
