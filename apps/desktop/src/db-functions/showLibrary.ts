@@ -11,7 +11,8 @@
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { schema } from "@/global/database/db";
+// The schema module itself, not the renderer's database: the main process prunes on close
+import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
 import {
     DerivedFromSchema,
