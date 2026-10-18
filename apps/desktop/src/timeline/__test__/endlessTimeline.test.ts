@@ -4,7 +4,6 @@ import type Measure from "@/global/classes/Measure";
 import { createCountGrid } from "../countGrid";
 import {
     beatsThrough,
-    endlessBeatOfId,
     endlessIdOf,
     measuresThrough,
     metronomeBeats,
@@ -50,8 +49,8 @@ describe("endless counts on the timeline", () => {
             duration: 0.5,
         });
         expect(drawn[13]!.timestamp).toBe(6);
-        expect(endlessBeatOfId(drawn[12]!.id)).toBe(12);
-        expect(endlessBeatOfId(beats[3]!.id)).toBeNull();
+        expect(drawn[12]!.id).toBe(endlessIdOf(12));
+        expect(drawn[12]!.id).toBeLessThan(-1);
         expect(new Set(drawn.map((b) => b.position)).size).toBe(14);
     });
 
