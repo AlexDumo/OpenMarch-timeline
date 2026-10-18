@@ -27,6 +27,7 @@ import {
     startShapeGesture,
 } from "../frame/gestures";
 import {
+    withFiles,
     acrossIsDeep,
     flipBox,
     onField,
@@ -419,7 +420,7 @@ describe("the decisions of 2026-10-17", () => {
         expect(onField(t, 8).acrossKey).toBe("deep");
     });
 
-    it("a resize keeps the center; with variant B a new count keeps the size", () => {
+    it("a resize keeps the center", () => {
         const b = box4x2();
         for (const out of [
             withSpacing(b, "across", 2, 8, env()),
@@ -432,16 +433,6 @@ describe("the decisions of 2026-10-17", () => {
                 half / 2,
             );
         }
-        // B: 4 across at 10 apart is 30 wide; 2 across refits to 30 apart, 4 deep to 10/3 → 5 apart
-        const fit = withFieldCount(
-            b,
-            8,
-            "across",
-            2,
-            env({ countKeepsSize: true }),
-        );
-        expect(fit.across).toBe(30);
-        expect(fit.deep).toBe(5);
     });
 
     it("a flip keeps the angle when the mirrored box looks the same, and + always changes the count", () => {
@@ -498,5 +489,21 @@ describe("the decisions of 2026-10-17", () => {
                 ctx,
             ).kept,
         ).toBe(false);
+    });
+
+    it("on a turned box, + goes one wider on the field: the frame turns a quarter back first", () => {
+        // 2 across, 4 deep, turned a quarter: 4 across on the field
+        const narrow = withFiles(box4x2(), 8, 2, env());
+        const t = turnBy(narrow, 8, 90, "c", env());
+        expect(onField(t, 8).across).toBe(4);
+        for (const want of [5, 6, 7]) {
+            const out = withFieldCount(t, 8, "across", want, env());
+            expect(onField(out, 8).across).toBe(want);
+            // The same spacing side to side, on the box's own across now
+            expect(onField(out, 8).acrossSpacing).toBe(
+                onField(t, 8).acrossSpacing,
+            );
+        }
+        expect(withFieldCount(t, 8, "across", 4, env())).toBe(t);
     });
 });

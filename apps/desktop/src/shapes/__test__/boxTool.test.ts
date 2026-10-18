@@ -231,14 +231,6 @@ describe("editing a box", () => {
         expect(Math.abs(out.center.y - box.center.y)).toBeLessThanOrEqual(
             half / 2,
         );
-        // Variant B keeps the size instead: the edge marchers stay about where they were
-        const kept = changeFiles(box, 16, 1, env({ countKeepsSize: true }));
-        expect(filesOf(kept)).toBe(5);
-        const was = footprintOf(box, 16);
-        const now = footprintOf(kept, 16);
-        expect(
-            Math.abs(now.right - now.left - (was.right - was.left)),
-        ).toBeLessThanOrEqual(2 * half);
         expect(changeFiles(box, 16, -99, env()).files).toBe(1);
         expect(changeFiles(box, 16, 99, env()).files).toBe(16);
     });

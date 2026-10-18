@@ -11,7 +11,12 @@ import {
 } from "../box/boxGeometry";
 import { turnShape, flipShape } from "../frame/gestures";
 import { boxTool } from "../box/boxTool";
-import { DEGREE, rotationDegrees, type PivotKey } from "../frame/frame";
+import {
+    DEGREE,
+    normalizeAngle,
+    rotationDegrees,
+    type PivotKey,
+} from "../frame/frame";
 
 import type { ToolEnv } from "../tool/toolKind";
 import {
@@ -92,10 +97,36 @@ export function withFieldCount(
     count: number,
     env: ToolEnv,
 ): BoxParams {
-    const ownFiles = (axis === "across") !== acrossIsDeep(p.rotation);
+    const swapped = acrossIsDeep(p.rotation);
+    if (axis === "across" && swapped) {
+        // Side to side on the field is the box's own deep, where only some counts fit (8 in 5
+        // ranks is still 2 across, so + jumped from 4 to 8: sims, F3). Turn the box's frame a
+        // quarter back first, so its own across runs side to side again: the same grid, the same
+        // look, its angle a quarter less.
+        if (count === onField(p, spots).across) return p;
+        return withFiles(reoriented(p, spots), spots, count, env);
+    }
+    const ownFiles = (axis === "across") !== swapped;
     return ownFiles
         ? withFiles(p, spots, count, env)
         : withRanks(p, spots, count, env);
+}
+
+/**
+ * The same grid of spots described a quarter turn the other way: its ranks become its files and
+ * its two spacings swap. A short rank moves to the new back; who goes where is worked out again by
+ * the count change that follows.
+ */
+export function reoriented(p: BoxParams, spots: number): BoxParams {
+    return {
+        ...p,
+        rotation: normalizeAngle(p.rotation - Math.PI / 2),
+        files: ranksOf(p, spots),
+        across: p.deep,
+        deep: p.across,
+        flipX: undefined,
+        flipY: undefined,
+    };
 }
 
 /**

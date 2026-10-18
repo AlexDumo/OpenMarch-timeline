@@ -405,32 +405,6 @@ test("change: the rotation is a number in ⋯ you type, and Tab goes from number
     await expect.poll(() => readout(page)).toBe("3 × 3 · 2 × 3 steps");
 });
 
-test("change: with the keep-size study variant, + keeps the box's width and refits the spacing", async ({
-    show,
-}) => {
-    const { page } = show;
-    await page.evaluate(() =>
-        localStorage.setItem("openmarch.boxCountResize", "keep-size"),
-    );
-    await drawBox(show);
-    const width = async () => {
-        const xs = (await shapeOverlay(page))!.spots.map((p) => p.x);
-        return Math.max(...xs) - Math.min(...xs);
-    };
-    const before = await width();
-    const spacing = await page.getByTestId("shape-editor-across").innerText();
-    await page.getByRole("button", { name: "One more across" }).click();
-    await expect.poll(() => readout(page)).toMatch(/^5 × 2 · /);
-    const { pixelsPerStep } = await fieldGrid(show);
-    // As near as half steps allow
-    expect(Math.abs((await width()) - before)).toBeLessThanOrEqual(
-        2 * pixelsPerStep,
-    );
-    await expect(page.getByTestId("shape-editor-across")).not.toHaveText(
-        spacing,
-    );
-});
-
 test("Enter places the marchers on the spots as one undo step, and Escape cancels", async ({
     show,
 }) => {

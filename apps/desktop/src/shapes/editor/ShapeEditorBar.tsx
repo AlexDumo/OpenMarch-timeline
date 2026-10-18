@@ -142,8 +142,9 @@ function ShapeEditorBar({
     return (
         <div
             ref={place.ref}
-            className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex -translate-x-1/2 flex-col gap-4 border px-6 py-4 whitespace-nowrap"
+            className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex flex-col gap-4 border px-6 py-4 whitespace-nowrap"
             style={place.style}
+            {...place.hold}
             data-testid={testId}
             data-shape-editor
             data-placement={place.above ? "above" : "below"}
@@ -420,7 +421,8 @@ function ShapeEditorBar({
                                 className="text-text/60 text-xs"
                                 data-testid="shape-editor-order-kept"
                             >
-                                Kept from your turn or flip · pick one to redo
+                                Everyone kept their spot through your turn or
+                                flip · pick one to work it out again
                             </span>
                         )}
                     </span>
@@ -432,24 +434,39 @@ function ShapeEditorBar({
 
 /**
  * Where the editor sits: under the shape's outline, centered, and above it when there's no room
- * below in the field. Follows the field as it pans and zooms.
+ * below in the field, kept inside the field side to side. Follows the field as it pans and zooms,
+ * but holds still while the pointer is on it, so a button doesn't slide away between two clicks
+ * as the numbers change (sims, F3: 5 of 8 clicked the wrong thing).
  */
 function usePlacement(params: BoxParams, spots: number) {
     const view = useFieldViewStore();
     const ref = useRef<HTMLDivElement>(null);
-    const [room, setRoom] = useState({ height: 0, field: Infinity });
+    const [room, setRoom] = useState({
+        width: 0,
+        height: 0,
+        fieldWidth: Infinity,
+        fieldHeight: Infinity,
+    });
+    const [held, setHeld] = useState<{ left: number; top: number } | null>(
+        null,
+    );
     const b = boxBounds(params, spots);
     const bottom = fieldToElement(view, (b.left + b.right) / 2, b.bottom);
     const top = fieldToElement(view, (b.left + b.right) / 2, b.top);
     // The outline's spots have a radius and the handles stick out: clear them
     const pad = GAP_PX + 6;
-    // Its own height (the ⋯ row opens) and the field's, as they change
+    // Its own size (the ⋯ row opens) and the field's, as they change
     useLayoutEffect(() => {
         const el = ref.current;
         const field = el?.offsetParent;
         if (!el || !field) return;
         const measure = () =>
-            setRoom({ height: el.offsetHeight, field: field.clientHeight });
+            setRoom({
+                width: el.offsetWidth,
+                height: el.offsetHeight,
+                fieldWidth: field.clientWidth,
+                fieldHeight: field.clientHeight,
+            });
         measure();
         const observer = new ResizeObserver(measure);
         observer.observe(el);
@@ -457,14 +474,29 @@ function usePlacement(params: BoxParams, spots: number) {
         return () => observer.disconnect();
     }, []);
     const above =
-        bottom.y + pad + room.height > room.field &&
+        bottom.y + pad + room.height > room.fieldHeight &&
         top.y - pad - room.height > 0;
+    const anchor = above ? top : bottom;
+    const margin = 4;
+    const left = Math.max(
+        margin,
+        Math.min(
+            anchor.x - room.width / 2,
+            room.fieldWidth - room.width - margin,
+        ),
+    );
+    const at = held ?? {
+        left,
+        top: above ? top.y - pad - room.height : bottom.y + pad,
+    };
     return {
         ref,
         above,
-        style: above
-            ? { left: top.x, top: top.y - pad - room.height }
-            : { left: bottom.x, top: bottom.y + pad },
+        style: at,
+        hold: {
+            onPointerEnter: () => setHeld(at),
+            onPointerLeave: () => setHeld(null),
+        },
     };
 }
 

@@ -373,9 +373,16 @@ and flipping to 2.5, all from the back-left pivot):
   side still reads 90°, not 270°. A box at 30° really tilts the other way and reads 330°.
 - The inspector's summary and the placed box's label follow the field like the bar, and their
   − and + make the box wider on the field.
-- **A/B in progress: what a new count does.** A (default): the box keeps its spacing and grows
-  around its center. B: the box keeps its size and the spacing refits, on half steps. Picked by
-  `localStorage["openmarch.boxCountResize"] = "keep-size"` for the study; the owner decides.
+- **What a new count does (A/B, decided):** the box keeps its spacing and grows or shrinks
+  around its center. Keeping its size and refitting the spacing lost clearly with the simulated
+  users (`~/ux-sim/shapes/f3/SUMMARY.md`: 1.0 against 2.75 on "the count did what I expected";
+  everyone's typed spacing broke).
+- **On a turned box, "one more across" really is one more across the field.** A box can only
+  have as many ranks as its count allows (8 in 5 ranks is still 2 across), so + used to jump from
+  4 to 8. The box's frame now turns a quarter back first, so its own across runs side to side:
+  the same grid, the same look, but its angle reads a quarter less (owner, 2026-10-18).
+- **The floating editor holds still while the pointer is on it**, and stays inside the field, so
+  a button doesn't slide away between two clicks.
 
 ## Open questions for the owner
 

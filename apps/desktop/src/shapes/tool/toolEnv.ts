@@ -2,7 +2,6 @@ import { getRoundCoordinates2 } from "@/utilities/CoordinateActions";
 import type { ShapeField } from "../field/shapeField";
 import { useShapeEditorStore } from "../frame/shapeEditorStore";
 import { DEFAULT_PIVOT } from "../frame/frame";
-import { countKeepsSize } from "../frame/countResizeVariant";
 import { isBasicMode } from "@/stores/EditorModeStore";
 import type { ToolEnv } from "./toolKind";
 
@@ -38,6 +37,5 @@ export function toolEnvFor(
         // Basic has no pivot grid: it always uses the default
         pivot: isBasicMode() ? DEFAULT_PIVOT : editor.pivot,
         ratioLocked: editor.ratioLocked,
-        countKeepsSize: countKeepsSize(),
     };
 }

@@ -472,10 +472,9 @@ export function changeFiles(
 }
 
 /**
- * The box with `files` across (clamped to 1 to `n`). By default it keeps its spacing and grows
- * from the pivot. With `env.countKeepsSize` it keeps its size instead: the same distance from
- * edge marcher to edge marcher each way, as near as half steps allow, around its center, so the
- * marchers redistribute inside it.
+ * The box with `files` across (clamped to 1 to `n`): it keeps its spacing and grows or shrinks
+ * around the pivot. (Keeping its size and refitting the spacing instead lost an A/B with the
+ * simulated users on 2026-10-18: everyone's typed spacing broke.)
  */
 export function resizeFiles(
     p: BoxParams,
@@ -483,32 +482,14 @@ export function resizeFiles(
     files: number,
     env: ToolEnv,
 ): BoxParams {
-    const count = Math.max(1, n);
-    const clamped = Math.min(count, Math.max(1, Math.round(files)));
+    const clamped = Math.min(Math.max(1, n), Math.max(1, Math.round(files)));
     if (clamped === filesOf(p)) return p;
-    if (!env.countKeepsSize)
-        return grownFromPivot(p, { ...p, files: clamped }, n, env);
-    const was = boxFrame(p, n);
-    const ranks = Math.ceil(count / clamped);
-    // A single file or rank has no width or depth to keep: it keeps its spacing for later
-    const across =
-        clamped > 1 && was.halfWidth > 0
-            ? snapInterval((2 * was.halfWidth) / (clamped - 1), env)
-            : p.across;
-    const deep =
-        ranks > 1 && was.halfDepth > 0
-            ? snapInterval((2 * was.halfDepth) / (ranks - 1), env)
-            : p.deep;
-    return grownFromPivot(p, { ...p, files: clamped, across, deep }, n, {
-        ...env,
-        pivot: "c",
-    });
+    return grownFromPivot(p, { ...p, files: clamped }, n, env);
 }
 
 /**
  * `after`, a resize of `before` (a new count or spacing), moved so the pivot stays where it was:
- * by default the back-left corner, so a box stays where it was drawn and grows right and toward
- * the front (owner, 2026-10-17). Then back on the grid.
+ * by default the center (2026-10-18). Then back on the grid.
  */
 export function grownFromPivot(
     before: BoxParams,
