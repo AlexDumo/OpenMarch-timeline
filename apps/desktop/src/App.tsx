@@ -42,7 +42,10 @@ import {
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { createAllUndoTriggers, resetTimelineChangeLog } from "./db-functions";
 import { db } from "./global/database/db";
-import { historyKeys } from "./hooks/queries/useHistory";
+import {
+    historyKeys,
+    refreshAfterStoredCounts,
+} from "./hooks/queries/useHistory";
 import tolgee from "./global/singletons/Tolgee";
 import { InContextTools } from "@tolgee/web/tools";
 import clsx from "clsx";
@@ -196,6 +199,8 @@ function App() {
             });
         return () => unsubscribe();
     }, [databaseIsReady]);
+
+    useEffect(() => refreshAfterStoredCounts(queryClient), [databaseIsReady]);
 
     useEffect(() => {
         void window.electron
