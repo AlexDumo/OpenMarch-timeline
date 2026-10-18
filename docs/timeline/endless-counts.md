@@ -237,7 +237,9 @@ Right-clicking the pill opens a small menu: "+ Create pages every N counts to th
 music runs on, EC-10), then "New pages [16] counts" with the number selected. A whole number
 (1–999) is saved on Enter or when the menu closes (a click outside it included), never when focus
 moves within the menu, so hovering its action mid-typing keeps the box; Escape cancels; anything
-else is ignored.
+else is ignored. The action follows the box: while a whole number is typed it reads "Create pages
+every 12 counts to the end" and makes pages of 12, and picking it saves 12 as well (the menu
+closes); with anything else typed it reads and makes the saved N.
 It writes the file's "Default new page counts" workspace setting, so it isn't an undo step; pages
 already made keep their length. The pill's tooltip says it can be right-clicked. V-304.
 

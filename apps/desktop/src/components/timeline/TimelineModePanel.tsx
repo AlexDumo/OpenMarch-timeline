@@ -749,11 +749,16 @@ function useAppendCountsControls({
         ...(musicEndBeat !== null && musicEndBeat - lastFlag > counts
             ? {
                   toEnd: {
-                      label: t("timeline.appendCounts.pagesToEnd", { counts }),
-                      title: t("timeline.appendCounts.pagesToEndTitle", {
-                          counts,
-                      }),
-                      onAppend: () => addPagesToEnd(musicEndBeat),
+                      label: (shown: number) =>
+                          t("timeline.appendCounts.pagesToEnd", {
+                              counts: shown,
+                          }),
+                      title: (shown: number) =>
+                          t("timeline.appendCounts.pagesToEndTitle", {
+                              counts: shown,
+                          }),
+                      onAppend: (shown: number) =>
+                          addPagesToEnd(musicEndBeat, shown),
                   },
               }
             : {}),

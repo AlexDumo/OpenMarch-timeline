@@ -68,11 +68,12 @@ export const appendPagesToEndMutationOptions = (
  * Pages every "new page counts" counts after the last page, up to a beat (EC-10): the timeline's
  * "Create pages every N counts to the end" and the export tabs' "moves past the end" warning.
  * `counts` is the file's "Default new page counts" setting; `addPagesToEnd(untilBeat)` is one
- * undoable edit, and says how many pages it added in a toast.
+ * undoable edit (pages of `counts`, or of the length given), and says how many pages it added in
+ * a toast.
  */
 export function usePagesToEnd(): {
     readonly counts: number;
-    readonly addPagesToEnd: (untilBeat: number) => void;
+    readonly addPagesToEnd: (untilBeat: number, pageCounts?: number) => void;
     readonly isPending: boolean;
 } {
     const { t } = useTolgee();
@@ -90,7 +91,8 @@ export function usePagesToEnd(): {
     );
     return {
         counts,
-        addPagesToEnd: (untilBeat) => mutate({ counts, untilBeat }),
+        addPagesToEnd: (untilBeat, pageCounts = counts) =>
+            mutate({ counts: pageCounts, untilBeat }),
         isPending,
     };
 }

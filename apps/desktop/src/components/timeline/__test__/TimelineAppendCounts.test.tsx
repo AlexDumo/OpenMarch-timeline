@@ -134,8 +134,9 @@ describe("+ N counts after the last page", () => {
                 counts: 16,
                 onCountsChange: vi.fn(),
                 toEnd: {
-                    label: "Create pages every 16 counts to the end",
-                    title: "Add pages every 16 counts to the end of the music",
+                    label: (n) => `Create pages every ${n} counts to the end`,
+                    title: (n) =>
+                        `Add pages every ${n} counts to the end of the music`,
                     onAppend: onPages,
                 },
             },
@@ -236,8 +237,9 @@ describe("changing how many counts + N counts adds", () => {
                 counts: 16,
                 onCountsChange,
                 toEnd: {
-                    label: "Create pages every 16 counts to the end",
-                    title: "Add pages every 16 counts to the end of the music",
+                    label: (n) => `Create pages every ${n} counts to the end`,
+                    title: (n) =>
+                        `Add pages every ${n} counts to the end of the music`,
                     onAppend: vi.fn(),
                 },
             },
@@ -267,6 +269,77 @@ describe("changing how many counts + N counts adds", () => {
         fireEvent.submit(field.closest("form")!);
         expect(onCountsChange).toHaveBeenCalledTimes(1);
         expect(onCountsChange).toHaveBeenCalledWith(12);
+    });
+
+    it("the to-the-end action follows the typed number, makes pages of it and saves it", () => {
+        const onCountsChange = vi.fn();
+        const onPages = vi.fn();
+        show({
+            appendCounts: {
+                ...appendCounts(),
+                counts: 16,
+                onCountsChange,
+                toEnd: {
+                    label: (n) => `Create pages every ${n} counts to the end`,
+                    title: (n) =>
+                        `Add pages every ${n} counts to the end of the music`,
+                    onAppend: onPages,
+                },
+            },
+        });
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        const field = screen.getByRole("textbox", {
+            name: "Counts for new pages",
+        });
+        // Not a whole number: it reads the saved length
+        fireEvent.change(field, { target: { value: "" } });
+        expect(
+            screen.getByRole("menuitem", {
+                name: "Create pages every 16 counts to the end",
+            }),
+        ).toBeTruthy();
+        fireEvent.change(field, { target: { value: "12" } });
+        const action = screen.getByRole("menuitem", {
+            name: "Create pages every 12 counts to the end",
+        });
+        expect(action.getAttribute("title")).toBe(
+            "Add pages every 12 counts to the end of the music",
+        );
+        fireEvent.click(action);
+        expect(onPages).toHaveBeenCalledWith(12);
+        expect(onCountsChange).toHaveBeenCalledTimes(1);
+        expect(onCountsChange).toHaveBeenCalledWith(12);
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
+    });
+
+    it("with nothing usable typed, the to-the-end action makes the saved length and saves nothing", () => {
+        const onCountsChange = vi.fn();
+        const onPages = vi.fn();
+        show({
+            appendCounts: {
+                ...appendCounts(),
+                counts: 16,
+                onCountsChange,
+                toEnd: {
+                    label: (n) => `Create pages every ${n} counts to the end`,
+                    title: (n) =>
+                        `Add pages every ${n} counts to the end of the music`,
+                    onAppend: onPages,
+                },
+            },
+        });
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        fireEvent.change(
+            screen.getByRole("textbox", { name: "Counts for new pages" }),
+            { target: { value: "0" } },
+        );
+        fireEvent.click(
+            screen.getByRole("menuitem", {
+                name: "Create pages every 16 counts to the end",
+            }),
+        );
+        expect(onPages).toHaveBeenCalledWith(16);
+        expect(onCountsChange).not.toHaveBeenCalled();
     });
 
     it("saves what was typed when the menu closes another way", async () => {

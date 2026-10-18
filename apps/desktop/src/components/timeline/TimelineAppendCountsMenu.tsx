@@ -27,7 +27,9 @@ export const parsePageCounts = (text: string): number | null => {
  * The right-click menu on **+ N counts**: how many counts a new page gets, the file's "Default new
  * page counts" setting (the same as in Workspace settings), typed, saved on Enter or when the menu
  * closes, the box losing focus to outside it included (Escape cancels, EC-16); and, when the music
- * runs on past the last page, pages every N counts to its end (EC-10).
+ * runs on past the last page, pages every N counts to its end (EC-10). That action follows the box:
+ * it reads and makes pages of the number typed there while it is a whole number (else the saved
+ * one), and picking it saves that number too, as the menu closes.
  * Focus moving inside the menu never saves: a half-typed "1" on the way to "12" stays unsaved.
  * Opens where the pill was right-clicked.
  */
@@ -44,9 +46,9 @@ export function TimelineAppendCountsMenu({
     onCountsChange: (counts: number) => void;
     /** "Create pages every 16 counts to the end", when the music runs on past the last page */
     toEnd?: {
-        readonly label: string;
-        readonly title: string;
-        readonly onAppend: () => void;
+        readonly label: (counts: number) => string;
+        readonly title: (counts: number) => string;
+        readonly onAppend: (counts: number) => void;
     };
     onClose: () => void;
 }) {
@@ -62,6 +64,8 @@ export function TimelineAppendCountsMenu({
         return () => cancelAnimationFrame(frame);
     }, []);
     const parsed = parsePageCounts(typed);
+    // What the to-the-end action reads and makes: the typed number, else the saved one
+    const shown = parsed ?? counts;
     // Set by Escape, which closes without keeping what was typed
     const cancelled = useRef(false);
     // Every way the menu closes goes through here, once: it saves a whole number unless cancelled
@@ -109,14 +113,14 @@ export function TimelineAppendCountsMenu({
                         <>
                             <DropdownMenu.Item
                                 data-testid="timeline-pages-to-end"
-                                title={toEnd.title}
+                                title={toEnd.title(shown)}
                                 className={ACTION_CLASS}
                                 onPointerMove={keepTyping}
                                 onPointerLeave={keepTyping}
-                                onSelect={toEnd.onAppend}
+                                onSelect={() => toEnd.onAppend(shown)}
                             >
                                 <PlusIcon size={12} weight="bold" />
-                                {toEnd.label}
+                                {toEnd.label(shown)}
                             </DropdownMenu.Item>
                             <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
                         </>
