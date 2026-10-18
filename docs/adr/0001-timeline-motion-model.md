@@ -227,8 +227,11 @@ merge it back. So the first rule above is relaxed:
   plus, for a peeled slot, an assignment and a one-slot transition with the slot's destination.
   Under the layer amendment below, a split move is not a page's move, so it ranks above page
   moves (spec §6.2, L-1). Where a marcher's split-off row also overlaps a move of theirs that
-  started earlier and isn't a page's, the derived ranking can then change who plays there; the
-  layer-priority change decides whether split and merge keep motion in that case.
+  started earlier and isn't a page's, the derived ranking can then change who plays there. The
+  project owner accepted that (2026-10-18): a split move ranks like any other move, and the split
+  toast names the marchers whose motion changes and from which count. Once pages carry the stored
+  mark, deleting a page's move leaves a split move over its counts a move (a clip), and the page
+  has no move of its own until marchers are added to it (owner, 2026-10-18).
 
 The interaction is UI-25 in `docs/timeline/ui.md`.
 

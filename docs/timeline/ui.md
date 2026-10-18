@@ -1202,14 +1202,17 @@ from it. The spec still wins on the model; this file decides presentation.
   - **No motion changes** (owner). Each chosen marcher's transition moves to the new timeline as it
     is: destination and path, and a kept marker with it, as one undoable edit
     (`splitMarchersIntoNewMove`). Who plays follows spec §6.2: a split move is not a page's own move,
-    so it ranks above page moves, and against other moves by its start and end like any move. Until
-    the layer-priority change lands, the split keeps each row's stored layer. A converted page's
-    shared transition (one slot per marcher, P9.10) is split slot by slot: each leaving marcher gets
-    its own one-slot transition with its slot's destination and the same path, and the old one is
-    compacted, so no slot is left vacant. A transition into a shape, a follow-the-leader one, or one
-    whose marchers are in an inheriting follow-the-leader order can't be split apart; the split is
-    refused naming the marchers who move together ("…move into one shape together with … Select them
-    all, or none of them"), and selecting them all moves that whole transition.
+    so it ranks above page moves, and against other moves by its start and end like any move. So a
+    split can change who plays where a split-off marcher also has an earlier-starting move running
+    into this range; the owner accepted that (2026-10-18), and the split toast will name those
+    marchers and the count their motion changes from. Until the layer-priority change lands, the split
+    keeps each row's stored layer. A converted page's shared transition (one slot per marcher, P9.10)
+    is split slot by slot: each leaving marcher gets its own one-slot transition with its slot's
+    destination and the same path, and the old one is compacted, so no slot is left vacant. A
+    transition into a shape, a follow-the-leader one, or one whose marchers are in an inheriting
+    follow-the-leader order can't be split apart; the split is refused naming the marchers who move
+    together ("…move into one shape together with … Select them all, or none of them"), and selecting
+    them all moves that whole transition.
   - **Drag out** (owner, option C, _experimental_: the owner wants to feel it). With marchers
     selected that are in a move, drag its clip down: a ghost clip under the pointer says "Split 8
     marchers", and releasing does the same split. The drag locks to an axis when it starts
@@ -1248,14 +1251,15 @@ from it. The spec still wins on the model; this file decides presentation.
     it still stops at other moves (V-121), and at a page's moves when the marcher has another
     move above it inside this one, which the raise would override; §6.2 drops the stop at other
     moves when it lands (ADR 0001, 2026-10-16 amendment).
-  - **What still goes by range** (_lead default_, V-288, V-289). Resizing a move or moving a clip
-    onto exactly another move's counts is still refused (UI-15, V-127): only Split makes a shared
-    range. Deleting a page's own timeline (Delete page and its moves) leaves a split move as the
-    oldest over the box, so the box stands for it from then on and its clip goes. An edit that
-    only empties the page's timeline (dragging its last marcher back, set to previous page) keeps
-    it, empty, while a move split off it shares its range (`oldestOnSharedRange`), so the split
-    move stays a clip. Some refusal
-    messages still name a split move by its range ("Page 2's move", `moveName`).
+  - **What still goes by range** (_lead default_, V-288, V-289). Resizing a move or moving a clip onto
+    exactly another move's counts is still refused (UI-15, V-127): only Split makes a shared range.
+    Deleting a page's own timeline (Delete page and its moves) leaves a split move as the oldest over
+    the box, so the box stands for it from then on and its clip goes. Once the stored page-move mark
+    lands this changes (owner, 2026-10-18): the split move stays a clip, and the page box has no move
+    until marchers are added to it. An edit that only empties the page's timeline (dragging its last
+    marcher back, set to previous page) keeps it, empty, while a move split off it shares its range
+    (`oldestOnSharedRange`), so the split move stays a clip. Some refusal messages still name a split
+    move by its range ("Page 2's move", `moveName`).
   - Open, for the owner: merging moves with different counts (whose counts win, or stretch); a
     drag-out from a page box; whether a split should leave the new move isolated or only selected;
     and Basic's writes over a page whose marchers were split (Basic writes the page's own
