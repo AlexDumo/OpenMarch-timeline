@@ -48,6 +48,20 @@ export function beatsThrough(
 }
 
 /**
+ * The counts the metronome clicks (EC-6): the stored ones and endless ones up to the stop point
+ * `stopBeat`, which is a count boundary. The count starting at the stop point is left out, so no
+ * click lands where playing on stops; with only stored counts it is the stored beats, as before
+ * endless counts.
+ */
+export function metronomeBeats(
+    grid: CountGrid,
+    beats: readonly Beat[],
+    stopBeat: number,
+): readonly Beat[] {
+    return beatsThrough(grid, beats, stopBeat);
+}
+
+/**
  * The stored measures and, after them, the endless measures that start before `drawn` ends (the
  * output of `beatsThrough`), numbered on from the last stored measure. The same array when none
  * starts past the stored counts.

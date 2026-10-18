@@ -18,7 +18,7 @@ import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { beatsThrough, measuresThrough } from "@/timeline/endlessTimeline";
+import { measuresThrough, metronomeBeats } from "@/timeline/endlessTimeline";
 import { usePlaybackStopBeat } from "@/timeline/usePlaybackStopBeat";
 import AudioOffsetWorker from "@/workers/audioOffset.worker.ts?worker";
 import {
@@ -157,10 +157,10 @@ export default function AudioPlayer() {
         pages,
         countGrid,
     } = useTimingObjects();
-    // The metronome counts on past the stored counts, up to where playing on stops (endless counts)
+    // The metronome counts on past the stored counts, up to where playing on stops (EC-6)
     const stopBeat = usePlaybackStopBeat();
     const beats = useMemo(
-        () => beatsThrough(countGrid, storedBeats, stopBeat + 1).slice(),
+        () => metronomeBeats(countGrid, storedBeats, stopBeat).slice(),
         [countGrid, storedBeats, stopBeat],
     );
     const measures = useMemo(
