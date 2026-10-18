@@ -184,6 +184,24 @@ describe("horns as their own meshes", () => {
         set.dispose();
     });
 
+    it("draws every marcher solid: the 3D View never fades Following marchers", async () => {
+        // The editor's field fades marchers with no coordinate of their own
+        // on the count (#300); the 3D View shows the performance (#302)
+        const { set } = await trumpetAndDrumMajor("high");
+        const meshes = set.group.children.filter(
+            (o) =>
+                o.name.startsWith("view3d-marchers-") ||
+                o.name.startsWith("view3d-horn-"),
+        ) as THREE.InstancedMesh[];
+        expect(meshes.length).toBeGreaterThan(0);
+        for (const mesh of meshes) {
+            const material = mesh.material as THREE.Material;
+            expect(material.transparent).toBe(false);
+            expect(material.opacity).toBe(1);
+        }
+        set.dispose();
+    });
+
     it("keeps the body mesh free of horn triangles", async () => {
         const { set } = await trumpetAndDrumMajor("high");
         const bodiesMeshes = set.group.children.filter((o) =>

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { FieldDimming } from "../fieldDimming";
 import {
     FieldFollowing,
+    FOLLOWING_EASE_MS,
     FOLLOWING_OPACITY,
+    type FadeClock,
     drawnFollowing,
     marcherOpacity,
 } from "../fieldFollowing";
@@ -31,6 +33,82 @@ describe("FieldFollowing", () => {
         following.set(new Set([2, 1]));
         expect(listener).toHaveBeenCalledTimes(1);
         expect(following.version).toBe(version);
+    });
+});
+
+/** A clock the test steps by hand: frames run only when `frame` is called. */
+function manualClock() {
+    let now = 0;
+    let pending: (() => void) | null = null;
+    const clock: FadeClock = {
+        now: () => now,
+        requestFrame: (callback) => {
+            pending = callback;
+            return 1;
+        },
+        cancelFrame: () => {
+            pending = null;
+        },
+    };
+    return {
+        clock,
+        /** Moves time on by `ms` and runs the frame asked for, if any. */
+        frame(ms: number) {
+            now += ms;
+            const run = pending;
+            pending = null;
+            run?.();
+        },
+        get waiting() {
+            return pending !== null;
+        },
+    };
+}
+
+describe("easing into the fade on Stop", () => {
+    it("ends faded, and stops asking for frames once it gets there", () => {
+        const time = manualClock();
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing(time.clock);
+        following.set(new Set([1]), { ease: true });
+        // Who's Following is known straight away: selecting doesn't wait
+        expect(following.isFollowing(1)).toBe(true);
+        for (let t = 0; t < FOLLOWING_EASE_MS; t += 16) time.frame(16);
+        time.frame(16);
+        expect(marcherOpacity(dimming, following, 1)).toBe(FOLLOWING_OPACITY);
+        expect(time.waiting).toBe(false);
+    });
+
+    it("redraws the layers on each frame of the ease", () => {
+        const time = manualClock();
+        const following = new FieldFollowing(time.clock);
+        const listener = vi.fn();
+        following.subscribe(listener);
+        following.set(new Set([1]), { ease: true });
+        const version = following.version;
+        time.frame(16);
+        expect(following.version).toBeGreaterThan(version);
+        expect(listener.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    it("goes solid at once when playback starts again mid-ease", () => {
+        const time = manualClock();
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing(time.clock);
+        following.set(new Set([1]), { ease: true });
+        time.frame(16);
+        following.set(null);
+        expect(marcherOpacity(dimming, following, 1)).toBe(1);
+        expect(time.waiting).toBe(false);
+    });
+
+    it("fades straight away without an ease", () => {
+        const time = manualClock();
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing(time.clock);
+        following.set(new Set([1]));
+        expect(marcherOpacity(dimming, following, 1)).toBe(FOLLOWING_OPACITY);
+        expect(time.waiting).toBe(false);
     });
 });
 

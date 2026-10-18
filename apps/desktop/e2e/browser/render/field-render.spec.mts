@@ -279,30 +279,63 @@ test.describe("following-fade", () => {
                 ),
             )
             .toEqual([false, true]);
-        await settle(page);
-        await page.waitForTimeout(300);
-        const png = await field(page).screenshot();
-        await saveCapture(page, "following-fade", png, ["following-fade"]);
-
-        const box = (await field(page).boundingBox())!;
-        const centers = await page.evaluate(() =>
-            window.fieldTest!.marchers().map((m) => m.screen),
-        );
-        const contrasts = await dotContrasts(
+        const [set, following] = await capturedContrasts(
             page,
-            png,
-            centers.map((c) => ({
-                x: (c.x - box.x) * (png.readUInt32BE(16) / box.width),
-                y: (c.y - box.y) * (png.readUInt32BE(20) / box.height),
-            })),
+            "following-fade",
         );
-        const [set, following] = contrasts as [number, number];
         expect(set).toBeGreaterThan(40);
         // About half as strong: 0.5 opacity over the field
         expect(following).toBeGreaterThan(set * 0.3);
         expect(following).toBeLessThan(set * 0.7);
+
+        // #302: Stop eases the fade back in, ending at the same look
+        await page.keyboard.press("Space");
+        await expect
+            .poll(() =>
+                page.evaluate(() =>
+                    window.fieldTest!.marchers().map((m) => m.following),
+                ),
+            )
+            .toEqual([false, false]);
+        await page.keyboard.press("Space");
+        await expect
+            .poll(() =>
+                page.evaluate(() =>
+                    window.fieldTest!.marchers().map((m) => m.following),
+                ),
+            )
+            .toEqual([false, true]);
+        const [setAfter, followingAfter] = await capturedContrasts(
+            page,
+            "following-fade-after-stop",
+        );
+        expect(Math.abs(setAfter - set)).toBeLessThan(8);
+        expect(Math.abs(followingAfter - following)).toBeLessThan(8);
     });
 });
+
+/**
+ * Captures the settled field (well past the fade's ease) as `name`, and reads
+ * each marcher's dot contrast in it, in the field test API's order.
+ */
+async function capturedContrasts(page: Page, name: string) {
+    await settle(page);
+    await page.waitForTimeout(300);
+    const png = await field(page).screenshot();
+    await saveCapture(page, name, png, ["following-fade"]);
+    const box = (await field(page).boundingBox())!;
+    const centers = await page.evaluate(() =>
+        window.fieldTest!.marchers().map((m) => m.screen),
+    );
+    return dotContrasts(
+        page,
+        png,
+        centers.map((c) => ({
+            x: (c.x - box.x) * (png.readUInt32BE(16) / box.width),
+            y: (c.y - box.y) * (png.readUInt32BE(20) / box.height),
+        })),
+    ) as Promise<[number, number]>;
+}
 
 /**
  * How far each dot's center is from the field just above it (clear of the dot
