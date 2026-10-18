@@ -6,7 +6,13 @@ type Three = typeof import("three");
 export const PALETTE_SLOTS: string[];
 export const STYLES: Record<
     string,
-    { id: number; label: string; about: string }
+    {
+        id: number;
+        label: string;
+        about: string;
+        /** Options this style changes from `DEFAULT_OPTIONS`. */
+        defaults?: Record<string, unknown>;
+    }
 >;
 export const DEFAULT_OPTIONS: Record<string, unknown>;
 export const INSTRUMENTS: string[];
