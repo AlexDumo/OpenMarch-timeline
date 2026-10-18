@@ -60,8 +60,7 @@ import {
 import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
-import { useLabeledHoldMarks } from "./PageHoldMark";
-import { useTimelineHoldMarks } from "@/timeline/usePageHoldMarks";
+import { useSelectionKeyframes } from "@/timeline/useSelectionKeyframes";
 import {
     useKeepToggle,
     useMarcherNameOf,
@@ -204,14 +203,12 @@ export default function TimelineModePanel() {
             ),
         [selectedIdsKey],
     );
-    // UI-18: where the selected marchers hold, on the page boxes
     const selectedIdList = useMemo(
         () => [...selectedMarcherIds],
         [selectedMarcherIds],
     );
-    const holdMarks = useLabeledHoldMarks(
-        useTimelineHoldMarks(pages, selectedIdList),
-    );
+    // #303: where the selected marchers are Set, as keyframes on the timeline
+    const keyframes = useSelectionKeyframes(selectedIdList);
     // UI-18 keep later pages: the chains on the page boxes, and the page box menu's entries
     // (named up to three; K's target says so, from the current page)
     const keepStates = usePageKeepStates(pages, selectedIdList);
@@ -417,7 +414,7 @@ export default function TimelineModePanel() {
                     transportAccessories={basic ? SPEED_BUTTON : LOOP_BUTTONS}
                     transportSecondary={SOUND_BUTTON}
                     transportViewControls={basic ? undefined : COMPACT_BUTTON}
-                    holdMarks={holdMarks}
+                    keyframes={keyframes}
                     keepChains={keepChains}
                     keepHere={keepHere}
                     onSelectionChange={changeSelection}

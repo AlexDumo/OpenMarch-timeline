@@ -1986,22 +1986,6 @@
             "transitionSpansTimeline": "A transition must span its whole timeline, starting and ending with it. Change the timeline's range instead, and its transitions move with it.",
             "unknown": "The timeline couldn't make that change."
         },
-        "holdMarks": {
-            "holds": "Selected marchers hold from Page {page}",
-            "holdsFromStart": "Selected marchers hold from the start",
-            "holdsFromStartHint": "They stand where they started",
-            "holdsHere": "Selected marchers hold on this page",
-            "holdsHereHint": "They stand where their last move left them",
-            "holdsHint": "They stand where Page {page} left them",
-            "kept": "Selected marchers are kept here",
-            "keptHint": "They stay here when earlier pages change",
-            "mixed": "Some selected marchers hold from Page {page}",
-            "mixedFromStart": "Some selected marchers hold from the start",
-            "mixedHere": "Some selected marchers hold on this page",
-            "mixedHint": "Some have their own move here",
-            "moves": "Selected marchers move on this page",
-            "movesHint": "They have their own move here"
-        },
         "keep": {
             "chain": {
                 "ariaLabel": "Page {page}: {label}. {hint}",
@@ -2047,6 +2031,10 @@
                 "three": "{first}, {second} and {third}",
                 "two": "{first} and {second}"
             }
+        },
+        "keyframes": {
+            "label": "Page {page}, count {count}: {set} of {total} selected marchers Set",
+            "labelOne": "Page {page}, count {count}: Set"
         },
         "label": "Timeline",
         "masterVolume": "Master Volume",

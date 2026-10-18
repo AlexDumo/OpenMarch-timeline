@@ -29,6 +29,10 @@ Terms used throughout:
   dragging one on the count makes it Set. Playback draws everyone solid, and isolation's dim wins
   over the Following look (#300, #301). Say "Set" and "Following" (e.g. "Following Page 2") in the
   UI, not "pinned", "locked", "kept" or "edited".
+- With marchers selected, the timeline shows a **keyframe diamond** at every count after the first
+  page where a selected marcher is Set: filled where all of them are Set, hollow where only some
+  are. A click moves the playhead there. They replaced the hold marks and their tooltip (sections 1
+  and 2, kept below as history) in both modes (#303).
 
 About the screenshots: most were taken during the build, before the 2026-10-09 rebase onto #115
 (transport keys). Since then the tooltips are #115's `ShortcutTooltip`, and they may look slightly
@@ -48,6 +52,8 @@ which build it shows.
 9. [What this PR removed or renamed](#9-what-this-pr-removed-or-renamed)
 
 ## 1. Hold marks on the page boxes
+
+_Replaced by the keyframe diamonds (#303); kept as a record of what shipped before._
 
 ![Hold marks: diamonds under pages 1 and 2, solid bars along pages 3 and 4](images/04-hold-marks-page-boxes.png)
 
@@ -74,6 +80,8 @@ _TL, page 2 selected, all eight marchers selected (as of wp10). The marchers mov
 - V-146.
 
 ## 2. The hold-mark tooltip
+
+_Replaced by the keyframe diamonds (#303); kept as a record of what shipped before._
 
 ![Tooltip over page 3's bar: "Selected marchers hold from Page 2 / They stand where Page 2 left them"](images/05-hold-mark-tooltip.png)
 
