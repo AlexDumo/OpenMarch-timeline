@@ -10,6 +10,8 @@
  * of their first beat. Times are in seconds.
  */
 
+import type { CountGrid } from "./countGrid";
+
 /** The seconds per count when a show has no timed count to continue (120 BPM) */
 export const FALLBACK_BEAT_DURATION = 0.5;
 
@@ -112,6 +114,20 @@ export function musicEndSeconds(
     for (let i = envelope.peaks.length - 1; i >= 0; i--)
         if (envelope.peaks[i]! > quietest) return (i + 1) / envelope.rate;
     return null;
+}
+
+/**
+ * The music's end (`musicEndSeconds`) as a count: the first whole count at or after it, as a spec
+ * beat. A hair of float error past a count line doesn't make it the next count. 0 with no counts.
+ * Where playback stops, how far the waveform lane draws, and where pages to the end go up to.
+ */
+export function musicEndBeat(
+    grid: Pick<CountGrid, "storedCount" | "beatAtTime">,
+    seconds: number,
+): number {
+    return grid.storedCount > 0
+        ? Math.ceil(grid.beatAtTime(seconds) - 1e-6)
+        : 0;
 }
 
 /**

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     continuedCounts,
     countContinuation,
+    musicEndBeat,
     musicEndSeconds,
     pageFlagsToEnd,
 } from "../countsPastEnd";
@@ -109,6 +110,30 @@ describe("where the music ends", () => {
         expect(musicEndSeconds(envelope(1, 0.5, 1e-3, 1e-3), 42)).toBe(0.2);
         expect(musicEndSeconds(envelope(0, 0), 42)).toBeNull();
         expect(musicEndSeconds(envelope(), 42)).toBeNull();
+    });
+});
+
+describe("musicEndBeat", () => {
+    // Half-second counts: `seconds` is at beat `seconds * 2`
+    const grid = {
+        storedCount: 9,
+        beatAtTime: (seconds: number) => seconds * 2,
+    };
+
+    it("is the first whole count at or after the music's end", () => {
+        expect(musicEndBeat(grid, 16)).toBe(32);
+        expect(musicEndBeat(grid, 16.1)).toBe(33);
+        expect(musicEndBeat(grid, 15.9)).toBe(32);
+    });
+
+    it("doesn't round a hair of float error up to the next count", () => {
+        expect(musicEndBeat(grid, 16 + 1e-9)).toBe(32);
+    });
+
+    it("is 0 with no counts", () => {
+        expect(musicEndBeat({ storedCount: 0, beatAtTime: () => 0 }, 12)).toBe(
+            0,
+        );
     });
 });
 

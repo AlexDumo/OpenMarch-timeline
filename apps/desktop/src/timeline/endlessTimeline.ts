@@ -9,6 +9,7 @@
 import type Beat from "@/global/classes/Beat";
 import type Measure from "@/global/classes/Measure";
 import type { CountGrid } from "./countGrid";
+import { musicEndBeat } from "./countsPastEnd";
 
 /** Endless ids are this minus the spec beat, far below any stored id or `tempBeat`'s -1 */
 const ENDLESS_ID_BASE = -1_000_000;
@@ -101,9 +102,7 @@ export function playbackStopBeat({
     lastMoveEndBeat: number;
 }): number {
     const musicBeat =
-        musicEndSeconds !== null && grid.storedCount > 0
-            ? Math.ceil(grid.beatAtTime(musicEndSeconds) - 1e-6)
-            : 0;
+        musicEndSeconds !== null ? musicEndBeat(grid, musicEndSeconds) : 0;
     return Math.max(showEndBeat, musicBeat, lastMoveEndBeat);
 }
 

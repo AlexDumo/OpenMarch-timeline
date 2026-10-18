@@ -1,4 +1,12 @@
-import { mutationOptions, QueryClient } from "@tanstack/react-query";
+import {
+    mutationOptions,
+    QueryClient,
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from "@tanstack/react-query";
+import { useTolgee } from "@tolgee/react";
+import { toast } from "sonner";
 import { db } from "@/global/database/db";
 import {
     appendPageOfCounts,
@@ -6,8 +14,10 @@ import {
 } from "@/db-functions/appendPages";
 import type { AddedPageFlag } from "@/db-functions/pageFlags";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { defaultWorkspaceSettings } from "@/settings/workspaceSettings";
 import { invalidatePageQueries } from "./usePages";
 import { measureKeys } from "./useMeasures";
+import { workspaceSettingsQueryOptions } from "./useWorkspaceSettings";
 
 /**
  * Pages after the last one (endless counts): **+ N counts** after the last page, and pages
@@ -53,3 +63,34 @@ export const appendPagesToEndMutationOptions = (
         },
         onError: (e) => toastTimelineError(e),
     });
+
+/**
+ * Pages every "new page counts" counts after the last page, up to a beat (EC-10): the timeline's
+ * "Create pages every N counts to the end" and the export tabs' "moves past the end" warning.
+ * `counts` is the file's "Default new page counts" setting; `addPagesToEnd(untilBeat)` is one
+ * undoable edit, and says how many pages it added in a toast.
+ */
+export function usePagesToEnd(): {
+    readonly counts: number;
+    readonly addPagesToEnd: (untilBeat: number) => void;
+    readonly isPending: boolean;
+} {
+    const { t } = useTolgee();
+    const queryClient = useQueryClient();
+    const counts =
+        useQuery(workspaceSettingsQueryOptions()).data?.defaultNewPageCounts ??
+        defaultWorkspaceSettings.defaultNewPageCounts;
+    const { mutate, isPending } = useMutation(
+        appendPagesToEndMutationOptions(queryClient, (added) => {
+            if (added > 0)
+                toast.success(
+                    t("timeline.appendCounts.pagesAdded", { pages: added }),
+                );
+        }),
+    );
+    return {
+        counts,
+        addPagesToEnd: (untilBeat) => mutate({ counts, untilBeat }),
+        isPending,
+    };
+}

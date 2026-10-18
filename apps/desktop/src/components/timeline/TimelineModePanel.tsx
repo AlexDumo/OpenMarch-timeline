@@ -38,9 +38,10 @@ import {
 } from "@/hooks/queries/useWorkspaceSettings";
 import {
     appendPageOfCountsMutationOptions,
-    appendPagesToEndMutationOptions,
+    usePagesToEnd,
 } from "@/hooks/queries/useAppendPages";
 import { pageEndBeat } from "@/timeline/pageEndBeat";
+import { musicEndBeat } from "@/timeline/countsPastEnd";
 import { AudioClock } from "./Clock";
 import {
     TimelineCompactButton,
@@ -195,7 +196,7 @@ export default function TimelineModePanel() {
     const waveform = useMemo(() => {
         if (!envelope || waveformHidden) return null;
         const through =
-            musicEnd === null ? 0 : Math.ceil(countGrid.beatAtTime(musicEnd));
+            musicEnd === null ? 0 : musicEndBeat(countGrid, musicEnd);
         const peaks = peaksByBeat(
             envelope,
             beatsThrough(countGrid, beats, through),
@@ -364,9 +365,7 @@ export default function TimelineModePanel() {
     const appendCounts = useAppendCountsControls({
         lastFlag: showEndBeat,
         musicEndBeat:
-            musicEnd === null
-                ? null
-                : Math.ceil(countGrid.beatAtTime(musicEnd) - 1e-6),
+            musicEnd === null ? null : musicEndBeat(countGrid, musicEnd),
         hidden: isPlaying || holding,
     });
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
@@ -724,20 +723,12 @@ function useAppendCountsControls({
     const { t } = useTolgee();
     const queryClient = useQueryClient();
     const { data: settings } = useQuery(workspaceSettingsQueryOptions());
-    const counts = settings?.defaultNewPageCounts ?? 16;
+    const { counts, addPagesToEnd } = usePagesToEnd();
     const { mutate: updateSettings } = useMutation(
         updateWorkspaceSettingsMutationOptions(queryClient),
     );
     const { mutate: appendPage } = useMutation(
         appendPageOfCountsMutationOptions(queryClient, selectAddedPage),
-    );
-    const { mutate: pagesToEnd } = useMutation(
-        appendPagesToEndMutationOptions(queryClient, (added) => {
-            if (added > 0)
-                toast.success(
-                    t("timeline.appendCounts.pagesAdded", { pages: added }),
-                );
-        }),
     );
     if (hidden) return undefined;
     return {
@@ -762,8 +753,7 @@ function useAppendCountsControls({
                       title: t("timeline.appendCounts.pagesToEndTitle", {
                           counts,
                       }),
-                      onAppend: () =>
-                          pagesToEnd({ counts, untilBeat: musicEndBeat }),
+                      onAppend: () => addPagesToEnd(musicEndBeat),
                   },
               }
             : {}),
