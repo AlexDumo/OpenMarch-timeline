@@ -19,6 +19,13 @@ export const FALLBACK_BEAT_DURATION = 0.5;
 export interface CountContinuation {
     /** Whether the show has measures, so appended counts get measure lines */
     readonly measured: boolean;
+    /**
+     * How many counts the pattern repeats over: the meter with measures, else 1. Count `k` is as
+     * long as count `k + period`, and with measures a period starts on a downbeat.
+     */
+    readonly period: number;
+    /** Which count of a period the first appended count is (0 when it starts a measure) */
+    readonly phase: number;
     /** The duration in seconds of the `k`th appended count (from 0) */
     durationAt(k: number): number;
     /** Whether the `k`th appended count (from 0) starts a measure */
@@ -63,6 +70,8 @@ export function countContinuation({
     if (starts.length === 0)
         return {
             measured: false,
+            period: 1,
+            phase: 0,
             durationAt: () => lastDuration,
             isDownbeat: () => false,
         };
@@ -80,6 +89,8 @@ export function countContinuation({
     const phase = lastMeasureCounts < meter ? lastMeasureCounts : 0;
     return {
         measured: true,
+        period: meter,
+        phase,
         durationAt: (k) => pattern[(phase + k) % meter]!,
         isDownbeat: (k) => (phase + k) % meter === 0,
     };

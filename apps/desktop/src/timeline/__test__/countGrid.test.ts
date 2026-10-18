@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import { createCountGrid } from "../countGrid";
+import { continuedCounts, countContinuation } from "../countsPastEnd";
 import { beatAtTime, timeAtBeat } from "../timeMap";
 import { calculateTimestamps } from "@/global/classes/Beat";
 
@@ -184,6 +185,37 @@ describe("createCountGrid", () => {
         expect(grid.isDownbeat(6)).toBe(false);
         expect(grid.isDownbeat(7)).toBe(true);
         expect(grid.isDownbeat(10)).toBe(true);
+    });
+
+    it("agrees with the stored continuation when the last meter is longer than 4096 counts", () => {
+        // A 5000-count measure of uneven counts, then a last measure three counts long
+        const meter = 5000;
+        const durations = [
+            ...Array.from({ length: meter }, (_, i) => 0.4 + (i % 7) * 0.05),
+            0.5,
+            0.5,
+            0.5,
+        ];
+        const beats = showOf(durations);
+        const measureStarts = [1, 1 + meter];
+        const grid = createCountGrid({ beats, measureStarts });
+        const appended = continuedCounts(
+            countContinuation({ beats, measureStarts }),
+            2 * meter + 10,
+        );
+        let seconds = grid.storedEndSeconds;
+        appended.forEach(({ duration, downbeat }, k) => {
+            const beat = beats.length + k;
+            if (!close(grid.timeAtBeat(beat), seconds))
+                expect(grid.timeAtBeat(beat)).toBeCloseTo(seconds, 6);
+            if (grid.durationAt(beat) !== duration)
+                expect(grid.durationAt(beat)).toBe(duration);
+            if (grid.isDownbeat(beat) !== downbeat)
+                expect(grid.isDownbeat(beat)).toBe(downbeat);
+            if (k % 997 === 0)
+                expect(grid.beatAtTime(seconds)).toBeCloseTo(beat, 6);
+            seconds += duration;
+        });
     });
 
     it("answers far past the end without walking there", () => {
