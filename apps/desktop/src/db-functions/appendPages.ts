@@ -1,4 +1,5 @@
 import { pageFlagsToEnd } from "@/timeline/countsPastEnd";
+import { ensureCountsInTransaction } from "./endlessCounts";
 import { addPageFlagInTransaction, type AddedPageFlag } from "./pageFlags";
 import { readPageGrid } from "./timelineRipple";
 import { refuse } from "./timelineErrors";
@@ -63,8 +64,8 @@ export async function appendPageOfCounts({
  * **Pages every N counts to the end of the music** (EC-10), inside a `transactionWithHistory`: a
  * flag every `counts` counts after the last page's flag up to `untilBeat` (the first whole count at
  * or after the music's end), with a shorter last page for the rest (`pageFlagsToEnd`). Each flag
- * is added as **+** adds one, storing the counts up to it. Returns the pages added (0 when the
- * last flag is already there).
+ * is added as **+** adds one, after the counts up to the last flag are stored in one append.
+ * Returns the pages added (0 when the last flag is already there).
  */
 export async function appendPagesToEndInTransaction({
     tx,
@@ -82,6 +83,10 @@ export async function appendPagesToEndInTransaction({
         Math.floor(untilBeat),
         counts,
     );
+    // The counts up to the last flag in one append, so each flag finds its counts stored
+    const lastFlag = flags[flags.length - 1];
+    if (lastFlag !== undefined)
+        await ensureCountsInTransaction({ tx, through: lastFlag });
     for (const beat of flags) await addPageFlagInTransaction({ tx, beat });
     return flags.length;
 }

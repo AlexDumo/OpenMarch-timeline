@@ -1,4 +1,4 @@
-import { asc } from "drizzle-orm";
+import { asc, count } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import {
     continuedCounts,
@@ -163,9 +163,8 @@ export async function ensureCountsInTransaction({
 }): Promise<number> {
     if (!Number.isFinite(through))
         refuse(`can't store counts up to beat ${through}`);
-    const beatCount = (
-        await tx.select({ id: schema.beats.id }).from(schema.beats).all()
-    ).length;
+    const beatCount =
+        (await tx.select({ n: count() }).from(schema.beats).get())?.n ?? 0;
     const need = Math.ceil(through);
     if (need <= beatCount) return beatCount;
     if (need - beatCount > MAX_COUNTS_PER_EDIT)
