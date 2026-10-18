@@ -11,7 +11,8 @@ import {
 } from "three";
 import type { FieldTheme } from "@openmarch/core";
 import type { FieldMarchers } from "../fieldMarchers";
-import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
+import type { FieldDimming } from "../fieldDimming";
+import { marcherOpacity, type FieldFollowing } from "../fieldFollowing";
 import { useFieldDraw } from "../fieldDrawContext";
 import { writeMarcherLooks } from "../marcherLooks";
 import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
@@ -113,11 +114,13 @@ void main() {
     float ringA = vSelected * uRing.a
         * (smoothstep(uRingInner - aa, uRingInner + aa, d)
             - smoothstep(uRingOuter - aa, uRingOuter + aa, d));
+    // A dimmed (#201) or Following (#300) marcher's dot fades; its ring stays full strength
+    dotA *= vOpacity;
+    dotRgb *= vOpacity;
     float a = dotA + ringA * (1.0 - dotA);
-    if (a * vOpacity < 0.004) discard;
+    if (a < 0.004) discard;
     vec3 rgb = dotRgb + uRing.rgb * ringA * (1.0 - dotA);
-    // A dimmed marcher (#201) fades as a whole
-    gl_FragColor = vec4(rgb / a, a * vOpacity);
+    gl_FragColor = vec4(rgb / a, a);
 }`;
 
 type Drawn = {
@@ -125,6 +128,7 @@ type Drawn = {
     idsVersion: number;
     appearanceVersion: number;
     dimVersion: number;
+    followingVersion: number;
     selectionVersion: number;
     theme: FieldTheme | null;
 };
@@ -133,11 +137,14 @@ type Drawn = {
 export default function MarchersLayer({
     marchers,
     dimming,
+    following,
     theme,
 }: {
     marchers: FieldMarchers;
     /** Marchers drawn dimmed (#201). */
     dimming: FieldDimming;
+    /** Marchers drawn faded as Following (#300); dimming wins. */
+    following: FieldFollowing;
     theme: FieldTheme;
 }) {
     const invalidate = useThree((s) => s.invalidate);
@@ -147,6 +154,7 @@ export default function MarchersLayer({
         idsVersion: -1,
         appearanceVersion: -1,
         dimVersion: -1,
+        followingVersion: -1,
         selectionVersion: -1,
         theme: null,
     });
@@ -189,6 +197,7 @@ export default function MarchersLayer({
     useEffect(() => invalidate(), [theme, invalidate]);
     // New dimming redraws them on the next frame
     useEffect(() => dimming.subscribe(invalidate), [dimming, invalidate]);
+    useEffect(() => following.subscribe(invalidate), [following, invalidate]);
 
     useEffect(
         () => () => {
@@ -215,7 +224,10 @@ export default function MarchersLayer({
             resized ||
             marchers.appearanceVersion !== last.appearanceVersion ||
             theme !== last.theme;
-        const dimChanged = resized || dimming.version !== last.dimVersion;
+        const dimChanged =
+            resized ||
+            dimming.version !== last.dimVersion ||
+            following.version !== last.followingVersion;
         const reselected =
             resized || marchers.selectionVersion !== last.selectionVersion;
         if (
@@ -266,7 +278,7 @@ export default function MarchersLayer({
             const opacity = instanced("aOpacity");
             const array = opacity.array as Float32Array;
             marchers.ids.forEach((id, i) => {
-                array[i] = dimming.isDimmed(id) ? DIMMED_OPACITY : 1;
+                array[i] = marcherOpacity(dimming, following, id);
             });
             opacity.needsUpdate = true;
         }
@@ -283,6 +295,7 @@ export default function MarchersLayer({
             idsVersion: marchers.idsVersion,
             appearanceVersion: marchers.appearanceVersion,
             dimVersion: dimming.version,
+            followingVersion: following.version,
             selectionVersion: marchers.selectionVersion,
             theme,
         };

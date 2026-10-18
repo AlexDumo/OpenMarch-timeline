@@ -75,6 +75,7 @@ import MarchersLayer from "./layers/MarchersLayer";
 import LabelsLayer from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
 import { useTimelineVisuals } from "./useTimelineVisuals";
+import { drawnFollowing } from "./fieldFollowing";
 import {
     KeptMarksOverlay,
     KeptMarksPlacer,
@@ -257,7 +258,7 @@ function ThreeFieldView() {
         marcherIds,
         fieldProperties,
     });
-    const { dimming } = timeline;
+    const { dimming, following } = timeline;
     const keptMarks = useFieldKeptMarks({
         enabled: timeline.ready,
         isPlaying,
@@ -406,10 +407,11 @@ function ThreeFieldView() {
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
                 dimmed: (id) => dimming.isDimmed(id),
+                following: (id) => drawnFollowing(dimming, following, id),
             }),
         );
         return () => installFieldTestApi(undefined);
-    }, [marchers, editor, dimming]);
+    }, [marchers, editor, dimming, following]);
 
     // Navigation (#194): wheel, pan drags and touch anywhere on the field
     useEffect(() => {
@@ -538,11 +540,13 @@ function ThreeFieldView() {
                         <MarchersLayer
                             marchers={marchers}
                             dimming={dimming}
+                            following={following}
                             theme={fieldProperties.theme}
                         />
                         <LabelsLayer
                             marchers={marchers}
                             dimming={dimming}
+                            following={following}
                             labels={labels}
                             theme={fieldProperties.theme}
                             atlas={atlases.label}

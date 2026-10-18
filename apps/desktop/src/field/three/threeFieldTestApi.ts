@@ -32,6 +32,8 @@ export type ThreeFieldState = {
     theme(): FieldTheme;
     /** Whether a marcher is drawn dimmed (#201). */
     dimmed(id: number): boolean;
+    /** Whether a marcher is drawn faded as Following (#300): never while dimmed or playing. */
+    following(id: number): boolean;
     /** The app's selection, as the editor reads it. */
     selection(): readonly number[];
     activeGesture(): FieldTestGesture | null;
@@ -74,6 +76,7 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                         screen.y < rect.bottom,
                     look: lookOf(stacks[i] ?? [], theme),
                     dimmed: field.dimmed(id),
+                    following: field.following(id),
                 };
             });
         },

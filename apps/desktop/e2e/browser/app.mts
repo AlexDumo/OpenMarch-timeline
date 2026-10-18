@@ -19,6 +19,8 @@ export type DrawnMarcher = {
     look: FieldTestLook;
     /** Drawn dimmed, outside the isolated move; it can't be selected. */
     dimmed: boolean;
+    /** Drawn faded: no coordinate of its own on the count shown (#300). */
+    following: boolean;
 };
 
 // Helpers read the field only through the field test API

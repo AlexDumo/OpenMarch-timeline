@@ -8,6 +8,7 @@ import {
 import { tsImport } from "tsx/esm/api";
 import { test, expect } from "../fixtures.mjs";
 import { field, OUT, saveCapture, settle } from "./compare.mjs";
+import { seedShowSql } from "../seed.mjs";
 
 /**
  * Render captures of the field itself (#200; see README.md here). Not a
@@ -233,3 +234,110 @@ for (const c of CASES) {
         });
     });
 }
+
+/**
+ * Set vs Following (#301): the one pixel check that a Following marcher is
+ * drawn faded next to a Set one (the field test API's `following` says what
+ * the field means to draw, not the pixels). Over page 1, T1 moves and T2
+ * stays where it began, so on page 1's flag T1 is Set and T2 is Following.
+ */
+test.describe("following-fade", () => {
+    test.use({
+        seedSql: seedShowSql({
+            beats: 16,
+            measureStarts: [1, 5, 9, 13],
+            pageStarts: [1],
+            marchers: [1, 2].map((id) => ({
+                id,
+                section: "Trumpet",
+                prefix: "T",
+                order: id,
+            })),
+            positions: [
+                [
+                    [1, 400, 300],
+                    [2, 480, 300],
+                ],
+                [
+                    [1, 400, 340],
+                    [2, 480, 300],
+                ],
+            ],
+        }),
+    });
+
+    test("a Following dot is fainter than a Set one", async ({ show }) => {
+        const { page } = show;
+        await page.waitForFunction(
+            () => window.fieldTest?.marchers().length === 2,
+        );
+        await page.keyboard.press("e");
+        await expect
+            .poll(() =>
+                page.evaluate(() =>
+                    window.fieldTest!.marchers().map((m) => m.following),
+                ),
+            )
+            .toEqual([false, true]);
+        await settle(page);
+        await page.waitForTimeout(300);
+        const png = await field(page).screenshot();
+        await saveCapture(page, "following-fade", png, ["following-fade"]);
+
+        const box = (await field(page).boundingBox())!;
+        const centers = await page.evaluate(() =>
+            window.fieldTest!.marchers().map((m) => m.screen),
+        );
+        const contrasts = await dotContrasts(
+            page,
+            png,
+            centers.map((c) => ({
+                x: (c.x - box.x) * (png.readUInt32BE(16) / box.width),
+                y: (c.y - box.y) * (png.readUInt32BE(20) / box.height),
+            })),
+        );
+        const [set, following] = contrasts as [number, number];
+        expect(set).toBeGreaterThan(40);
+        // About half as strong: 0.5 opacity over the field
+        expect(following).toBeGreaterThan(set * 0.3);
+        expect(following).toBeLessThan(set * 0.7);
+    });
+});
+
+/**
+ * How far each dot's center is from the field just above it (clear of the dot
+ * and its label), 0 to 255, in a field capture at device-pixel `points`.
+ */
+const dotContrasts = (
+    page: Page,
+    png: Buffer,
+    points: readonly { x: number; y: number }[],
+) =>
+    page.evaluate(
+        async ({ base64, points }) => {
+            const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+            const bitmap = await createImageBitmap(
+                new Blob([bytes], { type: "image/png" }),
+            );
+            const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+            const context = canvas.getContext("2d")!;
+            context.drawImage(bitmap, 0, 0);
+            const shade = (x: number, y: number) => {
+                const d = context.getImageData(
+                    Math.round(x),
+                    Math.round(y),
+                    1,
+                    1,
+                ).data;
+                return [d[0]!, d[1]!, d[2]!];
+            };
+            return points.map(({ x, y }) => {
+                const dot = shade(x, y);
+                const around = shade(x, y - 40);
+                return Math.max(
+                    ...dot.map((value, i) => Math.abs(value - around[i]!)),
+                );
+            });
+        },
+        { base64: png.toString("base64"), points },
+    );
