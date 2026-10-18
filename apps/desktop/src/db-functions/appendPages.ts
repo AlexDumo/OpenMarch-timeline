@@ -1,6 +1,4 @@
-import { schema } from "@/global/database/db";
 import { pageFlagsToEnd } from "@/timeline/countsPastEnd";
-import { FIRST_PAGE_ID } from "./page";
 import { addPageFlagInTransaction, type AddedPageFlag } from "./pageFlags";
 import { readPageGrid } from "./timelineRipple";
 import { refuse } from "./timelineErrors";
@@ -17,17 +15,14 @@ import type { DbConnection, DbTransaction } from "./types";
  * refused for the drill. Each is one undoable edit.
  */
 
-/** Where the last page's flag is, as an ordinal: past the show's last count where the show ends first */
+/**
+ * Where the last page's flag is drawn, as an ordinal: its end in the page grid, where a last page
+ * that runs past the stored counts ends at the last one (storing counts keeps it there,
+ * `appendCountsInTransaction`)
+ */
 async function lastFlagBeat(tx: DbTransaction): Promise<number> {
     const grid = await readPageGrid(tx);
-    const last = grid.pages[grid.pages.length - 1];
-    if (!last) return 1;
-    if (last.id === FIRST_PAGE_ID) return last.end;
-    const utility = await tx
-        .select({ lastPageCounts: schema.utility.last_page_counts })
-        .from(schema.utility)
-        .get();
-    return Math.max(last.end, last.start + (utility?.lastPageCounts ?? 0));
+    return grid.pages[grid.pages.length - 1]?.end ?? 1;
 }
 
 /**

@@ -12,6 +12,7 @@ import {
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { readPageGrid } from "../timelineRipple";
 import { ensureCountsInTransaction } from "../endlessCounts";
+import { appendPageOfCounts } from "../appendPages";
 import { addPageFlag, movePageFlag, pageFlagMoveLimits } from "../pageFlags";
 import { resizeTimeline } from "../timelineResize";
 import { shiftTimeline } from "../timelineCommands";
@@ -282,6 +283,77 @@ describeDbTests("writes past the last stored count", (it) => {
             await shiftTimeline({ db, timelineId: last.id, delta: 100 });
 
             expect(await beatCount(db)).toBe(last.end_beat + 100);
+            await roundTrip(db, before, await snapshot(db));
+        });
+    });
+
+    describe("a last page whose counts run past the stored ones", () => {
+        /**
+         * The last page (6, from beat 41) has `last_page_counts` 72 but the show stores counts
+         * only to beat 97, so it's drawn ending at 97 (`fromDatabasePages` clamps it), and its
+         * move ends there.
+         */
+        const setUpLongLastPage = async (db: DbConnection) => {
+            await db.update(schema.utility).set({ last_page_counts: 72 });
+            await setUp(db);
+            expect((await grid(db)).slice(-1)).toEqual([[6, 41, 97]]);
+        };
+
+        it("storing counts for a move keeps the last page as drawn, and moves nothing", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUpLongLastPage(db);
+            const [marcher] = await db.select().from(schema.marchers).all();
+            const timelinesBefore = await db
+                .select()
+                .from(schema.timelines)
+                .all();
+            const motionBefore = await positions(97);
+            const before = await snapshot(db);
+
+            await transactionWithHistory(db, "makeClip", async (tx) => {
+                await moveMarchersInRangeInTransaction({
+                    tx,
+                    range: { start: 120, end: 128 },
+                    moves: [{ marcherId: marcher!.id, x: 12, y: 34 }],
+                });
+            });
+
+            expect(await beatCount(db)).toBe(128);
+            // Its flag stays where it was drawn, and its length now says so
+            expect((await grid(db)).slice(-1)).toEqual([[6, 41, 97]]);
+            expect((await db.query.utility.findFirst())!.last_page_counts).toBe(
+                56,
+            );
+            // Every row that was there stays, the move ending on the last flag included
+            const timelinesAfter = await db
+                .select()
+                .from(schema.timelines)
+                .all();
+            for (const row of timelinesBefore)
+                expect(timelinesAfter).toContainEqual(row);
+            expect(await positions(97)).toEqual(motionBefore);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("+ N counts adds its page after the last flag as drawn", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUpLongLastPage(db);
+            const timelineBefore = await snapshot(db, TIMELINE_TABLES);
+            const before = await snapshot(db);
+
+            const added = await appendPageOfCounts({ db, counts: 16 });
+
+            expect([added.startBeat, added.endBeat]).toEqual([97, 113]);
+            expect((await grid(db)).slice(-2)).toEqual([
+                [6, 41, 97],
+                [added.page.id, 97, 113],
+            ]);
+            expect(await beatCount(db)).toBe(113);
+            expect(await snapshot(db, TIMELINE_TABLES)).toEqual(timelineBefore);
             await roundTrip(db, before, await snapshot(db));
         });
     });

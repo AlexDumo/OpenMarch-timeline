@@ -7,8 +7,12 @@ import {
 } from "@/timeline/countsPastEnd";
 import { createBeatsInTransaction } from "./beat";
 import { createMeasuresInTransaction } from "./measures";
-import { ensureSecondBeatHasPage } from "./page";
-import { withTimelinePageRipple } from "./timelineRipple";
+import {
+    ensureSecondBeatHasPage,
+    FIRST_PAGE_ID,
+    updateLastPageCounts,
+} from "./page";
+import { readPageGrid, withTimelinePageRipple } from "./timelineRipple";
 import { refuse } from "./timelineErrors";
 import type { DbTransaction } from "./types";
 
@@ -23,7 +27,28 @@ import type { DbTransaction } from "./types";
  * with them. The append runs inside `withTimelinePageRipple`, like every beat edit: timeline rows
  * hold plain count numbers, and counts appended after the last one move none of them, even moves
  * that run past the show's end.
+ *
+ * A last page whose `last_page_counts` runs past the stored counts is drawn ending at the last
+ * stored count (`fromDatabasePages`, `readPageGrid` clamp it there). Storing counts would let it
+ * grow into them, moving its flag and every row ending on it, so the append first shortens
+ * `last_page_counts` to the length the page is drawn with (`keepLastPageAsDrawn`).
  */
+
+/**
+ * Sets `last_page_counts` to the last page's drawn length where it runs past the stored counts, so
+ * appending counts leaves the last flag where it is drawn. Every reader then agrees on that flag.
+ */
+async function keepLastPageAsDrawn(tx: DbTransaction): Promise<void> {
+    const grid = await readPageGrid(tx);
+    const last = grid.pages[grid.pages.length - 1];
+    if (!last || last.id === FIRST_PAGE_ID) return;
+    const utility = await tx
+        .select({ lastPageCounts: schema.utility.last_page_counts })
+        .from(schema.utility)
+        .get();
+    if (!utility || last.start + utility.lastPageCounts <= last.end) return;
+    await updateLastPageCounts({ tx, lastPageCounts: last.end - last.start });
+}
 
 /** `countContinuation` for the show in `tx`, and its beat count (beat 0 included) */
 async function readContinuation(tx: DbTransaction): Promise<{
@@ -67,6 +92,7 @@ export async function appendCountsInTransaction({
     const { continuation, beatCount } = await readContinuation(tx);
     if (counts === 0) return beatCount;
     const appended = continuedCounts(continuation, counts);
+    await keepLastPageAsDrawn(tx);
     storedCounts = true;
     await withTimelinePageRipple(tx, async () => {
         const created = await createBeatsInTransaction({
