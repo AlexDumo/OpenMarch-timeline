@@ -11,7 +11,7 @@ import {
 } from "@/timeline/timelineStore";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { readPageGrid } from "../timelineRipple";
-import { ensureCountsInTransaction } from "../endlessCounts";
+import { ensureCountsInTransaction, takeStoredCounts } from "../endlessCounts";
 import { appendPageOfCounts } from "../appendPages";
 import { addPageFlag, movePageFlag, pageFlagMoveLimits } from "../pageFlags";
 import { resizeTimeline } from "../timelineResize";
@@ -355,6 +355,33 @@ describeDbTests("writes past the last stored count", (it) => {
             expect(await beatCount(db)).toBe(113);
             expect(await snapshot(db, TIMELINE_TABLES)).toEqual(timelineBefore);
             await roundTrip(db, before, await snapshot(db));
+        });
+    });
+
+    describe("the stored counts flag", () => {
+        it("is set only by an edit that commits", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            takeStoredCounts();
+            const refused = await transactionWithHistory(
+                db,
+                "test",
+                async (tx) => {
+                    await ensureCountsInTransaction({ tx, through: 120 });
+                    throw new Error("refused");
+                },
+            ).catch((error: unknown) => error);
+            expect(refused).toBeInstanceOf(Error);
+            expect(await beatCount(db)).toBe(97);
+            expect(takeStoredCounts()).toBe(false);
+
+            await transactionWithHistory(db, "test", (tx) =>
+                ensureCountsInTransaction({ tx, through: 120 }),
+            );
+            expect(takeStoredCounts()).toBe(true);
+            expect(takeStoredCounts()).toBe(false);
         });
     });
 });

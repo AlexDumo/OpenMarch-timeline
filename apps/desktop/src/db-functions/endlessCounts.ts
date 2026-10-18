@@ -12,6 +12,7 @@ import {
     FIRST_PAGE_ID,
     updateLastPageCounts,
 } from "./page";
+import { afterHistoryCommit } from "./history";
 import { readPageGrid, withTimelinePageRipple } from "./timelineRipple";
 import { refuse } from "./timelineErrors";
 import type { DbTransaction } from "./types";
@@ -93,7 +94,10 @@ export async function appendCountsInTransaction({
     if (counts === 0) return beatCount;
     const appended = continuedCounts(continuation, counts);
     await keepLastPageAsDrawn(tx);
-    storedCounts = true;
+    // Only once the edit commits: a refused one stores nothing
+    afterHistoryCommit(() => {
+        storedCounts = true;
+    });
     await withTimelinePageRipple(tx, async () => {
         const created = await createBeatsInTransaction({
             tx,
@@ -123,9 +127,10 @@ export async function appendCountsInTransaction({
 let storedCounts = false;
 
 /**
- * Whether an edit has stored counts since the last call (which clears it). Any write can store
- * counts now, a move or a measure line too, so the app refreshes the beats and measures after a
- * write that did (`refreshAfterStoredCounts`), whatever queries the write itself refreshes.
+ * Whether a committed edit has stored counts since the last call (which clears it); a refused one
+ * never counts (`afterHistoryCommit`). Any write can store counts now, a move or a measure line
+ * too, so the app refreshes the beats and measures after a write that did
+ * (`refreshAfterStoredCounts`), whatever queries the write itself refreshes.
  */
 export const takeStoredCounts = (): boolean => {
     const stored = storedCounts;
