@@ -2,7 +2,7 @@ import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { filesOf, ranksOf, shortBy } from "../box/boxGeometry";
+import { onField, shortBy } from "../box/boxGeometry";
 import { formatSteps } from "../editor/format";
 import type { PlacedBox } from "./placedBox";
 
@@ -20,12 +20,14 @@ export function useDrawnOnPage(box: PlacedBox | null): string | null {
  * the back rank never had; empty: holes members left)
  */
 export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
-    const across = formatSteps(box.params.across / stepPx);
-    const deep = formatSteps(box.params.deep / stepPx);
+    // As the field shows it, like the floating editor: across is side to side
+    const field = onField(box.params, box.spots);
+    const across = formatSteps(field.acrossSpacing / stepPx);
+    const deep = formatSteps(field.deepSpacing / stepPx);
     const empty = box.spots - box.recipe.members.length;
     const short = shortBy(box.params, box.spots);
     return [
-        `${filesOf(box.params)} × ${ranksOf(box.params, box.spots)}`,
+        `${field.across} × ${field.deep}`,
         `${across === deep ? across : `${across} × ${deep}`} steps`,
         ...(short > 0 ? [`${short} short`] : []),
         ...(empty > 0 ? [`${empty} empty`] : []),

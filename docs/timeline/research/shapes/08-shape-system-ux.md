@@ -361,6 +361,22 @@ scored best, surprises worst):
   ("Flip ↔", "Flip ↕"). On shapes too big to label every spot (over 24), the spot under the
   pointer shows who will stand there.
 
+## Decisions, 2026-10-18
+
+From the second round of simulated users (`~/ux-sim/shapes/f2/SUMMARY.md`: turning fell to 2.0
+and flipping to 2.5, all from the back-left pivot):
+
+- **The default pivot is the center again**, for turns, flips and resizes. Around the corner,
+  turns swung the box off screen, the knob turned less than it was pulled (its angle was taken
+  from the corner), and flips jumped the box a box-width sideways.
+- **A flip keeps the angle when the mirrored box looks the same**: a box at 90° mirrored side to
+  side still reads 90°, not 270°. A box at 30° really tilts the other way and reads 330°.
+- The inspector's summary and the placed box's label follow the field like the bar, and their
+  − and + make the box wider on the field.
+- **A/B in progress: what a new count does.** A (default): the box keeps its spacing and grows
+  around its center. B: the box keeps its size and the spacing refits, on half steps. Picked by
+  `localStorage["openmarch.boxCountResize"] = "keep-size"` for the study; the owner decides.
+
 ## Open questions for the owner
 
 Answered 2026-10-16 (see above): the ratio lock's rounding, the knob, where saved shapes live,

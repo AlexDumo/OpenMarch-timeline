@@ -261,10 +261,13 @@ test("change: the knob turns the box and ⋯ flips it, each marcher keeping thei
     const before = overlay.walks;
 
     // Drag the knob a quarter turn clockwise around the pivot: the box's
-    // back-left corner by default (owner, 2026-10-17)
+    // center by default
     const xs0 = before.map((w) => w.to.x);
     const ys0 = before.map((w) => w.to.y);
-    const pivot = { x: Math.min(...xs0), y: Math.min(...ys0) };
+    const pivot = {
+        x: (Math.min(...xs0) + Math.max(...xs0)) / 2,
+        y: (Math.min(...ys0) + Math.max(...ys0)) / 2,
+    };
     const pivotScreen = await toScreen(page, pivot);
     const knob = overlay.knob!;
     const v = { x: knob.x - pivotScreen.x, y: knob.y - pivotScreen.y };
@@ -292,12 +295,15 @@ test("change: the knob turns the box and ⋯ flips it, each marcher keeping thei
     // The numbers follow the field: 4 × 2 turned a quarter reads 2 × 4
     expect(await readout(page)).toMatch(/^2 × 4 · /);
 
-    // ⋯ → flip side to side: mirrored about the pivot's line, same marchers;
+    // ⋯ → flip side to side: mirrored about the center's line, same marchers;
     // neither order is lit after it
     const turned = overlay.walks;
+    // The quarter turn may have moved the center a little back onto the grid
+    const xs1 = turned.map((w) => w.to.x);
+    const turnedMid = (Math.min(...xs1) + Math.max(...xs1)) / 2;
     await page.getByTestId("shape-editor-more").click();
     await page.getByTestId("shape-editor-flip-across").click();
-    // Those on the pivot's line stay; everyone else crosses to the other side
+    // Those on the center's line stay; everyone else crosses to the other side
     await expect
         .poll(async () =>
             (await shapeOverlay(page))!.walks.some(
@@ -308,7 +314,7 @@ test("change: the knob turns the box and ⋯ flips it, each marcher keeping thei
     const flipped = (await shapeOverlay(page))!.walks;
     flipped.forEach((w, i) => {
         expect(
-            Math.abs(w.to.x - (2 * pivot.x - turned[i].to.x)),
+            Math.abs(w.to.x - (2 * turnedMid - turned[i].to.x)),
         ).toBeLessThanOrEqual(slack);
         expect(w.to.y).toBeCloseTo(turned[i].to.y, 3);
     });
@@ -397,6 +403,32 @@ test("change: the rotation is a number in ⋯ you type, and Tab goes from number
     await page.keyboard.type("3");
     await page.keyboard.press("Enter");
     await expect.poll(() => readout(page)).toBe("3 × 3 · 2 × 3 steps");
+});
+
+test("change: with the keep-size study variant, + keeps the box's width and refits the spacing", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.evaluate(() =>
+        localStorage.setItem("openmarch.boxCountResize", "keep-size"),
+    );
+    await drawBox(show);
+    const width = async () => {
+        const xs = (await shapeOverlay(page))!.spots.map((p) => p.x);
+        return Math.max(...xs) - Math.min(...xs);
+    };
+    const before = await width();
+    const spacing = await page.getByTestId("shape-editor-across").innerText();
+    await page.getByRole("button", { name: "One more across" }).click();
+    await expect.poll(() => readout(page)).toMatch(/^5 × 2 · /);
+    const { pixelsPerStep } = await fieldGrid(show);
+    // As near as half steps allow
+    expect(Math.abs((await width()) - before)).toBeLessThanOrEqual(
+        2 * pixelsPerStep,
+    );
+    await expect(page.getByTestId("shape-editor-across")).not.toHaveText(
+        spacing,
+    );
 });
 
 test("Enter places the marchers on the spots as one undo step, and Escape cancels", async ({

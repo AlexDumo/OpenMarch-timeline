@@ -419,23 +419,44 @@ describe("the decisions of 2026-10-17", () => {
         expect(onField(t, 8).acrossKey).toBe("deep");
     });
 
-    it("a resize keeps the back-left corner where it was", () => {
+    it("a resize keeps the center; with variant B a new count keeps the size", () => {
         const b = box4x2();
-        const before = boxFrame(b, 8);
         for (const out of [
             withSpacing(b, "across", 2, 8, env()),
-            withFieldCount(b, 8, "across", 3, env()),
+            withFieldCount(b, 8, "across", 2, env()),
         ]) {
-            const f = boxFrame(out, 8);
-            expect(f.center.x - f.halfWidth).toBeCloseTo(
-                before.center.x - before.halfWidth,
-                6,
+            expect(Math.abs(out.center.x - b.center.x)).toBeLessThanOrEqual(
+                half / 2,
             );
-            expect(f.center.y - f.halfDepth).toBeCloseTo(
-                before.center.y - before.halfDepth,
-                6,
+            expect(Math.abs(out.center.y - b.center.y)).toBeLessThanOrEqual(
+                half / 2,
             );
         }
+        // B: 4 across at 10 apart is 30 wide; 2 across refits to 30 apart, 4 deep to 10/3 → 5 apart
+        const fit = withFieldCount(
+            b,
+            8,
+            "across",
+            2,
+            env({ countKeepsSize: true }),
+        );
+        expect(fit.across).toBe(30);
+        expect(fit.deep).toBe(5);
+    });
+
+    it("a flip keeps the angle when the mirrored box looks the same, and + always changes the count", () => {
+        const t = turnBy(box4x2(), 8, 90, "c", env());
+        const f = flipBox(t, 8, "across", "c", env());
+        expect(rotationDegrees(f.rotation)).toBe(90);
+        // A box at 30° really tilts the other way
+        const t30 = turnBy(box4x2(), 8, 30, "c", env());
+        expect(
+            rotationDegrees(flipBox(t30, 8, "across", "c", env()).rotation),
+        ).toBe(330);
+        // 64 in 9 ranks is still 8 across: one more deep goes on to the next count that changes
+        const big = drawBox({ x: 0, y: 0 }, { x: 70, y: 70 }, 64, env())!;
+        expect(filesOf(big)).toBe(8);
+        expect(filesOf(withRanks(big, 64, 9, env()))).toBe(7);
     });
 
     it("the rotation drags 1° per 2 px, 15° with Shift, and back to the start changes nothing", () => {

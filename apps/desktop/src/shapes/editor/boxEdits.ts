@@ -4,11 +4,15 @@ import {
     ranksOf,
     snapInterval,
     grownFromPivot,
+    resizeFiles,
+    acrossIsDeep,
+    onField,
     type BoxParams,
 } from "../box/boxGeometry";
 import { turnShape, flipShape } from "../frame/gestures";
 import { boxTool } from "../box/boxTool";
 import { DEGREE, rotationDegrees, type PivotKey } from "../frame/frame";
+
 import type { ToolEnv } from "../tool/toolKind";
 import {
     COUNT_RATE,
@@ -30,12 +34,7 @@ export function withFiles(
     files: number,
     env: ToolEnv,
 ): BoxParams {
-    const clamped = Math.min(
-        Math.max(1, spots),
-        Math.max(1, Math.round(files)),
-    );
-    if (clamped === filesOf(p)) return p;
-    return grownFromPivot(p, { ...p, files: clamped }, spots, env);
+    return resizeFiles(p, spots, files, env);
 }
 
 /**
@@ -49,8 +48,16 @@ export function withRanks(
     env: ToolEnv,
 ): BoxParams {
     const n = Math.max(1, spots);
-    const r = Math.min(n, Math.max(1, Math.round(ranks)));
-    return withFiles(p, spots, Math.ceil(n / r), env);
+    const now = ranksOf(p, spots);
+    const want = Math.min(n, Math.max(1, Math.round(ranks)));
+    if (want === now) return p;
+    // Not every count deep fits: 64 in 9 ranks is still 8 across. Go on until the count changes.
+    const step = want > now ? 1 : -1;
+    for (let r = want; r >= 1 && r <= n; r += step) {
+        const files = Math.ceil(n / r);
+        if (files !== filesOf(p)) return withFiles(p, spots, files, env);
+    }
+    return p;
 }
 
 /** The box with a spacing set, in steps. The ratio lock moves the other spacing with it. */
@@ -75,33 +82,6 @@ export function withSpacing(
         ));
     if (across === p.across && deep === p.deep) return p;
     return grownFromPivot(p, { ...p, across, deep }, spots, env);
-}
-
-/**
- * Whether the box is turned far enough that its own deep runs side to side on the field: between
- * 45° and 135° (or 225° and 315°). The editor's numbers then follow the field, so "across" is
- * always side to side as people see it (owner, 2026-10-17). Exactly 45° keeps the box's own.
- */
-export function acrossIsDeep(rotation: number): boolean {
-    const d = rotationDegrees(rotation) % 180;
-    return d > 45 && d < 135;
-}
-
-/** The box's counts and spacings as the field shows them: across is side to side */
-export function onField(p: BoxParams, spots: number) {
-    const swap = acrossIsDeep(p.rotation);
-    const files = filesOf(p);
-    const ranks = ranksOf(p, spots);
-    return {
-        swap,
-        across: swap ? ranks : files,
-        deep: swap ? files : ranks,
-        acrossSpacing: swap ? p.deep : p.across,
-        deepSpacing: swap ? p.across : p.deep,
-        /** The box's own parameter each field number edits */
-        acrossKey: (swap ? "deep" : "across") as "across" | "deep",
-        deepKey: (swap ? "across" : "deep") as "across" | "deep",
-    };
 }
 
 /** The box with `count` across (or deep) on the field */
@@ -220,3 +200,5 @@ export const flipBox = (
     pivot: PivotKey,
     env: ToolEnv,
 ): BoxParams => flipShape(boxTool, p, spots, axis, pivot, env) as BoxParams;
+
+export { acrossIsDeep, onField };

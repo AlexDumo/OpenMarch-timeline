@@ -6,12 +6,12 @@ import {
     useActionHandlerGroup,
 } from "@/shortcuts/useActionHandler";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { filesOf, moveBox } from "../box/boxGeometry";
+import { moveBox, onField } from "../box/boxGeometry";
+import { withFieldCount } from "../editor/boxEdits";
 import { currentShapeField } from "../field/shapeFieldContext";
 import { toolEnvFor } from "../tool/toolEnv";
 import { useBoxSelectionStore } from "./boxSelectionStore";
 import { commitBox } from "./commitBox";
-import { liveFiles } from "./liveBox";
 import { leaveBox, selectOnField } from "./boxSelection";
 
 const DIRECTIONS = {
@@ -29,13 +29,15 @@ export function stepPlacedBoxFiles(
     const field = currentShapeField();
     const box = useBoxSelectionStore.getState().selected;
     if (!field || !box) return;
-    const params = liveFiles(
-        box,
-        delta,
+    // One more or fewer across the field, however the box is turned
+    const params = withFieldCount(
+        box.params,
+        box.spots,
+        "across",
+        onField(box.params, box.spots).across + delta,
         toolEnvFor(field, { shift: false, alt: false }),
     );
-    if (filesOf(params) !== filesOf(box.params))
-        void commitBox(box, params, queryClient);
+    if (params !== box.params) void commitBox(box, params, queryClient);
 }
 
 /**

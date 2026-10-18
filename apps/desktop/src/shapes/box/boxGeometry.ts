@@ -6,6 +6,7 @@ import {
     fieldToFrame,
     frameToField,
     pivotPoint,
+    rotationDegrees,
     squareToField,
     type ShapeFrame,
 } from "../frame/frame";
@@ -467,9 +468,41 @@ export function changeFiles(
     delta: number,
     env: ToolEnv,
 ): BoxParams {
-    const files = Math.min(Math.max(1, n), Math.max(1, filesOf(p) + delta));
-    if (files === filesOf(p)) return p;
-    return grownFromPivot(p, { ...p, files }, n, env);
+    return resizeFiles(p, n, filesOf(p) + delta, env);
+}
+
+/**
+ * The box with `files` across (clamped to 1 to `n`). By default it keeps its spacing and grows
+ * from the pivot. With `env.countKeepsSize` it keeps its size instead: the same distance from
+ * edge marcher to edge marcher each way, as near as half steps allow, around its center, so the
+ * marchers redistribute inside it.
+ */
+export function resizeFiles(
+    p: BoxParams,
+    n: number,
+    files: number,
+    env: ToolEnv,
+): BoxParams {
+    const count = Math.max(1, n);
+    const clamped = Math.min(count, Math.max(1, Math.round(files)));
+    if (clamped === filesOf(p)) return p;
+    if (!env.countKeepsSize)
+        return grownFromPivot(p, { ...p, files: clamped }, n, env);
+    const was = boxFrame(p, n);
+    const ranks = Math.ceil(count / clamped);
+    // A single file or rank has no width or depth to keep: it keeps its spacing for later
+    const across =
+        clamped > 1 && was.halfWidth > 0
+            ? snapInterval((2 * was.halfWidth) / (clamped - 1), env)
+            : p.across;
+    const deep =
+        ranks > 1 && was.halfDepth > 0
+            ? snapInterval((2 * was.halfDepth) / (ranks - 1), env)
+            : p.deep;
+    return grownFromPivot(p, { ...p, files: clamped, across, deep }, n, {
+        ...env,
+        pivot: "c",
+    });
 }
 
 /**
@@ -534,5 +567,32 @@ export function boxBounds(p: BlockParams, n: number): Footprint {
         right: Math.max(...xs),
         top: Math.min(...ys),
         bottom: Math.max(...ys),
+    };
+}
+
+/**
+ * Whether the box is turned far enough that its own deep runs side to side on the field: between
+ * 45° and 135° (or 225° and 315°). The editor's numbers then follow the field, so "across" is
+ * always side to side as people see it (owner, 2026-10-17). Exactly 45° keeps the box's own.
+ */
+export function acrossIsDeep(rotation: number): boolean {
+    const d = rotationDegrees(rotation) % 180;
+    return d > 45 && d < 135;
+}
+
+/** The box's counts and spacings as the field shows them: across is side to side */
+export function onField(p: BlockParams, spots: number) {
+    const swap = acrossIsDeep(p.rotation);
+    const files = filesOf(p);
+    const ranks = ranksOf(p, spots);
+    return {
+        swap,
+        across: swap ? ranks : files,
+        deep: swap ? files : ranks,
+        acrossSpacing: swap ? p.deep : p.across,
+        deepSpacing: swap ? p.across : p.deep,
+        /** The box's own parameter each field number edits */
+        acrossKey: (swap ? "deep" : "across") as "across" | "deep",
+        deepKey: (swap ? "across" : "deep") as "across" | "deep",
     };
 }

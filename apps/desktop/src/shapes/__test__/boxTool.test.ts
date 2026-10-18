@@ -219,21 +219,26 @@ describe("editing a box", () => {
         expect([f.left, f.top, f.bottom]).toEqual([0, 0, 75]);
     });
 
-    it("the file count grows from the back-left corner, keeping the intervals", () => {
+    it("the file count changes around the center, keeping the intervals", () => {
         const out = changeFiles(box, 16, 1, env());
         expect(filesOf(out)).toBe(5);
         expect(out.across).toBe(box.across);
         expect(out.deep).toBe(box.deep);
-        // The back-left corner stays where it was; the box grows right and toward the front
-        const was = footprintOf(box, 16);
-        const now = footprintOf(out, 16);
-        expect(now.left).toBeCloseTo(was.left, 6);
-        expect(now.top).toBeCloseTo(was.top, 6);
-        // Around the center when that's the pivot
-        const centered = changeFiles(box, 16, 1, env({ pivot: "c" }));
-        expect(Math.abs(centered.center.x - box.center.x)).toBeLessThanOrEqual(
+        // Within a quarter step of the old center: its marchers snap to the grid
+        expect(Math.abs(out.center.x - box.center.x)).toBeLessThanOrEqual(
             half / 2,
         );
+        expect(Math.abs(out.center.y - box.center.y)).toBeLessThanOrEqual(
+            half / 2,
+        );
+        // Variant B keeps the size instead: the edge marchers stay about where they were
+        const kept = changeFiles(box, 16, 1, env({ countKeepsSize: true }));
+        expect(filesOf(kept)).toBe(5);
+        const was = footprintOf(box, 16);
+        const now = footprintOf(kept, 16);
+        expect(
+            Math.abs(now.right - now.left - (was.right - was.left)),
+        ).toBeLessThanOrEqual(2 * half);
         expect(changeFiles(box, 16, -99, env()).files).toBe(1);
         expect(changeFiles(box, 16, 99, env()).files).toBe(16);
     });

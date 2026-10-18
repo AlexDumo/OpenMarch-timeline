@@ -19,6 +19,11 @@ export interface ToolEnv {
     readonly pivot?: PivotKey;
     /** The box's ratio lock: changing one spacing changes the other in proportion */
     readonly ratioLocked?: boolean;
+    /**
+     * A new count keeps the box's size and refits its spacing, rather than keeping the spacing
+     * and growing the box (the 2026-10-18 A/B, variant B; see `countResizeVariant`)
+     */
+    readonly countKeepsSize?: boolean;
 }
 
 /** A handle the canvas draws, and the cursor it shows on hover */

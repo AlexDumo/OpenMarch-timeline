@@ -9,7 +9,7 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import { boxBounds, boxFrame, filesOf, ranksOf } from "../box/boxGeometry";
+import { boxBounds, boxFrame, onField } from "../box/boxGeometry";
 import { frameCorners } from "../frame/frame";
 import { formatSteps } from "../editor/format";
 import { useShapeToolStore } from "../tool/shapeToolStore";
@@ -42,14 +42,16 @@ const LABEL_GAP_PX = 30;
 
 /** "Box 5 × 4 · 2 steps", or "· 2 × 1½ steps" when the intervals differ */
 export function boxLabel(box: PlacedBox, stepPx: number): string {
-    const across = formatSteps(box.params.across / stepPx);
-    const deep = formatSteps(box.params.deep / stepPx);
+    // As the field shows it: across is side to side however the box is turned
+    const field = onField(box.params, box.spots);
+    const across = formatSteps(field.acrossSpacing / stepPx);
+    const deep = formatSteps(field.deepSpacing / stepPx);
     return tolgee.t(
         "shapes.box.label",
         "Box {files} × {ranks} · {interval} steps",
         {
-            files: filesOf(box.params),
-            ranks: ranksOf(box.params, box.spots),
+            files: field.across,
+            ranks: field.deep,
             interval: across === deep ? across : `${across} × ${deep}`,
         },
     );

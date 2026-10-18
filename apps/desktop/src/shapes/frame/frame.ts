@@ -30,11 +30,11 @@ export interface ShapeFrame {
 export type PivotKey = "nw" | "n" | "ne" | "w" | "c" | "e" | "sw" | "s" | "se";
 
 /**
- * What a shape turns, flips and resizes around until the user picks another point: its back-left
- * corner, so a box stays where it was drawn when it grows (owner, 2026-10-17). Basic mode, which
- * has no pivot grid, always uses it.
+ * What a shape turns, flips and resizes around until the user picks another point: its center.
+ * The back-left corner (2026-10-17) made turns swing the box off screen and flips jump a box-width
+ * sideways (sims, F2). Basic mode, which has no pivot grid, always uses it.
  */
-export const DEFAULT_PIVOT: PivotKey = "nw";
+export const DEFAULT_PIVOT: PivotKey = "c";
 
 export const PIVOT_KEYS: readonly PivotKey[] = [
     "nw",
@@ -123,11 +123,26 @@ export function flipFrame(
         axis === "across"
             ? { x: 2 * pivot.x - frame.center.x, y: frame.center.y }
             : { x: frame.center.x, y: 2 * pivot.y - frame.center.y };
-    // A mirror on the field is the opposite turn and a mirror in the frame's own axes
-    const rotation = normalizeAngle(-frame.rotation);
-    return axis === "across"
-        ? { ...frame, center, rotation, flipX: !frame.flipX }
-        : { ...frame, center, rotation, flipY: !frame.flipY };
+    // A mirror on the field is the opposite turn and a mirror along one of the frame's own axes.
+    // Mirrored across the field (x), that is the turn -θ with the frame's x mirrored, or the
+    // same placement written as π - θ with its y mirrored; front to back, the other way round.
+    // Of the two, the one whose angle reads closest to the old one: a box at 90° mirrored side to
+    // side looks the same, so it should still read 90°, not 270° (sims, F2).
+    const opposite = normalizeAngle(-frame.rotation);
+    const half = normalizeAngle(Math.PI - frame.rotation);
+    const near = (a: number) => {
+        const d = Math.abs(normalizeAngle(a - frame.rotation));
+        return Math.min(d, 2 * Math.PI - d);
+    };
+    const ownAxis = near(opposite) <= near(half) + 1e-9;
+    const flipsX = (axis === "across") === ownAxis;
+    return {
+        ...frame,
+        center,
+        rotation: ownAxis ? opposite : half,
+        flipX: flipsX ? !frame.flipX : frame.flipX,
+        flipY: flipsX ? frame.flipY : !frame.flipY,
+    };
 }
 
 /** The frame's outline: its four corners, back-left first, clockwise on screen */
