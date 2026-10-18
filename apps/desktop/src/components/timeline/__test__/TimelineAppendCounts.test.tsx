@@ -17,9 +17,11 @@ afterEach(cleanup);
 if (typeof window.PointerEvent === "undefined") {
     class TestPointerEvent extends MouseEvent {
         readonly pointerId: number;
+        readonly pointerType: string;
         constructor(type: string, init: PointerEventInit = {}) {
             super(type, init);
             this.pointerId = init.pointerId ?? 1;
+            this.pointerType = init.pointerType ?? "mouse";
         }
     }
     window.PointerEvent = TestPointerEvent as unknown as typeof PointerEvent;
@@ -201,7 +203,7 @@ describe("changing how many counts + N counts adds", () => {
         expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
     });
 
-    it("saves when the box loses focus, and Escape cancels", () => {
+    it("saves when the box loses focus to outside the menu, and Escape cancels", () => {
         const onCountsChange = vi.fn();
         show({
             appendCounts: { ...appendCounts(), counts: 16, onCountsChange },
@@ -224,6 +226,65 @@ describe("changing how many counts + N counts adds", () => {
         fireEvent.keyDown(field, { key: "Escape" });
         fireEvent.blur(field);
         expect(onCountsChange).not.toHaveBeenCalled();
+    });
+
+    it("a hover on the menu's action neither saves a half-typed number nor takes the typing", () => {
+        const onCountsChange = vi.fn();
+        show({
+            appendCounts: {
+                ...appendCounts(),
+                counts: 16,
+                onCountsChange,
+                toEnd: {
+                    label: "Create pages every 16 counts to the end",
+                    title: "Add pages every 16 counts to the end of the music",
+                    onAppend: vi.fn(),
+                },
+            },
+        });
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        const field = screen.getByRole("textbox", {
+            name: "Counts for new pages",
+        }) as HTMLInputElement;
+        const action = screen.getByRole("menuitem", {
+            name: "Create pages every 16 counts to the end",
+        });
+        field.focus();
+        // "1" on the way to "12"
+        fireEvent.change(field, { target: { value: "1" } });
+        fireEvent.pointerMove(action, { pointerType: "mouse" });
+        expect(document.activeElement).toBe(field);
+        fireEvent.pointerLeave(action, { pointerType: "mouse" });
+        expect(document.activeElement).toBe(field);
+        // Focus moving within the menu (a keyboard, a click on the action) saves nothing
+        fireEvent.blur(field, { relatedTarget: action });
+        expect(onCountsChange).not.toHaveBeenCalled();
+        expect(screen.getByTestId("timeline-append-counts-menu")).toBeTruthy();
+        // The typing stays in the box: the menu's typeahead would jump to "Create pages…" on "c"
+        fireEvent.keyDown(field, { key: "c" });
+        expect(document.activeElement).toBe(field);
+        fireEvent.change(field, { target: { value: "12" } });
+        fireEvent.submit(field.closest("form")!);
+        expect(onCountsChange).toHaveBeenCalledTimes(1);
+        expect(onCountsChange).toHaveBeenCalledWith(12);
+    });
+
+    it("saves what was typed when the menu closes another way", async () => {
+        const onCountsChange = vi.fn();
+        show({
+            appendCounts: { ...appendCounts(), counts: 16, onCountsChange },
+        });
+        fireEvent.contextMenu(pill()!, { clientX: 300, clientY: 200 });
+        const field = screen.getByRole("textbox", {
+            name: "Counts for new pages",
+        });
+        fireEvent.change(field, { target: { value: "24" } });
+        // An outside press dismisses the menu (Radix listens for it from the next task)
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        fireEvent.pointerDown(document.body);
+        expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
+        expect(onCountsChange).toHaveBeenCalledTimes(1);
+        expect(onCountsChange).toHaveBeenCalledWith(24);
     });
 
     it("without the command, a right-click opens no menu", () => {
