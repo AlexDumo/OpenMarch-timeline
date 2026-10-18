@@ -16,6 +16,7 @@ import { addPageFlag, movePageFlag, pageFlagMoveLimits } from "../pageFlags";
 import { resizeTimeline } from "../timelineResize";
 import { shiftTimeline } from "../timelineCommands";
 import { moveMarchersInRangeInTransaction } from "../timelineMoves";
+import { addMarchersToTimeline } from "../timelineMembership";
 
 // These tests set the flag and convert the show themselves
 keepFixturesInPageMode(
@@ -240,6 +241,31 @@ describeDbTests("writes past the last stored count", (it) => {
             await timelineResolverSettled();
             const r = useTimelineResolverStore.getState().resolver!;
             expect(r.positionAt(marcher!.id, 128)).toEqual([12, 34]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("Add selected marchers past the end stores the counts the move lands on", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const [marcher] = await db.select().from(schema.marchers).all();
+            const before = await snapshot(db);
+
+            const result = await addMarchersToTimeline({
+                db,
+                range: { start: 110, end: 118 },
+                marcherIds: [marcher!.id],
+            });
+
+            expect(result.createdTimeline).toBe(true);
+            expect(await beatCount(db)).toBe(118);
+            const timeline = (
+                await db.select().from(schema.timelines).all()
+            ).find((t) => t.id === result.timelineId);
+            expect(timeline).toMatchObject({ start_beat: 110, end_beat: 118 });
+            // The last page doesn't grow to cover it
+            expect((await grid(db)).slice(-1)).toEqual([[6, 41, 49]]);
             await roundTrip(db, before, await snapshot(db));
         });
 
