@@ -42,7 +42,9 @@ import {
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { TagButtons } from "./marcher/TagEditor";
 import TimelineHoldLine from "./TimelineHoldLine";
-import UnsetHereButton from "./UnsetHereButton";
+import UnsetHereButton, {
+    UnsetHereAndFollowingButton,
+} from "./UnsetHereButton";
 import { useMarcherNameOf } from "@/timeline/useKeepLaterPages";
 
 const DEFAULT_SORTING_THRESHOLD = 0.1;
@@ -650,8 +652,11 @@ function MarcherEditor() {
                                         marcherIds={selectedMarcherIdList}
                                         nameOf={selectedNameOf}
                                     />
-                                    {/* Set vs Following (#304) */}
+                                    {/* Set vs Following (#304, #305) */}
                                     <UnsetHereButton
+                                        marcherIds={selectedMarcherIdList}
+                                    />
+                                    <UnsetHereAndFollowingButton
                                         marcherIds={selectedMarcherIdList}
                                     />
                                     {selectedMarchers.length === 2 && (
@@ -939,8 +944,13 @@ function MarcherEditor() {
                                                     }
                                                     nameOf={selectedNameOf}
                                                 />
-                                                {/* Set vs Following (#304) */}
+                                                {/* Set vs Following (#304, #305) */}
                                                 <UnsetHereButton
+                                                    marcherIds={
+                                                        selectedMarcherIdList
+                                                    }
+                                                />
+                                                <UnsetHereAndFollowingButton
                                                     marcherIds={
                                                         selectedMarcherIdList
                                                     }

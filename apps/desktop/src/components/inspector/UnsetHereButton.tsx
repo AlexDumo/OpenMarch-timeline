@@ -2,7 +2,12 @@ import clsx from "clsx";
 import { useTranslate } from "@tolgee/react";
 import { getButtonClassName } from "@openmarch/ui";
 import ActionButton from "@/shortcuts/ActionButton";
-import { useUnsetTargets } from "@/timeline/timelineUnset";
+import { pagesText } from "@/timeline/timelineKeepLater";
+import {
+    unsetFollowingLabel,
+    useUnsetFollowingPages,
+    useUnsetTargets,
+} from "@/timeline/timelineUnset";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 
 /**
@@ -51,6 +56,53 @@ export default function UnsetHereButton({
             {t("inspector.marcher.timeline.unsetHere", {
                 defaultValue: "Unset here",
             })}
+        </ActionButton>
+    );
+}
+
+/**
+ * **Unset here and on Pages N–M** in the marcher inspector (Set vs Following, #305), next to
+ * **Unset here**: runs the `timelineUnsetHereAndFollowing` action. Shown only when some later
+ * pages follow the spot of the selected marchers Set on the count shown, and it names them.
+ */
+export function UnsetHereAndFollowingButton({
+    marcherIds,
+}: {
+    marcherIds: readonly number[];
+}) {
+    const { t } = useTranslate();
+    const targets = useUnsetTargets(marcherIds);
+    const following = useUnsetFollowingPages(marcherIds);
+    if (!following) return null;
+    const label = unsetFollowingLabel(following, (key, defaultValue, params) =>
+        t(key, { defaultValue, ...params }),
+    );
+    const pages = pagesText(following);
+    const tooltip =
+        targets.length === marcherIds.length
+            ? t("inspector.marcher.timeline.unsetHereAndFollowingHint", {
+                  defaultValue:
+                      "Take back their coordinate on this count, and {pages} follow back to the earlier spot",
+                  pages,
+              })
+            : t("inspector.marcher.timeline.unsetHereAndFollowingHintSome", {
+                  defaultValue:
+                      "Take back the coordinate of the {count} of the {total} selected that are Set on this count, and {pages} follow back to the earlier spot",
+                  count: String(targets.length),
+                  total: String(marcherIds.length),
+                  pages,
+              });
+    return (
+        <ActionButton
+            action="timelineUnsetHereAndFollowing"
+            data-testid="timeline-unset-here-and-following"
+            tooltip={tooltip}
+            aria-label={`${label}. ${tooltip}`}
+            className={clsx(
+                getButtonClassName({ variant: "secondary", size: "compact" }),
+            )}
+        >
+            {label}
         </ActionButton>
     );
 }

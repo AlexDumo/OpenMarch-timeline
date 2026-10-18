@@ -18,7 +18,11 @@ import { moveMarchersInTarget } from "../timelineMoves";
 import { keptStatesOnPageBoxes } from "../timelineKeepHere";
 import { readKeptAssignmentIds } from "../timelineKeptMarkers";
 import { unsetMarchersAt } from "../timelineUnset";
-import { unsetHere } from "@/timeline/timelineUnset";
+import {
+    unsetFollowingPages,
+    unsetHere,
+    unsetHereAndFollowing,
+} from "@/timeline/timelineUnset";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { keepMarchersOnPage } from "../timelineKeepHere";
 
@@ -98,12 +102,14 @@ const unset = async (
     beat: number,
     marcherIds: number[],
     tidyShared = false,
+    keepLaterPages = true,
 ) => {
     const result = await unsetMarchersAt({
         db,
         beat,
         marcherIds,
         tidyShared,
+        keepLaterPages,
     });
     await timelineResolverSettled();
     return result;
@@ -308,6 +314,161 @@ describeDbTests(
             await timelineResolverSettled();
             expect((await atFlags(db, a))[3]).toEqual(UP);
             expect((await atFlags(db, b))[3]).toEqual(UP2);
+        });
+    },
+);
+
+describeDbTests("Unset here and on Pages N–M", (it) => {
+    const unsetAll = (db: DbConnection, beat: number, marcherIds: number[]) =>
+        unset(db, beat, marcherIds, false, false);
+
+    it("the later pages that followed the spot follow back to the earlier one", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await show(db);
+        const [homeA] = await atFlags(db, a);
+        const [homeB] = await atFlags(db, b);
+
+        const result = await unsetAll(db, PAGE2.end, [a, b]);
+        expect(result.unset).toEqual([a, b].sort((x, y) => x - y));
+        expect(await atFlags(db, a)).toEqual([
+            homeA,
+            homeA,
+            homeA,
+            homeA,
+            homeA,
+        ]);
+        expect(await atFlags(db, b)).toEqual([
+            homeB,
+            homeB,
+            homeB,
+            homeB,
+            homeB,
+        ]);
+        expect(result.markers.added).toEqual([]);
+        expect((await readKeptAssignmentIds(db)).size).toBe(0);
+    });
+
+    it("leaves pages from the next move of their own on", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await show(db);
+        await move(db, PAGE3, [{ marcherId: b, xy: ELSEWHERE }]);
+        const [homeA] = await atFlags(db, a);
+        const [homeB] = await atFlags(db, b);
+
+        await unsetAll(db, PAGE2.end, [a, b]);
+        expect(await atFlags(db, a)).toEqual([
+            homeA,
+            homeA,
+            homeA,
+            homeA,
+            homeA,
+        ]);
+        expect(await atFlags(db, b)).toEqual([
+            homeB,
+            homeB,
+            homeB,
+            ELSEWHERE,
+            ELSEWHERE,
+        ]);
+    });
+
+    it("is one undo step, and undo and redo restore it exactly", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await show(db);
+        const before = await snapshot(db);
+        const groups = await undoGroups(db);
+        await unsetAll(db, PAGE2.end, [a, b]);
+        const after = await snapshot(db);
+        expect(await undoGroups(db)).toBe(groups + 1);
+
+        expect((await performUndo(db)).success).toBe(true);
+        expect(await snapshot(db)).toEqual(before);
+        await timelineResolverSettled();
+        expect((await atFlags(db, a)).slice(2)).toEqual([UP, UP, UP]);
+        expect((await performRedo(db)).success).toBe(true);
+        expect(await snapshot(db)).toEqual(after);
+    });
+});
+
+describeDbTests(
+    "Unset here and on Pages N–M from the app: the pages that follow",
+    (it) => {
+        const BOXES = [
+            { start: 1, end: 9, name: "1" },
+            { ...PAGE2, name: "2" },
+            { ...PAGE3, name: "3" },
+            { start: 25, end: 33, name: "4" },
+        ];
+        const playheadAt = (beat: number) =>
+            useTimelineSelectionStore.setState({
+                playheadBeat: beat,
+                cursorBeat: null,
+                pageBoxes: BOXES,
+            });
+        const following = async (db: DbConnection, marcherIds: number[]) =>
+            unsetFollowingPages({
+                resolver: resolver(),
+                kept: await readKeptAssignmentIds(db),
+                marcherIds,
+                beat: useTimelineSelectionStore.getState().playheadBeat,
+                boxes: BOXES,
+            });
+
+        it("names the pages that follow the Set marchers' spot, up to their next move", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, c } = await show(db);
+            playheadAt(PAGE2.end);
+            expect(await following(db, [a, b, c])).toEqual(["3", "4"]);
+            await move(db, PAGE3, [{ marcherId: b, xy: ELSEWHERE }]);
+            expect(await following(db, [b])).toBeNull();
+            expect(await following(db, [a, b])).toEqual(["3", "4"]);
+            await move(db, { start: 25, end: 33 }, [
+                { marcherId: a, xy: ELSEWHERE },
+            ]);
+            expect(await following(db, [a])).toEqual(["3"]);
+            playheadAt(0);
+            expect(await following(db, [a, b, c])).toBeNull();
+        });
+
+        it("names none where the next page holds a kept spot", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a } = await show(db);
+            await keepMarchersOnPage({ db, pageBox: PAGE3, marcherIds: [a] });
+            await timelineResolverSettled();
+            playheadAt(PAGE2.end);
+            expect(await following(db, [a])).toBeNull();
+        });
+
+        it("takes back the Set marchers' spot and lets the following pages follow back", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, c } = await show(db);
+            const [homeA] = await atFlags(db, a);
+            playheadAt(PAGE2.end);
+            expect((await unsetHereAndFollowing([a, c], db)).unset).toEqual([
+                a,
+            ]);
+            await timelineResolverSettled();
+            expect(await atFlags(db, a)).toEqual([
+                homeA,
+                homeA,
+                homeA,
+                homeA,
+                homeA,
+            ]);
+            expect((await atFlags(db, b)).slice(2)).toEqual([UP2, UP2, UP2]);
+            expect((await readKeptAssignmentIds(db)).size).toBe(0);
         });
     },
 );
