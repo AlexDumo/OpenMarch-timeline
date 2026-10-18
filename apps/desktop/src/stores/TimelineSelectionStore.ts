@@ -130,8 +130,9 @@ export interface TimelineSelectionState {
     /** Every stored timeline, by start then id; `null` until loaded */
     readonly storedTimelines: readonly StoredTimelineMembership[] | null;
     /**
-     * The end of the show (`beats.length`), the furthest the playhead goes; `null` while unknown.
-     * Kept by `useTimelinePlaybackDriver`.
+     * Where playing on stops (docs/timeline/endless-counts.md rule 6): the latest of the show's end,
+     * the music's end and the last move's end; `null` while unknown. The playhead isn't held to
+     * it: the counts never end, so it goes anywhere. Kept by `useTimelinePlaybackDriver`.
      */
     readonly showEndBeat: number | null;
     /** The isolated timeline, or `null` (see the module comment) */
@@ -183,7 +184,7 @@ export interface TimelineSelectionState {
      */
     readonly unpinStart: () => void;
     /**
-     * Navigation: moves the playhead (`normalizePlayheadBeat`, at most `showEndBeat`). An unpinned
+     * Navigation: moves the playhead (`normalizePlayheadBeat`; the counts never end). An unpinned
      * S follows it, except during a gesture (`beginScrub`); a pinned S stays (UI-12). A non-finite
      * beat is ignored.
      */
@@ -492,13 +493,12 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     typeof update === "function" ? update(s) : update,
                 ),
             );
+        // The counts never end (endless counts), so only isolation bounds the playhead
         const clamp = (s: TimelineSelectionState, beat: number) => {
             const whole = normalizePlayheadBeat(beat);
-            const bounded =
-                s.showEndBeat === null ? whole : Math.min(whole, s.showEndBeat);
             return s.isolation === null
-                ? bounded
-                : isolatedPlayhead(s.isolation, bounded);
+                ? whole
+                : isolatedPlayhead(s.isolation, whole);
         };
         // Inside isolation the playhead stays after the start: on the start flag, UI-10's window
         // falls back to the page box ending there, so a drag would edit the previous move
@@ -597,9 +597,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                 ...windowFields(
                     r.startBeat,
                     r.startPinned,
-                    s.showEndBeat === null
-                        ? r.playheadBeat
-                        : Math.min(r.playheadBeat, s.showEndBeat),
+                    r.playheadBeat,
                     s.pageBoxes,
                 ),
                 isolation: null,
@@ -1060,12 +1058,8 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             cue: (beat) =>
                 set((s) => {
                     if (!Number.isFinite(beat)) return {};
-                    const whole = normalizePlayheadBeat(beat);
                     return {
-                        cursorBeat:
-                            s.showEndBeat === null
-                                ? whole
-                                : Math.min(whole, s.showEndBeat),
+                        cursorBeat: normalizePlayheadBeat(beat),
                         playheadRevision: s.playheadRevision + 1,
                     };
                 }),

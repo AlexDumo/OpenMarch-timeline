@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTolgee } from "@tolgee/react";
 import {
     pageFlagMoveLimits,
     type AddedPageFlag,
@@ -31,6 +32,15 @@ import {
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
 import { useTimelineTracksState } from "@/timeline/useTimelineTracks";
+import {
+    updateWorkspaceSettingsMutationOptions,
+    workspaceSettingsQueryOptions,
+} from "@/hooks/queries/useWorkspaceSettings";
+import {
+    appendPageOfCountsMutationOptions,
+    appendPagesToEndMutationOptions,
+} from "@/hooks/queries/useAppendPages";
+import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { AudioClock } from "./Clock";
 import {
     TimelineCompactButton,
@@ -51,7 +61,12 @@ import {
     useAudioEnvelopeStore,
 } from "@/timeline/timelineWaveform";
 import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
-import { timeAtBeat } from "@/timeline/timeMap";
+import {
+    useMusicEndSeconds,
+    usePlaybackStopBeat,
+} from "@/timeline/usePlaybackStopBeat";
+import type { CountGrid } from "@/timeline/countGrid";
+import { beatsThrough, measuresThrough } from "@/timeline/endlessTimeline";
 import {
     moveCommandBlocker,
     useMoveCommands,
@@ -163,23 +178,27 @@ export const toTimelineSelection = (
  * A clip is a move: its menu, its ⋯ button and Delete edit, rename and delete it (UI-14).
  */
 export default function TimelineModePanel() {
-    const { beats, pages, measures } = useTimingObjects()!;
+    const { beats, pages, measures, countGrid } = useTimingObjects()!;
     // UI-19: Basic is this timeline with its page boxes holding the music, and none of the
     // Expert parts (clips, the loop, isolation, moves): docs/timeline/research/basic-mode
     const basic = useIsBasicMode();
     const basicExtras = useBasicTimelineExtras(pages);
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
-    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis. Hidden
-    // in settings, the lane goes away as it does with no audio.
+    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis, in
+    // full: past the stored counts on the counts that go on (endless counts), to the music's end.
+    // Hidden in settings, the lane goes away as it does with no audio.
     const envelope = useAudioEnvelopeStore((s) => s.envelope);
     const waveformHidden = useUiSettingsStore(
         (s) => s.uiSettings.timelineWaveformStyle === "hidden",
     );
+    const musicEnd = useMusicEndSeconds();
     const waveform = useMemo(() => {
         if (!envelope || waveformHidden) return null;
+        const through =
+            musicEnd === null ? 0 : Math.ceil(countGrid.beatAtTime(musicEnd));
         const peaks = peaksByBeat(
             envelope,
-            beats,
+            beatsThrough(countGrid, beats, through),
             createTimelineBeatAxis(beats).offset,
         );
         // A show with no audio plays a silent placeholder: nothing to draw, so in Basic, where the
@@ -187,7 +206,7 @@ export default function TimelineModePanel() {
         if (basic && !peaks.some((beat) => beat.some((peak) => peak > 0)))
             return null;
         return { peaksByBeat: peaks };
-    }, [envelope, beats, waveformHidden, basic]);
+    }, [envelope, beats, countGrid, musicEnd, waveformHidden, basic]);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );
@@ -335,6 +354,21 @@ export default function TimelineModePanel() {
                   },
         [isPlaying, isolated, movePageFlag],
     );
+    // Not while a paused preview holds a frame (UI-11), as **+**
+    const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
+    // The show's end (endless counts rule 4) is the last page's flag, shaded past it in the page
+    // row; playback and Fit go on to the latest of it, the music's end and the last move's end
+    const lastPage = pages[pages.length - 1];
+    const showEndBeat = lastPage ? pageEndBeat(lastPage) : 0;
+    const stopBeat = usePlaybackStopBeat();
+    const appendCounts = useAppendCountsControls({
+        lastFlag: showEndBeat,
+        musicEndBeat:
+            musicEnd === null
+                ? null
+                : Math.ceil(countGrid.beatAtTime(musicEnd) - 1e-6),
+        hidden: isPlaying || holding,
+    });
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
     // Change to subset / normal page: one `updatePages` edit, one undo step
     const { mutate: updatePages } = useMutation(
@@ -362,7 +396,7 @@ export default function TimelineModePanel() {
         // UI-17 follow-up: home while playing jumps playback to the start (a page box jumps by
         // its own scrub; home has nowhere else to go)
         if (isPlaying && next?.kind === "home") {
-            jumpTimelinePlayback(beats, 0);
+            jumpTimelinePlayback(countGrid, 0);
             return;
         }
         if (isPlaying) return;
@@ -454,6 +488,9 @@ export default function TimelineModePanel() {
                     }
                     moveCommands={basic ? undefined : moveCommands}
                     pageFlagMove={pageFlagMove}
+                    appendCounts={appendCounts}
+                    countGrid={countGrid}
+                    fitBeat={stopBeat}
                     onSetPageSubset={(pageId, subset) =>
                         updatePages({
                             modifiedPagesArgs: [
@@ -495,6 +532,7 @@ export default function TimelineModePanel() {
  */
 function PlayingTimeline({
     basic = false,
+    countGrid,
     ...props
 }: { basic?: boolean } & Omit<
     TimelineProps,
@@ -508,9 +546,13 @@ function PlayingTimeline({
     | "addPageNames"
     | "loop"
     | "onLoopChange"
->) {
+    | "onViewportExtent"
+> & {
+        /** The counts as they go on past the stored ones (endless counts) */
+        countGrid: CountGrid;
+    }) {
     const { beats, pages } = props;
-    const playback = useTimelinePlayback({ beats, pages });
+    const playback = useTimelinePlayback({ countGrid, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);
     // UI-17: the loop, drawn as a bar with draggable ends; an isolated move always loops, so its
@@ -542,16 +584,24 @@ function PlayingTimeline({
     );
     // UI-12: the paused clock reads the beat the timeline shows, not the selected page's end
     const shownBeat = useTimelineSelectionStore(displayedBeat);
+    // Past the stored counts too: they go on (endless counts)
     const pausedSeconds =
-        beats.length > 0
-            ? timeAtBeat(beats, Math.min(shownBeat, beats.length))
-            : undefined;
+        beats.length > 0 ? countGrid.timeAtBeat(shownBeat) : undefined;
     const clock = useMemo(
         () => <AudioClock pausedSeconds={pausedSeconds} />,
         [pausedSeconds],
     );
     // UI-9 **+** after the free paused playhead; the new page becomes the selection
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
+    // Endless counts (rules 1 and 7): the timeline draws the counts on past the stored ones, with
+    // some room past where playback stops; the scroll ends there
+    const endless = useEndlessCounts({
+        countGrid,
+        beats,
+        measures: props.measures,
+        stopBeat: props.fitBeat ?? 0,
+        playheadBeat: Math.max(playheadBeat, shownBeat, playback.positionBeat),
+    });
     // Not while a paused preview holds a frame: + is drawn there, but would add at P (UI-11)
     const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
     const addPageFlag = useAddPageFlag({
@@ -578,6 +628,9 @@ function PlayingTimeline({
     return (
         <Timeline
             {...props}
+            beats={endless.beats}
+            measures={endless.measures}
+            onViewportExtent={endless.onViewportExtent}
             selection={selection}
             transportClock={clock}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
@@ -592,6 +645,129 @@ function PlayingTimeline({
             onLoopChange={isolation || basic ? undefined : changeLoop}
         />
     );
+}
+
+/** The fewest counts the timeline goes on past where playback stops */
+const MIN_PADDING_BEATS = 32;
+
+/**
+ * The counts the timeline draws (docs/timeline/endless-counts.md rules 1 and 7): the stored ones,
+ * then the grid's up to some room past `stopBeat` (the latest of the last page's flag, the music's
+ * end and the last move's end): half a screen, at least 32 counts (EC-9). The scroll ends there;
+ * placing a page or move further moves it on. The playhead keeps the end where it is (playing on
+ * past it, say) but adds no room, so clicking at the far right doesn't creep the end out. Rounded
+ * up to 32 counts so that playing on redraws the lanes once in a while.
+ */
+function useEndlessCounts({
+    countGrid,
+    beats,
+    measures,
+    stopBeat,
+    playheadBeat,
+}: {
+    countGrid: CountGrid;
+    beats: TimelineProps["beats"];
+    measures: TimelineProps["measures"];
+    stopBeat: number;
+    /** The playhead, or the beat playing: the timeline reaches it, with no room past it */
+    playheadBeat: number;
+}) {
+    const [screenBeats, setScreenBeats] = useState(2 * MIN_PADDING_BEATS);
+    const padding = Math.max(MIN_PADDING_BEATS, screenBeats / 2);
+    const extent =
+        Math.ceil(
+            Math.max(stopBeat + padding, playheadBeat) / MIN_PADDING_BEATS,
+        ) * MIN_PADDING_BEATS;
+    const onViewportExtent = useCallback(
+        ({ screenBeats: next }: { screenBeats: number }) =>
+            // Whole powers of two (down), so a pinch redraws the counts a few times, not every frame
+            setScreenBeats(
+                Math.max(
+                    MIN_PADDING_BEATS,
+                    2 ** Math.floor(Math.log2(Math.max(next, 1))),
+                ),
+            ),
+        [],
+    );
+    const drawnBeats = useMemo(
+        () => beatsThrough(countGrid, beats, extent),
+        [beats, countGrid, extent],
+    );
+    const drawnMeasures = useMemo(
+        () => measuresThrough(countGrid, measures, drawnBeats),
+        [countGrid, drawnBeats, measures],
+    );
+    return {
+        beats: drawnBeats as TimelineProps["beats"],
+        measures: drawnMeasures as TimelineProps["measures"],
+        onViewportExtent,
+    };
+}
+
+/**
+ * **+ N counts** after the last page (N is the show's "new page counts" setting, which its
+ * right-click menu changes, EC-16), and, when the music runs on more than N counts past the last
+ * flag, pages every N counts to the music's end (EC-10). Each is one undoable edit that stores the
+ * counts it lands on; the new page is selected, as **+** selects it.
+ */
+function useAppendCountsControls({
+    lastFlag,
+    musicEndBeat,
+    hidden,
+}: {
+    /** The last page's flag, a spec beat position */
+    lastFlag: number;
+    /** The first whole count at or after the music's end; null without music */
+    musicEndBeat: number | null;
+    hidden: boolean;
+}) {
+    const { t } = useTolgee();
+    const queryClient = useQueryClient();
+    const { data: settings } = useQuery(workspaceSettingsQueryOptions());
+    const counts = settings?.defaultNewPageCounts ?? 16;
+    const { mutate: updateSettings } = useMutation(
+        updateWorkspaceSettingsMutationOptions(queryClient),
+    );
+    const { mutate: appendPage } = useMutation(
+        appendPageOfCountsMutationOptions(queryClient, selectAddedPage),
+    );
+    const { mutate: pagesToEnd } = useMutation(
+        appendPagesToEndMutationOptions(queryClient, (added) => {
+            if (added > 0)
+                toast.success(
+                    t("timeline.appendCounts.pagesAdded", { pages: added }),
+                );
+        }),
+    );
+    if (hidden) return undefined;
+    return {
+        label: t("timeline.appendCounts.label", { counts }),
+        title: t("timeline.appendCounts.title", { counts }),
+        onAppend: () => appendPage(counts),
+        counts,
+        // The pill's right-click menu sets the file's default new page counts
+        ...(settings
+            ? {
+                  onCountsChange: (next: number) =>
+                      updateSettings({
+                          ...settings,
+                          defaultNewPageCounts: next,
+                      }),
+              }
+            : {}),
+        ...(musicEndBeat !== null && musicEndBeat - lastFlag > counts
+            ? {
+                  toEnd: {
+                      label: t("timeline.appendCounts.pagesToEnd", { counts }),
+                      title: t("timeline.appendCounts.pagesToEndTitle", {
+                          counts,
+                      }),
+                      onAppend: () =>
+                          pagesToEnd({ counts, untilBeat: musicEndBeat }),
+                  },
+              }
+            : {}),
+    };
 }
 
 /**

@@ -405,8 +405,9 @@ export const getPageCountAt = (
 
 /**
  * The playhead's page, count and measure, as the transport shows them (UI-13): "Pg 2 · ct 7/16"
- * and "m4 beat 4", or "Home", or "After pg 4 · +4". `spoken` spells them out for screen readers.
- * `measure` is null when the show has no measure there.
+ * and "m4 beat 4", or "Home", or "END +4" past the show's end, where the counts belong to no page
+ * (endless counts rule 8). `spoken` spells them out for screen readers. `measure` is null when
+ * the show has no measure there.
  */
 export const getPlayheadReadout = (
     model: Pick<TimelineViewModel, "pages" | "measures" | "beatCount">,
@@ -417,7 +418,7 @@ export const getPlayheadReadout = (
     const page = at.home
         ? "Home"
         : at.after
-          ? `After pg ${at.pageLabel} · +${at.count}`
+          ? `END +${at.count}`
           : `Pg ${at.pageLabel} · ct ${at.count}${at.total != null ? `/${at.total}` : ""}`;
     const measure = measureAt
         ? `m${measureAt.measure} beat ${measureAt.beat}`
@@ -425,7 +426,9 @@ export const getPlayheadReadout = (
     const spokenPage = at.home
         ? `Home, page ${at.pageLabel}`
         : at.after
-          ? `${at.count} counts after page ${at.pageLabel}`
+          ? at.count === 1
+              ? "1 count past the end of the show"
+              : `${at.count} counts past the end of the show`
           : `Page ${at.pageLabel}, count ${at.count}${at.total != null ? ` of ${at.total}` : ""}`;
     const spoken = measureAt
         ? `${spokenPage}, measure ${measureAt.measure} beat ${measureAt.beat}`

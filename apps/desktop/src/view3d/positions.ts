@@ -19,7 +19,7 @@ import { useMemo } from "react";
 import type { FieldProperties, Resolver, WorldPoint } from "@openmarch/core";
 import { db } from "@/global/database/db";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
-import type { BeatTiming } from "@/timeline/timeMap";
+import type { CountClock } from "@/timeline/countGrid";
 import { PositionBuffer, playbackBeat } from "@/timeline/positionBuffer";
 import { acquireExportResolver } from "@/timeline/timelineExport";
 import { VIEW3D_TIMELINE_QUERY_KEY } from "@/view3d/sync/protocol";
@@ -50,7 +50,8 @@ export class ShowPositions {
 
     constructor(
         resolver: PositionResolver,
-        private readonly beats: readonly BeatTiming[],
+        /** The show's counts, going on past the stored ones (endless counts) */
+        private readonly clock: CountClock,
     ) {
         this.known = new Set(resolver.marcherIds());
         this.sampled = new PositionBuffer({
@@ -85,7 +86,7 @@ export class ShowPositions {
     ): boolean {
         if (!this.known.has(marcherId) || Number.isNaN(ms)) return false;
         if (ms !== this.sampledMs) {
-            this.sampled.fill(playbackBeat(this.beats, ms));
+            this.sampled.fill(playbackBeat(this.clock, ms));
             this.sampledMs = ms;
         }
         const i = this.sampled.indexOf(marcherId);
@@ -136,7 +137,7 @@ export type ShowPositionsReturn = {
  */
 export function useShowPositions(): ShowPositionsReturn {
     const {
-        beats,
+        countGrid,
         isLoading: timingLoading,
         hasError: timingError,
     } = useTimingObjects();
@@ -152,12 +153,12 @@ export function useShowPositions(): ShowPositionsReturn {
         if (isLoading || hasError || !resolver)
             return { positions: null, isLoading, hasError };
         return {
-            positions: new ShowPositions(resolver, beats),
+            positions: new ShowPositions(resolver, countGrid),
             isLoading: false,
             hasError: false,
         };
     }, [
-        beats,
+        countGrid,
         resolver,
         timingLoading,
         timingError,
