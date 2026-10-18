@@ -20,7 +20,7 @@ import {
     TransportNavigationButton,
     TransportPlayButton,
 } from "./TransportButtons";
-import { TransportTooltipProvider } from "./ShortcutTooltip";
+import { ShortcutTooltip, TransportTooltipProvider } from "./ShortcutTooltip";
 import {
     isPlainNudgeKey,
     overlayOpen,
@@ -92,13 +92,8 @@ import {
     type TimelineLiveValue,
     useLiveValue,
 } from "./timelineLiveValue";
-import {
-    HoldMarkTooltip,
-    PageHoldMarkView,
-    type HoldWords,
-    type LabeledHoldMark,
-    type LabeledHoldMarks,
-} from "./PageHoldMark";
+import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
+import { TimelineKeyframes } from "./TimelineKeyframes";
 import {
     chainFit,
     KEEP_DOT_SIZE,
@@ -738,7 +733,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     showMeasures = true,
     seekSnapBeats = [],
     positionBeat,
-    holdMarks,
+    keyframes,
     keepChains,
     scrubLine,
     pageFlagMove,
@@ -768,8 +763,8 @@ export const TimelineRuler = memo(function TimelineRuler({
     height?: number;
     /** The playhead, which a dragged flag lands on when near, as on downbeats and page lines */
     flagSnapPlayhead?: () => BeatPosition;
-    /** Where the selected marchers hold, by page id (UI-18); none without a selection */
-    holdMarks?: LabeledHoldMarks;
+    /** Where the selected marchers are Set (#303); none without a selection */
+    keyframes?: readonly SelectionKeyframe[];
     /** The chains on the page boxes (UI-18 keep later pages), by page id */
     keepChains?: PageKeepChains;
 }) {
@@ -802,7 +797,7 @@ export const TimelineRuler = memo(function TimelineRuler({
             pixelsPerBeat,
         );
     }, [measures, pixelsPerBeat]);
-    const holdMarkId = useId();
+    const wordsId = useId();
     const scrub = useRulerScrub(
         onSeek,
         beatCount,
@@ -885,8 +880,7 @@ export const TimelineRuler = memo(function TimelineRuler({
                 initialPageWidth={initialPageWidth}
                 scrub={scrub}
                 onSelectPage={selectPage}
-                holdMarks={holdMarks}
-                holdMarkId={holdMarkId}
+                wordsId={wordsId}
                 keepChains={keepChains}
             />
             {pageFlagMove && (
@@ -902,6 +896,14 @@ export const TimelineRuler = memo(function TimelineRuler({
                     preview={flagPreview}
                     onPreviewChange={setFlagPreview}
                     onSelectPage={selectPage}
+                />
+            )}
+            {keyframes && (
+                <TimelineKeyframes
+                    keyframes={keyframes}
+                    pages={pages}
+                    pixelsPerBeat={pixelsPerBeat}
+                    onSeek={onSeek}
                 />
             )}
             {showMeasures && (
@@ -927,8 +929,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     initialPageWidth,
     scrub,
     onSelectPage,
-    holdMarks,
-    holdMarkId,
+    wordsId,
     keepChains,
 }: {
     initialPage: TimelinePageMarker | undefined;
@@ -944,10 +945,8 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
     initialPageWidth: number;
     scrub: RulerScrub;
     onSelectPage: (page: TimelinePageMarker, extend?: boolean) => void;
-    /** Where the selected marchers hold, by page id (UI-18) */
-    holdMarks?: LabeledHoldMarks;
-    /** The prefix of each box's hold description id */
-    holdMarkId: string;
+    /** The prefix of each box's description id (`TimelinePageBox`'s chain words) */
+    wordsId: string;
     /** The chains on the page boxes (UI-18 keep later pages), by page id */
     keepChains?: PageKeepChains;
 }) {
@@ -996,8 +995,7 @@ const TimelineRulerBoxes = memo(function TimelineRulerBoxes({
                             initialPageWidth={initialPageWidth}
                             scrub={scrub}
                             onSelectPage={onSelectPage}
-                            hold={holdMarks?.get(page.id)}
-                            holdDescriptionId={`${holdMarkId}-${page.id}`}
+                            descriptionId={`${wordsId}-${page.id}`}
                             chain={keepChains?.get(page.id)}
                         />
                     ) : null,
@@ -1016,8 +1014,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
     initialPageWidth,
     scrub,
     onSelectPage,
-    hold,
-    holdDescriptionId,
+    descriptionId,
     chain,
 }: {
     page: TimelinePageMarker;
@@ -1027,9 +1024,8 @@ const TimelinePageBox = memo(function TimelinePageBox({
     initialPageWidth: number;
     scrub: RulerScrub;
     onSelectPage: (page: TimelinePageMarker, extend?: boolean) => void;
-    /** Where the selected marchers hold on this page (UI-18), with its words */
-    hold?: LabeledHoldMark;
-    holdDescriptionId: string;
+    /** The id of the box's chain words, for its `aria-describedby` */
+    descriptionId: string;
     /** The box's chain for the selected marchers (UI-18 keep later pages) */
     chain?: PageKeepChain;
 }) {
@@ -1050,27 +1046,31 @@ const TimelinePageBox = memo(function TimelinePageBox({
         : dot?.clear
           ? labelPaddingBeside(dot.offset, KEEP_DOT_SIZE)
           : undefined;
-    // A chain with no room for its button: its words go on the box, mark or not, naming whom the
-    // box's menu changes, with (K) where K does the same, as the chain's button shows it
+    // A chain with no room for its button: its words go on the box, as its tooltip and accessible
+    // description, naming whom the box's menu changes, with (K) where K does the same, as the
+    // chain's button shows it
     const menuK = !!chain && !fit && !!chain.menuWithK;
-    const words: HoldWords | undefined =
+    const words =
         chain && !fit
-            ? { mark: hold?.mark, label: chain.menuLabel, hint: chain.menuHint }
-            : hold;
+            ? { label: chain.menuLabel, hint: chain.menuHint }
+            : undefined;
     const box = (
-        <HoldMarkTooltip
-            hold={
+        <ShortcutTooltip
+            label={
                 words && menuK
-                    ? { ...words, label: `${words.label} (${KEEP_SHORTCUT})` }
-                    : words
+                    ? `${words.label} (${KEEP_SHORTCUT})`
+                    : words?.label
             }
+            hint={words?.hint}
+            side="top"
+            closeOnPress
         >
             <button
                 type="button"
                 data-timeline-interactive="true"
                 {...timelineRangeTargetProps(range, undefined, page.id)}
                 aria-label={`Page ${page.label}`}
-                aria-describedby={words ? holdDescriptionId : undefined}
+                aria-describedby={words ? descriptionId : undefined}
                 aria-keyshortcuts={menuK ? KEEP_SHORTCUT : undefined}
                 aria-pressed={selected}
                 {...scrub.handlers}
@@ -1087,15 +1087,16 @@ const TimelinePageBox = memo(function TimelinePageBox({
                 }}
             >
                 <PageBoxLabel label={page.label} shown={labelShown} />
-                <PageHoldMarkView
-                    hold={words}
-                    descriptionId={holdDescriptionId}
-                />
+                {words && (
+                    <span id={descriptionId} className="sr-only">
+                        {words.label}. {words.hint}
+                    </span>
+                )}
                 {chain && dot && (
                     <PageKeepDot kind={chain.kind} left={dot.offset} />
                 )}
             </button>
-        </HoldMarkTooltip>
+        </ShortcutTooltip>
     );
     if (!chain || !fit) return box;
     // A sibling right after the box, not inside it: a button can't hold a button, and hovering

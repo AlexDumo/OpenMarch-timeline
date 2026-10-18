@@ -1,4 +1,4 @@
-import type { LabeledHoldMarks } from "./PageHoldMark";
+import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
 import type { PageKeepChains } from "./PageKeepChain";
 import type { TimelineClipResizeCommands } from "./TimelineClipResize";
 import type { ReactNode } from "react";
@@ -287,8 +287,8 @@ export interface TimelineCommonProps
     readonly transportSecondary?: ReactNode;
     /** View controls at the transport's end, such as Compact (UI-12); they fold too */
     readonly transportViewControls?: ReactNode;
-    /** Where the selected marchers hold, on the page boxes (UI-18); none without a selection */
-    readonly holdMarks?: LabeledHoldMarks;
+    /** #303: where the selected marchers are Set, view beats; none without a selection */
+    readonly keyframes?: readonly SelectionKeyframe[];
     /** The chains on the page boxes (UI-18 keep later pages); none without a selection */
     readonly keepChains?: PageKeepChains;
     /** UI-19 Basic: the selected marchers' mid-page positions, view beats */

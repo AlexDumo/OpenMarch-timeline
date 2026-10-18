@@ -6,7 +6,7 @@ import type { CarrySpan } from "./timelineCarryForward";
  * own ends there with real motion, and on the first page (beat 0), always. Everywhere else it's
  * **Following**: holding from an earlier count, partway through a move, or on a stay move that
  * ends where it began (Only Page N, unlink) or a kept spot (keep later pages). Read from the
- * marcher's resolver spans, as the page hold marks and the inspector's hold line are.
+ * marcher's resolver spans, as the inspector's hold line is.
  *
  * The field asks per playhead move, so each marcher's Set beats are worked out once per resolver
  * version (`marcherSetBeats`) and looked up per beat (`isSetAt`, `followingAt`).
@@ -71,4 +71,35 @@ export function followingAt(
     for (const [id, beats] of setBeats)
         if (!isSetAt(beats, beat)) following.add(id);
     return following;
+}
+
+/**
+ * A count where a selected marcher is Set: a keyframe on the timeline. Filled when all the
+ * selected marchers are Set there (`set === total`), hollow when only some are.
+ */
+export interface SelectionKeyframe {
+    readonly beat: number;
+    /** How many selected marchers are Set on the count */
+    readonly set: number;
+    /** How many marchers are selected */
+    readonly total: number;
+}
+
+/**
+ * The selection's keyframes, ascending: every count after the first page where a selected marcher
+ * is Set. The first page has none: everyone is Set there, always.
+ *
+ * @param setBeats each selected marcher's Set beats (`marcherSetBeats`)
+ */
+export function selectionKeyframes(
+    setBeats: readonly (readonly number[])[],
+): SelectionKeyframe[] {
+    const counts = new Map<number, number>();
+    for (const beats of setBeats)
+        for (const beat of beats)
+            if (beat !== 0) counts.set(beat, (counts.get(beat) ?? 0) + 1);
+    const total = setBeats.length;
+    return [...counts]
+        .sort(([a], [b]) => a - b)
+        .map(([beat, set]) => ({ beat, set, total }));
 }

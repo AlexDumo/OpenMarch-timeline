@@ -264,9 +264,9 @@ describe("en.json", () => {
                 "Deleted {label} · Page {pages} changed",
             "timeline.moveDeleted.withPages":
                 "Deleted {label} · Pages {pages} changed",
-            "timeline.holdMarks.kept": "Selected marchers are kept here",
-            "timeline.holdMarks.keptHint":
-                "They stay here when earlier pages change",
+            "timeline.keyframes.label":
+                "Page {page}, count {count}: {set} of {total} selected marchers Set",
+            "timeline.keyframes.labelOne": "Page {page}, count {count}: Set",
         }))
             expect(lookup(key), key).toBe(text);
     });

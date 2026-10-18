@@ -1070,7 +1070,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                     ? positionBeat
                                     : undefined
                             }
-                            holdMarks={props.holdMarks}
+                            keyframes={props.keyframes}
                             keepChains={props.keepChains}
                         />
                         <TimelinePastEndShade
