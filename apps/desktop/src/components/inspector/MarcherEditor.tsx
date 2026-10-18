@@ -42,6 +42,7 @@ import {
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import { TagButtons } from "./marcher/TagEditor";
 import TimelineHoldLine from "./TimelineHoldLine";
+import UnsetHereButton from "./UnsetHereButton";
 import { useMarcherNameOf } from "@/timeline/useKeepLaterPages";
 
 const DEFAULT_SORTING_THRESHOLD = 0.1;
@@ -649,6 +650,10 @@ function MarcherEditor() {
                                         marcherIds={selectedMarcherIdList}
                                         nameOf={selectedNameOf}
                                     />
+                                    {/* Set vs Following (#304) */}
+                                    <UnsetHereButton
+                                        marcherIds={selectedMarcherIdList}
+                                    />
                                     {selectedMarchers.length === 2 && (
                                         <ActionButton
                                             action="swapMarchers"
@@ -933,6 +938,12 @@ function MarcherEditor() {
                                                         selectedMarcherIdList
                                                     }
                                                     nameOf={selectedNameOf}
+                                                />
+                                                {/* Set vs Following (#304) */}
+                                                <UnsetHereButton
+                                                    marcherIds={
+                                                        selectedMarcherIdList
+                                                    }
                                                 />
                                             </div>
                                             {/* This is here so the form submits when enter is pressed, does NOT need to be translated */}
