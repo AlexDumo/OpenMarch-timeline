@@ -18,14 +18,14 @@ import {
  *   show: the chains light for a moment, and until the next edit a click on one unlinks it as it
  *   was before the edit (**Only Page 2**, `CarriedEdit`).
  *
- * Off by default; `localStorage["openmarch.followLinks"] = "on"` turns it on (from the next render).
+ * On by default; `localStorage["openmarch.followLinks"] = "off"` turns it off (from the next render).
  */
 export const FOLLOW_LINKS_KEY = "openmarch.followLinks";
 
 /** Whether the follow links variant is on (read on every call, so a study can switch it live) */
 export function followLinksOn(): boolean {
     try {
-        return globalThis.localStorage?.getItem(FOLLOW_LINKS_KEY) === "on";
+        return globalThis.localStorage?.getItem(FOLLOW_LINKS_KEY) !== "off";
     } catch {
         return false;
     }

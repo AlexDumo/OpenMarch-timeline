@@ -36,6 +36,12 @@ import {
     useTimelineResolverStore,
 } from "../timelineStore";
 
+// These cover the "Pages followed" toast: the follow links default (chains, no toast) is off here
+vi.mock("@/timeline/followLinks", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/timeline/followLinks")>()),
+    followLinksOn: () => false,
+}));
+
 /**
  * UI-18 keep later pages, through the API on a real database: the page box menu's commands and
  * **K** keep or let follow again the selected marchers, one undo step each; and after an edit that
