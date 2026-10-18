@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Resolver } from "@openmarch/core";
 import { db } from "@/global/database/db";
+import tolgee from "@/global/singletons/Tolgee";
 import type { DbConnection } from "@/db-functions/types";
 import {
     unsetMarchersAt,
@@ -10,10 +11,17 @@ import { isBasicMode } from "@/stores/EditorModeStore";
 import {
     displayedBeat,
     useTimelineSelectionStore,
+    type PageBox,
 } from "@/stores/TimelineSelectionStore";
 import { lockedOnBox, useBasicLocksStore } from "./basicLocks";
 import { toastBasicLock } from "./basicLockToast";
 import { toastTimelineError } from "./timelineErrorMessages";
+import {
+    followingPages,
+    pageKeepStates,
+    type KeepTranslate,
+} from "./timelineKeepLater";
+import { keepPagesOfBoxes } from "./timelineOnlyThisPage";
 import { isSetAt, marcherSetBeats } from "./timelineSetFollowing";
 import { resolverSpans, useTimelineResolverStore } from "./timelineStore";
 import { applyKeptChange, useKeptAssignmentsStore } from "./useKeepLaterPages";
@@ -21,7 +29,9 @@ import { applyKeptChange, useKeptAssignmentsStore } from "./useKeepLaterPages";
 /**
  * **Unset here** as the UI runs it (Set vs Following, #300 and #304): the selected marchers that
  * are Set on the playhead's count lose that coordinate and follow from earlier, while later pages
- * keep their spots (`unsetMarchersAt`). One undo step; a refusal is a toast, never thrown.
+ * keep their spots (`unsetMarchersAt`). **Unset here and on Pages N–M** (#305) lets the later
+ * pages that followed the spot follow back instead, and is offered only when some do
+ * (`unsetFollowingPages`). Each is one undo step; a refusal is a toast, never thrown.
  */
 
 const NOTHING: UnsetResult = { unset: [], markers: { added: [], removed: [] } };
@@ -68,6 +78,83 @@ export function useUnsetTargets(marcherIds: readonly number[]): number[] {
     }, [resolver, version, kept, marcherIds, beat]);
 }
 
+/**
+ * The pages that follow the spot `marcherIds` have at `beat`, in page order: for the ones Set
+ * there (`unsetTargets`), the page boxes after the one holding `beat`, in a row, that some of them
+ * follow into without a move of their own (`followingPages`, as the keep chains and **Only Page
+ * N** read it). What **Unset here and on Pages N–M** lets follow back; null when none follow.
+ */
+export function unsetFollowingPages({
+    resolver,
+    kept,
+    marcherIds,
+    beat,
+    boxes,
+}: {
+    resolver: Resolver | null;
+    kept: ReadonlySet<number>;
+    marcherIds: readonly number[];
+    beat: number;
+    boxes: readonly PageBox[];
+}): string[] | null {
+    const targets = unsetTargets({ resolver, kept, marcherIds, beat });
+    if (!resolver || targets.length === 0) return null;
+    const pages = keepPagesOfBoxes(boxes);
+    const holding = pages.find(
+        (p) => p.range && p.range.start < beat && beat <= p.flag,
+    );
+    if (!holding) return null;
+    const states = pageKeepStates({
+        pages,
+        marcherIds: targets,
+        spansOf: (id) => resolverSpans(resolver, id),
+        kept,
+    });
+    return followingPages(states, holding.id)?.names ?? null;
+}
+
+/** **Unset here and on Pages N–M**'s label for the pages that follow (`unsetFollowingPages`). */
+export function unsetFollowingLabel(
+    pages: readonly string[],
+    translate: KeepTranslate = (key, defaultValue, params) =>
+        tolgee.t(key, defaultValue, params),
+): string {
+    const first = pages[0] ?? "";
+    const last = pages[pages.length - 1] ?? first;
+    return first === last
+        ? translate(
+              "actions.timeline.unsetHereAndPage",
+              "Unset here and on Page {page}",
+              { page: first },
+          )
+        : translate(
+              "actions.timeline.unsetHereAndPages",
+              "Unset here and on Pages {first}–{last}",
+              { first, last },
+          );
+}
+
+/** `unsetFollowingPages` for `marcherIds` at the count shown, kept current. */
+export function useUnsetFollowingPages(
+    marcherIds: readonly number[],
+): string[] | null {
+    const resolver = useTimelineResolverStore((s) => s.resolver);
+    const version = useTimelineResolverStore((s) => s.version);
+    const kept = useKeptAssignmentsStore((s) => s.ids);
+    const beat = useTimelineSelectionStore(displayedBeat);
+    const boxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    return useMemo(() => {
+        void version; // a new version means new spans
+        return unsetFollowingPages({
+            resolver,
+            kept,
+            marcherIds,
+            beat,
+            boxes,
+        });
+    }, [resolver, version, kept, marcherIds, beat, boxes]);
+}
+
 /** The page box holding `beat` (`start < beat ≤ end`), from the Basic locks' boxes. */
 const boxHolding = (beat: number) =>
     useBasicLocksStore
@@ -79,9 +166,28 @@ const boxHolding = (beat: number) =>
  * moves there need Expert) are left alone with the lock toast, and a shared move's slot is taken
  * out rather than left vacant.
  */
-export async function unsetHere(
+export function unsetHere(
     marcherIds: readonly number[],
     database: DbConnection = db,
+): Promise<UnsetResult> {
+    return unsetSetMarchers(marcherIds, true, database);
+}
+
+/**
+ * **Unset here and on Pages N–M** for `marcherIds` at the count shown: as `unsetHere`, but the
+ * later pages that followed the spot follow back to the earlier one.
+ */
+export function unsetHereAndFollowing(
+    marcherIds: readonly number[],
+    database: DbConnection = db,
+): Promise<UnsetResult> {
+    return unsetSetMarchers(marcherIds, false, database);
+}
+
+async function unsetSetMarchers(
+    marcherIds: readonly number[],
+    keepLaterPages: boolean,
+    database: DbConnection,
 ): Promise<UnsetResult> {
     const beat = displayedBeat(useTimelineSelectionStore.getState());
     let targets = unsetTargets({
@@ -106,6 +212,7 @@ export async function unsetHere(
             db: database,
             beat,
             marcherIds: targets,
+            keepLaterPages,
             tidyShared: basic,
         });
         applyKeptChange(result.markers);

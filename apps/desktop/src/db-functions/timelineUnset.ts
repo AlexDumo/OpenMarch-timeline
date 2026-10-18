@@ -131,28 +131,33 @@ async function nextPageBox(
         : null;
 }
 
-/** **Unset here** as one undoable edit (`unsetMarchersAtInTransaction` with the stays). */
+/**
+ * **Unset here** as one undoable edit (`unsetMarchersAtInTransaction` with the stays), or with
+ * `keepLaterPages` false **Unset here and on Pages N–M** (no stays: the followers carry back).
+ */
 export async function unsetMarchersAt({
     db,
     beat,
     marcherIds,
+    keepLaterPages = true,
     tidyShared = false,
 }: {
     db: DbConnection;
     beat: number;
     marcherIds: readonly number[];
+    keepLaterPages?: boolean;
     tidyShared?: boolean;
 }): Promise<UnsetResult> {
     try {
         return await transactionWithHistory(
             db,
-            "unsetMarchersAt",
+            keepLaterPages ? "unsetMarchersAt" : "unsetMarchersAndFollowersAt",
             async (tx) => {
                 const result = await unsetMarchersAtInTransaction({
                     tx,
                     beat,
                     marcherIds,
-                    keepLaterPages: true,
+                    keepLaterPages,
                     tidyShared,
                 });
                 if (result.unset.length === 0) throw new NothingToUnset(result);

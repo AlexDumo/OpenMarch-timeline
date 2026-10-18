@@ -13,6 +13,11 @@ interface HandlerOptions {
     ignoreRepeat?: boolean | (() => boolean);
     /** Runs when the key that ran the action is let go (or the window loses focus while held) */
     onRelease?: () => void;
+    /**
+     * The label shown in the palette instead of the definition's, for one that names state (a
+     * page range). Translated by the caller. Default: the definition's label.
+     */
+    label?: string;
 }
 
 export function useActionHandler(
@@ -35,12 +40,18 @@ export function useActionHandlerGroup(
         options.ignoreRepeat ?? false,
     );
     const releaseRef = useRef(options.onRelease);
+    const labelRef = useRef(options.label);
     const hasRelease = options.onRelease !== undefined;
     useLayoutEffect(() => {
         runRef.current = run;
         ignoreRepeatRef.current = options.ignoreRepeat ?? false;
         releaseRef.current = options.onRelease;
     });
+    useLayoutEffect(() => {
+        if (labelRef.current === options.label) return;
+        labelRef.current = options.label;
+        notifyActionHandlersChanged();
+    }, [options.label]);
     useLayoutEffect(() => {
         if (enabledRef.current === enabled) return;
         enabledRef.current = enabled;
@@ -61,6 +72,7 @@ export function useActionHandlerGroup(
                     return typeof ignore === "function" ? ignore() : ignore;
                 },
                 release: hasRelease ? () => releaseRef.current?.() : undefined,
+                label: () => labelRef.current,
             }),
         );
         return () => unregister.forEach((off) => off());
