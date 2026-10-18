@@ -68,6 +68,7 @@ import {
     usePageKeepStates,
 } from "@/timeline/useKeepLaterPages";
 import { useSelectedPage } from "@/context/SelectedPageContext";
+import tolgee from "@/global/singletons/Tolgee";
 import {
     followLinkChains,
     keepHereMenu,
@@ -232,6 +233,7 @@ export default function TimelineModePanel() {
     const followLinks = followLinksOn();
     const fieldEditing = useFieldEditing(followLinks);
     const carried = useFollowLinksStore((s) => s.carried);
+    const carriedLit = useFollowLinksStore((s) => s.carriedLit);
     const homePageId = pages[0]?.id ?? null;
     const keepChains = useMemo(
         () =>
@@ -243,6 +245,7 @@ export default function TimelineModePanel() {
                       homePageId,
                       editing: fieldEditing,
                       carried,
+                      carriedLit,
                   })
                 : plainKeepChains,
         [
@@ -253,12 +256,21 @@ export default function TimelineModePanel() {
             homePageId,
             fieldEditing,
             carried,
+            carriedLit,
         ],
     );
-    const keepHere = useMemo(
-        () => keepHereMenu(keepStates, keepK),
-        [keepStates, keepK],
-    );
+    const keepHere = useMemo(() => {
+        const menu = keepHereMenu(keepStates, keepK);
+        return followLinks
+            ? {
+                  ...menu,
+                  keepLabel: tolgee.t(
+                      "timeline.followLinks.unlinkHere",
+                      "Unlink selected marchers here",
+                  ),
+              }
+            : menu;
+    }, [keepStates, keepK, followLinks]);
     const { tracks: timelines, current: tracksCurrent } =
         useTimelineTracksState({
             database: db,

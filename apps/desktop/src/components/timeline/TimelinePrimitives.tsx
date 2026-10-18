@@ -1041,7 +1041,7 @@ const TimelinePageBox = memo(function TimelinePageBox({
     const labelChars = labelShown ? page.label.length : 0;
     const fit = chain ? chainFit(boxWidth, labelChars) : null;
     const dot =
-        chain && !fit && chain.kind !== "follows"
+        chain && !fit && (chain.kind !== "follows" || chain.shown)
             ? keepDotFit(boxWidth, labelChars)
             : null;
     // The sticky label stops before the chain or dot (`labelPaddingBeside`)
@@ -1092,7 +1092,11 @@ const TimelinePageBox = memo(function TimelinePageBox({
                     descriptionId={holdDescriptionId}
                 />
                 {chain && dot && (
-                    <PageKeepDot kind={chain.kind} left={dot.offset} />
+                    <PageKeepDot
+                        kind={chain.kind}
+                        left={dot.offset}
+                        lit={chain.lit}
+                    />
                 )}
             </button>
         </HoldMarkTooltip>

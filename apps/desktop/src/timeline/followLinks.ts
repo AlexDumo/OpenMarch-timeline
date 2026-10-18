@@ -13,8 +13,10 @@ import {
  * - the linked chain shows on every page box that follows the selected page for the selected
  *   marchers (`followingPages`), not only on the selected page and on hover;
  * - while a field drag moves, scales or rotates them, those chains light up in the accent;
+ * - a click on one beforehand unlinks that page (keeps the marchers there), so the edit won't move it;
  * - after an edit that carried into them, the "Pages 3–4 followed · Only Page 2" toast doesn't
- *   show: the chains stay lit, and a click on one does **Only Page 2** (`CarriedEdit`).
+ *   show: the chains light for a moment, and until the next edit a click on one unlinks it as it
+ *   was before the edit (**Only Page 2**, `CarriedEdit`).
  *
  * Off by default; `localStorage["openmarch.followLinks"] = "on"` turns it on (from the next render).
  */
@@ -44,12 +46,28 @@ export interface CarriedEdit {
 interface FollowLinksState {
     /** The last edit's carry, until the next edit, undo or redo */
     carried: CarriedEdit | null;
+    /** The carry's chains are lit: for `CARRIED_LIT_MS` after it, then they go quiet again */
+    carriedLit: boolean;
     setCarried: (carried: CarriedEdit | null) => void;
 }
 
+/** How long the chains stay lit after an edit carried into their pages (ms) */
+export const CARRIED_LIT_MS = 1500;
+
+let quietTimer: ReturnType<typeof setTimeout> | undefined;
+
 export const useFollowLinksStore = create<FollowLinksState>((set) => ({
     carried: null,
-    setCarried: (carried) => set({ carried }),
+    carriedLit: false,
+    setCarried: (carried) => {
+        clearTimeout(quietTimer);
+        set({ carried, carriedLit: carried !== null });
+        if (carried)
+            quietTimer = setTimeout(
+                () => set({ carriedLit: false }),
+                CARRIED_LIT_MS,
+            );
+    },
 }));
 
 /*

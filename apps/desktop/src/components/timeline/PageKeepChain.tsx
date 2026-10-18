@@ -168,6 +168,7 @@ export function followLinkChains({
     homePageId,
     editing,
     carried,
+    carriedLit = true,
     translate = (key, defaultValue, params) =>
         tolgee.t(key, defaultValue, params),
 }: {
@@ -177,6 +178,8 @@ export function followLinkChains({
     homePageId: number | null;
     editing: boolean;
     carried: CarriedEdit | null;
+    /** The carry's chains are lit (just after the edit) */
+    carriedLit?: boolean;
     translate?: KeepTranslate;
 }): PageKeepChains {
     if (chains.size === 0) return chains;
@@ -200,22 +203,50 @@ export function followLinkChains({
             out.set(state.pageId, {
                 ...chain,
                 shown: true,
-                lit: true,
+                lit: editing || carriedLit,
                 withK: false,
                 label: translate(
                     "timeline.followLinks.carried",
-                    "Followed your change to Page {edited}",
+                    "Moved with your change to Page {edited}",
                     params,
                 ),
                 hint: translate(
                     "timeline.followLinks.carriedHint",
-                    "Click to put {pages} back as they were (only Page {edited} changes)",
+                    "Click to unlink and put {pages} back as they were",
                     params,
                 ),
                 onToggle: carried.onlyThisPage,
             });
         } else if (followNames.has(state.pageName)) {
-            out.set(state.pageId, { ...chain, shown: true, lit: editing });
+            const params = {
+                page: state.pageName,
+                from: state.from[state.from.length - 1] ?? "",
+            };
+            const label = params.from
+                ? translate(
+                      "timeline.followLinks.linked",
+                      "Linked to Page {from}: changes there move this page too",
+                      params,
+                  )
+                : chain.label;
+            const hint = translate(
+                "timeline.followLinks.linkedHint",
+                "Click to unlink, so Page {page} and the pages after it stay put",
+                params,
+            );
+            out.set(state.pageId, {
+                ...chain,
+                shown: true,
+                lit: editing,
+                label,
+                hint,
+                menuLabel: label,
+                menuHint: translate(
+                    "timeline.followLinks.linkedMenuHint",
+                    "Right-click the page to unlink it",
+                    params,
+                ),
+            });
         }
     }
     return out;
@@ -519,8 +550,11 @@ export function PageKeepChainButton({
 export function PageKeepDot({
     kind,
     left,
+    lit = false,
 }: {
     kind: PageKeepChain["kind"];
+    /** Follow links: a lit chain's dot fills in the accent */
+    lit?: boolean;
     /** How far in from the box's left edge (px, `keepDotFit`) */
     left: number;
 }) {
@@ -529,8 +563,13 @@ export function PageKeepDot({
             aria-hidden
             data-testid="page-keep-dot"
             data-chain={kind}
+            data-lit={lit ? "true" : undefined}
             className={`pointer-events-none absolute bottom-[2px] size-[8px] rounded-full ${
-                kind === "kept" ? "bg-accent" : "border-accent bg-fg-2 border-2"
+                kind === "kept" || lit
+                    ? "bg-accent"
+                    : kind === "follows"
+                      ? "border-text-subtitle/70 bg-fg-2 border"
+                      : "border-accent bg-fg-2 border-2"
             }`}
             style={{ left }}
         />
