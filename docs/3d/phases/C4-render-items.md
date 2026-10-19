@@ -159,8 +159,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 ### C4.9: Test Garment for the GPU run
 
 - Owner: Trevor (3d/c4-test-garment)
-- Status: done 2026-10-13 (local harness branch, not on main)
-- PR: none
+- Status: in-progress
+- PR: none (`3d/c4-test-garment` is not pushed yet)
 - Parallel: yes
 - Depends on: C4.2
 
@@ -251,23 +251,33 @@ Nothing yet.
   rectangle, so the 3D silk clips where the Artwork template's mask does.
   C4.11's 44 × 66 in swing size is unchanged; its outline is the flat-bottom
   swing (owner Q41), with a sagging-bottom alternative kept in the data.
-- 2026-10-17, C4.9 recorded (branch `3d/c4-test-garment`, local, not on
-  `main`): the test Garment was built and measured on 2026-10-13 in the
-  `task/gpu-benchmark` harness with `3d/c4-silk` (step 6) merged in, in
-  commits `4e908a766` (harness: `view3d-web/bench/garment.ts`,
-  `garmentMesh.ts` and their test) and `849294254` (results). Nothing in
-  `src/` changes. The Garment is made in the browser from each body type's
-  jacket, sleeves and pants (`_PART` 1–3), subdivided to 3,152 triangles a
-  fit and skinned through step 6's composer, one `InstancedMesh` a fitted
-  body type, no shadows. Run it with `garment=N|all` (N wearers),
-  `performers=N` (cut the show) and `garmentSubdiv=0` (788 triangles a fit);
-  the `run-bench.mjs` commands are in `research/gpu-benchmark.md`, "C4.9: the
-  test Garment". Headline on the M1 Pro (385 marchers, `hs`, 1080p, 1×):
-  +7 draws in every case (baseline 131); frame time 4.99 ms off, +0.29 ms
-  for 40 wearers, +0.94 for 150, +2.07 for 300, +2.63 for all; +3.73 ms for
-  all at 2×. The full reading is in that branch's `docs/3d/findings.md`,
+- 2026-10-17, C4.9 measured, not done (branch `3d/c4-test-garment`, on
+  Trevor's machine only): the test Garment was built and measured on
+  2026-10-13 in the `task/gpu-benchmark` harness with `3d/c4-silk` (step 6)
+  merged in, in commits `4e908a766` (harness: `view3d-web/bench/garment.ts`,
+  `garmentMesh.ts` and their test) and `849294254` (results). Those commits,
+  the `task/gpu-benchmark` harness (`view3d-web/bench/`) and
+  `research/gpu-benchmark.md` are on Trevor's local branch, not on any
+  remote, so the hashes don't resolve yet. Nothing in `src/` changes. The
+  Garment is made in the browser from each body type's jacket, sleeves and
+  pants (`_PART` 1–3), subdivided to 3,152 triangles a fit and skinned
+  through step 6's composer, one `InstancedMesh` a fitted body type, no
+  shadows. Run it with `garment=N|all` (N wearers), `performers=N` (cut the
+  show) and `garmentSubdiv=0` (788 triangles a fit); the `run-bench.mjs`
+  commands are in that branch's `research/gpu-benchmark.md`, "C4.9: the test
+  Garment". Headline on the M1 Pro (385 marchers, `hs`, 1080p, 1×): +7 draws
+  in every case (baseline 131); frame time 4.99 ms off, +0.29 ms for 40
+  wearers, +0.94 for 150, +2.07 for 300, +2.63 for all; +3.73 ms for all at
+  2×. The full reading is in that branch's `docs/3d/findings.md`,
   "2026-10-13 · trevor (3d/c4-test-garment) · C4.9, test Garment in the GPU
-  harness". Before C4.7, the harness and the Garment must be ported onto
-  `main` (step 6 merged as #120) or onto the C4.3 and C4.4 branches, since
-  the branch carries the pre-merge step 6.
+  harness". These numbers were taken on the pre-merge step 6.
+  - **Next:** push `3d/c4-test-garment` and `task/gpu-benchmark` to the
+    fork; port the harness (harness-only, under `view3d-web/bench/`, with
+    `research/gpu-benchmark.md`) and the test Garment onto `main`, where
+    step 6 merged as #120, not onto the C4.3 or C4.4 branches; then re-run
+    the M1 Pro numbers on `main` before C4.7.
+  - **Blockers:** the commits exist only on Trevor's local branch.
+  - **Resume from:** push both branches, then port `view3d-web/bench/` and
+  `research/gpu-benchmark.md` onto a branch from `main` and re-run
+  `run-bench.mjs` with `garment=all`.
   <!-- cspell:ignore Subdiv -->
