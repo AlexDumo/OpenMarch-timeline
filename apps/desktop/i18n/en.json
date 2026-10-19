@@ -36,8 +36,12 @@
         "edit": {
             "noRedoAvailable": "No action to redo",
             "noUndoAvailable": "No action to undo",
+            "redidCueEdit": "Redid a cue edit (Visuals)",
+            "redidDrillEdit": "Redid a drill edit (Editor)",
             "redo": "Redo",
-            "undo": "Undo"
+            "undo": "Undo",
+            "undidCueEdit": "Undid a cue edit (Visuals)",
+            "undidDrillEdit": "Undid a drill edit (Editor)"
         },
         "file": {
             "closeFile": "Close file",
@@ -128,6 +132,8 @@
             "runFieldBenchmark": "Run field benchmark",
             "runFieldBenchmarkKeywords": "performance fps speed test frame rate",
             "showShortcuts": "Keyboard shortcuts",
+            "toggleWorkspace": "Switch workspace (Editor or Visuals)",
+            "toggleWorkspaceKeywords": "visuals editor workspace cues mode",
             "showNextPaths": "Show next page paths",
             "showPreviousPaths": "Show previous page paths",
             "toggleNextPaths": "Toggle next page paths",
@@ -252,6 +258,7 @@
     },
     "commandPalette": {
         "close": "Close",
+        "editsDrill": "Edits the drill — switch to Editor",
         "empty": "No matching commands.",
         "navigate": "Navigate",
         "placeholder": "Search commands…",
@@ -2443,7 +2450,7 @@
         "cue": {
             "title": "Cue",
             "delete": "Delete",
-            "where": "{who}, count {count}",
+            "where": "{who}, {where}",
             "value": "Value",
             "notForEveryone": "{value} (doesn't fit everyone)",
             "transition": "Transition (counts)",
@@ -2463,11 +2470,11 @@
             "pickingPoint": "Click a point on the field (Esc cancels)"
         },
         "why": {
-            "title": "Why, at count {count}",
+            "title": "Why, at {where}",
             "value": "{value}: {n} of {total}",
             "setBy": "Set by",
             "beat": "Beat",
-            "cue": "{value} for {who} on count {count}",
+            "cue": "{value} for {who} on {where}",
             "takenOver": "(taken over from {channel})",
             "default": {
                 "library": "The default",

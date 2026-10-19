@@ -3,7 +3,12 @@ import { useEditorModeStore } from "@/stores/EditorModeStore";
 import { useWorkspaceViewStore } from "@/stores/WorkspaceViewStore";
 import { isActionEnabled, registerActionHandler, runAction } from "../registry";
 import { isDrillEditingAction } from "../workspaceActions";
-import type { ActionId } from "../definitions";
+import {
+    ACTION_IDS,
+    getActionDefinition,
+    type ActionCategory,
+    type ActionId,
+} from "../definitions";
 
 afterEach(() => useWorkspaceViewStore.setState({ view: "editor" }));
 
@@ -14,28 +19,45 @@ const handle = (id: ActionId) => {
 };
 
 describe("drill edits in Visuals mode (performer-behavior.md 7.1)", () => {
-    it("are the moving, aligning and shaping actions, and K", () => {
-        for (const id of [
-            "moveSelectedMarchersUp",
-            "alignHorizontally",
-            "swapMarchers",
-            "setSelectedMarchersToNextPage",
-            "alignmentEventLine",
-            "applyQuickShape",
-            "createCircle",
-            "toggleKeepOnPage",
-        ] as const)
+    // Over the whole registry, not a list of ids, so actions added or removed later are held to
+    // the same rule
+    it("are the actions whose definitions say they edit the drill", () => {
+        for (const id of ACTION_IDS)
+            expect(isDrillEditingAction(id), id).toBe(
+                getActionDefinition(id).editsDrill,
+            );
+    });
+
+    it("include every moving, aligning, batch, cursor and shape action", () => {
+        const drillCategories = new Set<ActionCategory>([
+            "movement",
+            "alignment",
+            "batchEdit",
+            "cursor",
+            "shape",
+        ]);
+        const inDrillCategories = ACTION_IDS.filter((id) =>
+            drillCategories.has(getActionDefinition(id).category),
+        );
+        expect(inDrillCategories.length).toBeGreaterThan(0);
+        for (const id of inDrillCategories)
             expect(isDrillEditingAction(id), id).toBe(true);
-        for (const id of [
-            "selectAllMarchers",
-            "performUndo",
-            "performRedo",
-            "playPause",
-            "nextPage",
-            "previousPage",
-            "focusTimeline",
-        ] as const)
-            expect(isDrillEditingAction(id), id).toBe(false);
+    });
+
+    it("leave out files, undo, playback, navigation, selecting and the workspace switch", () => {
+        const kept = new Set<ActionCategory>([
+            "file",
+            "edit",
+            "playback",
+            "navigation",
+            "select",
+        ]);
+        for (const id of ACTION_IDS)
+            if (kept.has(getActionDefinition(id).category))
+                expect(isDrillEditingAction(id), id).toBe(false);
+        expect(isDrillEditingAction("toggleWorkspace")).toBe(false);
+        // K keeps the selected marchers on later pages (UI-18), filed under the timeline
+        expect(isDrillEditingAction("toggleKeepOnPage")).toBe(true);
     });
 
     it("don't run in Visuals mode, and run again in the Editor", () => {
