@@ -3,7 +3,10 @@ import { describe, expect, it as plainIt } from "vitest";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { readShowTiming } from "@/timeline/showTiming";
 import { _replaceAllBeatObjects } from "@/components/timeline/audio/EditableAudioPlayerUtils";
-import { _importMusicXmlFile } from "@/components/music/MusicXmlImport";
+import {
+    _importMusicXmlFile,
+    parseMusicXmlFile,
+} from "@/components/music/MusicXmlImport";
 import Measure from "@/global/classes/Measure";
 import { performUndo } from "../history";
 import { deleteBeatsCarryingCues, deleteBeatsInTransaction } from "../beat";
@@ -210,12 +213,14 @@ describeDbTests("item changes when every beat is replaced", (it) => {
 
             const { beats: allBeats, pages: allPages } =
                 await readShowTiming(db);
+            const parsed = await parseMusicXmlFile({
+                arrayBuffer: async () =>
+                    new TextEncoder().encode(scoreOf(24)).buffer,
+            });
             const result = await _importMusicXmlFile({
                 data: {
-                    file: {
-                        name: "score.musicxml",
-                        text: async () => scoreOf(24),
-                    } as unknown as File,
+                    fileName: "score.musicxml",
+                    parsed,
                     allPages: [...allPages],
                     measures: [],
                     allBeats: [...allBeats],
