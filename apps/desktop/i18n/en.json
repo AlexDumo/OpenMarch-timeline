@@ -124,6 +124,7 @@
             "exitTimelineFocus": "Done editing timeline",
             "focusCanvas": "Focus canvas",
             "focusTimeline": "Edit timeline",
+            "openFieldMenu": "Open the field menu",
             "hideNextPaths": "Hide next page paths",
             "hidePreviousPaths": "Hide previous page paths",
             "openCommandPalette": "Command palette",
