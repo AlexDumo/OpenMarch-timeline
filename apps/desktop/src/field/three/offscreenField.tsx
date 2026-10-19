@@ -151,6 +151,7 @@ export async function createOffscreenField(
                 <LabelsLayer
                     marchers={marchers}
                     dimming={NO_DIMMING}
+                    following={NO_FOLLOWING}
                     labels={args.labels}
                     theme={args.fieldProperties.theme}
                     atlas={atlases.label}

@@ -546,6 +546,7 @@ function ThreeFieldView() {
                         <LabelsLayer
                             marchers={marchers}
                             dimming={dimming}
+                            following={following}
                             labels={labels}
                             theme={fieldProperties.theme}
                             atlas={atlases.label}

@@ -1,4 +1,4 @@
-import { sameMembers, type FieldDimming } from "./fieldDimming";
+import { DIMMED_OPACITY, sameMembers, type FieldDimming } from "./fieldDimming";
 
 /**
  * Which marchers the field draws as Following (`FOLLOWING_LOOK`) because they're Following at the
@@ -46,12 +46,14 @@ export class FieldFollowing {
  * full strength. A shape with an outline dashes the outline round its fill at
  * 60%; one without dashes its edge in its fill's color, with nothing inside.
  * An X dashes its own lines. Dashes keep the
- * shape's contrast and read by shape, not only by lightness; the label stays
- * solid. The marchers layer takes how far along the look is as one 0–1 value
+ * shape's contrast and read by shape, not only by lightness; the label is a
+ * little fainter. The marchers layer takes how far along the look is as one 0–1 value
  * per marcher (`aFollowing`), so an ease can open the gaps from solid.
  */
 export const FOLLOWING_LOOK = {
-    /** How opaque the fill is inside a dashed outline, and when too small for dashes. */
+    /** How opaque the label is: a little fainter than Set, still well-contrasted text. */
+    labelOpacity: 0.75,
+    /** How opaque the fill is inside a dashed outline. */
     fillOpacity: 0.6,
     /** The dashed edge's width, in field units; never under `minEdgePx`. */
     edgeWidth: 1.75,
@@ -61,8 +63,16 @@ export const FOLLOWING_LOOK = {
     sideDashes: 3,
     /** How much of each dash's share a gap takes. */
     gap: 0.4,
-    /** Below this dot radius on screen, in CSS px, no dashes: the 60% fill alone. */
-    minDashRadiusPx: 4,
+    /**
+     * Below this dot radius on screen, in CSS px, fewer, longer dashes, so the
+     * gaps still show: four gaps round a circle, one a side (owner 2026-10-19:
+     * dashes at any size, never a fade).
+     */
+    fewDashesBelowPx: 4,
+    smallCircleDashes: 4,
+    smallSideDashes: 2,
+    /** The least a gap is, in CSS px, however small the shape. */
+    minGapPx: 2,
 } as const;
 
 /** Whether a marcher is drawn as Following: isolation's dim takes over from it. */
@@ -71,3 +81,13 @@ export const drawnFollowing = (
     following: FieldFollowing,
     id: number,
 ): boolean => !dimming.isDimmed(id) && following.isFollowing(id);
+
+/** How opaque a marcher's label is drawn: dimmed, a little fainter when Following, or solid. */
+export function labelOpacity(
+    dimming: FieldDimming,
+    following: FieldFollowing,
+    id: number,
+): number {
+    if (dimming.isDimmed(id)) return DIMMED_OPACITY;
+    return following.isFollowing(id) ? FOLLOWING_LOOK.labelOpacity : 1;
+}

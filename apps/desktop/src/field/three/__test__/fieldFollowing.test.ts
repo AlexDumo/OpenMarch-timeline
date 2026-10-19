@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { FieldDimming } from "../fieldDimming";
+import { DIMMED_OPACITY } from "../fieldDimming";
 import {
     FieldFollowing,
     FOLLOWING_LOOK,
     drawnFollowing,
+    labelOpacity,
 } from "../fieldFollowing";
 
 describe("FieldFollowing", () => {
@@ -47,6 +49,20 @@ describe("a marcher's drawn look", () => {
         const following = new FieldFollowing();
         following.set(new Set([2]));
         expect(drawnFollowing(dimming, following, 1)).toBe(false);
+    });
+
+    it("draws a Following label a little fainter, still readable; dim wins", () => {
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing();
+        dimming.set(new Set([1, 2, 3]));
+        following.set(new Set([2, 3]));
+        expect(labelOpacity(dimming, following, 1)).toBe(1);
+        expect(labelOpacity(dimming, following, 3)).toBe(
+            FOLLOWING_LOOK.labelOpacity,
+        );
+        expect(labelOpacity(dimming, following, 4)).toBe(DIMMED_OPACITY);
+        expect(FOLLOWING_LOOK.labelOpacity).toBeGreaterThanOrEqual(0.7);
+        expect(FOLLOWING_LOOK.labelOpacity).toBeLessThan(1);
     });
 
     it("dashes the edge at least 2 px wide round a 60% fill, solid corners", () => {

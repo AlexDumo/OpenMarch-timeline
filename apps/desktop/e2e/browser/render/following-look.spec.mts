@@ -13,7 +13,8 @@ import { isolate } from "../timeline.mjs";
  * own lines. The field test API's `following` says what the field means to
  * draw; this checks the pixels.
  *
- * - The test on white asserts the dashes and the fill for every shape.
+ * - The tests on white assert the dashes (at the opening zoom and 3×) and
+ *   the fill (3×) for every shape and style.
  * - The contact sheet captures every shape and style, Set beside Following,
  *   on white, a dark theme and turf (with `TURF_IMAGE` naming a field image;
  *   skipped without), at the opening zoom and at 3×, plus an isolated move.
@@ -37,7 +38,8 @@ const sections = SHAPES.flatMap((shape, row) =>
         name: `${shape}-${style.name}`,
         set: row * 6 + column * 2 + 1,
         following: row * 6 + column * 2 + 2,
-        x: 300 + column * 110,
+        // Clear of the yard lines (every 90 field units), which would fill a gap
+        x: 310 + column * 120,
         y: 300 + row * 55,
     })),
 );
@@ -199,55 +201,6 @@ async function capture(page: Page, name: string, margin = 30) {
 test.describe("following look", () => {
     test.use({ seedSql: SHOW_SQL });
 
-    test("a Following edge is dashed at full strength, round a 60% fill only inside an outline", async ({
-        show,
-    }) => {
-        const { page } = show;
-        await onPage1(page);
-        await zoomBy(page, 3);
-        const png = await field(page).screenshot();
-        const box = (await field(page).boundingBox())!;
-        const scale = png.readUInt32BE(16) / box.width;
-        const drawn = await page.evaluate(() =>
-            window.fieldTest!.marchers().map((m) => ({
-                id: m.id,
-                screen: m.screen,
-            })),
-        );
-        const at = (id: number) => {
-            const { screen } = drawn.find((m) => m.id === id)!;
-            return {
-                x: (screen.x - box.x) * scale,
-                y: (screen.y - box.y) * scale,
-            };
-        };
-        const checked = sections.filter((s) => s.style.name !== "outline");
-        const profiles = await edgeProfiles(
-            page,
-            png,
-            checked.map((s) => ({
-                shape: s.shape,
-                set: at(s.set),
-                following: at(s.following),
-            })),
-        );
-        for (const [i, s] of checked.entries()) {
-            const profile = profiles[i]!;
-            // Every dash at the Set shape's full contrast, with a gap between each
-            const least = s.shape === "triangle" ? 6 : 8;
-            expect(profile.gaps, `${s.name} gaps`).toBeGreaterThanOrEqual(
-                least,
-            );
-            expect(profile.dash, `${s.name} dash`).toBeGreaterThan(0.9);
-            // An X's lines are its dashes; it has no fill
-            if (s.shape === "x") continue;
-            // Inside a dashed outline the fill is at 60%; without an outline, nothing
-            if (s.style.name === "both")
-                expect(profile.fill, `${s.name} fill`).toBeCloseTo(0.6, 1);
-            else expect(profile.fill, `${s.name} fill`).toBeLessThan(0.1);
-        }
-    });
-
     test("contact sheet on white", async ({ show }) => {
         const { page } = show;
         await onPage1(page);
@@ -255,6 +208,77 @@ test.describe("following look", () => {
         await zoomBy(page, 3);
         await capture(page, "following-white-3x");
     });
+});
+
+// Measured without labels: at the opening zoom a label touches its shape's
+// top edge and would fill a gap there
+test.describe("following look, measured", () => {
+    test.use({
+        seedSql: [
+            ...SHOW_SQL,
+            "UPDATE section_appearances SET label_visible = 0",
+        ],
+    });
+
+    for (const zoom of [
+        { name: "the opening zoom", times: 1 },
+        { name: "3×", times: 3 },
+    ])
+        test(`a Following edge is dashed at full strength at ${zoom.name}`, async ({
+            show,
+        }) => {
+            const { page } = show;
+            await onPage1(page);
+            if (zoom.times > 1) await zoomBy(page, zoom.times);
+            const png = await field(page).screenshot();
+            const box = (await field(page).boundingBox())!;
+            const scale = png.readUInt32BE(16) / box.width;
+            const drawn = await page.evaluate(() =>
+                window.fieldTest!.marchers().map((m) => ({
+                    id: m.id,
+                    screen: m.screen,
+                })),
+            );
+            const at = (id: number) => {
+                const { screen } = drawn.find((m) => m.id === id)!;
+                return {
+                    x: (screen.x - box.x) * scale,
+                    y: (screen.y - box.y) * scale,
+                };
+            };
+            const profiles = await edgeProfiles(
+                page,
+                png,
+                sections.map((s) => ({
+                    shape: s.shape,
+                    style: s.style,
+                    set: at(s.set),
+                    following: at(s.following),
+                })),
+            );
+            for (const [i, s] of sections.entries()) {
+                const profile = profiles[i]!;
+                // Dashes at any size: fewer, longer ones on a small shape
+                const least = profile.small
+                    ? { circle: 4, square: 4, triangle: 3, x: 4 }[s.shape]
+                    : { circle: 8, square: 8, triangle: 6, x: 8 }[s.shape];
+                expect(profile.gaps, `${s.name} gaps`).toBeGreaterThanOrEqual(
+                    least,
+                );
+                expect(profile.dash, `${s.name} dash`).toBeGreaterThan(0.8);
+                // The fill, where it's big enough to read: 60% inside an
+                // outline, nothing without one (an X's lines are its dashes)
+                if (
+                    profile.small ||
+                    s.shape === "x" ||
+                    s.style.name === "outline"
+                )
+                    continue;
+                if (s.style.name === "both")
+                    expect(profile.fill, `${s.name} fill`).toBeCloseTo(0.6, 1);
+                else expect(profile.fill, `${s.name} fill`).toBeLessThan(0.1);
+            }
+        });
 });
 
 test.describe("following look, dark", () => {
@@ -372,7 +396,7 @@ test.describe("following look, isolated", () => {
 type ShapeName = (typeof SHAPES)[number];
 type Point = { x: number; y: number };
 
-/** The colors at device-pixel `points` in a field capture, as [r, g, b]. */
+/** The colors at device-pixel `points` in a field capture, as [r, g, b], interpolated between pixels. */
 const pixelsAt = (page: Page, png: Buffer, points: readonly Point[]) =>
     page.evaluate(
         async ({ base64, points }) => {
@@ -383,14 +407,27 @@ const pixelsAt = (page: Page, png: Buffer, points: readonly Point[]) =>
             const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
             const context = canvas.getContext("2d")!;
             context.drawImage(bitmap, 0, 0);
+            const { data, width } = context.getImageData(
+                0,
+                0,
+                bitmap.width,
+                bitmap.height,
+            );
+            const at = (x: number, y: number, c: number) =>
+                data[(y * width + x) * 4 + c]!;
+            // Bilinear, between the four pixel centers round the point
             return points.map(({ x, y }) => {
-                const d = context.getImageData(
-                    Math.round(x),
-                    Math.round(y),
-                    1,
-                    1,
-                ).data;
-                return [d[0]!, d[1]!, d[2]!];
+                const x0 = Math.floor(x - 0.5);
+                const y0 = Math.floor(y - 0.5);
+                const fx = x - 0.5 - x0;
+                const fy = y - 0.5 - y0;
+                return [0, 1, 2].map(
+                    (c) =>
+                        at(x0, y0, c) * (1 - fx) * (1 - fy) +
+                        at(x0 + 1, y0, c) * fx * (1 - fy) +
+                        at(x0, y0 + 1, c) * (1 - fx) * fy +
+                        at(x0 + 1, y0 + 1, c) * fx * fy,
+                );
             });
         },
         { base64: png.toString("base64"), points },
@@ -400,6 +437,7 @@ const pixelsAt = (page: Page, png: Buffer, points: readonly Point[]) =>
 const contrast = (color: number[], background: number[]) =>
     Math.max(...color.map((v, i) => Math.abs(v - background[i]!)));
 
+const WHITE = [255, 255, 255];
 const SQUARE_HALF = 5 * Math.sqrt(Math.PI) * 0.6;
 const TRIANGLE_HW = 6;
 const TRIANGLE_HH = TRIANGLE_HW * Math.sqrt(3) * 0.5;
@@ -471,18 +509,82 @@ function edgePath(shape: ShapeName, inset: number): [number, number][] {
 }
 
 /**
- * For each Following shape and the Set one beside it, in a field capture at
- * device-pixel centers: how many gaps its dashed edge (or an X's lines) has,
- * its dashes' contrast as a share of the Set shape's, and its middle's (its
- * fill's opacity). Shapes are measured in the Set circle's scale.
+ * How many gaps a closed run of edge strengths has: falls under `gapBelow`
+ * after a dash over `dashAbove`.
+ */
+function countGaps(
+    values: readonly number[],
+    dashAbove: number,
+    gapBelow: number,
+) {
+    let gaps = 0;
+    let onDash = values[values.length - 1]! > dashAbove;
+    // Round twice, so the first pass settles where the path starts
+    for (const [k, v] of [...values, ...values].entries()) {
+        if (onDash && v < gapBelow && k >= values.length) gaps++;
+        if (v > dashAbove) onDash = true;
+        else if (v < gapBelow) onDash = false;
+    }
+    return gaps;
+}
+
+/**
+ * At each point of `path` (shape units round `center`), the most contrast
+ * with the white field across a pixel either side of it, so half a pixel off
+ * doesn't miss a thin band.
+ */
+async function strongestAcross(
+    page: Page,
+    png: Buffer,
+    path: readonly [number, number][],
+    center: Point,
+    unit: number,
+) {
+    const across = [-1, -0.5, 0, 0.5, 1].map((px) => px / unit);
+    const points = path.flatMap(([x, y], k) => {
+        const [nx, ny] = path[(k + 1) % path.length]!;
+        const [px, py] = path[(k + path.length - 1) % path.length]!;
+        const length = Math.hypot(nx - px, ny - py) || 1;
+        const normal = [(ny - py) / length, -(nx - px) / length];
+        return across.map((t) => ({
+            x: center.x + (x + normal[0]! * t) * unit,
+            y: center.y + (y + normal[1]! * t) * unit,
+        }));
+    });
+    const colors = await pixelsAt(page, png, points);
+    return path.map((_, k) =>
+        Math.max(
+            ...colors
+                .slice(k * across.length, (k + 1) * across.length)
+                .map((c) => contrast(c, WHITE)),
+        ),
+    );
+}
+
+/** A CSS color's red, green and blue. */
+const rgbOf = (css: string) => css.match(/\d+/g)!.slice(0, 3).map(Number);
+
+/**
+ * For each Following shape, in a field capture at device-pixel centers: how
+ * many gaps its dashed edge (or an X's lines) has, its dashes' contrast as a
+ * share of its own color's, whether it's small on screen (the shader's fewer
+ * dashes), and its middle's contrast as a share of its fill's. Shapes are
+ * measured in the Set filled circle's scale.
  */
 async function edgeProfiles(
     page: Page,
     png: Buffer,
-    pairs: readonly { shape: ShapeName; set: Point; following: Point }[],
+    pairs: readonly {
+        shape: ShapeName;
+        style: (typeof STYLES)[number];
+        set: Point;
+        following: Point;
+    }[],
 ) {
-    // Pixels per shape unit: the Set circle's radius along its middle row
-    const circle = pairs.find((p) => p.shape === "circle")!.set;
+    // Pixels per shape unit: the Set filled circle's radius along its middle row
+    const circle = pairs.find(
+        (p) => p.shape === "circle" && p.style.name === "filled",
+    )!.set;
     const row = await pixelsAt(
         page,
         png,
@@ -491,53 +593,51 @@ async function edgeProfiles(
             y: circle.y,
         })),
     );
-    const [field] = await pixelsAt(page, png, [
-        { x: circle.x - 60, y: circle.y },
-    ]);
-    const radius = row.findIndex(
-        (c) => contrast(c, field!) < contrast(row[0]!, field!) / 2,
-    );
-    const unit = (radius - 0.5) / 5;
-    const inset = Math.max(1.75, 2 / unit) / 2;
+    // The default theme's field (sampling it could land on a grid line)
+    const field = WHITE;
+    const radius =
+        row.findIndex(
+            (c) => contrast(c, field) < contrast(row[0]!, field) / 2,
+        ) - 0.5;
+    const unit = radius / 5;
+    // The shader's switch to fewer dashes, at a 4 CSS px radius (the harness draws at 1 device px each)
+    const small = radius < 4;
+    // The dashed edge's width, and the middle of its band from the shape's edge
+    const width = Math.max(1.75, 2 / unit);
     const profiles = [];
-    for (const { shape, set, following } of pairs) {
-        const [background, middle] = await pixelsAt(page, png, [
-            { x: set.x - 60, y: set.y },
-            { x: set.x, y: set.y + (shape === "triangle" ? 1.732 * unit : 0) },
-        ]);
-        const full = contrast(middle!, background!);
-        const share = (colors: number[][]) =>
-            colors.map((c) => contrast(c, background!) / full);
-        const path = edgePath(shape, inset);
-        const values = share(
-            await pixelsAt(
+    for (const { shape, style, following } of pairs) {
+        const outlined = style.outline !== "NULL" && shape !== "x";
+        const color = rgbOf(outlined ? style.outline : style.fill);
+        const full = contrast(color, field);
+        const inset = outlined ? width / 2 - 0.5 : width / 2;
+        const values = (
+            await strongestAcross(
                 page,
                 png,
-                path.map(([x, y]) => ({
-                    x: following.x + x * unit,
-                    y: following.y + y * unit,
-                })),
-            ),
-        );
-        // A gap is a run where the edge drops well under full strength
-        const on = values.map((v) => v > 0.85);
-        const gaps = on.filter((v, k) => v && !on[(k + 1) % on.length]).length;
-        const dashes = values.filter((v) => v > 0.85);
-        const [fill] = share(
-            await pixelsAt(page, png, [
-                {
-                    x: following.x,
-                    y: following.y + (shape === "triangle" ? 1.732 * unit : 0),
-                },
-            ]),
-        );
+                edgePath(shape, inset),
+                following,
+                unit,
+            )
+        ).map((c) => c / full);
+        // Inside an outline a gap shows the 60% fill; elsewhere, the field
+        const [dashAbove, gapBelow] =
+            style.name === "both" && shape !== "x" ? [0.85, 0.75] : [0.6, 0.45];
+        const gaps = countGaps(values, dashAbove, gapBelow);
+        const dashes = values
+            .filter((v) => v > dashAbove)
+            .sort((a, b) => a - b);
+        const [middle] = await pixelsAt(page, png, [
+            {
+                x: following.x,
+                y: following.y + (shape === "triangle" ? 1.732 * unit : 0),
+            },
+        ]);
         profiles.push({
             shape,
+            small,
             gaps,
-            dash:
-                dashes.reduce((sum, v) => sum + v, 0) /
-                Math.max(1, dashes.length),
-            fill: fill!,
+            dash: dashes[Math.floor(dashes.length * 0.9)] ?? 0,
+            fill: contrast(middle!, field) / contrast(rgbOf(style.fill), field),
         });
     }
     return profiles;

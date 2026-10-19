@@ -80,8 +80,11 @@ const FRAGMENT = /* glsl */ `
 #define MIN_EDGE_PX ${L.minEdgePx.toFixed(3)}
 #define CIRCLE_DASHES ${L.circleDashes.toFixed(1)}
 #define SIDE_DASHES ${L.sideDashes.toFixed(1)}
+#define SMALL_CIRCLE_DASHES ${L.smallCircleDashes.toFixed(1)}
+#define SMALL_SIDE_DASHES ${L.smallSideDashes.toFixed(1)}
+#define FEW_DASHES_BELOW_PX ${L.fewDashesBelowPx.toFixed(3)}
+#define MIN_GAP_PX ${L.minGapPx.toFixed(3)}
 #define GAP ${L.gap.toFixed(3)}
-#define MIN_DASH_RADIUS_PX ${L.minDashRadiusPx.toFixed(3)}
 varying vec2 vLocal;
 varying vec4 vFill;
 varying vec4 vOutline;
@@ -121,12 +124,12 @@ float xMark(vec2 p) {
 
 /**
  * Where a point on the shape's edge (or an X's arm) falls among its dashes, in
- * dashes: a gap is centered on each whole number that 'gapAt' allows. A
- * circle has CIRCLE_DASHES all round; a square's or triangle's side, and an
- * X's arm, has SIDE_DASHES from corner to corner, so corners stay solid.
+ * dashes: a gap is centered on each whole number between them. A circle has
+ * 'circle' dashes all round; a square's or triangle's side, and an X's arm,
+ * has 'side' from corner to corner, so corners stay solid.
  */
-float dashPosition(vec2 p, float shape) {
-    if (shape < 0.5) return (atan(p.y, p.x) / (2.0 * PI) + 0.5) * CIRCLE_DASHES;
+float dashPosition(vec2 p, float shape, float circle, float side) {
+    if (shape < 0.5) return (atan(p.y, p.x) / (2.0 * PI) + 0.5) * circle;
     float u;
     if (shape < 1.5) {
         vec2 q = abs(p);
@@ -138,18 +141,25 @@ float dashPosition(vec2 p, float shape) {
         vec2 q = abs(p);
         u = (q.x + q.y) / (DOT_R * 1.2 * 2.0) * 2.0 - 1.0;
     }
-    return (u * 0.5 + 0.5) * SIDE_DASHES;
+    return (u * 0.5 + 0.5) * side;
 }
 
-/** 1 on a dash, 0 in a gap, for a look 'amount' of the way to Following (0 is solid). */
+/**
+ * 1 on a dash, 0 in a gap, for a look 'amount' of the way to Following (0 is
+ * solid). A shape too small on screen for its usual dashes gets fewer, longer
+ * ones, and a gap is never under MIN_GAP_PX, so the gaps always show.
+ */
 float dashed(vec2 p, float shape, float amount) {
     if (amount < 0.001) return 1.0;
-    float k = dashPosition(p, shape);
-    float center = shape < 0.5 ? floor(k + 0.5) : clamp(floor(k + 0.5), 1.0, SIDE_DASHES - 1.0);
+    bool small = DOT_R / uMargin < FEW_DASHES_BELOW_PX;
+    float side = small ? SMALL_SIDE_DASHES : SIDE_DASHES;
+    float k = dashPosition(p, shape, small ? SMALL_CIRCLE_DASHES : CIRCLE_DASHES, side);
+    float center = shape < 0.5 ? floor(k + 0.5) : clamp(floor(k + 0.5), 1.0, side - 1.0);
     float off = abs(k - center);
-    float gapHalf = 0.5 * GAP * amount;
+    // fwidth(k) is a pixel, in dashes
     float fw = fwidth(k);
-    return smoothstep(gapHalf - fw, gapHalf + fw, off);
+    float gapHalf = amount * min(max(0.5 * GAP, 0.5 * MIN_GAP_PX * fw), 0.35);
+    return smoothstep(gapHalf - 0.5 * fw, gapHalf + 0.5 * fw, off);
 }
 
 void main() {
@@ -166,32 +176,25 @@ void main() {
     float strokeA = vOutline.a * stroke;
     vec3 strokeRgb = vOutline.rgb;
 
-    // Following (#300): the edge dashed at full strength round the fill at 60%.
-    // Too small on screen for dashes, the 60% fill alone
+    // Following (#300): the edge dashed at full strength, at any size
     float amount = vFollowing;
-    float dashes = amount * step(MIN_DASH_RADIUS_PX, DOT_R / uMargin);
     if (amount > 0.0) {
-        float on = dashed(vLocal, vShape, dashes);
-        float width = mix(1.0, max(EDGE_WIDTH, MIN_EDGE_PX * uMargin), dashes);
+        float on = dashed(vLocal, vShape, amount);
+        float width = mix(1.0, max(EDGE_WIDTH, MIN_EDGE_PX * uMargin), amount);
         if (vShape > 2.5) {
             // An X dashes its own lines, at full strength
-            fillA *= dashes > 0.0 ? on : mix(1.0, FOLLOWING_FILL, amount);
+            fillA *= on;
+        } else if (vOutline.a >= 0.1) {
+            // The outline, widened inward and dashed, round the fill at 60%
+            fillA *= mix(1.0, FOLLOWING_FILL, amount);
+            float band = 1.0 - smoothstep(0.5 * width - aa, 0.5 * width + aa, abs(d - 0.5 + 0.5 * width));
+            strokeA = vOutline.a * band * on;
         } else {
-            if (vOutline.a >= 0.1) {
-                // The outline, widened inward and dashed, round the fill at 60%
-                fillA *= mix(1.0, FOLLOWING_FILL, amount);
-                float band = 1.0 - smoothstep(0.5 * width - aa, 0.5 * width + aa, abs(d - 0.5 + 0.5 * width));
-                strokeA = vOutline.a * band * on;
-            } else if (dashes > 0.0) {
-                // No outline: only the edge, dashed in the fill's color, with nothing inside
-                fillA *= 1.0 - amount;
-                float band = 1.0 - smoothstep(0.5 * width - aa, 0.5 * width + aa, abs(d + 0.5 * width));
-                strokeRgb = vFill.rgb;
-                strokeA = vFill.a * band * on;
-            } else {
-                // Too small for dashes: the fill at 60% alone
-                fillA *= mix(1.0, FOLLOWING_FILL, amount);
-            }
+            // No outline: only the edge, dashed in the fill's color, with nothing inside
+            fillA *= 1.0 - amount;
+            float band = 1.0 - smoothstep(0.5 * width - aa, 0.5 * width + aa, abs(d + 0.5 * width));
+            strokeRgb = vFill.rgb;
+            strokeA = vFill.a * band * on;
         }
     }
     float dotA = strokeA + fillA * (1.0 - strokeA);
