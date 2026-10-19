@@ -2,6 +2,7 @@
  * Items' Outlines over the show, for the field: their stored geometry changes keyed by marcher
  * and counted by beat index, the same beat numbers the timeline resolver and playhead use.
  */
+import { endlessIdOf } from "@/timeline/endlessTimeline";
 import { type GeometryChange, type ItemGeometry } from "@openmarch/core";
 import type { DatabaseItem, DatabaseItemGeometry } from "@/db-functions/items";
 import type { SetItemGeometryArgs } from "@/hooks/queries/useItems";
@@ -76,18 +77,16 @@ function parseStoredJson(text: string | null): unknown {
 
 /**
  * The beat a change made with the playhead at `playheadBeat` is written on: the beat at or
- * before the playhead, so it is in place where the user is looking.
+ * before the playhead, so it is in place where the user is looking. Past the stored counts it is
+ * an endless beat (`endlessIdOf`), which the write stores first (endless counts).
  */
-export function outlineWriteBeat<B extends { index: number }>(
-    beats: readonly B[],
+export function outlineWriteBeat(
+    beats: readonly { readonly id: number; readonly index: number }[],
     playheadBeat: number,
-): B | undefined {
+): { readonly id: number; readonly index: number } | undefined {
     if (beats.length === 0) return undefined;
-    const index = Math.min(
-        beats.length - 1,
-        Math.max(0, Math.floor(playheadBeat + 1e-9)),
-    );
-    return beats[index];
+    const index = Math.max(0, Math.floor(playheadBeat + 1e-9));
+    return beats[index] ?? { id: endlessIdOf(index), index };
 }
 
 /**
@@ -129,9 +128,9 @@ export function fieldOutlineWrite({
 }
 
 /** `outlineWriteBeat` at the beat the timeline shows now (the paused playhead or a held frame) */
-export const outlineWriteBeatNow = <B extends { index: number }>(
-    beats: readonly B[],
-): B | undefined =>
+export const outlineWriteBeatNow = (
+    beats: readonly { readonly id: number; readonly index: number }[],
+): { readonly id: number; readonly index: number } | undefined =>
     outlineWriteBeat(
         beats,
         displayedBeat(useTimelineSelectionStore.getState()),

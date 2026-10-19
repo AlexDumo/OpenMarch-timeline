@@ -15,16 +15,6 @@ import {
     MOVE_NAME_MAX_LENGTH,
     moveLabels,
 } from "@/timeline/timelineViewModel";
-import { useTimelineViewVersions } from "@/timeline/useTimelineViewVersions";
-import { clampBulge } from "@/timeline/timelineTransitionEditor";
-import { DEFAULT_BULGE } from "@/timeline/timelinePathDefaults";
-import {
-    readMovePath,
-    setMovePath,
-    type MovePath,
-    type MovePathStyle,
-} from "@/db-functions/timelineCommands";
-import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { isolatedTimelineName } from "@/components/timeline/TimelineIsolationBar";
 import { useMoveCommands } from "@/components/timeline/useTimelineCommands";
 import { spaceStaysPlay } from "@/components/timeline/timelineHotkeys";
@@ -38,108 +28,11 @@ import {
     useInspectorTranslate,
     useSettledInspectorWindow,
     type InspectorTranslate,
-} from "./TimelineInspectorSection";
-import { BulgeEditor, Field, Help } from "./TimelineTransitionEditor";
-
-const MOVE_PATH_STYLES: readonly MovePathStyle[] = ["direct", "arc"];
-
-/**
- * A move's path, read again after every timeline edit, undo and redo; `null` until first read.
- */
-function useMovePath(timelineId: number): MovePath | null {
-    const { version, displayVersion } = useTimelineViewVersions();
-    const [path, setPath] = useState<MovePath | null>(null);
-    useEffect(() => {
-        let current = true;
-        readMovePath(db, timelineId).then(
-            (read) => {
-                if (current) setPath(read);
-            },
-            (error: unknown) =>
-                console.error("Couldn't read the move's path", error),
-        );
-        return () => {
-            current = false;
-        };
-    }, [timelineId, version, displayVersion]);
-    return path;
-}
+} from "./inspectorHooks";
+import { Field, Help } from "./InspectorFields";
 
 /** The app's focus ring, for the card's controls (UI-14 review) */
 const FOCUS_RING = "focus-visible:ring-accent focus-visible:ring-2";
-
-/**
- * The Move card's Path, a radio group (UI-14 review): the arrows move the choice and apply it, as
- * radios do; Enter or a click applies the focused one. Nothing is chosen while members differ or
- * all follow the leader.
- */
-export function MovePathRadios({
-    value,
-    disabled,
-    label,
-    optionLabel,
-    onChange,
-}: {
-    value: MovePathStyle | null;
-    disabled: boolean;
-    label: string;
-    optionLabel: (style: MovePathStyle) => string;
-    onChange: (style: MovePathStyle) => void;
-}) {
-    const refs = useRef<(HTMLButtonElement | null)[]>([]);
-    const focusable = value === null ? 0 : MOVE_PATH_STYLES.indexOf(value);
-    return (
-        <div
-            role="radiogroup"
-            aria-label={label}
-            data-testid="timeline-move-card-path"
-            className="rounded-6 border-stroke flex border p-2"
-        >
-            {MOVE_PATH_STYLES.map((style, index) => (
-                <button
-                    key={style}
-                    ref={(el) => {
-                        refs.current[index] = el;
-                    }}
-                    type="button"
-                    role="radio"
-                    aria-checked={value === style}
-                    tabIndex={index === focusable ? 0 : -1}
-                    disabled={disabled}
-                    onClick={() => {
-                        if (style !== value) onChange(style);
-                    }}
-                    onKeyDown={(event) => {
-                        const step =
-                            event.key === "ArrowRight" ||
-                            event.key === "ArrowDown"
-                                ? 1
-                                : event.key === "ArrowLeft" ||
-                                    event.key === "ArrowUp"
-                                  ? -1
-                                  : 0;
-                        if (step === 0) return;
-                        event.preventDefault();
-                        const next =
-                            (index + step + MOVE_PATH_STYLES.length) %
-                            MOVE_PATH_STYLES.length;
-                        refs.current[next]?.focus();
-                        onChange(MOVE_PATH_STYLES[next]!);
-                    }}
-                    className={clsx(
-                        "text-sub rounded-4 px-8 py-4 outline-hidden disabled:opacity-50",
-                        FOCUS_RING,
-                        value === style
-                            ? "bg-accent text-text-invert"
-                            : "hover:bg-fg-2",
-                    )}
-                >
-                    {optionLabel(style)}
-                </button>
-            ))}
-        </div>
-    );
-}
 
 /**
  * Whether a name typed in the Move card is an edit to save: changed, and not cleared while the
@@ -161,9 +54,7 @@ const REVEAL_SCROLL_DELAY_MS = 120;
  * The Move card (UI-14), first in the inspector, above the page and marcher editors and the
  * Timeline section, while the window is a move with a clip (`TimelineMoveCardSlot`): its name
  * (Enter or leaving the field saves, Esc goes back; empty clears it), when it happens in pages and
- * counts, its **Path** for every marcher in it at once (Direct, or Arc with one bend; "Follow the
- * leader" shown when all of them follow, "Mixed" when they differ), how to change where they end
- * up, who is in it with **Select them**, and **Delete move**. **Edit move** brings it into view
+ * counts, how to change where they end up, who is in it with **Select them**, and **Delete move**. **Edit move** brings it into view
  * (`useMoveCardRevealStore`): focus on its heading, a scroll and a brief highlight.
  */
 export function TimelineMoveCard({
@@ -196,29 +87,6 @@ export function TimelineMoveCard({
     const playheadInside = useTimelineSelectionStore(
         (s) => timeline.start < s.playheadBeat && s.playheadBeat < timeline.end,
     );
-    const path = useMovePath(timeline.id);
-    // One path edit at a time; a choice made meanwhile (the arrows pressed again) goes next. The
-    // controls stay enabled while one is written, so a focused radio keeps focus (UI-14 round-2
-    // review: disabling it dropped focus to the page, where the next key went to the canvas)
-    const pathWriting = useRef(false);
-    const nextPath = useRef<{ style: MovePathStyle; bulge?: number } | null>(
-        null,
-    );
-    const editPath = (style: MovePathStyle, bulge?: number) => {
-        if (pathWriting.current) {
-            nextPath.current = { style, bulge };
-            return;
-        }
-        pathWriting.current = true;
-        setMovePath({ db, timelineId: timeline.id, style, bulge })
-            .catch((error: unknown) => toastTimelineError(error))
-            .finally(() => {
-                pathWriting.current = false;
-                const next = nextPath.current;
-                nextPath.current = null;
-                if (next) editPath(next.style, next.bulge);
-            });
-    };
     // The name last sent, until the stored name changes: Enter, the blur and the card going can
     // each send the same rename before it lands, and a refused one would say so each time
     const lastSent = useRef<string | null>(null);
@@ -358,54 +226,6 @@ export function TimelineMoveCard({
                     {isolatedTimelineName(timeline, pages)}
                 </p>
             </Field>
-            <Field label={t("inspector.timeline.move.path")}>
-                <div className="flex items-center gap-8">
-                    <MovePathRadios
-                        value={
-                            path?.style === "direct" || path?.style === "arc"
-                                ? path.style
-                                : null
-                        }
-                        disabled={!path?.transitions}
-                        label={t("inspector.timeline.move.path")}
-                        optionLabel={(style) =>
-                            t(`inspector.timeline.pathStyle.${style}`)
-                        }
-                        onChange={(style) => editPath(style)}
-                    />
-                    {path?.style === "mixed" && (
-                        <span
-                            className="text-sub text-text/60"
-                            data-testid="timeline-move-card-path-mixed"
-                        >
-                            {t("inspector.timeline.move.pathMixed")}
-                        </span>
-                    )}
-                    {/* Code review: every member following the leader is one path, not Mixed;
-                        shown as it is, and Direct or Arc still changes them all */}
-                    {path?.style === "follow_the_leader" && (
-                        <span
-                            className="text-sub text-text/60"
-                            data-testid="timeline-move-card-path-follow"
-                        >
-                            {t(
-                                "inspector.timeline.pathStyle.follow_the_leader",
-                            )}
-                        </span>
-                    )}
-                </div>
-            </Field>
-            {path?.style === "arc" && (
-                <BulgeEditor
-                    bulge={path.bulge ?? DEFAULT_BULGE}
-                    disabled={!path?.transitions}
-                    t={t}
-                    onCommit={(value) => {
-                        const bulge = clampBulge(value);
-                        if (bulge !== null) editPath("arc", bulge);
-                    }}
-                />
-            )}
             <div className="flex flex-col gap-6">
                 <Help testId="timeline-move-card-end-help">
                     {t("inspector.timeline.move.endHelp")}

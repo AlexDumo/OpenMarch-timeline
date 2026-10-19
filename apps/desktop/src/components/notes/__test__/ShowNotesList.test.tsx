@@ -24,7 +24,6 @@ const what = (w: Partial<ShowNoteWhat>): ShowNoteWhat => ({
     itemIds: [],
     marcherIds: [],
     cueIds: [],
-    transitionId: null,
     ...w,
 });
 
@@ -71,15 +70,6 @@ const NOTES: ShowNote[] = [
         until: 13,
         what: what({ cueIds: [4], marcherIds: [1, 3] }),
     },
-    {
-        id: "rebase",
-        kind: "timeline",
-        source: "timeline",
-        beat: 16,
-        until: 17,
-        what: what({ marcherIds: [3], transitionId: 2 }),
-        detail: { code: "D-REBASE", level: "info", slot: null },
-    },
 ];
 
 const show = (ui: React.ReactElement) =>
@@ -111,7 +101,6 @@ describe("ShowNotesListView", () => {
             "Cart moves without a crew, Page 5 count 7",
             "Flag isn't drawn, count 1 after Page 5Rifle takes Alice's right hand",
             "A Silk cue's Artwork is fitted to a flag of another shape, Page 3 count 3For Alice and Carl",
-            "D-REBASE, Page 3 count 7Carl: This marcher joined or resumed this move partway, so its path was rebased to start where it was.",
         ]);
     });
 

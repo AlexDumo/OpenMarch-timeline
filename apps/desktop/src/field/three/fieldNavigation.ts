@@ -1,9 +1,10 @@
+import { isPreviewMode } from "@/stores/PreviewModeStore";
 import {
     baseZoom,
     centerAtBase,
     clampPan,
     clampZoom,
-    fullscreenFit,
+    previewFit,
     isPanButton,
     panBy,
     pinchStep,
@@ -66,9 +67,9 @@ export function settleView() {
     if (!navigated) resetView();
 }
 
-/** Fits the whole field into `container` (its fullscreen container, padding included). */
-export function fitFullscreen(container: { width: number; height: number }) {
-    const fit = fullscreenFit(view(), container, view().field);
+/** Fits the whole field into `container` (its container in Preview). */
+export function fitPreview(container: { width: number; height: number }) {
+    const fit = previewFit(view(), container, view().field);
     if (fit) useFieldViewStore.setState(fit);
 }
 
@@ -142,7 +143,8 @@ function listen(
  * - Wheel: zooms at the pointer (mouse mode) or pans (trackpad mode); a pinch
  *   or Ctrl/Cmd+wheel zooms in either mode.
  * - Right-drag (Ctrl-drag on a Mac) and middle-drag pan, one to one. The
- *   field's other pointer handling skips these presses (`isPanPress`).
+ *   field's other pointer handling skips these presses (`isPanPress`). In
+ *   Preview, which edits nothing, a left-drag pans too.
  * - Touch: one finger pans, two pinch.
  *
  * Presses on the field's own controls are left to them.
@@ -194,7 +196,11 @@ function listenForWheel(
 function listenForPanDrags(surface: HTMLElement) {
     let pan: { pointerId: number; x: number; y: number } | null = null;
     const onPointerDown = (event: PointerEvent) => {
-        if (!isPanPress(event) || onControl(event)) return;
+        const previewDrag =
+            event.pointerType !== "touch" &&
+            event.button === 0 &&
+            isPreviewMode();
+        if (!(isPanPress(event) || previewDrag) || onControl(event)) return;
         event.preventDefault();
         if (pan) return;
         pan = {

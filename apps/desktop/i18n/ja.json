@@ -81,7 +81,6 @@
         "shape": {
             "applyQuick": "図形にスナップ",
             "create": "図形を作成",
-            "createCircle": "円を作成",
             "delete": "選択されている形状を削除",
             "noMarchersSelected": "行進者が選択されていません"
         },
@@ -1189,10 +1188,7 @@
             "label": "ページ {pageName}",
             "subset": "サブセット"
         },
-        "pages": "ページ",
-        "perspective": {
-            "label": "視点"
-        }
+        "pages": "ページ"
     },
     "titlebar": {
         "bugReport": "バグ や フィードバック を 提出 ",

@@ -6,7 +6,7 @@ export const createMarchers = async (
     section: string = "Piccolo",
 ) => {
     await page.locator("#sidebar-launcher-marchers").click();
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     await page.getByRole("combobox", { name: "Other" }).click();
     await page.getByLabel(section).getByText(section).click();
     await page.getByRole("spinbutton", { name: "Quantity" }).click();

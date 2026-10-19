@@ -33,7 +33,9 @@ import Sidebar from "@/components/sidebar/Sidebar";
 import Toaster from "./components/ui/Toaster";
 import FocusNotice from "./components/FocusNotice";
 import SvgPreviewHandler from "./utilities/SvgPreviewHandler";
-import { useFullscreenStore } from "./stores/FullscreenStore";
+import { useIsPreviewMode } from "./stores/PreviewModeStore";
+import { PreviewModeHost } from "./components/preview/PreviewMode";
+import WorkspaceViewSwitch from "./components/visuals/WorkspaceViewSwitch";
 import AnalyticsOptInModal from "./components/AnalyticsOptInModal";
 import { useEditorModeStore } from "./stores/EditorModeStore";
 import ErrorBoundary from "./ErrorBoundary";
@@ -45,7 +47,10 @@ import {
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { createAllUndoTriggers, resetTimelineChangeLog } from "./db-functions";
 import { db } from "./global/database/db";
-import { historyKeys } from "./hooks/queries/useHistory";
+import {
+    historyKeys,
+    refreshAfterStoredCounts,
+} from "./hooks/queries/useHistory";
 import tolgee from "./global/singletons/Tolgee";
 import { InContextTools } from "@tolgee/web/tools";
 import clsx from "clsx";
@@ -96,7 +101,8 @@ function App() {
         (s) => s.uiSettings.focussedComponent,
     );
     const pluginsLoadedRef = useRef(false);
-    const { isFullscreen } = useFullscreenStore();
+    // Preview watches the show: no toolbar, sidebar or inspector
+    const preview = useIsPreviewMode();
     const visuals = useIsVisualsView();
 
     // Check if running in codegen mode
@@ -200,6 +206,8 @@ function App() {
             });
         return () => unsubscribe();
     }, [databaseIsReady]);
+
+    useEffect(() => refreshAfterStoredCounts(queryClient), [databaseIsReady]);
 
     useEffect(() => {
         void window.electron
@@ -315,6 +323,7 @@ function App() {
                                             <View3dPublisher />
                                             <AssetsHost />
                                             <SvgPreviewHandler />
+                                            <PreviewModeHost />
                                             <TitleBar showControls />
                                             <FocusNotice />
                                             <VisualsProvider>
@@ -326,20 +335,27 @@ function App() {
                                                         id="workspace"
                                                         className="relative flex h-full min-h-0 w-full min-w-0 flex-col gap-8"
                                                     >
-                                                        <div
-                                                            className={
-                                                                timelineFocussedClass
-                                                            }
-                                                        >
-                                                            <Toolbar />
-                                                        </div>
+                                                        {preview ? (
+                                                            // Only the workspace switch, to go back
+                                                            <div className="flex justify-end">
+                                                                <WorkspaceViewSwitch />
+                                                            </div>
+                                                        ) : (
+                                                            <div
+                                                                className={
+                                                                    timelineFocussedClass
+                                                                }
+                                                            >
+                                                                <Toolbar />
+                                                            </div>
+                                                        )}
                                                         <div
                                                             className={clsx(
                                                                 "relative flex h-full min-h-0 min-w-0 gap-8",
                                                                 timelineFocussedClass,
                                                             )}
                                                         >
-                                                            {!isFullscreen &&
+                                                            {!preview &&
                                                                 !visuals && (
                                                                     <>
                                                                         <Sidebar />
@@ -364,7 +380,7 @@ function App() {
                                                             </TimelineSplitter>
                                                         )}
                                                     </div>
-                                                    {!isFullscreen && (
+                                                    {!preview && (
                                                         <div
                                                             className={
                                                                 timelineFocussedClass
