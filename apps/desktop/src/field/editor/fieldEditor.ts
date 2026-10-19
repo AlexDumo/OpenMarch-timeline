@@ -76,6 +76,8 @@ export type FieldEditorPorts = {
      * anything with it. The app may act on the press here (story 60: the
      * first press after a paused preview clears the preview) and returns
      * true when it takes it, so the editor selects, drags and drops nothing.
+     * A right-click calls it too, before it opens the menu, and goes on
+     * whatever it returns (#315).
      */
     takePress?(): boolean;
     /**
@@ -739,10 +741,15 @@ export class FieldEditor {
     /**
      * The field's menu at a right-click (#315): it acts on the selection, so a
      * marcher clicked that isn't selected is selected first. Empty field (a
-     * dimmed marcher, a handle) keeps the selection.
+     * dimmed marcher, a handle) keeps the selection. A paused preview is
+     * cleared first, as a press clears it (story 60), so the marcher is found
+     * where it stands at the playhead, the count the menu's actions edit.
      */
     private openMenu(pointer: FieldPointer) {
-        const hit = this.marcherAt(pointer.field);
+        this.ports.takePress?.();
+        const hit = this.handleAt(pointer.field)
+            ? null
+            : this.marcherAt(pointer.field);
         if (hit !== null && !this.ports.selection.get().includes(hit))
             this.write([hit]);
         this.ports.openMenu?.(pointer);

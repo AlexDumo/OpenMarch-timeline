@@ -128,3 +128,36 @@ describe("attachFieldPointerInput, the right-click menu (#315)", () => {
         expect(state.menus).toBe(0);
     });
 });
+
+describe("attachFieldPointerInput, right presses that start off the field (#315 review)", () => {
+    it("doesn't forward a right-drag that started elsewhere (the timeline): the line tool's line stays put", () => {
+        const { editor, fire, root } = setup();
+        editor.setLineTool([1, 2]);
+        fire("pointerdown", { x: 100, y: 300 });
+        fire("pointerup", { x: 100, y: 300 });
+        fire("pointermove", { x: 150, y: 300 });
+        expect(editor.lineToolShape()!.line!.end).toEqual({ x: 150, y: 300 });
+
+        // A right-drag that began outside the field, moving over its root
+        const outside = document.createElement("div");
+        document.body.append(outside);
+        fire("pointermove", { x: 400, y: 500, buttons: 2, target: outside });
+        fire("pointermove", { x: 420, y: 520, buttons: 2, target: root });
+        expect(editor.lineToolShape()!.line!.end).toEqual({ x: 150, y: 300 });
+        outside.remove();
+    });
+
+    it("still forwards the moves of a right press that started on the field", () => {
+        const { editor, fire, root } = setup();
+        editor.setLineTool([1, 2]);
+        fire("pointerdown", { x: 100, y: 300 });
+        fire("pointerup", { x: 100, y: 300 });
+        fire("pointerdown", { x: 150, y: 300, button: 2, buttons: 2 });
+        fire("pointermove", { x: 420, y: 520, buttons: 2, target: root });
+        expect(editor.lineToolShape()!.line!.end).toEqual({ x: 420, y: 520 });
+        fire("pointerup", { x: 420, y: 520, button: 2, target: root });
+        // Over: later right-button moves from elsewhere aren't the field's
+        fire("pointermove", { x: 50, y: 50, buttons: 2, target: root });
+        expect(editor.lineToolShape()!.line!.end).toEqual({ x: 420, y: 520 });
+    });
+});

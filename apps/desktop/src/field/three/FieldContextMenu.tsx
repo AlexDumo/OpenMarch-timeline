@@ -129,7 +129,9 @@ export default function FieldContextMenu({
                     align="start"
                     side="bottom"
                     collisionPadding={8}
-                    // Focus goes back to the field, not to the anchor
+                    // Focus isn't returned to the anchor, a hidden div: it falls to the page
+                    // body. The field keeps the shortcuts' focus (`focussedComponent`), so its
+                    // keys still work
                     onCloseAutoFocus={(event) => event.preventDefault()}
                     {...KEEP_MENU_EVENTS}
                     className={TIMELINE_MENU_CONTENT_CLASS}

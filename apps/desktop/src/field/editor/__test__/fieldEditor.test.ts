@@ -355,6 +355,66 @@ describe("FieldEditor right-click menu (#315)", () => {
         expect(state.selected).toEqual([]);
     });
 
+    it("clears a paused preview first, then selects by where the marchers stand at the playhead (story 60)", () => {
+        // The preview holds marcher 3 at (300, 100); at the playhead it stands on EMPTY
+        let held = true;
+        const takePress = vi.fn(() => {
+            const was = held;
+            held = false;
+            return was;
+        });
+        const { editor, ports, state } = setup({ selected: [1], takePress });
+        ports.marchers = () => ({
+            ids: [1, 2, 3, 4],
+            positions: Float64Array.from([
+                100,
+                100,
+                200,
+                100,
+                ...(held ? [300, 100] : [EMPTY.x, EMPTY.y]),
+                400,
+                100,
+            ]),
+            hidden: Uint8Array.from([0, 0, 0, 0]),
+        });
+        // A right-drag pans and leaves the preview alone
+        rightDown(editor, 300, 100);
+        rightUp(editor, 310, 100);
+        expect(takePress).not.toHaveBeenCalled();
+        // On its held spot, marcher 3 isn't there any more: empty field
+        rightDown(editor, 300, 100);
+        rightUp(editor, 300, 100);
+        expect(takePress).toHaveBeenCalledTimes(1);
+        expect(state.selected).toEqual([1]);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+        // Where it stands at the playhead, it's selected
+        held = true;
+        rightDown(editor, EMPTY.x, EMPTY.y);
+        rightUp(editor, EMPTY.x, EMPTY.y);
+        expect(state.selected).toEqual([3]);
+        expect(ports.openMenu).toHaveBeenCalledTimes(2);
+    });
+
+    it("treats a handle as empty field, even over an unselected marcher: the selection stays", () => {
+        const { editor, ports, state } = setup({ selected: [1, 3] });
+        // Marcher 2 sits under the top middle handle of the box around 1 and 3
+        ports.marchers = () => ({
+            ids: [1, 2, 3, 4],
+            positions: Float64Array.from([
+                100, 100, 200, 90, 300, 100, 400, 100,
+            ]),
+            hidden: Uint8Array.from([0, 0, 0, 0]),
+        });
+        // A left press there takes the handle, not the marcher
+        editor.pointerDown(at(200, 90));
+        editor.pointerUp(at(200, 90));
+        expect(state.selected).toEqual([1, 3]);
+        rightDown(editor, 200, 90);
+        rightUp(editor, 200, 90);
+        expect(state.selected).toEqual([1, 3]);
+        expect(ports.openMenu).toHaveBeenCalledTimes(1);
+    });
+
     it("opens no menu on a right-click during a left drag", () => {
         const { editor, ports } = setup();
         editor.pointerDown(at(100, 100));
