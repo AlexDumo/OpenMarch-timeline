@@ -14,7 +14,8 @@ import {
 } from "@/db-functions";
 import { updatePagesInTransaction } from "@/db-functions";
 import { db } from "@/global/database/db";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { itemGeometryKeys } from "@/hooks/queries/useItems";
 import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import {
@@ -201,9 +202,14 @@ const useMusicXmlMutation = <TArgs>(
     successKey?: string,
 ) => {
     const { fetchTimingObjects } = useTimingObjects();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn,
         onSuccess: async () => {
+            // Item Outline changes moved to the new beats
+            void queryClient.invalidateQueries({
+                queryKey: itemGeometryKeys.all(),
+            });
             // This happens twice to bypass the errors. There's likely a better solution
             await fetchTimingObjects();
             await fetchTimingObjects();
