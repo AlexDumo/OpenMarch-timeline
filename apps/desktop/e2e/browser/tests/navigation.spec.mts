@@ -214,11 +214,15 @@ test("Reset fits the whole field into the pane the timeline leaves", async ({
 
 /**
  * Clicks Reset in the page and reads the zoom every frame for `ms`. With
- * `wheelAfter`, scrolls the field that many frames after the click.
+ * `interrupt`, scrolls or presses the field that many frames after the click.
  */
-const zoomsAfterReset = (page: Page, ms: number, wheelAfter?: number) =>
+const zoomsAfterReset = (
+    page: Page,
+    ms: number,
+    interrupt?: { after: number; by: "wheel" | "press" },
+) =>
     page.evaluate(
-        async ({ ms, wheelAfter }) => {
+        async ({ ms, interrupt }) => {
             const reset = document.querySelector<HTMLElement>(
                 '[title="Reset Zoom and Center"]',
             )!;
@@ -230,23 +234,32 @@ const zoomsAfterReset = (page: Page, ms: number, wheelAfter?: number) =>
             const start = performance.now();
             while (performance.now() - start < ms) {
                 await new Promise(requestAnimationFrame);
-                if (zooms.length === wheelAfter) {
+                if (zooms.length === interrupt?.after) {
                     const box = surface.getBoundingClientRect();
-                    surface.dispatchEvent(
-                        new WheelEvent("wheel", {
-                            deltaX: 40,
-                            clientX: box.left + box.width / 2,
-                            clientY: box.top + box.height / 2,
-                            bubbles: true,
-                            cancelable: true,
-                        }),
-                    );
+                    const at = {
+                        clientX: box.left + box.width / 2,
+                        clientY: box.top + box.height / 2,
+                        bubbles: true,
+                        cancelable: true,
+                    };
+                    if (interrupt.by === "wheel")
+                        surface.dispatchEvent(
+                            new WheelEvent("wheel", { ...at, deltaX: 40 }),
+                        );
+                    else {
+                        surface.dispatchEvent(
+                            new PointerEvent("pointerdown", at),
+                        );
+                        surface.dispatchEvent(
+                            new PointerEvent("pointerup", at),
+                        );
+                    }
                 }
                 zooms.push(window.fieldTest!.viewport().zoom);
             }
             return zooms;
         },
-        { ms, wheelAfter },
+        { ms, interrupt },
     );
 
 const fieldQualityMode = (page: Page) =>
@@ -272,7 +285,7 @@ test.describe("at full quality", () => {
         "Names a GPU with an init script",
     );
 
-    test("Reset glides to the fit, and the wheel stops the glide", async ({
+    test("Reset glides to the fit, and a scroll or a press stops the glide", async ({
         show,
     }) => {
         const { page } = show;
@@ -286,7 +299,8 @@ test.describe("at full quality", () => {
         const gliding = zooms.filter(
             (zoom) => zoom < zoomedIn - 0.01 && zoom > opened.zoom + 0.01,
         );
-        expect(gliding.length).toBeGreaterThan(3);
+        // Slow software frames can leave only a few in between
+        expect(gliding.length).toBeGreaterThanOrEqual(3);
         zooms.slice(1).forEach((zoom, i) => {
             expect(zoom).toBeLessThanOrEqual(zooms[i] + 1e-9);
             expect(zoom).toBeGreaterThanOrEqual(opened.zoom - 1e-9);
@@ -296,13 +310,17 @@ test.describe("at full quality", () => {
             "100%",
         );
 
-        // A scroll mid-glide stops it where it is
+        // A scroll or a press mid-glide stops it where it is
         for (let i = 0; i < 4; i++) await page.getByTitle("Zoom In").click();
         await settledView(page);
-        const stopped = await zoomsAfterReset(page, 800, 3);
-        const after = stopped.slice(4);
-        expect(after.every((zoom) => zoom === after[0])).toBe(true);
-        expect(after[0]).toBeGreaterThan(opened.zoom + 0.01);
+        for (const by of ["wheel", "press"] as const) {
+            const stopped = await zoomsAfterReset(page, 800, { after: 3, by });
+            const after = stopped.slice(4);
+            expect(after.every((zoom) => zoom === after[0])).toBe(true);
+            expect(after[0]).toBeGreaterThan(opened.zoom + 0.01);
+            await page.getByTitle("Zoom In").click();
+            await settledView(page);
+        }
     });
 });
 
@@ -321,7 +339,11 @@ test.describe("in Performance mode", () => {
     });
 });
 
-test("in a narrow window, Reset fits the field's width", async ({ show }) => {
+test("in a narrow window, Reset fits the field's width", async ({
+    show,
+    target,
+}) => {
+    test.skip(target !== "browser", "Resizes the page's viewport");
     const { page } = show;
     await openedView(show);
     // The sidebar and the inspector leave a pane narrower than the field is wide

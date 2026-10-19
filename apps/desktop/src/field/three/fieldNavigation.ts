@@ -35,7 +35,7 @@ let navigated = false;
 /** Moves the view to `next` for the user. */
 function navigate(next: FieldView) {
     // The user's own navigation stops a glide where it is
-    glide.stop();
+    stopGlide();
     navigated = true;
     useFieldViewStore.setState(next);
 }
@@ -62,7 +62,7 @@ export function setView(next: FieldView) {
 export function resetView() {
     const { width, height, field } = view();
     if (width <= 0 || height <= 0) return;
-    glide.stop();
+    stopGlide();
     navigated = false;
     useFieldViewStore.setState({
         ...centerAtBase(width, height, field),
@@ -75,6 +75,11 @@ const glide = new SpringValue(0);
 
 /** Quick, and it settles on the fit without overshooting it. */
 const GLIDE_CONFIG = { tension: 280, friction: 30, clamp: true };
+
+/** Stops the glide where it is, if one is running. */
+const stopGlide = () => {
+    if (glide.isAnimating) glide.stop();
+};
 
 const prefersReducedMotion = () =>
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -99,7 +104,7 @@ export function glideToFit() {
         panX: current.panX,
         panY: current.panY,
     };
-    glide.stop();
+    stopGlide();
     navigated = false;
     // The readout counts down to 100% as the field glides
     useFieldViewStore.setState({ baseZoom: baseZoom(width, height, field) });
@@ -109,6 +114,8 @@ export function glideToFit() {
         config: GLIDE_CONFIG,
         onChange: () => {
             const now = view();
+            // A pane squeezed to nothing has no fit: wait for it to come back
+            if (now.width <= 0 || now.height <= 0) return;
             const to = centerAtBase(now.width, now.height, now.field);
             useFieldViewStore.setState(viewBetween(from, to, glide.get()));
         },
@@ -128,7 +135,7 @@ export function settleView() {
 
 /** Fits the whole field into `container` (its container in Preview). */
 export function fitPreview(container: { width: number; height: number }) {
-    glide.stop();
+    stopGlide();
     const fit = previewFit(view(), container, view().field);
     if (fit) useFieldViewStore.setState(fit);
 }
@@ -218,7 +225,13 @@ export function attachFieldNavigation(
         const rect = (field() ?? surface).getBoundingClientRect();
         return { x: clientX - rect.left, y: clientY - rect.top };
     };
+    // A press on the field (a drag, a marquee, a tool) stops a glide, so
+    // the view holds still under it
+    const onPress = (event: PointerEvent) => {
+        if (!onControl(event)) stopGlide();
+    };
     const detach = [
+        listen(surface, { pointerdown: onPress }, { capture: true }),
         listenForWheel(surface, local, settings),
         listenForPanDrags(surface),
         listenForTouch(surface, local, settings),
