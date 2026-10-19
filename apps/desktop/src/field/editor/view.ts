@@ -80,25 +80,39 @@ export function clampPan(view: FieldView, field: FieldSize): FieldView {
     };
 }
 
+/** The room kept around the fitted field on each side, in CSS pixels. */
+const FIT_MARGIN = 16;
+
 /**
- * The base zoom (100% in the zoom controls): the zoom at which the field's
- * height fits the element, but never above 1.
+ * The base zoom (100% in the zoom controls): the zoom at which the whole
+ * field fits the element, across and down, with a small margin on each side.
+ * The element is the field's pane, so the fit follows the pane as the
+ * timeline below it grows or shrinks.
  */
-export function baseZoom(height: number, field: FieldSize): number {
-    if (field.height <= 0 || height <= 0) return 1;
-    return Math.min(1, height / field.height);
+export function baseZoom(
+    width: number,
+    height: number,
+    field: FieldSize,
+): number {
+    if (field.width <= 0 || field.height <= 0) return 1;
+    if (width <= 0 || height <= 0) return 1;
+    // A small pane keeps most of its room for the field
+    const room = (size: number) => size - 2 * Math.min(FIT_MARGIN, size * 0.05);
+    return clampZoom(
+        Math.min(room(width) / field.width, room(height) / field.height),
+    );
 }
 
 /**
- * The view a show opens at, and that the reset button returns to: the field
- * centered at the base zoom.
+ * The view a show opens at, and that the reset button returns to: the whole
+ * field fitted and centered, at the base zoom.
  */
 export function centerAtBase(
     width: number,
     height: number,
     field: FieldSize,
 ): FieldView {
-    const zoom = baseZoom(height, field);
+    const zoom = baseZoom(width, height, field);
     return clampPan(
         {
             width,
@@ -111,13 +125,36 @@ export function centerAtBase(
     );
 }
 
+/**
+ * The view `t` of the way from `from` to `to` (0 to 1), as if the element's
+ * visible part of the field slid and resized in a straight line from one to
+ * the other. Clicking the zoom percentage glides along this.
+ */
+export function viewBetween(
+    from: FieldView,
+    to: FieldView,
+    t: number,
+): FieldView {
+    const left = (v: FieldView) => -v.panX / v.zoom;
+    const right = (v: FieldView) => (v.width - v.panX) / v.zoom;
+    const top = (v: FieldView) => -v.panY / v.zoom;
+    const lerp = (a: number, b: number) => a + (b - a) * t;
+    const shownLeft = lerp(left(from), left(to));
+    const zoom = to.width / (lerp(right(from), right(to)) - shownLeft);
+    return {
+        ...to,
+        zoom,
+        panX: -shownLeft * zoom,
+        panY: -lerp(top(from), top(to)) * zoom,
+    };
+}
+
 /** In Preview, the share of its container the field fills. */
 const PREVIEW_FILL = 0.87;
 
 /**
- * The view on entering Preview: the whole field at 87% of its container,
- * centered across and a tenth of the spare height down. `container` is the
- * field's container including its padding.
+ * The view in Preview (100% there): the whole field at 87% of `container`,
+ * the field's pane, centered across and a tenth of the spare height down.
  */
 export function previewFit(
     view: FieldView,
