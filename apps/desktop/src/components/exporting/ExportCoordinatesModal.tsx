@@ -1293,6 +1293,7 @@ function VideoExport() {
                     frameSampler: previewSampler,
                     appearanceSteps,
                     backgroundImage: fieldImage.image,
+                    backgroundImageSize: fieldImage.size,
                     // The preview sizes it to its own canvas on the first frame
                     width: 1,
                     height: 1,
@@ -1330,6 +1331,7 @@ function VideoExport() {
         appearanceSteps,
         fieldImage.loaded,
         fieldImage.image,
+        fieldImage.size,
     ]);
 
     const previewLoading =
@@ -1423,6 +1425,7 @@ function VideoExport() {
                 frameSampler,
                 appearanceSteps,
                 backgroundImage: fieldImage.image,
+                backgroundImageSize: fieldImage.size,
                 audioData: audioFile.data,
                 audioOffsetSeconds: workspaceSettings?.audioOffsetSeconds ?? 0,
                 width,
@@ -1487,6 +1490,7 @@ function VideoExport() {
         marchers,
         appearanceSteps,
         fieldImage.image,
+        fieldImage.size,
         workspaceSettings?.audioOffsetSeconds,
         frameRate,
         videoTheme,

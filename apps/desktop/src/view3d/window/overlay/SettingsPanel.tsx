@@ -5,7 +5,8 @@
  * - Venue, saved with the show: the venue, its lighting, the crowd and its
  *   colors, and the end-zone lettering. Every change goes to the editor,
  *   which saves it with undo.
- * - Graphics, saved on this computer: render quality.
+ * - Graphics: quality and resolution live in the app's Settings window (3D View section). Where
+ *   there is no Settings window (the web preview), they are here too.
  * - Preview only, never saved: horns, guard equipment and the step-off foot,
  *   overriding the cues in this window alone.
  * - The keyboard and mouse controls, so they can be found.
@@ -20,6 +21,7 @@ import { Input, Switch } from "@openmarch/ui";
 import clsx from "clsx";
 import { useView3dSceneStore } from "../sceneStore";
 import { QUALITY_MODES } from "../qualityPreference";
+import { HAS_SETTINGS_WINDOW, RESOLUTIONS } from "../renderPrefs";
 import { HOLD_STATES } from "../hornState";
 import { GUARD_EQUIPMENT } from "@/view3d/core/instruments/catalog";
 import { Segmented } from "./Panel";
@@ -90,13 +92,16 @@ export function SettingsPanel({
                     {hasStands && <CrowdRows />}
                     {kitId !== "gym" && <EndZoneRow />}
                 </Section>
-                <Section
-                    title={t("view3d.settings.graphicsSection")}
-                    hint={t("view3d.settings.graphicsHint")}
-                >
-                    <QualityRow />
-                    <PowerRows />
-                </Section>
+                {/* Graphics live in the Settings window; the web preview has none */}
+                {!HAS_SETTINGS_WINDOW && (
+                    <Section
+                        title={t("view3d.settings.graphicsSection")}
+                        hint={t("view3d.settings.graphicsHint")}
+                    >
+                        <QualityRow />
+                        <ResolutionRow />
+                    </Section>
+                )}
                 {/* Its own section: window state only, never saved (performer-behavior.md 7.5) */}
                 <Section
                     title={t("view3d.settings.previewSection")}
@@ -327,25 +332,31 @@ function ColorField({
     );
 }
 
+/**
+ * Quality, for the web preview, which has no Settings window. Says why when
+ * the view went to Low on its own or WebGL draws in software.
+ */
 function QualityRow() {
     const { t } = useTranslate();
     const mode = useView3dSceneStore((s) => s.qualityMode);
     const setMode = useView3dSceneStore((s) => s.setQualityMode);
     const autoLowered = useView3dSceneStore((s) => s.autoLowered);
-    const hint =
-        mode === "auto" && autoLowered
-            ? t("view3d.settings.qualityAutoLowered")
-            : t(`view3d.settings.qualityHint.${mode}`);
+    const softwareGl = useView3dSceneStore((s) => s.softwareGl);
+    const hint = softwareGl
+        ? t("view3d.quality.softwareHint")
+        : mode === "auto" && autoLowered
+          ? t("view3d.quality.autoLoweredHint")
+          : t(`settings.view3d.quality.${mode}.description`);
     return (
-        <Row label={t("view3d.settings.quality")} stacked>
+        <Row label={t("settings.view3d.quality")} stacked>
             <Segmented
                 value={mode}
                 options={QUALITY_MODES.map((value) => ({
                     value,
-                    label: t(`view3d.settings.qualityMode.${value}`),
+                    label: t(`settings.view3d.quality.${value}`),
                 }))}
                 onChange={setMode}
-                label={t("view3d.settings.quality")}
+                label={t("settings.view3d.quality")}
                 testId="view3d-quality-picker"
             />
             <p
@@ -358,34 +369,27 @@ function QualityRow() {
     );
 }
 
-/** Battery savers: stop drawing when nothing moves, and cap the frame rate on battery. */
-function PowerRows() {
+/** Resolution, for the web preview, which has no Settings window. */
+function ResolutionRow() {
     const { t } = useTranslate();
-    const prefs = useView3dSceneStore((s) => s.powerPrefs);
-    const setPrefs = useView3dSceneStore((s) => s.setPowerPrefs);
+    const resolution = useView3dSceneStore((s) => s.resolution);
+    const setResolution = useView3dSceneStore((s) => s.setResolution);
     return (
-        <>
-            <Row label={t("view3d.settings.pauseWhenIdle")}>
-                <Switch
-                    checked={prefs.pauseWhenIdle}
-                    onCheckedChange={(pauseWhenIdle) =>
-                        setPrefs({ ...prefs, pauseWhenIdle })
-                    }
-                    aria-label={t("view3d.settings.pauseWhenIdle")}
-                    data-testid="view3d-pause-when-idle"
-                />
-            </Row>
-            <Row label={t("view3d.settings.saveOnBattery")}>
-                <Switch
-                    checked={prefs.saveOnBattery}
-                    onCheckedChange={(saveOnBattery) =>
-                        setPrefs({ ...prefs, saveOnBattery })
-                    }
-                    aria-label={t("view3d.settings.saveOnBattery")}
-                    data-testid="view3d-save-on-battery"
-                />
-            </Row>
-        </>
+        <Row label={t("settings.view3d.resolution")} stacked>
+            <Segmented
+                value={resolution}
+                options={RESOLUTIONS.map((value) => ({
+                    value,
+                    label: t(`settings.view3d.resolution.${value}`),
+                }))}
+                onChange={setResolution}
+                label={t("settings.view3d.resolution")}
+                testId="view3d-resolution-picker"
+            />
+            <p className="text-sub text-text/60">
+                {t(`settings.view3d.resolution.${resolution}.description`)}
+            </p>
+        </Row>
     );
 }
 

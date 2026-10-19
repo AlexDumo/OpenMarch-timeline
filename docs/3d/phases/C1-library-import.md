@@ -712,6 +712,13 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
   cleared. Convert on open is quiet. The change bumps the file format, so
   older builds refuse the file. Mobile sync and export must produce the field
   image from the floor; that is part of the mobile sync work.
+- 2026-10-16, trevor (3d/floor-field-image): D-23 built except mobile sync
+  and export and the pick from the Library. The floor is the field image in
+  2D, exports and 3D; convert on open makes it from a legacy image and writes
+  file version 9 (only once a file has a floor, after review); Field settings
+  → Image has Upload floor… and Remove floor;
+  new shows copy a previous show's floor. Details in ADR 0002 D-23 "As
+  built".
 
 ### 2026-10-13 · trevor (3d/c1-starter-kit) · C1.13
 

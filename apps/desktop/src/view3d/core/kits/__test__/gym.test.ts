@@ -130,6 +130,7 @@ describe.each(Object.entries(footprints))("gym kit, %s", (_name, fp) => {
         });
         expect(spots).toHaveLength(4);
         expect(spots.every((s) => s.intensity === 0)).toBe(true);
+        expect(spots.some((s) => s.visible)).toBe(false);
         expect(overhead!.intensity).toBeCloseTo(1.1);
         const panels = kit.root.getObjectByName("gym-panels") as InstancedMesh;
         const mat = panels.material as { emissiveIntensity: number };
@@ -137,6 +138,7 @@ describe.each(Object.entries(footprints))("gym kit, %s", (_name, fp) => {
 
         kit.setLighting("show");
         expect(spots.every((s) => s.intensity > 2)).toBe(true);
+        expect(spots.every((s) => s.visible)).toBe(true);
         expect(overhead!.intensity).toBeCloseTo(0.1);
         expect(mat.emissiveIntensity).toBeCloseTo(0.08);
 
@@ -144,6 +146,7 @@ describe.each(Object.entries(footprints))("gym kit, %s", (_name, fp) => {
         expect(overhead!.intensity).toBeCloseTo(0.1);
         kit.setLighting("house");
         expect(spots.every((s) => s.intensity === 0)).toBe(true);
+        expect(spots.some((s) => s.visible)).toBe(false);
         kit.dispose();
     });
 

@@ -343,8 +343,10 @@ describe("pro dome kit", () => {
         expect(spots).toHaveLength(6);
         kit.setLighting("day");
         spots.forEach((s) => expect(s.intensity).toBe(0));
+        spots.forEach((s) => expect(s.visible).toBe(false));
         kit.setLighting("night");
         spots.forEach((s) => expect(s.intensity).toBe(1.4));
+        spots.forEach((s) => expect(s.visible).toBe(true));
         kit.setLighting("roofClosed");
         spots.forEach((s) => expect(s.intensity).toBe(1.4));
     });
