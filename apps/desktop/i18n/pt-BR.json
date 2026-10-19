@@ -1188,10 +1188,7 @@
             "label": "Página {pageName}",
             "subset": "Subconjunto"
         },
-        "pages": "Páginas",
-        "perspective": {
-            "label": "Perspectiva"
-        }
+        "pages": "Páginas"
     },
     "titlebar": {
         "bugReport": "Enviar erro ou feedback",

@@ -137,7 +137,9 @@
             "showNextPaths": "Show next page paths",
             "showPreviousPaths": "Show previous page paths",
             "toggleNextPaths": "Toggle next page paths",
-            "togglePreviousPaths": "Toggle previous page paths"
+            "togglePreviousPaths": "Toggle previous page paths",
+            "togglePreview": "Preview the show",
+            "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play"
         }
     },
     "analyticsOptIn": {
@@ -302,7 +304,8 @@
         "run": "Run",
         "suggested": "Suggested",
         "title": "Command palette",
-        "unavailable": "Not available right now"
+        "unavailable": "Not available right now",
+        "offInPreview": "Not in Preview — exit Preview to edit"
     },
     "convertShow": {
         "backupFolder": "In {folder}",
@@ -2017,9 +2020,6 @@
             "subset": "Subset"
         },
         "pages": "Pages",
-        "perspective": {
-            "label": "Perspective"
-        },
         "rangeMenu": {
             "deleteWithMoves": "Delete page and its moves",
             "followAgain": "Let selected marchers follow again",
@@ -2364,7 +2364,8 @@
         "workspace": {
             "label": "Workspace",
             "editor": "Editor",
-            "visuals": "Visuals"
+            "visuals": "Visuals",
+            "preview": "Preview"
         },
         "channels": {
             "feet": "Feet",

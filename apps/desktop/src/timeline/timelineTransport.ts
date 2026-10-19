@@ -19,6 +19,7 @@ import {
     playbackStartInfoRef,
     restartLivePlaybackAt,
 } from "@/components/timeline/audio/AudioPlayer";
+import { isPreviewMode } from "@/stores/PreviewModeStore";
 
 /**
  * The transport (docs/timeline/ui.md UI-9; P8.11), shared by the timeline's transport buttons and
@@ -82,7 +83,9 @@ export function navigateTimelinePages(
     if (target.range) {
         state.selectRange(target.range.start, target.range.end);
         // UI-17: going to a page takes the loop there (in Expert the loop follows the window anyway)
-        if (state.loop && !state.isolation)
+        // Not in Preview, which has no loop on screen: it stays for the Editor
+        // (`useBasicModeGuards`)
+        if (state.loop && !state.isolation && !isPreviewMode())
             state.setLoop({ start: target.range.start, end: target.range.end });
     } else state.selectHome();
     return true;
@@ -206,7 +209,8 @@ export function stopTimelinePlayback(
     setIsPlaying: (isPlaying: boolean) => void,
 ): void {
     if (!useTimelineSelectionStore.getState().playback) return;
-    endRequest = "stop";
+    // Preview plays like a video: stopping, or reaching the end of the show, pauses where it is
+    endRequest = isPreviewMode() ? "pause" : "stop";
     setIsPlaying(false);
 }
 
@@ -423,6 +427,10 @@ export function toggleTimelinePlayback({
         stopTimelinePlayback(setIsPlaying);
         return;
     }
+    if (isPreviewMode()) {
+        playPreview(setIsPlaying);
+        return;
+    }
     const state = useTimelineSelectionStore.getState();
     const bounds = loopBounds(state);
     if (bounds) {
@@ -439,6 +447,18 @@ export function toggleTimelinePlayback({
     state.cue(once.from);
     state.setPlayback({ kind: "preview", ...once, once: true });
     setIsPlaying(true);
+}
+
+/**
+ * Preview's Play: always plays on, with no loop and no window, from the beat on show, or from the
+ * start once it has played to the end, as a video does: at or past where playback stops (the
+ * store's `showEndBeat`, endless counts rule 6) it starts over rather than playing on in silence
+ */
+function playPreview(setIsPlaying: (isPlaying: boolean) => void): void {
+    const state = useTimelineSelectionStore.getState();
+    const from = displayedBeat(state);
+    const stop = state.showEndBeat;
+    startTimelinePlayOn(setIsPlaying, stop !== null && from >= stop ? 0 : from);
 }
 
 /** The edit window Expert's Play plays once (UI-26): `[S, P)`, or `null` with none to play. */
@@ -469,7 +489,7 @@ export function playTimelineOn({
         return;
     }
     const state = useTimelineSelectionStore.getState();
-    if (state.isolation) {
+    if (state.isolation || isPreviewMode()) {
         toggleTimelinePlayback({ isPlaying, setIsPlaying });
         return;
     }
@@ -492,6 +512,10 @@ export function playTimelinePage({
         pauseTimelinePlayback(setIsPlaying);
         return;
     }
+    if (isPreviewMode()) {
+        playPreview(setIsPlaying);
+        return;
+    }
     const state = useTimelineSelectionStore.getState();
     const bounds = loopBounds(state);
     if (!bounds) {
@@ -510,7 +534,7 @@ export function playTimelinePage({
  */
 export function toggleTimelineLoop(): void {
     const state = useTimelineSelectionStore.getState();
-    if (state.isolation) return;
+    if (state.isolation || isPreviewMode()) return;
     if (state.loop) {
         state.setLoop(null);
         return;

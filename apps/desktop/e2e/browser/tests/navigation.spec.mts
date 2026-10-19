@@ -4,7 +4,7 @@ import { readField, waitForIdle } from "../app.mjs";
 import type { Show } from "../fixtures.mjs";
 
 // Navigation on the field (fork #194): wheel, trackpad, pinch, pan drags,
-// limits, the zoom controls, fullscreen and touch, with the two decided
+// limits, the zoom controls, Preview and touch, with the two decided
 // changes in #189's rules table ("Panning" and "Alt"). The view is read only
 // through the field test API.
 
@@ -337,22 +337,18 @@ test("the zoom buttons zoom by a fifth at the center", async ({ show }) => {
     await expect(page.getByTitle("Reset Zoom and Center")).toHaveText("83%");
 });
 
-test("fullscreen fits the whole field, and leaving it centers the field again", async ({
+test("Preview fits the whole field, and leaving it centers the field again", async ({
     show,
 }) => {
     const { page } = show;
     const field = await fieldSize(show);
     const before = await openedView(show);
 
-    await page
-        .getByRole("button", { name: "Toggle timeline fullscreen" })
-        .click();
+    await page.getByTestId("workspace-view-preview").click();
     await expect
         .poll(async () => (await view(page)).zoom)
         .not.toBe(before.zoom);
     // Centered across at 87% of the room, a tenth of the spare height down.
-    // Today's fit measures the room with the 128 px left above the field, so
-    // when the height limits it the field's back edge can run off the bottom.
     // The canvas can take a moment to grow into the room: read both afresh.
     const offCenter = async () => {
         const v = await view(page);
@@ -367,9 +363,7 @@ test("fullscreen fits the whole field, and leaving it centers the field again", 
         (box.width / field.width) * 0.87 + 1e-6,
     );
 
-    await page
-        .getByRole("button", { name: "Toggle timeline fullscreen" })
-        .click();
+    await page.getByTestId("workspace-view-editor").click();
     await openedView(show);
 });
 
@@ -433,42 +427,4 @@ test.describe("touch", () => {
         expectNear(drawn.x, mid.x, 0.5);
         expectNear(drawn.y, mid.y, 0.5);
     });
-});
-
-test("fullscreen's perspective tilts the field, and leaving fullscreen flattens it", async ({
-    show,
-}) => {
-    const { page } = show;
-    const perspective = page.getByTestId("field-perspective");
-    // Only in fullscreen
-    await expect(perspective).toBeDisabled();
-    await page
-        .getByRole("button", { name: "Toggle timeline fullscreen" })
-        .click();
-    await expect(perspective).toBeEnabled();
-    const tilt = page.getByTestId("fieldTilt");
-    const flat = (await tilt.boundingBox())!;
-
-    await perspective.click();
-    const slider = page.getByRole("slider", { name: "Perspective" });
-    await slider.focus();
-    for (let i = 0; i < 40; i++) await page.keyboard.press("ArrowRight");
-    await expect(perspective).toHaveAccessibleName("Perspective, 40°");
-    // Leaning back, the field looks shorter on screen
-    await expect
-        .poll(async () => (await tilt.boundingBox())!.height)
-        .toBeLessThan(flat.height * 0.9);
-    await page.keyboard.press("Escape");
-
-    await page
-        .getByRole("button", { name: "Toggle timeline fullscreen" })
-        .click();
-    await expect(perspective).toHaveAccessibleName("Perspective, 0°");
-    await expect
-        .poll(async () => {
-            const box = (await tilt.boundingBox())!;
-            const inner = await tilt.evaluate((el) => el.clientHeight);
-            return Math.abs(box.height - inner);
-        })
-        .toBeLessThanOrEqual(1);
 });

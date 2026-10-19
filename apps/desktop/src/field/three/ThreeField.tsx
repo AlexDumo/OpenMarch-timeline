@@ -6,7 +6,6 @@ import {
     useMemo,
     useRef,
     useState,
-    type CSSProperties,
     type RefObject,
 } from "react";
 import clsx from "clsx";
@@ -18,7 +17,7 @@ import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { useFullscreenStore } from "@/stores/FullscreenStore";
+import { isPreviewMode, useIsPreviewMode } from "@/stores/PreviewModeStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     allItemsQueryOptions,
@@ -78,7 +77,7 @@ import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
     attachFieldNavigation,
-    fitFullscreen,
+    fitPreview,
     resetView,
     settleView,
 } from "./fieldNavigation";
@@ -184,13 +183,8 @@ function ThreeFieldView() {
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const { isPlaying } = useIsPlaying()!;
     const { beats, pages, countGrid } = useTimingObjects()!;
-    const isFullscreen = useFullscreenStore((s) => s.isFullscreen);
-    const perspective = useFullscreenStore((s) => s.perspective);
-    const setPerspective = useFullscreenStore((s) => s.setPerspective);
-    // The tilt is fullscreen's only: leaving fullscreen flattens the field
-    useEffect(() => {
-        if (!isFullscreen) setPerspective(0);
-    }, [isFullscreen, setPerspective]);
+    const preview = useIsPreviewMode();
+    const panning = useFieldViewStore((s) => s.panning);
     const { image: fieldImage, size: fieldImageSize } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
@@ -419,9 +413,14 @@ function ThreeFieldView() {
         setActiveFieldEditor(editor);
         return () => setActiveFieldEditor(null);
     }, [editor]);
-    // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1)
+    // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1). Preview
+    // edits nothing: the editor hears no presses there at all (`EditorInput`), only navigation
     const visuals = useIsVisualsView();
-    useEffect(() => editor.setReadOnly(visuals), [editor, visuals]);
+    const previewing = useIsPreviewMode();
+    useEffect(
+        () => editor.setReadOnly(visuals || previewing),
+        [editor, visuals, previewing],
+    );
     // A rotation typed into the inspector belongs to its selection and page:
     // when either changes before it's saved, it's dropped (#198)
     useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
@@ -483,23 +482,26 @@ function ThreeFieldView() {
     // Here, not in the camera: a canvas started over after a lost context
     // keeps the view
     const opened = useRef(false);
-    useFullscreenFit(root, isFullscreen, ready, settled);
+    usePreviewFit(root, preview, ready, settled);
 
     return (
         <div
             ref={root}
-            // Fullscreen leaves room above the field, and the field takes no
-            // input there
+            // Preview edits nothing, but the view still moves: a hand to drag it
             className={clsx(
                 "rounded-6 relative h-full w-full touch-none overflow-hidden",
-                isFullscreen && "pointer-events-none pt-128",
+                preview && (panning ? "cursor-grabbing" : "cursor-grab"),
             )}
-            style={TILT_PERSPECTIVE}
             data-testid="threeField"
         >
-            <TimelineIsolationBar />
-            <TimelineFromStartBadge />
-            <PropDrawingNotice />
+            {/* What a drag edits: Preview edits nothing */}
+            {!preview && (
+                <>
+                    <TimelineIsolationBar />
+                    <TimelineFromStartBadge />
+                    <PropDrawingNotice />
+                </>
+            )}
             <FieldBenchmark
                 frames={benchFrames}
                 view={benchView}
@@ -514,17 +516,9 @@ function ThreeFieldView() {
                     }}
                 />
             )}
-            <div
-                // Fullscreen's perspective (UI-12) tilts the field and what's
-                // drawn over it together. The field takes no input in
-                // fullscreen, so nothing hit-tests through the tilt
-                className="relative h-full w-full"
-                style={tiltStyle(perspective)}
-                data-testid="fieldTilt"
-            >
+            <div className="relative h-full w-full">
                 {fieldProperties && quality.reason !== "noWebGL" && (
                     <Canvas
-                        // Sized by layout, not by the tilted box on screen
                         resize={{ offsetSize: true }}
                         key={canvasKey}
                         // The field canvas, for the scenarios
@@ -690,69 +684,53 @@ function useFieldItems(
     );
 }
 
-/** The tilt's depth: the field is viewed from 1500 CSS px away, at its center. */
-const TILT_PERSPECTIVE: CSSProperties = {
-    perspective: "1500px",
-    perspectiveOrigin: "center center",
-};
+/** How long to wait for Preview's layout to settle. */
+const PREVIEW_SETTLE_MS = 250;
 
 /**
- * Fullscreen's perspective: the field leans back `degrees` about a line
- * below its center, which looks more natural, and eases into each angle.
- */
-const tiltStyle = (degrees: number): CSSProperties => ({
-    transform: degrees === 0 ? undefined : `rotateX(${degrees}deg)`,
-    transformOrigin: "center 70%",
-    transition: "transform 0.2s ease-out",
-});
-
-/** How long to wait for the fullscreen layout to settle. */
-const FULLSCREEN_SETTLE_MS = 250;
-
-/**
- * Entering fullscreen fits the whole field and clears the selection, and
+ * Entering Preview fits the whole field and clears the selection, and
  * leaving it centers the field at the base zoom again, once the layout has
  * settled. The field also centers again that long after it's `ready`, as the
  * app's panels finish laying out around it, and marks the view `settled`.
  */
-function useFullscreenFit(
+function usePreviewFit(
     root: RefObject<HTMLDivElement | null>,
-    isFullscreen: boolean,
+    preview: boolean,
     ready: boolean,
     settled: RefObject<boolean>,
 ) {
     const { setSelectedMarchers } = useSelectedMarchers()!;
-    // Read when it runs: the effect follows fullscreen and readiness only
+    // Read when it runs: the effect follows Preview and readiness only
     const clearSelection = useRef(() => setSelectedMarchers([]));
     clearSelection.current = () => setSelectedMarchers([]);
     const opening = useRef(true);
     useEffect(() => {
         if (!ready) return;
-        // Until it has run once, it's the show opening; then fullscreen changes
+        // Until it has run once, it's the show opening; then Preview changes
         const first = opening.current;
         let frame = 0;
         const timeout = setTimeout(() => {
             frame = requestAnimationFrame(() => {
                 opening.current = false;
                 settled.current = true;
-                if (!isFullscreen) {
+                if (!preview) {
                     if (first) settleView();
                     else resetView();
                     return;
                 }
                 if (root.current)
-                    fitFullscreen({
+                    fitPreview({
                         width: root.current.clientWidth,
                         height: root.current.clientHeight,
                     });
                 clearSelection.current();
             });
-        }, FULLSCREEN_SETTLE_MS);
+        }, PREVIEW_SETTLE_MS);
         return () => {
             clearTimeout(timeout);
             cancelAnimationFrame(frame);
         };
-    }, [isFullscreen, ready, root, settled]);
+    }, [preview, ready, root, settled]);
 }
 
 /**
@@ -760,7 +738,7 @@ function useFullscreenFit(
  * show centered at the base zoom once it's `ready`, and points the camera at
  * the store's view. Until the view has `settled`, a resize centers it again.
  * After that a resize keeps the zoom and where the field sits from the
- * top-left; in fullscreen it fits the field again.
+ * top-left; in Preview it fits the field again.
  */
 function FieldCamera({
     fieldProperties,
@@ -790,8 +768,8 @@ function FieldCamera({
         if (!opened.current) {
             opened.current = true;
             resetView();
-        } else if (useFullscreenStore.getState().isFullscreen && root.current) {
-            fitFullscreen({
+        } else if (isPreviewMode() && root.current) {
+            fitPreview({
                 width: root.current.clientWidth,
                 height: root.current.clientHeight,
             });
@@ -831,8 +809,13 @@ function EditorInput({
 }) {
     const canvas = useThree((s) => s.gl.domElement);
     const invalidate = useThree((s) => s.invalidate);
+    // Preview edits nothing, and selects nothing: presses only move the view (`fieldNavigation`)
+    const preview = useIsPreviewMode();
 
-    useEffect(() => attachFieldPointerInput(canvas, editor), [canvas, editor]);
+    useEffect(
+        () => (preview ? undefined : attachFieldPointerInput(canvas, editor)),
+        [canvas, editor, preview],
+    );
     // A drag moves marchers outside the playhead's fills: draw them
     useEffect(() => marchers.subscribe(invalidate), [marchers, invalidate]);
 

@@ -20,6 +20,7 @@ import {
 } from "./audio/AudioPlayer";
 import type { TimelinePlayback } from "./Timeline";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
+import { useIsPreviewMode } from "@/stores/PreviewModeStore";
 
 interface PlaybackState {
     readonly countGrid: CountClock;
@@ -139,8 +140,10 @@ export function useTimelinePlayback({
     const latest = useRef(state);
     latest.current = state;
     const commands = useMemo(() => playbackCommands(latest), []);
-    // UI-26: Alt+click plays on in Expert; Basic's Play already does
+    // UI-26: Alt+click plays on in Expert; Basic's Play already does, and so does Preview's, which
+    // has no loop and pauses where it is (`timelineTransport`), so nothing marks a way back
     const basic = useIsBasicMode();
+    const preview = useIsPreviewMode();
 
     return useMemo<TimelinePlayback>(
         () => ({
@@ -148,13 +151,17 @@ export function useTimelinePlayback({
             positionBeat:
                 isPlaying && liveIndex != null ? liveIndex : playheadBeat,
             isPlaying,
-            returnBeat: isPlaying ? restingBeat : undefined,
-            playLoops,
+            returnBeat: isPlaying && !preview ? restingBeat : undefined,
+            playLoops: playLoops && !preview,
             ...commands,
-            onPlayOn: basic ? undefined : commands.onPlayOn,
+            onPlayOn: basic || preview ? undefined : commands.onPlayOn,
+            onPlayFromPlayhead: preview
+                ? undefined
+                : commands.onPlayFromPlayhead,
         }),
         [
             basic,
+            preview,
             commands,
             isPlaying,
             liveBeat,
