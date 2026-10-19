@@ -3,12 +3,12 @@ import { defaultSettings, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import AudioPlayer from "./audio/AudioPlayer";
 import ActionButton from "@/shortcuts/ActionButton";
 import EditableAudioPlayer from "./audio/EditableAudioPlayer";
-import { useFullscreenStore } from "@/stores/FullscreenStore";
 import TimelineModePanel from "./TimelineModePanel";
 import VisualsTimeline from "@/components/visuals/VisualsTimeline";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
+import { useIsPreviewMode } from "@/stores/PreviewModeStore";
+import { PreviewTimelinePanel } from "./TimelineNavigationPanel";
 import { T } from "@tolgee/react";
-import clsx from "clsx";
 
 export default function TimelineContainer() {
     const focussedComponent = useUiSettingsStore(
@@ -57,7 +57,6 @@ function TimelineZoomControls() {
     const currentPixels = useUiSettingsStore(
         (s) => s.uiSettings.timelinePixelsPerSecond,
     );
-    const { isFullscreen } = useFullscreenStore();
     const zoomPercent = Math.round(
         (currentPixels / TIMELINE_BASE_PX_PER_SEC) * 100,
     );
@@ -86,12 +85,7 @@ function TimelineZoomControls() {
     };
 
     return (
-        <div
-            className={clsx(
-                { "right-290": !isFullscreen },
-                "border-stroke bg-modal fixed right-16 bottom-16 z-50 flex w-96 items-stretch justify-between overflow-hidden rounded-lg border shadow-lg",
-            )}
-        >
+        <div className="border-stroke bg-modal fixed right-290 bottom-16 z-50 flex w-96 items-stretch justify-between overflow-hidden rounded-lg border shadow-lg">
             <button
                 onClick={handleZoomOut}
                 className="border-stroke text-text flex w-full items-center justify-center border-l p-2 transition-colors duration-150 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
@@ -121,18 +115,25 @@ function TimelineZoomControls() {
 }
 
 /**
- * The timeline with the audio player beside it: the drill timeline, or in Visuals mode its own
- * (performer-behavior.md section 7.1). The player stays mounted across the switch.
- * UI-12: perspective and fullscreen live on the field's zoom widget.
+ * The timeline with the audio player beside it: the drill timeline, in Visuals mode its own
+ * (performer-behavior.md section 7.1), or in Preview only the music, the pages and the playhead.
+ * The player stays mounted across the switch.
  */
 function TimelineModeContainer() {
     const visuals = useIsVisualsView();
+    const preview = useIsPreviewMode();
     return (
         <div
             className="flex min-h-0 flex-1 gap-8"
             data-testid="timeline-mode-container"
         >
-            {visuals ? <VisualsTimeline /> : <TimelineModePanel />}
+            {preview ? (
+                <PreviewTimelinePanel />
+            ) : visuals ? (
+                <VisualsTimeline />
+            ) : (
+                <TimelineModePanel />
+            )}
             <AudioPlayer />
         </div>
     );
