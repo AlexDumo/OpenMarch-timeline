@@ -18,6 +18,7 @@ import {
     deleteMeasuresInTransaction,
 } from "@/db-functions/measures";
 import { updatePagesInTransaction } from "@/db-functions/page";
+import { remapItemChangesOntoReplacementBeatsInTransaction } from "@/db-functions/itemBeatRemap";
 import {
     DatabaseBeat,
     ModifiedBeatArgs,
@@ -393,8 +394,12 @@ export const _performDatabaseOperationsInTransaction = async ({
         });
     }
 
-    // Delete old beats
+    // Delete old beats; item changes move to the new beat at their time first
     if (beatIdsToDelete.size > 0) {
+        await remapItemChangesOntoReplacementBeatsInTransaction({
+            tx,
+            beatIds: beatIdsToDelete,
+        });
         await deleteBeatsInTransaction({
             tx,
             beatIds: beatIdsToDelete,

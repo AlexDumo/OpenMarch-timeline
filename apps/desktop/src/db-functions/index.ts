@@ -18,3 +18,4 @@ export * from "./cues";
 export * from "./phraseAssets";
 export * from "./pagePerformerSettings";
 export * from "./items";
+export * from "./itemBeatRemap";

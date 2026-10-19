@@ -1,5 +1,9 @@
 import { withTimelinePageRipple } from "@/db-functions/timelineRipple";
-import { FIRST_BEAT_ID, transactionWithHistory } from "@/db-functions";
+import {
+    FIRST_BEAT_ID,
+    remapItemChangesOntoReplacementBeatsInTransaction,
+    transactionWithHistory,
+} from "@/db-functions";
 import {
     createBeatsInTransaction,
     deleteBeatsInTransaction,
@@ -165,10 +169,14 @@ export const _importMusicXmlFile = async ({
                     (b) => !newBeatIds.has(b.id) && b.id !== FIRST_BEAT_ID,
                 );
                 if (unusedBeats.length > 0) {
-                    await deleteBeatsInTransaction({
+                    const beatIds = new Set(unusedBeats.map((b) => b.id));
+                    // Item changes move to the new beat at their time instead of going with
+                    // the old beats
+                    await remapItemChangesOntoReplacementBeatsInTransaction({
                         tx,
-                        beatIds: new Set(unusedBeats.map((b) => b.id)),
+                        beatIds,
                     });
+                    await deleteBeatsInTransaction({ tx, beatIds });
                 }
 
                 return {
