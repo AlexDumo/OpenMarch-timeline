@@ -196,6 +196,24 @@ rubber and plastic, drum heads: `MATTE_PARTS` in `instrumentGeometry.ts`)
 draw non-metallic at roughness 0.65, because a fully metallic white stock
 shows only reflections and reads as chrome (owner, 2026-10-09).
 
+**Silks** are not instrument pieces (C4.4, props-spec.md section 7). A flag
+model lists its silks as `SilkSpec`s (size, frame in the instrument frame,
+bone, mirror); `silkSet.ts` draws every silk in the band in one instanced
+cloth mesh per detail tier (24 × 16 cells near, 12 × 8 far and at `low`):
+metalness 0, roughness 0.8, double-sided, no shadows. A silk is plain in
+the section's 2D fill when it has one; otherwise it takes the guard
+preset's carry color and silk pattern (D-18), which the fragment shader
+samples at the grid's (u, v) from one texture holding every preset's
+pattern (`silkPatternTexture`). The vertex shader waves each silk in its own frame
+before skinning (`silkWave.ts`, the silk prototype's variant B: it hangs
+at rest and billows on the move), from per-instance inputs written by
+count: the show clock, a phase seed, ground speed, distance covered and
+turn rate. Only the swing flag's sleeve stays a silk-colored piece.
+A silk's Cut shapes the grid before the wave: each column runs from the
+outline's top to its bottom at that point of the fly (a depth field
+sampled 17 times along the fly, `silkCutProfile`), so the swing silks take
+the catalog's flat-bottomed swing Cut and the 6 ft flag stays a rectangle.
+
 **Parts and finish.** The uniform shader paints parts by id; it knows ids 0
 to 15 today. Instruments take new ids from 16 upward: 16 brass finish (gold
 lacquer by default, silver lacquer as the alternative), 17 reserved, 18 chrome, 19 drum shell (section color), 20 drum head, 21 bar

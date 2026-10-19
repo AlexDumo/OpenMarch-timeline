@@ -517,6 +517,32 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   to spare and takes 0.19 s. The integrated-GPU budget is still
   unmeasured.
 
+### 2026-10-13 · trevor (3d/c4-silk) · C4.4, silk mesh and wave
+
+- Change measured: silks drawn in their own instanced cloth mesh per tier
+  with the stateless wave before skinning, against the flags' silks inside
+  the instrument mesh (56 × 36 at high, 6 × 4 at low).
+- Method: the web preview (`view3d-web:dev`) with a debug hook never
+  committed, LHB '26 Daft Punk demo (40 Color Guard 6 ft flags), Press box,
+  show clock pinned at 8.0 s (39 silks moving), headless Chromium, ANGLE
+  Metal, Apple M1 Pro. `renderer.info` with the silk meshes shown and
+  hidden; 100 frames synced with `readPixels` at 1920 × 1080, 3 rounds,
+  medians. The `task/gpu-benchmark` harness is not on this branch and was
+  not run.
+- Draw calls: +1 with 40 silks (high 121 against 120, low 49 against 48),
+  +1 with 72 swing silks and +1 with 144 double-swing silks: one call per
+  tier in use, at most 2.
+- Triangles: +7,680 for 40 silks on the 12 × 8 tier; the instrument mesh
+  sheds the old silk grids.
+- Frame time: high 5.75 against 5.68 ms (+0.07), low 3.29 against 3.03 ms
+  (+0.26), within run-to-run noise of a few tenths.
+- Scrubbing: the same count drawn after scrubbing away and back gives a
+  byte-identical screenshot (high and low); unit tests check the same
+  per-instance inputs and vertices after a scrub.
+- Not measured: a base M1, Intel Iris Xe (C4.7). The swing silks were
+  measured at the old 1.5 × 0.7 m size, before C4.11's 44 × 66 in cut; the
+  grid's cell count, and so its triangles, doesn't depend on the size.
+
 ## Packaging
 
 ### 2026-10-11 · 3d-worker (3d/c1-sharp) · C1.5 sharp, macOS arm64
