@@ -81,7 +81,6 @@
         "shape": {
             "applyQuick": "Ajustar a la forma",
             "create": "Crear forma",
-            "createCircle": "Crear círculo",
             "delete": "Elimina las formas seleccionadas actualmente",
             "noMarchersSelected": "Ningún manifestante seleccionado"
         },
