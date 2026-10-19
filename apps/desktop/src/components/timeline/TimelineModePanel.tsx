@@ -153,8 +153,8 @@ export const toTimelineSelection = (
  * The timeline (ui.md, from the 0.2 branch). It takes the file's real beats, pages and measures, and plays through the app's existing audio clock. Its
  * selection is `useTimelineSelectionStore`'s (UI-9): the initial page box selects home, a page box
  * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
- * **+** after the free paused playhead adds a page flag there and selects the new page; a page
- * box's right-click menu deletes its flag (P8.13's writes, wired by P8.15), or the page and its
+ * **Add page** on the free paused playhead's right-click menu adds a page flag there and selects
+ * the new page; a page box's right-click menu deletes its flag (P8.13's writes, wired by P8.15), or the page and its
  * moves (defined coordinates, owner decision 3). Neither Create Track
  * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
  * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
@@ -482,7 +482,7 @@ export default function TimelineModePanel() {
 }
 
 /**
- * The timeline fed by the audio playback, with its zoom, its window and **+**. The playback
+ * The timeline fed by the audio playback, with its zoom, its window and **Add page**. The playback
  * position changes once a beat while playing or scrubbing, the window (from the start flag to the
  * playhead) with it, and the zoom every frame of a pinch, so all of them are read here, under the
  * panel: they re-render the timeline, not the panel and its queries.
@@ -540,9 +540,9 @@ export function PlayingTimeline({
         () => <AudioClock pausedSeconds={pausedSeconds} />,
         [pausedSeconds],
     );
-    // UI-9 **+** after the free paused playhead; the new page becomes the selection
+    // UI-9 **Add page** on the free paused playhead's menu; the new page becomes the selection
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
-    // Not while a paused preview holds a frame: + is drawn there, but would add at P (UI-11)
+    // Not while a paused preview holds a frame: the menu would open there, but add at P (UI-11)
     const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
     const addPageFlag = useAddPageFlag({
         pages,
@@ -646,7 +646,7 @@ export function selectionAfterDeleteWithMoves(
         : { kind: "home" };
 }
 
-/** **+** selects the new page's page timeline (UI-9: "The new page is selected"). */
+/** **Add page** selects the new page's page timeline (UI-9: "The new page is selected"). */
 export const selectAddedPage = ({
     startBeat,
     endBeat,

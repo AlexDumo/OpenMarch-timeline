@@ -71,6 +71,7 @@ import {
     type TimelineMoveMenuActions,
 } from "./TimelineRangeMenu";
 import { MOVE_NAME_MAX_LENGTH } from "@/timeline/timelineViewModel";
+import { AddPageFlagMenu } from "./AddPageFlagMenu";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import {
     previewPagesForFlag,
@@ -2652,6 +2653,9 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     onSeek,
     isPlaying = false,
     scrubLine,
+    onAddPage,
+    onAddSubsetPage,
+    addPageNames,
 }: {
     model: TimelineViewModel;
     positionBeat: BeatPosition;
@@ -2672,6 +2676,12 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
      * follows the pointer by a transform, without re-rendering (`useScrubFollow`)
      */
     scrubLine?: TimelineLiveValue<number | null>;
+    /** The right-click menu's **Add page** at the playhead (`AddPageFlagMenu`); no menu without it */
+    onAddPage?: () => void;
+    /** The menu's **Add subset page** */
+    onAddSubsetPage?: () => void;
+    /** The new page's names, after the menu's entries */
+    addPageNames?: { page: string; subset: string };
 }) {
     const keySteps = useArrowKeySteps(onSeek);
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
@@ -2724,58 +2734,68 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     });
 
     return (
-        <button
-            ref={anchorRef}
-            type="button"
-            data-testid="timeline-playhead"
-            data-timeline-scrub="true"
-            aria-label={`Playback position: ${getPlayheadReadout(model, positionBeat).spoken}`}
-            onPointerDown={(event) => event.preventDefault()}
-            onKeyDown={(event) => {
-                const delta =
-                    event.key === "ArrowLeft"
-                        ? -1
-                        : event.key === "ArrowRight"
-                          ? 1
-                          : 0;
-                if (delta === 0 || !onSeek) return;
-                event.preventDefault();
-                if (isPlaying) {
-                    onSeek(
-                        clamp(Math.round(positionBeat) + delta, 0, beatCount),
-                    );
-                    return;
-                }
-                keySteps.step(
-                    (from) => clamp(from + delta, 0, beatCount),
-                    Math.round(positionBeat),
-                    event.repeat,
-                );
-            }}
-            onKeyUp={(event) => {
-                if (event.key === "ArrowLeft" || event.key === "ArrowRight")
-                    keySteps.release();
-            }}
-            onBlur={keySteps.end}
-            className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize! touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
-            style={{ left, height }}
+        <AddPageFlagMenu
+            onAddPage={onAddPage}
+            onAddSubsetPage={onAddSubsetPage}
+            names={addPageNames}
         >
-            {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
-                the line, so its tip runs into the line */}
-            <span
-                className="bg-accent pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2"
-                style={{ height }}
-            />
-            <svg
-                width="12"
-                height="11"
-                viewBox="0 0 12 11"
-                aria-hidden="true"
-                className="text-accent pointer-events-none absolute top-0 left-[calc(50%-6px)]"
+            <button
+                ref={anchorRef}
+                type="button"
+                data-testid="timeline-playhead"
+                data-timeline-scrub="true"
+                aria-label={`Playback position: ${getPlayheadReadout(model, positionBeat).spoken}`}
+                onPointerDown={(event) => event.preventDefault()}
+                onKeyDown={(event) => {
+                    const delta =
+                        event.key === "ArrowLeft"
+                            ? -1
+                            : event.key === "ArrowRight"
+                              ? 1
+                              : 0;
+                    if (delta === 0 || !onSeek) return;
+                    event.preventDefault();
+                    if (isPlaying) {
+                        onSeek(
+                            clamp(
+                                Math.round(positionBeat) + delta,
+                                0,
+                                beatCount,
+                            ),
+                        );
+                        return;
+                    }
+                    keySteps.step(
+                        (from) => clamp(from + delta, 0, beatCount),
+                        Math.round(positionBeat),
+                        event.repeat,
+                    );
+                }}
+                onKeyUp={(event) => {
+                    if (event.key === "ArrowLeft" || event.key === "ArrowRight")
+                        keySteps.release();
+                }}
+                onBlur={keySteps.end}
+                className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize! touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
+                style={{ left, height }}
             >
-                <path d="M0 0 H12 V6 L6 11 L0 6 Z" fill="currentColor" />
-            </svg>
-        </button>
+                {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
+                the line, so its tip runs into the line */}
+                <span
+                    className="bg-accent pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2"
+                    style={{ height }}
+                />
+                <svg
+                    width="12"
+                    height="11"
+                    viewBox="0 0 12 11"
+                    aria-hidden="true"
+                    className="text-accent pointer-events-none absolute top-0 left-[calc(50%-6px)]"
+                >
+                    <path d="M0 0 H12 V6 L6 11 L0 6 Z" fill="currentColor" />
+                </svg>
+            </button>
+        </AddPageFlagMenu>
     );
 });
 

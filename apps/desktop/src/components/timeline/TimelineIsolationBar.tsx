@@ -217,7 +217,7 @@ export function editingWords(
         !plan.ok &&
         plan.error instanceof TimelineEditRefusedError &&
         plan.error.refusal === "pastLastPage"
-        ? "Add a page with + to edit here"
+        ? "Right-click the playhead to add a page here"
         : `Editing ${name}`;
 }
 

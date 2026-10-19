@@ -193,13 +193,13 @@ export interface TimelineProps {
      */
     readonly addSelectedMarchers?: TimelineAddMarchersMenu;
     /**
-     * UI-9 **+** at the paused playhead (P8.13's `useAddPageFlag`); omit it where **+** doesn't
-     * show (on a flag, at home, past the beats).
+     * UI-9 **Add page** on the paused playhead's right-click menu (P8.13's `useAddPageFlag`); omit
+     * it where no page can be added (on a flag, at home, past the beats).
      */
     readonly onAddPageFlag?: () => void;
-    /** **Add subset page** in **+**'s right-click menu: the same page, as a subset (UI-9) */
+    /** **Add subset page** in the playhead's right-click menu: the same page, as a subset (UI-9) */
     readonly onAddSubsetPage?: () => void;
-    /** The names **+**'s menu shows, muted, after **Add page** and **Add subset page** */
+    /** The names the playhead's menu shows, muted, after **Add page** and **Add subset page** */
     readonly addPageNames?: { readonly page: string; readonly subset: string };
     /**
      * The page box menu's **Change to subset** / **Change to normal page** (UI-9): sets page

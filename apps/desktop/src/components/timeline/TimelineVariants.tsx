@@ -11,16 +11,14 @@ import {
     type MouseEvent,
 } from "react";
 import { TimelineLoopBar } from "./TimelineLoopBar";
-import { AddPageFlagMenu } from "./AddPageFlagMenu";
 import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import { flushSync } from "react-dom";
-import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react";
+import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { useTimelineFollow, type FollowZoomAnchor } from "./useTimelineFollow";
 import clsx from "clsx";
 import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
-    beatToX,
     clamp,
     getPageSnapBeats,
     getWindowCountLabel,
@@ -53,11 +51,9 @@ import {
     TimelineTransport,
     useElementHeight,
     useElementWidth,
-    useScrubFollow,
     useTimelinePointer,
 } from "./TimelinePrimitives";
 import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
-import { addPageFlagLeft } from "./PageKeepChain";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import { useLatestCallback } from "./useLatestCallback";
 import {
@@ -639,7 +635,6 @@ const TimelineSurface = memo(function TimelineSurface({
     const expanded = density !== "collapsed";
     const viewportRef = useRef<HTMLDivElement>(null);
     const playheadRef = useRef<HTMLButtonElement>(null);
-    const addPageFlagRef = useRef<HTMLButtonElement>(null);
     const rows = useMemo(
         () => (basic ? [] : packTimelineTracks(model.tracks)),
         [basic, model.tracks],
@@ -784,13 +779,6 @@ const TimelineSurface = memo(function TimelineSurface({
         beatCount: model.beatCount,
         snapBeats,
     });
-    // **+** sits just after the playhead, so a scrub carries it along with the line
-    useScrubFollow(
-        addPageFlagRef,
-        pointer.scrubLine,
-        beatToX(positionBeat, pixelsPerBeat),
-        pixelsPerBeat,
-    );
     const onNavigate = useLatestCallback(transportNavigation(props));
     // A clip is its timeline: clicking it selects that range (UI-12)
     const selectTrack = useLatestCallback(
@@ -1150,41 +1138,14 @@ const TimelineSurface = memo(function TimelineSurface({
                             onSeek={props.onSeek}
                             isPlaying={props.isPlaying}
                             scrubLine={pointer.scrubLine}
+                            onAddPage={
+                                props.isPlaying
+                                    ? undefined
+                                    : props.onAddPageFlag
+                            }
+                            onAddSubsetPage={props.onAddSubsetPage}
+                            addPageNames={props.addPageNames}
                         />
-                        {props.onAddPageFlag && !props.isPlaying && (
-                            <AddPageFlagMenu
-                                onAddPage={props.onAddPageFlag}
-                                onAddSubsetPage={props.onAddSubsetPage}
-                                names={props.addPageNames}
-                            >
-                                <button
-                                    ref={addPageFlagRef}
-                                    type="button"
-                                    data-testid="timeline-add-page-flag"
-                                    data-timeline-interactive="true"
-                                    aria-label="Add a page flag here"
-                                    title="Add a page flag here"
-                                    onPointerDown={(event) =>
-                                        event.stopPropagation()
-                                    }
-                                    onClick={props.onAddPageFlag}
-                                    className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
-                                    // Past the playhead's box's keep chain, if it would cover it
-                                    style={{
-                                        left: addPageFlagLeft({
-                                            pages: model.pages,
-                                            beatCount: model.beatCount,
-                                            positionBeat,
-                                            pixelsPerBeat,
-                                            keepChains: props.keepChains,
-                                        }),
-                                        top: TIMELINE_PAGE_ROW_TOP + 6,
-                                    }}
-                                >
-                                    <PlusIcon size={10} weight="bold" />
-                                </button>
-                            </AddPageFlagMenu>
-                        )}
                         <TimelineRangePreview
                             preview={pointer.rangePreview}
                             pixelsPerBeat={pixelsPerBeat}

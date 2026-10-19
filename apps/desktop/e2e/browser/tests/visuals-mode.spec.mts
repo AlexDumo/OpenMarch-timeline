@@ -509,11 +509,16 @@ test("Visuals has its own timeline, and the field only selects there", async ({
         "data-workspace",
         "visuals",
     );
-    // the cue lanes are the timeline's lanes: no drill clips, no + and no window
+    // the cue lanes are the timeline's lanes: no drill clips, no window, and
+    // no Add page on the playhead
     await expect(page.getByTestId("visuals-band")).toBeVisible();
     await expect(page.getByTestId("timeline-clip")).toHaveCount(0);
-    await expect(page.getByTestId("timeline-add-page-flag")).toHaveCount(0);
     await expect(page.getByTestId("timeline-selection-range")).toHaveCount(0);
+    await page.getByTestId("timeline-playhead").click({ button: "right" });
+    await expect(page.getByTestId("timeline-add-page-flag-menu")).toHaveCount(
+        0,
+    );
+    await page.keyboard.press("Escape");
     // a page box still goes to its page
     const position = (name: string) =>
         page.getByRole("button", {

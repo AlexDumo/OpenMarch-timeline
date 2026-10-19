@@ -182,9 +182,14 @@ from it. The spec still wins on the model; this file decides presentation.
     `useSelectedPage` is read in timeline mode keeps new code from bringing
     it back. Coordinate sheets and drill-chart exports loop over every page
     and don't read the selection, so they stay.
-  - **+.** When the paused playhead isn't on a flag (and there is a beat
-    there), a **+** shows just after it. It adds a page whose flag is at the
-    playhead in one edit. The page that was split keeps its flag, id and
+  - **Add page (was +).** When the paused playhead isn't on a flag (and there
+    is a beat there), right-clicking the playhead opens a menu with **Add
+    page**. It adds a page whose flag is at the playhead in one edit. Until
+    2026-10-19 this was a **+** just after the playhead; the owner moved it to
+    the playhead's menu because a button on the end of the start flag–playhead
+    pair read as acting on that range, while adding a page only puts a flag at
+    one beat (_owner, 2026-10-19_). Older notes below that say **+** mean this
+    entry. The page that was split keeps its flag, id and
     per-page data (notes, appearance); the new page comes before it, and
     later pages renumber, unless it is a subset page (below). Only page rows change, plus
     `last_page_counts` when the last page is split; no timeline is written,
@@ -195,8 +200,8 @@ from it. The spec still wins on the model; this file decides presentation.
     (_owner, 2026-10-12_); it never adds beats, so where the music ends on
     the last flag there is no **+** past it. The timeline keeps 32px after
     the last beat so **+** stays on screen at the show's end.
-  - **Subset pages (2026-10-13).** Right-clicking **+** opens a menu with
-    **Add page** (the same as clicking **+**) and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
+  - **Subset pages (2026-10-13).** The playhead's menu (right-clicking **+**
+    until 2026-10-19) has **Add page** and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
     subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
     a page box offers **Change to subset**, or **Change to normal page** on a
     subset page, matching the Subset switch in page mode's menu and the
