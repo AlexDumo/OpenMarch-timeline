@@ -402,6 +402,65 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   Iris Xe, `pro`, the shadow pass (still unpatched), and a parity test of
   the composed pose against a mixer-layered one.
 
+### 2026-10-16 · trevor (3d/body-look-key) · body draw calls (P7.2)
+
+- Result: 129 draw calls a frame become 57 at high and 42 become 30 at
+  low; frame time is within noise at high and 1% to 2% better at low.
+- Change: body meshes group by what the uniform draws on the body
+  (`bodyKey`), not by the whole look. Looks that differed only in what they
+  carry, how they hold it, its fill color or finish each had their own
+  body mesh and material; they now share one.
+- Machine and fixture: M1 Pro, the 3D web preview (`view3d-web`, Chromium
+  on Metal, 1400 × 900 at device pixel ratio 2), LHB '26 Daft Punk demo
+  (385 marchers), high school venue, Podium camera, a 5 s orbit drag.
+  `timeline/main` and the branch ran on two dev servers and the runs
+  alternated, 3 to 4 each. Draws counted by wrapping the WebGL draw calls;
+  GPU time from `EXT_disjoint_timer_query_webgl2` around each frame; CPU
+  from DevTools `TaskDuration`. The preview needed #277's `sqlReadBatch`
+  host fix to place any marchers.
+
+  | Build                         | Draws a frame | GPU p50 (ms) | Frames in 5 s  |
+  | ----------------------------- | ------------- | ------------ | -------------- |
+  | `timeline/main`, high         | 129           | 14.1 to 14.6 | 645 to 659     |
+  | `bodyKey` grouping, high      | 57            | 14.4 to 14.8 | 645 to 654     |
+  | Per-look texture (C4.3), high | 50            | 14.8 to 15.3 | 602 to 633     |
+  | `timeline/main`, low          | 42            | 2.43 to 2.46 | 2,427 to 2,460 |
+  | `bodyKey` grouping, low       | 30            | 2.39 to 2.40 | 2,474 to 2,477 |
+  | Per-look texture (C4.3), low  | 29            | 2.50 to 2.55 | 2,288 to 2,314 |
+
+  The texture's low rows come from an earlier session, where
+  `timeline/main` read 2.47 to 2.48 ms and 2,360 to 2,374 frames. High is
+  capped near the display's 120 Hz; low isn't, so its frame counts are the
+  throughput.
+
+- Reading: cutting body draws doesn't buy frame time on this machine. The
+  frame is GPU-bound: a CPU profile of the orbit spends 35% in
+  `uniformMatrix4fv` and 18% in `drawElementsInstanced`, which is the main
+  thread waiting on a full command buffer, and under 1% in three.js's own
+  JavaScript. `bodyKey` grouping is kept: it takes 72 draws a frame off
+  the bodies at high, is
+  within noise at high and about 1% to 2% faster at low, and may help more
+  on drivers with heavier per-draw overhead (untested).
+- C4.3's per-look texture (one material, one body mesh per body type,
+  every look a row of a float texture read with `texelFetch`) met its draw
+  goal, 16 looks in the calls of one, with pixel parity, but cost 4% to 6%
+  more GPU time than per-look materials. Replacing the fetches with
+  constants made it 6% faster than `timeline/main`, so the cost is the
+  per-fragment fetch and the branches on a per-instance style, not the
+  hidden shako triangles (an inference: their cost wasn't measured on its
+  own, so C4.3's done-when stays open). Fetching lazily and reading the option texels once
+  per fragment only narrowed it. Parked on the local branch
+  `3d/look-texture-spike`; it is worth another look only if custom uniforms
+  (C5) make shows with many looks common.
+- Parity: the four camera views at high and low against `timeline/main`
+  differ on at most 69 of 1.2 M pixels (0.006%), all on edges where a horn
+  meets a face, from the new draw order.
+- Not run: the GPU benchmark harness (`task/gpu-benchmark`, not on
+  `main`); the timings are the web preview's. A real energy reading on
+  battery is still open.
+- Next for battery: find what the GPU spends 14 ms on at high (turf,
+  shadows, crowd, body fill), by toggling each; draw calls aren't it.
+
 ### 2026-10-11 · trevor (3d/cue-layering) · step 6, the layered renderer
 
 <!-- cspell:ignore readPixels -->
