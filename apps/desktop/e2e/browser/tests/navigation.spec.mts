@@ -344,7 +344,7 @@ test("Preview fits the whole field, and leaving it centers the field again", asy
     const field = await fieldSize(show);
     const before = await openedView(show);
 
-    await page.getByTestId("preview-mode-toggle").click();
+    await page.getByTestId("workspace-view-preview").click();
     await expect
         .poll(async () => (await view(page)).zoom)
         .not.toBe(before.zoom);
@@ -363,7 +363,7 @@ test("Preview fits the whole field, and leaving it centers the field again", asy
         (box.width / field.width) * 0.87 + 1e-6,
     );
 
-    await page.getByTestId("preview-mode-toggle").click();
+    await page.getByTestId("workspace-view-editor").click();
     await openedView(show);
 });
 

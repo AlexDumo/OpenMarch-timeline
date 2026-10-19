@@ -19,7 +19,6 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import MarcherLogo from "@/components/MarcherLogo";
 import { isWebBuild, webChannel } from "@/utilities/webBuild";
 import WebFileMenu from "./WebFileMenu";
-import { PreviewButton } from "@/components/preview/PreviewMode";
 import { useWebWelcomeStore } from "@/stores/WebWelcomeStore";
 
 /** Page zoom changes the viewport's CSS size, so it always fires a resize. */
@@ -224,10 +223,8 @@ function EditorTitleBar({
                     {showFilePath ? displayDbPath : null}
                 </p>
                 <div
-                    className={`titlebar-button flex items-center gap-12 ${isMacOS ? "pr-24" : ""}`}
+                    className={`titlebar-button flex gap-12 ${isMacOS ? "pr-24" : ""}`}
                 >
-                    {/* Preview: watch the show without editing it */}
-                    {variant === "main" && showControls && <PreviewButton />}
                     <BugReport />
                     {showWindowControls && (
                         <div className="titlebar-button flex">

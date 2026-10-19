@@ -35,6 +35,7 @@ import FocusNotice from "./components/FocusNotice";
 import SvgPreviewHandler from "./utilities/SvgPreviewHandler";
 import { useIsPreviewMode } from "./stores/PreviewModeStore";
 import { PreviewModeHost } from "./components/preview/PreviewMode";
+import WorkspaceViewSwitch from "./components/visuals/WorkspaceViewSwitch";
 import AnalyticsOptInModal from "./components/AnalyticsOptInModal";
 import { useEditorModeStore } from "./stores/EditorModeStore";
 import ErrorBoundary from "./ErrorBoundary";
@@ -329,7 +330,12 @@ function App() {
                                                         id="workspace"
                                                         className="relative flex h-full min-h-0 w-full min-w-0 flex-col gap-8"
                                                     >
-                                                        {!preview && (
+                                                        {preview ? (
+                                                            // Only the workspace switch, to go back
+                                                            <div className="flex justify-end">
+                                                                <WorkspaceViewSwitch />
+                                                            </div>
+                                                        ) : (
                                                             <div
                                                                 className={
                                                                     timelineFocussedClass

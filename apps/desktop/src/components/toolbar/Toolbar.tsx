@@ -12,7 +12,6 @@ import SelectTab from "./tabs/SelectTab";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
-import { useIsBasicMode } from "@/stores/EditorModeStore";
 import VisualsToolbar from "@/components/visuals/VisualsToolbar";
 import WorkspaceViewSwitch from "@/components/visuals/WorkspaceViewSwitch";
 
@@ -21,8 +20,6 @@ export default function Topbar() {
     const { selectedPage } = useSelectedPage()!;
     const { currentCollisions } = useCollisionStore();
     const visuals = useIsVisualsView();
-    // Visuals mode authors cues, which Basic doesn't show (UI-19)
-    const basic = useIsBasicMode();
 
     // Switch from collisions tab to alignment when page changes and no collisions exist. Not while
     // playing or scrubbing, when the selected page follows the playhead (#226): the tab waits for
@@ -44,9 +41,7 @@ export default function Topbar() {
 
     return (
         <div className="group relative">
-            {!basic && (
-                <WorkspaceViewSwitch className="absolute top-0 right-0 z-10" />
-            )}
+            <WorkspaceViewSwitch className="absolute top-0 right-0 z-10" />
             {visuals ? (
                 <VisualsToolbar />
             ) : (

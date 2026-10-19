@@ -2242,11 +2242,7 @@
         "bugReport.placeholder": "What went wrong?\nWhat did you expect?\nHow can we reproduce the issue?",
         "databasePathError": "Database Path Error",
         "databasePathError.description": "Failed to fetch .dots file path!\n\nPlease fully quit the app and try again.\n\nIf the issue persists, please reach out to support.",
-        "databasePathError.dismiss": "Dismiss",
-        "preview": "Preview",
-        "preview.tooltip": "Watch the show without editing it",
-        "preview.exit": "Exit preview",
-        "preview.exitTooltip": "Back to editing (Esc)"
+        "databasePathError.dismiss": "Dismiss"
     },
     "toolbar": {
         "alignment": {
@@ -2571,7 +2567,8 @@
         "workspace": {
             "label": "Workspace",
             "editor": "Editor",
-            "visuals": "Visuals"
+            "visuals": "Visuals",
+            "preview": "Preview"
         },
         "channels": {
             "feet": "Feet",

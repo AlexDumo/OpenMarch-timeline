@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useEditorModeStore } from "@/stores/EditorModeStore";
-import { useWorkspaceViewStore } from "@/stores/WorkspaceViewStore";
+import {
+    isVisualsView,
+    useWorkspaceViewStore,
+} from "@/stores/WorkspaceViewStore";
 import { isActionEnabled, registerActionHandler, runAction } from "../registry";
 import {
     isActionOffInWorkspace,
@@ -131,6 +134,15 @@ describe("Preview, which edits nothing", () => {
         usePreviewModeStore.setState({ isPreview: false });
         for (const id of ids) expect(isActionEnabled(id), id).toBe(true);
         handlers.forEach((h) => h.off());
+    });
+
+    it("shows over Visuals, which comes back when Preview ends", () => {
+        useWorkspaceViewStore.setState({ view: "visuals" });
+        expect(isVisualsView()).toBe(true);
+        usePreviewModeStore.setState({ isPreview: true });
+        expect(isVisualsView()).toBe(false);
+        usePreviewModeStore.setState({ isPreview: false });
+        expect(isVisualsView()).toBe(true);
     });
 
     it("keeps no drill edit", () => {
