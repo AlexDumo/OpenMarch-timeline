@@ -33,6 +33,8 @@ export { mirrorAcross50, offsetCopy } from "./drill/mirror";
 export * from "./fills/omFills";
 export { countDots, hasDotFill } from "./fills/dotCount";
 export { dataUrlToBlob } from "./editor/scene";
+export { sha256Hex } from "./hash";
+export { uuid } from "./ids";
 export { registerOmFillers } from "./fills/roughFiller";
 export {
     exportBounds,
