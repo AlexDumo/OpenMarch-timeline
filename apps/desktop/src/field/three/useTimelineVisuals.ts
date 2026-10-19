@@ -5,7 +5,7 @@ import type Page from "@/global/classes/Page";
 import { db } from "@/global/database/db";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import {
-    displayedBeat,
+    fieldBeat,
     isolatedTimeline,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
@@ -25,6 +25,12 @@ import {
     planPathOverlay,
     type OverlayPlan,
 } from "@/field/timelineOverlays";
+import { useVisualsStore } from "@/stores/VisualsStore";
+import {
+    isVisualsView,
+    useWorkspaceViewStore,
+} from "@/stores/WorkspaceViewStore";
+import { useEditorModeStore } from "@/stores/EditorModeStore";
 import { FieldDimming } from "./fieldDimming";
 import { FieldFollowing } from "./fieldFollowing";
 
@@ -145,27 +151,45 @@ export function useTimelineVisuals({
 
 /**
  * UI-9: while a move is isolated, the marchers outside it are dimmed, once the
- * resolver is ready. Follows the timeline selection store outside React;
- * `FieldDimming` ignores updates that keep the same members, such as the
- * window moving inside the move.
+ * resolver is ready. In Visuals mode a focused who does the same, ahead of
+ * any isolation (performer-behavior.md section 7.1); dimmed marchers stay
+ * selectable there, since the selection is a who. Follows the stores outside
+ * React; `FieldDimming` ignores updates that keep the same members, such as
+ * the window moving inside the move.
  */
 function useFieldDimming(enabled: boolean): FieldDimming {
     const dimming = useMemo(() => new FieldDimming(), []);
     useEffect(() => {
         const update = () => {
+            const focused = isVisualsView()
+                ? useVisualsStore.getState().focusMarcherIds
+                : null;
+            if (focused) {
+                dimming.set(focused);
+                return;
+            }
             const isolated = enabled
                 ? isolatedTimeline(useTimelineSelectionStore.getState())
                 : null;
             dimming.set(isolated?.marcherIds ?? null);
         };
         update();
-        return useTimelineSelectionStore.subscribe((state, previous) => {
-            if (
-                state.isolation !== previous.isolation ||
-                state.storedTimelines !== previous.storedTimelines
-            )
-                update();
-        });
+        const unsubscribes = [
+            useTimelineSelectionStore.subscribe((state, previous) => {
+                if (
+                    state.isolation !== previous.isolation ||
+                    state.storedTimelines !== previous.storedTimelines
+                )
+                    update();
+            }),
+            useVisualsStore.subscribe((state, previous) => {
+                if (state.focusMarcherIds !== previous.focusMarcherIds)
+                    update();
+            }),
+            useWorkspaceViewStore.subscribe(update),
+            useEditorModeStore.subscribe(update),
+        ];
+        return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
     }, [dimming, enabled]);
     return dimming;
 }
@@ -176,7 +200,8 @@ function useFieldDimming(enabled: boolean): FieldDimming {
  * marcher's Set beats are worked out once per resolver version and kept
  * markers, so a playhead move only looks them up, and `FieldFollowing`
  * redraws only when who's Following changes. Stopping eases the dashes in
- * (#302), unless the system asks for reduced motion.
+ * (#302), unless the system asks for reduced motion. The count is the one the
+ * field draws (`fieldBeat`), so a dragged start flag (UI-26) shows its own.
  */
 function useFieldFollowing(ready: boolean, isPlaying: boolean): FieldFollowing {
     const following = useMemo(() => new FieldFollowing(), []);
@@ -216,7 +241,7 @@ function useFieldFollowing(ready: boolean, isPlaying: boolean): FieldFollowing {
             following.set(
                 followingAt(
                     setBeats,
-                    displayedBeat(useTimelineSelectionStore.getState()),
+                    fieldBeat(useTimelineSelectionStore.getState()),
                 ),
                 { ease },
             );
@@ -244,8 +269,7 @@ function useFieldFollowing(ready: boolean, isPlaying: boolean): FieldFollowing {
                 if (state.ids !== previous.ids) safely(true);
             }),
             useTimelineSelectionStore.subscribe((state, previous) => {
-                if (displayedBeat(state) !== displayedBeat(previous))
-                    safely(false);
+                if (fieldBeat(state) !== fieldBeat(previous)) safely(false);
             }),
         ];
         return () => {

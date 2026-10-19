@@ -18,7 +18,7 @@ import {
 } from "../fieldFollowing";
 import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
 import { useFieldDraw } from "../fieldDrawContext";
-import { writeMarcherLooks } from "../marcherLooks";
+import { MARCHER_SHAPE, writeMarcherLooks } from "../marcherLooks";
 import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
 
 /**
@@ -363,6 +363,11 @@ export default function MarchersLayer({
                 fill: fill.array as Float32Array,
                 outline: outline.array as Float32Array,
                 shape: shape.array as Float32Array,
+            });
+            // Items are drawn as their Outlines by the items layer, not as dots
+            const shapes = shape.array as Float32Array;
+            marchers.isItem.forEach((item, i) => {
+                if (item) shapes[i] = MARCHER_SHAPE.hidden;
             });
             fill.needsUpdate = true;
             outline.needsUpdate = true;

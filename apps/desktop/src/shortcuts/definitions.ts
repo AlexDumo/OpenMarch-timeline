@@ -26,6 +26,12 @@ export interface ActionDefinition {
     toggleOnKey?: string;
     toggleOffKey?: string;
     category: ActionCategory;
+    /**
+     * Whether the action edits the drill: the marchers' positions, the pages or the moves.
+     * Visuals mode edits cues, not the drill, so it turns these off (`isActionOffInWorkspace`,
+     * performer-behavior.md section 7.1). Required, so a new action has to say.
+     */
+    editsDrill: boolean;
     scope: ActionScope;
     /**
      * Binding strings, see bindings.ts. Empty = unbound. The first binding is the one shown in tooltips.
@@ -115,6 +121,7 @@ function buildNudgeActions(): Record<NudgeActionId, ActionDefinition> {
                 labelKey: `actions.movement.move${dirName}`,
                 labelSuffixKey: variant.suffix,
                 category: "movement",
+                editsDrill: true,
                 scope: "canvas",
                 defaultBindings: variant.bindings(dir.letter, dir.arrow),
                 hiddenFromPalette: true,
@@ -138,6 +145,7 @@ function buildTapBeatsActions(): Record<TapBeatsActionId, ActionDefinition> {
             labelKey: "actions.timeline.tapBeats",
             labelParams: { count },
             category: "timeline",
+            editsDrill: false,
             scope: "timeline",
             defaultBindings: [String(count)],
             hiddenFromPalette: true,
@@ -152,6 +160,7 @@ const STATIC_ACTIONS = {
     launchLoadFileDialogue: {
         labelKey: "actions.file.loadDialogue",
         category: "file",
+        editsDrill: false,
         scope: "global",
         // Electron binds this in the native menu; the web build has none.
         defaultBindings: isWebBuild ? ["$mod+O"] : [],
@@ -159,6 +168,7 @@ const STATIC_ACTIONS = {
     launchSaveFileDialogue: {
         labelKey: "actions.file.saveDialogue",
         category: "file",
+        editsDrill: false,
         scope: "global",
         // Electron binds this in the native menu; the web build has none.
         defaultBindings: isWebBuild ? ["$mod+S"] : [],
@@ -166,24 +176,28 @@ const STATIC_ACTIONS = {
     launchNewFileDialogue: {
         labelKey: "actions.file.newDialogue",
         category: "file",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
     launchInsertAudioFileDialogue: {
         labelKey: "actions.file.insertAudio",
         category: "file",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
     closeFile: {
         labelKey: "actions.file.closeFile",
         category: "file",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
     openExportDialog: {
         labelKey: "actions.file.openExport",
         category: "file",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         args: { tab: "mobile" },
@@ -192,6 +206,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.file.exportCoordinateSheets",
         keywordsKey: "actions.file.exportCoordinateSheetsKeywords",
         category: "file",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         args: { tab: "coordinate-sheets" },
@@ -200,6 +215,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.file.exportDrillCharts",
         keywordsKey: "actions.file.exportDrillChartsKeywords",
         category: "file",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         args: { tab: "drill-charts" },
@@ -208,6 +224,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.file.exportVideo",
         keywordsKey: "actions.file.exportVideoKeywords",
         category: "file",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         args: { tab: "video" },
@@ -216,6 +233,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.file.exportToMobile",
         keywordsKey: "actions.file.exportToMobileKeywords",
         category: "file",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         args: { tab: "mobile" },
@@ -223,6 +241,7 @@ const STATIC_ACTIONS = {
     launchImportMusicXmlFileDialogue: {
         labelKey: "actions.file.importMusicXml",
         category: "file",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
         hiddenFromPalette: true,
@@ -232,12 +251,14 @@ const STATIC_ACTIONS = {
     performUndo: {
         labelKey: "actions.edit.undo",
         category: "edit",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+Z", "Control+Z"],
     },
     performRedo: {
         labelKey: "actions.edit.redo",
         category: "edit",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+Shift+Z", "Control+Shift+Z"],
     },
@@ -246,24 +267,28 @@ const STATIC_ACTIONS = {
     nextPage: {
         labelKey: "actions.navigation.nextPage",
         category: "navigation",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["E"],
     },
     lastPage: {
         labelKey: "actions.navigation.lastPage",
         category: "navigation",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["Alt+E", "End", "Alt+Shift+E"],
     },
     previousPage: {
         labelKey: "actions.navigation.previousPage",
         category: "navigation",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["Q"],
     },
     firstPage: {
         labelKey: "actions.navigation.firstPage",
         category: "navigation",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["Alt+Q", "Home", "Alt+Shift+Q"],
     },
@@ -272,12 +297,14 @@ const STATIC_ACTIONS = {
     nextBeat: {
         labelKey: "actions.navigation.nextBeat",
         category: "navigation",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["Shift+E"],
     },
     previousBeat: {
         labelKey: "actions.navigation.previousBeat",
         category: "navigation",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["Shift+Q"],
     },
@@ -286,6 +313,7 @@ const STATIC_ACTIONS = {
         toggleOnKey: "actions.playback.play",
         toggleOffKey: "actions.playback.pause",
         category: "playback",
+        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["Space"],
     },
@@ -293,13 +321,24 @@ const STATIC_ACTIONS = {
     playPage: {
         labelKey: "actions.playback.playPage",
         category: "playback",
+        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["Shift+Space"],
+    },
+    // UI-26: Alt+Space plays on from the start flag past the playhead (Expert timeline); Space
+    // plays the window once
+    playOn: {
+        labelKey: "actions.playback.playOn",
+        category: "playback",
+        editsDrill: false,
+        scope: "canvas",
+        defaultBindings: ["Alt+Space"],
     },
     // UI-17: C turns looping on over the page being edited, or off (timeline mode)
     toggleLoop: {
         labelKey: "actions.playback.toggleLoop",
         category: "playback",
+        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["C"],
     },
@@ -308,6 +347,7 @@ const STATIC_ACTIONS = {
     holdFasterPlayback: {
         labelKey: "actions.playback.holdFaster",
         category: "playback",
+        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["BracketRight"],
         ignoreRepeat: true,
@@ -316,6 +356,7 @@ const STATIC_ACTIONS = {
     holdSlowerPlayback: {
         labelKey: "actions.playback.holdSlower",
         category: "playback",
+        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["BracketLeft"],
         ignoreRepeat: true,
@@ -325,6 +366,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.playback.nextSpeed",
         keywordsKey: "actions.playback.speedKeywords",
         category: "playback",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
@@ -332,6 +374,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.playback.previousSpeed",
         keywordsKey: "actions.playback.speedKeywords",
         category: "playback",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
@@ -339,12 +382,14 @@ const STATIC_ACTIONS = {
         labelKey: "actions.playback.resetSpeed",
         keywordsKey: "actions.playback.speedKeywords",
         category: "playback",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
     toggleMetronome: {
         labelKey: "actions.playback.toggleMetronome",
         category: "playback",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+M", "Control+M"],
     },
@@ -353,24 +398,28 @@ const STATIC_ACTIONS = {
     setAllMarchersToPreviousPage: {
         labelKey: "actions.batchEdit.setAllToPrevious",
         category: "batchEdit",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["$mod+Shift+P", "Control+Shift+P"],
     },
     setSelectedMarchersToPreviousPage: {
         labelKey: "actions.batchEdit.setSelectedToPrevious",
         category: "batchEdit",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+P"],
     },
     setAllMarchersToNextPage: {
         labelKey: "actions.batchEdit.setAllToNext",
         category: "batchEdit",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["$mod+Shift+N", "Control+Shift+N"],
     },
     setSelectedMarchersToNextPage: {
         labelKey: "actions.batchEdit.setSelectedToNext",
         category: "batchEdit",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+N"],
     },
@@ -379,6 +428,7 @@ const STATIC_ACTIONS = {
     snapToNearestCustomFraction: {
         labelKey: "actions.alignment.snapToCustomFraction",
         category: "alignment",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["1"],
     },
@@ -387,6 +437,7 @@ const STATIC_ACTIONS = {
         toggleOnKey: "actions.alignment.lockXOn",
         toggleOffKey: "actions.alignment.lockXOff",
         category: "alignment",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Y"],
     },
@@ -395,48 +446,56 @@ const STATIC_ACTIONS = {
         toggleOnKey: "actions.alignment.lockYOn",
         toggleOffKey: "actions.alignment.lockYOff",
         category: "alignment",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["X"],
     },
     alignVertically: {
         labelKey: "actions.alignment.alignVertically",
         category: "alignment",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Alt+V"],
     },
     alignHorizontally: {
         labelKey: "actions.alignment.alignHorizontally",
         category: "alignment",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Alt+H"],
     },
     evenlyDistributeVertically: {
         labelKey: "actions.alignment.distributeVertically",
         category: "alignment",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+V"],
     },
     evenlyDistributeHorizontally: {
         labelKey: "actions.alignment.distributeHorizontally",
         category: "alignment",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+H"],
     },
     flipHorizontal: {
         labelKey: "actions.alignment.flipHorizontal",
         category: "alignment",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Alt+F"],
     },
     flipVertical: {
         labelKey: "actions.alignment.flipVertical",
         category: "alignment",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Alt+Shift+F"],
     },
     swapMarchers: {
         labelKey: "actions.swap.swap",
         category: "alignment",
+        editsDrill: true,
         scope: "canvas",
         // On the web, Cmd/Ctrl+S downloads the show (saving), so swap moves.
         defaultBindings: isWebBuild
@@ -450,6 +509,7 @@ const STATIC_ACTIONS = {
         toggleOnKey: "actions.ui.showPreviousPaths",
         toggleOffKey: "actions.ui.hidePreviousPaths",
         category: "ui",
+        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["N"],
     },
@@ -458,12 +518,14 @@ const STATIC_ACTIONS = {
         toggleOnKey: "actions.ui.showNextPaths",
         toggleOffKey: "actions.ui.hideNextPaths",
         category: "ui",
+        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["M"],
     },
     focusCanvas: {
         labelKey: "actions.ui.focusCanvas",
         category: "ui",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["Alt+C"],
     },
@@ -472,6 +534,7 @@ const STATIC_ACTIONS = {
     openFieldMenu: {
         labelKey: "actions.ui.openFieldMenu",
         category: "ui",
+        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["ContextMenu", "Shift+F10"],
         hiddenFromPalette: true,
@@ -479,12 +542,14 @@ const STATIC_ACTIONS = {
     focusTimeline: {
         labelKey: "actions.ui.focusTimeline",
         category: "ui",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["Alt+T"],
     },
     openSettings: {
         labelKey: "actions.ui.openSettings",
         category: "ui",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+Comma"],
     },
@@ -494,6 +559,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.ui.runFieldBenchmark",
         keywordsKey: "actions.ui.runFieldBenchmarkKeywords",
         category: "ui",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
     },
@@ -502,19 +568,33 @@ const STATIC_ACTIONS = {
         labelKey: "actions.ui.openView3d",
         keywordsKey: "actions.ui.openView3dKeywords",
         category: "ui",
+        editsDrill: false,
         scope: "global",
         defaultBindings: [],
+    },
+    // Switches between the Editor and Visuals mode (performer-behavior.md section 7.1). Expert
+    // only: Basic has no Visuals mode
+    toggleWorkspace: {
+        labelKey: "actions.ui.toggleWorkspace",
+        keywordsKey: "actions.ui.toggleWorkspaceKeywords",
+        category: "ui",
+        editsDrill: false,
+        scope: "global",
+        defaultBindings: ["$mod+Shift+V"],
+        ignoreRepeat: true,
     },
     // UI-17 follow-up: ? lists every shortcut
     showShortcuts: {
         labelKey: "actions.ui.showShortcuts",
         category: "ui",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["Shift+Slash"],
     },
     openCommandPalette: {
         labelKey: "actions.ui.openCommandPalette",
         category: "ui",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+K"],
         allowInInputs: true,
@@ -523,6 +603,7 @@ const STATIC_ACTIONS = {
     exitTimelineFocus: {
         labelKey: "actions.ui.exitTimelineFocus",
         category: "ui",
+        editsDrill: false,
         scope: "timeline",
         defaultBindings: ["Escape"],
         allowInInputs: true,
@@ -533,24 +614,28 @@ const STATIC_ACTIONS = {
     applyQuickShape: {
         labelKey: "actions.shape.applyQuick",
         category: "cursor",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+Enter"],
     },
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",
         category: "cursor",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Escape"],
     },
     alignmentEventDefault: {
         labelKey: "actions.cursor.defaultMode",
         category: "cursor",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["V"],
     },
     alignmentEventLine: {
         labelKey: "actions.cursor.lineMode",
         category: "cursor",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["L"],
     },
@@ -559,16 +644,9 @@ const STATIC_ACTIONS = {
     selectAllMarchers: {
         labelKey: "actions.select.selectAll",
         category: "select",
+        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["$mod+A", "Control+A"],
-    },
-
-    // Shapes
-    createCircle: {
-        labelKey: "actions.shape.createCircle",
-        category: "shape",
-        scope: "canvas",
-        defaultBindings: ["O"],
     },
 
     // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it
@@ -576,6 +654,7 @@ const STATIC_ACTIONS = {
     toggleKeepOnPage: {
         labelKey: "actions.timeline.toggleKeepOnPage",
         category: "timeline",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: ["K"],
         ignoreRepeat: true,
@@ -587,6 +666,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.timeline.unsetHere",
         keywordsKey: "actions.timeline.unsetHereKeywords",
         category: "timeline",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: [],
     },
@@ -597,6 +677,7 @@ const STATIC_ACTIONS = {
         labelKey: "actions.timeline.unsetHereAndFollowing",
         keywordsKey: "actions.timeline.unsetHereKeywords",
         category: "timeline",
+        editsDrill: true,
         scope: "canvas",
         defaultBindings: [],
     },
@@ -605,6 +686,7 @@ const STATIC_ACTIONS = {
     timelineGoTo: {
         labelKey: "actions.timeline.goTo",
         category: "timeline",
+        editsDrill: false,
         scope: "global",
         defaultBindings: ["G", "$mod+G", "Control+G"],
         ignoreRepeat: true,
@@ -614,6 +696,7 @@ const STATIC_ACTIONS = {
     timelinePlayPause: {
         labelKey: "actions.timeline.playPause",
         category: "timeline",
+        editsDrill: false,
         scope: "timeline",
         defaultBindings: ["Space"],
         hiddenFromPalette: true,
@@ -622,6 +705,7 @@ const STATIC_ACTIONS = {
     timelinePreviousPage: {
         labelKey: "actions.timeline.previousPage",
         category: "timeline",
+        editsDrill: false,
         scope: "timeline",
         defaultBindings: ["ArrowLeft"],
         hiddenFromPalette: true,
@@ -629,6 +713,7 @@ const STATIC_ACTIONS = {
     timelineNextPage: {
         labelKey: "actions.timeline.nextPage",
         category: "timeline",
+        editsDrill: false,
         scope: "timeline",
         defaultBindings: ["ArrowRight"],
         hiddenFromPalette: true,

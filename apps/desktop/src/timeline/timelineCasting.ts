@@ -1,11 +1,11 @@
 import {
+    createResolver,
     hungarianAlgorithm,
     type PathStyle,
     type ShapeRow,
     type TransitionRow,
     type XY,
 } from "@openmarch/core";
-import { shapeSlotPoints } from "./timelineTransitionEditor";
 
 /**
  * Casting (P8.4): which slot of a transition each marcher takes. Pure; the assignment
@@ -128,4 +128,43 @@ export function castSlots(
         );
     const lowest = [...slots].sort((a, b) => a.slot - b.slot);
     return new Map(marchers.map((m, i) => [m.id, lowest[i]!.slot]));
+}
+
+/**
+ * The `count` slot destinations a shape gives (R-13), for switching a transition to individual
+ * points that start where the shape put them (D-16, Q-14). Read through a one-transition resolver,
+ * so the sampling is the resolver's own: each slot's marcher starts at (0, 0) and moves directly
+ * to its slot, so at the end beat it stands exactly on the sample.
+ */
+export function shapeSlotPoints(shape: ShapeRow, count: number): XY[] {
+    const ids = Array.from({ length: count }, (_, i) => i + 1);
+    const resolver = createResolver({
+        marchers: ids.map((id) => ({ id, home: [0, 0] as XY })),
+        shapes: { 1: shape },
+        transitions: {
+            1: {
+                id: 1,
+                start: 0,
+                end: 1,
+                dest: 1,
+                slots: count,
+                style: "direct",
+                order: "slot",
+                params: null,
+            },
+        },
+        assignments: ids.map((id) => ({
+            id,
+            marcher: id,
+            transition: 1,
+            slot: id - 1,
+            start: 0,
+            end: 1,
+            layer: 0,
+        })),
+    });
+    return ids.map((id) => {
+        const [x, y] = resolver.positionAt(id, 1);
+        return [x, y];
+    });
 }

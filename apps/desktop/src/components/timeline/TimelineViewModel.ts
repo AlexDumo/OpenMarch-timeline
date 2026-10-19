@@ -1,4 +1,5 @@
 import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
+import type { TimelineBand } from "./TimelineBand";
 import type { PageKeepChains } from "./PageKeepChain";
 import type { TimelineClipResizeCommands } from "./TimelineClipResize";
 import type { TimelineKeyframeMenu } from "./TimelineKeyframes";
@@ -97,13 +98,6 @@ export interface TimelineTarget {
 /** What a track stands for: a marcher or a shape (stories), or a whole stored timeline (UI-9) */
 export type TimelineTrackTargetType = TimelineTarget["type"] | "timeline";
 
-/** The diagnostics (spec §8.9) in a track's range, shown as a badge on its clip */
-export interface TimelineTrackDiagnostics {
-    readonly level: "warning" | "info";
-    /** One line per diagnostic, for the badge's tooltip */
-    readonly messages: readonly string[];
-}
-
 export interface TimelineTrack {
     readonly id: TimelineTrackId;
     /**
@@ -118,7 +112,6 @@ export interface TimelineTrack {
     readonly legs: readonly TimelineLeg[];
     /** A gap-free, non-overlapping partition of the track's complete range. */
     readonly activitySpans: readonly TimelineActivitySpan[];
-    readonly diagnostics?: TimelineTrackDiagnostics;
     /**
      * What screen readers call the clip, when the owner can say more than the label (UI-14 review:
      * "Move 1, Page 3, counts 1–4"); without it, the label and its beats
@@ -161,11 +154,6 @@ export type TimelineSelection =
           readonly via?: "pages";
           /** The range was drawn by dragging on empty timeline space (Ctrl+drag) */
           readonly drawn?: boolean;
-          /**
-           * The start flag was placed by hand and stays through navigation (UI-10 pinning); UI-12
-           * draws it with a pin that unpins it
-           */
-          readonly startPinned?: boolean;
       }
     | null;
 
@@ -231,6 +219,8 @@ export interface TimelineInteractionProps {
     readonly playLoops?: boolean;
     /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     readonly onPlayFromPlayhead?: () => void;
+    /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
+    readonly onPlayOn?: () => void;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
@@ -270,6 +260,19 @@ export interface TimelineCommonProps
     readonly showTransport?: boolean;
     /** The playback clock shown in the transport. The app passes its audio clock; stories pass none. */
     readonly transportClock?: ReactNode;
+    /**
+     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): page
+     * boxes select and the ruler seeks, but nothing draws a range. The owner passes no editing
+     * commands
+     */
+    readonly readOnly?: boolean;
+    /**
+     * A read-only timeline's start flag (view beats), drawn with no handles: Play starts there,
+     * so it shows even where nothing moves it by hand
+     */
+    readonly startFlagBeat?: number;
+    /** Lanes drawn where the clip rows go, under the waveform (Visuals mode's cue lanes) */
+    readonly band?: TimelineBand;
     /** Extra transport controls, such as volume, the metronome and fullscreen */
     readonly transportAccessories?: ReactNode;
     readonly className?: string;
@@ -278,8 +281,6 @@ export interface TimelineCommonProps
     ) => TimelineRangeCommitResult;
     /** Resizing a clip by its edges (resize-move), in view beats; without it clips have no handles */
     readonly clipResize?: TimelineClipResizeCommands;
-    /** Unpins the start flag (UI-12), from its pin */
-    readonly onUnpinStart?: () => void;
     /** The loop (UI-17), view beats; `null` or absent when looping is off */
     readonly loop?: TimelineBeatRange | null;
     /** A loop end dragged or stepped (UI-17), view beats */

@@ -81,7 +81,6 @@
         "shape": {
             "applyQuick": "Aligner sur la forme",
             "create": "Créer une forme",
-            "createCircle": "Créer cercle",
             "delete": "Supprime les formes sélectionnées actuelles",
             "noMarchersSelected": "Aucun marcheur sélectionné"
         },

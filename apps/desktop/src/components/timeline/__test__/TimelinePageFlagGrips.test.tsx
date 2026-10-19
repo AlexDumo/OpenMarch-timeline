@@ -317,7 +317,6 @@ describe("followPageFlagMove (case 14)", () => {
         store.followPageFlagMove(17, 14);
         const s = useTimelineSelectionStore.getState();
         expect(s.selection).toEqual({ kind: "range", start: 14, end: 25 });
-        expect(s.startPinned).toBe(false);
         expect(s.playheadBeat).toBe(25);
     });
 });

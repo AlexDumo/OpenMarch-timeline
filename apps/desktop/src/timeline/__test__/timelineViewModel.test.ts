@@ -92,7 +92,6 @@ const build = (
         {
             tables: tablesOf(show, timelines),
             spansOf: (m) => resolverSpans(resolver, m),
-            diagnostics: resolver.diagnostics(),
         },
         filter,
     );
@@ -114,9 +113,6 @@ const activity = (t: TimelineInput) =>
 /** Legs as `[start, end, texture]` triples */
 const legs = (t: TimelineInput) =>
     t.legs.map((l) => [l.startBeatIndex, l.endBeatIndex, l.texture]);
-
-const codes = (t: TimelineInput) =>
-    (t.diagnostics?.messages ?? []).map((m) => m.split(":")[0]);
 
 /** A show's beats as the app has them: the zero-length beat 0, then `count` timed beats */
 const appBeats = (count: number): Beat[] =>
@@ -371,57 +367,11 @@ describe("buildTimelineTracks", () => {
                         asked.push(m);
                         return resolverSpans(resolver, m);
                     },
-                    diagnostics: [],
                 },
                 selecting(),
             );
             // Shape 1's members are 1, 2 and 3; each is asked once
             expect(asked.sort()).toEqual([1, 2, 3]);
-        });
-    });
-
-    describe("diagnostics badges (§8.9)", () => {
-        it("G9: a vacant slot badges the shape track, not every member's track", () => {
-            const tracks = build(golden("G9"), selecting(2));
-            const ftl = track(tracks, shapeTrackId(1, 2));
-            expect(ftl.diagnostics?.level).toBe("warning");
-            expect(codes(ftl)).toContain("D-VACANT");
-            expect(codes(track(tracks, marcherTrackId(1, 2)))).not.toContain(
-                "D-VACANT",
-            );
-            // G9 drops marcher 1 from both moves, so the line's transition has a vacancy too
-            expect(codes(track(tracks, shapeTrackId(1, 1)))).toEqual([
-                "D-VACANT",
-            ]);
-        });
-
-        it("G11: a non-founding follow-the-leader span badges its marcher, not the others", () => {
-            const tracks = build(golden("G11"), selecting(1, 2));
-            expect(codes(track(tracks, shapeTrackId(1, 2)))).toContain(
-                "D-FTL-NONFOUNDING",
-            );
-            expect(codes(track(tracks, marcherTrackId(1, 1)))).toContain(
-                "D-FTL-NONFOUNDING",
-            );
-            expect(
-                track(tracks, marcherTrackId(1, 2)).diagnostics,
-            ).toBeUndefined();
-        });
-
-        it("a vacancy in a transition without a shape badges one marcher track only", () => {
-            const show = golden("G13");
-            // T1 is shapeless with three slots; drop slot 1's marcher (2)
-            show.assignments = show.assignments.filter(
-                (r) => !(r.transition === 1 && r.marcher === 2),
-            );
-            const tracks = build(show, ALL);
-            const vacant = tracks.filter((t) => codes(t).includes("D-VACANT"));
-            expect(vacant.map((t) => t.id)).toEqual([marcherTrackId(1, 1)]);
-        });
-
-        it("G1 has no diagnostics and no badge", () => {
-            for (const t of build(golden("G1"), ALL))
-                expect(t.diagnostics).toBeUndefined();
         });
     });
 
@@ -536,7 +486,6 @@ describe("buildTimelineTracks", () => {
             {
                 tables,
                 spansOf: (m) => resolverSpans(resolver, m),
-                diagnostics: resolver.diagnostics(),
             },
             { kind: "default", selectedMarcherIds: selected },
         );

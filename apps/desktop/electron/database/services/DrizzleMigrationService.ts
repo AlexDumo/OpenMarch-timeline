@@ -13,6 +13,7 @@ import {
 import { sql } from "drizzle-orm";
 import { DB } from "../db";
 import { DatabaseSync } from "node:sqlite";
+import { skipsExistingColumn } from "../migrations/addColumnGuard";
 import {
     fileTooNewMessage,
     isSupportedUserVersion,
@@ -132,6 +133,23 @@ function pendingMigrationQueries(
     );
 }
 
+/** A table's columns now, or none for a missing table. */
+const columnsOf = (rawDb: DatabaseSync) => (table: string) =>
+    (
+        rawDb.prepare("SELECT name FROM pragma_table_info(?)").all(table) as {
+            name: string;
+        }[]
+    ).map((c) => c.name);
+
+/**
+ * Runs one migration statement, skipping an `ADD COLUMN` the table already has (see
+ * `addColumnGuard.ts`), so a migration that ran under another date can run again.
+ */
+function runMigrationQuery(rawDb: DatabaseSync, query: string): void {
+    if (skipsExistingColumn(query, columnsOf(rawDb))) return;
+    rawDb.exec(query);
+}
+
 /**
  * Applies the timeline-only migrations (see `FIRST_TIMELINE_MIGRATION_TAG`) on `rawDb`, which
  * must be inside the conversion's transaction: if anything later fails, the rollback undoes
@@ -150,7 +168,7 @@ export function applyTimelineMigrationsInTransaction(
     if (queries.length === 0) return;
     rawDb.exec("PRAGMA defer_foreign_keys = ON");
     dropAllTriggers(rawDb);
-    for (const query of queries) rawDb.exec(query);
+    for (const query of queries) runMigrationQuery(rawDb, query);
     createAllTriggers(rawDb);
 }
 
@@ -182,7 +200,7 @@ export function applyPageMigrationsInTransaction(
         "page",
     );
     dropAllTriggers(rawDb);
-    for (const query of queries) rawDb.exec(query);
+    for (const query of queries) runMigrationQuery(rawDb, query);
     createAllTriggers(rawDb);
     recreateChangeLogTriggers(rawDb);
 }
@@ -234,8 +252,9 @@ export class DrizzleMigrationService {
      * This uses Drizzle's built-in migration functionality
      *
      * Runs only on files whose `user_version` this build supports (7, the page
-     * model, which is an artifact of the previous migration system, and 8, the
-     * timeline model). It never changes the version. See `../fileVersion.ts`.
+     * model, which is an artifact of the previous migration system, 8, the
+     * timeline model, and 9, the floor model). It never changes the version.
+     * See `../fileVersion.ts`.
      */
     async applyPendingMigrations(migrationsFolder?: string): Promise<void> {
         const userVersion = readUserVersion(this.rawDb);
@@ -275,7 +294,7 @@ export class DrizzleMigrationService {
             dropAllTriggers(this.rawDb);
             for (const query of queries) {
                 this.rawDb.exec("PRAGMA foreign_keys = OFF");
-                this.rawDb.exec(query);
+                runMigrationQuery(this.rawDb, query);
             }
             createAllTriggers(this.rawDb);
             this.rawDb.prepare("PRAGMA foreign_keys = ON").run();

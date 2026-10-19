@@ -3,6 +3,7 @@ import {
     type ActionArgs,
     type ActionId,
 } from "./definitions";
+import { isActionOffInWorkspace } from "./workspaceActions";
 
 export interface ActionHandler {
     run: (args: ActionArgs | undefined) => void;
@@ -47,7 +48,7 @@ export function hasActionHandler(id: ActionId): boolean {
 }
 
 export function isActionEnabled(id: ActionId): boolean {
-    return top(id)?.isEnabled() ?? false;
+    return !isActionOffInWorkspace(id) && (top(id)?.isEnabled() ?? false);
 }
 
 /** The label the action's handler gives right now (`useActionHandler`'s `label`), if any */
@@ -62,7 +63,8 @@ export function actionIgnoresRepeat(id: ActionId): boolean {
 
 export function runAction(id: ActionId): boolean {
     const handler = top(id);
-    if (!handler || !handler.isEnabled()) return false;
+    if (!handler || !handler.isEnabled() || isActionOffInWorkspace(id))
+        return false;
     runListeners.forEach((listener) => listener(id));
     handler.run(getActionDefinition(id).args);
     return true;

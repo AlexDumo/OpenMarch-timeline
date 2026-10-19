@@ -20,6 +20,7 @@ import {
 } from "@/db-functions";
 import { DEFAULT_STALE_TIME } from "./constants";
 import { showCueCarryNotice } from "@/utilities/cueCarryNotice";
+import { itemGeometryKeys } from "./useItems";
 
 /**
  * Arguments for shifting beats
@@ -113,6 +114,8 @@ export const deleteBeatsMutationOptions = (qc: QueryClient) => {
             void qc.invalidateQueries({
                 queryKey: [KEY_BASE],
             });
+            // Item Outline changes on the deleted beats were carried to other beats
+            void qc.invalidateQueries({ queryKey: itemGeometryKeys.all() });
             showCueCarryNotice(cues, qc);
         },
         onError: (e, variables) => {

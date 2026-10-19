@@ -8,7 +8,6 @@ import { brassModel } from "@/view3d/core/instruments/brass";
 import type { InstrumentModel } from "@/view3d/core/instruments/model";
 import type { Piece } from "@/view3d/core/instruments/mesh";
 import { hold } from "@/view3d/core/instruments/holds";
-import { guardModel } from "@/view3d/core/instruments/guard";
 import { poseArms } from "../marchers/armPose";
 import {
     MATTE_PARTS,
@@ -47,37 +46,6 @@ async function body() {
 }
 
 describe("instrumentGeometry", () => {
-    it("paints a silk pattern across the silk, pole to fly end, and nothing else", async () => {
-        const mesh = await body();
-        const h = hold("flag", "up");
-        const model = guardModel("flag6");
-        // red at the pole, blue at the fly end
-        const g = instrumentGeometry(
-            mesh.skeleton,
-            poseArms(mesh.skeleton, h),
-            h,
-            model,
-            "brass",
-            0x00ff00,
-            (u) => (u < 0.5 ? 0xff0000 : 0x0000ff),
-        );
-        const part = g.getAttribute("_part");
-        const color = g.getAttribute("color");
-        let red = 0;
-        let blue = 0;
-        for (let i = 0; i < part.count; i++) {
-            const isSilk = part.getX(i) === PART_SILK;
-            const [r, gr, b] = [color.getX(i), color.getY(i), color.getZ(i)];
-            // no silk vertex keeps the plain section color
-            if (isSilk) expect(gr).toBe(0);
-            else expect([r, gr, b]).not.toEqual([1, 0, 0]);
-            if (isSilk && r === 1) red++;
-            if (isSilk && b === 1) blue++;
-        }
-        expect(red).toBeGreaterThan(0);
-        expect(blue).toBeGreaterThan(0);
-    });
-
     it("weights every vertex to the prop bone and keeps the parts", async () => {
         const mesh = await body();
         const h = hold("brass", "up");

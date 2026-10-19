@@ -27,6 +27,7 @@ import {
     ExpandedTimeline,
 } from "./TimelineVariants";
 import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
+import type { TimelineBand } from "./TimelineBand";
 import type { PageKeepChains } from "./PageKeepChain";
 import type { TimelineKeyframeMenu } from "./TimelineKeyframes";
 import type {
@@ -48,7 +49,6 @@ import type {
     TimelineSelection,
     TimelineTarget,
     TimelineTrack,
-    TimelineTrackDiagnostics,
     TimelineTrackTargetType,
     TimelineViewModel,
     TimelineWaveform,
@@ -80,7 +80,6 @@ export interface TimelineInput {
     readonly endBeatIndex: number;
     readonly legs: readonly TimelineLegInput[];
     readonly activitySpans: readonly TimelineActivitySpan[];
-    readonly diagnostics?: TimelineTrackDiagnostics;
     /**
      * Where other timelines take every member of this one (the dashed spans, UI-4), in spec beats:
      * which timeline, and its part of the range (UI-14 review)
@@ -126,6 +125,8 @@ export interface TimelinePlayback {
     readonly playLoops?: boolean;
     /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     readonly onPlayFromPlayhead?: () => void;
+    /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
+    readonly onPlayOn?: () => void;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -141,6 +142,15 @@ const STOPPED_AT_START: TimelinePlayback = {
  * (`createTimelineBeatAxis`), and converts at this boundary, the selection included.
  */
 export interface TimelineProps {
+    /**
+     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): no clips,
+     * no window, no page flag or move edits, no ranges drawn. Page boxes and home still select
+     * (`onSelectionChange`, to go to that page), and the ruler and the surface scrub. The editing
+     * commands given are ignored
+     */
+    readonly readOnly?: boolean;
+    /** Lanes drawn in place of the clip rows, under the waveform (Visuals mode's cue lanes) */
+    readonly band?: TimelineBand;
     readonly mode: TimelineMode;
     readonly beats: readonly Beat[];
     readonly pages: readonly Page[];
@@ -172,8 +182,6 @@ export interface TimelineProps {
     ) => TimelineRangeCommitResult;
     /** Resizing a clip by its edges (resize-move), in spec beats */
     readonly clipResize?: TimelineClipResizeCommands;
-    /** Unpins the start flag (UI-12), from its pin */
-    readonly onUnpinStart?: () => void;
     /** The loop (UI-17), spec beats; `null` or absent when looping is off */
     readonly loop?: TimelineBeatRange | null;
     /** A loop end dragged or stepped (UI-17), spec beats */
@@ -274,7 +282,6 @@ const toTrack = (timeline: TimelineInput): TimelineTrack => ({
         texture: leg.texture,
     })),
     activitySpans: timeline.activitySpans,
-    diagnostics: timeline.diagnostics,
     ...(timeline.accessibleName
         ? { accessibleName: timeline.accessibleName }
         : {}),
@@ -344,7 +351,6 @@ export const selectionToView = (
                         ),
                     }
                   : {}),
-              ...(selection.startPinned ? { startPinned: true } : {}),
           }
         : selection;
 
@@ -365,7 +371,39 @@ export const selectionToSpec = (
           }
         : selection;
 
+const NO_TIMELINES: readonly TimelineInput[] = [];
+
+/** What a read-only timeline leaves out of its variant's props: the window and every edit */
+const READ_ONLY_EDITS = {
+    readOnly: true,
+    selection: undefined,
+    onCreateTrack: undefined,
+    addSelectedMarchers: undefined,
+    moveCommands: undefined,
+    onAddPageFlag: undefined,
+    onAddSubsetPage: undefined,
+    addPageNames: undefined,
+    pageFlagMove: undefined,
+    onOpenRange: undefined,
+    onTimelineRangeCommit: undefined,
+    clipResize: undefined,
+    onUnpinStart: undefined,
+    holdMarks: undefined,
+    keepChains: undefined,
+    basicPoints: undefined,
+    onRemoveBasicPoint: undefined,
+    expertMarks: undefined,
+} as const;
+
+/** Where a read-only timeline draws the start flag: the window's start, or the flag left behind */
+const readOnlyStartFlag = (selection: TimelineSelection | undefined) =>
+    selection?.kind === "range"
+        ? (selection.startFlagBeatIndex ?? selection.range.startBeatIndex)
+        : undefined;
+
 export function Timeline(props: TimelineProps) {
+    const { readOnly = false } = props;
+    const timelines = readOnly ? NO_TIMELINES : props.timelines;
     const axis = useMemo(
         () => createTimelineBeatAxis(props.beats),
         [props.beats],
@@ -377,18 +415,11 @@ export function Timeline(props: TimelineProps) {
                 beats: props.beats,
                 pages: props.pages,
                 measures: props.measures,
-                timelines: props.timelines,
+                timelines,
                 waveform,
                 axis,
             }),
-        [
-            axis,
-            props.beats,
-            props.measures,
-            props.pages,
-            props.timelines,
-            waveform,
-        ],
+        [axis, props.beats, props.measures, props.pages, timelines, waveform],
     );
     const playback = props.playback ?? STOPPED_AT_START;
     const [ownPixelsPerBeat, setOwnPixelsPerBeat] = useState(16);
@@ -470,7 +501,7 @@ export function Timeline(props: TimelineProps) {
                   })
             : undefined,
     );
-    const { onTimelineRangeCommit, onCreateTrack, timelines } = props;
+    const { onTimelineRangeCommit, onCreateTrack } = props;
     // A clip move keeps its length: send the spec range shifted by the move, so a clip whose start
     // was hidden with beat 0 moves by exactly the beats it was dragged
     const commitRange = useLatestCallback(
@@ -786,6 +817,7 @@ export function Timeline(props: TimelineProps) {
         onPlayingChange: useLatestCallback(playback.onPlayingChange),
         playLoops: playback.playLoops,
         onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
+        onPlayOn: useLatestCallback(playback.onPlayOn),
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,
@@ -801,7 +833,6 @@ export function Timeline(props: TimelineProps) {
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
-        onUnpinStart: useLatestCallback(props.onUnpinStart),
         loop: viewLoop,
         onLoopChange: changeLoop,
         transportSecondary: props.transportSecondary,
@@ -817,12 +848,23 @@ export function Timeline(props: TimelineProps) {
         expertMarks: props.expertMarks,
     };
 
+    // Read-only (Visuals mode): no window and no edits; page boxes still select, to go to their page
+    // Its start flag is still drawn, where Play starts from
+    const shownProps = readOnly
+        ? {
+              ...commonProps,
+              ...READ_ONLY_EDITS,
+              startFlagBeat: readOnlyStartFlag(selection),
+              band: props.band,
+          }
+        : { ...commonProps, band: props.band };
+
     return props.mode === "basic" ? (
-        <BasicTimeline {...commonProps} />
+        <BasicTimeline {...shownProps} />
     ) : props.mode === "expanded" ? (
-        <ExpandedTimeline {...commonProps} />
+        <ExpandedTimeline {...shownProps} />
     ) : (
-        <CollapsedTimeline {...commonProps} />
+        <CollapsedTimeline {...shownProps} />
     );
 }
 

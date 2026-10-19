@@ -12,7 +12,7 @@ import {
     useQueryClient,
 } from "@tanstack/react-query";
 import { safelyInvalidateQueries } from "./utils";
-import { allMarchersQueryOptions } from "./useMarchers";
+import { allMarcherRowsQueryOptions } from "./useMarchers";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useTimingObjects } from "../useTimingObjects";
@@ -88,7 +88,8 @@ interface PendingFocus {
 export const usePerformHistoryAction = () => {
     const qc = useQueryClient();
     const { pages } = useTimingObjects();
-    const { data: marchers } = useQuery(allMarchersQueryOptions());
+    // Items too: an undo can select the props it restored
+    const { data: marchers } = useQuery(allMarcherRowsQueryOptions());
     const selectedMarchersContext = useSelectedMarchers();
     const setSelectedMarchers =
         selectedMarchersContext?.setSelectedMarchers ?? (() => {});
@@ -99,7 +100,7 @@ export const usePerformHistoryAction = () => {
     const selectMarchers = (ids: Set<number>) => {
         // The marchers as fetched again after the action, so restored marchers can be selected
         const current =
-            qc.getQueryData(allMarchersQueryOptions().queryKey) ?? marchers;
+            qc.getQueryData(allMarcherRowsQueryOptions().queryKey) ?? marchers;
         if (current) setSelectedMarchers(current.filter((m) => ids.has(m.id)));
     };
 

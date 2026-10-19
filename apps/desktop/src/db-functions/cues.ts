@@ -460,7 +460,7 @@ const channelTargetKey = (
  * Before deleting `beatIds`: each beat's order, each deleted beat's next surviving beat (null
  * at the end of the show), and each surviving beat's position once they're gone.
  */
-const beatsAfterDeletion = async (
+export const beatsAfterDeletion = async (
     tx: DbTransaction,
     beatIds: ReadonlySet<number>,
 ) => {
