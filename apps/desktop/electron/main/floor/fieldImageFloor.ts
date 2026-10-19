@@ -22,34 +22,60 @@ export const FLOOR_TEMP_PREFIX = "openmarch-floor-";
 
 const FLOOR_NAME = "Field image";
 
-/** Formats the Artwork pipeline reads itself; anything else sharp reads (GIF, WebP) becomes PNG. */
+/** Decodes an image the browser can draw into a PNG. */
+export type ImageDecoder = (image: Uint8Array) => Promise<Uint8Array>;
+
+/**
+ * Formats the Artwork pipeline reads itself; anything else becomes a PNG: through sharp (GIF,
+ * WebP, TIFF, AVIF), else through the browser, which drew the old field image (BMP, ICO). The
+ * old uploader took any `image/*`, so every image it took still converts.
+ */
 async function pipelineInput(
     image: Uint8Array,
+    decodeImage: () => Promise<ImageDecoder>,
 ): Promise<{ bytes: Uint8Array; extension: string }> {
     const format = sniffArtworkFormat(image);
     if (format)
         return { bytes: image, extension: format === "jpeg" ? "jpg" : format };
-    const sharp = (await import("sharp")).default;
-    return {
-        bytes: new Uint8Array(await sharp(image).png().toBuffer()),
-        extension: "png",
-    };
+    let bytes: Uint8Array;
+    try {
+        const sharp = (await import("sharp")).default;
+        bytes = new Uint8Array(await sharp(image).png().toBuffer());
+    } catch (sharpError) {
+        try {
+            bytes = await (await decodeImage())(image);
+        } catch (error) {
+            throw new Error("The field image couldn't be decoded", {
+                cause: [sharpError, error],
+            });
+        }
+    }
+    return { bytes, extension: "png" };
 }
 
 export interface FloorFromFieldImageOptions {
     /** Renders a PDF original; defaults to pdf.js in a hidden window, made only for a PDF. */
     pdfRenderer?: () => PdfRenderer;
+    /** Decodes what sharp can't; defaults to the browser in a hidden window. */
+    decodeImage?: ImageDecoder;
 }
 
 const appPdfRenderer = async (): Promise<PdfRenderer> =>
     (await import("../artwork-import")).createElectronPdfRenderer();
+
+const appImageDecoder = async (): Promise<ImageDecoder> => {
+    const { decodeImageWithChromium } = await import("../artwork-import");
+    return (image) => decodeImageWithChromium(image);
+};
 
 export async function floorFromFieldImage(
     image: Uint8Array,
     fieldProperties: FieldProperties,
     options: FloorFromFieldImageOptions = {},
 ): Promise<EmbedLibraryVersion> {
-    const { bytes, extension } = await pipelineInput(image);
+    const { bytes, extension } = await pipelineInput(image, async () =>
+        options.decodeImage ? options.decodeImage : appImageDecoder(),
+    );
     const file = { filename: `${FLOOR_NAME}.${extension}`, bytes };
     const pdfRenderer =
         extension === "pdf"

@@ -14,7 +14,7 @@ describe("file-format version", () => {
     it("supports the page model (7), the timeline model (8) and the floor model (9)", () => {
         expect(MIN_SUPPORTED_USER_VERSION).toBe(7);
         expect(MAX_SUPPORTED_USER_VERSION).toBe(9);
-        expect(NEW_FILE_USER_VERSION).toBe(9);
+        expect(NEW_FILE_USER_VERSION).toBe(8);
     });
 
     describe("decideFileVersion", () => {

@@ -1,5 +1,5 @@
 import { describe, expect } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { performRedo, performUndo } from "../history";
 import {
@@ -11,6 +11,7 @@ import {
     getFieldFloor,
     getFieldFloorImage,
     getFieldFloorPart,
+    getFieldImage,
     libraryKeepsFromFloor,
     writeFieldJsonKeepingFloorInTransaction,
 } from "../fieldFloor";
@@ -104,13 +105,33 @@ describeDbTests("fieldFloor", (it) => {
             ).toBe("tarp display.original");
         });
 
-        it("never reads the legacy field_properties.image", async ({ db }) => {
+        it("draws a legacy image that hasn't become a floor, rather than nothing", async ({
+            db,
+        }) => {
             await db
                 .update(schema.field_properties)
                 .set({ image: bytes("legacy image") })
                 .where(eq(schema.field_properties.id, 1))
                 .run();
-            expect(await getFieldFloorImage({ db })).toBeNull();
+            expect(await imageText(getFieldFloorImage({ db }))).toBe(
+                "legacy image",
+            );
+            const image = await getFieldImage({ db, use: "print" });
+            expect(image).toMatchObject({ source: "legacy", size: null });
+        });
+
+        it("prefers the floor to a legacy image beside it", async ({ db }) => {
+            await db
+                .update(schema.field_properties)
+                .set({ image: bytes("legacy image") })
+                .where(eq(schema.field_properties.id, 1))
+                .run();
+            const tarp = await artwork(FLOOR, "tarp display");
+            await embedLibraryVersions({ db, versions: [tarp] });
+            await setFieldFloor({ db, floor: refOf(tarp) });
+            expect(await imageText(getFieldFloorImage({ db }))).toBe(
+                "tarp display",
+            );
         });
 
         it("is null when the floor's Version isn't in the show", async ({
@@ -128,6 +149,122 @@ describeDbTests("fieldFloor", (it) => {
                 .where(eq(schema.field_properties.id, 1))
                 .run();
             expect(await getFieldFloorImage({ db })).toBeNull();
+        });
+    });
+
+    describe("getFieldImage", () => {
+        const png = (text: string) =>
+            new Uint8Array([
+                0x89,
+                0x50,
+                0x4e,
+                0x47,
+                0x0d,
+                0x0a,
+                0x1a,
+                0x0a,
+                ...bytes(text),
+            ]);
+        async function floorWith(original: Uint8Array, sizeM: number[]) {
+            const sidecar = bytes(
+                JSON.stringify({
+                    schemaVersion: 1,
+                    type: "openmarch-artwork",
+                    surface: "baseFloor",
+                    original: {
+                        format: "png",
+                        page: null,
+                        pixels: { width: 4800, height: 2560 },
+                        colorSpace: "srgb",
+                    },
+                    size: {
+                        width: { m: sizeM[0] },
+                        height: { m: sizeM[1] },
+                        source: "slot",
+                        templateId: null,
+                    },
+                    nativeDpi: 300,
+                    display: { width: 2048, height: 1092, format: "jpeg" },
+                    importNotes: [],
+                    badges: [],
+                }),
+            );
+            const parts = { original, display: bytes("display"), sidecar };
+            const version: EmbedLibraryVersion = {
+                itemId: FLOOR,
+                versionHash: await versionHashOf(await hashParts(parts)),
+                kind: "artwork",
+                name: "Tarp",
+                builtIn: false,
+                metadata,
+                pins: [],
+                parts,
+            };
+            return version;
+        }
+
+        it("gives 2D and exports a PNG or JPEG original, and 3D the display texture", async ({
+            db,
+        }) => {
+            const tarp = await floorWith(png("original"), [36.576, 27.432]);
+            await embedLibraryVersions({ db, versions: [tarp] });
+            await setFieldFloor({ db, floor: refOf(tarp) });
+
+            const print = await getFieldImage({ db, use: "print" });
+            expect(Array.from(print!.bytes)).toEqual(
+                Array.from(png("original")),
+            );
+            expect(print).toMatchObject({
+                source: "floor",
+                size: { widthM: 36.576, heightM: 27.432 },
+            });
+            const display = await getFieldImage({ db, use: "display" });
+            expect(await imageText(Promise.resolve(display!.bytes))).toBe(
+                "display",
+            );
+            expect(display!.size).toEqual(print!.size);
+        });
+
+        it("gives 2D a vector original's display texture, which it can draw", async ({
+            db,
+        }) => {
+            const tarp = await floorWith(bytes("<svg></svg>"), [10, 5]);
+            await embedLibraryVersions({ db, versions: [tarp] });
+            await setFieldFloor({ db, floor: refOf(tarp) });
+            const print = await getFieldImage({ db, use: "print" });
+            expect(await imageText(Promise.resolve(print!.bytes))).toBe(
+                "display",
+            );
+        });
+    });
+
+    describe("file version (D-23)", () => {
+        const userVersion = async (db: DbConnection) =>
+            (
+                await db
+                    .select({ v: sql<number>`user_version` })
+                    .from(sql`pragma_user_version`)
+                    .get()
+            )?.v;
+
+        it("writes 9 when a floor is set, so an older build refuses the file", async ({
+            db,
+        }) => {
+            await db.run(sql.raw("PRAGMA user_version = 8"));
+            const tarp = await artwork(FLOOR, "tarp display");
+            await embedLibraryVersions({ db, versions: [tarp] });
+            expect(await userVersion(db)).toBe(8);
+
+            await setFieldFloor({ db, floor: refOf(tarp) });
+            expect(await userVersion(db)).toBe(9);
+        });
+
+        it("leaves the version alone when a floor is cleared", async ({
+            db,
+        }) => {
+            await db.run(sql.raw("PRAGMA user_version = 8"));
+            await setFieldFloor({ db, floor: null });
+            expect(await userVersion(db)).toBe(8);
         });
     });
 

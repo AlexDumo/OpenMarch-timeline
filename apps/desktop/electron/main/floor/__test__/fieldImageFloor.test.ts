@@ -67,10 +67,30 @@ describe("floorFromFieldImage (D-23 convert on open)", () => {
         expect(version.parts.display).toBeDefined();
     });
 
+    it("converts an image only the browser reads, such as a BMP, through its decoder", async () => {
+        // A 2 × 1 BMP header is enough: sharp refuses it, the browser stand-in decodes it
+        const bmp = new Uint8Array([0x42, 0x4d, ...new Array(60).fill(0)]);
+        const png = new Uint8Array(await solid(200, 100).png().toBuffer());
+        const decoded: Uint8Array[] = [];
+        const version = await floorFromFieldImage(bmp, gym, {
+            decodeImage: async (image) => {
+                decoded.push(image);
+                return png;
+            },
+        });
+        expect(decoded).toEqual([bmp]);
+        expect(Array.from(version.parts.original!)).toEqual(Array.from(png));
+        expect(
+            decodeArtworkSidecar(version.parts.sidecar!).original.format,
+        ).toBe("png");
+    });
+
     it("throws for bytes that aren't an image, and leaves no temp folder", async () => {
         const before = leftovers();
         await expect(
-            floorFromFieldImage(new TextEncoder().encode("not an image"), gym),
+            floorFromFieldImage(new TextEncoder().encode("not an image"), gym, {
+                decodeImage: () => Promise.reject(new Error("not an image")),
+            }),
         ).rejects.toThrow();
         expect(leftovers()).toEqual(before);
     });

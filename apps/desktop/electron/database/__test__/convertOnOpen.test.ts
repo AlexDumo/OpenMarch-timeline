@@ -438,15 +438,9 @@ describe.each(["in-thread", "worker"] as const)("convert on open (%s)", (m) => {
                 ),
             };
         };
-        // The page conversion writes 8; the open's floor step (D-23) then writes 9, which a new
-        // file starts at. Everything else matches.
-        const { userVersion: convertedVersion, ...convertedRest } =
-            pick(converted);
-        const { userVersion: freshVersion, ...freshRest } = pick(fresh);
-        expect(convertedVersion).toBe(8);
-        expect(freshVersion).toBe(9);
-        expect(convertedRest).toEqual(freshRest);
+        expect(pick(converted)).toEqual(pick(fresh));
         expect(pick(fresh)).toMatchObject({
+            userVersion: 8,
             timelines: 0,
             marker: CONVERTED_AT,
             pageEraTables: [],

@@ -59,7 +59,7 @@ function renderControls(fieldProperties: FieldProperties) {
 }
 
 describe("FieldFloorControls (D-23, Q82)", () => {
-    it("starts an artwork import pre-filled as a Base floor at the field's size", async () => {
+    it("starts an artwork import pre-filled as a Base floor at the field's size, in the image's shape", async () => {
         const startImport = vi.fn();
         useAssetsStore.setState({ startImport });
         renderControls(gym);
@@ -79,6 +79,8 @@ describe("FieldFloorControls (D-23, Q82)", () => {
                         source: "slot",
                         templateId: null,
                     },
+                    // An image of another shape is placed as the field image is
+                    fit: gym.imageFillOrFit === "fill" ? "fill" : "fit",
                 },
             }),
         );

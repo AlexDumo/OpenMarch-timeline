@@ -313,13 +313,17 @@ export async function applyPreviousDotsFieldImage(
     form: NewShowFormState,
     queryClient: QueryClient,
 ): Promise<void> {
+    const fieldFloor = form.previousDotsImport?.fieldFloor;
     const fieldImage = form.previousDotsImport?.fieldImage;
-    if (fieldImage == null || fieldImage.length === 0) return;
+    if (!fieldFloor && (fieldImage == null || fieldImage.length === 0)) return;
 
-    // The new show's floor, made in main from the previous show's image (D-23). The rest of
-    // the copy goes on without it: a floor that can't be made is a toast, not a failed show.
+    // The new show's floor (D-23): the previous show's floor Version as it is, or one made in
+    // main from a previous show's legacy image. The rest of the copy goes on without it: a floor
+    // that can't be made is a toast, not a failed show.
     try {
-        await window.electron.setNewShowFloorFromImage(fieldImage);
+        if (fieldFloor)
+            await window.electron.setNewShowFloorFromVersion(fieldFloor);
+        else await window.electron.setNewShowFloorFromImage(fieldImage!);
     } catch (error) {
         conToastError("Couldn't copy the previous show's field image", error);
         return;

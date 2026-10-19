@@ -209,7 +209,7 @@ describe("opening a show with convert on open", () => {
         expect(await sqlProxyWorks()).toBe(true);
         expect(calls).toEqual(["preparing"]);
         expect(stateOf(showPath)).toMatchObject({
-            userVersion: 9,
+            userVersion: 8,
             pageEraTables: [],
         });
     });
@@ -312,7 +312,7 @@ describe("opening a show with convert on open", () => {
                 path.basename(shown).replace(/\.dots$/, "-2.dots"),
             ].sort(),
         );
-        expect(stateOf(showPath).userVersion).toBe(9);
+        expect(stateOf(showPath).userVersion).toBe(8);
     });
 
     it("two opens of the same file at once: converted once, both open quietly", async () => {
@@ -329,7 +329,7 @@ describe("opening a show with convert on open", () => {
         expect(second.calls).toEqual([]);
         expect(backupsIn(tempDir)).toHaveLength(1);
         expect(stateOf(showPath)).toMatchObject({
-            userVersion: 9,
+            userVersion: 8,
             // One timeline per page move (pages 1 to 6)
             timelines: 6,
         });
@@ -365,8 +365,8 @@ describe("opening a show with convert on open", () => {
         const [a, b] = await Promise.all([firstOpen, secondOpen]);
         expect([a.status, b.status]).toEqual([200, 200]);
         expect(DatabaseServices.getDbPath()).toBe(otherPath);
-        expect(stateOf(showPath).userVersion).toBe(9);
-        expect(stateOf(otherPath).userVersion).toBe(9);
+        expect(stateOf(showPath).userVersion).toBe(8);
+        expect(stateOf(otherPath).userVersion).toBe(8);
     });
 
     describe("the renderer's SQL", () => {
@@ -426,7 +426,7 @@ describe("opening a show with convert on open", () => {
             reloadB.emit("did-navigate");
             await resumedB;
             expect(await sqlProxyWorks()).toBe(true);
-            expect(stateOf(otherPath).userVersion).toBe(9);
+            expect(stateOf(otherPath).userVersion).toBe(8);
         });
 
         it("resumes after the fallback when the reload never navigates, and at once without a window", async () => {
@@ -526,7 +526,7 @@ describe("opening a show with convert on open", () => {
             expect(backupsIn(tempDir)).toEqual([]);
             const state = stateOf(newPath);
             expect(state).toMatchObject({
-                userVersion: 9,
+                userVersion: 8,
                 pageEraTables: [],
                 timelines: 0,
             });
@@ -674,7 +674,7 @@ describe("opening a show with convert on open", () => {
                 expect(connections[0]!.isOpen).toBe(false);
                 expect(result.db).toBe(connections[1]);
                 expect(result.db!.prepare("PRAGMA user_version").get()).toEqual(
-                    { user_version: 9 },
+                    { user_version: 8 },
                 );
                 expect(progress[0]).toEqual({ phase: "backup" });
                 expect(progress.at(-1)).toEqual({
@@ -745,7 +745,7 @@ describe("opening a show with convert on open", () => {
             try {
                 expect(result.status).toBe(200);
                 expect(result.db!.prepare("PRAGMA user_version").get()).toEqual(
-                    { user_version: 9 },
+                    { user_version: 8 },
                 );
             } finally {
                 result.db?.close();
@@ -782,7 +782,7 @@ describe("opening a show with convert on open", () => {
                 expect(result.status).toBe(200);
                 expect(calls).toEqual(["preparing"]);
                 expect(result.db!.prepare("PRAGMA user_version").get()).toEqual(
-                    { user_version: 9 },
+                    { user_version: 8 },
                 );
                 expect(result.db!.prepare("PRAGMA busy_timeout").get()).toEqual(
                     { timeout: 5000 },
@@ -826,9 +826,9 @@ describe("opening a show with convert on open", () => {
             expect(results.map((r) => r.status)).toEqual([200, 200]);
             // The second open only started once the first had converted its file.
             expect(order).toEqual(["first converting", "second preparing"]);
-            expect(firstVersionWhenSecondPrepared).toBe(9);
-            expect(stateOf(showPath).userVersion).toBe(9);
-            expect(stateOf(otherPath).userVersion).toBe(9);
+            expect(firstVersionWhenSecondPrepared).toBe(8);
+            expect(stateOf(showPath).userVersion).toBe(8);
+            expect(stateOf(otherPath).userVersion).toBe(8);
             expect(DatabaseServices.getDbPath()).toBe(otherPath);
         });
     });

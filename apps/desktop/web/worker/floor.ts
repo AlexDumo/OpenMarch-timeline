@@ -1,9 +1,11 @@
 /**
  * The show's floor in the web editor (ADR 0002 D-23). The web build has no `sharp` and no local
  * Library, so it makes a Base floor Version the way the desktop Artwork pipeline would, with the
- * browser's own decoder: the image as its original (a GIF or WebP becomes a PNG first), a
- * display texture at the Base floor cap, and the same sidecar. Convert on open and a new show
- * copying a previous show's image both use it in place of the desktop's `floorFromFieldImage`.
+ * browser's own decoder: the image as its original (a GIF, WebP or BMP becomes a PNG first), a
+ * display texture at the Base floor cap, and the same sidecar. An SVG or PDF stays the original
+ * as a vector, and the page draws it for the display texture (the worker has no DOM). Convert on
+ * open and a new show copying a previous show's image both use it in place of the desktop's
+ * `floorFromFieldImage`.
  */
 import type { FieldProperties } from "@openmarch/core";
 import { floorSizeForImage } from "../../src/view3d/core/field/floorSize";
@@ -19,6 +21,8 @@ import {
     encodeArtworkSidecar,
 } from "../../electron/main/artwork-import/sidecar";
 import { sniffArtworkFormat } from "../../electron/main/artwork-import/formats";
+import { PAGE_CHANNELS, type RasterizedImage } from "../protocol";
+import { askPage } from "./page";
 
 const FLOOR_NAME = "Field image";
 
@@ -30,6 +34,17 @@ export interface DecodedImage {
 }
 
 export type FloorDecoder = (image: Uint8Array) => Promise<DecodedImage>;
+
+/** Draws an SVG, or a PDF's first page, as a PNG `long` pixels on its long edge. */
+export type VectorRasterizer = (
+    image: Uint8Array,
+    format: "svg" | "pdf",
+    long: number,
+) => Promise<RasterizedImage>;
+
+/** The page draws vectors: the worker has no DOM for an SVG, nor pdf.js. */
+export const pageRasterizer: VectorRasterizer = (image, format, long) =>
+    askPage<RasterizedImage>(PAGE_CHANNELS.rasterizeImage, image, format, long);
 
 /** The worker's decoder: `createImageBitmap`, drawn on an `OffscreenCanvas` to write a PNG. */
 export const browserDecoder: FloorDecoder = async (image) => {
@@ -48,6 +63,70 @@ export const browserDecoder: FloorDecoder = async (image) => {
     };
 };
 
+interface MadeFloor {
+    original: Uint8Array;
+    format: "png" | "jpeg" | "svg" | "pdf";
+    page: { index: number; count: number } | null;
+    /** Null for a vector original */
+    pixels: { width: number; height: number } | null;
+    size: { widthM: number; heightM: number };
+    display: Uint8Array;
+    displaySize: { width: number; height: number; format: "png" | "jpeg" };
+}
+
+/** A raster: its own bytes (a GIF, WebP or BMP as a PNG), downsized to the cap for display. */
+async function rasterFloor(
+    image: Uint8Array,
+    sniffed: "png" | "jpeg" | null,
+    fieldProperties: FieldProperties,
+    decode: FloorDecoder,
+): Promise<MadeFloor> {
+    const decoded = await decode(image);
+    const pixels = { width: decoded.width, height: decoded.height };
+    const format = sniffed ?? "png";
+    const original = sniffed
+        ? image
+        : await decoded.encodePng(pixels.width, pixels.height);
+    const target = displaySize(pixels.width, pixels.height);
+    const resized =
+        target.width !== pixels.width || target.height !== pixels.height;
+    return {
+        original,
+        format,
+        page: null,
+        pixels,
+        size: floorSizeForImage(fieldProperties, pixels),
+        display: resized
+            ? await decoded.encodePng(target.width, target.height)
+            : original,
+        displaySize: { ...target, format: resized ? "png" : format },
+    };
+}
+
+/** A vector stays the original; its display texture is drawn at the cap, as a PNG. */
+async function vectorFloor(
+    image: Uint8Array,
+    format: "svg" | "pdf",
+    fieldProperties: FieldProperties,
+    rasterize: VectorRasterizer,
+): Promise<MadeFloor> {
+    const { long } = ARTWORK_SURFACE_SPECS.baseFloor.displayCap;
+    const drawn = await rasterize(image, format, long);
+    return {
+        original: image,
+        format,
+        page: format === "pdf" ? { index: 0, count: drawn.pageCount } : null,
+        pixels: null,
+        size: floorSizeForImage(fieldProperties, drawn),
+        display: drawn.png,
+        displaySize: {
+            width: drawn.width,
+            height: drawn.height,
+            format: "png",
+        },
+    };
+}
+
 /** Fits `width` × `height` inside the Base floor's display cap, never enlarging. */
 function displaySize(width: number, height: number) {
     const { long } = ARTWORK_SURFACE_SPECS.baseFloor.displayCap;
@@ -61,43 +140,37 @@ function displaySize(width: number, height: number) {
 export async function webFloorFromFieldImage(
     image: Uint8Array,
     fieldProperties: FieldProperties,
-    { decode = browserDecoder }: { decode?: FloorDecoder } = {},
+    {
+        decode = browserDecoder,
+        rasterize = pageRasterizer,
+    }: { decode?: FloorDecoder; rasterize?: VectorRasterizer } = {},
 ): Promise<EmbedLibraryVersion> {
     const sniffed = sniffArtworkFormat(image);
-    if (sniffed === "pdf" || sniffed === "svg") {
-        throw new Error(
-            "A PDF or SVG field image becomes a floor in the desktop app",
-        );
-    }
-    const decoded = await decode(image);
-    const pixels = { width: decoded.width, height: decoded.height };
-    const format = sniffed ?? "png";
-    const original = sniffed
-        ? image
-        : await decoded.encodePng(pixels.width, pixels.height);
-
-    const target = displaySize(pixels.width, pixels.height);
-    const resized =
-        target.width !== pixels.width || target.height !== pixels.height;
-    const display = resized
-        ? await decoded.encodePng(target.width, target.height)
-        : original;
-    const displayFormat = resized ? "png" : format;
-
-    const size = floorSizeForImage(fieldProperties, pixels);
+    const made =
+        sniffed === "pdf" || sniffed === "svg"
+            ? await vectorFloor(image, sniffed, fieldProperties, rasterize)
+            : await rasterFloor(image, sniffed, fieldProperties, decode);
+    const { original, display, format } = made;
     const sidecar = encodeArtworkSidecar({
         schemaVersion: ARTWORK_SIDECAR_VERSION,
         type: "openmarch-artwork",
         surface: "baseFloor",
-        original: { format, page: null, pixels, colorSpace: "srgb" },
+        original: {
+            format,
+            page: made.page,
+            pixels: made.pixels,
+            colorSpace: "srgb",
+        },
         size: {
-            width: { m: size.widthM },
-            height: { m: size.heightM },
+            width: { m: made.size.widthM },
+            height: { m: made.size.heightM },
             source: "slot",
             templateId: null,
         },
-        nativeDpi: nativeDpi(pixels.width, size.widthM),
-        display: { ...target, format: displayFormat },
+        nativeDpi: made.pixels
+            ? nativeDpi(made.pixels.width, made.size.widthM)
+            : "vector",
+        display: made.displaySize,
         importNotes: [],
         badges: [],
     });

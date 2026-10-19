@@ -10,9 +10,12 @@
  *   opens it, once the person confirms (`convertOnOpen.ts`).
  * - 8: timeline model.
  * - 9: floor model (ADR 0002 D-23). The show's field image is its floor, an embedded Base floor
- *   Artwork named in the field properties; `field_properties.image` is legacy. New files start
- *   here, and opening an 8 converts its field image and writes 9 (`convertFieldImage.ts`), so a
- *   build that only knows 8 refuses the file instead of editing a field image nothing reads.
+ *   Artwork named in the field properties; `field_properties.image` is legacy. A file is
+ *   written as 9 when it gets a floor: opening an 8 converts its field image
+ *   (`convertFieldImage.ts`), and Upload floor… sets one (`setFieldFloorInTransaction`). A build
+ *   that only knows 8 then refuses the file instead of editing a field image nothing reads. A
+ *   file without a floor, new or opened, stays at 8, so opening a show to look at it never
+ *   changes it.
  */
 import type { DatabaseSync } from "node:sqlite";
 
@@ -20,15 +23,15 @@ import type { DatabaseSync } from "node:sqlite";
 export const PAGE_MODEL_USER_VERSION = 7;
 /** Version of a timeline-model file (what the page conversion writes). */
 export const TIMELINE_MODEL_USER_VERSION = 8;
-/** Version of a file whose field image is its floor (new files, and 8s once opened). */
+/** Version of a file whose field image is its floor (written once it has one). */
 export const FLOOR_MODEL_USER_VERSION = 9;
 
 /** Oldest version this build opens. Older files must go through 0.0.10 first. */
 export const MIN_SUPPORTED_USER_VERSION = PAGE_MODEL_USER_VERSION;
 /** Newest version this build opens. Anything higher was written by a newer release. */
 export const MAX_SUPPORTED_USER_VERSION = FLOOR_MODEL_USER_VERSION;
-/** Version written into a brand-new file: a new show is a timeline show with a floor. */
-export const NEW_FILE_USER_VERSION = FLOOR_MODEL_USER_VERSION;
+/** Version written into a brand-new file: a timeline show, with no floor yet. */
+export const NEW_FILE_USER_VERSION = TIMELINE_MODEL_USER_VERSION;
 
 /**
  * Status code that `setDbPath` returns for a file from a newer release.

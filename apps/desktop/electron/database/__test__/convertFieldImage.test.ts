@@ -1,7 +1,8 @@
 // @vitest-environment node
 /**
  * Convert on open for the show's floor (ADR 0002 D-23): a show with a legacy field image and no
- * floor gets one, quietly and outside undo history, and every opened 8 is written as 9.
+ * floor gets one, quietly and outside undo history, and is written as 9. A show without a
+ * field image keeps its version.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
@@ -18,7 +19,9 @@ import {
 } from "../fileVersion";
 import {
     convertFieldImageOnOpen,
+    resetFieldImageFailures,
     setFloorFromImage,
+    setFloorFromVersion,
 } from "../convertFieldImage";
 import { createAllUndoTriggers } from "@/db-functions/historyTriggers";
 import type { EmbedLibraryVersion } from "@/db-functions/showLibrary";
@@ -94,6 +97,7 @@ describe("convertFieldImageOnOpen", () => {
 
     beforeEach(() => {
         dir = fs.mkdtempSync(path.join(os.tmpdir(), "om-floor-"));
+        resetFieldImageFailures();
         vi.spyOn(console, "log").mockImplementation(() => {});
         vi.spyOn(console, "error").mockImplementation(() => {});
     });
@@ -146,7 +150,7 @@ describe("convertFieldImageOnOpen", () => {
         expect(triggersBefore.length).toBeGreaterThan(0);
     });
 
-    it("only writes 9 for a show with no field image", async () => {
+    it("leaves a show with no field image at 8, untouched", async () => {
         db = await createShow(
             path.join(dir, "show.dots"),
             TIMELINE_MODEL_USER_VERSION,
@@ -159,7 +163,27 @@ describe("convertFieldImageOnOpen", () => {
         expect(makeFloor).not.toHaveBeenCalled();
         expect(fieldRow(db).json_data).toBe(jsonBefore);
         expect(count(db, "library_items")).toBe(0);
-        expect(readUserVersion(db)).toBe(FLOOR_MODEL_USER_VERSION);
+        // Opening a show to look at it never changes it (D-23)
+        expect(readUserVersion(db)).toBe(TIMELINE_MODEL_USER_VERSION);
+    });
+
+    it("tries an image that failed once per run, and logs the failure once", async () => {
+        db = await createShow(
+            path.join(dir, "show.dots"),
+            TIMELINE_MODEL_USER_VERSION,
+        );
+        withLegacyImage(db);
+        const makeFloor = vi.fn(async (): Promise<EmbedLibraryVersion> => {
+            throw new Error("not an image");
+        });
+        const errors = vi.mocked(console.error);
+
+        expect(await convertFieldImageOnOpen(db, { makeFloor })).toBe("failed");
+        expect(await convertFieldImageOnOpen(db, { makeFloor })).toBe("failed");
+
+        expect(makeFloor).toHaveBeenCalledOnce();
+        expect(errors).toHaveBeenCalledOnce();
+        expect(Array.from(fieldRow(db).image!)).toEqual(Array.from(LEGACY));
     });
 
     it("leaves the file as it was when the image can't be made into a floor", async () => {
@@ -270,6 +294,58 @@ describe("convertFieldImageOnOpen", () => {
             expect(count(db, "library_items")).toBe(1);
             expect(count(db, "history_undo")).toBe(historyBefore);
             expect(fieldTriggers(db)).toEqual(triggersBefore);
+        });
+    });
+
+    describe("setFloorFromVersion (a new show copying a previous show's floor Version)", () => {
+        it("embeds the Version as it is, names it the floor and writes 9", async () => {
+            db = await createShow(
+                path.join(dir, "show.dots"),
+                TIMELINE_MODEL_USER_VERSION,
+            );
+            const historyBefore = count(db, "history_undo");
+            const version = {
+                ...(await floorVersion("display")),
+                name: "Gym tarp",
+                metadata: {
+                    ...(await floorVersion("display")).metadata,
+                    license: "CC-BY-4.0",
+                },
+            };
+
+            const floor = await setFloorFromVersion(
+                getOrm(db) as never,
+                version,
+            );
+
+            expect(floor).toEqual({
+                itemId: FLOOR_ID,
+                versionHash: version.versionHash,
+            });
+            expect(JSON.parse(fieldRow(db).json_data).floor).toEqual(floor);
+            const row = db
+                .prepare("SELECT name, metadata FROM library_items")
+                .get() as { name: string; metadata: string };
+            expect(row.name).toBe("Gym tarp");
+            expect(JSON.parse(row.metadata).license).toBe("CC-BY-4.0");
+            expect(count(db, "history_undo")).toBe(historyBefore);
+            expect(readUserVersion(db)).toBe(FLOOR_MODEL_USER_VERSION);
+        });
+
+        it("refuses parts that don't match the Version, writing nothing", async () => {
+            db = await createShow(
+                path.join(dir, "show.dots"),
+                FLOOR_MODEL_USER_VERSION,
+            );
+            const version = await floorVersion("display");
+            await expect(
+                setFloorFromVersion(getOrm(db) as never, {
+                    ...version,
+                    parts: { ...version.parts, display: new Uint8Array([1]) },
+                }),
+            ).rejects.toThrow();
+            expect(count(db, "library_items")).toBe(0);
+            expect(JSON.parse(fieldRow(db).json_data).floor).toBeUndefined();
         });
     });
 });

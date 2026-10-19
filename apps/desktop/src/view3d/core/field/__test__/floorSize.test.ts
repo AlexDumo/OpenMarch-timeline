@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FieldProperties, fieldFootprint } from "@openmarch/core";
 import FieldPropertiesTemplates from "../../../../global/classes/FieldProperties.templates";
 import { fieldFloorSize, floorSizeForImage } from "../floorSize";
+import { planImage } from "../imagePlan";
 
 const gym = FieldPropertiesTemplates.INDOOR_50x80_8to5;
 
@@ -47,5 +48,41 @@ describe("fieldFloorSize (Upload floor…)", () => {
             widthM: footprint.width,
             heightM: footprint.depth,
         });
+    });
+});
+
+describe("planImage with a floor's physical size (D-23)", () => {
+    it("lands a floor sized from its placement exactly where the image was", () => {
+        const image = { width: 1000, height: 1000 };
+        const placed = planImage({ fieldProperties: gym }, image, 1);
+        const size = floorSizeForImage(gym, image);
+        const floor = planImage(
+            { fieldProperties: gym },
+            { ...image, sizeM: size },
+            1,
+        );
+        expect(floor.minX).toBeCloseTo(placed.minX, 6);
+        expect(floor.maxX).toBeCloseTo(placed.maxX, 6);
+        expect(floor.minZ).toBeCloseTo(placed.minZ, 6);
+        expect(floor.maxZ).toBeCloseTo(placed.maxZ, 6);
+    });
+
+    it("draws a smaller floor at its size, centered, not stretched over the field", () => {
+        const floor = planImage(
+            { fieldProperties: gym },
+            { width: 4000, height: 3000, sizeM: { widthM: 8, heightM: 6 } },
+            1,
+        );
+        expect(floor.maxX - floor.minX).toBeCloseTo(8, 6);
+        expect(floor.maxZ - floor.minZ).toBeCloseTo(6, 6);
+        const f = fieldFootprint(gym);
+        expect((floor.minX + floor.maxX) / 2).toBeCloseTo(
+            (f.minX + f.maxX) / 2,
+            6,
+        );
+        expect((floor.minZ + floor.maxZ) / 2).toBeCloseTo(
+            (f.minZ + f.maxZ) / 2,
+            6,
+        );
     });
 });

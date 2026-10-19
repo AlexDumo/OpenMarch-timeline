@@ -3,8 +3,9 @@ import { db, schema } from "../database/db";
 import { eq } from "drizzle-orm";
 import { transactionWithHistory } from "../../db-functions/history";
 import {
-    getFieldFloorImage,
+    getFieldImage,
     writeFieldJsonKeepingFloorInTransaction,
+    type FieldImage,
 } from "../../db-functions/fieldFloor";
 
 const { field_properties } = schema;
@@ -49,9 +50,12 @@ export async function updateFieldProperties(
 }
 
 /**
- * The field image: the show's floor's display texture (ADR 0002 D-23), or null. The legacy
- * `field_properties.image` column is read only by convert on open.
+ * The field image (ADR 0002 D-23), or null: the show's floor, its original for 2D and exports
+ * (`"print"`) or its display texture for 3D (`"display"`), or a legacy image that hasn't become
+ * a floor yet.
  */
-export async function getFieldPropertiesImage(): Promise<Uint8Array | null> {
-    return getFieldFloorImage({ db });
+export async function getFieldPropertiesImage(
+    use: "print" | "display" = "print",
+): Promise<FieldImage | null> {
+    return getFieldImage({ db, use });
 }

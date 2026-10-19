@@ -51,6 +51,8 @@ export default function FieldFloorControls({
                     source: "slot",
                     templateId: null,
                 },
+                // An image of another shape keeps it, placed on the field as before
+                fit: fieldProperties.imageFillOrFit === "fill" ? "fill" : "fit",
             },
             onEmbedded: async (saved: ImportedVersion[]) => {
                 // One floor per show: a multi-page PDF's first page

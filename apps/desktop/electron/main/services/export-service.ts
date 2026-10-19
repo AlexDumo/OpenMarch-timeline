@@ -12,7 +12,7 @@ import sanitizeHtml from "sanitize-html";
 
 import Store from "electron-store";
 import { getOrmConnection } from "../../database/database.services";
-import { getFieldFloorImage } from "../../../src/db-functions/fieldFloor";
+import { getFieldImage } from "../../../src/db-functions/fieldFloor";
 import { sniffArtworkFormat } from "../artwork-import/formats";
 import { measureRangeString as _measureRangeString } from "../../../src/global/classes/Page.utils";
 import logoSvgRaw from "@/assets/open-march-logo.svg?raw";
@@ -557,10 +557,13 @@ export class PDFExportService {
         }
 
         try {
-            // The field image is the show's floor (ADR 0002 D-23): its display texture
-            const image = await getFieldFloorImage({
-                db: getOrmConnection() as never,
-            });
+            // The field image is the show's floor (ADR 0002 D-23): its original, for print
+            const image = (
+                await getFieldImage({
+                    db: getOrmConnection() as never,
+                    use: "print",
+                })
+            )?.bytes;
 
             if (!image) {
                 this.fieldImageCache = null;
@@ -568,7 +571,8 @@ export class PDFExportService {
             }
 
             const base64 = Buffer.from(image).toString("base64");
-            // A floor's display texture is PNG, or JPEG for a large opaque image
+            // A floor's print image is a PNG or a JPEG (its original, or the display texture
+            // of a vector)
             const mimeType =
                 sniffArtworkFormat(image) === "jpeg"
                     ? "image/jpeg"

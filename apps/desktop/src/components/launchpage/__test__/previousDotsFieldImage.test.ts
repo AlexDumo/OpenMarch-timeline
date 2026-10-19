@@ -45,6 +45,24 @@ describe("applyPreviousDotsFieldImage (D-23)", () => {
         );
     });
 
+    it("copies the previous show's floor Version as it is, not re-importing its image", async () => {
+        const fromVersion = vi.fn().mockResolvedValue(undefined);
+        const fromImage = vi.fn();
+        window.electron = {
+            setNewShowFloorFromVersion: fromVersion,
+            setNewShowFloorFromImage: fromImage,
+        } as never;
+        const fieldFloor = { itemId: "tarp", name: "Gym tarp" };
+
+        await applyPreviousDotsFieldImage(
+            { previousDotsImport: { fieldImage: null, fieldFloor } } as never,
+            new QueryClient(),
+        );
+
+        expect(fromVersion).toHaveBeenCalledWith(fieldFloor);
+        expect(fromImage).not.toHaveBeenCalled();
+    });
+
     it("does nothing without an image", async () => {
         const setFloor = vi.fn();
         window.electron = { setNewShowFloorFromImage: setFloor } as never;

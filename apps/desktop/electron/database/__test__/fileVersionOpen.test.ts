@@ -135,11 +135,11 @@ describe("opening files by format version", () => {
         expect(sha256(filePath)).toBe(hashBefore);
     });
 
-    it("creates a new file at 9", async () => {
+    it("creates a new file at 8: it gets 9 with its first floor", async () => {
         const filePath = path.join(tempDir, "new.dots");
 
         expect(await openLikeSetActiveDb(filePath, true)).toBe(200);
-        expect(userVersionOf(filePath)).toBe(9);
+        expect(userVersionOf(filePath)).toBe(8);
     });
 
     describe("migration service", () => {

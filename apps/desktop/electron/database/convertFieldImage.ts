@@ -3,21 +3,30 @@
  * (`field_properties.image`) and no floor gets one: the image goes through the Artwork pipeline
  * as a Base floor (the caller's `makeFloor`), is embedded in the show, and is named in the field
  * properties; the column is then cleared. It is quiet, outside undo history like the timeline
- * conversion, and never touches the local Library. Every timeline file it sees is written as the
- * floor-model version, so an older build refuses it.
+ * conversion, and never touches the local Library. A file that gets a floor is written as the
+ * floor-model version (9), so an older build refuses it; a file with no field image keeps its
+ * version, so opening it to look never changes it.
  *
  * Content decides, not the version: a 9 that still holds an image (such as a repaired copy of an
  * 8) converts too. A page-model file (7) is left for the timeline conversion, which runs first.
+ *
+ * An image that can't become a floor stays in the file, and the field keeps drawing it
+ * (`getFieldImage`). It is tried once per image each time the app runs, and the failure is
+ * logged once, so reopening the show doesn't repeat the work or the log.
  */
 import type { DatabaseSync } from "node:sqlite";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 import { FieldProperties, type FieldFloor } from "@openmarch/core";
 import {
     embedLibraryVersionInTransaction,
+    ShowLibraryMetadataSchema,
     type EmbedLibraryVersion,
 } from "@/db-functions/showLibrary";
+import { LIBRARY_LIMITS } from "@/view3d/library/protocol";
 import {
     floorOfFieldJson,
+    markFloorModelInTransaction,
     parseFieldJson,
     readFieldJson,
     setFieldFloorInTransaction,
@@ -45,8 +54,26 @@ export type FieldImageConversion =
     | "converted"
     /** Nothing to convert (no image, a floor already, or a page-model file). */
     | "none"
-    /** The image couldn't become a floor; the file is unchanged, so the next open retries. */
+    /**
+     * The image couldn't become a floor; the file is unchanged and the field keeps drawing the
+     * image. The app tries it again the next time it runs.
+     */
     | "failed";
+
+/** Images that couldn't become a floor while the app has been running, by their bytes' hash. */
+const failedImages = new Set<string>();
+
+async function imageKey(image: Uint8Array): Promise<string> {
+    const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(image));
+    return Array.from(new Uint8Array(digest), (b) =>
+        b.toString(16).padStart(2, "0"),
+    ).join("");
+}
+
+/** Forgets earlier failures, for tests. */
+export function resetFieldImageFailures(): void {
+    failedImages.clear();
+}
 
 interface FieldRow {
     json_data: string;
@@ -70,28 +97,44 @@ export async function convertFieldImageOnOpen(
     // Without readable field properties there's no size for a floor: keep the image for later
     if (hasImage && !hasFloor && !json) return "failed";
 
-    let floor: EmbedLibraryVersion | null = null;
-    if (hasImage && !hasFloor && json) {
-        try {
-            floor = await makeFloor(
-                new Uint8Array(row!.image!),
-                new FieldProperties(json as never),
+    if (!hasImage) {
+        // A floor in a file below 9 (written back by hand, say) still keeps older builds out
+        if (hasFloor && version < FLOOR_MODEL_USER_VERSION)
+            await (getOrm(db) as unknown as DbConnection).transaction(
+                markFloorModelInTransaction,
             );
+        // Otherwise the file stays exactly as it was, version and all
+        return "none";
+    }
+
+    let floor: EmbedLibraryVersion | null = null;
+    if (!hasFloor && json) {
+        const image = new Uint8Array(row!.image!);
+        const key = await imageKey(image);
+        if (failedImages.has(key)) return "failed";
+        try {
+            floor = await makeFloor(image, new FieldProperties(json as never));
         } catch (error) {
-            console.error("Couldn't make the field image into a floor", error);
+            failedImages.add(key);
+            console.error(
+                "Couldn't make the field image into a floor; the field keeps drawing it",
+                error,
+            );
             return "failed";
         }
     }
+    if (hasFloor)
+        // An older build wrote an image into a file that has a floor, which wins (D-23)
+        console.warn(
+            "Clearing a field image written beside the show's floor by an older build",
+        );
 
     const orm = getOrm(db) as unknown as DbConnection;
     const hadUndoTriggers = await hasFieldUndoTriggers(orm);
     await orm.transaction(async (tx: DbTransaction) => {
-        if (hasImage)
-            await installFloorInTransaction(tx, floor, { hadUndoTriggers });
-        if (version < FLOOR_MODEL_USER_VERSION)
-            await tx.run(
-                sql.raw(`PRAGMA user_version = ${FLOOR_MODEL_USER_VERSION}`),
-            );
+        await installFloorInTransaction(tx, floor, { hadUndoTriggers });
+        // Installing a floor writes 9 itself; a floor already there keeps it
+        if (hasFloor) await markFloorModelInTransaction(tx);
     });
     return floor ? "converted" : "none";
 }
@@ -109,9 +152,9 @@ async function hasFieldUndoTriggers(
 }
 
 /**
- * Embeds `floor` (when given), names it in the field properties and clears the legacy image,
- * none of it undoable: the person never made this edit. Puts back only the undo triggers the
- * file had.
+ * Embeds `floor` (when given), names it in the field properties (which writes the floor-model
+ * version) and clears the legacy image, none of it undoable: the person never made this edit.
+ * Puts back only the undo triggers the file had.
  */
 async function installFloorInTransaction(
     tx: DbTransaction,
@@ -144,6 +187,49 @@ export async function setFloorFromImage(
     const json = await readFieldJson(db);
     if (!json) throw new Error("Field properties not found");
     const floor = await makeFloor(image, new FieldProperties(json as never));
+    const hadUndoTriggers = await hasFieldUndoTriggers(db);
+    await db.transaction((tx) =>
+        installFloorInTransaction(tx, floor, { hadUndoTriggers }),
+    );
+    return { itemId: floor.itemId, versionHash: floor.versionHash };
+}
+
+/** The most a copied floor's parts may hold: an Artwork original plus its display and sidecar. */
+const MAX_FLOOR_VERSION_BYTES = LIBRARY_LIMITS.artworkBytes + 64 * 1024 * 1024;
+
+const FloorVersionSchema = z.object({
+    itemId: z.string().min(1),
+    versionHash: z.string().length(64),
+    kind: z.literal("artwork"),
+    name: z.string().min(1),
+    builtIn: z.boolean(),
+    metadata: ShowLibraryMetadataSchema,
+    pins: z.array(z.object({ itemId: z.string(), versionHash: z.string() })),
+    parts: z.record(z.string(), z.instanceof(Uint8Array)),
+});
+
+/** A floor Version that came over IPC, checked; throws when it isn't one. */
+export function parseFloorVersion(value: unknown): EmbedLibraryVersion {
+    const version = FloorVersionSchema.parse(value);
+    const total = Object.values(version.parts).reduce(
+        (n, part) => n + part.byteLength,
+        0,
+    );
+    if (total === 0 || total > MAX_FLOOR_VERSION_BYTES)
+        throw new Error("Not a floor");
+    return version;
+}
+
+/**
+ * Makes a previous show's floor Version the open show's floor as it is: same item, Version,
+ * name and license (`newShow:setFloorFromVersion`). Outside undo history, like
+ * `setFloorFromImage`. Throws, writing nothing, when the parts don't match the Version.
+ */
+export async function setFloorFromVersion(
+    db: DbConnection,
+    floor: EmbedLibraryVersion,
+): Promise<FieldFloor> {
+    if (floor.kind !== "artwork") throw new Error("A floor is Artwork");
     const hadUndoTriggers = await hasFieldUndoTriggers(db);
     await db.transaction((tx) =>
         installFloorInTransaction(tx, floor, { hadUndoTriggers }),

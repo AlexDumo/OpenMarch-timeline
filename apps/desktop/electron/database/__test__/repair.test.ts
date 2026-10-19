@@ -88,7 +88,7 @@ describe("DatabaseSync Repair", () => {
     };
 
     describe("initializeAndMigrateDatabase", () => {
-        it("should successfully initialize database with user_version 9 (a new file's)", async () => {
+        it("should successfully initialize database with user_version 8 (a new file's)", async () => {
             const dbPath = path.join(tempDir, "test.db");
             const db = new DatabaseSync(dbPath);
 
@@ -99,7 +99,7 @@ describe("DatabaseSync Repair", () => {
                     user_version: number;
                 }
             ).user_version;
-            expect(userVersion).toBe(9);
+            expect(userVersion).toBe(8);
 
             db.close();
             fs.unlinkSync(dbPath);
@@ -966,7 +966,7 @@ describe("DatabaseSync Repair", () => {
             fs.unlinkSync(originalDbPath);
         });
 
-        it("writes a repaired timeline-model file (user_version 8) at this build's version (9)", async () => {
+        it("keeps a timeline-model file (user_version 8) at 8", async () => {
             const originalDbPath = path.join(tempDir, "timeline.dots");
             const originalDb =
                 await createNewDatabaseWithMigrations(originalDbPath);
@@ -982,7 +982,7 @@ describe("DatabaseSync Repair", () => {
                 }
             ).user_version;
             fixedDb.close();
-            expect(userVersion).toBe(9);
+            expect(userVersion).toBe(8);
         });
 
         it("copies timeline rows parents first, so the invariant triggers accept them", async () => {
@@ -1166,7 +1166,6 @@ describe("DatabaseSync Repair", () => {
                 await createNewDatabaseWithMigrations(originalDbPath);
             originalDb.exec(`
                 INSERT INTO marchers (id, section, drill_prefix, drill_order) VALUES (1, 'Brass', 'B', 1);
-                PRAGMA user_version = 8;
             `);
             expect(readUserVersionOf(originalDb)).toBe(8);
             originalDb.close();
@@ -1175,7 +1174,7 @@ describe("DatabaseSync Repair", () => {
 
             const fixedDb = new DatabaseSync(fixedPath, { readOnly: true });
             try {
-                expect(readUserVersionOf(fixedDb)).toBe(9);
+                expect(readUserVersionOf(fixedDb)).toBe(8);
                 expect(tableNamesOf(fixedDb)).not.toContain("marcher_pages");
                 expect(
                     fixedDb.prepare("SELECT id FROM marchers").all(),
@@ -1185,7 +1184,7 @@ describe("DatabaseSync Repair", () => {
             }
         });
 
-        it("repairs a version-0 file without page-era tables as a timeline file (9)", async () => {
+        it("repairs a version-0 file without page-era tables as a timeline file (8)", async () => {
             const originalDbPath = path.join(tempDir, "no-page-era.dots");
             const originalDb = new DatabaseSync(originalDbPath);
             originalDb.exec(`
@@ -1202,7 +1201,7 @@ describe("DatabaseSync Repair", () => {
 
             const fixedDb = new DatabaseSync(fixedPath, { readOnly: true });
             try {
-                expect(readUserVersionOf(fixedDb)).toBe(9);
+                expect(readUserVersionOf(fixedDb)).toBe(8);
             } finally {
                 fixedDb.close();
             }
@@ -1286,7 +1285,7 @@ describe("DatabaseSync Repair", () => {
                     user_version: number;
                 }
             ).user_version;
-            expect(userVersion).toBe(9);
+            expect(userVersion).toBe(8);
 
             // Verify migrations were applied
             const orm = getOrm(fixedDb);
@@ -1401,7 +1400,7 @@ describe("DatabaseSync Repair", () => {
                     user_version: number;
                 }
             ).user_version;
-            expect(userVersion).toBe(9);
+            expect(userVersion).toBe(8);
 
             fixedDb.close();
             fs.unlinkSync(fixedPath);
@@ -1520,7 +1519,7 @@ describe("DatabaseSync Repair", () => {
                     user_version: number;
                 }
             ).user_version;
-            expect(userVersion).toBe(9);
+            expect(userVersion).toBe(8);
 
             // Verify migrations were applied
             const orm = getOrm(fixedDb);
@@ -1564,7 +1563,7 @@ describe("DatabaseSync Repair", () => {
                     user_version: number;
                 }
             ).user_version;
-            expect(userVersion).toBe(9); // Should be a valid database, not "old content"
+            expect(userVersion).toBe(8); // Should be a valid database, not "old content"
 
             fixedDb.close();
             fs.unlinkSync(fixedPath);

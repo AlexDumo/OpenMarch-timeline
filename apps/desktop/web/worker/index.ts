@@ -15,6 +15,7 @@
  * page reopens it.
  */
 import "./process";
+import "./page";
 import * as DatabaseServices from "@om-electron/database/database.services";
 import { getOrm } from "@om-electron/database/db";
 import { DrizzleMigrationService } from "@om-electron/database/services/DrizzleMigrationService";
@@ -27,7 +28,9 @@ import { initializeNewFileAsTimeline } from "@om-electron/database/convertOnOpen
 import { convertFileOnOpen } from "@om-electron/database/convertOnOpen";
 import {
     convertFieldImageOnOpen,
+    parseFloorVersion,
     setFloorFromImage,
+    setFloorFromVersion,
 } from "@om-electron/database/convertFieldImage";
 import { webFloorFromFieldImage } from "./floor";
 import * as schema from "@om-electron/database/migrations/schema";
@@ -411,6 +414,15 @@ function registerNewShowHandlers() {
                 webFloorFromFieldImage(bytes, fieldProperties),
         );
     });
+    ipcMain.handle(
+        "newShow:setFloorFromVersion",
+        async (_, version: unknown) => {
+            await setFloorFromVersion(
+                DatabaseServices.getOrmConnection() as never,
+                parseFloorVersion(version),
+            );
+        },
+    );
 }
 
 /** The web build's own channels: one show, in from and out to the page. */
@@ -515,6 +527,8 @@ function registerHandlers() {
 }
 
 async function handle(message: ToWorker) {
+    // The page's answers to `askPage` are taken as they arrive (`./page.ts`)
+    if (message.type === "answer") return;
     if (message.type === "send") {
         const listener = ipcListeners.get(message.channel);
         // Electron drops a message no one listens for; so does this.

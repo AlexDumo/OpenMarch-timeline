@@ -76,12 +76,48 @@ describe("webFloorFromFieldImage (D-23 in the web editor)", () => {
         ).toBe("png");
     });
 
-    it("refuses PDF and SVG, which the browser can't decode in a worker", async () => {
-        const { decode } = decoder(1, 1);
-        await expect(
-            webFloorFromFieldImage(new TextEncoder().encode("%PDF-1.7"), gym, {
-                decode,
+    it("keeps an SVG as a vector original and has the page draw its display texture", async () => {
+        const svg = new TextEncoder().encode(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"/>',
+        );
+        const asked: unknown[][] = [];
+        const version = await webFloorFromFieldImage(svg, gym, {
+            decode: () => Promise.reject(new Error("not a raster")),
+            rasterize: async (...args) => {
+                asked.push(args);
+                return { png: PNG, width: 2048, height: 1024, pageCount: 1 };
+            },
+        });
+        expect(asked).toEqual([[svg, "svg", 2048]]);
+        expect(Array.from(version.parts.original!)).toEqual(Array.from(svg));
+        expect(Array.from(version.parts.display!)).toEqual(Array.from(PNG));
+        const sidecar = decodeArtworkSidecar(version.parts.sidecar!);
+        expect(sidecar).toMatchObject({
+            original: { format: "svg", page: null, pixels: null },
+            nativeDpi: "vector",
+            display: { width: 2048, height: 1024, format: "png" },
+        });
+        const size = floorSizeForImage(gym, { width: 2048, height: 1024 });
+        expect(sidecar.size.width.m).toBeCloseTo(size.widthM, 6);
+    });
+
+    it("makes a PDF's first page the floor, as the desktop does", async () => {
+        const pdf = new TextEncoder().encode("%PDF-1.7 stand-in");
+        const version = await webFloorFromFieldImage(pdf, gym, {
+            decode: () => Promise.reject(new Error("not a raster")),
+            rasterize: async () => ({
+                png: PNG,
+                width: 1584,
+                height: 2048,
+                pageCount: 3,
             }),
-        ).rejects.toThrow(/desktop app/);
+        });
+        const sidecar = decodeArtworkSidecar(version.parts.sidecar!);
+        expect(sidecar.original).toMatchObject({
+            format: "pdf",
+            page: { index: 0, count: 3 },
+            pixels: null,
+        });
+        expect(version.metadata.originalFilename).toBe("Field image.pdf");
     });
 });

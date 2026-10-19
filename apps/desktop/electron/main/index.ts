@@ -478,6 +478,19 @@ function handleNewShowFloorIpc() {
             );
         },
     );
+    ipcMain.handle(
+        "newShow:setFloorFromVersion",
+        async (event, version: unknown) => {
+            if (event.sender !== win?.webContents)
+                throw new Error("Only the editor sets the floor");
+            const { setFloorFromVersion, parseFloorVersion } =
+                await import("../database/convertFieldImage");
+            await setFloorFromVersion(
+                DatabaseServices.getOrmConnection() as never,
+                parseFloorVersion(version),
+            );
+        },
+    );
 }
 
 function initDatabaseIpcHandlers() {
