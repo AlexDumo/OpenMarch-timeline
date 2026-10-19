@@ -2,9 +2,10 @@
  * The counts the timeline draws past the last stored one (docs/timeline/endless-counts.md rules 1, 6
  * and 7). The timeline's lanes draw `Beat`s and `Measure`s, so past the stored counts it gets
  * stand-ins from the count grid (`countGrid.ts`) up to the scroll extent: beats and measures with
- * negative ids that nothing stores. They look the same as stored ones. They are only drawn and
- * heard: no edit takes their ids. A write that lands past the stored counts names a spec beat and
- * stores the counts first (`ensureCountsInTransaction`).
+ * negative ids that nothing stores. They look the same as stored ones. A write that lands past the
+ * stored counts stores the counts first (`ensureCountsInTransaction`): the timeline's writes name
+ * a spec beat; a write keyed by beat id (a prop's Outline, from the playhead) may name an endless
+ * one, which `storedBeatIdInTransaction` stores and swaps for the stored id.
  */
 import type Beat from "@/global/classes/Beat";
 import type Measure from "@/global/classes/Measure";
@@ -16,6 +17,10 @@ const ENDLESS_ID_BASE = -1_000_000;
 
 /** The id an endless beat or measure at spec beat `beat` gets */
 export const endlessIdOf = (beat: number) => ENDLESS_ID_BASE - beat;
+
+/** The spec beat of an endless beat's or measure's id, or null for a stored one */
+export const endlessBeatOfId = (id: number): number | null =>
+    id <= ENDLESS_ID_BASE ? ENDLESS_ID_BASE - id : null;
 
 /**
  * The stored beats and, after them, endless ones up to spec beat `through` (exclusive), timed by

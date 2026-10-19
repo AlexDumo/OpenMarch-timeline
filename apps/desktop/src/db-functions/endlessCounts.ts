@@ -5,6 +5,7 @@ import {
     countContinuation,
     type CountContinuation,
 } from "@/timeline/countsPastEnd";
+import { endlessBeatOfId } from "@/timeline/endlessTimeline";
 import { createBeatsInTransaction } from "./beat";
 import { createMeasuresInTransaction } from "./measures";
 import {
@@ -172,4 +173,30 @@ export async function ensureCountsInTransaction({
             `that is ${need - beatCount} counts past the end; one edit stores at most ${MAX_COUNTS_PER_EDIT}`,
         );
     return await appendCountsInTransaction({ tx, counts: need - beatCount });
+}
+
+/**
+ * The stored id for a beat id a write names: a stored one as it is; an endless one (`endlessIdOf`,
+ * past the stored counts) has the counts up to it stored first, in the same edit, and becomes that
+ * stored beat's id.
+ */
+export async function storedBeatIdInTransaction({
+    tx,
+    beatId,
+}: {
+    tx: DbTransaction;
+    beatId: number;
+}): Promise<number> {
+    const beat = endlessBeatOfId(beatId);
+    if (beat === null) return beatId;
+    await ensureCountsInTransaction({ tx, through: beat + 1 });
+    const row = await tx
+        .select({ id: schema.beats.id })
+        .from(schema.beats)
+        .orderBy(asc(schema.beats.position))
+        .limit(1)
+        .offset(beat)
+        .get();
+    if (!row) refuse(`no count ${beat} to write on`);
+    return row.id;
 }

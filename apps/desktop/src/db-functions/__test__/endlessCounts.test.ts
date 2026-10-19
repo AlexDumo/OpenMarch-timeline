@@ -18,6 +18,9 @@ import { resizeTimeline } from "../timelineResize";
 import { shiftTimeline } from "../timelineCommands";
 import { moveMarchersInRangeInTransaction } from "../timelineMoves";
 import { addMarchersToTimeline } from "../timelineMembership";
+import { createItems, setItemGeometry, type NewItemArgs } from "../items";
+import { endlessIdOf } from "@/timeline/endlessTimeline";
+import { createAllUndoTriggers } from "../historyTriggers";
 
 // These tests set the flag and convert the show themselves
 keepFixturesInPageMode(
@@ -382,6 +385,114 @@ describeDbTests("writes past the last stored count", (it) => {
             );
             expect(takeStoredCounts()).toBe(true);
             expect(takeStoredCounts()).toBe(false);
+        });
+    });
+
+    describe("big edits and writes keyed by beat id", () => {
+        it("stores more counts in one edit than one insert statement can bind", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            // 12,000 beats bind 36,000 values, past SQLite's 32,766 for one statement
+            const after = await transactionWithHistory(db, "test", (tx) =>
+                ensureCountsInTransaction({ tx, through: 97 + 12_000 }),
+            );
+            expect(after).toBe(97 + 12_000);
+            expect(await beatCount(db)).toBe(97 + 12_000);
+        });
+
+        const riser = (beatId: number): NewItemArgs => ({
+            kind: "prop",
+            name: "Riser",
+            surfaceType: "platform",
+            home: [120, 80],
+            beatId,
+            geometry: {
+                outlineType: "rectangle",
+                width: 2.4,
+                depth: 1.2,
+                height: 0.4,
+            },
+        });
+        const beatIdAt = async (db: DbConnection, ordinal: number) =>
+            (
+                await db
+                    .select({ id: schema.beats.id })
+                    .from(schema.beats)
+                    .orderBy(asc(schema.beats.position))
+                    .all()
+            )[ordinal]!.id;
+
+        it("a prop drawn past the end stores the counts up to its beat and is on field from it, one undo step", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            // The timeline-only tables (items among them) get their history triggers as the app's
+            // conversion makes them (`convertOnOpen`); the test conversion leaves that to its tests
+            await createAllUndoTriggers(db);
+            const before = await snapshot(db, [
+                schema.beats,
+                schema.measures,
+                schema.items,
+                schema.item_geometry,
+            ]);
+            const [item] = await createItems({
+                db,
+                newItems: [riser(endlessIdOf(110))],
+            });
+            expect(await beatCount(db)).toBe(111);
+            const geometry = await db
+                .select()
+                .from(schema.item_geometry)
+                .where(sql`${schema.item_geometry.item_id} = ${item!.id}`)
+                .all();
+            expect(geometry.map((g) => g.beat_id)).toEqual([
+                await beatIdAt(db, 110),
+            ]);
+            await performUndo(db);
+            expect(
+                await snapshot(db, [
+                    schema.beats,
+                    schema.measures,
+                    schema.items,
+                    schema.item_geometry,
+                ]),
+            ).toEqual(before);
+        });
+
+        it("an Outline set past the end adds a change there, and leaves the one on the last stored count", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const last = await beatIdAt(db, 96);
+            const [item] = await createItems({ db, newItems: [riser(last)] });
+            await setItemGeometry({
+                db,
+                itemId: item!.id,
+                beatId: endlessIdOf(104),
+                geometry: {
+                    outlineType: "rectangle",
+                    width: 4,
+                    depth: 1.2,
+                    height: 0.4,
+                },
+            });
+            const rows = await db
+                .select()
+                .from(schema.item_geometry)
+                .where(sql`${schema.item_geometry.item_id} = ${item!.id}`)
+                .all();
+            expect(
+                rows
+                    .map((r) => [r.beat_id, r.width])
+                    .sort((a, b) => a[1]! - b[1]!),
+            ).toEqual([
+                [last, 2.4],
+                [await beatIdAt(db, 104), 4],
+            ]);
         });
     });
 });
