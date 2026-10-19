@@ -544,8 +544,9 @@ cascade and its `equipment_name` column are not used [07 revision].
   different flag: a Carry change.
 - Applies only to performers carrying a flag; others are skipped silently. A
   flag of another Cut gets the Artwork fitted per the sizing contract
-  (section 3), with a note when the aspect differs (by more than 1% of the
-  larger).
+  (section 3), with a note when the aspect differs (by the sizing code's
+  "same aspect" rule: more than 0.5% of the larger, the Cut's aspect being
+  its template's trim box).
 - Default with no Silk cue: a built-in plain silk in the section's 2D color.
 - The silk picker writes a Silk cue (count-keyed), never an appearance row
   [26.1].

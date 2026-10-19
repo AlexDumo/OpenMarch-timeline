@@ -1,3 +1,4 @@
+import { sameAspect } from "../sizes/aspect";
 import {
     GUARD_CARRIES,
     cueSettings,
@@ -1027,17 +1028,12 @@ export function compileCues(
     return compiled;
 }
 
-/** Aspects within this share of the larger count as the same. */
-const ASPECT_TOLERANCE = 0.01;
-
-const aspectsDiffer = (a: number, b: number) =>
-    Math.abs(a - b) > ASPECT_TOLERANCE * Math.max(a, b);
-
 /**
  * Notes each Silk cue whose Artwork's aspect differs from the Cut of a flag
  * Carry gives the marcher while the silk applies. The silk still applies:
  * the Artwork is fitted to the Cut per the sizing contract (props-spec.md
- * section 3). An unknown aspect on either side is no note. Runs on the
+ * section 3), and "differs" is that contract's rule (`sameAspect`, 0.5%
+ * of the larger). An unknown aspect on either side is no note. Runs on the
  * channels before take-overs: no Carry or Silk value takes another over.
  */
 function noteSilkAspects(
@@ -1062,7 +1058,7 @@ function noteSilkAspects(
             return (
                 (equipment?.holds ?? usual) === "flag" &&
                 cutAspect !== undefined &&
-                aspectsDiffer(cutAspect, artworkAspect)
+                !sameAspect(cutAspect, artworkAspect)
             );
         });
         if (differs) notes.add("silk_aspect", [seg.cueId], marcherId);

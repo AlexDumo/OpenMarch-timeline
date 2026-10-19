@@ -239,11 +239,11 @@ one after it [26.20].
   `marchers` rows of type `prop` or `equipment`, and the Who list leaves them
   out [24].
 
-| Channel | Says                                                    | Default                                                                                                 | Source              |
-| ------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------- |
-| Carry   | What is held: flag, rifle, sabre, horn, none            | The section's usual equipment; `carryForSection` (`view3d/core/instruments/catalog.ts`) as the fallback | 07 revision         |
-| Silk    | Which Artwork a carried flag's Silk shows (not its Cut) | A built-in plain silk in the section's 2D color                                                         | 07 revision, 26.11  |
-| Uniform | Which uniform a performer wears                         | Band default, or Guard default when `isGuard`; nothing stored                                           | 09                  |
+| Channel | Says                                                    | Default                                                                                                 | Source             |
+| ------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------ |
+| Carry   | What is held: flag, rifle, sabre, horn, none            | The section's usual equipment; `carryForSection` (`view3d/core/instruments/catalog.ts`) as the fallback | 07 revision        |
+| Silk    | Which Artwork a carried flag's Silk shows (not its Cut) | A built-in plain silk in the section's 2D color                                                         | 07 revision, 26.11 |
+| Uniform | Which uniform a performer wears                         | Band default, or Guard default when `isGuard`; nothing stored                                           | 09                 |
 
 #### Carry decides what is held
 
@@ -370,8 +370,11 @@ and item Placement changes under their page with their count. Behavior cues
 - For the Silk aspect note [26.13], Silk Library items and flag equipment in
   that input take an optional `aspect` (width ÷ height as the silk template
   lays it out), and the output's notes gain `silk_aspect`: a Silk cue whose
-  Artwork differs by more than 1% from the Cut of a flag Carry gives while it
-  applies. Another public package API change under D-6 (2026-10-16).
+  Artwork's aspect differs from the Cut of a flag Carry gives while it
+  applies, by the sizing code's "same aspect" rule (more than 0.5% of the
+  larger; `sameAspect` in `@openmarch/core`). For a Cut that isn't a
+  rectangle, its aspect is its template's trim box. Another public package
+  API change under D-6 (2026-10-16).
 - Item Placement, geometry and artwork slot rows are not cues, so
   `compileCues` doesn't read them; the 3D View and the notes list resolve
   them on their own.

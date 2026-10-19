@@ -72,6 +72,12 @@ export interface WindowStoredCues {
     phraseAssets?: readonly ShowPhraseAsset[];
     /** Where a marcher stands at a count's click, for positional ripple orders. */
     positionAt?: CompileInput["positionAt"];
+    /**
+     * The show's Library items and each section's usual equipment, with
+     * their aspects for the Silk aspect note (`view3d/library/cueAspects`).
+     */
+    libraryItems?: CompileInput["libraryItems"];
+    sections?: CompileInput["sections"];
 }
 
 /**
@@ -102,6 +108,8 @@ export function compileWindowCues(
         cues: stored.cues ?? [],
         phraseAssets: stored.phraseAssets,
         positionAt: stored.positionAt,
+        libraryItems: stored.libraryItems,
+        sections: stored.sections,
         showDefaults: { stepOffFoot },
     });
 }

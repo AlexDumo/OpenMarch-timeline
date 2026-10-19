@@ -655,6 +655,36 @@ describe("Silk aspect", () => {
         expect(out.flags).toEqual([]);
     });
 
+    it("uses the sizing code's same-aspect rule: within 0.5% is the same", () => {
+        const near = (id: string, aspect: number): CueLibraryItem => ({
+            id,
+            channel: "silk",
+            name: id,
+            aspect,
+        });
+        const WITHIN = "library:7f1c2a90-0000-4000-8000-00000000000a@1f2021";
+        const BEYOND = "library:7f1c2a90-0000-4000-8000-00000000000b@222324";
+        const out = compileCues(
+            show(
+                [cue(141, "silk", 4, WITHIN), cue(142, "silk", 16, BEYOND)],
+                [trumpet, flag],
+                {
+                    libraryItems: [
+                        ...items,
+                        near(WITHIN, (36 / 54) * 1.004),
+                        // 0.7%: past the sizing code's 0.5%, so fitted
+                        near(BEYOND, (36 / 54) * 1.007),
+                    ],
+                    equipmentFallback: { "color guard": SIX_FOOT },
+                },
+            ),
+        );
+
+        expect(out.notes).toEqual([
+            { kind: "silk_aspect", cueIds: [142], marcherIds: [2] },
+        ]);
+    });
+
     it("notes only the performers whose flag is of another Cut, from when Carry gives it", () => {
         const out = compileCues(
             silkShow([
