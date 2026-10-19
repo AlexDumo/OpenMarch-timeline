@@ -5,7 +5,11 @@ import { readTimelineTables } from "@/timeline/timelineRows";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { mapDbErrors, refuse } from "./timelineErrors";
-import { findTimelineByRange, type DatabaseTimeline } from "./timelines";
+import {
+    findTimelineByRange,
+    timelinesWithRange,
+    type DatabaseTimeline,
+} from "./timelines";
 import {
     createTimelineTransitionsInTransaction,
     deleteTimelineTransitionRowsInTransaction,
@@ -71,10 +75,11 @@ export const partlyOverlaps = (a: BeatRange, b: BeatRange): boolean =>
 const rangeText = ({ start, end }: BeatRange) => `[${start}, ${end})`;
 
 /** Each marcher's drill number ("T3"), for refusals. */
-const marcherLabels = async (
+export const marcherLabels = async (
     tx: DbTransaction,
     marcherIds: readonly number[],
 ): Promise<Map<number, string>> => {
+    if (marcherIds.length === 0) return new Map();
     const rows = await tx
         .select({
             id: schema.marchers.id,
@@ -85,6 +90,30 @@ const marcherLabels = async (
         .where(inArray(schema.marchers.id, [...marcherIds]))
         .all();
     return new Map(rows.map((r) => [r.id, `${r.prefix}${r.order}`]));
+};
+
+/**
+ * Marchers in an inheriting follow-the-leader transition, whose order R-12 may read from the slot
+ * indexes of their previous transition: compaction leaves those slots alone, and split won't
+ * peel them apart.
+ */
+export const marchersInInheritingFollowTheLeader = async (
+    tx: DbTransaction,
+): Promise<Set<number>> => {
+    const a = schema.timeline_assignments;
+    const t = schema.timeline_transitions;
+    const rows = await tx
+        .select({ marcher: a.marcher_id })
+        .from(a)
+        .innerJoin(t, eq(t.id, a.transition_id))
+        .where(
+            and(
+                eq(t.path_style, "follow_the_leader"),
+                eq(t.order_mode, "inherit"),
+            ),
+        )
+        .all();
+    return new Set(rows.map((r) => r.marcher));
 };
 
 /** The timelines each marcher has an assignment in, by marcher. */
@@ -223,11 +252,18 @@ export const addMarchersToTimelineInTransaction = async ({
     range,
     marcherIds,
     passThrough = false,
+    into,
 }: {
     tx: DbTransaction;
     range: BeatRange;
     marcherIds: readonly number[];
     passThrough?: boolean;
+    /**
+     * UI-25: the stored timeline over `range` to add to, when several share it (a move split off
+     * a page's timeline that is selected). Ignored unless it exists with exactly `range`; the
+     * oldest over the range (the page's) is used otherwise.
+     */
+    into?: number;
 }): Promise<AddMarchersToTimelineResult> => {
     const { start, end } = range;
     if (
@@ -250,7 +286,12 @@ export const addMarchersToTimelineInTransaction = async ({
     // Past the show's end, the counts the move lands on are stored first (endless counts)
     await ensureCountsInTransaction({ tx, through: end });
 
-    const existing = await findTimelineByRange(tx, range);
+    const existing =
+        (into === undefined
+            ? undefined
+            : (await timelinesWithRange(tx, range)).find(
+                  (t) => t.id === into,
+              )) ?? (await findTimelineByRange(tx, range));
     const timelinesOf = await timelinesOfMarchers(tx, ids);
     // In any timeline over exactly this range: a file from before C-12 may hold two, and a
     // marcher in the newer one is in this timeline too (one transition per marcher per range)
@@ -435,32 +476,9 @@ export const removeAssignmentRowsInTransaction = async ({
     // Marchers in an inheriting follow-the-leader transition, whose order R-12 may read from the
     // slot indexes of their previous transition. The set may include the removed marchers; that
     // is harmless, because it is only checked against the rows that remain.
-    const ftlMarchers = new Set<number>();
-    if (compact) {
-        const ftlInherit = await tx
-            .select({ id: t.id })
-            .from(t)
-            .where(
-                and(
-                    eq(t.path_style, "follow_the_leader"),
-                    eq(t.order_mode, "inherit"),
-                ),
-            )
-            .all();
-        if (ftlInherit.length > 0) {
-            const ftlRows = await tx
-                .select({ marcher: a.marcher_id })
-                .from(a)
-                .where(
-                    inArray(
-                        a.transition_id,
-                        ftlInherit.map((r) => r.id),
-                    ),
-                )
-                .all();
-            for (const r of ftlRows) ftlMarchers.add(r.marcher);
-        }
-    }
+    const ftlMarchers = compact
+        ? await marchersInInheritingFollowTheLeader(tx)
+        : new Set<number>();
 
     await mapDbErrors(async () => {
         await tx.delete(a).where(

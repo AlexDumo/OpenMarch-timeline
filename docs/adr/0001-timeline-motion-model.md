@@ -142,7 +142,8 @@ timeline); selecting a timeline replaces selecting a page, and nothing reads a
 selected page. Rules on stored data, enforced by the write functions
 (`E-ARGS`), not by the database:
 
-- At most one timeline has a given range.
+- At most one timeline has a given range. (Relaxed on 2026-10-16: a move split off another keeps
+  its range; see the amendment below.)
 - A marcher has at most one transition in a timeline when UI-9 makes it; a
   marcher added to a timeline gets its own one-slot shapeless `direct`
   transition spanning it.
@@ -204,6 +205,41 @@ file and be told apart from a move that happens to go nowhere, so it is stored:
   spot as an ordinary move that goes nowhere.
 
 The study is `docs/timeline/research/defined-coordinates/10-keep-later-pages-study.md`.
+
+**Amendment (2026-10-16, project owner): a range may hold several moves.** A designer can pull
+some marchers out of a move (a page's timeline, say) into a move of their own, edit it apart, and
+merge it back. So the first rule above is relaxed:
+
+- Several stored timelines may have the same range. **Split** (`splitMarchersIntoNewMove`) makes
+  one, by sharing the range of the move it splits. A resize or a clip move may also land on
+  another move's exact counts when the two share no marcher (project owner, 2026-10-18; L-4
+  refuses only one marcher's two moves over the same counts), unless it is older than the page's
+  own move there, which it would take over as the oldest (`pageMoveTakenOver`; the stored mark
+  below removes the case). Creating a timeline still refuses a
+  shared range (`createTimelinesInTransaction`).
+- A page box stands for the **oldest** timeline (lowest id) with exactly its range, as
+  `findTimelineByRange` already returned (the next amendment replaces this inference with a
+  stored mark). Every other timeline over it is a move: it has a name
+  ("Move N") and a clip. A page flag drag moves timelines that already shared a range together.
+  An edit that empties the page's timeline keeps its row while another timeline shares its range,
+  so a split move never becomes the page's by accident.
+- A marcher is still in at most one of the timelines over one range: split and merge move whole
+  transitions (or peel a slot of a shared shapeless one into its own one-slot transition), and
+  merge refuses a marcher in both.
+- Neither edit changes motion: a timeline has no effect on resolution (R-1). The exception is a
+  merge of moves with different counts, which first fits the merged move to the target's counts
+  (project owner, 2026-10-18), re-timing it as a resize would. There is no schema,
+  file-format or change-log change; the rows that move are `timeline_transitions.timeline_id`,
+  plus, for a peeled slot, an assignment and a one-slot transition with the slot's destination.
+  Under the layer amendment below, a split move is not a page's move, so it ranks above page
+  moves (spec §6.2, L-1). Where a marcher's split-off row also overlaps a move of theirs that
+  started earlier and isn't a page's, the derived ranking can then change who plays there. The
+  project owner accepted that (2026-10-18): a split move ranks like any other move, and the split
+  toast names the marchers whose motion changes and from which count. Once pages carry the stored
+  mark, deleting a page's move leaves a split move over its counts a move (a clip), and the page
+  has no move of its own until marchers are added to it (owner, 2026-10-18).
+
+The interaction is UI-25 in `docs/timeline/ui.md`.
 
 **Amendment (2026-10-16, project owner): layers are derived, and a page's move is marked.** Each
 edit used to choose layers its own way, and the inspector let a designer type one. Now:

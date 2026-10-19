@@ -85,7 +85,7 @@ The split move now covers counts 5 to 13. It isn't a page's move, so it wins ove
 ### 2. Grow a move past the next page
 
 The split move's end goes from 16 to 18. It wins counts 16 to 18 over Page 3's move, which then
-picks the marchers up and catches up (the owner's V-290 decision). Both rules agree.
+picks the marchers up and catches up (the owner's V-340 decision). Both rules agree.
 
 ![Case 2, rule B](images/case2-B.gif)
 

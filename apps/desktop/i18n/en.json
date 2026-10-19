@@ -117,7 +117,9 @@
             "playPause": "Play / pause audio",
             "previousPage": "Previous page (timeline)",
             "tapBeats": "Add {count} temporary beats",
-            "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again"
+            "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again",
+            "splitSelectedIntoNewMove": "Split selected marchers into a new move",
+            "mergeMoveIntoPage": "Merge this move into its page"
         },
         "ui": {
             "exitTimelineFocus": "Done editing timeline",
@@ -2024,6 +2026,28 @@
             "deleteWithMoves": "Delete page and its moves",
             "followAgain": "Let selected marchers follow again",
             "keepHere": "Keep selected marchers here"
+        },
+        "split": {
+            "menu": "Split {count} selected into new move",
+            "menuNone": "Split selected into new move",
+            "drag": "Split {count, plural, one {# marcher} other {# marchers}}",
+            "done": "Split {count, plural, one {# marcher} other {# marchers}} into {label}",
+            "paused": "Pause to split or merge moves.",
+            "nothingOnPage": "Nothing moves on this page yet, so there is nothing to split."
+        },
+        "merge": {
+            "menuPair": "Merge {source} into {target}",
+            "menuPairFit": "Merge {source} into {target} · fit to its counts",
+            "menuInto": "Merge into {target}",
+            "menuIntoFit": "Merge into {target} · fit to its counts",
+            "done": "Merged {source} into {target}",
+            "page": "Page {name}",
+            "thisPage": "this page",
+            "thisPageStart": "This page",
+            "thisMove": "this move",
+            "pickTwo": "Pick two moves to merge.",
+            "inBoth": "{count, plural, one {A marcher is} other {# marchers are}} in both moves, so merging would give them two moves at once.",
+            "noPageMove": "{page} has no move of its own to merge into."
         },
         "appendCounts": {
             "label": "{counts, plural, one {# count} other {# counts}}",

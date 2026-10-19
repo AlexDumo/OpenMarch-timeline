@@ -21,6 +21,9 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { db } from "@/global/database/db";
 import {
     displayedBeat,
+    isolatedTimeline,
+    resolveStoredTimeline,
+    selectedStoredTimeline,
     selectionIsRange,
     useTimelineSelectionStore,
     type TimelineEditSelection,
@@ -61,7 +64,11 @@ import {
     peaksByBeat,
     useAudioEnvelopeStore,
 } from "@/timeline/timelineWaveform";
-import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
+import {
+    createTimelineBeatAxis,
+    isPageTimeline,
+    pageTimelineIds,
+} from "@/timeline/timelineViewModel";
 import {
     useMusicEndSeconds,
     usePlaybackStopBeat,
@@ -74,6 +81,7 @@ import {
     useTimelineCommands,
 } from "./useTimelineCommands";
 import { useTimelineClipResize } from "./useTimelineClipResize";
+import { useSplitMergeActions, useSplitMergeMoves } from "./useSplitMergeMoves";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
 import { useLabeledHoldMarks } from "./PageHoldMark";
@@ -148,6 +156,10 @@ const COMPACT_BUTTON = <TimelineCompactButton />;
 export const toTimelineSelection = (
     selection: TimelineEditSelection,
     startBeat?: number,
+    /** UI-25: the stored timeline the window resolves to, and whether it is a move's clip */
+    resolved?: { readonly id: number; readonly onClip: boolean } | null,
+    /** UI-25: a second move selected beside it (Shift+click) */
+    pairedTimelineId: number | null = null,
 ): TimelineSelection =>
     selection.kind === "range"
         ? {
@@ -156,6 +168,9 @@ export const toTimelineSelection = (
                   startBeatIndex: selection.start,
                   endBeatIndex: selection.end,
               },
+              ...(resolved ? { timelineId: resolved.id } : {}),
+              ...(resolved?.onClip ? { onClip: true } : {}),
+              ...(pairedTimelineId !== null ? { pairedTimelineId } : {}),
               // UI-10: with P on or before S the window falls back, but the flag stays where it is
               ...(startBeat !== undefined && startBeat !== selection.start
                   ? { startFlagBeatIndex: startBeat }
@@ -290,11 +305,20 @@ export default function TimelineModePanel() {
         timelines,
         selectedMarcherIds,
     });
+    // UI-25: a move can be split, and moves merged (not in Basic, which gets no clips)
+    const splitMerge = useSplitMergeMoves({
+        database: db,
+        selectedMarcherIds,
+        isPlaying,
+        pages,
+    });
+    useSplitMergeActions(splitMerge, !basic, selectedMarcherIds, isPlaying);
     // UI-14: a clip is a move; it can be edited, renamed and deleted
     const moves = useMoveCommands(db);
     const moveCommands = useMemo(
         () => ({
             disabledReason: moveCommandBlocker(isPlaying),
+            extraFor: splitMerge.moveExtraFor,
             onEdit: (id: number) => {
                 if (!isPlaying) moves.editMove(id);
             },
@@ -304,7 +328,7 @@ export default function TimelineModePanel() {
                 if (!isPlaying) void moves.deleteMove(id);
             },
         }),
-        [isPlaying, moves],
+        [isPlaying, moves, splitMerge],
     );
     const clipResize = useTimelineClipResize({ database: db, timelines });
     const queryClient = useQueryClient();
@@ -409,16 +433,39 @@ export default function TimelineModePanel() {
         }
         if (isPlaying) return;
         const store = useTimelineSelectionStore.getState();
+        // UI-25: Shift+click on another move's clip selects it beside the window's, for **Merge
+        // moves**; the window stays
+        if (
+            next?.kind === "range" &&
+            next.extend &&
+            next.timelineId !== undefined
+        ) {
+            const current = selectedStoredTimeline(store);
+            if (
+                store.isolation === null &&
+                current &&
+                current.id !== next.timelineId
+            ) {
+                store.pairTimeline(
+                    store.pairedTimelineId === next.timelineId
+                        ? null
+                        : next.timelineId,
+                );
+                return;
+            }
+        }
         if (next?.kind === "home") store.selectHome();
         else if (next?.kind === "range") {
             const { startBeatIndex: start, endBeatIndex: end } = next.range;
-            store.selectRange(start, end);
+            store.selectRange(start, end, next.timelineId);
             // UI-17: a drawn range (Ctrl+drag) is the loop, and turns looping on, as dragging
             // Logic's cycle bar does; a page box or Shift+click takes a loop that is on to the
-            // pages selected. A dragged start flag only moves the edit window
-            const pageBox = store.pageBoxes.some(
-                (b) => b.start === start && b.end === end,
-            );
+            // pages selected. A dragged start flag only moves the edit window. A clip click
+            // carries its move, and a move split off a page keeps the page's range but is still
+            // a clip, not the page box (UI-25)
+            const pageBox =
+                next.timelineId === undefined &&
+                store.pageBoxes.some((b) => b.start === start && b.end === end);
             if (
                 store.isolation === null &&
                 (next.drawn ||
@@ -439,6 +486,7 @@ export default function TimelineModePanel() {
                 windowBeforeClick.current = s.isolation?.restore ?? {
                     startBeat: s.startBeat,
                     playheadBeat: s.playheadBeat,
+                    windowTimelineId: s.windowTimelineId,
                 };
             }}
         >
@@ -470,15 +518,23 @@ export default function TimelineModePanel() {
                     onOpenRange={
                         basic
                             ? undefined
-                            : (range) => {
+                            : (range, timelineId) => {
                                   if (isPlaying) return;
                                   const store =
                                       useTimelineSelectionStore.getState();
-                                  const timeline = store.storedTimelines?.find(
-                                      (t) =>
-                                          t.start === range.startBeatIndex &&
-                                          t.end === range.endBeatIndex,
-                                  );
+                                  // UI-25: a clip's own move; a page box's is the oldest there
+                                  const timeline =
+                                      store.storedTimelines?.find(
+                                          (t) => t.id === timelineId,
+                                      ) ??
+                                      resolveStoredTimeline(
+                                          {
+                                              kind: "range",
+                                              start: range.startBeatIndex,
+                                              end: range.endBeatIndex,
+                                          },
+                                          store.storedTimelines,
+                                      );
                                   if (timeline)
                                       store.isolate(
                                           timeline.id,
@@ -492,6 +548,8 @@ export default function TimelineModePanel() {
                               }
                     }
                     moveCommands={basic ? undefined : moveCommands}
+                    clipPeel={basic ? undefined : splitMerge.clipPeel}
+                    pageMenuExtra={basic ? undefined : splitMerge.pageMenuExtra}
                     pageFlagMove={pageFlagMove}
                     appendCounts={appendCounts}
                     countGrid={countGrid}
@@ -579,9 +637,30 @@ export function PlayingTimeline({
             }),
         [],
     );
+    // UI-25: which of the moves sharing the window's range it stands for
+    const resolvedId = useTimelineSelectionStore(
+        (s) => s.isolation?.timelineId ?? selectedStoredTimeline(s)?.id ?? null,
+    );
+    const pairedId = useTimelineSelectionStore((s) => s.pairedTimelineId);
+    const resolvedOnClip = useTimelineSelectionStore((s) => {
+        const t = s.isolation ? isolatedTimeline(s) : selectedStoredTimeline(s);
+        return (
+            t !== null &&
+            !isPageTimeline(t, s.storedTimelines ?? [], s.pageBoxes) &&
+            s.pageBoxes.some((b) => b.start === t.start && b.end === t.end)
+        );
+    });
     const selection = useMemo(
-        () => toTimelineSelection(editSelection, startBeat),
-        [editSelection, startBeat],
+        () =>
+            toTimelineSelection(
+                editSelection,
+                startBeat,
+                resolvedId === null
+                    ? null
+                    : { id: resolvedId, onClip: resolvedOnClip },
+                pairedId,
+            ),
+        [editSelection, startBeat, resolvedId, resolvedOnClip, pairedId],
     );
     // UI-12: the paused clock reads the beat the timeline shows, not the selected page's end
     const shownBeat = useTimelineSelectionStore(displayedBeat);
@@ -899,17 +978,36 @@ export function useHeldWhileStale<T>(value: T, current: boolean): T {
  * The timelines that don't match a page box (UI-10, project owner, 2026-10-03). A page box
  * already stands for the stored timeline with exactly its range: clicking it sets the start flag
  * and playhead to its edges, so a clip under it would only repeat it. Timelines that start or end
- * off a flag (a mid-page arrival, a pinned start flag) keep their clips. Ranges are spec beats.
+ * off a flag (a mid-page arrival) keep their clips, and so does a move split
+ * off a page's timeline (UI-25): the box stands for the oldest over its range. Ranges are spec
+ * beats.
  */
 export function timelinesOffPages<
-    T extends Pick<TimelineInput, "startBeatIndex" | "endBeatIndex">,
+    T extends Pick<TimelineInput, "startBeatIndex" | "endBeatIndex" | "linkId">,
 >(timelines: readonly T[], pages: readonly FlagPage[]): T[] {
-    const boxes = new Set(
-        pageFlags(pages).flatMap((f) =>
-            f.range ? [`${f.range.start}:${f.range.end}`] : [],
-        ),
+    const boxes = pageFlags(pages).flatMap((f) =>
+        f.range ? [{ start: f.range.start, end: f.range.end }] : [],
     );
+    // UI-25: only the page's own timeline (the oldest over the box) hides under it; a move split
+    // off it keeps the range and its clip
+    const pages_ = pageTimelineIds(
+        timelines.flatMap((t) =>
+            t.linkId === undefined
+                ? []
+                : [
+                      {
+                          id: Number(t.linkId),
+                          start: t.startBeatIndex,
+                          end: t.endBeatIndex,
+                      },
+                  ],
+        ),
+        boxes,
+    );
+    const onBox = new Set(boxes.map((b) => `${b.start}:${b.end}`));
     return timelines.filter(
-        (t) => !boxes.has(`${t.startBeatIndex}:${t.endBeatIndex}`),
+        (t) =>
+            !onBox.has(`${t.startBeatIndex}:${t.endBeatIndex}`) ||
+            (t.linkId !== undefined && !pages_.has(Number(t.linkId))),
     );
 }

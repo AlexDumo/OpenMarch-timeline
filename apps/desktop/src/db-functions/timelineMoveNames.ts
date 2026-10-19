@@ -8,6 +8,7 @@ import type { DbConnection, DbTransaction } from "./types";
 import { readPageGrid } from "./timelineRipple";
 import {
     createTimelinesInTransaction,
+    timelinesWithRange,
     type DatabaseTimeline,
 } from "./timelines";
 
@@ -29,6 +30,35 @@ export const readPageBoxes = async (
         (f) => (f.range ? [{ start: f.range.start, end: f.range.end }] : []),
     );
 };
+
+/**
+ * The page's own timeline that timeline `timelineId` would take over by landing on exactly `range`
+ * (a resize or a clip move), or `undefined`. A page box stands for the oldest timeline over it
+ * (UI-25), so an older move landing there would become the page's move and turn the page's real
+ * one into a clip. Until the stored page-move mark (ADR 0001, 2026-10-16) replaces that inference,
+ * such a landing is refused. A box with no stored timeline is fine: the move becomes its page's
+ * move (resize-move E9).
+ */
+export const pageMoveTakenOver = async (
+    db: DbTransaction,
+    timelineId: number,
+    range: { start: number; end: number },
+): Promise<DatabaseTimeline | undefined> => {
+    if (
+        !(await readPageBoxes(db)).some(
+            (b) => b.start === range.start && b.end === range.end,
+        )
+    )
+        return undefined;
+    const page = (await timelinesWithRange(db, range)).find(
+        (t) => t.id !== timelineId,
+    );
+    return page && timelineId < page.id ? page : undefined;
+};
+
+/** Says why `pageMoveTakenOver` refuses a landing. */
+export const PAGE_TAKEOVER_REFUSAL =
+    "Landing on exactly this page's counts would make this move the page's own move. Merge it into the page instead.";
 
 /**
  * What a refusal needs to name a moment or a move in pages and counts (`beatWhere`, `moveName` in
