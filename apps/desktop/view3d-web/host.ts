@@ -133,6 +133,11 @@ class WebHost {
     readonly api: Window["view3d"] = {
         isMacOS: false,
         sqlRead: async (sql, params, method) => this.read(sql, params, method),
+        // One synchronous pass over one connection: already a snapshot, never busy
+        sqlReadBatch: async (queries) => ({
+            busy: false,
+            results: queries.map((q) => this.read(q.sql, q.params, q.method)),
+        }),
         hello: () => this.publish(),
         on: (channel, callback) => {
             const set = this.listeners.get(channel) ?? new Set();

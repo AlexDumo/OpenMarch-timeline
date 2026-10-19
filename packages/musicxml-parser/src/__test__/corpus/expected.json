@@ -1,0 +1,355 @@
+{
+    "cogliati-score-similarity/dataset/C-16.mxl": {
+        "order": "1 2 3 4",
+        "counts": "4 4 4 4",
+        "seconds": 8,
+        "warnings": ["no-tempo"]
+    },
+    "cogliati-score-similarity/dataset/F-13.mxl": {
+        "order": "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 30,
+        "warnings": []
+    },
+    "cogliati-score-similarity/dataset/F-7.mxl": {
+        "order": "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 34,
+        "warnings": []
+    },
+    "cogliati-score-similarity/dataset/M-2.mxl": {
+        "order": "1 2 3 4 5 6 7 8 9",
+        "counts": "4 4 4 4 4 4 4 4 4",
+        "seconds": 33.231,
+        "warnings": []
+    },
+    "flatio-embed-examples/external-audio/example.xml": {
+        "order": "1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7 8 9",
+        "counts": "2 4 4 4 4 4 4 4 2 2 4 4 4 4 4 4 4 2",
+        "seconds": 24,
+        "warnings": ["completes-pickup", "pickup-rounded", "repeat-played"]
+    },
+    "napulen-effects-of-translation/lilypond_to_musicxml/BWV-510.xml": {
+        "order": "1 2 3",
+        "counts": "8 4 2",
+        "seconds": 7,
+        "warnings": ["fermata", "long-measure", "no-tempo", "short-measure"]
+    },
+    "napulen-effects-of-translation/lilypond_to_musicxml/O_Haupt_voll_Blut.xml": {
+        "order": "",
+        "counts": "",
+        "seconds": 0,
+        "warnings": []
+    },
+    "napulen-effects-of-translation/mei_to_musicxml/Bach_Herzliebster_Jesu.xml": {
+        "order": "0 1 2 3 4 5 6 7 8 9 10 11",
+        "counts": "1 4 4 4 4 4 4 4 4 4 4 3",
+        "seconds": 22,
+        "warnings": ["completes-pickup", "fermata", "no-tempo", "pickup"]
+    },
+    "napulen-effects-of-translation/mei_to_musicxml/Bach_Wie_bist_du_Seele.xml": {
+        "order": "0 1 2 3 4 5 6 7 8 9 10 11",
+        "counts": "1 4 4 4 4 4 4 4 4 4 4 3",
+        "seconds": 22,
+        "warnings": ["completes-pickup", "fermata", "no-tempo", "pickup"]
+    },
+    "pdmx/8/40/QmQrQQbJKA4iZNPGeJdBKrRWvWRByVbetay59qyvBQyWFR.mxl": {
+        "order": "0 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47",
+        "counts": "4 4 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8",
+        "seconds": 140.488,
+        "warnings": ["fermata", "measure-numbers"]
+    },
+    "pdmx/8/55/QmQYvmoYxcKme1tMkkEbyFs4kc3DDe7ZWJuBxW84hv8RXJ.mxl": {
+        "order": "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33",
+        "counts": "4 4 4 4 4 4 4 4 4 2 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 137.846,
+        "warnings": ["fermata"]
+    },
+    "sacred-harp/lib/books/denson/410t.xml": {
+        "order": "1 2 3 4 5 6 7 8 9",
+        "counts": "3 3 3 3 3 3 3 3 3",
+        "seconds": 27,
+        "warnings": ["no-tempo"]
+    },
+    "sacred-harp/lib/books/denson/535.xml": {
+        "order": "1 2 3 4 5 6 7 8 9 10 11 12 13",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 26,
+        "warnings": ["no-tempo"]
+    },
+    "scorewriter-comparison/Dorico/FermataTest/FermataTest Dorico 5.musicxml": {
+        "order": "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 64,
+        "warnings": ["no-tempo"]
+    },
+    "scorewriter-comparison/Dorico/RepeatsTest/RepeatsTest Dorico 5.musicxml": {
+        "order": "1 2 1 2 3 4 4 5 6 5 7 10 5 11 1 2 3 4 5 11 12 1 2 3 4 5 11 12 13 1 2 3 4 5 11 12 13 14 18 19",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 80,
+        "warnings": [
+            "jump-played",
+            "navigation-from-words",
+            "no-tempo",
+            "repeat-played"
+        ]
+    },
+    "scorewriter-comparison/Dorico/TimeSignaturesTest/TimeSignaturesTest Dorico 5.musicxml": {
+        "order": "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31",
+        "counts": "4 2 2 2 2 2 2 2 2 2 3 6 11 22 43 86 171 334 4 2 4 4 5 4 2 2 2 2 2 2 3",
+        "seconds": 276.367,
+        "warnings": [
+            "assumed-grouping",
+            "long-measure",
+            "no-tempo",
+            "unknown-meter"
+        ]
+    },
+    "scorewriter-comparison/Finale/RepeatsTest/RepeatsTest Finale.musicxml": {
+        "order": "1 2 3 1 2 3 4 5 5 6 7 6 8 11 6 12 1 2 3 4 5 6 12 13 1 2 3 4 5 6 12 13 14 19 20 21 19 20 21",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 78,
+        "warnings": ["jump-played", "navigation-from-words", "repeat-played"]
+    },
+    "scorewriter-comparison/Finale/TimeSignaturesTest/TimeSignaturesTest Finale.musicxml": {
+        "order": "1 2 3 4 5 6 7 8",
+        "counts": "4 100 1 6 3 2 4 2",
+        "seconds": 63.188,
+        "warnings": ["short-measure-rounded", "unknown-meter"]
+    },
+    "scorewriter-comparison/MuseScore/RepeatsTest/RepeatsTest MuseScore 4.1.musicxml": {
+        "order": "1 2 1 2 3 4 4 5 6 5 7 10 5 11 1 2 3 4 5 11 12 1 2 3 4 5 11 12 13",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 58,
+        "warnings": ["jump-played", "no-tempo", "repeat-played"]
+    },
+    "scorewriter-comparison/MuseScore/TimeSignaturesTest/TimeSignaturesTest MuseScore 4.1.musicxml": {
+        "order": "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23",
+        "counts": "2 3 4 5 6 1 2 2 2 3 3 4 4 2 2 3 4 2 3 2 2 342 2048",
+        "seconds": 1096.063,
+        "warnings": ["assumed-grouping", "no-tempo"]
+    },
+    "scorewriter-comparison/Sibelius/RepeatsTest/RepeatsTest Sibelius Plug-in.musicxml": {
+        "order": "1 2 1 2 3 4 4 5 6 5 X1 X4 5 X5 X6 1 2 3 4 5 X5 X6 X7 1 2 3 4 5 X5 X6 X7 X8 X15 X16 X17 X18",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 72,
+        "warnings": [
+            "jump-played",
+            "measure-numbers",
+            "navigation-from-words",
+            "no-tempo",
+            "repeat-played"
+        ]
+    },
+    "scorewriter-comparison/Sibelius/RepeatsTest/RepeatsTest Sibelius native.musicxml": {
+        "order": "1 2 1 2 3 4 4 5 6 5 7 10 5 11 12 1 2 3 4 5 11 12 13 1 2 3 4 5 11 12 13 14 15 16 17",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 70,
+        "warnings": [
+            "jump-played",
+            "missing-coda",
+            "missing-segno",
+            "navigation-from-words",
+            "no-tempo",
+            "repeat-played"
+        ]
+    },
+    "scorewriter-comparison/Sibelius/TimeSignaturesTest/TimeSignaturesTest Sibelius Plug-in.musicxml": {
+        "order": "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17",
+        "counts": "2 2 2 3 3 1 4 4 5 2 6 2 3 3 4 126 1",
+        "seconds": 92.531,
+        "warnings": ["assumed-grouping", "no-tempo"]
+    },
+    "scorewriter-comparison/Sibelius/TimeSignaturesTest/TimeSignaturesTest Sibelius native.musicxml": {
+        "order": "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17",
+        "counts": "2 2 2 3 3 1 4 4 5 2 6 2 3 3 4 126 1",
+        "seconds": 92.531,
+        "warnings": ["assumed-grouping", "no-tempo"]
+    },
+    "syntaxblitz-noteflight/portfolio/music-xml/11.xml": {
+        "order": "1 2 3 4",
+        "counts": "4 4 4 4",
+        "seconds": 8,
+        "warnings": []
+    },
+    "syntaxblitz-noteflight/portfolio/music-xml/39.xml": {
+        "order": "1 2 3 4",
+        "counts": "4 4 4 4",
+        "seconds": 8,
+        "warnings": []
+    },
+    "w3c-musicxmlTestSuite/02a-Rests-Durations.musicxml": {
+        "order": "1 2 3 4 5 6",
+        "counts": "2 2 2 2 3 3",
+        "seconds": 14,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/02d-Rests-Multimeasure-TimeSignatures.musicxml": {
+        "order": "1 2 3 4 5 6 7 8 9 10",
+        "counts": "4 4 3 3 3 2 2 4 4 4",
+        "seconds": 16.5,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/03a-Rhythm-Durations.musicxml": {
+        "order": "1 2 3 4 5 6",
+        "counts": "16 16 24 24 28 28",
+        "seconds": 136,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/03c-Rhythm-DivisionChange.musicxml": {
+        "order": "1 2",
+        "counts": "4 4",
+        "seconds": 4,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/03e-Rhythm-No-Divisions.musicxml": {
+        "order": "1",
+        "counts": "4",
+        "seconds": 2,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/11a-TimeSignatures.musicxml": {
+        "order": "1 2 3 4 5 6 7 8 9 10 11",
+        "counts": "2 4 2 3 2 3 4 5 1 2 4",
+        "seconds": 21.25,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/11c-TimeSignatures-CompoundSimple.musicxml": {
+        "order": "1 2",
+        "counts": "2 9",
+        "seconds": 5.75,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/11e-TimeSignatures-CompoundMixed.musicxml": {
+        "order": "1",
+        "counts": "5",
+        "seconds": 2.75,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/11f-TimeSignatures-SymbolMeaning.musicxml": {
+        "order": "1 3",
+        "counts": "1 3",
+        "seconds": 2,
+        "warnings": ["measure-numbers", "no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/11h-TimeSignatures-SenzaMisura.musicxml": {
+        "order": "1 2 3 4",
+        "counts": "2 3 2 3",
+        "seconds": 5,
+        "warnings": ["no-tempo", "unknown-meter"]
+    },
+    "w3c-musicxmlTestSuite/31c-MetronomeMarks.musicxml": {
+        "order": "1 2 3",
+        "counts": "4 4 4",
+        "seconds": 9.616,
+        "warnings": ["metric-modulation"]
+    },
+    "w3c-musicxmlTestSuite/41b-MultiParts-MoreThan10.musicxml": {
+        "order": "1",
+        "counts": "4",
+        "seconds": 2,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/43j-MultiStaff-TimeSignatureAfterBackup.musicxml": {
+        "order": "1",
+        "counts": "3",
+        "seconds": 1.5,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/45a-SimpleRepeat.musicxml": {
+        "order": "1 1 1 1 1 2",
+        "counts": "4 4 4 4 4 4",
+        "seconds": 12,
+        "warnings": ["no-tempo", "repeat-played"]
+    },
+    "w3c-musicxmlTestSuite/45b-RepeatWithAlternatives.musicxml": {
+        "order": "1 2 1 3 4",
+        "counts": "4 4 4 4 4",
+        "seconds": 10,
+        "warnings": ["no-tempo", "repeat-played"]
+    },
+    "w3c-musicxmlTestSuite/45c-RepeatMultipleTimes.musicxml": {
+        "order": "1 2 3 2 3 2 3 2 3 2 3 4 5 6 7 4 5 6 7 4 5 6 7 8",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 48,
+        "warnings": ["no-tempo", "repeat-played"]
+    },
+    "w3c-musicxmlTestSuite/45d-Repeats-MultipleEndings.musicxml": {
+        "order": "1 2 1 3 4 5 1 6 7 8 9 1 10 1 6 7 8 9 1 10 1 6 7 8 9 1 11 12",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 56,
+        "warnings": ["no-tempo", "repeat-played"]
+    },
+    "w3c-musicxmlTestSuite/45e-Repeats-Combination.musicxml": {
+        "order": "1 2 1 3 4 5 5 6 7 6 8 9 8 9 10",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 30,
+        "warnings": ["no-tempo", "repeat-played"]
+    },
+    "w3c-musicxmlTestSuite/45f-Repeats-InvalidEndings.musicxml": {
+        "order": "1 2 3 4 4 5 6 7 8 8 9 10 11 12 13 14",
+        "counts": "4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4",
+        "seconds": 32,
+        "warnings": ["no-tempo", "repeat-played", "unreachable-ending"]
+    },
+    "w3c-musicxmlTestSuite/45g-Repeats-NotEnded.musicxml": {
+        "order": "1 2",
+        "counts": "4 4",
+        "seconds": 4,
+        "warnings": ["no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/45i-Repeats-Nested.musicxml": {
+        "order": "1 2 3 3 4 1 5 5 6 7",
+        "counts": "4 4 4 4 4 4 4 4 4 4",
+        "seconds": 20,
+        "warnings": ["no-tempo", "repeat-played"]
+    },
+    "w3c-musicxmlTestSuite/45j-SimpleRepeat-Start.musicxml": {
+        "order": "1 1 2",
+        "counts": "4 4 4",
+        "seconds": 6,
+        "warnings": ["no-tempo", "repeat-played"]
+    },
+    "w3c-musicxmlTestSuite/46b-MidmeasureBarline.musicxml": {
+        "order": "1",
+        "counts": "4",
+        "seconds": 2,
+        "warnings": ["no-tempo", "no-time-signature"]
+    },
+    "w3c-musicxmlTestSuite/46d-PickupMeasure-ImplicitMeasures.musicxml": {
+        "order": "0 1 X1 2",
+        "counts": "2 2 2 3",
+        "seconds": 4.5,
+        "warnings": [
+            "measure-numbers",
+            "no-tempo",
+            "pickup",
+            "pickup-rounded",
+            "short-measure"
+        ]
+    },
+    "w3c-musicxmlTestSuite/46f-IncompleteMeasures.musicxml": {
+        "order": "1 2 3 4",
+        "counts": "2 4 2 4",
+        "seconds": 6,
+        "warnings": ["completes-pickup", "no-tempo", "pickup"]
+    },
+    "w3c-musicxmlTestSuite/46i-OverfullMeasures.musicxml": {
+        "order": "1 2 3 4",
+        "counts": "5 4 5 4",
+        "seconds": 9,
+        "warnings": ["long-measure", "no-tempo"]
+    },
+    "w3c-musicxmlTestSuite/51c-MultipleMetadata.musicxml": {
+        "order": "1",
+        "counts": "4",
+        "seconds": 2,
+        "warnings": ["no-tempo", "no-time-signature"]
+    },
+    "w3c-musicxmlTestSuite/90a-Compressed-MusicXML.mxl": {
+        "order": "1",
+        "counts": "2",
+        "seconds": 2,
+        "warnings": ["no-tempo"]
+    }
+}

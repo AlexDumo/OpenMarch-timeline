@@ -1,4 +1,4 @@
-import type { Vector3Tuple } from "three";
+import type { Light, Vector3Tuple } from "three";
 import type { LightingPreset } from "../types";
 import { ft } from "./units";
 
@@ -159,3 +159,15 @@ export function lightingValues(preset: LightingPreset): LightingValues {
 }
 
 export const LIGHTING_PRESET_IDS = Object.keys(LIGHTING) as LightingPreset[];
+
+/**
+ * Sets a light's intensity and hides the light while it is 0. three.js shades
+ * every visible light for every pixel, whatever its intensity, so a light
+ * that is off but still visible costs as much as a lit one: by day the four
+ * unlit pole spots took a third of the frame's GPU time. Turning a light on
+ * or off changes the light count, so the scene's shaders recompile once.
+ */
+export function setLightIntensity(light: Light, intensity: number): void {
+    light.intensity = intensity;
+    light.visible = intensity > 0;
+}
