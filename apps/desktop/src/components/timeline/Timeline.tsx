@@ -26,7 +26,7 @@ import {
     CollapsedTimeline,
     ExpandedTimeline,
 } from "./TimelineVariants";
-import type { LabeledHoldMarks } from "./PageHoldMark";
+import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
 import type { PageKeepChains } from "./PageKeepChain";
 import type {
     TimelineAddMarchersMenu,
@@ -216,8 +216,8 @@ export interface TimelineProps {
      * range in spec beats (a clip's stored range).
      */
     readonly onOpenRange?: (range: TimelineBeatRange) => void;
-    /** Where the selected marchers hold, by page id (UI-18); none without a selection */
-    readonly holdMarks?: LabeledHoldMarks;
+    /** #303: where the selected marchers are Set, spec beats; none without a selection */
+    readonly keyframes?: readonly SelectionKeyframe[];
     /** The chains on the page boxes (UI-18 keep later pages), by page id; none without a selection */
     readonly keepChains?: PageKeepChains;
     /** The page box menu's **Keep selected marchers here** and **Let selected marchers follow again** */
@@ -747,6 +747,16 @@ export function Timeline(props: TimelineProps) {
             ? (viewBeat: number) => onRemoveBasicPoint(axis.toSpec(viewBeat))
             : undefined,
     );
+    // #303: the selection's keyframes on the view axis
+    const { keyframes } = props;
+    const viewKeyframes = useMemo(
+        () =>
+            keyframes?.map((keyframe) => ({
+                ...keyframe,
+                beat: axis.toView(keyframe.beat),
+            })),
+        [axis, keyframes],
+    );
     const commonProps = {
         model,
         positionBeat,
@@ -784,7 +794,7 @@ export function Timeline(props: TimelineProps) {
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,
-        holdMarks: props.holdMarks,
+        keyframes: viewKeyframes,
         keepChains: props.keepChains,
         basicPoints: viewBasicPoints,
         onRemoveBasicPoint: removeBasicPoint,
