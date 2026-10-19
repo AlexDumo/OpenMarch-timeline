@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { TransitionRow, XY } from "@openmarch/core";
+import type { ShapeRow, TransitionRow, XY } from "@openmarch/core";
 import {
     castDistance,
     castSlots,
     MAX_CAST_SLOTS,
     nearestSlots,
+    shapeSlotPoints,
     transitionSlotPoints,
 } from "../timelineCasting";
 
@@ -217,5 +218,69 @@ describe("a marcher that never moves in the transition", () => {
         expect(
             castDistance([{ id: 1, xy: null }], [[0, 0]], new Map([[1, 0]])),
         ).toBe(0);
+    });
+});
+
+const LINE: ShapeRow = {
+    kind: "line",
+    geometry: {
+        points: [
+            [0, 0],
+            [10, 0],
+        ],
+    },
+};
+const BLOCK: ShapeRow = {
+    kind: "block",
+    geometry: { origin: [0, 0], rows: 2, cols: 2, spacing: [2, 3] },
+};
+
+const near = (actual: readonly XY[], expected: readonly XY[]) => {
+    expect(actual).toHaveLength(expected.length);
+    actual.forEach((p, i) => {
+        expect(p[0]).toBeCloseTo(expected[i]![0], 9);
+        expect(p[1]).toBeCloseTo(expected[i]![1], 9);
+    });
+};
+
+describe("shapeSlotPoints (R-13)", () => {
+    it("samples a line evenly, end to end", () => {
+        expect(shapeSlotPoints(LINE, 3)).toEqual([
+            [0, 0],
+            [5, 0],
+            [10, 0],
+        ]);
+        expect(shapeSlotPoints(LINE, 1)).toEqual([[0, 0]]);
+    });
+
+    it("fills a block row by row", () => {
+        expect(shapeSlotPoints(BLOCK, 3)).toEqual([
+            [0, 0],
+            [2, 0],
+            [0, 3],
+        ]);
+    });
+
+    it("spaces a circle's slots around it from the start angle", () => {
+        near(
+            shapeSlotPoints(
+                {
+                    kind: "circle",
+                    geometry: {
+                        center: [0, 0],
+                        radius: 10,
+                        start_angle: 0,
+                        clockwise: false,
+                    },
+                },
+                4,
+            ),
+            [
+                [10, 0],
+                [0, 10],
+                [-10, 0],
+                [0, -10],
+            ],
+        );
     });
 });

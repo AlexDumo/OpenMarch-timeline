@@ -1126,6 +1126,7 @@
         "shortcuts.category.navigation": "Navegação",
         "shortcuts.category.playback": "Reprodução",
         "shortcuts.category.select": "Seleção",
+        "shortcuts.category.shape": "Formas",
         "shortcuts.category.timeline": "Linha do tempo",
         "shortcuts.category.ui": "Interface",
         "shortcuts.conflict": "{binding} já é usado por {actions}.",

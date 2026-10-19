@@ -665,11 +665,16 @@ from it. The spec still wins on the model; this file decides presentation.
     all as one edit (code review). The edit reads the paths under the write lock, so a choice sent
     twice is one edit.
     It is a radio group (round 2): the arrows move the choice and apply it.
+    **Removed 2026-10-19** (owner: no setting a move's path for now): the card has no Path
+    control; stored paths still play and draw, and `setMovePath` stays for when it returns.
   - **Per-marcher details** (_lead default_, V-46). With a move, the selected marchers'
     explanations and transition editors are about that move: they explain inside it, at P, or at
     its last beat when P is on its end (where the next move starts). They sit under a closed
     "Per-marcher details (16)" disclosure under the card, and when more marchers are selected than
     are shown it says "Showing the first 10 of 16 marchers".
+    **Removed 2026-10-19** with the whole inspector Timeline section (owner: no debug details in
+    the sidebar for users): no per-marcher explanations, show diagnostics or transition, slot
+    and shape editors.
   - **The inspector explains at the playhead** in timeline mode, not the selected page's end
     (_lead default_, V-41), except inside a move, above. On a flag that is the same beat; between
     flags it is where edits land (UI-10). "Select a page to see why…" is gone, since there is

@@ -790,10 +790,6 @@
                 "paused": "Pause to delete a move.",
                 "selectMarchers": "Select them",
                 "title": "Move"
-            },
-            "shapes": {
-                "canvasHelp": "The picked shape is drawn on the field. Drag a round handle to reshape it, or the square handle to move it. Each drag is saved as one change when you let go.",
-                "dragDropped": "That drag wasn't saved, because another shape change was still being saved. Drag it again."
             }
         },
         "title": "Inspector"
@@ -1681,6 +1677,7 @@
         "shortcuts.category.navigation": "Navigation",
         "shortcuts.category.playback": "Playback",
         "shortcuts.category.select": "Selection",
+        "shortcuts.category.shape": "Shapes",
         "shortcuts.category.timeline": "Timeline",
         "shortcuts.category.ui": "Interface",
         "shortcuts.conflict": "{binding} is already used by {actions}.",

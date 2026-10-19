@@ -11,6 +11,7 @@ export type ActionCategory =
     | "ui"
     | "cursor"
     | "select"
+    | "shape"
     | "timeline";
 export type ActionArgs = Readonly<Record<string, string | number | boolean>>;
 

@@ -24,6 +24,7 @@ const GROUPS: readonly (readonly [category: string, title: string])[] = [
     ["select", "Selection"],
     ["movement", "Move marchers"],
     ["alignment", "Alignment"],
+    ["shape", "Shapes"],
     ["batchEdit", "Batch editing"],
     ["cursor", "Tools"],
     ["ui", "View"],

@@ -1126,6 +1126,7 @@
         "shortcuts.category.navigation": "ナビゲーション",
         "shortcuts.category.playback": "再生",
         "shortcuts.category.select": "選択",
+        "shortcuts.category.shape": "図形",
         "shortcuts.category.timeline": "タイムライン",
         "shortcuts.category.ui": "インターフェース",
         "shortcuts.conflict": "{binding}は既に{actions}で使用されています。",

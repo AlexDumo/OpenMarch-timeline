@@ -1126,6 +1126,7 @@
         "shortcuts.category.navigation": "Navigation",
         "shortcuts.category.playback": "Lecture",
         "shortcuts.category.select": "Sélection",
+        "shortcuts.category.shape": "Formes",
         "shortcuts.category.timeline": "Chronologie",
         "shortcuts.category.ui": "Interface",
         "shortcuts.conflict": "{binding} est déjà utilisé par {actions}.",
