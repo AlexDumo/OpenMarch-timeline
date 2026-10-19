@@ -230,11 +230,6 @@ export const useUiSettingsStore = create<UiSettingsStoreInterface>(
                 uiSettings.lockX = false;
             }
 
-            // Settings built before this field existed have none: use the defaults
-            uiSettings.startFlagPositions = uiSettings.startFlagPositions
-                ? clampStartFlagPositions(uiSettings.startFlagPositions)
-                : DEFAULT_START_FLAG_POSITIONS;
-
             // Disable collisions for now
             uiSettings.showCollisions = false;
 

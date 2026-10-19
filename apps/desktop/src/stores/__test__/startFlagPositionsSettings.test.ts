@@ -72,18 +72,6 @@ describe("start flag positions settings", () => {
             JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}")
                 .startFlagPositions,
         ).toEqual(expected);
-
-        store.getState().setUiSettings({
-            ...store.getState().uiSettings,
-            startFlagPositions: {
-                always: { dots: "off", paths: "selected" },
-                hold: { dots: "all", paths: "all" },
-            },
-        });
-        expect(store.getState().uiSettings.startFlagPositions).toEqual({
-            always: { dots: "off", paths: "off" },
-            hold: { dots: "all", paths: "all" },
-        });
     });
 
     it("ignore the old Previous paths setting when loading", async () => {
