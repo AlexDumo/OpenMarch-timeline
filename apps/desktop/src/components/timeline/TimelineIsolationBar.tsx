@@ -38,6 +38,18 @@ export function isolatedTimelineName(
     // pinned on page 1's start): the same moment, so name it as page 1's
     if (range.start === 0 && boxes[0]?.range?.start === 1)
         range = { start: 1, end: range.end };
+    // Both lines held on one beat (UI-21): an empty window, named by its beat, not as a run of
+    // pages read backwards ("Pages 5–4")
+    if (range.end <= range.start) {
+        const flag = boxes.find((f) => f.range!.end === range.start);
+        if (flag) return `Page ${flag.page.name}'s flag`;
+        const inside = boxes.find(
+            (f) => f.range!.start <= range.start && range.start < f.range!.end,
+        );
+        return inside
+            ? `Page ${inside.page.name}, count ${range.start - inside.range!.start}`
+            : `Beat ${range.start}`;
+    }
     const exact = boxes.find(
         (f) => f.range!.start === range.start && f.range!.end === range.end,
     );
