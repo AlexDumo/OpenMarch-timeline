@@ -355,9 +355,11 @@ aliases, never shown as labels [owner, 2026-10-12, Q39–Q41, Q44].
 - Making an item from a performer's implicit flag writes a Carry `none` cue
   for that performer at the item's first count, linked to the item so undo
   and delete remove both [26.14].
-- **New items:** home where created, on field from that count. Before it, a
-  created prop is Off field and an item that came from a flag is held by its
-  original performer [24].
+- **New items:** home where created, on field from that count. Before it,
+  every item is Off field (it has no Outline yet). An item made from a flag
+  gets an explicit held change at its first count, held by its original
+  performer; nothing else records where an item came from (owner,
+  2026-10-18) [24].
 - Every all-marchers loop filters by `type`: drill order, ripple orders,
   coordinate sheets, mobile export, drill numbers, Visuals mode's Who list.
   Props may fill formation slots; band and section cue targets never reach
@@ -395,13 +397,26 @@ deletes the change. It joins undo history and repair like the cue tables.
 - **Item ripples:** one row per item at staggered counts sharing a group id,
   so they edit, move and delete together; the Items tab treats the group like
   a cue ripple with the same orders (drill, left→right, right→left, down the
-  form) [21].
+  form) [21]. Each row carries its own value, so each flag goes to its own
+  performer; the rows store the ripple's span and order as a cue does
+  (`ripple_json`), so the group can be shown, moved and re-timed. A group
+  edit changes the state, never who holds what (owner, 2026-10-18).
+- Of two items' changes on one count, the one written last is newer
+  (`beat_rank`, then id). A change that a beat deletion or a tempo edit
+  lands on a count with another item's change ranks below it, so deleting a
+  count never changes which item a performer holds.
 - A visible trade of equipment between performers is a Placement change; the
   cue channels themselves are hard cuts [26.12].
 - **Hand conflicts are allowed.** The newest Placement takes over at its
   count and is drawn; the displaced item isn't drawn while the conflict
   lasts; a quiet note names it ("Flag not put down, count 9 of page 5"). No
-  data changes automatically [07, 21].
+  data changes automatically [07, 21]. Equipment a Carry cue gives a
+  performer occupies their hands (a sabre the right, a horn, drum, flag or
+  rifle both): an item held in those hands is a hand conflict, and Carry
+  keeps the hand (owner, 2026-10-18).
+- Deleting one of two holders of a two-hand item leaves it held by the other;
+  the notes list names a held change whose holders give fewer hands than the
+  item takes (`shortHandedHolds`).
 - A placed prop may move with no crew (people outside the show). Show
   setting "Warn when a prop moves without a crew", default off, stored in the
   show file [07, 26.19]. A crew-distance note always applies when a crew is
