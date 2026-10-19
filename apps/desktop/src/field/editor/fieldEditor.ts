@@ -242,6 +242,7 @@ export class FieldEditor {
             marchers: () => ports.marchers(),
             zoom: () => ports.zoom(),
             canSelect: (id) => ports.canSelect(id),
+            isItem: (id) => ports.isItem?.(id) ?? false,
             selection: () => ports.selection.get(),
             select: (ids) => this.write(ids),
             changed: () => this.emit(),
@@ -408,11 +409,15 @@ export class FieldEditor {
         this.setHover("default");
     }
 
-    /** Ctrl/Cmd+A: every marcher drawn that can be selected. */
+    /** Ctrl/Cmd+A: every performer drawn that can be selected; items (C2.2) are left out. */
     selectAll(): void {
         const { ids, hidden } = this.ports.marchers();
+        const isItem = this.ports.isItem ?? (() => false);
         this.write(
-            ids.filter((id, i) => !hidden?.[i] && this.ports.canSelect(id)),
+            ids.filter(
+                (id, i) =>
+                    !hidden?.[i] && !isItem(id) && this.ports.canSelect(id),
+            ),
         );
     }
 

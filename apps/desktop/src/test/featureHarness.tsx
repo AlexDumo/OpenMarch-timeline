@@ -23,7 +23,7 @@ import {
 } from "@/context/SelectedMarchersContext";
 import { SelectedAudioFileProvider } from "@/context/SelectedAudioFileContext";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
-import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
+import { allMarcherRowsQueryOptions } from "@/hooks/queries/useMarchers";
 import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
 import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
 import TimelineResolverHost from "@/timeline/TimelineResolverHost";
@@ -79,7 +79,8 @@ const probe: { current: FeatureProbe | null } = { current: null };
 
 function ProbeView() {
     const { pages } = useTimingObjects();
-    const { data: marchers } = useQuery(allMarchersQueryOptions());
+    // Items too, so a test can select a prop as the field does
+    const { data: marchers } = useQuery(allMarcherRowsQueryOptions());
     const selectedPageContext = useSelectedPage()!;
     const selectedMarchersContext = useSelectedMarchers()!;
     const settings = useQuery(workspaceSettingsQueryOptions());

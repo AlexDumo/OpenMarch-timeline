@@ -53,9 +53,9 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.2: Keep items out of all-marchers loops
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-items-out-of-loops-v2)
+- Status: in-review
+- PR: #279
 - Parallel: yes
 - Depends on: C2.1
 
@@ -190,3 +190,35 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 - **Checks:** desktop vitest (items, migrations, field, editor); core
   tests; `e2e/browser/tests/props.spec.mts` in the browser (7 scenarios);
   type-check, lint, format, spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-items-out-of-loops-v2) · C2.2
+
+- **Done:** `isPerformer` / `performersOnly` (`Marcher.ts`) and
+  `performersQueryOptions`. Items are left out of coordinate sheets and
+  individual drill charts, the mobile export, the marcher list and section
+  appearances, collisions (a performer on a platform isn't colliding with
+  it), the Select tab and Ctrl/Cmd+A on the field, and the 3D View's
+  performer figures. Drill numbering is untouched: items use their own
+  PROP and EQUIP prefixes.
+- **Cross-phase:** cue targets, ripple orders and the Visuals Who list
+  belong to the cue code; check them when items get cues (C3.7).
+- **Checks:** desktop vitest (full suite); type-check, lint, format,
+  spellcheck.
+
+### 2026-10-18 · review fixes (3d/c2-items-out-of-loops-v2) · C2.2
+
+- **Done:** performers are the default (owner-approved). `getMarchers` and
+  `allMarchersQueryOptions` leave items out; code that draws, selects or
+  writes items asks for `getMarcherRowsIncludingItems` /
+  `allMarcherRowsQueryOptions` by name: the field, the selection, undo's
+  reselect, move-member selection and the drill-number check.
+  `performersQueryOptions` is gone. Drill-chart PDFs, video export and
+  launch-page previews no longer draw props as dots. Marquee and lasso
+  leave items out when performers are inside (`areaPicks`); align,
+  distribute, swap, Create Line and Create Circle use the selected
+  performers; "set all marchers to the previous/next page" sets the
+  performers; the inspector shows performers and a note for selected props;
+  the previous-show import skips the source's items.
+- **Kept on rows:** timeline label lookups, the resolver snapshot and
+  casting take ids from the selection; props may fill formation slots
+  (props-spec section 4).

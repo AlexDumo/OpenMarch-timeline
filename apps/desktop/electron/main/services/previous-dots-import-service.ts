@@ -99,6 +99,23 @@ const sourceMarcherColumns = {
 type SourceMarcher = PreviousDotsMarcherImport & { id: number };
 
 /**
+ * The source's item rows (`marchers.type = 'item'`, C2.2). The source isn't migrated, so a file
+ * from before items has no `type` column and no items.
+ */
+function sourceItemIds(db: DatabaseSync): Set<number> {
+    const hasType = db
+        .prepare(
+            "SELECT 1 FROM pragma_table_info('marchers') WHERE name = 'type'",
+        )
+        .get();
+    if (!hasType) return new Set();
+    const rows = db
+        .prepare("SELECT id FROM marchers WHERE type = 'item'")
+        .all() as { id: number }[];
+    return new Set(rows.map((r) => r.id));
+}
+
+/**
  * A page-era source (not converted yet): its last page's `marcher_pages` rows.
  *
  * @throws when the source has no pages
@@ -175,16 +192,20 @@ export async function readPreviousDotsFile(
         if (!fieldProperties?.json_data)
             throw new Error("Field properties not found in source file");
 
-        const marchers: SourceMarcher[] = await orm
-            .select(sourceMarcherColumns)
-            .from(schema.marchers)
-            .orderBy(
-                schema.marchers.drill_prefix,
-                schema.marchers.drill_order,
-                schema.marchers.year,
-                schema.marchers.notes,
-            )
-            .all();
+        // Performers only: the source's items (props and equipment, C2.2) aren't marchers
+        const itemIds = sourceItemIds(db);
+        const marchers: SourceMarcher[] = (
+            await orm
+                .select(sourceMarcherColumns)
+                .from(schema.marchers)
+                .orderBy(
+                    schema.marchers.drill_prefix,
+                    schema.marchers.drill_order,
+                    schema.marchers.year,
+                    schema.marchers.notes,
+                )
+                .all()
+        ).filter((m) => !itemIds.has(m.id));
 
         let workspaceSettingsJson: string | undefined;
         try {
