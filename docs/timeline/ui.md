@@ -1197,10 +1197,14 @@ from it. The spec still wins on the model; this file decides presentation.
     it was pressed, with the canvas on the playhead (the arrival). With no window (home, or both lines
     on one beat) it plays on. **Alt+Space**, or Alt+click on Play, plays on from the start flag past
     the playhead to the end of the show (owner: a key, not a setting). Shift+Space still plays on from
-    the playhead. Holding Alt shows the start flag's bar then ▶ on Play, named "Play on from the start
-    flag", and the tooltip guide gets a third row; Space's row reads "Play to the playhead". While
-    playing, Alt+Space stops as Space does. A click past the playhead while playing to it plays on to
-    the end of the show; a click inside the window keeps stopping at the playhead (V-287).
+    the playhead. Holding Alt shows the start flag's bar then ▶ on Play. The tooltip guide lists
+    the three, each with the marks of the lines it names (owner, 2026-10-19): "Play from start flag
+    ⚑ and stop at playhead ⛉" (Space), "Play from start flag ⚑ and continue" (Alt + Space) and "Play
+    from playhead ⛉ and continue" (Shift + Space); in Basic Space's row is "Play from start flag and
+    continue". While playing, Alt+Space stops as Space does. A click past the playhead while playing
+    to it plays on to the end of the show; a click inside the window, or before it, keeps stopping at
+    the playhead (V-287). The same goes for a loop: a click before it plays into it and wraps at its
+    end, where it used to play on past it (owner, 2026-10-19).
   - **The canvas shows the dragged flag.** While the start flag is dragged, the field shows its beat,
     where movers leave from, and the playhead again on release; once a dragged line swaps it shows the
     line under the pointer. An arrow key on the start flag shows it until the steps settle (300 ms

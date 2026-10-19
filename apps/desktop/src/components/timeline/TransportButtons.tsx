@@ -272,7 +272,10 @@ const NAVIGATION_TARGETS = {
 interface TransportGuideRow<Mode extends string = string> {
     readonly mode: Mode;
     readonly icon: ReactNode;
+    /** What it does, for the button's name */
     readonly label: string;
+    /** What the guide shows instead of `label`, with the lines' marks inline */
+    readonly content?: ReactNode;
     /** The shortcut as keycaps */
     readonly shortcut: string;
 }
@@ -341,7 +344,9 @@ function TransportGuide({
                     <span aria-hidden="true" className="flex">
                         {row.icon}
                     </span>
-                    <span className="text-[12px]">{row.label}</span>
+                    <span className="flex items-center gap-4 text-[12px]">
+                        {row.content ?? row.label}
+                    </span>
                     <Keycaps shortcut={row.shortcut} plus />
                 </span>
             ))}
@@ -399,10 +404,61 @@ export const TransportNavigationButton = memo(
     },
 );
 
+/** The start flag as the timeline draws it, a pennant on its stem, for the guide's words */
+const START_FLAG_MARK = (
+    <svg
+        aria-hidden="true"
+        data-mark="start-flag"
+        width="9"
+        height="13"
+        viewBox="0 0 9 13"
+        className={clsx("shrink-0", START_INK.text)}
+    >
+        <rect x="0" y="0" width="1.5" height="13" fill="currentColor" />
+        <path d="M0 0 L9 0 L0 9 Z" fill="currentColor" />
+    </svg>
+);
+
+/** The playhead as the timeline draws it, its head on its line, for the guide's words */
+const PLAYHEAD_MARK = (
+    <svg
+        aria-hidden="true"
+        data-mark="playhead"
+        width="10"
+        height="13"
+        viewBox="0 0 10 13"
+        className="text-accent shrink-0"
+    >
+        <rect x="4.25" y="0" width="1.5" height="13" fill="currentColor" />
+        <path d="M0 0 H10 V5 L5 9 L0 5 Z" fill="currentColor" />
+    </svg>
+);
+
+/** "Play from start flag ⚑ and continue", with the lines' marks after their names (owner) */
+const playWords = (
+    from: "start" | "playhead",
+    stopAtPlayhead: boolean,
+): { label: string; content: ReactNode } => {
+    const name = from === "start" ? "start flag" : "playhead";
+    const end = stopAtPlayhead ? "stop at playhead" : "continue";
+    return {
+        label: `Play from ${name} and ${end}`,
+        content: (
+            <>
+                Play from {name}
+                {from === "start" ? START_FLAG_MARK : PLAYHEAD_MARK}
+                and {end}
+                {stopAtPlayhead && PLAYHEAD_MARK}
+            </>
+        ),
+    };
+};
+
 /**
- * What Play (Space), Shift+Play (Shift+Space) and, with `playsOn`, Alt+Play (Alt+Space) do, in the
- * order the tooltip lists them. With `playsOn` (Expert, UI-26) Space plays to the playhead and Alt
- * plays on past it; without (Basic, the 3D View) Space plays on from the start flag.
+ * What Play (Space), Alt+Play (Alt+Space, with `playsOn`) and Shift+Play (Shift+Space) do, in the
+ * order the tooltip lists them (owner, 2026-10-19). With `playsOn` (Expert, UI-26) Space stops at
+ * the playhead and Alt continues past it; without (Basic, the 3D View) Space continues from the
+ * start flag. With looping on, Space and Shift+Space name the loop.
  */
 const playGuide = (
     loops: boolean,
@@ -411,25 +467,15 @@ const playGuide = (
     {
         mode: "play",
         icon: PLAY_ICON,
-        label: loops
-            ? "Play the loop"
-            : playsOn
-              ? "Play to the playhead"
-              : "Play from the start flag",
+        ...(loops ? { label: "Play the loop" } : playWords("start", playsOn)),
         shortcut: TRANSPORT_SHORTCUTS.play,
-    },
-    {
-        mode: "shift",
-        icon: PLAY_FROM_PLAYHEAD_ICON,
-        label: loops ? "Play the loop once" : "Play from the playhead",
-        shortcut: TRANSPORT_SHORTCUTS.playPage,
     },
     ...(playsOn
         ? [
               {
                   mode: "alt" as const,
                   icon: PLAY_ON_ICON,
-                  label: "Play on from the start flag",
+                  ...playWords("start", false),
                   shortcut: TRANSPORT_SHORTCUTS.playOn.replace(
                       "Alt",
                       isMac() ? "Option" : "Alt",
@@ -437,6 +483,14 @@ const playGuide = (
               },
           ]
         : []),
+    {
+        mode: "shift",
+        icon: PLAY_FROM_PLAYHEAD_ICON,
+        ...(loops
+            ? { label: "Play the loop once" }
+            : playWords("playhead", false)),
+        shortcut: TRANSPORT_SHORTCUTS.playPage,
+    },
 ];
 
 /** What Stop (Space) and Pause (Shift+Space) do while playing (UI-24) */

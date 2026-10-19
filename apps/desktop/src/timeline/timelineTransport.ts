@@ -116,7 +116,7 @@ export function navigateTimeline(
 
 /**
  * A click, scrub or page navigation while playing (UI-12): playback jumps to `beat` and goes on,
- * as in a DAW, and the playhead stays put. A loop jumped outside its window plays on from there;
+ * as in a DAW, and the playhead stays put. A loop jumped past its end plays on from there;
  * isolation keeps the jump inside the isolated range. Returns false when not playing.
  */
 export function jumpTimelinePlayback(
@@ -142,8 +142,9 @@ const playbackTarget = (beats: readonly BeatTiming[], beat: number) => {
 };
 
 /**
- * A loop jumped outside its window plays on from there (UI-11), so its stop stays; inside the
- * window it keeps looping. Isolation keeps its run.
+ * A loop jumped past its end plays on from there (UI-11), so its stop stays. Inside it, or before
+ * it, it keeps the run: playback reaches the loop and wraps at its end, as Logic's cycle does
+ * (owner, 2026-10-19: a click before the start flag blew past the loop). Isolation keeps its run.
  */
 const runAfterJump = (
     run: TimelinePlaybackRun,
@@ -151,7 +152,7 @@ const runAfterJump = (
 ): TimelinePlaybackRun =>
     run.kind === "preview" &&
     !useTimelineSelectionStore.getState().isolation &&
-    (target < run.from || target >= run.to)
+    target >= run.to
         ? { kind: "on" }
         : run;
 

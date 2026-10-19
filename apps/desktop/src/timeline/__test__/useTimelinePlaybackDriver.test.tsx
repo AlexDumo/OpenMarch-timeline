@@ -787,6 +787,36 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             expect(store().loop).toBe(loop);
         });
 
+        it("a click before the loop keeps looping: playback reaches the loop and wraps at its end (owner 2026-10-19)", async ({
+            db,
+            wrapper,
+        }) => {
+            const { result } = await setUp(db, wrapper);
+            act(() => {
+                store().selectRange(9, 13);
+                store().setLoop({ start: 9, end: 13 });
+            });
+            space(result);
+            audio.seconds = 4.6;
+            frame();
+            const { playChanges, send } = scrubber(result);
+
+            send(5, "press");
+            send(5, "end");
+            expect(playChanges).toEqual([]);
+            expect(store().playback).toEqual({
+                kind: "preview",
+                from: 9,
+                to: 13,
+            });
+            expect(store().cursorBeat).toBe(5);
+            // At the loop's end it goes back to the loop's start, not on past it
+            audio.seconds = 6.1; // beat 13.2
+            frame();
+            expect(result.current.playing.isPlaying).toBe(true);
+            expect(store().cursorBeat).toBe(9);
+        });
+
         it("a jump during an isolated preview keeps the isolated run (UI-17)", async ({
             db,
             wrapper,
