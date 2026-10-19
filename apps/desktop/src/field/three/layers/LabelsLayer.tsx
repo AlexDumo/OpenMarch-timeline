@@ -19,8 +19,9 @@ const CENTER_BASELINE = 0.35;
  * Every marcher's label (drill number) in one instanced draw of SDF glyphs,
  * in the theme's label color. A marcher whose
  * appearance hides its label has no glyphs. The text is laid out again only
- * when the marchers, their labels or which labels show change; a frame only
- * rewrites the anchors.
+ * when the marchers, their labels or which labels show change; dimming and
+ * the Following look only rewrite the colors, and a frame only rewrites the
+ * anchors.
  */
 export default function LabelsLayer({
     marchers,
@@ -101,13 +102,16 @@ export default function LabelsLayer({
             marchers.idsVersion !== last.idsVersion ||
             labels !== last.labels ||
             theme !== last.theme ||
-            shown !== last.shown ||
+            shown !== last.shown;
+        // Dimming and the Following look (and each frame of its ease on Stop) only recolor
+        const recolor =
             dimming.version !== last.dimVersion ||
             following.version !== last.followingVersion;
-        if (newLayout) {
+        if (newLayout || recolor) {
             const color = rgba01(theme.defaultMarcher.label);
             const faded = new Map<number, typeof color>();
-            const colorOf = (opacity: number): typeof color => {
+            const colorOf = (id: number): typeof color => {
+                const opacity = labelOpacity(dimming, following, id);
                 if (opacity === 1) return color;
                 let c = faded.get(opacity);
                 if (!c) {
@@ -116,14 +120,16 @@ export default function LabelsLayer({
                 }
                 return c;
             };
-            text.setLabels(
-                marchers.ids.map((id, i) => ({
-                    text: shown[i] ? (labels.get(id) ?? "") : "",
-                    size: LABEL_SIZE,
-                    baseline: CENTER_BASELINE,
-                    color: colorOf(labelOpacity(dimming, following, id)),
-                })),
-            );
+            if (newLayout)
+                text.setLabels(
+                    marchers.ids.map((id, i) => ({
+                        text: shown[i] ? (labels.get(id) ?? "") : "",
+                        size: LABEL_SIZE,
+                        baseline: CENTER_BASELINE,
+                        color: colorOf(id),
+                    })),
+                );
+            else text.setColors((i) => colorOf(marchers.ids[i]!));
         }
         if (newLayout || marchers.version !== last.version)
             text.setAnchors(marchers.positions);

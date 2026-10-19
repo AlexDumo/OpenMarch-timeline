@@ -12,8 +12,8 @@ import {
 import type { FieldTheme } from "@openmarch/core";
 import type { FieldMarchers } from "../fieldMarchers";
 import {
-    drawnFollowing,
     FOLLOWING_LOOK,
+    followingAmount,
     type FieldFollowing,
 } from "../fieldFollowing";
 import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
@@ -176,7 +176,8 @@ void main() {
     float strokeA = vOutline.a * stroke;
     vec3 strokeRgb = vOutline.rgb;
 
-    // Following (#300): the edge dashed at full strength, at any size
+    // Following (#300): the edge dashed at full strength, at any size. The
+    // amount eases 0 to 1 on Stop (#302): the gaps open from a solid edge
     float amount = vFollowing;
     if (amount > 0.0) {
         float on = dashed(vLocal, vShape, amount);
@@ -374,7 +375,7 @@ export default function MarchersLayer({
             const amounts = followingLook.array as Float32Array;
             marchers.ids.forEach((id, i) => {
                 opacities[i] = dimming.isDimmed(id) ? DIMMED_OPACITY : 1;
-                amounts[i] = drawnFollowing(dimming, following, id) ? 1 : 0;
+                amounts[i] = followingAmount(dimming, following, id);
             });
             opacity.needsUpdate = true;
             followingLook.needsUpdate = true;

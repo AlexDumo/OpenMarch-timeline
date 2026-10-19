@@ -5,6 +5,7 @@ import type { Page } from "@playwright/test";
 import { FieldProperties } from "@openmarch/core";
 import { test, expect, type Show } from "../fixtures.mjs";
 import { seedShowSql } from "../seed.mjs";
+import { drawnMarchers, goTo, waitForField } from "../app.mjs";
 
 /**
  * The video export (#207) draws its frames through the field off screen.
@@ -127,6 +128,18 @@ test("saves a video of the show with the marchers where the show puts them", asy
     show,
 }) => {
     const { page } = show;
+    // Paused at 2 s (measure 2) in the editor, T1 is partway through its move
+    // and T2 is on a stay move: both are Following there, drawn dashed (#300)
+    await waitForField(page);
+    await goTo(page, "m2");
+    await expect
+        .poll(async () =>
+            (await drawnMarchers(page))
+                .filter((m) => m.following)
+                .map((m) => m.drillNumber)
+                .sort(),
+        )
+        .toEqual(["T1", "T2"]);
     await openVideoExport(page);
     await page.getByRole("combobox", { name: /^\d+ fps$/ }).click();
     await page.getByRole("option", { name: "30 fps" }).click();
@@ -151,7 +164,10 @@ test("saves a video of the show with the marchers where the show puts them", asy
     const first = frameAt(file, 0.05);
     const middle = frameAt(file, 2);
     const last = frameAt(file, 3.9);
-    // T2 never moves: its dot's color, in every frame
+    // T2 never moves: its dot's color, in every frame. On the first frame
+    // everyone is Set; later frames draw T2 and T1 just as solid, though the
+    // editor draws them dashed there (#302): a dashed dot's middle is at most a
+    // 60% fill, far outside `close`
     const marcher = first(pixel(400, 500));
     expect(close(middle(pixel(400, 500)), marcher)).toBe(true);
     expect(close(last(pixel(400, 500)), marcher)).toBe(true);

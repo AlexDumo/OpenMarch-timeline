@@ -3,9 +3,12 @@ import { FieldDimming } from "../fieldDimming";
 import { DIMMED_OPACITY } from "../fieldDimming";
 import {
     FieldFollowing,
+    FOLLOWING_EASE_MS,
     FOLLOWING_LOOK,
     drawnFollowing,
+    followingAmount,
     labelOpacity,
+    type FadeClock,
 } from "../fieldFollowing";
 
 describe("FieldFollowing", () => {
@@ -31,6 +34,127 @@ describe("FieldFollowing", () => {
         following.set(new Set([2, 1]));
         expect(listener).toHaveBeenCalledTimes(1);
         expect(following.version).toBe(version);
+    });
+});
+
+/** A clock the test steps by hand: frames run only when `frame` is called. */
+function manualClock() {
+    let now = 0;
+    let pending: (() => void) | null = null;
+    const clock: FadeClock = {
+        now: () => now,
+        requestFrame: (callback) => {
+            pending = callback;
+            return 1;
+        },
+        cancelFrame: () => {
+            pending = null;
+        },
+    };
+    return {
+        clock,
+        /** Moves time on by `ms` and runs the frame asked for, if any. */
+        frame(ms: number) {
+            now += ms;
+            const run = pending;
+            pending = null;
+            run?.();
+        },
+        get waiting() {
+            return pending !== null;
+        },
+    };
+}
+
+/** The look a marcher is drawn with: how far along the dashes, how opaque its label. */
+const look = (
+    dimming: FieldDimming,
+    following: FieldFollowing,
+    id: number,
+) => ({
+    amount: followingAmount(dimming, following, id),
+    label: labelOpacity(dimming, following, id),
+});
+
+describe("easing into the Following look on Stop", () => {
+    it("opens the gaps from solid, quickly at first, and ends at the full look", () => {
+        const time = manualClock();
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing(time.clock);
+        following.set(new Set([1]), { ease: true });
+        // Who's Following is known straight away: selecting doesn't wait
+        expect(following.isFollowing(1)).toBe(true);
+        expect(drawnFollowing(dimming, following, 1)).toBe(true);
+        expect(look(dimming, following, 1)).toEqual({ amount: 0, label: 1 });
+        time.frame(FOLLOWING_EASE_MS / 2);
+        // Ease-out: past halfway at half the time
+        const middle = look(dimming, following, 1);
+        expect(middle.amount).toBeGreaterThan(0.5);
+        expect(middle.amount).toBeLessThan(1);
+        expect(middle.label).toBeLessThan(1);
+        expect(middle.label).toBeGreaterThan(FOLLOWING_LOOK.labelOpacity);
+        time.frame(FOLLOWING_EASE_MS / 2);
+        expect(look(dimming, following, 1)).toEqual({
+            amount: 1,
+            label: FOLLOWING_LOOK.labelOpacity,
+        });
+        expect(time.waiting).toBe(false);
+    });
+
+    it("redraws the layers on each frame of the ease", () => {
+        const time = manualClock();
+        const following = new FieldFollowing(time.clock);
+        const listener = vi.fn();
+        following.subscribe(listener);
+        following.set(new Set([1]), { ease: true });
+        const version = following.version;
+        time.frame(16);
+        expect(following.version).toBeGreaterThan(version);
+        expect(listener.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    it("goes solid at once when playback starts again mid-ease", () => {
+        const time = manualClock();
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing(time.clock);
+        following.set(new Set([1]), { ease: true });
+        time.frame(16);
+        following.set(null);
+        expect(look(dimming, following, 1)).toEqual({ amount: 0, label: 1 });
+        expect(time.waiting).toBe(false);
+    });
+
+    it("keeps easing when who's Following changes mid-ease, as Stop's jump back does", () => {
+        const time = manualClock();
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing(time.clock);
+        following.set(new Set([1]), { ease: true });
+        time.frame(16);
+        following.set(new Set([1, 2]));
+        expect(followingAmount(dimming, following, 2)).toBeLessThan(1);
+        time.frame(FOLLOWING_EASE_MS);
+        expect(followingAmount(dimming, following, 2)).toBe(1);
+    });
+
+    it("draws the full look straight away without an ease (scrubbing, opening a show)", () => {
+        const time = manualClock();
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing(time.clock);
+        following.set(new Set([1]));
+        expect(look(dimming, following, 1)).toEqual({
+            amount: 1,
+            label: FOLLOWING_LOOK.labelOpacity,
+        });
+        expect(time.waiting).toBe(false);
+    });
+
+    it("leaves a dimmed marcher to isolation's dim, never dashed", () => {
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing();
+        dimming.set(new Set([1]));
+        following.set(new Set([1, 2]));
+        expect(followingAmount(dimming, following, 2)).toBe(0);
+        expect(followingAmount(dimming, following, 1)).toBe(1);
     });
 });
 

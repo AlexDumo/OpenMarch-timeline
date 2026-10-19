@@ -307,6 +307,7 @@ export class TextBatch {
     readonly mesh: Mesh<InstancedBufferGeometry, ShaderMaterial>;
     private anchors = new Float32Array(0);
     private anchorAttr: InstancedBufferAttribute | null = null;
+    private colorAttr: InstancedBufferAttribute | null = null;
     /** The label of each glyph. */
     private owner = new Int32Array(0);
 
@@ -388,7 +389,9 @@ export class TextBatch {
             "aScaleRot",
             new InstancedBufferAttribute(scaleRot, 2),
         );
-        geometry.setAttribute("aColor", new InstancedBufferAttribute(color, 4));
+        this.colorAttr = new InstancedBufferAttribute(color, 4);
+        this.colorAttr.setUsage(DynamicDrawUsage);
+        geometry.setAttribute("aColor", this.colorAttr);
         this.anchorAttr = new InstancedBufferAttribute(this.anchors, 2);
         this.anchorAttr.setUsage(DynamicDrawUsage);
         geometry.setAttribute("aAnchor", this.anchorAttr);
@@ -409,6 +412,21 @@ export class TextBatch {
             out[g * 2 + 1] = xy[li + 1];
         }
         if (this.anchorAttr) this.anchorAttr.needsUpdate = true;
+    }
+
+    /**
+     * Recolors every label (`colorOf` by label index, as given to
+     * {@link setLabels}) without laying the text out again: only the color
+     * buffer is rewritten and uploaded. Allocates nothing.
+     */
+    setColors(colorOf: (label: number) => TextLabel["color"]) {
+        const attr = this.colorAttr;
+        if (!attr) return;
+        const out = attr.array as Float32Array;
+        const owner = this.owner;
+        for (let g = 0; g < owner.length; g++)
+            out.set(colorOf(owner[g]), g * 4);
+        attr.needsUpdate = true;
     }
 
     /** Moves every label by the same amount, in field units. */

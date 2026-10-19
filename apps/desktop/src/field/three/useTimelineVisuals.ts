@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { FieldProperties } from "@openmarch/core";
 import type Page from "@/global/classes/Page";
@@ -139,7 +139,7 @@ export function useTimelineVisuals({
     );
 
     const dimming = useFieldDimming(ready);
-    const following = useFieldFollowing(ready && !isPlaying);
+    const following = useFieldFollowing(ready, isPlaying);
     return { paths, focus, collisions, dimming, following, ready };
 }
 
@@ -175,15 +175,22 @@ function useFieldDimming(enabled: boolean): FieldDimming {
  * own on the count shown are Following, drawn with a dashed edge; playing, nobody is. Each
  * marcher's Set beats are worked out once per resolver version and kept
  * markers, so a playhead move only looks them up, and `FieldFollowing`
- * redraws only when who's Following changes.
+ * redraws only when who's Following changes. Stopping eases the dashes in
+ * (#302), unless the system asks for reduced motion.
  */
-function useFieldFollowing(enabled: boolean): FieldFollowing {
+function useFieldFollowing(ready: boolean, isPlaying: boolean): FieldFollowing {
     const following = useMemo(() => new FieldFollowing(), []);
+    const played = useRef(false);
+    const enabled = ready && !isPlaying;
     useEffect(() => {
         if (!enabled) {
+            if (isPlaying) played.current = true;
             following.set(null);
             return;
         }
+        // Only the first look after playback eases in; later ones are instant
+        let ease = played.current && !prefersReducedMotion();
+        played.current = false;
         let setBeats: Map<number, readonly number[]> | null = null;
         const update = () => {
             const { resolver } = useTimelineResolverStore.getState();
@@ -211,7 +218,9 @@ function useFieldFollowing(enabled: boolean): FieldFollowing {
                     setBeats,
                     displayedBeat(useTimelineSelectionStore.getState()),
                 ),
+                { ease },
             );
+            ease = false;
         };
         // Called inside the stores' writes: a failed update mustn't stop their other listeners
         const safely = (fresh: boolean) => {
@@ -242,6 +251,9 @@ function useFieldFollowing(enabled: boolean): FieldFollowing {
         return () => {
             for (const unsubscribe of unsubscribes) unsubscribe();
         };
-    }, [following, enabled]);
+    }, [following, enabled, isPlaying]);
     return following;
 }
+
+const prefersReducedMotion = () =>
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
