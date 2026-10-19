@@ -105,7 +105,9 @@ phases [26.24].
     `core/instruments/model.ts`); `OM_grip_L`: the left grip.
   - Artwork slots: materials or meshes with
     `extras.openmarch.artworkSlot {id, widthM, heightM}`, UV0 spanning the
-    printable area.
+    printable area. A slot id is 1 to 64 letters, digits, underscores or
+    dashes (the add-on writes `front-panel`); the import drops any other id
+    with a note, and the show file keeps the same rule.
   - Stretch: a 3D 9-slice, `extras.openmarch.stretch {x:[a,b],...}`. The slab
     scales and the outside translates rigidly. Axes without a zone are
     flagged, never stretched.

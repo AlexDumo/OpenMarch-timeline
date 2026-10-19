@@ -12,6 +12,10 @@ import {
     primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
+import {
+    ARTWORK_SLOT_ID_BAD_GLOB,
+    ARTWORK_SLOT_ID_MAX_LENGTH,
+} from "./artworkSlotId";
 
 /*************** COMMON COLUMNS ***************/
 
@@ -1056,7 +1060,10 @@ export const item_artwork_slots = sqliteTable(
         beat_id: integer()
             .notNull()
             .references(() => beats.id, { onDelete: "cascade" }),
-        /** The slot id: `top`, `front` or `back` with no model, else one the model declares */
+        /**
+         * The slot id: `top`, `front` or `back` with no model, else one the model declares; 1 to
+         * 64 letters, digits, underscores or dashes (`artworkSlotId.ts`)
+         */
         slot: text().notNull(),
         /**
          * The Artwork and the Version it pins, or both null for a bare slot. No foreign key, as on
@@ -1082,7 +1089,9 @@ export const item_artwork_slots = sqliteTable(
         index("item_artwork_slots_beat_id_idx").on(table.beat_id),
         check(
             "item_artwork_slots_slot_check",
-            sql`slot IS NOT NULL AND length(slot) BETWEEN 1 AND 64 AND slot NOT GLOB '*[^A-Za-z0-9_]*'`,
+            sql.raw(
+                `slot IS NOT NULL AND length(slot) BETWEEN 1 AND ${ARTWORK_SLOT_ID_MAX_LENGTH} AND slot NOT GLOB '${ARTWORK_SLOT_ID_BAD_GLOB}'`,
+            ),
         ),
         check(
             "item_artwork_slots_library_check",

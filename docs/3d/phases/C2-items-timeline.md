@@ -237,6 +237,20 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 - **Checks:** desktop and core vitest (full suites); migration tests;
   type-check, lint, format, spellcheck.
 
+### 2026-10-19 · review fixes (3d/c2-slots-v2) · C2.4
+
+- **Done:** slot ids take dashes, the Blender add-on's default
+  (`front-panel`): one rule (`migrations/artworkSlotId.ts`) for the
+  `item_artwork_slots` CHECK, the slot writes, the model import (which drops
+  any other id with a note) and the import choices. An assignment whose
+  Artwork Version the show hasn't embedded, or whose Library item isn't an
+  Artwork, is refused. Slot assignments are in `BEAT_KEYED_ITEM_TABLES`, so
+  tempo edits and MusicXML import keep them. 0026 regenerated, dated after
+  #181's lab migration and safe to run twice.
+- **Left:** #286's Library delete and Replace with… don't see the item
+  tables yet (whichever merges second adds them). A file a fork build gave
+  the old 0026 keeps the dash-refusing CHECK.
+
 ### 2026-10-18 · review fixes (3d/c2-placement-v2) · C2.3
 
 - **Done (owner decisions of 2026-10-18):** a ripple carries a value per
