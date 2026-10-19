@@ -1210,6 +1210,9 @@ These belong in the inspector (P8.5), not the timeline:
   the ones about that marcher. A transition-wide one (such as `D-VACANT`) of a
   transition without a shape shows once, on the first shown marcher track
   assigned to it. The badge's tooltip lists them.
+  **Removed 2026-10-19** (owner, #319): no diagnostics badge on clips and no
+  diagnostics in the inspector or Show checks; they are engine internals a
+  designer can't act on. The resolver still reports them for tests.
 
 **Where they are (P8.5).** The inspector's Timeline section
 (`TimelineInspectorSection`, timeline mode only) explains each selected marcher

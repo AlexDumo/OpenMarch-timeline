@@ -24,7 +24,6 @@ import {
     joinList,
     type NamedPageBox,
 } from "@/timeline/timelineRangeWords";
-import { DIAGNOSTIC_STRING_KEYS } from "@/components/inspector/timelineInspectorStrings";
 import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
 
 export interface NotesViewProps {
@@ -114,19 +113,6 @@ export function noteText(
                 text: withWhere(t("showChecks.silkAspect")),
                 detail: who ? t("showChecks.forWho", { who }) : undefined,
             };
-        case "timeline": {
-            const code = note.detail?.code;
-            const text = code
-                ? t(DIAGNOSTIC_STRING_KEYS[code], {
-                      slot: note.detail?.slot ?? "",
-                      transition: note.what.transitionId ?? "",
-                  })
-                : "";
-            return {
-                text: withWhere(code ?? ""),
-                detail: who ? `${who}: ${text}` : text,
-            };
-        }
     }
 }
 

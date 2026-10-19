@@ -829,13 +829,6 @@
             "title": "Shapes"
         },
         "timeline": {
-            "diagnostics": {
-                "dFtlEmpty": "Nobody founds this follow-the-leader move, so there's no trail: the marchers fill the shape from its far end.",
-                "dFtlNonFounding": "This marcher joined or resumed a follow-the-leader move partway, so it isn't part of the trail's order and heads to its target on its own.",
-                "dOrderFallback": "This move couldn't inherit an order from a single earlier move, so it uses slot order.",
-                "dRebase": "This marcher joined or resumed this move partway, so its path was rebased to start where it was.",
-                "dVacant": "Slot {slot} has no marcher assigned, so nobody goes to that place."
-            },
             "move": {
                 "counts": "Counts",
                 "delete": "Delete move",

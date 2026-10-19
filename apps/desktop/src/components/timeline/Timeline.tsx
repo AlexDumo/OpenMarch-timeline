@@ -48,7 +48,6 @@ import type {
     TimelineSelection,
     TimelineTarget,
     TimelineTrack,
-    TimelineTrackDiagnostics,
     TimelineTrackTargetType,
     TimelineViewModel,
     TimelineWaveform,
@@ -80,7 +79,6 @@ export interface TimelineInput {
     readonly endBeatIndex: number;
     readonly legs: readonly TimelineLegInput[];
     readonly activitySpans: readonly TimelineActivitySpan[];
-    readonly diagnostics?: TimelineTrackDiagnostics;
     /**
      * Where other timelines take every member of this one (the dashed spans, UI-4), in spec beats:
      * which timeline, and its part of the range (UI-14 review)
@@ -281,7 +279,6 @@ const toTrack = (timeline: TimelineInput): TimelineTrack => ({
         texture: leg.texture,
     })),
     activitySpans: timeline.activitySpans,
-    diagnostics: timeline.diagnostics,
     ...(timeline.accessibleName
         ? { accessibleName: timeline.accessibleName }
         : {}),
