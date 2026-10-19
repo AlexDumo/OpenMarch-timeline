@@ -84,6 +84,30 @@ const renderTimeline = (props: Partial<TimelineProps> = {}) => {
 };
 
 describe("the read-only timeline", () => {
+    it("still draws the start flag, with no handles: Play starts there", () => {
+        renderTimeline({
+            readOnly: true,
+            selection: {
+                kind: "range",
+                range: { startBeatIndex: 9, endBeatIndex: 13 },
+            },
+        });
+        const flag = screen.getByTestId("timeline-start-flag-mark");
+        // view beats: the hidden beat 0 shifts them one left
+        expect(flag).toHaveAttribute("data-beat", "8");
+        expect(flag.querySelector("button")).toBeNull();
+        expect(
+            screen.queryByTestId("timeline-start-pennant"),
+        ).not.toBeInTheDocument();
+    });
+
+    it("draws no start flag without a window", () => {
+        renderTimeline({ readOnly: true, selection: { kind: "home" } });
+        expect(
+            screen.queryByTestId("timeline-start-flag-mark"),
+        ).not.toBeInTheDocument();
+    });
+
     it("draws no clips, no window, no + and no flag grips, though it's given them", () => {
         renderTimeline({ readOnly: true });
         expect(screen.queryByTestId("timeline-clip")).not.toBeInTheDocument();

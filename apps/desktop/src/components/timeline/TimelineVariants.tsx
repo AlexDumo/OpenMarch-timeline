@@ -46,6 +46,7 @@ import {
     TimelineRangePreview,
     TimelineRuler,
     TimelineSelectionRange,
+    TimelineStartFlagMark,
     type TimelineSelectionInteraction,
     TimelineShell,
     TimelineTrackClip,
@@ -1197,6 +1198,14 @@ const TimelineSurface = memo(function TimelineSurface({
                                 onChange={props.onLoopChange}
                             />
                         )}
+                        {props.readOnly &&
+                            props.startFlagBeat !== undefined && (
+                                <TimelineStartFlagMark
+                                    beat={props.startFlagBeat}
+                                    pixelsPerBeat={pixelsPerBeat}
+                                    height={pinnedHeight}
+                                />
+                            )}
                         {selectionRange && !basic && (
                             <TimelineSelectionRange
                                 range={selectionRange}

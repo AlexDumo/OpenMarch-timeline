@@ -276,6 +276,11 @@ export interface TimelineCommonProps
      * commands
      */
     readonly readOnly?: boolean;
+    /**
+     * A read-only timeline's start flag (view beats), drawn with no handles: Play starts there,
+     * so it shows even where nothing moves it by hand
+     */
+    readonly startFlagBeat?: number;
     /** Lanes drawn where the clip rows go, under the waveform (Visuals mode's cue lanes) */
     readonly band?: TimelineBand;
     /** Extra transport controls, such as volume, the metronome and fullscreen */

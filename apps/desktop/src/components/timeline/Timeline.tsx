@@ -396,6 +396,12 @@ const READ_ONLY_EDITS = {
     expertMarks: undefined,
 } as const;
 
+/** Where a read-only timeline draws the start flag: the window's start, or the flag left behind */
+const readOnlyStartFlag = (selection: TimelineSelection | undefined) =>
+    selection?.kind === "range"
+        ? (selection.startFlagBeatIndex ?? selection.range.startBeatIndex)
+        : undefined;
+
 export function Timeline(props: TimelineProps) {
     const { readOnly = false } = props;
     const timelines = readOnly ? NO_TIMELINES : props.timelines;
@@ -821,8 +827,14 @@ export function Timeline(props: TimelineProps) {
     };
 
     // Read-only (Visuals mode): no window and no edits; page boxes still select, to go to their page
+    // Its start flag is still drawn, where Play starts from
     const shownProps = readOnly
-        ? { ...commonProps, ...READ_ONLY_EDITS, band: props.band }
+        ? {
+              ...commonProps,
+              ...READ_ONLY_EDITS,
+              startFlagBeat: readOnlyStartFlag(selection),
+              band: props.band,
+          }
         : { ...commonProps, band: props.band };
 
     return props.mode === "basic" ? (
