@@ -90,6 +90,25 @@ export interface ResizeOtherRow extends ResizeRow {
     readonly pageMove?: boolean;
 }
 
+/**
+ * Whether row `a` of a move over `range` may be raised over a page's own moves: not when the
+ * marcher has another row over the move at a higher layer, which the raised row would then
+ * override (that row may be a page's own move too). Both `timelineResizeLimits` and
+ * `growOverLayers` follow it, so a resize never raises a row it wasn't let through for.
+ */
+const canRiseOverPageMoves = (
+    a: ResizeRow,
+    others: readonly ResizeOtherRow[],
+    range: { readonly start: number; readonly end: number },
+): boolean =>
+    !others.some(
+        (o) =>
+            o.marcherId === a.marcherId &&
+            o.layer > a.layer &&
+            o.start < range.end &&
+            range.start < o.end,
+    );
+
 const tighter = (
     current: TimelineResizeBound,
     beat: number,
@@ -192,15 +211,7 @@ export function timelineResizeLimits({
                 { kind: "member", beat: a.start },
                 true,
             );
-        // Whether this marcher's row can be raised over page moves without overriding another
-        // row of the marcher above it inside the move
-        const canRise = !others.some(
-            (o) =>
-                o.marcherId === a.marcherId &&
-                o.layer > a.layer &&
-                o.start < end &&
-                start < o.end,
-        );
+        const canRise = canRiseOverPageMoves(a, others, { start, end });
         // E3, E5: the marcher's other moves that would collide or win over the grown part
         for (const o of others) {
             if (o.marcherId !== a.marcherId || o.layer < a.layer) continue;
@@ -333,8 +344,9 @@ export async function readTimelineResizeLimits(
  * The layer each of a resized move's rows goes to (by assignment id), for the rows the new range
  * grows over a page's own moves at the same or a higher layer: one above the highest of them, so
  * the move overrides them there and the page's move catches up after it (R-5). Rows that grow
- * over nothing of the kind keep their layer. `timelineResizeLimits` already stopped the edge
- * wherever a raised row would override another move.
+ * over nothing of the kind keep their layer, and so do rows that can't rise
+ * (`canRiseOverPageMoves`): they grow underneath, as over any higher move, and
+ * `timelineResizeLimits` stopped their edges at the page moves beyond.
  */
 export function growOverLayers(
     own: readonly (ResizeRow & { readonly id: number })[],
@@ -344,6 +356,7 @@ export function growOverLayers(
 ): Map<number, number> {
     const out = new Map<number, number>();
     for (const a of own) {
+        if (!canRiseOverPageMoves(a, others, from)) continue;
         // The part of the new range this row gains (R-E1: rows anchored at a moved edge follow it)
         const grown: { start: number; end: number }[] = [];
         if (a.start === from.start && to.start < from.start)

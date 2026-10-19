@@ -705,6 +705,57 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
                 /Fitting Move 1 to Move 2's counts would run .* into Page 3/,
             );
         });
+
+        it("refuses a fit that would give a marcher two moves over the same counts (L-4)", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            const pages = await setUp(db);
+            const p2 = pageRange(pages, 2);
+            const p3 = pageRange(pages, 3);
+            const p4 = pageRange(pages, 4);
+            const page3 = await timelineOf(db, p3);
+            const [a] = ids(marchersAndPages);
+            // a's move split off Page 3, grown into Page 4 (its row rises over Page 4's move)
+            // and shrunk back: Page 3's counts again, one layer up
+            const offThree = await splitMarchersIntoNewMove({
+                db,
+                timelineId: page3.id,
+                marcherIds: [a!],
+            });
+            await resizeTimeline({
+                db,
+                timelineId: offThree.timeline.id,
+                start: p3.start,
+                end: p4.start + 1,
+            });
+            await resizeTimeline({
+                db,
+                timelineId: offThree.timeline.id,
+                start: p3.start,
+                end: p3.end,
+            });
+            expect(
+                (await membersOf(db, offThree.timeline.id)).map((m) => m.layer),
+            ).toEqual([1]);
+            const offTwo = await splitMarchersIntoNewMove({
+                db,
+                timelineId: (await timelineOf(db, p2)).id,
+                marcherIds: [a!],
+            });
+            // Fitted to Page 3's counts, a's row would sit on layer 0 beside its layer-1 row
+            // there: no same-layer overlap, but two moves over the same counts
+            await expectRefused(
+                db,
+                () =>
+                    mergeMoves({
+                        db,
+                        sourceId: offTwo.timeline.id,
+                        targetId: page3.id,
+                    }),
+                /already in Move 1, over Page 3's counts/,
+            );
+        });
     });
 
     describe("a page with a split move (audit of one-timeline-per-range callers)", () => {

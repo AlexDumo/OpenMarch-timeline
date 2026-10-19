@@ -2035,7 +2035,9 @@
         },
         "merge": {
             "menuPair": "Merge {source} into {target}",
+            "menuPairFit": "Merge {source} into {target} · fit to its counts",
             "menuInto": "Merge into {target}",
+            "menuIntoFit": "Merge into {target} · fit to its counts",
             "done": "Merged {source} into {target}"
         },
         "appendCounts": {

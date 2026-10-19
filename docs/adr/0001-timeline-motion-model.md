@@ -210,8 +210,8 @@ The study is `docs/timeline/research/defined-coordinates/10-keep-later-pages-stu
 some marchers out of a move (a page's timeline, say) into a move of their own, edit it apart, and
 merge it back. So the first rule above is relaxed:
 
-- Several stored timelines may have the same range. Only **Split** (`splitMarchersIntoNewMove`)
-  makes one, by sharing the range of the move it splits. A resize or a clip move may also land on
+- Several stored timelines may have the same range. **Split** (`splitMarchersIntoNewMove`) makes
+  one, by sharing the range of the move it splits. A resize or a clip move may also land on
   another move's exact counts when the two share no marcher (project owner, 2026-10-18; L-4
   refuses only one marcher's two moves over the same counts). Creating a timeline still refuses a
   shared range (`createTimelinesInTransaction`).

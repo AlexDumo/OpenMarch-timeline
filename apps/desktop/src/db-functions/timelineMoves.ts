@@ -734,12 +734,17 @@ export const isPageBox = (grid: PageGrid, range: BeatRange): boolean =>
  * the marcher's only row over any of the box's beats. Deleting that row changes nothing before the
  * box, and leaves the marcher holding through the box where the box starts. Empty when `range`
  * isn't a page's box.
+ *
+ * With `anyTimelineOverBox`, the row may be in any timeline over exactly the box: **Follow
+ * again** takes back a kept move wherever it went, and a split carries it, kept, into a move of
+ * its own over the box (UI-25).
  */
 export const ownPageMoves = async (
     tx: DbTransaction,
     grid: PageGrid,
     range: BeatRange,
     marcherIds: readonly number[],
+    { anyTimelineOverBox = false }: { anyTimelineOverBox?: boolean } = {},
 ): Promise<Map<number, DatabaseTimelineAssignment>> => {
     const out = new Map<number, DatabaseTimelineAssignment>();
     if (marcherIds.length === 0 || !isPageBox(grid, range)) return out;
@@ -784,7 +789,7 @@ export const ownPageMoves = async (
         if (list.length !== 1) continue;
         const r = list[0]!;
         if (
-            r.timelineId === pageTimeline.id &&
+            (anyTimelineOverBox || r.timelineId === pageTimeline.id) &&
             r.slotCount === 1 &&
             r.shapeId === null &&
             exact(r.row.start_beat, r.row.end_beat) &&

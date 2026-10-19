@@ -473,8 +473,10 @@ export const mergeMovesInTransaction = async ({
 /**
  * Refuses (E-ARGS) fitting `source` to `target`'s counts when the range procedure would fail
  * (`setTimelineRangeInTransaction`), with a message that names the marchers: a row that doesn't
- * reach an edge stays where it is, so it must lie inside the target's counts, and every fitted row
- * must stay clear of the same marcher's rows on its layer in other moves.
+ * reach an edge stays where it is, so it must lie inside the target's counts; every fitted row
+ * must stay clear of the same marcher's rows on its layer in other moves; and no marcher may
+ * already have another move over exactly the target's counts (spec §6.2 L-4), as one split off
+ * the target has.
  */
 async function refuseBadFit(
     tx: DbTransaction,
@@ -511,6 +513,7 @@ async function refuseBadFit(
     if (marcherIds.length === 0) return;
     const A = schema.timeline_assignments;
     const T = schema.timeline_transitions;
+    const L = schema.timelines;
     const others = await tx
         .select({
             marcherId: A.marcher_id,
@@ -518,9 +521,12 @@ async function refuseBadFit(
             end: A.end_beat,
             layer: A.layer,
             timelineId: T.timeline_id,
+            timelineStart: L.start_beat,
+            timelineEnd: L.end_beat,
         })
         .from(A)
         .innerJoin(T, eq(A.transition_id, T.id))
+        .innerJoin(L, eq(T.timeline_id, L.id))
         .where(inArray(A.marcher_id, marcherIds))
         .all();
     const hits = fitted.flatMap((f) => {
@@ -547,6 +553,44 @@ async function refuseBadFit(
             )}'s counts first.`,
         );
     }
+    await refuseSecondMoveOverCounts(tx, others, source, target, nameOf);
+}
+
+/**
+ * Refuses (E-ARGS) a fit that would give a marcher two moves over the same counts (spec §6.2
+ * L-4): one of `rows` (the source's marchers' rows) is in another move over exactly `target`'s
+ * counts, as a move split off the target is.
+ */
+async function refuseSecondMoveOverCounts(
+    tx: DbTransaction,
+    rows: readonly {
+        readonly marcherId: number;
+        readonly timelineId: number;
+        readonly timelineStart: number;
+        readonly timelineEnd: number;
+    }[],
+    source: DatabaseTimeline,
+    target: DatabaseTimeline,
+    nameOf: (timelineId: number) => string,
+): Promise<void> {
+    const sameCounts = rows.filter(
+        (o) =>
+            o.timelineId !== source.id &&
+            o.timelineId !== target.id &&
+            o.timelineStart === target.start_beat &&
+            o.timelineEnd === target.end_beat,
+    );
+    if (sameCounts.length === 0) return;
+    const ids = [...new Set(sameCounts.map((o) => o.marcherId))];
+    refuse(
+        `${labelList(await marcherLabels(tx, ids), ids)} ${
+            ids.length === 1 ? "is" : "are"
+        } already in ${nameOf(sameCounts[0]!.timelineId)}, over ${nameOf(
+            target.id,
+        )}'s counts, so merging would give ${
+            ids.length === 1 ? "it" : "them"
+        } two moves over the same counts.`,
+    );
 }
 
 /** `mergeMovesInTransaction` as one undoable edit. */

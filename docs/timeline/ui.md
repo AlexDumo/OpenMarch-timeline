@@ -1183,7 +1183,7 @@ from it. The spec still wins on the model; this file decides presentation.
   one-slot transition per marcher (UI-9), so when many marchers share one (a page's timeline, say)
   there was no way to pull some of them out and edit them apart. Supersedes UI-9's **One timeline
   per range** (owner): a range may hold several moves. Items marked _lead default_ were filled in by
-  the lead; the feel-based ones are V-330 to V-339 in research/ownership/VALIDATION.md. Built on
+  the lead; the feel-based ones are V-330 to V-340 in research/ownership/VALIDATION.md. Built on
   branch `timeline/split-move`. Expert only: Basic (UI-19) offers none of it, not even in the
   command palette.
   - **Several moves over one range** (owner). The page box still stands for the page's original
@@ -1215,7 +1215,9 @@ from it. The spec still wins on the model; this file decides presentation.
     marchers and the count their motion changes from. Until the layer-priority change lands, the split
     keeps each row's stored layer. A converted page's shared transition (one slot per marcher, P9.10)
     is split slot by slot: each leaving marcher gets its own one-slot transition with its slot's
-    destination and the same path, and the old one is compacted, so no slot is left vacant. A
+    destination and the same path, and the old one is compacted, so no slot is left vacant. A kept
+    marcher (Keep, defined coordinates 10) stays kept in the new move, and **Follow again** on the
+    page box takes its kept move back from there too, deleting the split move if that empties it. A
     transition into a shape, a follow-the-leader one, or one whose marchers are in an inheriting
     follow-the-leader order can't be split apart; the split is refused naming the marchers who move
     together ("…move into one shape together with … Select them all, or none of them"), and selecting
@@ -1251,8 +1253,9 @@ from it. The spec still wins on the model; this file decides presentation.
     would re-time everyone in it. The drop label and the menu entries say so ("Merge into Page 3 · fit
     to its counts"), and ⌘K's **Merge this move into its page** fits a move to the page it starts on.
     It is refused, naming the marchers, when one joins or leaves the move partway at a count outside
-    the target's, or when a fitted row would run into another of the marcher's moves on its layer;
-    resizing the move to the target's counts first gets there. With the same counts nothing moves on
+    the target's, when a fitted row would run into another of the marcher's moves on its layer, or
+    when a marcher already has another move over exactly the target's counts (a move split off it,
+    spec §6.2 L-4); resizing the move to the target's counts first gets there in the first two. With the same counts nothing moves on
     the field.
   - **Toasts.** "Split 8 marchers into Move 6" and "Merged Move 6 into Page 3", each with **Undo**,
     which runs the app's undo and closes on the next edit, undo or redo (UI-14's delete toast).
@@ -1264,7 +1267,10 @@ from it. The spec still wins on the model; this file decides presentation.
     above the page's moves they now overlap (`growOverLayers` in `timelineResize.ts`). For now
     it still stops at other moves (V-121), and at a page's moves when the marcher has another
     move above it inside this one, which the raise would override; §6.2 drops the stop at other
-    moves when it lands (ADR 0001, 2026-10-16 amendment).
+    moves when it lands (ADR 0001, 2026-10-16 amendment). A row with a move above it there (often
+    the page's own move, edited after this move crossed its flag) is never raised: it grows
+    underneath, as over any higher move, so a resize never changes who plays on counts it didn't
+    touch (`canRiseOverPageMoves`).
   - **What still goes by range** (V-338, V-339). Resizing a move onto exactly another move's counts is
     refused only when the two share a marcher (spec §6.2 L-4, owner 2026-10-18; it was refused for
     every move, so a split move stretched away from its page could never get back to merge). Deleting

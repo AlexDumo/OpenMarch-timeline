@@ -246,6 +246,37 @@ describe("timelineResizeLimits (pure)", () => {
     );
 
     plainIt(
+        "doesn't raise a row under a page move that already sits over the move: it grows underneath",
+        () => {
+            // Page 2's own move over [8,16) is above Move M over [4,12) (page 2 edited after M
+            // crossed its flag). Growing M's end to 14 must not lift M over page 2 on 8–12,
+            // counts the resize never touched
+            const pageAbove = {
+                ...row(1, 8, 16, 1),
+                timelineId: 2,
+                pageMove: true,
+            };
+            const limits = timelineResizeLimits({
+                timelineId: 1,
+                start: 4,
+                end: 12,
+                own: [row(1, 4, 12)],
+                others: [pageAbove],
+                taken: [],
+            });
+            expect(timelineResizeRefusal(limits, 4, 14)).toBeNull();
+            expect(
+                growOverLayers(
+                    [{ id: 7, ...row(1, 4, 12) }],
+                    [pageAbove],
+                    { start: 4, end: 12 },
+                    { start: 4, end: 14 },
+                ).size,
+            ).toBe(0);
+        },
+    );
+
+    plainIt(
         "stops at a same- or higher-layer move on the same marcher, and grows over lower ones (E3, E4, E5)",
         () => {
             const limits = timelineResizeLimits({

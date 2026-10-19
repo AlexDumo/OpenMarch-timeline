@@ -966,7 +966,7 @@ export function useHeldWhileStale<T>(value: T, current: boolean): T {
  * The timelines that don't match a page box (UI-10, project owner, 2026-10-03). A page box
  * already stands for the stored timeline with exactly its range: clicking it sets the start flag
  * and playhead to its edges, so a clip under it would only repeat it. Timelines that start or end
- * off a flag (a mid-page arrival, a pinned start flag) keep their clips, and so does a move split
+ * off a flag (a mid-page arrival) keep their clips, and so does a move split
  * off a page's timeline (UI-25): the box stands for the oldest over its range. Ranges are spec
  * beats.
  */
