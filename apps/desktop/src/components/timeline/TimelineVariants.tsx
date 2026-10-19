@@ -12,6 +12,7 @@ import {
 } from "react";
 import { TimelineLoopBar } from "./TimelineLoopBar";
 import { AddPageFlagMenu } from "./AddPageFlagMenu";
+import { useClipDrops } from "./clipDrops";
 import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import { flushSync } from "react-dom";
 import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react";
@@ -644,6 +645,34 @@ const TimelineSurface = memo(function TimelineSurface({
         () => (basic ? [] : packTimelineTracks(model.tracks)),
         [basic, model.tracks],
     );
+    // A move that stopped fitting a page box (the box was split) drops out of the page row
+    const clipDrops = useClipDrops(model.tracks, model.pages, model.beatCount);
+    // While a clip drops, the tracks draw over the pinned header, so it is seen leaving the page
+    // box, not sliding out from under the bar. The drops that landed, for the current drops
+    const [landed, setLanded] = useState<{
+        drops: typeof clipDrops;
+        ids: ReadonlySet<TimelineTrackId>;
+    }>(() => ({ drops: clipDrops, ids: new Set() }));
+    const endDrop = useCallback(
+        (trackId: TimelineTrackId) =>
+            setLanded((previous) =>
+                previous.drops === clipDrops && previous.ids.has(trackId)
+                    ? previous
+                    : {
+                          drops: clipDrops,
+                          ids: new Set(
+                              previous.drops === clipDrops
+                                  ? [...previous.ids, trackId]
+                                  : [trackId],
+                          ),
+                      },
+            ),
+        [clipDrops],
+    );
+    const dropsInFlight =
+        landed.drops === clipDrops
+            ? [...clipDrops].some((id) => !landed.ids.has(id))
+            : clipDrops.size > 0;
     const snapBeats = useMemo(
         () =>
             getPageSnapBeats({
@@ -952,7 +981,10 @@ const TimelineSurface = memo(function TimelineSurface({
                         vertically, under the pinned ruler */}
                     <div
                         data-testid="timeline-tracks"
-                        className="absolute inset-x-0 top-0 z-[1]"
+                        className={clsx(
+                            "absolute inset-x-0 top-0",
+                            dropsInFlight ? "z-[3]" : "z-[1]",
+                        )}
                         style={{ height: surfaceHeight }}
                     >
                         {/* The waveform first, so a clip's resize tag above the first row paints
@@ -1008,6 +1040,12 @@ const TimelineSurface = memo(function TimelineSurface({
                                     renaming={renaming === String(track.id)}
                                     onRenameStart={startRename}
                                     onRenameEnd={endRename}
+                                    dropFrom={
+                                        clipDrops.has(track.id)
+                                            ? TIMELINE_PAGE_ROW_TOP
+                                            : undefined
+                                    }
+                                    onDropEnd={endDrop}
                                 />
                             )),
                         )}
