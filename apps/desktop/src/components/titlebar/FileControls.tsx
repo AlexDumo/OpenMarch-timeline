@@ -3,7 +3,7 @@ import {
     ArrowUUpLeftIcon,
     ArrowUUpRightIcon,
 } from "@phosphor-icons/react";
-import { useFullscreenStore } from "@/stores/FullscreenStore";
+import { useIsPreviewMode } from "@/stores/PreviewModeStore";
 import { useQuery } from "@tanstack/react-query";
 import {
     canRedoQueryOptions,
@@ -14,7 +14,8 @@ import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { isWebBuild } from "@/utilities/webBuild";
 
 export default function FileControls() {
-    const { isFullscreen } = useFullscreenStore();
+    // Preview edits nothing, so it has nothing to undo
+    const preview = useIsPreviewMode();
     const databaseReady = useDatabaseReady();
     const { data: canUndo } = useQuery(canUndoQueryOptions(databaseReady));
     const { data: canRedo } = useQuery(canRedoQueryOptions(databaseReady));
@@ -22,7 +23,7 @@ export default function FileControls() {
 
     return (
         <div className="titlebar-button flex w-fit gap-8">
-            {!isFullscreen && (
+            {!preview && (
                 <>
                     {/* The browser has its own reload. */}
                     {!isWebBuild && (

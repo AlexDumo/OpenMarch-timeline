@@ -150,6 +150,8 @@ export interface TimelineProps {
      * commands given are ignored
      */
     readonly readOnly?: boolean;
+    /** A read-only timeline with no start flag drawn (Preview, which always plays on) */
+    readonly hideStartFlag?: boolean;
     /** Lanes drawn in place of the clip rows, under the waveform (Visuals mode's cue lanes) */
     readonly band?: TimelineBand;
     readonly mode: TimelineMode;
@@ -831,7 +833,9 @@ export function Timeline(props: TimelineProps) {
         ? {
               ...commonProps,
               ...READ_ONLY_EDITS,
-              startFlagBeat: readOnlyStartFlag(selection),
+              startFlagBeat: props.hideStartFlag
+                  ? undefined
+                  : readOnlyStartFlag(selection),
               band: props.band,
           }
         : { ...commonProps, band: props.band };

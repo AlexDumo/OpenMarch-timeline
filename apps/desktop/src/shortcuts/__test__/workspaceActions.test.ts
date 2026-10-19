@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useEditorModeStore } from "@/stores/EditorModeStore";
 import { useWorkspaceViewStore } from "@/stores/WorkspaceViewStore";
 import { isActionEnabled, registerActionHandler, runAction } from "../registry";
-import { isDrillEditingAction } from "../workspaceActions";
+import {
+    isActionOffInWorkspace,
+    isDrillEditingAction,
+} from "../workspaceActions";
+import { usePreviewModeStore } from "@/stores/PreviewModeStore";
 import {
     ACTION_IDS,
     getActionDefinition,
@@ -86,5 +90,53 @@ describe("drill edits in Visuals mode (performer-behavior.md 7.1)", () => {
         expect(runAction("moveSelectedMarchersUp")).toBe(true);
         useEditorModeStore.setState({ mode });
         nudge.off();
+    });
+});
+
+describe("Preview, which edits nothing", () => {
+    afterEach(() => usePreviewModeStore.setState({ isPreview: false }));
+
+    it("turns off edits, undo and selecting, and keeps playback, navigation and files", () => {
+        const ids: ActionId[] = [
+            "moveSelectedMarchersUp",
+            "performUndo",
+            "selectAllMarchers",
+            "toggleLoop",
+            "focusTimeline",
+            "playPause",
+            "nextPage",
+            "nextPlaybackSpeed",
+            "launchSaveFileDialogue",
+            "togglePreview",
+        ];
+        const handlers = ids.map(handle);
+        usePreviewModeStore.setState({ isPreview: true });
+        const enabled = Object.fromEntries(
+            ids.map((id) => [id, isActionEnabled(id)]),
+        );
+        expect(enabled).toEqual({
+            moveSelectedMarchersUp: false,
+            performUndo: false,
+            selectAllMarchers: false,
+            toggleLoop: false,
+            focusTimeline: false,
+            playPause: true,
+            nextPage: true,
+            nextPlaybackSpeed: true,
+            launchSaveFileDialogue: true,
+            togglePreview: true,
+        });
+        expect(runAction("performUndo")).toBe(false);
+
+        usePreviewModeStore.setState({ isPreview: false });
+        for (const id of ids) expect(isActionEnabled(id), id).toBe(true);
+        handlers.forEach((h) => h.off());
+    });
+
+    it("keeps no drill edit", () => {
+        usePreviewModeStore.setState({ isPreview: true });
+        for (const id of ACTION_IDS)
+            if (isDrillEditingAction(id))
+                expect(isActionOffInWorkspace(id), id).toBe(true);
     });
 });

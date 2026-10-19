@@ -3,7 +3,7 @@ import {
     centerAtBase,
     clampPan,
     clampZoom,
-    fullscreenFit,
+    previewFit,
     isPanButton,
     panBy,
     pinchStep,
@@ -66,9 +66,9 @@ export function settleView() {
     if (!navigated) resetView();
 }
 
-/** Fits the whole field into `container` (its fullscreen container, padding included). */
-export function fitFullscreen(container: { width: number; height: number }) {
-    const fit = fullscreenFit(view(), container, view().field);
+/** Fits the whole field into `container` (its container in Preview). */
+export function fitPreview(container: { width: number; height: number }) {
+    const fit = previewFit(view(), container, view().field);
     if (fit) useFieldViewStore.setState(fit);
 }
 

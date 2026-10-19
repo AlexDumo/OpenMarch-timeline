@@ -138,7 +138,9 @@
             "showNextPaths": "Show next page paths",
             "showPreviousPaths": "Show previous page paths",
             "toggleNextPaths": "Toggle next page paths",
-            "togglePreviousPaths": "Toggle previous page paths"
+            "togglePreviousPaths": "Toggle previous page paths",
+            "togglePreview": "Preview the show",
+            "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play"
         }
     },
     "analyticsOptIn": {
@@ -303,7 +305,8 @@
         "run": "Run",
         "suggested": "Suggested",
         "title": "Command palette",
-        "unavailable": "Not available right now"
+        "unavailable": "Not available right now",
+        "offInPreview": "Not in Preview — exit Preview to edit"
     },
     "convertShow": {
         "backupFolder": "In {folder}",
@@ -2228,9 +2231,6 @@
             "subset": "Subset"
         },
         "pages": "Pages",
-        "perspective": {
-            "label": "Perspective"
-        },
         "rangeMenu": {
             "deleteWithMoves": "Delete page and its moves",
             "followAgain": "Let selected marchers follow again",
@@ -2242,7 +2242,11 @@
         "bugReport.placeholder": "What went wrong?\nWhat did you expect?\nHow can we reproduce the issue?",
         "databasePathError": "Database Path Error",
         "databasePathError.description": "Failed to fetch .dots file path!\n\nPlease fully quit the app and try again.\n\nIf the issue persists, please reach out to support.",
-        "databasePathError.dismiss": "Dismiss"
+        "databasePathError.dismiss": "Dismiss",
+        "preview": "Preview",
+        "preview.tooltip": "Watch the show without editing it",
+        "preview.exit": "Exit preview",
+        "preview.exitTooltip": "Back to editing (Esc)"
     },
     "toolbar": {
         "alignment": {

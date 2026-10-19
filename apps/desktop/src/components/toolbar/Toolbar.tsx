@@ -3,9 +3,7 @@ import { FileTab } from "./tabs/FileTab";
 import { CollisionsTab } from "./tabs/CollisionsTab";
 import AlignmentTab from "./tabs/AlignmentTab";
 import ViewTab from "./tabs/ViewTab";
-import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { useEffect, useState } from "react";
-import { clsx } from "clsx";
 import { T } from "@tolgee/react";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -19,23 +17,12 @@ import VisualsToolbar from "@/components/visuals/VisualsToolbar";
 import WorkspaceViewSwitch from "@/components/visuals/WorkspaceViewSwitch";
 
 export default function Topbar() {
-    const { isFullscreen } = useFullscreenStore();
     const [activeTab, setActiveTab] = useState("alignment");
     const { selectedPage } = useSelectedPage()!;
     const { currentCollisions } = useCollisionStore();
     const visuals = useIsVisualsView();
     // Visuals mode authors cues, which Basic doesn't show (UI-19)
     const basic = useIsBasicMode();
-
-    // Switch to "view" tab when entering fullscreen mode
-    useEffect(() => {
-        if (isFullscreen) {
-            setActiveTab("view");
-        }
-        if (!isFullscreen) {
-            setActiveTab("alignment");
-        }
-    }, [isFullscreen]);
 
     // Switch from collisions tab to alignment when page changes and no collisions exist. Not while
     // playing or scrubbing, when the selected page follows the playhead (#226): the tab waits for
@@ -56,46 +43,29 @@ export default function Topbar() {
     ]);
 
     return (
-        <div
-            className={clsx("group relative", {
-                "border-stroke bg-modal backdrop-blur-32 shadow-modal absolute z-50 w-full rounded-[18px] border p-8":
-                    isFullscreen,
-            })}
-        >
-            {!isFullscreen && !basic && (
+        <div className="group relative">
+            {!basic && (
                 <WorkspaceViewSwitch className="absolute top-0 right-0 z-10" />
             )}
-            {visuals && !isFullscreen ? (
+            {visuals ? (
                 <VisualsToolbar />
             ) : (
                 <Tabs
                     value={activeTab}
                     onValueChange={setActiveTab}
-                    className={clsx(
-                        "flex flex-col gap-0 overflow-hidden transition-[max-height,opacity] duration-250 ease-in-out",
-                        {
-                            "pointer-events-none max-h-4 flex-row items-center gap-8 opacity-0":
-                                isFullscreen,
-                            "group-hover:pointer-events-auto group-hover:max-h-[80px] group-hover:opacity-100":
-                                isFullscreen,
-                        },
-                    )}
+                    className="flex flex-col gap-0 overflow-hidden"
                 >
                     <TabsList className="gap-0 border-none">
                         <TabItem value="file">
                             <T keyName="inspector.shape.fileTab" />
                         </TabItem>
-                        {!isFullscreen && (
-                            <>
-                                <TabItem value="alignment">
-                                    <T keyName="inspector.shape.alignmentTab" />
-                                </TabItem>
+                        <TabItem value="alignment">
+                            <T keyName="inspector.shape.alignmentTab" />
+                        </TabItem>
 
-                                <TabItem value="select">
-                                    <T keyName="inspector.shape.selectTab" />
-                                </TabItem>
-                            </>
-                        )}
+                        <TabItem value="select">
+                            <T keyName="inspector.shape.selectTab" />
+                        </TabItem>
                         <TabItem value="view">
                             <T keyName="inspector.shape.viewTab" />
                         </TabItem>
@@ -118,17 +88,13 @@ export default function Topbar() {
                         <FileTab />
                     </TabContent>
 
-                    {!isFullscreen && (
-                        <>
-                            <TabContent value="alignment">
-                                <AlignmentTab />
-                            </TabContent>
+                    <TabContent value="alignment">
+                        <AlignmentTab />
+                    </TabContent>
 
-                            <TabContent value="select">
-                                <SelectTab />
-                            </TabContent>
-                        </>
-                    )}
+                    <TabContent value="select">
+                        <SelectTab />
+                    </TabContent>
 
                     <TabContent value="view">
                         <ViewTab />

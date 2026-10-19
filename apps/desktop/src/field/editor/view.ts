@@ -111,15 +111,15 @@ export function centerAtBase(
     );
 }
 
-/** The share of the fullscreen field's container the field fills. */
-const FULLSCREEN_FILL = 0.87;
+/** In Preview, the share of its container the field fills. */
+const PREVIEW_FILL = 0.87;
 
 /**
- * The view on entering fullscreen: the whole field at 87% of its container,
+ * The view on entering Preview: the whole field at 87% of its container,
  * centered across and a tenth of the spare height down. `container` is the
  * field's container including its padding.
  */
-export function fullscreenFit(
+export function previewFit(
     view: FieldView,
     container: { width: number; height: number },
     field: FieldSize,
@@ -127,8 +127,8 @@ export function fullscreenFit(
     if (container.width <= 0 || container.height <= 0) return null;
     if (field.width <= 0 || field.height <= 0) return null;
     const zoom = Math.min(
-        (container.width / field.width) * FULLSCREEN_FILL,
-        (container.height / field.height) * FULLSCREEN_FILL,
+        (container.width / field.width) * PREVIEW_FILL,
+        (container.height / field.height) * PREVIEW_FILL,
     );
     return {
         ...view,
