@@ -237,11 +237,11 @@ for (const c of CASES) {
 
 /**
  * Set vs Following (#301): the one pixel check that a Following marcher is
- * drawn faded next to a Set one (the field test API's `following` says what
+ * drawn hollow next to a Set one (the field test API's `following` says what
  * the field means to draw, not the pixels). Over page 1, T1 moves and T2
  * stays where it began, so on page 1's flag T1 is Set and T2 is Following.
  */
-test.describe("following-fade", () => {
+test.describe("following-hollow", () => {
     test.use({
         seedSql: seedShowSql({
             beats: 16,
@@ -266,7 +266,9 @@ test.describe("following-fade", () => {
         }),
     });
 
-    test("a Following dot is fainter than a Set one", async ({ show }) => {
+    test("a Following dot is a ring as strong as a Set dot round a faint middle", async ({
+        show,
+    }) => {
         const { page } = show;
         await page.waitForFunction(
             () => window.fieldTest?.marchers().length === 2,
@@ -279,42 +281,78 @@ test.describe("following-fade", () => {
                 ),
             )
             .toEqual([false, true]);
-        await settle(page);
-        await page.waitForTimeout(300);
+        // Close enough that the ring is several pixels wide
+        await zoomTo(page, 3);
         const png = await field(page).screenshot();
-        await saveCapture(page, "following-fade", png, ["following-fade"]);
+        await saveCapture(page, "following-hollow", png, ["following-hollow"]);
 
         const box = (await field(page).boundingBox())!;
+        const scale = png.readUInt32BE(16) / box.width;
+        const { zoom } = await page.evaluate(() =>
+            window.fieldTest!.viewport(),
+        );
         const centers = await page.evaluate(() =>
             window.fieldTest!.marchers().map((m) => m.screen),
         );
-        const contrasts = await dotContrasts(
+        const [set, following] = await dotProfiles(
             page,
             png,
             centers.map((c) => ({
-                x: (c.x - box.x) * (png.readUInt32BE(16) / box.width),
-                y: (c.y - box.y) * (png.readUInt32BE(20) / box.height),
+                x: (c.x - box.x) * scale,
+                y: (c.y - box.y) * scale,
             })),
+            // The dot's radius is 5 field units
+            5 * zoom * scale,
         );
-        const [set, following] = contrasts as [number, number];
-        expect(set).toBeGreaterThan(40);
-        // About half as strong: 0.5 opacity over the field
-        expect(following).toBeGreaterThan(set * 0.3);
-        expect(following).toBeLessThan(set * 0.7);
+        expect(set!.center).toBeGreaterThan(100);
+        // The ring keeps the Set dot's contrast...
+        expect(following!.ring).toBeGreaterThan(set!.center * 0.9);
+        // ...round a faint middle (a quarter-strength fill)
+        expect(following!.center).toBeLessThan(set!.center * 0.4);
     });
 });
 
+/** Zooms the field about its middle until its zoom is at least `zoom`, with Ctrl+wheel. */
+async function zoomTo(page: Page, zoom: number) {
+    const box = (await field(page).boundingBox())!;
+    const marchers = await page.evaluate(() =>
+        window.fieldTest!.marchers().map((m) => m.screen),
+    );
+    const x = (marchers[0]!.x + marchers[1]!.x) / 2;
+    const y = (marchers[0]!.y + marchers[1]!.y) / 2;
+    await page.mouse.move(
+        Math.min(Math.max(x, box.x + 10), box.x + box.width - 10),
+        Math.min(Math.max(y, box.y + 10), box.y + box.height - 10),
+    );
+    await page.keyboard.down("Control");
+    await expect
+        .poll(
+            async () => {
+                await page.mouse.wheel(0, -30);
+                return (await page.evaluate(() => window.fieldTest!.viewport()))
+                    .zoom;
+            },
+            { intervals: [100], timeout: 15_000 },
+        )
+        .toBeGreaterThanOrEqual(zoom);
+    await page.keyboard.up("Control");
+    await settle(page);
+    await page.waitForTimeout(300);
+}
+
 /**
- * How far each dot's center is from the field just above it (clear of the dot
- * and its label), 0 to 255, in a field capture at device-pixel `points`.
+ * Each dot's contrast with the field beside it (clear of the dot and its
+ * label), 0 to 255, in a field capture at device-pixel `points`: at its
+ * center, and the most anywhere from the center out to its edge, `radius`.
  */
-const dotContrasts = (
+const dotProfiles = (
     page: Page,
     png: Buffer,
     points: readonly { x: number; y: number }[],
+    radius: number,
 ) =>
     page.evaluate(
-        async ({ base64, points }) => {
+        async ({ base64, points, radius }) => {
             const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
             const bitmap = await createImageBitmap(
                 new Blob([bytes], { type: "image/png" }),
@@ -332,12 +370,18 @@ const dotContrasts = (
                 return [d[0]!, d[1]!, d[2]!];
             };
             return points.map(({ x, y }) => {
-                const dot = shade(x, y);
-                const around = shade(x, y - 40);
-                return Math.max(
-                    ...dot.map((value, i) => Math.abs(value - around[i]!)),
-                );
+                const around = shade(x - radius * 2.5, y);
+                const contrast = (dx: number) =>
+                    Math.max(
+                        ...shade(x + dx, y).map((value, i) =>
+                            Math.abs(value - around[i]!),
+                        ),
+                    );
+                let ring = 0;
+                for (let dx = 0; dx < radius * 0.95; dx++)
+                    ring = Math.max(ring, contrast(dx));
+                return { center: contrast(0), ring };
             });
         },
-        { base64: png.toString("base64"), points },
+        { base64: png.toString("base64"), points, radius },
     );

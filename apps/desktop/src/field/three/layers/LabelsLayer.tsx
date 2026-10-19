@@ -4,7 +4,7 @@ import type { FieldTheme } from "@openmarch/core";
 import { rgba01 } from "../fieldGeometry";
 import type { FieldMarchers } from "../fieldMarchers";
 import type { FieldDimming } from "../fieldDimming";
-import { marcherOpacity, type FieldFollowing } from "../fieldFollowing";
+import { labelOpacity, type FieldFollowing } from "../fieldFollowing";
 import { useFieldDraw } from "../fieldDrawContext";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
@@ -33,7 +33,7 @@ export default function LabelsLayer({
     marchers: FieldMarchers;
     /** Marchers whose labels are drawn dimmed (#201). */
     dimming: FieldDimming;
-    /** Marchers whose labels are drawn faded as Following (#300); dimming wins. */
+    /** Marchers whose labels are drawn fainter as Following (#300); dimming wins. */
     following: FieldFollowing;
     /** Each marcher's drill number, by id. */
     labels: ReadonlyMap<number, string>;
@@ -121,7 +121,7 @@ export default function LabelsLayer({
                     text: shown[i] ? (labels.get(id) ?? "") : "",
                     size: LABEL_SIZE,
                     baseline: CENTER_BASELINE,
-                    color: colorOf(marcherOpacity(dimming, following, id)),
+                    color: colorOf(labelOpacity(dimming, following, id)),
                 })),
             );
         }

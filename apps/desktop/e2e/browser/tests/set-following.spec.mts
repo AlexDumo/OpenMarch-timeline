@@ -15,7 +15,7 @@ import { isolate } from "../timeline.mjs";
 
 // Set vs Following (#300, #301): on the playhead's exact count, a marcher with
 // a coordinate of its own (a move of its own ends there, with motion) is Set
-// and drawn solid; every other marcher is Following and drawn faded.
+// and drawn solid; every other marcher is Following and drawn hollow.
 //
 // Pages flag at beats 9, 17 and 25, four beats a measure. Over page 1 (1–9)
 // everyone moves. Over page 2 (9–17) T1 moves, T2 has a stay move (it ends
@@ -64,7 +64,7 @@ test.use({
     ],
 });
 
-/** Who's drawn faded as Following, by drill number. */
+/** Who's drawn hollow as Following, by drill number. */
 const following = async (page: Page) =>
     (await drawnMarchers(page))
         .filter((m) => m.following)
@@ -121,7 +121,7 @@ test("a page added mid-move shows everyone Following", async ({ show }) => {
     await expect.poll(() => following(page)).toEqual(["T1", "T2", "T3"]);
 });
 
-test("a faded marcher can be dragged, and becomes Set on that count", async ({
+test("a hollow marcher can be dragged, and becomes Set on that count", async ({
     show,
 }) => {
     const { page } = show;
@@ -135,7 +135,7 @@ test("a faded marcher can be dragged, and becomes Set on that count", async ({
     await expect.poll(() => following(page)).toEqual(["T2"]);
 });
 
-test("selecting a faded marcher keeps it faded", async ({ show }) => {
+test("selecting a hollow marcher keeps it hollow", async ({ show }) => {
     const { page } = show;
     await open(page);
     await goTo(page, "m5");
@@ -148,7 +148,7 @@ test("selecting a faded marcher keeps it faded", async ({ show }) => {
     await expect.poll(() => following(page)).toEqual(["T2", "T3"]);
 });
 
-test("isolation's dim takes over from the fade", async ({ show }) => {
+test("isolation's dim takes over from the hollow look", async ({ show }) => {
     const { page } = show;
     await open(page);
     // Page 2's move (its box starts at beat index 8) has T1 and T2; T3,

@@ -21,10 +21,11 @@ Terms used throughout:
 - On the playhead's exact count, a marcher is **Set** when a move of its own ends on that count with
   real motion; on the first page every marcher is Set. Every other marcher is **Following**: it
   holds from an earlier count, is partway through a move, or stands on a stay move that ends where
-  it began (Only Page N, unlink, a kept spot). While paused or scrubbing, the field draws Following
-  marchers and their labels at about half opacity; they stay selectable and draggable, and dragging
-  one on the count makes it Set. Playback draws everyone solid, and isolation's dim wins over the
-  fade (#300, #301). Say "Set" and "Following" (e.g. "Following Page 2") in the UI, not "pinned",
+  it began (Only Page N, unlink, a kept spot). While paused or scrubbing, the field draws a Following
+  marcher hollow (a full-strength ring in its own color round a quarter-strength fill, so it keeps
+  its contrast and reads by shape, not only by lightness) with its label at 0.75 opacity. Following
+  marchers stay selectable and draggable, and dragging one on the count makes it Set. Playback draws
+  everyone solid, and isolation's dim wins over the hollow look (#300, #301). Say "Set" and "Following" (e.g. "Following Page 2") in the UI, not "pinned",
   "locked", "kept" or "edited".
 
 About the screenshots: most were taken during the build, before the 2026-10-09 rebase onto #115

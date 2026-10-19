@@ -2,14 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 import { FieldDimming } from "../fieldDimming";
 import {
     FieldFollowing,
-    FOLLOWING_OPACITY,
+    FOLLOWING_LABEL_OPACITY,
+    HOLLOW_FILL_OPACITY,
     drawnFollowing,
-    marcherOpacity,
+    labelOpacity,
 } from "../fieldFollowing";
 import { DIMMED_OPACITY } from "../fieldDimming";
 
 describe("FieldFollowing", () => {
-    it("fades the Following marchers, and nobody without a set", () => {
+    it("marks the Following marchers, and nobody without a set", () => {
         const following = new FieldFollowing();
         expect(following.isFollowing(1)).toBe(false);
         following.set(new Set([2]));
@@ -34,23 +35,31 @@ describe("FieldFollowing", () => {
     });
 });
 
-describe("a marcher's drawn opacity", () => {
+describe("a marcher's drawn look", () => {
     it("is isolation's dim when dimmed, whether or not it follows", () => {
         const dimming = new FieldDimming();
         const following = new FieldFollowing();
         dimming.set(new Set([1]));
         following.set(new Set([1, 2, 3]));
-        expect(marcherOpacity(dimming, following, 1)).toBe(FOLLOWING_OPACITY);
-        expect(marcherOpacity(dimming, following, 2)).toBe(DIMMED_OPACITY);
         expect(drawnFollowing(dimming, following, 1)).toBe(true);
         expect(drawnFollowing(dimming, following, 2)).toBe(false);
+        expect(labelOpacity(dimming, following, 1)).toBe(
+            FOLLOWING_LABEL_OPACITY,
+        );
+        expect(labelOpacity(dimming, following, 2)).toBe(DIMMED_OPACITY);
     });
 
     it("is solid when Set", () => {
         const dimming = new FieldDimming();
         const following = new FieldFollowing();
         following.set(new Set([2]));
-        expect(marcherOpacity(dimming, following, 1)).toBe(1);
-        expect(FOLLOWING_OPACITY).toBeGreaterThan(DIMMED_OPACITY);
+        expect(drawnFollowing(dimming, following, 1)).toBe(false);
+        expect(labelOpacity(dimming, following, 1)).toBe(1);
+    });
+
+    it("keeps a Following label readable: under Set, over dimmed", () => {
+        expect(FOLLOWING_LABEL_OPACITY).toBeLessThan(1);
+        expect(FOLLOWING_LABEL_OPACITY).toBeGreaterThanOrEqual(0.75);
+        expect(HOLLOW_FILL_OPACITY).toBeLessThan(0.5);
     });
 });

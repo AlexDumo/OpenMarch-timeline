@@ -35,7 +35,7 @@ import { FieldFollowing } from "./fieldFollowing";
  * (`useTimelineFocusScene`, which also publishes the isolation plan the
  * playhead driver draws members at), collision markers (`useCollisionStore`),
  * who's dimmed, and who's Following (#300). Plans change on page changes,
- * edits and setting changes, never per frame; dimming and the Following fade
+ * edits and setting changes, never per frame; dimming and the Following look
  * go to the layers through {@link FieldDimming} and {@link FieldFollowing},
  * outside React.
  */
@@ -172,7 +172,7 @@ function useFieldDimming(enabled: boolean): FieldDimming {
 
 /**
  * #300: while paused or scrubbing, the marchers with no coordinate of their
- * own on the count shown are Following, drawn faded; playing, nobody is. Each
+ * own on the count shown are Following, drawn hollow; playing, nobody is. Each
  * marcher's Set beats are worked out once per resolver version and kept
  * markers, so a playhead move only looks them up, and `FieldFollowing`
  * redraws only when who's Following changes.
