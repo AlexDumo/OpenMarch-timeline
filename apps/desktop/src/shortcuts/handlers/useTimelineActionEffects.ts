@@ -10,6 +10,7 @@ const TRANSPORT_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
     "timelinePlayPause",
     "toggleLoop",
     "playPage",
+    "playOn",
     "toggleMetronome",
     "holdFasterPlayback",
     "holdSlowerPlayback",

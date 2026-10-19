@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@openmarch/ui";
-import { FlagIcon, PushPinSlashIcon } from "@phosphor-icons/react";
+import { FlagIcon } from "@phosphor-icons/react";
 import { Keycaps } from "./ShortcutTooltip";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
@@ -39,6 +39,18 @@ export function isolatedTimelineName(
     // pinned on page 1's start): the same moment, so name it as page 1's
     if (range.start === 0 && boxes[0]?.range?.start === 1)
         range = { start: 1, end: range.end };
+    // Both lines held on one beat (UI-21): an empty window, named by its beat, not as a run of
+    // pages read backwards ("Pages 5–4")
+    if (range.end <= range.start) {
+        const flag = boxes.find((f) => f.range!.end === range.start);
+        if (flag) return `Page ${flag.page.name}'s flag`;
+        const inside = boxes.find(
+            (f) => f.range!.start <= range.start && range.start < f.range!.end,
+        );
+        return inside
+            ? `Page ${inside.page.name}, count ${range.start - inside.range!.start}`
+            : `Beat ${range.start}`;
+    }
     const exact = boxes.find(
         (f) => f.range!.start === range.start && f.range!.end === range.end,
     );
@@ -218,8 +230,8 @@ export const passedSets = (names: readonly string[]) =>
 /**
  * The line over the field (UI-12, replacing UI-11's From start badge): what a drag edits now, so
  * the window is never only a tint on the timeline. Quiet (no border, subtitle text) for an
- * ordinary page: a whole page box, start flag not pinned. Prominent, and flashed
- * once, when anything is unusual: a partial window, a pinned start flag (with **Unpin**), a window
+ * ordinary page: a whole page box. Prominent, and flashed
+ * once, when anything is unusual: a partial window, a window
  * passing page flags (that part never truncates), or past the last flag. With looping on it
  * names it while it is elsewhere ("Space loops Page 3's move", UI-17). Only the buttons take the pointer, so the field under it stays
  * usable. Screen readers hear the sentence once it settles, not on every scrubbed beat. Hidden
@@ -227,8 +239,6 @@ export const passedSets = (names: readonly string[]) =>
  */
 export function TimelineFromStartBadge() {
     const selection = useTimelineSelectionStore((s) => s.selection);
-    const startBeat = useTimelineSelectionStore((s) => s.startBeat);
-    const pinned = useTimelineSelectionStore((s) => s.startPinned);
     const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
     const playing = useTimelineSelectionStore((s) => s.playback !== null);
     const { pages } = useTimingObjects()!;
@@ -236,9 +246,6 @@ export function TimelineFromStartBadge() {
     // What a drop edits: nothing drops in Visuals mode (performer-behavior.md 7.1)
     const visuals = useIsVisualsView();
     const range = selection.kind === "range" ? selection : null;
-    // The pin only matters while it bounds the window (not when P is on or before it)
-    const pinShown = pinned && range !== null && range.start === startBeat;
-    // (Basic never pins; see useBasicModeGuards)
     // UI-17: with looping on, the loop's name when it isn't the window being edited
     const loop = useTimelineSelectionStore((s) => s.loop);
     const loopName =
@@ -309,17 +316,16 @@ export function TimelineFromStartBadge() {
             : null;
     const movedOn = stopped !== null;
     const editing = editingWords(basic ? plan : null, name);
-    const unusual =
-        loopShown || pinShown || through.length > 0 || !wholePage || movedOn;
+    const unusual = loopShown || through.length > 0 || !wholePage || movedOn;
     const sentence =
         selection.kind === "none"
             ? ""
-            : `${stopped ? `${stopped}. ` : ""}${editing}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${loopShown ? `. Space loops ${loopName}` : ""}`;
-    // Flash when it turns prominent for a new reason: a pin, or crossing flags
-    const flashKey = `${loopShown}|${pinShown}|${through.join(",")}`;
+            : `${stopped ? `${stopped}. ` : ""}${editing}${through.length ? `, through ${passedSets(through)}` : ""}${loopShown ? `. Space loops ${loopName}` : ""}`;
+    // Flash when it turns prominent for a new reason: a loop elsewhere, or crossing flags
+    const flashKey = `${loopShown}|${through.join(",")}`;
     const [fresh, setFresh] = useState(false);
     useEffect(() => {
-        if (!loopShown && !pinShown && through.length === 0) return;
+        if (!loopShown && through.length === 0) return;
         setFresh(true);
         const timeout = setTimeout(() => setFresh(false), 900);
         return () => clearTimeout(timeout);
@@ -351,7 +357,7 @@ export function TimelineFromStartBadge() {
                 unusual
                     ? clsx(
                           "bg-bg-1 text-text border shadow-md",
-                          loopShown || pinShown || through.length
+                          loopShown || through.length
                               ? START_INK.border
                               : "border-stroke",
                       )
@@ -388,24 +394,6 @@ export function TimelineFromStartBadge() {
                 >
                     · through {passedSets(through)}
                 </span>
-            )}
-            {pinShown && (
-                <button
-                    type="button"
-                    data-testid="timeline-window-unpin"
-                    title="The start flag is pinned: it stays here when you move to other pages. Unpin it to follow the page again."
-                    className={clsx(
-                        "rounded-4 hover:bg-fg-2 pointer-events-auto flex shrink-0 items-center gap-4 border px-6 py-1 text-[11px]",
-                        START_INK.border,
-                        START_INK.strongText,
-                    )}
-                    onClick={() =>
-                        useTimelineSelectionStore.getState().unpinStart()
-                    }
-                >
-                    <PushPinSlashIcon size={11} weight="fill" />
-                    Unpin
-                </button>
             )}
             {loopShown && (
                 <span

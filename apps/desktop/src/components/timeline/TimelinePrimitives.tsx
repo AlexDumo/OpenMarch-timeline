@@ -4,7 +4,6 @@ import {
     ArrowsOutLineHorizontalIcon,
     DotsThreeIcon,
     HouseIcon,
-    PushPinIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { flushSync } from "react-dom";
@@ -166,6 +165,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     onPlayingChange,
     playLoops = false,
     onPlayFromPlayhead,
+    onPlayOn,
     onNavigate,
     onFit,
     fitted = false,
@@ -185,6 +185,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     playLoops?: boolean;
     /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     onPlayFromPlayhead?: () => void;
+    /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
+    onPlayOn?: () => void;
     onNavigate?: (direction: TimelineNavigation) => void;
     /** Fit the show in view, or back to the zoom from before fitting */
     onFit?: () => void;
@@ -332,6 +334,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                         onPlayingChange={onPlayingChange}
                         playLoops={playLoops}
                         onPlayFromPlayhead={onPlayFromPlayhead}
+                        onPlayOn={onPlayOn}
                     />
                     <TransportNavigationButton
                         direction="next"
@@ -1964,10 +1967,6 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
 export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     range,
     startFlagBeatIndex,
-    startPinned = false,
-    onUnpin,
-    pinTop = TIMELINE_PAGE_ROW_BOTTOM + 2,
-    pinSize = 18,
     beatCount,
     pixelsPerBeat,
     height,
@@ -1981,15 +1980,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     range: TimelineBeatRange;
     /** Where to draw the start flag when it isn't the range's start (UI-10, after Stop) */
     startFlagBeatIndex?: number;
-    /**
-     * The start flag is pinned (UI-10): it stays through navigation. UI-12 draws a pin beside its
-     * stem, under the ruler, so a forgotten pin can be seen; clicking the pin unpins (`onUnpin`).
-     */
-    startPinned?: boolean;
-    onUnpin?: () => void;
-    /** Where the pin sits, below the ruler, and its size (compact's row is smaller) */
-    pinTop?: number;
-    pinSize?: number;
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
@@ -2364,32 +2354,6 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                         style={{ height }}
                     />
                 </button>
-                {startPinned && (
-                    <button
-                        type="button"
-                        data-testid="timeline-start-pin"
-                        data-timeline-interactive="true"
-                        aria-label="Start flag pinned. Click to unpin"
-                        title="Pinned: the start flag stays here when you move to other pages. Click to unpin, so it follows the page again."
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={onUnpin}
-                        disabled={!onUnpin}
-                        className={clsx(
-                            "bg-bg-1 rounded-4 pointer-events-auto absolute z-[45] flex items-center justify-center border p-0 shadow-sm enabled:cursor-pointer",
-                            pinSize >= 18 ? "size-18" : "size-14",
-                            START_INK.text,
-                            START_INK.border,
-                        )}
-                        // Clear of the flag's own 12px handle and of a rehearsal tab centered on
-                        // the flag's beat (UI-12 review)
-                        style={{ left: x + 10, top: pinTop }}
-                    >
-                        <PushPinIcon
-                            size={pinSize >= 18 ? 12 : 10}
-                            weight="fill"
-                        />
-                    </button>
-                )}
                 {/* The pennant is its own handle in the headroom strip (UI-20), above the
                     playhead's (z-50) and the loop's ends (z-58): after Stop the flag is drawn on
                     the playhead, so this is the part of it that can always be grabbed. Its left edge is drawn on the stem's
