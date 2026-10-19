@@ -8,6 +8,7 @@ export type { PdfDocument, PdfPageInfo, PdfRenderer } from "./pdf";
 export {
     closeAllPdfRenderers,
     createElectronPdfRenderer,
+    decodeImageWithChromium,
     isPdfRendererWindow,
     livePdfRendererCount,
     type ElectronPdfRendererOptions,

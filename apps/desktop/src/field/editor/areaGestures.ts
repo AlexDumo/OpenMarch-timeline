@@ -1,6 +1,7 @@
 import type { FieldGesture, FieldPoint, FieldPointer } from "./fieldEditor";
 import { hitRadius, type DrawnMarchers } from "./hitTest";
 import {
+    areaPicks,
     lassoCloses,
     marchersInPolygon,
     marchersInRect,
@@ -29,6 +30,8 @@ export type AreaPorts = {
     marchers(): DrawnMarchers;
     zoom(): number;
     canSelect(id: number): boolean;
+    /** Whether a marcher is an item (C2.2), which an area takes only when nothing else is in it */
+    isItem?(id: number): boolean;
     selection(): readonly number[];
     select(ids: readonly number[]): void;
     /** The shape changed: the overlay draws it again. */
@@ -42,8 +45,9 @@ export interface AreaGesture extends FieldGesture {
 
 /**
  * A marquee: the rectangle from the press to the pointer. On release it
- * replaces the selection with every marcher whose dot it touches; with Shift
- * held at the press, it adds them.
+ * replaces the selection with every marcher whose dot it touches, leaving out
+ * items when performers are among them (`areaPicks`); with Shift held at the
+ * press, it adds them.
  */
 export function startMarquee(
     ports: AreaPorts,
@@ -64,11 +68,14 @@ export function startMarquee(
             ports.changed();
         },
         end(next) {
-            const inside = marchersInRect(
-                ports.marchers(),
-                rectBetween(start.field, next.field),
-                hitRadius(ports.zoom()),
-                ports.canSelect,
+            const inside = areaPicks(
+                marchersInRect(
+                    ports.marchers(),
+                    rectBetween(start.field, next.field),
+                    hitRadius(ports.zoom()),
+                    ports.canSelect,
+                ),
+                (id) => ports.isItem?.(id) ?? false,
             );
             ports.select(
                 selectionAfterArea(ports.selection(), inside, start.shift),
@@ -81,8 +88,8 @@ export function startMarquee(
 /**
  * A lasso: a freehand line from the press. Released within
  * `LASSO_CLOSE_DISTANCE` (50) screen px of its start it closes, and replaces
- * the selection with every marcher whose center is inside it (Shift at the
- * press adds them). Released farther away, it selects nothing and changes
+ * the selection with every marcher whose center is inside it, as a marquee
+ * picks them (Shift at the press adds them). Released farther away, it selects nothing and changes
  * nothing; the double-click's first click has already cleared the selection,
  * unless Shift was held.
  */
@@ -108,10 +115,9 @@ export function startLasso(ports: AreaPorts, start: FieldPointer): AreaGesture {
         end(next) {
             add(next.field);
             if (!lassoCloses(start.field, next.field, ports.zoom())) return;
-            const inside = marchersInPolygon(
-                ports.marchers(),
-                points,
-                ports.canSelect,
+            const inside = areaPicks(
+                marchersInPolygon(ports.marchers(), points, ports.canSelect),
+                (id) => ports.isItem?.(id) ?? false,
             );
             ports.select(
                 selectionAfterArea(ports.selection(), inside, start.shift),

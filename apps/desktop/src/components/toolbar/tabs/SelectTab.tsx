@@ -290,6 +290,7 @@ function FamilySelector({ marchers }: { marchers: Marcher[] }) {
 const SELECT_BY_STORAGE_KEY = "openmarch-select-tab-mode";
 
 function SelectTabContents() {
+    // Performers: props and equipment aren't selected by section, tag or prefix
     const { data: marchers, isSuccess: marchersLoaded } = useQuery(
         allMarchersQueryOptions(),
     );

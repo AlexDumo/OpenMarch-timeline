@@ -6,6 +6,7 @@ import { TimelineMoveCardSlot } from "./TimelineMoveCard";
 import { T } from "@tolgee/react";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { InspectorPageProvider } from "./InspectorPageContext";
+import { ShowChecksSection } from "@/components/notes/ShowNotesList";
 
 function Inspector() {
     // UI-19: Basic has no move cards (range, delete move): they make moves Basic can't edit
@@ -25,6 +26,8 @@ function Inspector() {
                     <PageEditor />
                     <MarcherEditor />
                     <AlignmentEditor />
+                    {/* ADR 0002 D-22: the show's one quiet list, in both modes */}
+                    <ShowChecksSection />
                 </div>
 
                 {/* Fixed notes footer at the bottom of the inspector */}

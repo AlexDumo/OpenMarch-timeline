@@ -44,12 +44,42 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 }
 
 /**
+ * The marchers that get coordinate sheets, named and sorted for the export: performers, from the
+ * marchers query, as items (props and equipment) have no sheet. An unnamed marcher is called by its section and the
+ * number in its drill number; sorted by section, then drill number.
+ */
+export function coordinateSheetMarchers(
+    marchers: readonly Marcher[],
+): (Marcher & { name: string })[] {
+    return marchers
+        .map((marcher) => ({
+            ...marcher,
+            // Use raw DB section with the numeric part of drill_number as fallback display name
+            name:
+                marcher.name ||
+                `${marcher.section} ${
+                    marcher.drill_number.match(/\d+/)?.[0] ||
+                    String(marcher.drill_order)
+                }`,
+        }))
+        .sort((a, b) => {
+            const sectionCompare = (a.section || "").localeCompare(
+                b.section || "",
+            );
+            if (sectionCompare !== 0) return sectionCompare;
+            return a.drill_number.localeCompare(b.drill_number, undefined, {
+                numeric: true,
+            });
+        });
+}
+
+/**
  * Renders one coordinate sheet per marcher (or one per quarter-sheet chunk of 28 pages) to HTML.
  *
  * `positions` is where the marchers stand on each page: the resolver sampled at each page's end
  * beat (docs/timeline/phases/07-page-parity.md P7.7). Rows are sorted by page order.
  *
- * @param marchers - already named and sorted for the export
+ * @param marchers - already named and sorted for the export (`coordinateSheetMarchers`)
  * @param t - translates the fallback section name and render errors
  */
 export function buildCoordinateSheets({

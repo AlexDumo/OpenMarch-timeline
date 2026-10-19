@@ -5,6 +5,7 @@ import { migrationQueriesAfter } from "@/../electron/database/services/DrizzleMi
 import { TIMELINE_MODEL_USER_VERSION } from "@/../electron/database/fileVersion";
 import { transactionWithHistory } from "@/db-functions/history";
 import type { DbConnection } from "@/db-functions/types";
+import { LATER_MARCHER_COLUMNS } from "./timelineMode";
 import {
     convertPagesToTimelineInTransaction,
     type ConvertPagesOptions,
@@ -33,9 +34,27 @@ export async function finishTestConversion(db: DbConnection): Promise<void> {
         last ? Number(last.createdAt) : undefined,
         "timeline",
     );
+    // A page-mode fixture has the `marchers` columns later migrations add already
+    const columns = new Set(
+        (
+            await db
+                .select({ name: sql<string>`name` })
+                .from(sql`pragma_table_info('marchers')`)
+                .all()
+        ).map((c) => c.name),
+    );
+    const addsExisting = (query: string) =>
+        LATER_MARCHER_COLUMNS.some(
+            (c) =>
+                columns.has(c.name) &&
+                query.includes(
+                    `ALTER TABLE \`marchers\` ADD COLUMN \`${c.name}\``,
+                ),
+        );
     await db.transaction(async (tx) => {
         for (const query of queries)
-            if (query.trim()) await tx.run(sql.raw(query));
+            if (query.trim() && !addsExisting(query))
+                await tx.run(sql.raw(query));
         await tx.run(
             sql.raw(`PRAGMA user_version = ${TIMELINE_MODEL_USER_VERSION}`),
         );
