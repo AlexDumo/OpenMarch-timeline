@@ -21,6 +21,10 @@ The `.d.ts` files are hand-written for the `.js` files; keep them in step.
 - Moved from `src/view3d/vendor/om-pose/` (2026-10-11), with header comments
   and spelling ignores only. No behavior change.
 - `legTurnSetup` and `cloneRig` are exported for the per-channel bake.
+- `uniform-shader.js` has a seventh style, `cadet` (2026-10-16, for the West
+  Point preset): academy full dress, with chest braid in trim, a cross belt in
+  the accent color with a plate, and a pleated cummerbund in the secondary
+  color.
 
 ## Channel layering
 
@@ -48,5 +52,6 @@ a blend, the same as on r160. That suite lives in om-pose; the vendored copy
 held only the three modules, so there was no suite here to move. Checks of these files here are the 3D View's own tests and the web
 preview's pixel comparisons (`docs/3d/findings.md`).
 
-om-pose is OpenMarch's own (private) repository, so these files and its
-assets ship under the app's license.
+om-pose is OpenMarch's own (private) repository, so these files ship under the
+app's license. Its assets don't: see `../assets/om-pose/LICENSE` (ADR 0002
+D-7, correction of 2026-10-11).

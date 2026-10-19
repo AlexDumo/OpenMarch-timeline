@@ -35,6 +35,7 @@ import {
     keptStatesOnPageBoxes,
 } from "../timelineKeepHere";
 import { readKeptAssignmentIds } from "../timelineKeptMarkers";
+import { splitMarchersIntoNewMove } from "../timelineSplitMoves";
 
 keepFixturesInPageMode(
     "its tests trim the show, write timeline rows and set the flag themselves",
@@ -318,6 +319,46 @@ describeDbTests("Keep later pages: storage and commands", (it) => {
         );
         expect(await snapshot(db)).toEqual(rows);
         expect(await undoGroups(db)).toBe(groups);
+    });
+
+    it("Follow again takes back a kept move that a split carried into a move of its own (UI-25)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const { a, b } = await show(db);
+        const before = await atFlags(db, a);
+        await keepMarchersOnPage({ db, pageBox: PAGE3, marcherIds: [a, b] });
+        const pageTimeline = (
+            await db.select().from(schema.timelines).all()
+        ).find(
+            (t) => t.start_beat === PAGE3.start && t.end_beat === PAGE3.end,
+        )!;
+        const split = await splitMarchersIntoNewMove({
+            db,
+            timelineId: pageTimeline.id,
+            marcherIds: [a],
+        });
+        expect(await stateOn(db, PAGE3, a)).toBe("kept");
+        const rows = await snapshot(db);
+
+        const result = await followAgainOnPage({
+            db,
+            pageBox: PAGE3,
+            marcherIds: [a],
+        });
+
+        expect(result.changed).toEqual([a]);
+        expect(await stateOn(db, PAGE3, a)).toBe("follows");
+        expect(await stateOn(db, PAGE3, b)).toBe("kept");
+        // The split move it emptied goes; the page's own timeline stays with b
+        const timelineIds = (
+            await db.select().from(schema.timelines).all()
+        ).map((t) => t.id);
+        expect(timelineIds).not.toContain(split.timeline.id);
+        expect(timelineIds).toContain(pageTimeline.id);
+        expect(await atFlags(db, a)).toEqual(before);
+        await performUndo(db);
+        expect(await snapshot(db)).toEqual(rows);
     });
 
     it("deleting a kept move's timeline takes the marker, and undo brings it back exactly", async ({

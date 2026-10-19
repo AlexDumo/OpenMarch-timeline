@@ -158,6 +158,11 @@ export type QualitySettings = {
      * drawn (above it they fade by coverage, in both modes).
      */
     minLineCoverage: number;
+    /**
+     * The view glides when the zoom percentage is clicked; without it, the
+     * view jumps there.
+     */
+    animateView: boolean;
 };
 
 /**
@@ -171,12 +176,14 @@ export const QUALITY_SETTINGS: Record<FieldQuality["mode"], QualitySettings> = {
         labelFadeFrom: 4,
         labelFadeTo: 7,
         minLineCoverage: 0,
+        animateView: true,
     },
     low: {
         dpr: 1,
         labelFadeFrom: 8,
         labelFadeTo: 11,
         minLineCoverage: 0.3,
+        animateView: false,
     },
 };
 

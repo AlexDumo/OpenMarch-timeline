@@ -1170,10 +1170,7 @@
             "label": "ページ {pageName}",
             "subset": "サブセット"
         },
-        "pages": "ページ",
-        "perspective": {
-            "label": "視点"
-        }
+        "pages": "ページ"
     },
     "titlebar": {
         "bugReport": "バグ や フィードバック を 提出 ",

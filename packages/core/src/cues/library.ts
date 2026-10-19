@@ -43,6 +43,8 @@ export interface CueLibraryValue {
     settings?: readonly CueSettingField[];
     /** Carry values: what holding it counts as. */
     holds?: PerformerCarry;
+    /** Silk and flag Carry items: width ÷ height (`CueLibraryItem.aspect`). */
+    aspect?: number;
 }
 
 const choice = (
@@ -266,6 +268,7 @@ function itemValue(item: CueLibraryItem): CueLibraryValue {
         fits: channel === "silk" ? FLAG : ALL_CARRIES,
         defaultTransition: 1,
         ...(item.holds ? { holds: item.holds } : {}),
+        ...(item.aspect !== undefined ? { aspect: item.aspect } : {}),
     };
 }
 

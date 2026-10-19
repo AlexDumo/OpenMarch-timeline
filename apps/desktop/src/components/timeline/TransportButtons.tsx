@@ -25,6 +25,7 @@ import {
 import clsx from "clsx";
 import { Keycaps, ShortcutTooltip } from "./ShortcutTooltip";
 import { isMac } from "./platform";
+import { START_INK } from "./startFlagInk";
 import type { TimelineNavigation } from "./TimelineViewModel";
 
 // The same elements every render, so the memoized transport buttons don't re-render for them
@@ -47,6 +48,20 @@ const PLAY_FROM_PLAYHEAD_ICON = (
 );
 
 /**
+ * Play while Alt is held (UI-26): the start flag's bar, then Play, then on ("play on from the start
+ * flag", past the playhead)
+ */
+const PLAY_ON_ICON = (
+    <span className="flex items-center gap-2">
+        <span
+            aria-hidden
+            className={clsx("rounded-2 h-14 w-[2.5px]", START_INK.bg)}
+        />
+        <PlayIcon size={14} weight="fill" />
+    </span>
+);
+
+/**
  * The transport's shortcuts as the tooltips show them (UI-17), as keycaps joined with " + ". They
  * mirror the actions' default bindings (`shortcuts/definitions.ts`), which a test checks; this
  * file doesn't import the app's shortcut registry. A rebound shortcut isn't shown here.
@@ -60,6 +75,7 @@ export const TRANSPORT_SHORTCUTS = {
     nextBeat: "Shift + E",
     play: "Space",
     playPage: "Shift + Space",
+    playOn: "Alt + Space",
     loop: "C",
 } as const;
 
@@ -133,8 +149,24 @@ const navigationMode = (event: {
 }): TransportNavigationMode =>
     event.altKey ? "edge" : event.shiftKey ? "beat" : "page";
 
-/** Marks Previous and Next, so a held Alt over them can be kept from the menu bar */
+/**
+ * Marks Previous and Next, and Play when Alt plays on (UI-26), so a held Alt over them can be kept
+ * from the menu bar
+ */
 const NAVIGATION_BUTTON_ATTRIBUTE = "data-transport-navigation";
+
+/**
+ * On Windows and Linux, a held Alt over a button that reads it is kept from the menu bar
+ * (`useHeldNavigationMode`)
+ */
+const keepAltFromMenu = (event: KeyboardEvent) => {
+    if (
+        event.key === "Alt" &&
+        !isMac() &&
+        document.querySelector(`[${NAVIGATION_BUTTON_ATTRIBUTE}]:hover`)
+    )
+        event.preventDefault();
+};
 
 /**
  * The modifier held now, as Previous and Next would read it. Only a change re-renders, so key
@@ -155,12 +187,7 @@ function useHeldNavigationMode(enabled: boolean): TransportNavigationMode {
                 event.ctrlKey || event.metaKey ? "page" : navigationMode(event),
             );
         const onKey = (event: KeyboardEvent) => {
-            if (
-                event.key === "Alt" &&
-                !isMac() &&
-                document.querySelector(`[${NAVIGATION_BUTTON_ATTRIBUTE}]:hover`)
-            )
-                event.preventDefault();
+            keepAltFromMenu(event);
             read(event);
         };
         const onBlur = () => setMode("page");
@@ -181,32 +208,56 @@ function useHeldNavigationMode(enabled: boolean): TransportNavigationMode {
     return mode;
 }
 
+/** What Play does: Space, Shift+Space (from the playhead, or pause) or Alt+Space (play on, UI-26) */
+type TransportPlayMode = "play" | "shift" | "alt";
+
+const playMode = (
+    event: {
+        readonly shiftKey: boolean;
+        readonly altKey: boolean;
+        readonly ctrlKey: boolean;
+        readonly metaKey: boolean;
+    },
+    alt: boolean,
+): TransportPlayMode =>
+    event.ctrlKey || event.metaKey
+        ? "play"
+        : event.shiftKey
+          ? "shift"
+          : alt && event.altKey
+            ? "alt"
+            : "play";
+
 /**
- * Whether Shift is held now, as Play would read it (`useHeldNavigationMode`'s rules: only a change
- * re-renders, losing focus lets go, a pointer event re-reads it)
+ * The modifier held now, as Play would read it (`useHeldNavigationMode`'s rules: only a change
+ * re-renders, losing focus lets go, a pointer event re-reads it). Alt counts only when `alt`.
  */
-function useHeldShift(enabled: boolean): boolean {
-    const [held, setHeld] = useState(false);
+function useHeldPlayMode(enabled: boolean, alt: boolean): TransportPlayMode {
+    const [mode, setMode] = useState<TransportPlayMode>("play");
     useEffect(() => {
         if (!enabled) return;
         const read = (event: KeyboardEvent | PointerEvent) =>
-            setHeld(event.shiftKey && !event.ctrlKey && !event.metaKey);
-        const onBlur = () => setHeld(false);
-        window.addEventListener("keydown", read, true);
-        window.addEventListener("keyup", read, true);
+            setMode(playMode(event, alt));
+        const onKey = (event: KeyboardEvent) => {
+            if (alt) keepAltFromMenu(event);
+            read(event);
+        };
+        const onBlur = () => setMode("play");
+        window.addEventListener("keydown", onKey, true);
+        window.addEventListener("keyup", onKey, true);
         window.addEventListener("pointermove", read, true);
         window.addEventListener("pointerdown", read, true);
         window.addEventListener("blur", onBlur);
         return () => {
-            window.removeEventListener("keydown", read, true);
-            window.removeEventListener("keyup", read, true);
+            window.removeEventListener("keydown", onKey, true);
+            window.removeEventListener("keyup", onKey, true);
             window.removeEventListener("pointermove", read, true);
             window.removeEventListener("pointerdown", read, true);
             window.removeEventListener("blur", onBlur);
-            setHeld(false);
+            setMode("play");
         };
-    }, [enabled]);
-    return held;
+    }, [enabled, alt]);
+    return mode;
 }
 
 const NAVIGATION_TARGETS = {
@@ -221,7 +272,10 @@ const NAVIGATION_TARGETS = {
 interface TransportGuideRow<Mode extends string = string> {
     readonly mode: Mode;
     readonly icon: ReactNode;
+    /** What it does, for the button's name */
     readonly label: string;
+    /** What the guide shows instead of `label`, with the lines' marks inline */
+    readonly content?: ReactNode;
     /** The shortcut as keycaps */
     readonly shortcut: string;
 }
@@ -290,7 +344,9 @@ function TransportGuide({
                     <span aria-hidden="true" className="flex">
                         {row.icon}
                     </span>
-                    <span className="text-[12px]">{row.label}</span>
+                    <span className="flex items-center gap-4 text-[12px]">
+                        {row.content ?? row.label}
+                    </span>
                     <Keycaps shortcut={row.shortcut} plus />
                 </span>
             ))}
@@ -348,26 +404,97 @@ export const TransportNavigationButton = memo(
     },
 );
 
-/** What Play (Space) and Shift+Play (Shift+Space) do, in the order the tooltip lists them */
+/** The start flag as the timeline draws it, a pennant on its stem, for the guide's words */
+const START_FLAG_MARK = (
+    <svg
+        aria-hidden="true"
+        data-mark="start-flag"
+        width="9"
+        height="13"
+        viewBox="0 0 9 13"
+        className={clsx("shrink-0", START_INK.text)}
+    >
+        <rect x="0" y="0" width="1.5" height="13" fill="currentColor" />
+        <path d="M0 0 L9 0 L0 9 Z" fill="currentColor" />
+    </svg>
+);
+
+/** The playhead as the timeline draws it, its head on its line, for the guide's words */
+const PLAYHEAD_MARK = (
+    <svg
+        aria-hidden="true"
+        data-mark="playhead"
+        width="10"
+        height="13"
+        viewBox="0 0 10 13"
+        className="text-accent shrink-0"
+    >
+        <rect x="4.25" y="0" width="1.5" height="13" fill="currentColor" />
+        <path d="M0 0 H10 V5 L5 9 L0 5 Z" fill="currentColor" />
+    </svg>
+);
+
+/** "Play from start flag ⚑ and continue", with the lines' marks after their names (owner) */
+const playWords = (
+    from: "start" | "playhead",
+    stopAtPlayhead: boolean,
+): { label: string; content: ReactNode } => {
+    const name = from === "start" ? "start flag" : "playhead";
+    const end = stopAtPlayhead ? "stop at playhead" : "continue";
+    return {
+        label: `Play from ${name} and ${end}`,
+        content: (
+            <>
+                Play from {name}
+                {from === "start" ? START_FLAG_MARK : PLAYHEAD_MARK}
+                and {end}
+                {stopAtPlayhead && PLAYHEAD_MARK}
+            </>
+        ),
+    };
+};
+
+/**
+ * What Play (Space), Alt+Play (Alt+Space, with `playsOn`) and Shift+Play (Shift+Space) do, in the
+ * order the tooltip lists them (owner, 2026-10-19). With `playsOn` (Expert, UI-26) Space stops at
+ * the playhead and Alt continues past it; without (Basic, the 3D View) Space continues from the
+ * start flag. With looping on, Space and Shift+Space name the loop.
+ */
 const playGuide = (
     loops: boolean,
-): readonly TransportGuideRow<"play" | "shift">[] => [
+    playsOn: boolean,
+): readonly TransportGuideRow<TransportPlayMode>[] => [
     {
         mode: "play",
         icon: PLAY_ICON,
-        label: loops ? "Play the loop" : "Play from the start flag",
+        ...(loops ? { label: "Play the loop" } : playWords("start", playsOn)),
         shortcut: TRANSPORT_SHORTCUTS.play,
     },
+    ...(playsOn
+        ? [
+              {
+                  mode: "alt" as const,
+                  icon: PLAY_ON_ICON,
+                  ...playWords("start", false),
+                  shortcut: TRANSPORT_SHORTCUTS.playOn.replace(
+                      "Alt",
+                      isMac() ? "Option" : "Alt",
+                  ),
+              },
+          ]
+        : []),
     {
         mode: "shift",
         icon: PLAY_FROM_PLAYHEAD_ICON,
-        label: loops ? "Play the loop once" : "Play from the playhead",
+        ...(loops
+            ? { label: "Play the loop once" }
+            : playWords("playhead", false)),
         shortcut: TRANSPORT_SHORTCUTS.playPage,
     },
 ];
 
 /** What Stop (Space) and Pause (Shift+Space) do while playing (UI-24) */
-const stopGuide: readonly TransportGuideRow<"play" | "shift">[] = [
+const stopGuide: readonly TransportGuideRow<TransportPlayMode>[] = [
     {
         mode: "play",
         icon: STOP_ICON,
@@ -393,26 +520,38 @@ export const TransportPlayButton = memo(function TransportPlayButton({
     onPlayingChange,
     playLoops,
     onPlayFromPlayhead,
+    onPlayOn,
     testIdPrefix = "timeline",
 }: {
     isPlaying: boolean;
     onPlayingChange?: (isPlaying: boolean) => void;
     playLoops: boolean;
     onPlayFromPlayhead?: () => void;
+    /** Alt+click (Alt+Space): plays on from the start flag past the playhead (Expert, UI-26) */
+    onPlayOn?: () => void;
     /** "timeline" in the editor, "view3d" in the 3D View window */
     testIdPrefix?: string;
 }) {
-    const shift = useHeldShift(onPlayingChange != null);
+    const playsOn = onPlayOn != null;
+    const held = useHeldPlayMode(onPlayingChange != null, playsOn);
     const togglePlaying = useCallback(
-        (event: ReactMouseEvent) =>
-            event.shiftKey && onPlayFromPlayhead
-                ? onPlayFromPlayhead()
-                : onPlayingChange?.(!isPlaying),
-        [isPlaying, onPlayingChange, onPlayFromPlayhead],
+        (event: ReactMouseEvent) => {
+            const clicked = playMode(event, playsOn);
+            if (clicked === "shift" && onPlayFromPlayhead) onPlayFromPlayhead();
+            // Playing, Alt+click stops, as Alt+Space does
+            else if (clicked === "alt" && onPlayOn && !isPlaying) onPlayOn();
+            else onPlayingChange?.(!isPlaying);
+        },
+        [isPlaying, onPlayingChange, onPlayFromPlayhead, onPlayOn, playsOn],
     );
     const onClick = onPlayingChange ? togglePlaying : undefined;
-    const mode = shift && onPlayFromPlayhead ? "shift" : "play";
-    const guide = isPlaying ? stopGuide : playGuide(playLoops);
+    const guide = isPlaying ? stopGuide : playGuide(playLoops, playsOn);
+    const mode =
+        held === "shift" && !onPlayFromPlayhead
+            ? "play"
+            : guide.some((r) => r.mode === held)
+              ? held
+              : "play";
     const row = guide.find((r) => r.mode === mode)!;
     return (
         <TransportButton
@@ -429,6 +568,7 @@ export const TransportPlayButton = memo(function TransportPlayButton({
             testId={`${testIdPrefix}-play`}
             pressed={isPlaying}
             onClick={onClick}
+            navigation={playsOn}
         >
             {row.icon}
         </TransportButton>

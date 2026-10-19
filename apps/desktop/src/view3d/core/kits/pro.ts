@@ -15,6 +15,7 @@ import {
     ft,
     lightingValues,
     ribbonTexture,
+    setLightIntensity,
     videoBoard,
     type SharedMaterials,
 } from "../environment";
@@ -379,6 +380,7 @@ function addRoofLights(ctx: ProContext, roof: Group, ox: number, oz: number) {
         spot.name = "pro.roofSpot";
         spot.position.set(cx + x, PRO_ROOF_Y - ft(6), cz + z);
         spot.target.position.set(cx + x * 0.2, 0, cz + z * 0.2);
+        spot.visible = false;
         ctx.root.add(spot, spot.target);
         spots.push(spot);
     }
@@ -386,7 +388,7 @@ function addRoofLights(ctx: ProContext, roof: Group, ox: number, oz: number) {
     return {
         set(barEmissive: number, spotIntensity: number) {
             barMat.emissiveIntensity = barEmissive;
-            spots.forEach((s) => (s.intensity = spotIntensity));
+            spots.forEach((s) => setLightIntensity(s, spotIntensity));
         },
     };
 }

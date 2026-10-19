@@ -71,15 +71,14 @@ from it. The spec still wins on the model; this file decides presentation.
   UI-9's **Add selected marchers**; clip moves stand._ A clip move shifts its whole spec
   timeline, every transition and assignment in it, by the dragged beats
   (`shiftTimeline`); shapes and destinations stay put, so every position moves
-  in time only. A shift that would leave beat 0 or overlap the same marcher's
-  row at the same layer in another timeline is refused (E-ARGS, E-A3), and a
-  clip dropped where it started writes nothing. Create Track's target is a
+  in time only. A shift that would leave beat 0 is refused (E-ARGS), and a
+  clip dropped where it started writes nothing. Overlapping the same marchers'
+  other moves is fine: spec §6.2 decides who plays (2026-10-16; such a shift
+  was refused with E-A3 before). Create Track's target is a
   shape picked by selecting its track, which takes the selected marchers, or
-  else the one selected marcher. Its assignments go one layer above the
-  highest layer the marchers already have in the range (0 where they have
-  none), so the new track steals the range (R-2) the way a breakaway does
-  (G2). Why: at layer 0 it would overlap a converted show's page moves and
-  always be refused (E-A3). A block with fewer cells than marchers is refused
+  else the one selected marcher. Its layers follow spec §6.2: it is above
+  the page moves it overlaps, so it steals that range (R-2) the way a
+  breakaway does (G2). A block with fewer cells than marchers is refused
   (E-T4). A marcher's new track starts at its position at the range start, so
   it doesn't jump there, but it holds still over the range. If the track steals
   a move in progress, the marcher stops for the range and the stolen move then
@@ -97,11 +96,9 @@ from it. The spec still wins on the model; this file decides presentation.
   `p_{n-m+q}` by trail order (R-9, R-12), so under `inherit` their slots don't
   matter and one more founder shifts every target. New marchers take its
   lowest vacant slots, and recasting it is refused. A marcher cast into an
-  existing transition gets an assignment over the whole transition, one layer
-  above the highest layer it already has over those beats (0 where it has
-  none), so it steals them like Create Track does (UI-6); the inspector then
-  names the moves it steals from. The layer is chosen per marcher, since layers
-  only rank one marcher's own moves (R-2). A recast that wouldn't shorten the
+  existing transition gets an assignment over the whole transition, ranked
+  against that marcher's other moves by spec §6.2; the inspector then names
+  the moves that take over from it and the moves it takes over. A recast that wouldn't shorten the
   total distance is refused, so ties never reshuffle anybody. Recasting a
   direct or arc move changes the slot order that a later follow-the-leader
   move under `inherit` takes its trail order from (R-12), so it can reorder
@@ -140,7 +137,9 @@ from it. The spec still wins on the model; this file decides presentation.
     moves edit homes.
   - **One timeline per range.** At most one timeline has a given range, so a
     page box always means one timeline. Several groups moving over the same
-    counts are several transitions in that timeline (UI-8).
+    counts are several transitions in that timeline (UI-8). Relaxed by UI-25
+    (2026-10-16): a move split off another keeps its range, and the page box
+    stands for the oldest.
   - **One transition per marcher per timeline.** Adding marchers always spans
     the whole timeline, and adding a marcher already in it does nothing. So
     "the marcher's transition in the selected timeline" is always one row.
@@ -198,6 +197,17 @@ from it. The spec still wins on the model; this file decides presentation.
     (_owner, 2026-10-12_); it never adds beats, so where the music ends on
     the last flag there is no **+** past it. The timeline keeps 32px after
     the last beat so **+** stays on screen at the show's end.
+  - **The page's move drops out of the split box (owner, 2026-10-19).** A page's own move is
+    not drawn as a clip: its box stands for it (UI-10). Splitting the box leaves that move
+    fitting no box, so it shows as a clip for the first time. Instead of appearing in its row,
+    the clip slides down from the page row, drawn over the page bar, in about a third of a
+    second, so it reads as coming out of the page. **Deleting a flag** but not its moves is the
+    same (owner, 2026-10-19): the merged box fits neither page's move, so both drop out of it.
+    Found by identity (a move a page box stood for that now has a clip, `useClipDrops`), so the
+    inspector's **Split page** and redo drop the same way, and a move made on purpose (a window,
+    **Add selected marchers**) just appears, whatever its range. Only the dropping clip draws
+    over the page bar; it takes no clicks until it lands. The page boxes themselves don't
+    animate (owner). With reduced motion nothing moves. V-289.
   - **Subset pages (2026-10-13).** Right-clicking **+** opens a menu with
     **Add page** (the same as clicking **+**) and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
     subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
@@ -246,17 +256,16 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Removing marchers.** Removing a marcher from a timeline deletes its
     assignment and its own one-slot transition. It never deletes the
     timeline, which stays stored, and selectable, even with nobody in it.
-  - **Layers.** A marcher can be added to a timeline that lies wholly inside
-    the range of a timeline it's already in. The new transition goes one layer
-    above its highest layer there and steals those beats (R-2). Once its
-    ending coordinate is edited, the old move resumes after it from that new
-    point and still ends where it ended (R-5, D-12, D-7), so its path after
-    the steal changes. Adding to a timeline that only partly overlaps one of
-    the marcher's timelines is refused (E-ARGS); the database wouldn't refuse
-    it, since the new row is a layer up. Adding to a range that strictly
-    contains one of the marcher's timelines is refused too, since the new
-    layer would steal that whole move (P8.14, lead, 2026-10-02). Ctrl+click
-    on the timeline is ignored (it opens the context menu on macOS).
+  - **Layers.** A marcher can be in timelines that overlap. Who plays follows
+    spec §6.2 (project owner, 2026-10-16): a page's own move is underneath;
+    otherwise the move that starts later takes over, and of two that start
+    together the shorter one wins. When the winning move ends, the other one
+    resumes from where the marcher is and still ends where it ended (R-5,
+    D-12, D-7). Adding to a timeline that partly overlaps, or strictly
+    contains, one of the marcher's timelines is allowed; it was refused before
+    (P8.14). Adding one that has exactly the same counts as another of the
+    marcher's moves is refused (L-4). Ctrl+click on the timeline is ignored
+    (it opens the context menu on macOS).
   - **Creating a timeline.** Click and drag on empty timeline space selects a
     range (snapping as in UI-2), which acts as an empty timeline that isn't
     stored yet; **Add selected marchers** on it creates the timeline. It
@@ -276,9 +285,9 @@ from it. The spec still wins on the model; this file decides presentation.
     assignment in the selected timeline (a converted or shape-cast show), a
     canvas edit of it is refused with a hint to use the inspector. UI-9's own
     flows never make a second row.
-  - **New marchers and overlaps** (_lead default_). A new marcher joins
-    stored timelines in start order and skips one that only partly overlaps a
-    timeline it has already joined.
+  - **New marchers and overlaps** (_lead default_). Superseded: since the
+    2026-10-08 amendment a new marcher stands at home with no moves, and
+    since 2026-10-16 partial overlaps are allowed (spec §6.2).
   - **Deleting a flag.** Deleting page N's flag deletes N's row and moves
     page N+1's start back to N's start, the exact inverse of **+**: N+1 keeps
     its flag, id and data (per-page data follows the page that keeps its
@@ -315,10 +324,15 @@ from it. The spec still wins on the model; this file decides presentation.
     any moved marcher that isn't in it (UI-9's own transition and layer rules),
     and sets their endings. There is no **Add selected marchers** step; the
     menu item is removed. A window that crosses page flags passes through
-    (project owner, 2026-10-04; research/ownership/10-cross-page-windows.md):
-    the drag overrides the moved marchers' moves inside the window, which stay
-    stored underneath and come back when it is deleted, and a move the window
-    runs into partway catches up after it (R-5). An info toast names what was
+    (project owner, 2026-10-04; research/ownership/10-cross-page-windows.md).
+    Who plays inside the window follows spec §6.2 like everywhere else
+    (project owner, 2026-10-16): the drag wins over page moves and over moves
+    that started before the window, which stay stored underneath and come back
+    when it is deleted; a move that starts inside the window wins from its
+    start. One that also ends inside the window hands the marchers back, so
+    they still arrive where they were dropped. One that runs past P means they
+    aren't at the dropped spot at P, and the toast names the move that takes
+    over. A move the window runs into partway catches up after it (R-5). An info toast names what was
     passed through, including page flags with no stored move under sparse rows,
     and offers **Start from Page N** (was "Only change Page N", renamed by
     defined-coordinates 07c §2), which moves them from the last flag before P
@@ -326,7 +340,8 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Arrivals off a flag.** P may rest between flags. A drag there creates a
     timeline ending at P, not a page (project owner, 2026-10-03). Pages stay
     cosmetic flags; **+** still adds one.
-  - **The start flag follows navigation** (_lead default_). Unless pinned, S is
+  - **The start flag follows navigation** (_lead default_; in Expert UI-26 keeps it put, and only
+    Basic follows). Unless pinned, S is
     the start of the page box holding P (the previous flag), recomputed when P
     is moved by navigation: clicking the ruler, page boxes, page navigation,
     **+**. Since the UI-12 review it follows when the gesture ends, not during
@@ -336,7 +351,7 @@ from it. The spec still wins on the model; this file decides presentation.
     up). Play and Stop never move S; pausing a play-on run moves P, and an
     unpinned S follows it (UI-12 review), so the window doesn't silently span
     pages.
-  - **Pinning** (_lead default_). Dragging the start handle, or dragging a
+  - **Pinning** (_lead default_; removed by UI-26). Dragging the start handle, or dragging a
     range on empty timeline space, pins S where it is dropped (before P;
     past P it swaps with P, UI-21). A
     pinned S stays through navigation until P moves to or before it, which
@@ -510,7 +525,7 @@ from it. The spec still wins on the model; this file decides presentation.
     move that makes it, not after React renders the new beat, so the line never lags the pointer.
     Where the playhead can't follow (isolation holds it inside the isolated range), the line stays
     on it.
-  - **A pinned start flag stays pinned until unpinned** (supersedes UI-10's "until P moves to or
+  - **A pinned start flag stays pinned until unpinned** (pins removed by UI-26) (supersedes UI-10's "until P moves to or
     before it"): scrubbing is now the commonest gesture, so moving the playhead never unpins it.
     With P on or before a pinned S the window falls back to the page box holding P, as after Stop.
     Only the pin, **Unpin** on the field line, a page box or home unpin it. A pinned flag has a pin
@@ -664,11 +679,16 @@ from it. The spec still wins on the model; this file decides presentation.
     all as one edit (code review). The edit reads the paths under the write lock, so a choice sent
     twice is one edit.
     It is a radio group (round 2): the arrows move the choice and apply it.
+    **Removed 2026-10-19** (owner: no setting a move's path for now): the card has no Path
+    control; stored paths still play and draw, and `setMovePath` stays for when it returns.
   - **Per-marcher details** (_lead default_, V-46). With a move, the selected marchers'
     explanations and transition editors are about that move: they explain inside it, at P, or at
     its last beat when P is on its end (where the next move starts). They sit under a closed
     "Per-marcher details (16)" disclosure under the card, and when more marchers are selected than
     are shown it says "Showing the first 10 of 16 marchers".
+    **Removed 2026-10-19** with the whole inspector Timeline section (owner: no debug details in
+    the sidebar for users): no per-marcher explanations, show diagnostics or transition, slot
+    and shape editors.
   - **The inspector explains at the playhead** in timeline mode, not the selected page's end
     (_lead default_, V-41), except inside a move, above. On a flag that is the same beat; between
     flags it is where edits land (UI-10). "Select a page to see why…" is gone, since there is
@@ -736,10 +756,10 @@ from it. The spec still wins on the model; this file decides presentation.
     a dashed red outline. Release commits where it waits. It never merges into the other timeline
     (owner, 2026-10-08, V-127).
   - **Walls.** An edge stops at what it would collide with or be cut short by, and the readout names
-    it: a neighboring flag, a move attached to the flag, another move on the same marchers at the
-    same or a higher layer (it never takes over the overlap: owner, 2026-10-08, V-121), a marcher
-    joining or leaving partway, or 1 count. It grows over moves it
-    already overrides (the page moves under a breakaway), which catch up where it ends (V-20, V-21).
+    it: a neighboring flag, a move attached to the flag, a marcher joining or leaving partway, or
+    1 count. Other moves on the same marchers don't stop it (project owner, 2026-10-16, replacing
+    V-121): where it now overlaps them, spec §6.2 decides who plays, and the counts that don't play
+    are drawn faded. A page's moves it grows over catch up where it ends (V-20, V-21).
   - **Readouts.** One wording: "Page 3: 8 → 11 counts", "Move 3: 4 → 6 counts", then the reason.
   - **One edit, Esc cancels.** A drag commits once, on release, as one undoable edit. Esc, a lost
     pointer, or a drag brought back writes nothing. Esc during a clip drag never also leaves
@@ -816,7 +836,7 @@ from it. The spec still wins on the model; this file decides presentation.
     Stop and Pause, and holding Shift makes it Pause.)
   - **A click, scrub or page jump while looping**: inside the loop it jumps and keeps looping;
     outside it, playback plays on from there and the stop stays (UI-11, UI-12).
-  - **The loop is its own region** (project owner, 2026-10-09, after trying the follow model by
+  - **The loop is its own region** (superseded in Expert by UI-26: the loop is the edit window) (project owner, 2026-10-09, after trying the follow model by
     hand: moving the playhead to look at another count shouldn't change what loops), drawn as a
     yellow bar along the ruler's top edge (in the headroom strip since UI-20), as Logic draws its cycle region. It is apart from the
     start flag and the edit window, which go back to UI-12's editing roles (owner, 2026-10-09, after trying
@@ -844,7 +864,8 @@ from it. The spec still wins on the model; this file decides presentation.
     locator's loop end was the playhead, so navigating stretched it). The separate loop region keeps
     both lessons: it covers whole pages and follows page navigation, and the playhead never resizes
     it.
-  - **Space plays on from the start flag; Shift+Space plays on from the playhead** (project owner,
+  - **Space plays on from the start flag; Shift+Space plays on from the playhead** (in Expert UI-26
+    plays the window once on Space and on with Alt+Space) (project owner,
     2026-10-13, after the lab test playback-start at lab.openmarch.com: version B, with one Play
     button: Shift+click on it is Shift+Space; the lab's second button was dropped). With looping
     on, Space loops and Shift+Space plays the loop once and goes back. A stop within the first beat from the start flag changes nothing: the flag is the page
@@ -1075,7 +1096,7 @@ from it. The spec still wins on the model; this file decides presentation.
     move, a page whose box was clicked) is resized after moving the line off it. A press on a clip
     under a line takes the line too. A click on the timeline, a click on the playhead,
     and a scrub started anywhere else move only the playhead, and pass the start flag as before
-    (owner).
+    (owner). In Expert UI-26 changes this: behind the start flag they swap.
   - **The swap.** Drag the start flag past the playhead and the line being dragged becomes the
     playhead, while the old playhead becomes the start flag. Drag the playhead behind the start
     flag and the line being dragged becomes the start flag, while the old start flag becomes the
@@ -1169,6 +1190,208 @@ from it. The spec still wins on the model; this file decides presentation.
     swaps Play to Play from the playhead. The field line's note for a stop on another page now reads
     "Paused on page 4". The 3D window's Space stops.
 
+- **UI-25: splitting a move and merging moves (project owner, 2026-10-16).** A move holds one
+  one-slot transition per marcher (UI-9), so when many marchers share one (a page's timeline, say)
+  there was no way to pull some of them out and edit them apart. Supersedes UI-9's **One timeline
+  per range** (owner): a range may hold several moves. Items marked _lead default_ were filled in by
+  the lead; the feel-based ones are V-330 to V-340 in research/ownership/VALIDATION.md. Built on
+  branch `timeline/split-move`. Expert only: Basic (UI-19) offers none of it, not even in the
+  command palette.
+  - **Several moves over one range** (owner). The page box still stands for the page's original
+    timeline: the oldest stored timeline (lowest id) with exactly its range, the one
+    `findTimelineByRange` returned before (`pageTimelineIds`, `isPageTimeline`). A stored page-move
+    mark replaces this inference in the layer-priority change (ADR 0001, 2026-10-16). A move split off
+    it always draws as its own clip, even on the page's flags, with its own label ("Move 6"). A
+    clicked clip's move is the window's (`windowTimelineId` in the selection store) until the window
+    leaves its range, so the clip, not the page box, shows selected, the Move card and the inspector
+    are about it, the field line names it ("Editing Move 6 (Page 3, counts 1–8)"), and a canvas drag
+    there adds marchers to it. Flag drags move timelines that share a range together. Undo and redo
+    keep the window, as UI-9 says, and an isolated move that undo takes away ends isolation
+    (09-isolation.md).
+  - **Split N selected into new move** (owner, option A). With marchers selected that are in a
+    move, right-clicking the move's clip, or the page box of a page's timeline, offers it; so do
+    the clip's ⋯ menu, the Move card (under "N marchers · Select them") and ⌘K ("Split selected
+    marchers into a new move", for the window's move). The new move has the same counts, is named
+    by the "Move N" rule (UI-14), and gets its own clip row; it is selected and isolated
+    (_lead default_, V-334), so Esc goes back to where you were. Disabled, with the reason under
+    it: while playing ("Pause to split or merge moves."), when none of the selected marchers is in
+    the move, and when all of them are (that would only rename it). The entry shows, disabled,
+    with no marchers selected too, so it can be found (_lead default_, V-337).
+  - **No motion changes** (owner). Each chosen marcher's transition moves to the new timeline as it
+    is: destination and path, and a kept marker with it, as one undoable edit
+    (`splitMarchersIntoNewMove`). Who plays follows spec §6.2: a split move is not a page's own move,
+    so it ranks above page moves, and against other moves by its start and end like any move. So a
+    split can change who plays where a split-off marcher also has an earlier-starting move running
+    into this range; the owner accepted that (2026-10-18), and the split toast will name those
+    marchers and the count their motion changes from. Until the layer-priority change lands, the split
+    keeps each row's stored layer. A converted page's shared transition (one slot per marcher, P9.10)
+    is split slot by slot: each leaving marcher gets its own one-slot transition with its slot's
+    destination and the same path, and the old one is compacted, so no slot is left vacant. A kept
+    marcher (Keep, defined coordinates 10) stays kept in the new move, and **Follow again** on the
+    page box takes its kept move back from there too, deleting the split move if that empties it. A
+    transition into a shape, a follow-the-leader one, or one whose marchers are in an inheriting
+    follow-the-leader order can't be split apart; the split is refused naming the marchers who move
+    together ("…move into one shape together with … Select them all, or none of them"), and selecting
+    them all moves that whole transition.
+  - **Drag out** (owner, option C, _experimental_: the owner wants to feel it). With marchers
+    selected that are in a move, drag its clip down: a ghost clip under the pointer says "Split 8
+    marchers", and releasing does the same split. The drag locks to an axis when it starts
+    (_lead default_, V-330): 10px up or down, at least twice as far as sideways, is this gesture;
+    4px sideways with more sideways than half the vertical travel is the clip move (re-time) as
+    before; in between it waits. A drop splits once the pointer is 24px below where it was pressed, below
+    the clip's bottom edge and over no other clip or page box (_lead default_, V-331); the timeline
+    is often fitted to its rows at the bottom of the window (UI-19), so there is no empty row to
+    aim at and the drop doesn't need one. The ghost stays on screen if the pointer leaves the
+    window. Without
+    selected members a vertical drag shows nothing and does nothing. Esc or a lost pointer
+    cancels. Edge drags (UI-15) and page-flag grips are untouched: they take the press first.
+    Page boxes don't drag out (_lead default_, V-332): a drag along them scrubs (UI-12), so they
+    keep the menu entry only.
+  - **Merge** (owner). Dragging a move's clip onto another move's clip, or onto the page box of a
+    page's timeline, outlines the target with "Merge into Page 3" while the pointer is over it, and
+    releasing merges; a refused drop is outlined red with the reason, and releasing there only says it
+    again. Shift+click on a second clip selects it beside the window's move (Cmd/Ctrl+click already
+    draws a range), and right-clicking either offers **Merge Move 7 into Move 6** (_lead default_,
+    V-336). A move's own menu also offers **Merge into Page N** for each page it overlaps that has its
+    own timeline. The merge moves every transition into the target and deletes the emptied move, as
+    one undoable edit (`mergeMoves`). The target is the page's timeline whenever one of the two is it,
+    so the page box keeps standing for it; otherwise the clip dropped on, or the one right-clicked
+    (_lead default_, V-333). Afterwards the target is selected: its page box, or its clip (_lead
+    default_, V-335). It refuses a merge that would give a marcher two transitions in one move.
+  - **Merging moves with different counts** (owner, 2026-10-18). The target's counts win: the merged
+    move is fitted to them first, as a resize would (R-E1), so its marchers keep their destinations
+    and paths and get there by the target's end. Never the other way round: stretching a page's move
+    would re-time everyone in it. The drop label and the menu entries say so ("Merge into Page 3 · fit
+    to its counts"), and ⌘K's **Merge this move into its page** fits a move to the page it starts on.
+    It is refused, naming the marchers, when one joins or leaves the move partway at a count outside
+    the target's, when a fitted row would run into another of the marcher's moves on its layer, or
+    when a marcher already has another move over exactly the target's counts (a move split off it,
+    spec §6.2 L-4); resizing the move to the target's counts first gets there in the first two. With the same counts nothing moves on
+    the field.
+  - **Toasts.** "Split 8 marchers into Move 6" and "Merged Move 6 into Page 3", each with **Undo**,
+    which runs the app's undo and closes on the next edit, undo or redo (UI-14's delete toast).
+  - **Growing past the page** (owner, 2026-10-16, V-340). A split move is not a page's own move,
+    so it ranks above page moves (spec §6.2, L-1). Growing it (or any move) over a page's move
+    makes it win there, and the page's move catches up from its set by the page's end (R-5, as a
+    move made over the pages already did, E4). Until the layer-priority change derives layers
+    (L-6), the code gets there with an interim raise: the resize puts the grown rows one layer
+    above the page's moves they now overlap (`growOverLayers` in `timelineResize.ts`). For now
+    it still stops at other moves (V-121), and at a page's moves when the marcher has another
+    move above it inside this one, which the raise would override; §6.2 drops the stop at other
+    moves when it lands (ADR 0001, 2026-10-16 amendment). A row with a move above it there (often
+    the page's own move, edited after this move crossed its flag) is never raised: it grows
+    underneath, as over any higher move, so a resize never changes who plays on counts it didn't
+    touch (`canRiseOverPageMoves`).
+  - **What still goes by range** (V-338, V-339). Resizing a move onto exactly another move's counts is
+    refused only when the two share a marcher (spec §6.2 L-4, owner 2026-10-18; it was refused for
+    every move, so a split move stretched away from its page could never get back to merge). One
+    exception: a move older than a page's own move can't land on exactly that page's counts, by
+    resize or clip move, since the box would then stand for it and the page's real move would turn
+    into a clip ("…merge into it instead", `pageMoveTakenOver`, until the page-move mark). Deleting
+    a page's own timeline (Delete page and its moves) leaves a split move as the oldest over the box,
+    so the box stands for it from then on and its clip goes. Once the stored page-move mark lands this
+    changes (owner, 2026-10-18): the split move stays a clip, and the page box has no move until
+    marchers are added to it. An edit that only empties the page's timeline (dragging its last marcher
+    back, set to previous page) keeps it, empty, while a move split off it shares its range
+    (`oldestOnSharedRange`), so the split move stays a clip. Some refusal messages still name a split
+    move by its range ("Page 2's move", `moveName`).
+  - Open, for the owner: a drag-out from a page box; whether a split should leave the new move
+    isolated or only selected; and Basic's writes over a page whose marchers were split (Basic writes
+    the page's own timeline, so a Basic edit of a split-off marcher moves its row back into the page's
+    timeline, with the same motion).
+
+- **UI-26: in Expert the start flag stays put, and Play plays to the playhead (project owner,
+  2026-10-18, after a grilling session).** It changes UI-10's following start flag and pin, UI-17's
+  loop region and Play, and UI-21's rule that only a drag on a line swaps. Basic is unchanged
+  (UI-19). Items marked _lead default_ were filled in by the lead.
+  - **The start flag stays.** A click, a scrub, a beat step (Shift+Q/E), the go-to box with a count
+    and Pause (Shift+Space) move only the playhead, past page flags too. Only going to a page (a page
+    box, Q/E, ⏮ ⏭, **+**, a clip, the go-to box with a page), home and the flag's own drag move it.
+  - **Behind the start flag, they swap.** A click or a scrub behind the start flag makes that beat
+    the start flag and the old start flag the playhead, even pages back (the field line says
+    "through set N"). A scrub swaps live and swaps back if it comes forward again, as a drag on the
+    playhead's line does (UI-21). A pause that lands behind it swaps the same way; a pause within
+    Play's first beat still changes nothing (V-192). A click on the start flag's own beat makes the
+    beat after it the window (V-285). _Lead default:_ a beat step back onto the start flag pushes it
+    a beat back, so stepping back walks a one-beat window back; beat 0 is home (V-288).
+  - **No pin.** The pin mark and the field line's **Unpin** are gone: there is nothing to pin when
+    the flag never follows. The field line still turns prominent for a partial or multi-page window.
+  - **The loop is the window.** While Loop is on, it loops the edit window, start flag to playhead,
+    and follows every change to it; the bar draws it, and dragging the bar's ends, Ctrl+drag and
+    Shift+click on pages all set the window. Playing never moves the playhead (UI-24), so a click
+    while looping moves only playback and the loop stays the window it was when Play was pressed; a
+    click outside it plays on (UI-17). An isolated move still loops its own range.
+  - **Play (Space) plays the window once**, from the start flag to the playhead, and stops back where
+    it was pressed, with the canvas on the playhead (the arrival). With no window (home, or both lines
+    on one beat) it plays on. **Alt+Space**, or Alt+click on Play, plays on from the start flag past
+    the playhead to the end of the show (owner: a key, not a setting). Shift+Space still plays on from
+    the playhead. Holding Alt shows the start flag's bar then ▶ on Play. The tooltip guide lists
+    the three, each with the marks of the lines it names (owner, 2026-10-19): "Play from start flag
+    ⚑ and stop at playhead ⛉" (Space), "Play from start flag ⚑ and continue" (Alt + Space) and "Play
+    from playhead ⛉ and continue" (Shift + Space); in Basic Space's row is "Play from start flag and
+    continue". While playing, Alt+Space stops as Space does. A click past the playhead while playing
+    to it plays on to the end of the show; a click inside the window, or before it, keeps stopping at
+    the playhead (V-287). The same goes for a loop: a click before it plays into it and wraps at its
+    end, where it used to play on past it (owner, 2026-10-19).
+  - **The canvas shows the dragged flag.** While the start flag is dragged, the field shows its beat,
+    where movers leave from, and the playhead again on release; once a dragged line swaps it shows the
+    line under the pointer. An arrow key on the start flag shows it until the steps settle (300 ms
+    after the last, V-283). _Lead default:_ an Expert scrub that swaps behind the start flag shows the
+    beat under the pointer the same way (V-286).
+  - **Windows and Linux** may take Alt+Space for the window's system menu; Alt+click on Play works
+    everywhere. Over Play, a held Alt is kept from the menu bar, as over Previous and Next.
+  - **How.** The store's `startStays` (set from the editor mode by `useBasicModeGuards`) picks the
+    rule: `seek` swaps behind the start flag, `beginScrub` makes an Expert scrub a playhead line drag,
+    the store keeps `loop` equal to the window, and `fieldBeat` is the beat the field draws.
+    `playTimelineOn` is Alt+Space.
+- **UI-27: splitting a move at the playhead (project owner, 2026-10-19).** The owner wants a
+  transition (not a page) cut into two moves at the paused playhead, "saving the positions of the
+  marchers at the point along the split", and, since paths won't always be straight lines, cut by
+  time at the playhead rather than by geometry. Arcs are deprecated and pathways will be redone;
+  for now a path is a straight line. Built on branch `timeline/split-at-playhead`; feel items are
+  V-341 to V-344.
+  - **Where it is.** A move's menu (right-click, the ⋯ button, Shift+F10) gets **Split at
+    playhead** after **Rename move…**. While the move is isolated (**Edit move**), the Move card
+    also has a **Split at playhead** button above Delete (project owner, 2026-10-19): only then
+    can the playhead be inside the card's move, since a selected move's window ends at the
+    playhead. ⌘K has **Split the move at the playhead** (`timelineSplitMoveAtPlayhead`, unbound):
+    while a move is isolated it acts on that move only, and with the playhead outside it says
+    "Put the playhead inside the move you're editing to split it."; otherwise it acts on the
+    window's move when the playhead is inside it, else on the one move the playhead is strictly
+    inside; with none or several it says so ("Several moves cross Page 3 count 4. Right-click the
+    one to split."). A page's own move (the oldest over its box, UI-25) has no clip or card, so it
+    isn't offered, while a move split off it by marchers is a move like any other; **+** and
+    **Split page** are the page's tools (_lead default_, V-344). Greyed out in ⌘K in Basic, where
+    there are no moves to split, and while playing.
+  - **When.** Only while paused (the menu entry says "Pause to split a move."), and only with the
+    playhead strictly inside the move: on an end there is nothing to split off, and the entry is
+    disabled with "Put the playhead inside the move to split it there." (the isolated Move card
+    shows the same help). A second split of the same move before the first lands is ignored.
+  - **What it writes** (`splitTimelineAtBeat`, one undoable edit). The move keeps its id, name,
+    transitions and destinations and now runs from the playhead to its end: it is the half that
+    still arrives where the move did (_lead default_, V-343). A new move ("Move N") runs from the
+    move's start to the playhead; each of the move's transitions gets a shapeless direct
+    counterpart there whose destinations are where its marchers were at the playhead, with the
+    rows that began before it, cut at the playhead, on their own layers. Rows ending at or before
+    the playhead leave the original, and a transition nobody takes any more goes with them. A kept
+    row split in two is kept in both halves, as Basic's split leaves it. Refused before any write:
+    a move already over either half (one timeline per range; on a page's box that would also take
+    over the page's move), and a move with nobody moving before or after the playhead.
+  - **Motion.** A direct path is a straight line at a constant speed per count, so the halves play
+    exactly as the whole did, including rows another move hides at the playhead (their point is
+    extrapolated along their own line). A row another move on a higher layer cuts into pieces
+    before the playhead keeps each piece's own line: every earlier piece starts from where that
+    move left the marcher, so it gets a row of its own in one more shapeless direct transition of
+    the new move. Any other path style is sampled at the playhead: before it the marchers go
+    straight to where they were, and from it the transition keeps its style but restarts there, so
+    its path after the playhead changes too. The toast says so: "Split Move 2 at Page 3 count 4 ·
+    3 marchers' paths are redrawn: straight before it, restarted after". Follow-the-leader's second half keeps its waypoints even where the leader has
+    passed them, and inherits order from the new straight first half (so it falls back to slot
+    order): both are known gaps until pathways are redone.
+  - **After.** The new move before the playhead becomes the window (its clip selected, the Move
+    card on it), ending any isolation (_lead default_, V-342), with **Undo** on the toast as for
+    Delete move.
+
 ## Mapping the spec onto the view model
 
 The reference `TimelineViewModel` becomes a derived view: an adapter builds it
@@ -1196,19 +1419,25 @@ These belong in the inspector (P8.5), not the timeline:
 
 - path style, bulge, waypoints, destination shape, `slot_count`, `order_mode`
   and slot casting;
-- the layer of each assignment (spec Q-8 stays open for anything richer);
+- which moves take over from each assignment, and why ("starts later", "same start, shorter").
+  There is no layer field: layers are derived (spec §6.2, D-18);
 - diagnostics (§8.9 requires them). The timeline adds a warning badge on any
   clip whose range has a diagnostic; the inspector lists them. A shape track's
   badge counts all of its transitions' diagnostics; a marcher track's counts
   the ones about that marcher. A transition-wide one (such as `D-VACANT`) of a
   transition without a shape shows once, on the first shown marcher track
   assigned to it. The badge's tooltip lists them.
+  **Removed 2026-10-19** (owner, #319): no diagnostics badge on clips and no
+  diagnostics in the inspector or Show checks; they are engine internals a
+  designer can't act on. The resolver still reports them for tests.
+
+**Removed 2026-10-19** (owner, #319): the inspector's Timeline section, its transition, slot and shape editors included, is gone; the paragraphs below are history.
 
 **Where they are (P8.5).** The inspector's Timeline section
 (`TimelineInspectorSection`, timeline mode only) explains each selected marcher
 (up to 10) at the selected page's end beat from `explain`: span kind with a
 plain-language note, its beats, the transition and the spec timeline it belongs
-to, the assignment's layer, slot, progress, origin (home, or the end of the
+to, which move it is following there and why (spec §6.2), slot, progress, origin (home, or the end of the
 previous span), path style, bulge, waypoints, destination, and for
 follow-the-leader spans the member order place, order source and target. It
 then lists that marcher's diagnostics, and below it every diagnostic of the
@@ -1253,14 +1482,13 @@ sums up the vacant slots as ranges, such as "0–9, 12, … (+N)" (D-13,
 - the slot, typed as a number: a vacant slot is taken, and an occupied one is
   traded with its marcher (both rows are deleted and inserted again, so no
   moment has two marchers in one slot);
-- the layer (a whole number from -1000 to 1000), with a note that the higher
-  layer wins where a marcher's moves overlap. The same layer over the same
-  beats as another of its moves is refused (E-A3);
 - the first and end beats, inside the transition (E-A1);
 - removal, which leaves the slot vacant.
 
-Each member says where it's stolen: the beats where a higher layer wins, and
-by which transition (R-2), the inspector's counterpart of UI-1's dashed spans.
+Each member says where it's stolen: the beats where another move takes over,
+by which transition, and why ("starts later", "same start, shorter"; spec
+§6.2), the inspector's counterpart of UI-1's dashed spans. P8.4's layer field
+is removed (project owner, 2026-10-16): no layer is typed anywhere.
 Two actions cast (UI-7): **Cast selected marchers** puts the selected marchers
 who aren't in the transition into its vacant slots (nearest, or lowest for
 follow the leader), and a note names the moves the cast steals beats from;
@@ -1274,7 +1502,7 @@ toasts. After an edit, the controls stay disabled until the inspector shows a
 target built from a newer store version than the edit was planned from; a
 target rebuilt from the same rows (scrubbing, playback) doesn't count.
 
-**Shapes (P8.2).** Below the transitions, `TimelineShapesEditor` draws and
+**Shapes (P8.2), removed 2026-10-19 (#319).** Below the transitions, `TimelineShapesEditor` draws and
 edits the show's spec shapes (`line`, `freehand`, `circle`, `box`, `block`,
 spec 5.2) in absolute field coordinates (D-5). It shows whether a page is
 selected or not.
@@ -1371,10 +1599,9 @@ points (P7.2).
 - **U-Q2:** what resizing a clip edge means. Decided (C-11, P8.10): a range
   edit of the clip's whole timeline. The timeline and every transition in it
   move together, and assignments anchored at the moved edge follow (R-E1).
-- **U-Q3:** how layers show on the timeline, if at all (spec Q-8). Since
-  P8.4 the inspector shows and edits each assignment's layer and where it's
-  stolen (UI-7); the timeline itself still shows steals only as dashed spans
-  (UI-1).
+- **U-Q3:** how layers show on the timeline, if at all (spec Q-8). Decided
+  (project owner, 2026-10-16): never as numbers. Clips stack by who plays, and
+  the counts a move loses are drawn faded (spec §6.2, D-18).
 - **U-Q4:** the shape track's activity rule. Decided: UI-4.
 - **U-Q5:** the rest of UI-9. Decided (2026-10-01): per-page data follows the
   page that keeps its flag (UI-9 **+**); timelines track flags that move;

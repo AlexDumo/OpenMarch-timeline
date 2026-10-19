@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import { DbConnection, DbTransaction } from "./types";
 import { schema } from "@/global/database/db";
 import { transactionWithHistory, createAllUndoTriggers } from "./history";
@@ -7,6 +7,7 @@ import {
     removeDeletedMarchersFromTimelinesInTransaction,
 } from "./timelineMarchers";
 import { deleteEmptySetCuesInTransaction } from "./cues";
+import { deleteHeldPlacementsWithNoHolderInTransaction } from "./itemPlacements";
 
 type DatabaseMarcher = typeof schema.marchers.$inferSelect;
 
@@ -20,6 +21,8 @@ export interface NewMarcherArgs {
     drill_order: number;
     year?: string | null;
     notes?: string | null;
+    /** `item` for a prop or piece of equipment (`createItems`); a performer by default */
+    type?: "marcher" | "item";
 }
 
 /**
@@ -53,16 +56,35 @@ const ensureUndoTriggers = async (db: DbConnection) => {
 };
 
 /**
- * @param db The database connection, or undefined to create a new connection
- * @returns An array of all marchers in the database
+ * The performers in the show: every marchers row except items, the props and equipment that are
+ * marchers rows of type `item` (props-spec section 4). Most code means performers when it says
+ * "every marcher"; the few places that need items too use {@link getMarcherRowsIncludingItems}.
+ *
+ * @param db The database connection
+ * @returns The performers, in row order
  */
 export async function getMarchers({
     db,
 }: {
     db: DbConnection;
 }): Promise<DatabaseMarcher[]> {
-    const response = await db.select().from(schema.marchers);
-    return response;
+    return await db
+        .select()
+        .from(schema.marchers)
+        .where(ne(schema.marchers.type, "item"));
+}
+
+/**
+ * Every marchers row, items (props and equipment) included: for the field, which draws and
+ * selects items, item writes, history and repair. Anything that means performers uses
+ * {@link getMarchers}.
+ */
+export async function getMarcherRowsIncludingItems({
+    db,
+}: {
+    db: DbConnection;
+}): Promise<DatabaseMarcher[]> {
+    return await db.select().from(schema.marchers);
 }
 
 export async function createMarchersInTransaction({
@@ -198,9 +220,12 @@ const deleteMarchersInTransaction = async ({
             );
     }
     // The marchers left their hand-picked sets through the cascade; a set left empty deletes
-    // its cue in the same edit (ADR 0004 D-2)
-    if (deletedMarchers.length > 0)
+    // its cue in the same edit (ADR 0004 D-2), and a held Placement change left with no holder
+    // goes too (ADR 0002 D-10)
+    if (deletedMarchers.length > 0) {
         await deleteEmptySetCuesInTransaction({ tx });
+        await deleteHeldPlacementsWithNoHolderInTransaction({ tx });
+    }
     return deletedMarchers;
 };
 

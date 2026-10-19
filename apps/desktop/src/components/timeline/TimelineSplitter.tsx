@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
+import { useIsPreviewMode } from "@/stores/PreviewModeStore";
 import { setLayoutResizing } from "@/global/layoutResize";
 import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import {
@@ -18,14 +19,17 @@ import {
  * extra room; shorter, the tracks scroll. Drag, arrow keys, or double-click (back to fitted).
  *
  * Basic has one row of page boxes and nothing to give more room, so its pane stays fitted and has
- * no divider (the height Expert saved is kept for when you switch back).
+ * no divider (the height Expert saved is kept for when you switch back). So does Preview, which
+ * draws Basic's row.
  *
  * A drag writes the pane's height straight to the DOM, once a frame, and commits it to the store
  * on release: React doesn't render on every pointer move, and the field canvas holds its size
  * until the drag ends (`setLayoutResizing`).
  */
 export function TimelineSplitter({ children }: { children: ReactNode }) {
-    const basic = useIsBasicMode();
+    const basicMode = useIsBasicMode();
+    const preview = useIsPreviewMode();
+    const basic = basicMode || preview;
     const savedHeight = useUiSettingsStore((s) => s.uiSettings.timelineHeight);
     const saved = basic ? null : savedHeight;
     const setTimelineHeight = useUiSettingsStore((s) => s.setTimelineHeight);

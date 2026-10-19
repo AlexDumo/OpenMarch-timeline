@@ -18,6 +18,16 @@ import {
 } from "./groupTransform";
 import { hitRadius, marcherAt, type DrawnMarchers } from "./hitTest";
 import {
+    ItemResizeGesture,
+    ItemRotateGesture,
+    itemSelectionFrame,
+    type ItemFrame,
+    type ItemSize,
+} from "./itemTransform";
+import { PropTool, type PropToolShape } from "./propTool";
+import type { OutlineType } from "@/db-functions/items";
+import type { DrawnOutline } from "@/items/itemOutlines";
+import {
     MoveGesture,
     type MarcherPosition,
     type MoveTransform,
@@ -103,6 +113,26 @@ export type FieldEditorPorts = {
     pressSelection?(hit: number, shift: boolean): readonly number[] | null;
     /** A double-click on marcher `id`: the second click came after a click on it. */
     doubleClickMarcher?(id: number): void;
+    /**
+     * Whether a marcher row is an item (a prop or equipment, C2.1). Items are
+     * hit by their Outline ({@link itemAt}), not by a dot at their center.
+     */
+    isItem?(id: number): boolean;
+    /** The item whose Outline holds `point`, topmost first, or null. */
+    itemAt?(point: FieldPoint): number | null;
+    /** Item `id`'s Outline as drawn, or null when it isn't drawn. */
+    itemFrame?(id: number): ItemFrame | null;
+    /** Draws item `id` at this size and turn while a handle drags it; null draws it as stored. */
+    previewItem?(id: number, size: ItemSize | null): void;
+    /**
+     * Saves item `id`'s new size and turn at the playhead. Resolves "saved"
+     * once the field can draw it, or "refused" when nothing was saved.
+     */
+    saveItem?(id: number, size: ItemSize): Promise<DropResult>;
+    /** A point snapped as a marcher's coordinates are (the prop tool's corners). */
+    snap?(point: FieldPoint): FieldPoint;
+    /** The prop tool finished an Outline: for the app to make the prop. */
+    propDrawn?(outline: DrawnOutline): void;
 };
 
 export type DropResult = "saved" | "refused";
@@ -254,6 +284,10 @@ export class FieldEditor {
     private unsubscribeMode: (() => void) | null = null;
     /** A press the mode claimed, until its release. */
     private modePress: { start: FieldPointer; double: boolean } | null = null;
+    /** The prop tool, while it's on (C2.1). */
+    private propTool: PropTool | null = null;
+    /** The prop tool's last press, for telling its double-clicks. */
+    private lastToolPress: { time: number; screen: FieldPoint } | null = null;
     private readonly listeners = new Set<() => void>();
     private readonly now: () => number;
     private readonly areaPorts: AreaPorts;
@@ -267,6 +301,7 @@ export class FieldEditor {
             marchers: () => ports.marchers(),
             zoom: () => ports.zoom(),
             canSelect: (id) => ports.canSelect(id),
+            isItem: (id) => ports.isItem?.(id) ?? false,
             selection: () => ports.selection.get(),
             select: (ids) => this.write(ids),
             changed: () => this.emit(),
@@ -283,6 +318,20 @@ export class FieldEditor {
         this.cancelGesture();
         this.ignoredButton = null;
         const taken = this.ports.takePress?.() ?? false;
+        if (this.propTool) {
+            // The prop tool's presses draw and never select; its moves and
+            // release are its own
+            this.press = null;
+            this.lastClick = null;
+            if (!taken && !pointer.ctrl && !pointer.meta) {
+                this.propTool.press(pointer);
+                this.lastToolPress = {
+                    time: this.now(),
+                    screen: pointer.screen,
+                };
+            }
+            return true;
+        }
         if (taken) {
             // Captured all the same, so its moves and release do nothing either.
             // Nor is it half of a double-click: the next press can't start a lasso
@@ -318,6 +367,10 @@ export class FieldEditor {
     }
 
     pointerMove(pointer: FieldPointer): void {
+        if (this.propTool) {
+            this.propTool.move(pointer);
+            return;
+        }
         if (this.modePress) {
             this.mode?.move(pointer);
             return;
@@ -381,6 +434,10 @@ export class FieldEditor {
             this.emit();
             return;
         }
+        if (this.propTool) {
+            if (pointer.button === 0) this.propTool.release(pointer);
+            return;
+        }
         if (this.ignoredButton !== null) {
             if (pointer.button === this.ignoredButton)
                 this.ignoredButton = null;
@@ -442,11 +499,15 @@ export class FieldEditor {
         this.setHover("default");
     }
 
-    /** Ctrl/Cmd+A: every marcher drawn that can be selected. */
+    /** Ctrl/Cmd+A: every performer drawn that can be selected; items (C2.2) are left out. */
     selectAll(): void {
         const { ids, hidden } = this.ports.marchers();
+        const isItem = this.ports.isItem ?? (() => false);
         this.write(
-            ids.filter((id, i) => !hidden?.[i] && this.ports.canSelect(id)),
+            ids.filter(
+                (id, i) =>
+                    !hidden?.[i] && !isItem(id) && this.ports.canSelect(id),
+            ),
         );
     }
 
@@ -464,6 +525,7 @@ export class FieldEditor {
 
     /** The gesture in progress, for the field test API and the overlay; a press that's still a click has none. */
     activeGesture(): FieldTestGesture | null {
+        if (this.propTool) return "prop";
         if (this.mode && (this.modePress || this.mode.gesture.always))
             return this.mode.gesture.kind;
         return this.gesture?.kind ?? null;
@@ -489,6 +551,46 @@ export class FieldEditor {
             this.unsubscribeMode = mode.subscribe(() => this.emit());
         }
         this.emit();
+    }
+
+    /**
+     * Turns the prop tool on to draw an Outline of `outlineType` (the Props
+     * panel's Draw), or off with null. Turning it on ends any press or
+     * gesture; turning it on again starts the drawing over.
+     */
+    setPropTool(outlineType: OutlineType | null): void {
+        if (outlineType === null) {
+            if (!this.propTool) return;
+            this.propTool = null;
+            this.emit();
+            return;
+        }
+        this.cancelGesture();
+        this.press = null;
+        this.lastClick = null;
+        this.lastToolPress = null;
+        this.propTool = new PropTool(outlineType, {
+            snap: (point) => this.ports.snap?.(point) ?? point,
+            finished: (outline) => this.ports.propDrawn?.(outline),
+            changed: () => this.emit(),
+            isDoubleClick: (pointer) => {
+                const last = this.lastToolPress;
+                return (
+                    last !== null &&
+                    this.now() - last.time <= DOUBLE_CLICK_MS &&
+                    Math.hypot(
+                        pointer.screen.x - last.screen.x,
+                        pointer.screen.y - last.screen.y,
+                    ) <= DOUBLE_CLICK_SLOP
+                );
+            },
+        });
+        this.emit();
+    }
+
+    /** The prop tool's Outline being drawn, or null when it's off. */
+    propToolShape(): PropToolShape | null {
+        return this.propTool?.shape() ?? null;
     }
 
     /** What the mode draws over the field, or null with no mode or nothing drawn. */
@@ -603,7 +705,7 @@ export class FieldEditor {
 
     /** The cursor the field shows. */
     cursor(): FieldCursor {
-        return this.hover;
+        return this.propTool ? "crosshair" : this.hover;
     }
 
     /** Calls `listener` whenever the gesture or cursor changes. Returns the unsubscribe. */
@@ -632,6 +734,8 @@ export class FieldEditor {
     /** Scaling or rotating the selection from one of its box's handles (#198). */
     private startTransform(press: FieldPress): FieldGesture | null {
         if (!press.handle) return null;
+        const item = this.selectedItem();
+        if (item) return this.startItemTransform(press, press.handle, item);
         const starts = this.drawnPositions(this.ports.selection.get());
         const box = boundsOf(starts);
         if (starts.length < 2 || !box) return null;
@@ -653,6 +757,8 @@ export class FieldEditor {
      */
     private selectionFrame(): SelectionFrame | null {
         if (this.modeOwnsSelectionBox()) return null;
+        const item = this.selectedItem();
+        if (item) return itemSelectionFrame(item.frame);
         const starts = this.drawnPositions(this.ports.selection.get());
         const box = boundsOf(starts);
         if (starts.length < 2 || !box) return null;
@@ -665,6 +771,55 @@ export class FieldEditor {
         if (!frame) return null;
         const zoom = this.ports.zoom();
         return handleAt(handlePoints(frame, zoom), point, zoom);
+    }
+
+    /**
+     * The one item selected and drawn, with its Outline: its handles resize
+     * and turn it (C2.1) instead of scaling or rotating a selection. Null for
+     * any other selection.
+     */
+    private selectedItem(): { id: number; frame: ItemFrame } | null {
+        const selection = this.ports.selection.get();
+        if (selection.length !== 1) return null;
+        const [id] = selection;
+        if (!this.ports.isItem?.(id)) return null;
+        const frame = this.ports.itemFrame?.(id) ?? null;
+        return frame && { id, frame };
+    }
+
+    /**
+     * Resizing or turning the selected item from a handle. Drawn at the size
+     * given until its save settles, as a drop's marchers are.
+     */
+    private startItemTransform(
+        press: FieldPress,
+        handle: HandleId,
+        { id, frame }: { id: number; frame: ItemFrame },
+    ): FieldGesture {
+        const preview = (size: ItemSize | null) =>
+            this.ports.previewItem?.(id, size);
+        const host = {
+            show: (size: ItemSize) => preview(size),
+            cancel: () => preview(null),
+            save: (size: ItemSize) => {
+                const unchanged =
+                    size.width === frame.width &&
+                    size.depth === frame.depth &&
+                    size.rotation === frame.rotation;
+                if (unchanged || !this.ports.saveItem) {
+                    preview(null);
+                    return;
+                }
+                preview(size);
+                this.ports.saveItem(id, size).then(
+                    () => preview(null),
+                    () => preview(null),
+                );
+            },
+        };
+        return handle === "rot"
+            ? new ItemRotateGesture(press.start, frame, host)
+            : new ItemResizeGesture(frame, host, handle);
     }
 
     /** A marquee, or a lasso after a double-click, from empty field. */
@@ -861,13 +1016,22 @@ export class FieldEditor {
             this.ports.selection.set(ids);
     }
 
+    /**
+     * The marcher a press at `point` lands on: a performer's dot, else an
+     * item whose Outline holds it, so a performer on a platform is still
+     * pressed.
+     */
     private marcherAt(point: FieldPoint) {
-        return marcherAt(
+        const isItem = this.ports.isItem ?? (() => false);
+        const performer = marcherAt(
             this.ports.marchers(),
             point,
             hitRadius(this.ports.zoom()),
-            (id) => this.ports.canSelect(id),
+            (id) => !isItem(id) && this.ports.canSelect(id),
         );
+        if (performer !== null) return performer;
+        const item = this.ports.itemAt?.(point) ?? null;
+        return item !== null && this.ports.canSelect(item) ? item : null;
     }
 
     /** The primary button, unless the press pans (navigation's rule, `isPanButton`). */

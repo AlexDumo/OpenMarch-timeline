@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Diagnostic, SpanInfo } from "@openmarch/core";
+import type { SpanInfo } from "@openmarch/core";
 import { asc } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { withTimelineWriteLock } from "@/db-functions/history";
@@ -160,17 +160,30 @@ export const readVersionedTimelineViewTables = (
  *
  * - Tracks are only built from rows and a resolver of the same version. While the next version's
  *   rows load, the last tracks stay, so nothing flickers and no mismatched pair is ever built.
- * - Spans and diagnostics are cached per resolver version.
+ * - Spans are cached per resolver version.
  * - One track per stored timeline (`buildTimelineClipTracks`, ui.md UI-9 "Tracks"), so the tracks
  *   don't depend on the selected marchers.
  */
-export function useTimelineTracks({
+export function useTimelineTracks(options: {
+    database: DbConnection;
+    enabled: boolean;
+}): readonly TimelineInput[] {
+    return useTimelineTracksState(options).tracks;
+}
+
+/**
+ * `useTimelineTracks`, and whether the tracks are `current`: built from rows of the store's
+ * versions now. After a timeline edit they aren't until the new rows are read (the last tracks
+ * stay meanwhile), so a view that pairs them with other data, such as the page boxes, can keep
+ * that data as the tracks saw it until they catch up.
+ */
+export function useTimelineTracksState({
     database,
     enabled,
 }: {
     database: DbConnection;
     enabled: boolean;
-}): readonly TimelineInput[] {
+}): { readonly tracks: readonly TimelineInput[]; readonly current: boolean } {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const { version, displayVersion } = useTimelineViewVersions();
     const active = enabled && resolver !== null;
@@ -194,11 +207,10 @@ export function useTimelineTracks({
         };
     }, [active, database, version, displayVersion]);
 
-    // Per resolver version: the spans asked for so far, and the diagnostics
+    // Per resolver version: the spans asked for so far
     const cache = useMemo(() => {
         void version; // the resolver answers differently after each version
         const spans = new Map<number, readonly SpanInfo[]>();
-        let diagnostics: readonly Diagnostic[] | null = null;
         return {
             spansOf: (marcherId: number) => {
                 let found = spans.get(marcherId);
@@ -208,8 +220,6 @@ export function useTimelineTracks({
                 }
                 return found ?? [];
             },
-            diagnostics: () =>
-                (diagnostics ??= resolver ? resolver.diagnostics() : []),
         };
     }, [resolver, version]);
 
@@ -224,11 +234,14 @@ export function useTimelineTracks({
         return buildTimelineClipTracks({
             tables: loaded.tables,
             spansOf: cache.spansOf,
-            diagnostics: cache.diagnostics(),
         });
     }, [active, loaded, version, displayVersion, cache]);
 
     const last = useRef<readonly TimelineInput[]>(NO_TRACKS);
     if (built !== null) last.current = built;
-    return built ?? last.current;
+    return {
+        tracks: built ?? last.current,
+        // Not before the first rows are read either
+        current: built !== null && (!active || loaded !== null),
+    };
 }

@@ -78,6 +78,12 @@ export interface UiSettings {
      * any member is selected, always, or never
      */
     shapes?: ShapeOutlines;
+    /** Whether props show their names on the canvas, unless `propNameOverrides` says otherwise */
+    showPropNames: boolean;
+    /** Per prop: whether its name shows. Key is the item id. */
+    propNameOverrides: Record<string, boolean>;
+    /** Per prop: true hides it on the canvas wherever the timeline has it. Key is the item id. */
+    hiddenPropIds: Record<string, boolean>;
     /** Whether to enable Tolgee In-Context Translating */
     tolgeeDevTools?: boolean;
     /** Tolgee API Key for In-Context Translating */
@@ -130,6 +136,9 @@ export const defaultSettings: UiSettings = {
     },
     marcherLabels: "auto",
     shapes: "selected",
+    showPropNames: false,
+    propNameOverrides: {},
+    hiddenPropIds: {},
     tolgeeDevTools: false,
 };
 

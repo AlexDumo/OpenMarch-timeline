@@ -15,6 +15,16 @@ import {
     type AppearanceStepsByMarcherId,
 } from "@/services/appearance/appearanceSteps";
 
+/**
+ * The show's items (props and equipment, C2.1) among the marchers: which ids
+ * they are, and whether one is drawn at a beat (it is Off field before the
+ * count it was made on, and the user may hide it).
+ */
+export interface FieldItemSource {
+    readonly ids: ReadonlySet<number>;
+    drawnAt(id: number, beat: number): boolean;
+}
+
 /** The open file's resolver store. */
 const resolverStore: PositionSource = {
     marcherIds: timelineMarcherIds,
@@ -35,6 +45,11 @@ const resolverStore: PositionSource = {
  *
  * It also marks which of them are selected (`selected`, `selectionVersion`),
  * from the app's selection, for the marchers layer's selection rings.
+ *
+ * Items (`setItems`) are marchers rows too, so the timeline moves them and
+ * the editor selects and drags them like any marcher; `isItem` marks them for
+ * the dot and label layers, which leave them to the items layer. One that
+ * isn't drawn at the beat is `hidden`.
  *
  * The editor can draw some marchers somewhere else (`setOverrides`): where
  * they're dragged, then where they were dropped until the drop is saved
@@ -63,8 +78,14 @@ export class FieldMarchers {
     stacks: readonly (AppearanceComponentOptional[] | null)[] = [];
     /** 1 for each marcher in `ids` that is hidden: neither drawn nor hit-testable. */
     hidden: Uint8Array = new Uint8Array(0);
-    /** Goes up whenever `stacks` or `hidden` changes. */
+    /** Goes up whenever `stacks`, `hidden` or `isItem` changes. */
     appearanceVersion = 0;
+    /** 1 for each marcher in `ids` that is an item: the items layer draws its Outline. */
+    isItem: Uint8Array = new Uint8Array(0);
+
+    private items: FieldItemSource | null = null;
+    /** `hidden` from the appearances alone, before items not drawn at the beat are added. */
+    private appearanceHidden: Uint8Array = new Uint8Array(0);
 
     private steps: AppearanceStepsByMarcherId | undefined;
     private changeBeats: number[] = [];
@@ -102,8 +123,24 @@ export class FieldMarchers {
         this.beat = beat;
         this.isolationPlan = isolationPlan;
         this.sampleAppearance(false);
+        this.markItems(false);
         this.emit();
         return true;
+    }
+
+    /** The beat last filled, or null before the first fill. */
+    get drawnBeat(): number | null {
+        return this.beat;
+    }
+
+    /**
+     * Which marchers are items, and when each is drawn. Call again when either
+     * changes: the marks are made again at the beat last filled.
+     */
+    setItems(items: FieldItemSource | null) {
+        this.items = items;
+        this.markItems(true);
+        this.emit();
     }
 
     /**
@@ -169,7 +206,53 @@ export class FieldMarchers {
             if (stack && appearanceIsHidden(stack)) hidden[i] = 1;
             return stack;
         });
-        this.hidden = hidden;
+        this.appearanceHidden = hidden;
+        // Bumps the appearance version
+        this.markItems(true);
+    }
+
+    /**
+     * Marks the items, and hides those not drawn at the beat last filled. A
+     * new `hidden` and a new appearance version only when a mark changed,
+     * unless `force` (new items or new appearances).
+     */
+    private markItems(force: boolean) {
+        const items = this.items;
+        const n = this.ids.length;
+        // A show with no items, marked so already: nothing to do on each frame
+        if (
+            !force &&
+            (!items || items.ids.size === 0) &&
+            this.isItem.length === n &&
+            this.hidden === this.appearanceHidden
+        )
+            return;
+        const isItem = new Uint8Array(n);
+        const hidden = Uint8Array.from(
+            this.appearanceHidden.length === n
+                ? this.appearanceHidden
+                : new Uint8Array(n),
+        );
+        if (items) {
+            for (let i = 0; i < n; i++) {
+                const id = this.ids[i];
+                if (!items.ids.has(id)) continue;
+                isItem[i] = 1;
+                if (this.beat !== null && !items.drawnAt(id, this.beat))
+                    hidden[i] = 1;
+            }
+        }
+        if (
+            !force &&
+            sameBytes(isItem, this.isItem) &&
+            sameBytes(hidden, this.hidden)
+        )
+            return;
+        this.isItem = isItem;
+        // With no item hidden, `hidden` is the appearances' own
+        this.hidden = sameBytes(hidden, this.appearanceHidden)
+            ? this.appearanceHidden
+            : hidden;
         this.appearanceVersion++;
     }
 
@@ -215,3 +298,6 @@ export class FieldMarchers {
         for (const listener of this.listeners) listener();
     }
 }
+
+const sameBytes = (a: Uint8Array, b: Uint8Array) =>
+    a.length === b.length && a.every((value, i) => value === b[i]);

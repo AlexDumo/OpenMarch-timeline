@@ -21,6 +21,16 @@ export interface FieldPropertyArgs {
     imageFillOrFit?: "fill" | "fit";
     backgroundImageOpacity?: number;
     theme?: FieldTheme;
+    floor?: FieldFloor;
+}
+
+/**
+ * The show's floor: a Base floor Artwork embedded in the show, named by reference (ADR 0002
+ * D-23). It is the field image in 2D, exports and the 3D tarp.
+ */
+export interface FieldFloor {
+    itemId: string;
+    versionHash: string;
 }
 
 export type MeasurementSystem = "imperial" | "metric";
@@ -123,6 +133,8 @@ export class FieldProperties {
     /** Opacity of the background image (0-1). Default is 1.0 (fully opaque). */
     readonly backgroundImageOpacity: number;
     readonly theme: FieldTheme;
+    /** The show's floor, which is its field image. Undefined when the show has none. */
+    readonly floor?: FieldFloor;
 
     constructor({
         name,
@@ -145,6 +157,7 @@ export class FieldProperties {
         imageFillOrFit = "fit",
         backgroundImageOpacity = 1.0,
         theme = DEFAULT_FIELD_THEME,
+        floor,
     }: FieldPropertyArgs) {
         // Verify x checkpoints have unique ids
         const xIds = new Set();
@@ -188,6 +201,7 @@ export class FieldProperties {
         this.imageFillOrFit = imageFillOrFit;
         this.backgroundImageOpacity = backgroundImageOpacity;
         this.theme = theme;
+        if (floor) this.floor = { ...floor };
 
         const minX = this.xCheckpoints.reduce(
             (min, cur) =>

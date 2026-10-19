@@ -7,17 +7,27 @@
  * The show time is written every frame through a ref; React re-renders only
  * when the page or count changes. The test ids are the ones P1.4's debug
  * readout used.
+ *
+ * Beside the count, how many of the show's checks (ADR 0002 D-22, the
+ * editor's "Show checks") apply at the moment viewed, when any do.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
 import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
+import { view3dResolverQueryOptions } from "@/view3d/positions";
+import { putDownItemsQueryOptions } from "@/hooks/queries/usePutDownItems";
+import { useShowNotesWith } from "@/hooks/useShowNotes";
+import { notesAt, type ShowNote } from "@/notes/showNotes";
+import { playbackBeat } from "@/timeline/positionBuffer";
+import type { CountClock } from "@/timeline/countGrid";
 import { useCameraStore } from "../camera/cameraStore";
 import {
     formatLength,
+    countsPastEnd,
     pageCountAt,
     pausedPageCount,
     type PageCount,
@@ -33,14 +43,20 @@ export function formatShowTime(showMs: number): string {
     return `${minutes}:${String(seconds).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
 }
 
-const samePageCount = (a: PageCount | null, b: PageCount | null) =>
+/** The page and count at the show time, or past the show's end how far (END +n, EC-8) */
+type ReadoutCount = PageCount | { pastEnd: number };
+
+const samePageCount = (a: ReadoutCount | null, b: ReadoutCount | null) =>
     a === b ||
     (!!a &&
         !!b &&
-        a.pageId === b.pageId &&
-        a.pageName === b.pageName &&
-        a.count === b.count &&
-        a.total === b.total);
+        ("pastEnd" in a
+            ? "pastEnd" in b && a.pastEnd === b.pastEnd
+            : !("pastEnd" in b) &&
+              a.pageId === b.pageId &&
+              a.pageName === b.pageName &&
+              a.count === b.count &&
+              a.total === b.total));
 
 /**
  * The page and count at the show time, re-rendering only when they change,
@@ -50,10 +66,14 @@ const samePageCount = (a: PageCount | null, b: PageCount | null) =>
 function useLivePageCount(
     pages: readonly ReadoutPage[],
     timeRef: React.RefObject<HTMLSpanElement | null>,
-): PageCount | null {
-    const [live, setLive] = useState<PageCount | null>(null);
+    checks: { notes: readonly ShowNote[]; clock: CountClock },
+): { current: ReadoutCount | null; checkCount: number } {
+    const [live, setLive] = useState<ReadoutCount | null>(null);
+    const [checkCount, setCheckCount] = useState(0);
     const pagesRef = useRef(pages);
     pagesRef.current = pages;
+    const checksRef = useRef(checks);
+    checksRef.current = checks;
 
     useEffect(() => {
         let frame = 0;
@@ -65,7 +85,11 @@ function useLivePageCount(
                 el.textContent = formatShowTime(showMs);
                 el.dataset.showMs = String(Math.round(showMs));
             }
-            const next =
+            const { notes, clock } = checksRef.current;
+            // Past the show's end the counts belong to no page (endless counts, EC-8)
+            const pastEnd = countsPastEnd(pagesRef.current, showMs, clock);
+            const next: ReadoutCount | null =
+                (pastEnd !== null && { pastEnd }) ||
                 (!sync.clock?.playing &&
                     pausedPageCount(
                         pagesRef.current,
@@ -74,19 +98,36 @@ function useLivePageCount(
                     )) ||
                 pageCountAt(pagesRef.current, showMs);
             setLive((prev) => (samePageCount(prev, next) ? prev : next));
+            setCheckCount(
+                notes.length === 0
+                    ? 0
+                    : notesAt(notes, playbackBeat(clock, showMs)),
+            );
             frame = requestAnimationFrame(update);
         };
         update();
         return () => cancelAnimationFrame(frame);
     }, [timeRef]);
 
-    return live;
+    return { current: live, checkCount };
+}
+
+/** The show's checks in the window, over its own resolver (put-downs included). */
+function useWindowChecks(): readonly ShowNote[] {
+    const { data: resolver } = useQuery(view3dResolverQueryOptions());
+    const { data: putDownItems } = useQuery(putDownItemsQueryOptions());
+    const version = useMemo(() => {
+        if (resolver && putDownItems) resolver.setPutDownItems(putDownItems);
+        return {};
+    }, [resolver, putDownItems]);
+    return useShowNotesWith(resolver ?? null, version).notes;
 }
 
 export function Readout({ large }: { large: boolean }) {
     const { t } = useTranslate();
     const timeRef = useRef<HTMLSpanElement>(null);
-    const { pages } = useTimingObjects();
+    const { pages, countGrid } = useTimingObjects();
+    const notes = useWindowChecks();
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
     );
@@ -95,7 +136,10 @@ export function Readout({ large }: { large: boolean }) {
     const field = useQuery(fieldPropertiesQueryOptions());
     const system = field.data?.measurementSystem ?? "imperial";
 
-    const current = useLivePageCount(pages, timeRef);
+    const { current, checkCount } = useLivePageCount(pages, timeRef, {
+        notes,
+        clock: countGrid,
+    });
 
     const length = (meters: number) => {
         const { value, unit } = formatLength(meters, system);
@@ -120,18 +164,35 @@ export function Readout({ large }: { large: boolean }) {
                 <span
                     className="text-text font-medium"
                     data-testid="view3d-selected-page"
-                    data-page-id={current?.pageId ?? ""}
+                    data-page-id={
+                        current && !("pastEnd" in current) ? current.pageId : ""
+                    }
                 >
-                    {current
-                        ? t("view3d.readout.page", { page: current.pageName })
-                        : t("view3d.readout.noPages")}
+                    {!current
+                        ? t("view3d.readout.noPages")
+                        : "pastEnd" in current
+                          ? t("view3d.readout.pastEnd", {
+                                count: current.pastEnd,
+                            })
+                          : t("view3d.readout.page", {
+                                page: current.pageName,
+                            })}
                 </span>
-                {current && (
+                {current && !("pastEnd" in current) && (
                     <span data-testid="view3d-count">
                         {t("view3d.readout.count", {
                             count: current.count,
                             total: current.total,
                         })}
+                    </span>
+                )}
+                {checkCount > 0 && (
+                    <span
+                        className="text-yellow"
+                        data-testid="view3d-check-count"
+                        data-count={checkCount}
+                    >
+                        {t("view3d.readout.checks", { count: checkCount })}
                     </span>
                 )}
                 <span

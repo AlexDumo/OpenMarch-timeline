@@ -39,6 +39,14 @@ export const tablesWithHistory = [
     schema.cues,
     schema.cue_marchers,
     schema.page_performer_settings,
+    // Items and their Outline changes (ADR 0002 D-10)
+    schema.items,
+    schema.item_geometry,
+    // Where each item is (ADR 0002 D-10), its holders and crew after their change
+    schema.item_placements,
+    schema.item_placement_marchers,
+    // Which Artwork sits on each item slot (ADR 0002 D-10)
+    schema.item_artwork_slots,
     // Shape recipes beside the positions they placed (ADR 0006)
     schema.timeline_shape_recipes,
     schema.timeline_shape_recipe_marchers,

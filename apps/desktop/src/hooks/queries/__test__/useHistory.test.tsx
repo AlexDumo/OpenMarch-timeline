@@ -53,7 +53,7 @@ const setUp = (marchers: TestMarcher[]) => {
     const qc = new QueryClient({
         defaultOptions: { queries: { staleTime: Infinity, retry: false } },
     });
-    qc.setQueryData(marcherKeys.all(), marchers);
+    qc.setQueryData(marcherKeys.rowsIncludingItems(), marchers);
     const wrapper = ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={qc}>{children}</QueryClientProvider>
     );
@@ -125,7 +125,10 @@ describe("usePerformHistoryAction", () => {
         const { qc, hook } = setUp([{ id: 1 }]);
         state.performHistoryAction.mockImplementation(async () => {
             // The undo restores marcher 5; its query has the new row before the hook selects
-            qc.setQueryData(marcherKeys.all(), [{ id: 1 }, { id: 5 }]);
+            qc.setQueryData(marcherKeys.rowsIncludingItems(), [
+                { id: 1 },
+                { id: 5 },
+            ]);
             return {
                 pageIdToGoTo: 2,
                 marcherIdsToSelect: new Set([5]),

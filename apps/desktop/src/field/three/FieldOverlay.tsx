@@ -4,7 +4,9 @@ import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
 import { HANDLE_SIZE, type HandleId } from "@/field/editor/groupTransform";
 import type { FieldRect } from "@/field/editor/selectionArea";
+import type { PropToolShape } from "@/field/editor/propTool";
 import type { FieldMarchers } from "./fieldMarchers";
+import type { FieldItems } from "./fieldItems";
 import { fieldToElement, useFieldViewStore } from "./fieldView";
 import {
     drawnSelectionBox,
@@ -33,6 +35,9 @@ const WALK_WIDTH = 1;
 const SHAPE_HANDLE_SIZE = 9;
 const SHAPE_HANDLE_WIDTH = 1.5;
 
+/** The prop tool's line while drawing, in CSS px. */
+const PROP_PREVIEW_WIDTH = 2;
+
 /** The rotate handle's connecting line, in CSS px. */
 const ROTATE_LINE_WIDTH = 1;
 
@@ -52,10 +57,12 @@ const ROTATE_LINE_WIDTH = 1;
  */
 export default function FieldOverlay({
     marchers,
+    items,
     editor,
     theme,
 }: {
     marchers: FieldMarchers;
+    items: FieldItems;
     editor: FieldEditor;
     theme: FieldTheme;
 }) {
@@ -69,19 +76,23 @@ export default function FieldOverlay({
             (listener: () => void) => {
                 const off = [
                     marchers.subscribe(listener),
+                    items.subscribe(listener),
                     subscribeEditor(listener),
                 ];
                 return () => off.forEach((unsubscribe) => unsubscribe());
             },
-            [marchers, subscribeEditor],
+            [marchers, items, subscribeEditor],
         ),
-        () => JSON.stringify(drawnSelectionBox(marchers, editor)),
+        () => JSON.stringify(drawnSelectionBox(marchers, editor, items)),
     );
     const area = useSyncExternalStore(subscribeEditor, () =>
         editor.areaShape(),
     );
     const modeDrawing = useSyncExternalStore(subscribeEditor, () =>
         editor.modeDrawing(),
+    );
+    const propTool = useSyncExternalStore(subscribeEditor, () =>
+        editor.propToolShape(),
     );
 
     return (
@@ -95,6 +106,7 @@ export default function FieldOverlay({
             )}
             {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
             {modeDrawing && <ModeDrawing drawing={modeDrawing} theme={theme} />}
+            {propTool && <PropToolPreview tool={propTool} theme={theme} />}
         </svg>
     );
 }
@@ -160,6 +172,46 @@ function SelectionBox({ frame }: { frame: DrawnSelectionBox | null }) {
                 ),
             )}
         </g>
+    );
+}
+
+/**
+ * The prop tool's Outline as it's drawn (C2.1): the theme's line color,
+ * filled at 30% when it's a closed shape.
+ */
+function PropToolPreview({
+    tool,
+    theme,
+}: {
+    tool: PropToolShape;
+    theme: FieldTheme;
+}) {
+    const view = useFieldViewStore();
+    const { preview } = tool;
+    if (!preview) return null;
+    const points = preview.points
+        .map((point) => {
+            const at = fieldToElement(view, point.x, point.y);
+            return `${at.x},${at.y}`;
+        })
+        .join(" ");
+    const stroke = rgbaToString(theme.primaryStroke);
+    return preview.closed ? (
+        <polygon
+            data-testid="fieldPropTool"
+            points={points}
+            fill={rgbaToString({ ...theme.primaryStroke, a: 0.3 })}
+            stroke={stroke}
+            strokeWidth={PROP_PREVIEW_WIDTH}
+        />
+    ) : (
+        <polyline
+            data-testid="fieldPropTool"
+            points={points}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={PROP_PREVIEW_WIDTH}
+        />
     );
 }
 

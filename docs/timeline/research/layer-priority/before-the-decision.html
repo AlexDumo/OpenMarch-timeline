@@ -1,0 +1,2491 @@
+<!doctype html>
+<!-- cspell:ignore Hyperlegible lede yardnum ticknum NROWS -->
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+    </head>
+    <body>
+        <title>Layer Rules for Moves</title>
+        <meta name="claude:viewport-fit-sides" content="cover" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+        />
+        <style>
+            /* Layout: one reading column; each scene is a framed figure (field above, timeline below); today/proposed pairs sit side by side on wide screens */
+            :root {
+                --bg: #f2f4ef;
+                --surface: #ffffff;
+                --ink: #1c221d;
+                --muted: #586259;
+                --line: #d3d9d1;
+                --lane: #e7ebe4;
+                --page: #c6cdc3;
+                --turf: #5b8c57;
+                --turf-line: rgba(255, 255, 255, 0.78);
+                --blue: #2c69b0;
+                --orange: #dc6519;
+                --bad: #c0352b;
+                --good: #2b8a55;
+                --accent: #1e5a88;
+                --display:
+                    "Barlow Condensed", "Arial Narrow", "Helvetica Neue",
+                    sans-serif;
+                --body:
+                    "Atkinson Hyperlegible", system-ui, -apple-system,
+                    "Segoe UI", sans-serif;
+                --mono:
+                    "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo,
+                    monospace;
+            }
+            @media (prefers-color-scheme: dark) {
+                :root:not([data-theme="light"]) {
+                    --bg: #131714;
+                    --surface: #1b201c;
+                    --ink: #e6ebe4;
+                    --muted: #9ba59c;
+                    --line: #313932;
+                    --lane: #232924;
+                    --page: #3b443c;
+                    --turf: #2d5631;
+                    --turf-line: rgba(255, 255, 255, 0.5);
+                    --blue: #6aa2e6;
+                    --orange: #f08b45;
+                    --bad: #ef6a5e;
+                    --good: #5cc08a;
+                    --accent: #80b6df;
+                    color-scheme: dark;
+                }
+            }
+            :root[data-theme="dark"] {
+                --bg: #131714;
+                --surface: #1b201c;
+                --ink: #e6ebe4;
+                --muted: #9ba59c;
+                --line: #313932;
+                --lane: #232924;
+                --page: #3b443c;
+                --turf: #2d5631;
+                --turf-line: rgba(255, 255, 255, 0.5);
+                --blue: #6aa2e6;
+                --orange: #f08b45;
+                --bad: #ef6a5e;
+                --good: #5cc08a;
+                --accent: #80b6df;
+                color-scheme: dark;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                background: var(--bg);
+                color: var(--ink);
+                font-family: var(--body);
+                font-size: 16px;
+                line-height: 1.55;
+                padding-left: max(16px, env(safe-area-inset-left, 0px));
+                padding-right: max(16px, env(safe-area-inset-right, 0px));
+                padding-block: 28px 56px;
+            }
+            main {
+                max-width: 1040px;
+                margin: 0 auto;
+                display: grid;
+                gap: 44px;
+            }
+            .prose {
+                max-width: 66ch;
+            }
+            h1,
+            h2,
+            h3 {
+                font-family: var(--display);
+                font-weight: 700;
+                letter-spacing: 0.01em;
+                text-wrap: balance;
+                margin: 0;
+                line-height: 1.1;
+            }
+            h1 {
+                font-size: clamp(2.1rem, 6vw, 3rem);
+            }
+            h2 {
+                font-size: clamp(1.55rem, 4.4vw, 2rem);
+            }
+            h3 {
+                font-size: 1.25rem;
+                font-weight: 600;
+            }
+            p {
+                margin: 0;
+            }
+            section {
+                display: grid;
+                gap: 16px;
+            }
+            .lede {
+                display: grid;
+                gap: 12px;
+            }
+            .lede p {
+                color: var(--muted);
+            }
+            .eyebrow {
+                font-family: var(--mono);
+                font-size: 0.74rem;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+            .legend {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px 20px;
+                font-size: 0.92rem;
+                color: var(--muted);
+            }
+            .legend span {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .dot {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                display: inline-block;
+                border: 2px solid var(--surface);
+                box-shadow: 0 0 0 1px var(--line);
+            }
+            .dot.blue {
+                background: var(--blue);
+            }
+            .dot.orange {
+                background: var(--orange);
+            }
+            .pair {
+                display: grid;
+                gap: 20px;
+                grid-template-columns: 1fr;
+            }
+            @media (min-width: 900px) {
+                .pair {
+                    grid-template-columns: 1fr 1fr;
+                }
+            }
+            figure {
+                margin: 0;
+                background: var(--surface);
+                border: 1px solid var(--line);
+                border-radius: 10px;
+                padding: 14px;
+                display: grid;
+                gap: 10px;
+                min-width: 0;
+                align-content: start;
+            }
+            figcaption {
+                display: flex;
+                align-items: baseline;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+            .tag {
+                font-family: var(--mono);
+                font-size: 0.72rem;
+                font-weight: 600;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                padding: 2px 8px;
+                border-radius: 4px;
+            }
+            .tag.now {
+                background: color-mix(in srgb, var(--bad) 14%, transparent);
+                color: var(--bad);
+            }
+            .tag.works {
+                background: color-mix(in srgb, var(--good) 16%, transparent);
+                color: var(--good);
+            }
+            .tag.prop {
+                background: color-mix(in srgb, var(--accent) 16%, transparent);
+                color: var(--accent);
+            }
+            svg.scene {
+                width: 100%;
+                height: auto;
+                display: block;
+                max-width: 100%;
+            }
+            .controls {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .controls button {
+                font: 600 0.85rem var(--body);
+                color: var(--surface);
+                background: var(--ink);
+                border: 0;
+                border-radius: 6px;
+                padding: 7px 14px;
+                cursor: pointer;
+                min-width: 78px;
+            }
+            .controls button:focus-visible,
+            .controls input:focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: 2px;
+            }
+            .controls input[type="range"] {
+                flex: 1;
+                min-width: 0;
+                accent-color: var(--ink);
+            }
+            .controls .count {
+                font-family: var(--mono);
+                font-size: 0.8rem;
+                color: var(--muted);
+                font-variant-numeric: tabular-nums;
+                min-width: 6.5ch;
+                text-align: right;
+            }
+            .caption {
+                min-height: 4.7em;
+                font-size: 0.97rem;
+            }
+            .caption b {
+                font-weight: 700;
+            }
+
+            /* Who picks the layer */
+            .edits {
+                display: grid;
+                gap: 10px;
+            }
+            .edit-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) 92px;
+                gap: 4px 10px;
+                align-items: center;
+            }
+            .edit-name {
+                font-weight: 700;
+                font-size: 0.93rem;
+                line-height: 1.3;
+            }
+            .edit-rule {
+                font-family: var(--mono);
+                font-size: 0.74rem;
+                color: var(--muted);
+                grid-column: 1 / -1;
+                line-height: 1.4;
+            }
+            .track {
+                position: relative;
+                height: 14px;
+                grid-column: 1 / 2;
+            }
+            .track::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                right: 0;
+                top: 6px;
+                height: 2px;
+                background: var(--line);
+            }
+            .track .gate {
+                position: absolute;
+                left: 50%;
+                top: -3px;
+                bottom: -3px;
+                width: 4px;
+                margin-left: -2px;
+                background: var(--accent);
+                border-radius: 2px;
+            }
+            .track .pip {
+                position: absolute;
+                top: 1px;
+                width: 12px;
+                height: 12px;
+                margin-left: -6px;
+                border-radius: 50%;
+                background: var(--ink);
+                left: 0%;
+                transition: background 0.2s;
+            }
+            .track .pip.bad {
+                background: var(--bad);
+            }
+            .track .pip.good {
+                background: var(--good);
+            }
+            .result {
+                grid-column: 2;
+                grid-row: 1 / span 2;
+                justify-self: end;
+                font-family: var(--mono);
+                font-size: 0.72rem;
+                font-weight: 600;
+                text-align: center;
+                padding: 4px 6px;
+                border-radius: 4px;
+                border: 1px solid var(--line);
+                color: var(--muted);
+                opacity: 0.35;
+                width: 92px;
+                line-height: 1.3;
+            }
+            .result.on {
+                opacity: 1;
+                color: var(--ink);
+            }
+            .result.on.bad {
+                color: var(--bad);
+                border-color: var(--bad);
+            }
+            .result.on.warn {
+                color: var(--orange);
+                border-color: var(--orange);
+            }
+            .result.on.pending {
+                border-style: dashed;
+            }
+            .gate-label {
+                font-family: var(--mono);
+                font-size: 0.74rem;
+                color: var(--accent);
+            }
+
+            .rules {
+                display: grid;
+                gap: 10px;
+                margin: 0;
+                padding: 0;
+                list-style: none;
+            }
+            .rules li {
+                display: grid;
+                grid-template-columns: 3.2em minmax(0, 1fr);
+                gap: 10px;
+                align-items: baseline;
+            }
+            .rules .id {
+                font-family: var(--mono);
+                font-weight: 600;
+                font-size: 0.85rem;
+                color: var(--accent);
+            }
+            .rules .q {
+                font-family: var(--mono);
+                font-size: 0.78rem;
+                color: var(--orange);
+            }
+
+            .check {
+                display: grid;
+                gap: 10px;
+            }
+            .ask {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 4px 12px;
+                align-items: center;
+                padding: 10px 12px;
+                border-radius: 8px;
+                background: var(--lane);
+            }
+            .ask .who {
+                font-weight: 700;
+                font-size: 0.93rem;
+            }
+            .ask .q {
+                font-size: 0.86rem;
+                color: var(--muted);
+                grid-column: 1;
+            }
+            .ask .ans {
+                grid-column: 2;
+                grid-row: 1 / span 2;
+                font-family: var(--display);
+                font-size: 1.35rem;
+                font-weight: 700;
+            }
+            .ans.yes {
+                color: var(--good);
+            }
+            .ans.no {
+                color: var(--bad);
+            }
+            .note {
+                font-size: 0.86rem;
+                color: var(--muted);
+            }
+            .decide {
+                display: grid;
+                gap: 12px;
+            }
+            .decide div {
+                display: grid;
+                gap: 4px;
+            }
+            .decide b {
+                font-family: var(--mono);
+                color: var(--orange);
+                font-size: 0.85rem;
+            }
+
+            /* SVG classes */
+            .turf {
+                fill: var(--turf);
+            }
+            .yard {
+                stroke: var(--turf-line);
+                stroke-width: 1;
+            }
+            .hash {
+                stroke: var(--turf-line);
+                stroke-width: 1;
+            }
+            .yardnum {
+                fill: var(--turf-line);
+                font: 600 9px var(--mono);
+                text-anchor: middle;
+            }
+            .m-blue {
+                fill: var(--blue);
+                stroke: #fff;
+                stroke-width: 1.5;
+            }
+            .m-orange {
+                fill: var(--orange);
+                stroke: #fff;
+                stroke-width: 1.5;
+            }
+            .ghost {
+                fill: none;
+                stroke: #fff;
+                stroke-width: 1.4;
+                stroke-dasharray: 2.5 2;
+                opacity: 0.9;
+            }
+            .ghost-path {
+                stroke: #fff;
+                stroke-width: 1;
+                stroke-dasharray: 3 3;
+                opacity: 0.7;
+                fill: none;
+            }
+            .lane {
+                fill: var(--lane);
+            }
+            .lane-label {
+                fill: var(--muted);
+                font: 600 10px var(--mono);
+            }
+            .tick {
+                stroke: var(--muted);
+                stroke-width: 1;
+            }
+            .ticknum {
+                fill: var(--muted);
+                font: 9px var(--mono);
+                text-anchor: middle;
+            }
+            .flag {
+                fill: var(--ink);
+            }
+            .flag-label {
+                fill: var(--ink);
+                font: 700 11px var(--body);
+            }
+            .clip-page {
+                fill: var(--page);
+            }
+            .clip-label {
+                fill: var(--ink);
+                font: 700 10px var(--body);
+            }
+            .clip-split {
+                fill: var(--orange);
+            }
+            .clip-split-label {
+                fill: #fff;
+                font: 700 10px var(--body);
+            }
+            .strip-blue {
+                fill: var(--blue);
+            }
+            .strip-orange {
+                fill: var(--orange);
+            }
+            .overlap-bad {
+                fill: var(--bad);
+                fill-opacity: 0.35;
+                stroke: var(--bad);
+                stroke-width: 2;
+            }
+            .overlap-ok {
+                fill: none;
+                stroke: var(--accent);
+                stroke-width: 1.5;
+                stroke-dasharray: 3 2;
+            }
+            .handle {
+                fill: var(--ink);
+            }
+            .handle-label {
+                fill: var(--ink);
+                font: 700 10px var(--body);
+                text-anchor: middle;
+            }
+            .playhead {
+                stroke: var(--ink);
+                stroke-width: 1.5;
+            }
+            .playhead-cap {
+                fill: var(--ink);
+            }
+            .toast-bg {
+                fill: var(--ink);
+            }
+            .toast-text {
+                fill: var(--surface);
+                font: 11px var(--body);
+            }
+            .toast-icon {
+                fill: var(--bad);
+            }
+            .rise-label {
+                fill: var(--accent);
+                font: 700 10px var(--body);
+            }
+            @media (prefers-reduced-motion: reduce) {
+                .track .pip {
+                    transition: none;
+                }
+            }
+        </style>
+        <style>
+            .edit-head {
+                display: grid;
+                gap: 8px;
+            }
+            .edit-head .meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                align-items: center;
+            }
+            .tag.same {
+                background: var(--lane);
+                color: var(--muted);
+            }
+            .rule-chip {
+                font-family: var(--mono);
+                font-size: 0.74rem;
+                font-weight: 600;
+                color: var(--accent);
+                border: 1px solid var(--accent);
+                border-radius: 4px;
+                padding: 1px 7px;
+            }
+            .sel {
+                fill: none;
+                stroke: #fff;
+                stroke-width: 1.5;
+                stroke-dasharray: 3 2;
+            }
+            .shape-outline {
+                fill: rgba(255, 255, 255, 0.12);
+                stroke: #fff;
+                stroke-width: 1;
+                stroke-dasharray: 4 3;
+            }
+            .panel-bg {
+                fill: var(--surface);
+                stroke: var(--line);
+            }
+            .panel-title {
+                fill: var(--muted);
+                font: 600 9px var(--mono);
+            }
+            .panel-text {
+                fill: var(--ink);
+                font: 700 11px var(--body);
+            }
+            .panel-field {
+                fill: var(--lane);
+                stroke: var(--accent);
+                stroke-width: 1.5;
+            }
+            .panel-val {
+                fill: var(--ink);
+                font: 600 11px var(--mono);
+            }
+            .panel-note {
+                fill: var(--muted);
+                font: 9px var(--body);
+            }
+            .menu-bg {
+                fill: var(--surface);
+                stroke: var(--line);
+            }
+            .menu-text {
+                fill: var(--ink);
+                font: 700 10px var(--body);
+            }
+            .clip-move {
+                fill: var(--orange);
+            }
+            .toc {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px 14px;
+                font-size: 0.9rem;
+            }
+            .toc a {
+                color: var(--accent);
+            }
+        </style>
+        <main>
+            <p
+                class="note"
+                style="
+                    border: 1px solid var(--line);
+                    border-radius: 8px;
+                    padding: 10px 12px;
+                    background: var(--surface);
+                "
+            >
+                <b>Superseded.</b> This page was written before the owner chose
+                "later start on top" (2026-10-16). Its draft rules L-1 to L-5
+                are replaced by spec §6.2; see README.md and cases.html. Its
+                scenes of today's behavior still hold.
+            </p>
+            <header class="lede prose">
+                <p class="eyebrow">PR #266 · split moves · layers</p>
+                <h1>Layer rules for moves</h1>
+                <p>
+                    Every edit that writes a marcher's rows has to pick a layer.
+                    Below, each edit gets a marcher example on a field and the
+                    timeline, today and with one shared rule list. Play a scene,
+                    or drag its slider to step through it count by count.
+                </p>
+                <div class="legend">
+                    <span
+                        ><i class="dot blue"></i>Stay in the page's moves</span
+                    >
+                    <span
+                        ><i class="dot orange"></i>Split or moved into their own
+                        move</span
+                    >
+                </div>
+                <nav class="toc" aria-label="Edits">
+                    <a href="#whole">Drag a whole move</a
+                    ><a href="#edge">Drag an edge</a
+                    ><a href="#make">Make a move</a><a href="#split">Split</a
+                    ><a href="#spot">Set one marcher's spot</a
+                    ><a href="#inspector">Type a layer</a
+                    ><a href="#pagemove">What's a page move</a
+                    ><a href="#rules">Rule list</a>
+                </nav>
+            </header>
+
+            <section>
+                <div class="prose" style="display: grid; gap: 10px">
+                    <h2>How layers work</h2>
+                    <p>
+                        Each marcher has stored rows: "follow this move from
+                        count A to count B, on layer L." Two rows for one
+                        marcher may overlap in time only on different layers,
+                        and <b>the higher layer wins</b>. The losing row isn't
+                        deleted. It keeps running underneath. When the higher
+                        row lets go, the marcher picks the lower move back up
+                        from wherever they actually are and finishes it on time,
+                        so nobody ever jumps.
+                    </p>
+                </div>
+            </section>
+
+            <section>
+                <div class="prose" style="display: grid; gap: 8px">
+                    <h2>The map: who picks the layer</h2>
+                    <p>
+                        Today each edit decides in its own file and nothing
+                        checks that they agree. Proposed, every edit names a
+                        rule from one list. Each row has its own marcher example
+                        further down.
+                    </p>
+                </div>
+                <div class="pair">
+                    <figure data-gate="now">
+                        <figcaption>
+                            <span class="tag now">Today</span>
+                            <h3>Six edits, six separate rules</h3>
+                        </figcaption>
+                        <div class="edits"></div>
+                        <div class="controls">
+                            <button type="button" id="gate-now-play">
+                                Play
+                            </button>
+                        </div>
+                        <p class="note">
+                            Rule names are the actual functions in PR #266.
+                        </p>
+                    </figure>
+                    <figure data-gate="prop">
+                        <figcaption>
+                            <span class="tag prop">Proposed</span>
+                            <h3>Every edit goes through one rule list</h3>
+                        </figcaption>
+                        <p class="gate-label">
+                            ▌ the gate: one layer module (timelineLayers.ts)
+                        </p>
+                        <div class="edits"></div>
+                        <div class="controls">
+                            <button type="button" id="gate-prop-play">
+                                Play
+                            </button>
+                        </div>
+                        <p class="note">
+                            The function that writes rows only takes a layer the
+                            module produced, so new code that makes up its own
+                            layer doesn't compile.
+                        </p>
+                    </figure>
+                </div>
+            </section>
+
+            <section id="whole">
+                <div class="edit-head prose">
+                    <div class="meta">
+                        <span class="tag now">Changes</span
+                        ><span class="rule-chip">L-2</span>
+                    </div>
+                    <h2>1. Drag a whole move</h2>
+                    <p>
+                        Your example. The orange marchers were split out of Page
+                        2's move, then you drag their move back 3 counts into
+                        Page 1.
+                    </p>
+                </div>
+                <div class="pair">
+                    <figure data-scene="shift-now">
+                        <figcaption>
+                            <span class="tag now">Today · refused</span>
+                            <h3>Drag the whole move back 3 counts</h3>
+                        </figcaption>
+                    </figure>
+                    <figure data-scene="shift-prop">
+                        <figcaption>
+                            <span class="tag prop">Proposed</span>
+                            <h3>Drag the whole move back 3 counts</h3>
+                        </figcaption>
+                    </figure>
+                </div>
+            </section>
+
+            <section id="edge">
+                <div class="edit-head prose">
+                    <div class="meta">
+                        <span class="tag same">Same today</span
+                        ><span class="rule-chip">L-2</span>
+                    </div>
+                    <h2>2. Drag a move's edge</h2>
+                    <p>
+                        Today's resize change already does this, which is why
+                        the whole-move drag above looks inconsistent. L-2 writes
+                        it down so both drags share it.
+                    </p>
+                </div>
+                <figure data-scene="edge">
+                    <figcaption>
+                        <span class="tag works">Today and proposed</span>
+                        <h3>Drag the start edge back 3 counts</h3>
+                    </figcaption>
+                </figure>
+            </section>
+
+            <section id="make">
+                <div class="edit-head prose">
+                    <div class="meta">
+                        <span class="tag same">Same today</span
+                        ><span class="rule-chip">L-1</span>
+                    </div>
+                    <h2>3. Make a move (or add marchers)</h2>
+                    <p>
+                        Making a move over counts the marchers already have is
+                        an explicit takeover. It goes one layer above what's
+                        there.
+                    </p>
+                </div>
+                <figure data-scene="make">
+                    <figcaption>
+                        <span class="tag works">Today and proposed</span>
+                        <h3>
+                            Make a new move for the orange marchers, counts 10
+                            to 16
+                        </h3>
+                    </figcaption>
+                </figure>
+            </section>
+
+            <section id="split">
+                <div class="edit-head prose">
+                    <div class="meta">
+                        <span class="tag same">Same today</span
+                        ><span class="rule-chip">L-3</span>
+                    </div>
+                    <h2>4. Split a move</h2>
+                    <p>
+                        A split only regroups rows. Each row keeps its layer and
+                        destination, so the field plays exactly as before.
+                    </p>
+                </div>
+                <figure data-scene="split">
+                    <figcaption>
+                        <span class="tag works">Today and proposed</span>
+                        <h3>Split the orange marchers out of Page 2's move</h3>
+                    </figcaption>
+                </figure>
+            </section>
+
+            <section id="spot">
+                <div class="edit-head prose">
+                    <div class="meta">
+                        <span class="tag same">Same today</span
+                        ><span class="rule-chip">L-3</span>
+                    </div>
+                    <h2>5. Set one marcher's spot</h2>
+                    <p>
+                        Dragging one marcher on the field at a count adds a row
+                        for them. Today it copies the layer of their row just
+                        before. L-3 makes that the written rule.
+                    </p>
+                </div>
+                <figure data-scene="spot">
+                    <figcaption>
+                        <span class="tag works">Today and proposed</span>
+                        <h3>Move one orange marcher at count 20</h3>
+                    </figcaption>
+                </figure>
+            </section>
+
+            <section id="inspector">
+                <div class="edit-head prose">
+                    <div class="meta">
+                        <span class="tag now">Changes</span
+                        ><span class="rule-chip">Q2</span>
+                    </div>
+                    <h2>6. Type a layer in the inspector</h2>
+                    <p>
+                        Start from the edge drag above: the split move took over
+                        from count 5 on layer 1. Expert mode lets you type any
+                        layer from −1000 to 1000.
+                    </p>
+                </div>
+                <div class="pair">
+                    <figure data-scene="insp-now">
+                        <figcaption>
+                            <span class="tag now"
+                                >Today · allowed silently</span
+                            >
+                            <h3>Type −1 as the split move's layer</h3>
+                        </figcaption>
+                    </figure>
+                    <figure data-scene="insp-prop">
+                        <figcaption>
+                            <span class="tag prop"
+                                >Proposed · one option for Q2</span
+                            >
+                            <h3>The field shows the layer and why</h3>
+                        </figcaption>
+                    </figure>
+                </div>
+            </section>
+
+            <section id="pagemove">
+                <div class="edit-head prose">
+                    <div class="meta">
+                        <span class="tag now">Changes</span
+                        ><span class="rule-chip">L-5</span>
+                    </div>
+                    <h2>7. What counts as a page's own move</h2>
+                    <p>
+                        Here Page 2's move goes into a shape. Dragging a move's
+                        edge counts it as a page move. "Delete page and its
+                        moves" only counts shapeless moves on layer 0, so it
+                        treats this one as a move you made. Read from the code;
+                        not yet tried in the app.
+                    </p>
+                </div>
+                <div class="pair">
+                    <figure data-scene="page-now">
+                        <figcaption>
+                            <span class="tag now">Today · refused</span>
+                            <h3>Delete Page 2 and its moves</h3>
+                        </figcaption>
+                    </figure>
+                    <figure data-scene="page-prop">
+                        <figcaption>
+                            <span class="tag prop"
+                                >Proposed · if L-5 says yes</span
+                            >
+                            <h3>Delete Page 2 and its moves</h3>
+                        </figcaption>
+                    </figure>
+                </div>
+            </section>
+
+            <section id="rules">
+                <div class="prose" style="display: grid; gap: 8px">
+                    <h2>The proposed rule list</h2>
+                    <p>
+                        This is a draft for the spec and an ADR 0001 amendment.
+                        Code comments would cite these IDs the way they already
+                        cite R-2 and E-A3.
+                    </p>
+                </div>
+                <figure>
+                    <ul class="rules">
+                        <li>
+                            <span class="id">L-1</span
+                            ><span
+                                ><b>Making a move</b> over counts a marcher
+                                already has puts it one layer above whatever is
+                                there, so it takes those counts over.</span
+                            >
+                        </li>
+                        <li>
+                            <span class="id">L-2</span
+                            ><span
+                                ><b>Moving or resizing a move</b> keeps its
+                                layer, but rises above a page's own moves
+                                wherever it newly covers them.
+                                <span class="q"
+                                    >Q1: at a move you made yourself, stop or
+                                    take over?</span
+                                ></span
+                            >
+                        </li>
+                        <li>
+                            <span class="id">L-3</span
+                            ><span
+                                ><b
+                                    >Splitting, merging and setting one
+                                    marcher's spot</b
+                                >
+                                keep each row's layer; a new row for one marcher
+                                takes the layer of their row just before
+                                it.</span
+                            >
+                        </li>
+                        <li>
+                            <span class="id">L-4</span
+                            ><span
+                                ><b>No edit lowers a layer</b> on its own.</span
+                            >
+                        </li>
+                        <li>
+                            <span class="id">L-5</span
+                            ><span
+                                ><b>"A page's own move"</b> has one definition,
+                                in one place, used by every edit.
+                                <span class="q"
+                                    >I recommend: a page's move is a page's move
+                                    whatever its destination or layer.</span
+                                ></span
+                            >
+                        </li>
+                    </ul>
+                </figure>
+            </section>
+
+            <section>
+                <div class="prose" style="display: grid; gap: 10px">
+                    <h2>What you need to decide</h2>
+                    <div class="decide">
+                        <div>
+                            <b>Q1</b
+                            ><span
+                                >When a drag or resize runs into a move you made
+                                yourself, not a page's move: stop, or take it
+                                over? I recommend stop, as resize does today
+                                (V-121), so only making a move takes over your
+                                own moves.</span
+                            >
+                        </div>
+                        <div>
+                            <b>Q2</b
+                            ><span
+                                >Should the Expert inspector's layer field stay
+                                free entry, or follow the rules (scene 6 shows
+                                one option)? Free entry gets around every rule
+                                above.</span
+                            >
+                        </div>
+                        <div>
+                            <b>L-5</b
+                            ><span
+                                >Should a page's move that goes into a shape, or
+                                that has marchers added on a higher layer, still
+                                count as the page's own move?</span
+                            >
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <script>
+            (() => {
+                const NS = "http://www.w3.org/2000/svg";
+                const reduce =
+                    window.matchMedia &&
+                    window.matchMedia("(prefers-reduced-motion: reduce)")
+                        .matches;
+                const S = (tag, attrs, parent, text) => {
+                    const el = document.createElementNS(NS, tag);
+                    for (const k in attrs) el.setAttribute(k, attrs[k]);
+                    if (text != null) el.textContent = text;
+                    if (parent) parent.appendChild(el);
+                    return el;
+                };
+                const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+                const lerp = (a, b, p) => a + (b - a) * p;
+                const ease = (p) =>
+                    p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+                const seg = (t, a, b) => ease(clamp((t - a) / (b - a)));
+
+                // ---- Field geometry: 100 × 50 units drawn in x 8..392, y 8..148
+                const fx = (x) => 8 + x * 3.84;
+                const fy = (y) => 8 + y * 2.8;
+                const A = [
+                    [22, 42],
+                    [32, 42],
+                    [42, 42],
+                    [58, 42],
+                    [68, 42],
+                    [78, 42],
+                ];
+                const B = [
+                    [28, 27],
+                    [36, 27],
+                    [44, 27],
+                    [56, 27],
+                    [64, 27],
+                    [72, 27],
+                ];
+                const C6 = [
+                    [16, 10],
+                    [26, 10],
+                    [36, 10],
+                    [50, 13],
+                    [60, 13],
+                    [70, 13],
+                ];
+                const X = [
+                    [72, 9],
+                    [81, 5],
+                    [90, 9],
+                ];
+                const SH = [
+                    [40, 7],
+                    [48, 7],
+                    [56, 7],
+                    [40, 14],
+                    [48, 14],
+                    [56, 14],
+                ];
+                const Z = [86, 32];
+                const isOrange = (i) => i >= 3;
+                const lp = (p, q, f) => [
+                    lerp(p[0], q[0], f),
+                    lerp(p[1], q[1], f),
+                ];
+                const P1 = (i, c) => lp(A[i], B[i], clamp(c / 8));
+                // Page 2's move with everyone in it
+                const base6 = (i, c) =>
+                    c <= 8 ? P1(i, c) : lp(B[i], C6[i], clamp((c - 8) / 8));
+                // The orange marchers in a split move [s, e) (rebased from where they are at s)
+                const splitPos = (s, e) => (i, c) => {
+                    if (!isOrange(i)) return base6(i, c);
+                    if (c < s) return P1(i, c);
+                    return lp(P1(i, s), X[i - 3], clamp((c - s) / (e - s)));
+                };
+                const ghostP1 = (s) => (i, c) =>
+                    isOrange(i) && s < 8 && c > s && c < 8 ? P1(i, c) : null;
+
+                // ---- Timeline geometry: counts 0..20 drawn in x 56..388
+                const X0 = 56,
+                    X1 = 388,
+                    LANE_TOP = 200,
+                    LANE_H = 48;
+                const xc = (c) => X0 + (c / 20) * (X1 - X0);
+
+                let uid = 0;
+                function mount(fig, sc) {
+                    const lanes = sc.lanes || [1, 0];
+                    const maxL = lanes[0];
+                    const H = LANE_TOP + lanes.length * LANE_H + 46;
+                    const yL = (L) => LANE_TOP + (maxL - L) * LANE_H;
+                    const svg = S("svg", {
+                        viewBox: `0 0 400 ${H}`,
+                        class: "scene",
+                        role: "img",
+                        "aria-label": fig.querySelector("h3").textContent,
+                    });
+                    fig.appendChild(svg);
+                    const hid = "h" + uid++;
+                    const pat = S(
+                        "pattern",
+                        {
+                            id: hid,
+                            width: 4,
+                            height: 4,
+                            patternUnits: "userSpaceOnUse",
+                            patternTransform: "rotate(45)",
+                        },
+                        S("defs", {}, svg),
+                    );
+                    S(
+                        "rect",
+                        { width: 1.6, height: 4, class: "strip-orange" },
+                        pat,
+                    );
+
+                    // static: field, ruler, lanes
+                    S(
+                        "rect",
+                        {
+                            x: 8,
+                            y: 8,
+                            width: 384,
+                            height: 140,
+                            rx: 4,
+                            class: "turf",
+                        },
+                        svg,
+                    );
+                    [
+                        "10",
+                        "20",
+                        "30",
+                        "40",
+                        "50",
+                        "40",
+                        "30",
+                        "20",
+                        "10",
+                    ].forEach((n, k) => {
+                        S(
+                            "line",
+                            {
+                                x1: fx((k + 1) * 10),
+                                x2: fx((k + 1) * 10),
+                                y1: 8,
+                                y2: 148,
+                                class: "yard",
+                            },
+                            svg,
+                        );
+                        S(
+                            "text",
+                            { x: fx((k + 1) * 10), y: 143, class: "yardnum" },
+                            svg,
+                            n,
+                        );
+                    });
+                    for (let x = 2; x < 100; x += 2) {
+                        if (x % 10 === 0) continue;
+                        S(
+                            "line",
+                            {
+                                x1: fx(x),
+                                x2: fx(x),
+                                y1: fy(16.5),
+                                y2: fy(17.5),
+                                class: "hash",
+                            },
+                            svg,
+                        );
+                        S(
+                            "line",
+                            {
+                                x1: fx(x),
+                                x2: fx(x),
+                                y1: fy(32.5),
+                                y2: fy(33.5),
+                                class: "hash",
+                            },
+                            svg,
+                        );
+                    }
+                    for (let c = 0; c <= 20; c++) {
+                        S(
+                            "line",
+                            {
+                                x1: xc(c),
+                                x2: xc(c),
+                                y1: 180,
+                                y2: c % 4 === 0 ? 186 : 183,
+                                class: "tick",
+                            },
+                            svg,
+                        );
+                        if (c % 4 === 0)
+                            S(
+                                "text",
+                                { x: xc(c), y: 195, class: "ticknum" },
+                                svg,
+                                c,
+                            );
+                    }
+                    lanes.forEach((L) => {
+                        S(
+                            "rect",
+                            {
+                                x: X0,
+                                y: yL(L) + 1,
+                                width: X1 - X0,
+                                height: LANE_H - 2,
+                                class: "lane",
+                            },
+                            svg,
+                        );
+                        S(
+                            "text",
+                            { x: 4, y: yL(L) + 28, class: "lane-label" },
+                            svg,
+                            `layer ${L < 0 ? "−" + -L : L}`,
+                        );
+                    });
+                    const dyn = S("g", {}, svg);
+
+                    const drawClip = (g, cl) => {
+                        const y = yL(cl.lane) + 2 + (cl.row ?? 1) * 23;
+                        const x = xc(cl.c0) + 1,
+                            w = Math.max(0, xc(cl.c1) - xc(cl.c0) - 2);
+                        const grp = S("g", { opacity: cl.opacity ?? 1 }, g);
+                        S(
+                            "rect",
+                            {
+                                x,
+                                y,
+                                width: w,
+                                height: 20,
+                                rx: 3,
+                                class:
+                                    cl.kind === "move"
+                                        ? "clip-move"
+                                        : "clip-page",
+                            },
+                            grp,
+                        );
+                        if (w > 30)
+                            S(
+                                "text",
+                                {
+                                    x: x + 4,
+                                    y: y + 11,
+                                    class:
+                                        cl.kind === "move"
+                                            ? "clip-split-label"
+                                            : "clip-label",
+                                },
+                                grp,
+                                cl.label,
+                            );
+                        (cl.strips || []).forEach((s, k) => {
+                            const sy = y + 13 + k * 3.5;
+                            S(
+                                "rect",
+                                {
+                                    x: x + 2,
+                                    y: sy,
+                                    width: Math.max(0, w - 4),
+                                    height: 3,
+                                    class: "strip-" + s.c,
+                                    opacity: s.o ?? 1,
+                                },
+                                grp,
+                            );
+                            if (s.hatch) {
+                                const hx = xc(s.hatch[0]) + 1,
+                                    hw = Math.max(
+                                        0,
+                                        xc(s.hatch[1]) - xc(s.hatch[0]) - 3,
+                                    );
+                                const cover = S(
+                                    "rect",
+                                    { x: hx, y: sy, width: hw, height: 3 },
+                                    grp,
+                                );
+                                cover.style.fill = "var(--page)";
+                                S(
+                                    "rect",
+                                    {
+                                        x: hx,
+                                        y: sy,
+                                        width: hw,
+                                        height: 3,
+                                        fill: `url(#${hid})`,
+                                    },
+                                    grp,
+                                );
+                            }
+                        });
+                    };
+
+                    const render = (st) => {
+                        dyn.textContent = "";
+                        // field extras
+                        if (st.shape)
+                            S(
+                                "rect",
+                                {
+                                    x: fx(36),
+                                    y: fy(3),
+                                    width: fx(60) - fx(36),
+                                    height: fy(18) - fy(3),
+                                    rx: 4,
+                                    class: "shape-outline",
+                                    opacity: st.shape,
+                                },
+                                dyn,
+                            );
+                        const c = st.fieldCount;
+                        for (let i = 0; i < 6; i++) {
+                            const g = st.ghost && st.ghost(i, c);
+                            if (g)
+                                S(
+                                    "circle",
+                                    {
+                                        cx: fx(g[0]),
+                                        cy: fy(g[1]),
+                                        r: 5,
+                                        class: "ghost",
+                                    },
+                                    dyn,
+                                );
+                        }
+                        for (let i = 0; i < 6; i++) {
+                            const p = st.pos(i, c);
+                            if (st.selected && st.selected.includes(i))
+                                S(
+                                    "circle",
+                                    {
+                                        cx: fx(p[0]),
+                                        cy: fy(p[1]),
+                                        r: 9,
+                                        class: "sel",
+                                    },
+                                    dyn,
+                                );
+                            S(
+                                "circle",
+                                {
+                                    cx: fx(p[0]),
+                                    cy: fy(p[1]),
+                                    r: 5.5,
+                                    class: isOrange(i) ? "m-orange" : "m-blue",
+                                },
+                                dyn,
+                            );
+                        }
+                        if (st.panel) {
+                            const pn = st.panel,
+                                px = 244,
+                                py = 14;
+                            S(
+                                "rect",
+                                {
+                                    x: px,
+                                    y: py,
+                                    width: 142,
+                                    height: pn.note ? 62 : 46,
+                                    rx: 5,
+                                    class: "panel-bg",
+                                },
+                                dyn,
+                            );
+                            S(
+                                "text",
+                                { x: px + 8, y: py + 13, class: "panel-title" },
+                                dyn,
+                                "INSPECTOR · SPLIT MOVE",
+                            );
+                            S(
+                                "text",
+                                { x: px + 8, y: py + 32, class: "panel-text" },
+                                dyn,
+                                "Layer",
+                            );
+                            S(
+                                "rect",
+                                {
+                                    x: px + 46,
+                                    y: py + 20,
+                                    width: 44,
+                                    height: 18,
+                                    rx: 3,
+                                    class: "panel-field",
+                                },
+                                dyn,
+                            );
+                            S(
+                                "text",
+                                { x: px + 52, y: py + 33, class: "panel-val" },
+                                dyn,
+                                pn.value,
+                            );
+                            if (pn.extra)
+                                S(
+                                    "text",
+                                    {
+                                        x: px + 96,
+                                        y: py + 33,
+                                        class: "panel-note",
+                                    },
+                                    dyn,
+                                    pn.extra,
+                                );
+                            if (pn.note)
+                                S(
+                                    "text",
+                                    {
+                                        x: px + 8,
+                                        y: py + 52,
+                                        class: "panel-note",
+                                    },
+                                    dyn,
+                                    pn.note,
+                                );
+                        }
+                        // flags
+                        (
+                            st.flags || [
+                                [0, "Page 1"],
+                                [8, "Page 2"],
+                                [16, "Page 3"],
+                            ]
+                        ).forEach(([fc, label, o]) => {
+                            const g = S("g", { opacity: o ?? 1 }, dyn);
+                            const f = S(
+                                "path",
+                                {
+                                    d: `M${xc(fc)} 162 v14 M${xc(fc)} 162 h9 l-3 3 l3 3 h-9`,
+                                    class: "flag",
+                                },
+                                g,
+                            );
+                            f.style.stroke = "var(--ink)";
+                            S(
+                                "text",
+                                { x: xc(fc) + 12, y: 170, class: "flag-label" },
+                                g,
+                                label,
+                            );
+                        });
+                        if (st.menu) {
+                            const mx = xc(st.menu.c) + 4;
+                            S(
+                                "rect",
+                                {
+                                    x: mx,
+                                    y: 150,
+                                    width: 150,
+                                    height: 22,
+                                    rx: 4,
+                                    class: "menu-bg",
+                                },
+                                dyn,
+                            );
+                            S(
+                                "text",
+                                { x: mx + 8, y: 165, class: "menu-text" },
+                                dyn,
+                                st.menu.text,
+                            );
+                        }
+                        // clips
+                        st.clips.forEach((cl) => drawClip(dyn, cl));
+                        if (st.riseLabel)
+                            S(
+                                "text",
+                                {
+                                    x: xc(0) + 6,
+                                    y: yL(st.riseLabel.lane) + 15,
+                                    class: "rise-label",
+                                    opacity: st.riseLabel.o,
+                                },
+                                dyn,
+                                st.riseLabel.text,
+                            );
+                        if (st.bad)
+                            S(
+                                "rect",
+                                {
+                                    x: xc(st.bad.c0) + 1,
+                                    y: yL(st.bad.lane) + 1,
+                                    width: Math.max(
+                                        0,
+                                        xc(st.bad.c1) - xc(st.bad.c0) - 1,
+                                    ),
+                                    height: LANE_H - 2,
+                                    rx: 3,
+                                    class: "overlap-bad",
+                                    opacity: st.bad.o,
+                                },
+                                dyn,
+                            );
+                        if (st.ok && st.ok.c1 - st.ok.c0 > 0.05)
+                            S(
+                                "rect",
+                                {
+                                    x: xc(st.ok.c0) + 1,
+                                    y: yL(st.ok.lane) + 1,
+                                    width: xc(st.ok.c1) - xc(st.ok.c0) - 1,
+                                    height: LANE_H - 2,
+                                    rx: 3,
+                                    class: "overlap-ok",
+                                },
+                                dyn,
+                            );
+                        if (st.handle) {
+                            const hy = yL(st.handle.lane) + st.handle.row * 23;
+                            S(
+                                "rect",
+                                {
+                                    x: xc(st.handle.c) - 2,
+                                    y: hy,
+                                    width: 4,
+                                    height: 26,
+                                    rx: 2,
+                                    class: "handle",
+                                },
+                                dyn,
+                            );
+                            S(
+                                "text",
+                                {
+                                    x: xc(st.handle.c),
+                                    y: hy - 3,
+                                    class: "handle-label",
+                                },
+                                dyn,
+                                "drag",
+                            );
+                        }
+                        if (st.count != null) {
+                            const x = xc(st.count);
+                            S(
+                                "line",
+                                {
+                                    x1: x,
+                                    x2: x,
+                                    y1: 178,
+                                    y2: LANE_TOP + lanes.length * LANE_H,
+                                    class: "playhead",
+                                },
+                                dyn,
+                            );
+                            S(
+                                "path",
+                                {
+                                    d: `M${x - 5} 176 h10 l-5 6 z`,
+                                    class: "playhead-cap",
+                                },
+                                dyn,
+                            );
+                        }
+                        if (st.toast) {
+                            const ty = LANE_TOP + lanes.length * LANE_H + 6;
+                            S(
+                                "rect",
+                                {
+                                    x: 20,
+                                    y: ty,
+                                    width: 360,
+                                    height: 34,
+                                    rx: 6,
+                                    class: "toast-bg",
+                                },
+                                dyn,
+                            );
+                            S(
+                                "circle",
+                                {
+                                    cx: 36,
+                                    cy: ty + 17,
+                                    r: 6,
+                                    class: "toast-icon",
+                                },
+                                dyn,
+                            );
+                            S(
+                                "text",
+                                { x: 48, y: ty + 14, class: "toast-text" },
+                                dyn,
+                                st.toast[0],
+                            );
+                            S(
+                                "text",
+                                { x: 48, y: ty + 27, class: "toast-text" },
+                                dyn,
+                                st.toast[1],
+                            );
+                        }
+                    };
+
+                    const controls = document.createElement("div");
+                    controls.className = "controls";
+                    const sid = fig.dataset.scene;
+                    controls.innerHTML = `<button type="button" id="${sid}-play">Play</button><input type="range" id="${sid}-scrub" min="0" max="1000" value="0" aria-label="Step through the scene"><span class="count"></span>`;
+                    fig.appendChild(controls);
+                    const cap = document.createElement("p");
+                    cap.className = "caption";
+                    cap.setAttribute("aria-live", "polite");
+                    fig.appendChild(cap);
+                    const btn = controls.querySelector("button");
+                    const range = controls.querySelector("input");
+                    const count = controls.querySelector(".count");
+                    let t = sc.key,
+                        playing = false,
+                        last = 0,
+                        raf = 0,
+                        started = false;
+                    const draw = () => {
+                        const st = sc.at(t);
+                        render(st);
+                        cap.innerHTML = st.caption;
+                        count.textContent =
+                            st.count != null
+                                ? `count ${Math.floor(st.count)}`
+                                : "";
+                        range.value = String(Math.round((t / sc.T) * 1000));
+                    };
+                    const tick = (now) => {
+                        t += (now - last) / 1000;
+                        last = now;
+                        if (t >= sc.T) {
+                            t = sc.T;
+                            playing = false;
+                            btn.textContent = "Replay";
+                            draw();
+                            return;
+                        }
+                        draw();
+                        raf = requestAnimationFrame(tick);
+                    };
+                    const play = () => {
+                        if (!started || t >= sc.T - 0.01) t = 0;
+                        started = true;
+                        playing = true;
+                        btn.textContent = "Pause";
+                        last = performance.now();
+                        raf = requestAnimationFrame(tick);
+                    };
+                    const pause = () => {
+                        playing = false;
+                        cancelAnimationFrame(raf);
+                        btn.textContent = "Play";
+                    };
+                    btn.addEventListener("click", () =>
+                        playing ? pause() : play(),
+                    );
+                    range.addEventListener("input", () => {
+                        started = true;
+                        pause();
+                        t = (Number(range.value) / 1000) * sc.T;
+                        draw();
+                    });
+                    draw();
+                    return {
+                        play,
+                        get started() {
+                            return started;
+                        },
+                    };
+                }
+
+                // ---- Shared pieces
+                const both = [{ c: "blue" }, { c: "orange" }];
+                const page1 = (hatch) => ({
+                    c0: 0,
+                    c1: 8,
+                    lane: 0,
+                    label: "Page 1's move",
+                    strips: [{ c: "blue" }, { c: "orange", hatch }],
+                });
+                const page2Blue = {
+                    c0: 8,
+                    c1: 16,
+                    lane: 0,
+                    label: "Page 2's move",
+                    strips: [{ c: "blue" }],
+                };
+                const play = (t, t0, e, cap) => {
+                    const c = clamp((t - t0) / 8) * 20;
+                    return { count: c, fieldCount: c, caption: cap(c, e) };
+                };
+                function splitCaption(c, e) {
+                    const n = Math.floor(c);
+                    if (c < 5)
+                        return `Count ${n}: everyone follows Page 1's move.`;
+                    if (c < 8)
+                        return `Count ${n}: the split move (layer 1) <b>takes over the orange marchers</b> from wherever they are. Page 1's move still runs underneath (dashed outlines) but no longer controls them.`;
+                    if (c < e)
+                        return `Count ${n}: blue marchers follow Page 2's move. Orange keep going in the split move.`;
+                    if (c < 16)
+                        return `Count ${n}: the split move ended at count ${e}, so orange <b>hold there</b>. The split took them out of Page 2's move, so nothing pulls them back.`;
+                    return `Count ${n}: orange hold where the split move left them until their next move.`;
+                }
+                const intro =
+                    "The orange marchers were split out of Page 2's move. Their split move kept the page's layer: <b>layer 0</b>.";
+                const splitClip = (c0, c1, lane, row = 0) => ({
+                    c0,
+                    c1,
+                    lane,
+                    row,
+                    kind: "move",
+                    label: "Split move",
+                });
+
+                const scenes = {
+                    "shift-now": {
+                        T: 7.6,
+                        key: 4.2,
+                        at(t) {
+                            let s = 8,
+                                bad = 0,
+                                toast = null,
+                                caption = intro;
+                            if (t >= 1.2) {
+                                s = lerp(8, 5, seg(t, 1.2, 2.8));
+                                bad = seg(t, 1.6, 2.8);
+                                caption =
+                                    "Drag the <b>whole split move</b> back 3 counts. It stays on layer 0.";
+                            }
+                            if (t >= 2.8) {
+                                bad = 1;
+                                toast = [
+                                    "That marcher already has a move on the same layer",
+                                    "at those beats. Put one of them on a different layer…",
+                                ];
+                                caption =
+                                    "<b>Refused.</b> The orange marchers already have Page 1's move on layer 0 at counts 5 to 8, and two rows can't overlap on one layer.";
+                            }
+                            if (t >= 5.4) {
+                                s = lerp(5, 8, seg(t, 5.4, 6.4));
+                                bad = 1 - seg(t, 5.4, 6.4);
+                                if (t > 6.2) toast = null;
+                                caption =
+                                    "It snaps back and nothing changes, though the edge drag (scene 2) is allowed to take over the same counts.";
+                            }
+                            return {
+                                clips: [
+                                    page1(),
+                                    page2Blue,
+                                    splitClip(s, s + 8, 0),
+                                ],
+                                bad: bad
+                                    ? { c0: s, c1: 8, lane: 0, o: bad }
+                                    : null,
+                                toast,
+                                fieldCount: 8,
+                                pos: splitPos(8, 16),
+                                caption,
+                                count: null,
+                            };
+                        },
+                    },
+                    "shift-prop": {
+                        T: 13.4,
+                        key: 7.4,
+                        at(t) {
+                            let s = 8,
+                                rise = 0,
+                                caption = intro,
+                                ok = null;
+                            if (t >= 1.2) {
+                                s = lerp(8, 5, seg(t, 1.2, 2.8));
+                                if (t < 3.4) ok = { c0: s, c1: 8, lane: 0 };
+                                caption =
+                                    "Drag the <b>whole split move</b> back 3 counts. It would overlap Page 1's move (dashed).";
+                            }
+                            if (t >= 2.8) {
+                                rise = seg(t, 2.8, 3.8);
+                                caption =
+                                    "Same rule as the edge drag (L-2): where it newly covers a page's own move, it <b>goes up to layer 1</b>.";
+                            }
+                            const st = {
+                                clips: [
+                                    page1(rise > 0.5 ? [s, 8] : null),
+                                    page2Blue,
+                                    splitClip(s, s + 8, rise),
+                                ],
+                                ok,
+                                riseLabel: rise
+                                    ? { lane: 1, o: rise, text: "↑ layer 1" }
+                                    : null,
+                                fieldCount: 0,
+                                pos: splitPos(s, s + 8),
+                                ghost: ghostP1(s),
+                                caption,
+                                count: null,
+                            };
+                            if (t >= 4.5)
+                                Object.assign(
+                                    st,
+                                    play(t, 4.5, 13, splitCaption),
+                                );
+                            return st;
+                        },
+                    },
+                    edge: {
+                        T: 13,
+                        key: 7.4,
+                        at(t) {
+                            let s = 8,
+                                rise = 0,
+                                caption = intro,
+                                handle = null;
+                            if (t >= 1.2) {
+                                s = lerp(8, 5, seg(t, 1.2, 2.8));
+                                caption =
+                                    "Drag the split move's <b>start edge</b> back 3 counts, into Page 1.";
+                            }
+                            if (t >= 0.8 && t < 3.2)
+                                handle = { c: s, lane: 0, row: 0 };
+                            if (t >= 2.8) {
+                                rise = seg(t, 2.8, 3.8);
+                                caption =
+                                    "Where it now covers Page 1's move, its rows <b>go up to layer 1</b>. The higher layer wins there.";
+                            }
+                            const st = {
+                                clips: [
+                                    page1(rise > 0.5 ? [s, 8] : null),
+                                    page2Blue,
+                                    splitClip(s, 16, rise),
+                                ],
+                                handle: handle && { ...handle, lane: rise },
+                                riseLabel: rise
+                                    ? { lane: 1, o: rise, text: "↑ layer 1" }
+                                    : null,
+                                fieldCount: 0,
+                                pos: splitPos(s, 16),
+                                ghost: ghostP1(s),
+                                caption,
+                                count: null,
+                            };
+                            if (t >= 4.5)
+                                Object.assign(
+                                    st,
+                                    play(t, 4.5, 16, splitCaption),
+                                );
+                            return st;
+                        },
+                    },
+                    make: {
+                        T: 13,
+                        key: 7.6,
+                        at(t) {
+                            let caption =
+                                    "Everyone is in Page 1's and Page 2's moves, on layer 0.",
+                                selected = null,
+                                mv = 0;
+                            if (t >= 1.0) {
+                                selected = [3, 4, 5];
+                                caption =
+                                    "Select the orange marchers and <b>make a new move</b> over counts 10 to 16.";
+                            }
+                            if (t >= 2.4) {
+                                mv = seg(t, 2.4, 3.4);
+                                caption =
+                                    "They already have Page 2's move there, so the new move goes <b>one layer above it</b> (layer 1) and takes those counts over.";
+                            }
+                            const pos = (i, c) =>
+                                isOrange(i) && mv > 0 && c >= 10
+                                    ? lp(
+                                          base6(i, 10),
+                                          X[i - 3],
+                                          clamp((c - 10) / 6),
+                                      )
+                                    : base6(i, c);
+                            const ghost = (i, c) =>
+                                isOrange(i) && mv > 0 && c > 10 && c < 16
+                                    ? base6(i, c)
+                                    : null;
+                            const clips = [
+                                page1(),
+                                {
+                                    c0: 8,
+                                    c1: 16,
+                                    lane: 0,
+                                    label: "Page 2's move",
+                                    strips: [
+                                        { c: "blue" },
+                                        {
+                                            c: "orange",
+                                            hatch: mv > 0.5 ? [10, 16] : null,
+                                        },
+                                    ],
+                                },
+                            ];
+                            if (mv)
+                                clips.push({
+                                    c0: 10,
+                                    c1: 16,
+                                    lane: 1,
+                                    row: 0,
+                                    kind: "move",
+                                    label: "Move 3",
+                                    opacity: mv,
+                                });
+                            const st = {
+                                clips,
+                                selected: t < 4.5 ? selected : null,
+                                fieldCount: 0,
+                                pos,
+                                ghost,
+                                caption,
+                                count: null,
+                            };
+                            if (t >= 4.5)
+                                Object.assign(
+                                    st,
+                                    play(t, 4.5, 16, (c) => {
+                                        const n = Math.floor(c);
+                                        if (c < 10)
+                                            return `Count ${n}: everyone follows the page moves.`;
+                                        if (c < 16)
+                                            return `Count ${n}: Move 3 (layer 1) <b>takes the orange marchers over</b> from where they are. Page 2's move still runs underneath for them (dashed).`;
+                                        return `Count ${n}: Move 3 is done; orange hold at its end.`;
+                                    }),
+                                );
+                            return st;
+                        },
+                    },
+                    split: {
+                        T: 13,
+                        key: 3.2,
+                        at(t) {
+                            let caption =
+                                    "Everyone is in Page 2's move, on layer 0.",
+                                selected = null,
+                                sp = 0;
+                            if (t >= 1.0) {
+                                selected = [3, 4, 5];
+                                caption =
+                                    "Select the orange marchers and <b>split</b> them into their own move.";
+                            }
+                            if (t >= 2.0) {
+                                sp = seg(t, 2.0, 3.0);
+                                caption =
+                                    "Their rows move into a new split move, <b>still on layer 0</b>, with the same counts and destinations.";
+                            }
+                            const clips = [
+                                page1(),
+                                {
+                                    c0: 8,
+                                    c1: 16,
+                                    lane: 0,
+                                    label: "Page 2's move",
+                                    strips: [
+                                        { c: "blue" },
+                                        { c: "orange", o: 1 - sp },
+                                    ],
+                                },
+                            ];
+                            if (sp)
+                                clips.push({
+                                    c0: 8,
+                                    c1: 16,
+                                    lane: 0,
+                                    row: 1 - sp,
+                                    kind: "move",
+                                    label: "Split move",
+                                    opacity: sp,
+                                });
+                            const st = {
+                                clips,
+                                selected: t < 4.5 ? selected : null,
+                                fieldCount: 8,
+                                pos: base6,
+                                caption,
+                                count: null,
+                            };
+                            if (t >= 4.5)
+                                Object.assign(
+                                    st,
+                                    play(t, 4.5, 16, (c) => {
+                                        const n = Math.floor(c);
+                                        if (c < 8)
+                                            return `Count ${n}: everyone follows Page 1's move.`;
+                                        return `Count ${n}: <b>exactly the same paths as before the split.</b> Orange follow the split move, blue follow Page 2's move. Nothing about layers changed.`;
+                                    }),
+                                );
+                            return st;
+                        },
+                    },
+                    spot: {
+                        T: 13,
+                        key: 3.4,
+                        at(t) {
+                            let caption =
+                                    "After the split, the orange marchers hold at the split move's end from count 16.",
+                                selected = null,
+                                add = 0,
+                                drag = 0;
+                            if (t >= 1.0) {
+                                selected = [4];
+                                drag = seg(t, 1.4, 2.4);
+                                caption =
+                                    "At count 20, select one orange marcher and <b>drag them</b> to a new spot.";
+                            }
+                            if (t >= 2.4) {
+                                add = seg(t, 2.4, 3.2);
+                                caption =
+                                    "That adds a row for them from 16 to 20. It takes the layer of their row just before it: the split move's, <b>layer 0</b>.";
+                            }
+                            const sp = splitPos(8, 16);
+                            const pos = (i, c) => {
+                                if (i === 4 && c > 16 && add > 0)
+                                    return lp(X[1], Z, clamp((c - 16) / 4));
+                                if (i === 4 && c >= 20 && drag > 0)
+                                    return lp(X[1], Z, drag);
+                                return sp(i, c);
+                            };
+                            const clips = [
+                                page1(),
+                                page2Blue,
+                                splitClip(8, 16, 0),
+                            ];
+                            if (add)
+                                clips.push({
+                                    c0: 16,
+                                    c1: 20,
+                                    lane: 0,
+                                    row: 0,
+                                    kind: "move",
+                                    label: "1 marcher",
+                                    opacity: add,
+                                });
+                            const st = {
+                                clips,
+                                selected: t < 4.5 ? selected : null,
+                                fieldCount: 20,
+                                count: t >= 1 && t < 4.5 ? 20 : null,
+                                pos,
+                                caption,
+                            };
+                            if (t >= 4.5)
+                                Object.assign(
+                                    st,
+                                    play(t, 4.5, 16, (c) => {
+                                        const n = Math.floor(c);
+                                        if (c < 16)
+                                            return `Count ${n}: the split plays as before.`;
+                                        return `Count ${n}: the one marcher walks to their new spot; everyone else holds.`;
+                                    }),
+                                );
+                            return st;
+                        },
+                    },
+                    "insp-now": {
+                        lanes: [1, 0, -1],
+                        T: 13.2,
+                        key: 3.4,
+                        at(t) {
+                            let caption =
+                                    "The split move took over from count 5 on layer 1 (scene 2).",
+                                val = "1",
+                                drop = 0;
+                            if (t >= 1.0) {
+                                val = t < 1.5 ? "1" : t < 1.9 ? "−" : "−1";
+                                caption =
+                                    "In the inspector, type <b>−1</b> as the split move's layer.";
+                            }
+                            if (t >= 2.0) {
+                                drop = seg(t, 2.0, 3.0);
+                                caption =
+                                    "<b>Allowed, with no message.</b> The move drops below Page 1's move, so Page 1 wins counts 5 to 8 again and the takeover you dragged in is gone.";
+                            }
+                            const lane = lerp(1, -1, drop);
+                            const clips = [
+                                page1(drop < 0.5 ? [5, 8] : null),
+                                page2Blue,
+                                splitClip(5, 16, lane),
+                            ];
+                            const pos =
+                                drop >= 0.5 ? splitPos(8, 16) : splitPos(5, 16);
+                            const st = {
+                                clips,
+                                panel: { value: val },
+                                fieldCount: 0,
+                                pos,
+                                ghost: drop >= 0.5 ? null : ghostP1(5),
+                                caption,
+                                count: null,
+                            };
+                            if (t >= 4.7)
+                                Object.assign(
+                                    st,
+                                    play(t, 4.7, 16, (c) => {
+                                        const n = Math.floor(c);
+                                        if (c < 8)
+                                            return `Count ${n}: orange follow <b>Page 1's move</b> all the way to its end, as if you never dragged.`;
+                                        if (c < 16)
+                                            return `Count ${n}: Page 1's move lets go, so the split move picks them up from where they are and finishes on time.`;
+                                        return `Count ${n}: the field looks like before the edge drag, but the timeline still shows the move starting at count 5.`;
+                                    }),
+                                );
+                            return st;
+                        },
+                    },
+                    "insp-prop": {
+                        T: 12.8,
+                        key: 3.2,
+                        at(t) {
+                            let caption =
+                                "The split move took over from count 5 on layer 1 (scene 2).";
+                            let panel = { value: "1", extra: "from L-2" };
+                            if (t >= 1.0) {
+                                panel = {
+                                    value: "1",
+                                    extra: "from L-2",
+                                    note: "Move down: would put it under Page 1",
+                                };
+                                caption =
+                                    "The inspector <b>shows the layer and which rule set it</b>. It only offers changes that keep the rules, and says why the others aren't there.";
+                            }
+                            const st = {
+                                clips: [
+                                    page1([5, 8]),
+                                    page2Blue,
+                                    splitClip(5, 16, 1),
+                                ],
+                                panel,
+                                fieldCount: 0,
+                                pos: splitPos(5, 16),
+                                ghost: ghostP1(5),
+                                caption,
+                                count: null,
+                            };
+                            if (t >= 4.3)
+                                Object.assign(
+                                    st,
+                                    play(t, 4.3, 16, (c) => {
+                                        const n = Math.floor(c);
+                                        if (c < 5)
+                                            return `Count ${n}: everyone follows Page 1's move.`;
+                                        if (c < 16)
+                                            return `Count ${n}: the takeover you dragged in stays. What you see on the timeline is what plays.`;
+                                        return `Count ${n}: orange hold at the split move's end.`;
+                                    }),
+                                );
+                            return st;
+                        },
+                    },
+                    "page-now": {
+                        T: 12.6,
+                        key: 3.6,
+                        at(t) {
+                            let caption =
+                                    "Page 2's move takes everyone into a shape.",
+                                menu = null,
+                                toast = null;
+                            if (t >= 1.0 && t < 2.2) {
+                                menu = {
+                                    c: 8,
+                                    text: "Delete Page 2 and its moves",
+                                };
+                                caption =
+                                    "Right-click Page 2 and choose <b>Delete Page 2 and its moves</b>.";
+                            }
+                            if (t >= 2.2) {
+                                toast = [
+                                    "Refused: Page 2's move would lose its counts.",
+                                    "(paraphrased; it's treated as a move you made)",
+                                ];
+                                caption =
+                                    "<b>Refused.</b> This delete only counts shapeless layer-0 moves as a page's own, so it won't delete a move that goes into a shape.";
+                            }
+                            if (t >= 4.4) toast = null;
+                            const pos = (i, c) =>
+                                c <= 8
+                                    ? P1(i, c)
+                                    : lp(B[i], SH[i], clamp((c - 8) / 8));
+                            const st = {
+                                clips: [
+                                    { ...page1(), strips: both },
+                                    {
+                                        c0: 8,
+                                        c1: 16,
+                                        lane: 0,
+                                        label: "Page 2's move",
+                                        strips: both,
+                                    },
+                                ],
+                                flags: [
+                                    [0, "Page 1"],
+                                    [8, "Page 2"],
+                                    [16, "End"],
+                                ],
+                                shape: 1,
+                                menu,
+                                toast,
+                                fieldCount: 16,
+                                pos,
+                                caption,
+                                count: null,
+                            };
+                            if (t >= 4.6)
+                                Object.assign(
+                                    st,
+                                    play(t, 4.6, 16, (c) => {
+                                        const n = Math.floor(c);
+                                        if (c < 8)
+                                            return `Count ${n}: everyone follows Page 1's move.`;
+                                        return `Count ${n}: nothing was deleted; Page 2's move still takes everyone into the shape. Yet dragging a move's edge over it treats it as a page move.`;
+                                    }),
+                                );
+                            return st;
+                        },
+                    },
+                    "page-prop": {
+                        T: 10.6,
+                        key: 3.6,
+                        at(t) {
+                            let caption =
+                                    "Page 2's move takes everyone into a shape.",
+                                menu = null,
+                                gone = 0;
+                            if (t >= 1.0 && t < 2.2) {
+                                menu = {
+                                    c: 8,
+                                    text: "Delete Page 2 and its moves",
+                                };
+                                caption =
+                                    "Right-click Page 2 and choose <b>Delete Page 2 and its moves</b>.";
+                            }
+                            if (t >= 2.2) {
+                                gone = seg(t, 2.2, 3.2);
+                                caption =
+                                    "Every edit asks the same isPageMove() check and gets the same answer, so <b>Page 2 and its move go</b>.";
+                            }
+                            const pos = (i, c) =>
+                                c <= 8 || gone >= 0.5
+                                    ? P1(i, c)
+                                    : lp(B[i], SH[i], clamp((c - 8) / 8));
+                            const clips = [{ ...page1(), strips: both }];
+                            if (gone < 1)
+                                clips.push({
+                                    c0: 8,
+                                    c1: 16,
+                                    lane: 0,
+                                    label: "Page 2's move",
+                                    strips: both,
+                                    opacity: 1 - gone,
+                                });
+                            const st = {
+                                clips,
+                                flags: [
+                                    [0, "Page 1"],
+                                    [8, gone > 0.5 ? "End" : "Page 2"],
+                                    [16, "End", 1 - gone],
+                                ],
+                                shape: 1 - gone,
+                                menu,
+                                fieldCount: gone >= 0.5 ? 8 : 16,
+                                pos,
+                                caption,
+                                count: null,
+                            };
+                            if (t >= 4.4)
+                                Object.assign(
+                                    st,
+                                    play(t, 4.4, 16, (c) => {
+                                        const n = Math.floor(c);
+                                        if (c < 8)
+                                            return `Count ${n}: everyone follows Page 1's move.`;
+                                        return `Count ${n}: the show now ends at Page 1's set.`;
+                                    }),
+                                );
+                            return st;
+                        },
+                    },
+                };
+
+                const players = [];
+                document
+                    .querySelectorAll("figure[data-scene]")
+                    .forEach((fig) => {
+                        const sc = scenes[fig.dataset.scene];
+                        if (sc) players.push([fig, mount(fig, sc)]);
+                    });
+
+                // ---- The map
+                const rows = [
+                    {
+                        name: "Drag a whole move",
+                        now: [
+                            "shiftTimeline(): no layer rule, keeps it",
+                            "refused E-A3",
+                            "bad",
+                        ],
+                        prop: ["L-2", "rises"],
+                    },
+                    {
+                        name: "Drag a move's edge",
+                        now: [
+                            "growOverLayers(): rises over page moves only",
+                            "rises",
+                        ],
+                        prop: ["L-2", "rises"],
+                    },
+                    {
+                        name: "Make a move, or add marchers",
+                        now: [
+                            "stealLayer(): one above whatever it overlaps",
+                            "takes over",
+                        ],
+                        prop: ["L-1", "takes over"],
+                    },
+                    {
+                        name: "Split a move",
+                        now: ["copies the old row's layer", "keeps"],
+                        prop: ["L-3", "keeps"],
+                    },
+                    {
+                        name: "Set one marcher's spot",
+                        now: [
+                            "previous?.layer ?? next?.layer ?? 0",
+                            "row before",
+                        ],
+                        prop: ["L-3", "row before"],
+                    },
+                    {
+                        name: "Type a layer in the inspector",
+                        now: [
+                            "any number from −1000 to 1000",
+                            "anything",
+                            "warn",
+                        ],
+                        prop: ["Q2", "your call", "pending"],
+                    },
+                ];
+                function mountGate(fig, mode) {
+                    const box = fig.querySelector(".edits");
+                    const els = rows.map((r) => {
+                        const [rule, result, kind] = r[mode];
+                        const row = document.createElement("div");
+                        row.className = "edit-row";
+                        row.innerHTML = `<span class="edit-name"></span><span class="result"></span><div class="track">${mode === "prop" ? '<span class="gate"></span>' : ""}<span class="pip"></span></div><span class="edit-rule"></span>`;
+                        row.querySelector(".edit-name").textContent = r.name;
+                        row.querySelector(".edit-rule").textContent =
+                            mode === "prop" ? `→ ${rule}` : rule;
+                        const res = row.querySelector(".result");
+                        res.textContent = result;
+                        if (kind) res.classList.add(kind);
+                        box.appendChild(row);
+                        return {
+                            pip: row.querySelector(".pip"),
+                            res,
+                            kind,
+                            rule: row.querySelector(".edit-rule"),
+                        };
+                    });
+                    const T = 0.4 + rows.length * 0.75 + 1.6;
+                    const draw = (t) => {
+                        els.forEach((e, i) => {
+                            const t0 = 0.4 + i * 0.75;
+                            let p = clamp((t - t0) / 1.4),
+                                cls = "";
+                            if (mode === "now" && e.kind === "bad") {
+                                p =
+                                    p < 0.6
+                                        ? ease(p / 0.6) * 0.85
+                                        : 0.85 - ease((p - 0.6) / 0.4) * 0.25;
+                                if (t - t0 > 0.84) cls = "bad";
+                            } else if (mode === "prop") {
+                                p =
+                                    p < 0.35
+                                        ? ease(p / 0.35) * 0.5
+                                        : p < 0.55
+                                          ? 0.5
+                                          : 0.5 + ease((p - 0.55) / 0.45) * 0.5;
+                                if (t - t0 > 0.5)
+                                    cls = e.kind === "pending" ? "" : "good";
+                            } else p = ease(p);
+                            e.pip.style.left = `${p * 100}%`;
+                            e.pip.className = "pip " + cls;
+                            e.res.classList.toggle(
+                                "on",
+                                t - t0 > (mode === "prop" ? 0.77 : 0.84),
+                            );
+                            e.rule.style.opacity = t >= t0 ? 1 : 0.4;
+                        });
+                    };
+                    let t = T,
+                        raf = 0,
+                        last = 0,
+                        started = false;
+                    const btn = fig.querySelector("button");
+                    const tick = (now) => {
+                        t += (now - last) / 1000;
+                        last = now;
+                        draw(Math.min(t, T));
+                        if (t < T) raf = requestAnimationFrame(tick);
+                        else btn.textContent = "Replay";
+                    };
+                    const run = () => {
+                        started = true;
+                        cancelAnimationFrame(raf);
+                        t = 0;
+                        last = performance.now();
+                        btn.textContent = "Playing";
+                        raf = requestAnimationFrame(tick);
+                    };
+                    btn.addEventListener("click", run);
+                    draw(T);
+                    return {
+                        play: run,
+                        get started() {
+                            return started;
+                        },
+                    };
+                }
+                document
+                    .querySelectorAll("figure[data-gate]")
+                    .forEach((fig) =>
+                        players.push([fig, mountGate(fig, fig.dataset.gate)]),
+                    );
+
+                // Play each scene once when it scrolls into view
+                if (!reduce && "IntersectionObserver" in window) {
+                    const byFig = new Map(players);
+                    const io = new IntersectionObserver(
+                        (entries) => {
+                            entries.forEach((en) => {
+                                if (!en.isIntersecting) return;
+                                const p = byFig.get(en.target);
+                                io.unobserve(en.target);
+                                if (p && !p.started) p.play();
+                            });
+                        },
+                        { threshold: 0.6 },
+                    );
+                    players.forEach(([fig]) => io.observe(fig));
+                }
+            })();
+        </script>
+    </body>
+</html>

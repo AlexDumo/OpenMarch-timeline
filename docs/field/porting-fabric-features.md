@@ -167,7 +167,8 @@ Dropped (owner decision on #209). The inspector's shape editor
 Fabric with handles to drag (`timeline/useTimelineShapeCanvas.ts`,
 `TimelineShapeOverlay.ts`; geometry and commits in
 `timeline/timelineShapeCanvas.ts`). #209 deleted all three, since nothing
-else used the geometry; the inspector still edits shapes through its inputs.
+else used the geometry. The inspector's shape editor itself was removed on
+2026-10-19 with the inspector's Timeline section.
 A later port can take `timelineShapeCanvas.ts` (`shapeOutline`,
 `shapeHandles`, `dragHandle`, the store's `commit`) back from
 `field-renderer-pre-209` and draw the handles as an SVG component in

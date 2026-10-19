@@ -108,6 +108,19 @@ export function marchersInPolygon(
     );
 }
 
+/**
+ * The marchers an area selects of those `inside` it: performers only when there are any, as
+ * select-all does, so a marquee across a formation on a riser doesn't take the riser along; the
+ * items (props and equipment, C2.2) when the area holds nothing else.
+ */
+export function areaPicks(
+    inside: readonly number[],
+    isItem: (id: number) => boolean,
+): readonly number[] {
+    const performers = inside.filter((id) => !isItem(id));
+    return performers.length > 0 ? performers : inside;
+}
+
 /** The selection an area leaves: it replaces the selection, or with Shift adds to it. */
 export function selectionAfterArea(
     current: readonly number[],

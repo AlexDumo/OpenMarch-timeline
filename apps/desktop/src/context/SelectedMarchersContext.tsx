@@ -8,7 +8,7 @@ import {
 } from "react";
 import Marcher from "@/global/classes/Marcher";
 import { useQuery } from "@tanstack/react-query";
-import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
+import { allMarcherRowsQueryOptions } from "@/hooks/queries/useMarchers";
 import { useMarcherAppearanceSteps } from "@/hooks/useMarcherAppearanceSteps";
 import {
     appearanceChangeBeats,
@@ -42,7 +42,8 @@ export function SelectedMarchersProvider({
 }: {
     children: ReactNode;
 }) {
-    const { data: marchers } = useQuery(allMarchersQueryOptions());
+    // Items too: a prop selected on the field stays selected
+    const { data: marchers } = useQuery(allMarcherRowsQueryOptions());
     const [selectedMarchers, setSelectedMarchers] = useState<Marcher[]>([]);
     // Hidden marchers can't be selected: the appearance steps sampled at the beat the paused
     // field shows, as the field draws them (UI-9)
