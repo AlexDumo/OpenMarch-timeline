@@ -411,7 +411,7 @@ deletes the change. It joins undo history and repair like the cue tables.
   cue channels themselves are hard cuts [26.12].
 - **Hand conflicts are allowed.** The newest Placement takes over at its
   count and is drawn; the displaced item isn't drawn while the conflict
-  lasts; a quiet note names it ("Flag not put down, count 9 of page 5"). No
+  lasts; a quiet note names it ("Flag isn't drawn, Page 5 count 9"). No
   data changes automatically [07, 21]. Equipment a Carry cue gives a
   performer occupies their hands (a sabre the right, a horn, drum, flag or
   rifle both): an item held in those hands is a hand conflict, and Carry
@@ -423,11 +423,29 @@ deletes the change. It joins undo history and repair like the cue tables.
   setting "Warn when a prop moves without a crew", default off, stored in the
   show file [07, 26.19]. A crew-distance note always applies when a crew is
   assigned.
-- **Put down:** at release the app writes the item a move ending at the
-  holder's position (the midpoint of the holders' hands for several). If the
-  holder's drill later changes, a quiet note "put down away from its holder"
-  offers one-click "Snap to holder". A timeline "follows marcher" span stays a
-  possible later upgrade [24].
+- **Put down:** a released item lands at its holder's position at the
+  release (the midpoint of the holders' for several). It is a hidden
+  mechanism, never a move: nothing is stored for it, it is no clip on the
+  timeline, has no step size and can't be edited as a move (owner,
+  2026-10-19). The position is derived on top of the timeline resolver
+  (`withPutDowns` in `@openmarch/core`, `items/putDown.ts`):
+  - On a held → placed change at count B, the item is where its holder is at
+    B, and stays there until its own next move (the first of its timeline
+    moves that ends after B). Over that move it blends from the put-down spot
+    into the move's own path, so the move ends where the designer put it.
+  - When one of the item's own moves ends exactly on B, the designer placed
+    it there: that move wins and nothing is derived. If it isn't at the
+    holder, the quiet note "put down away from its holder" offers one-click
+    "Snap to holder", which rewrites that move's end in one undo step.
+  - So the put-down can't outlive the release: deleting or changing the held
+    change, replacing it with Off field, putting it down earlier inside the
+    hold, deleting the holder, re-timing an item ripple or deleting counts
+    leaves the item where Placement and its own drill say. Placement edits
+    write no moves, so they never fail on the item's drill. A derived
+    put-down follows the holder's drill at B; there is no drift for it.
+  - The editor's resolver store, the exports and the 3D View window all read
+    positions through it. Edit commands that compute from the stored drill
+    (align, distribute) see the item's own drill, not the put-down.
 
 ### Artwork slot assignments [05, 07, 08, 11, 26.1]
 
@@ -784,18 +802,32 @@ Research basis [14]; policy [16]. Not legal advice.
 
 ## 11. Notes
 
-Checks are **quiet notes**: shown on the thing and in the show's notes list,
+Checks are **quiet notes**: shown on the thing and in the show's one list,
 never a modal, never a block (owner, 2026-10-11) [07, 08, 18, 21, 25].
 
-- Producers: hand conflicts, crew distance, crew-less moves (when the setting
-  is on), put-down drift, fit flags ("content outside cut", "scaled N%"), dormant slots, missing grips, missing Garment
-  fits, more than about 8 Garments, budget notes, file size, platform steps,
-  performers inside obstacles, dots leaving a moving platform, mismatched
-  Horn/Equipment states [26.2], Silk aspect fits [26.13], outdated
-  `kitVersion`.
-- Notes name counts ("Flag not put down, count 9 of page 5").
-- The notes list lives in Visuals mode; the 3D View shows a small note count
-  [26.16].
+- **One list, "Show checks"** (owner, 2026-10-19): it replaces the
+  inspector's "Show diagnostics" and holds every kind. It is named "checks"
+  so it doesn't sit beside the page's and the cue's free-text "Notes".
+- One shape, `ShowNote` (`apps/desktop/src/notes/showNotes.ts`): a kind, its
+  source (items, cues or the timeline), where (a beat, shown as the
+  transport says it, "Page 1 count 7"), what (item, performer, cue and move
+  ids) and an optional one-click fix. The words come at display time.
+- Producers today: hand conflicts (one note per item not drawn on a
+  performer, both hands merged, Carry cues included), short-handed holds,
+  crew distance, crew-less moves (when the setting is on), put-down drift,
+  the cue compiler's notes (`carry_mismatch`, `silk_aspect`) and the
+  timeline resolver's diagnostics. Crew checks look only at motion breaks
+  (moves' ends and put-downs), so 100 props over 6000 beats check in well
+  under 50 ms.
+- Later producers: fit flags ("content outside cut", "scaled N%"), dormant
+  slots, missing grips, missing Garment fits, more than about 8 Garments,
+  budget notes, file size, platform steps, performers inside obstacles, dots
+  leaving a moving platform, outdated `kitVersion`.
+- Clicking a note moves the playhead to its count and selects what it names.
+  An item's own notes also show in its editor.
+- The list is in the inspector in the Editor and in Visuals; the 3D View's
+  readout shows how many apply at the moment viewed [26.16]. The show
+  setting "Warn when a prop moves without a crew" is in Workspace settings.
 - Import rejections are the one refusal, shown on the review screen, never in
   an `AlertModal` [11].
 
@@ -815,7 +847,7 @@ readout) [22].
   in the editor's left sidebar: a browser of every Library item by kind with
   search, Import… and Artwork templates. A finished import closes the review
   and shows the new items highlighted there (owner, 2026-10-12, Q76).
-- **Notes list** [26.16].
+- **Show checks**, the show's one notes list, in the inspector (§11) [26.16].
 - Pickers carry an Import… that pre-fills kind, slot and size [11], and write
   count-keyed data with the scope on the button [26.1].
 - The 2D editor gains only PR 1013's prop Outlines (drag writes a geometry
