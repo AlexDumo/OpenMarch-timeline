@@ -6,12 +6,17 @@ import {
 import { db } from "@/global/database/db";
 import { useEffect, useState } from "react";
 import {
+    QueryClient,
     queryOptions,
     useMutation,
     useQuery,
     useQueryClient,
 } from "@tanstack/react-query";
 import { safelyInvalidateQueries } from "./utils";
+import { takeStoredCounts } from "@/db-functions/endlessCounts";
+import { subscribeHistoryChanges } from "@/db-functions/history";
+import { invalidatePageQueries } from "./usePages";
+import { measureKeys } from "./useMeasures";
 import { allMarcherRowsQueryOptions } from "./useMarchers";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useSelectedPage } from "@/context/SelectedPageContext";
@@ -45,6 +50,19 @@ export const canRedoQueryOptions = (enabled = true) =>
             return redoStackLength > 0;
         },
         enabled,
+    });
+
+/**
+ * Refreshes the beats, pages and measures after an edit that stored counts past the last one
+ * (endless counts, docs/timeline/endless-counts.md EC-13): a move or a page flag can store counts
+ * now, whatever queries the edit itself refreshes. Returns the unsubscribe.
+ */
+export const refreshAfterStoredCounts = (qc: QueryClient): (() => void) =>
+    subscribeHistoryChanges(() => {
+        if (takeStoredCounts())
+            void invalidatePageQueries(qc).then(() =>
+                qc.invalidateQueries({ queryKey: measureKeys.all() }),
+            );
     });
 
 /** Messages for an undo or redo that didn't apply, as Tolgee keys with English defaults */

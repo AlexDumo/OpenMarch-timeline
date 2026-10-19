@@ -27,6 +27,7 @@ import {
     type DatabaseTimeline,
 } from "./timelines";
 import { createTimelineTransitionsInTransaction } from "./timelineTransitions";
+import { ensureCountsInTransaction } from "./endlessCounts";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
 import {
     updateTimelineTransitionsInTransaction,
@@ -127,6 +128,8 @@ export const shiftTimelineInTransaction = async ({
         );
     if (e + delta > MAX_BEAT)
         refuse(`the timeline can't move past beat ${MAX_BEAT}`);
+    // Past the show's end, the counts it lands on are stored first (endless counts)
+    await ensureCountsInTransaction({ tx, through: e + delta });
 
     // The rows that move
     const transitionIds = (
@@ -377,6 +380,8 @@ export const createTrackInTransaction = async ({
     if (new Set(marcherIds).size !== marcherIds.length)
         refuse("a marcher appears more than once");
     await requireMarchers(tx, marcherIds);
+    // Past the show's end, the counts it lands on are stored first (endless counts)
+    await ensureCountsInTransaction({ tx, through: endBeat });
 
     let destination:
         | { kind: "shape"; shapeId: number }

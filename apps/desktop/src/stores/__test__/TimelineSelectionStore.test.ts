@@ -199,13 +199,13 @@ describe("TimelineSelectionStore (UI-9, UI-10)", () => {
         store().selectRange(9, 17);
         store().seek(9);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 10 });
-        // At the show's end there is no beat after it: the beat before it
+        // At the show's end too: the counts go on past it (endless counts)
         store().selectRange(25, 25);
         store().seek(25);
         expect(store().selection).toEqual({
             kind: "range",
-            start: 24,
-            end: 25,
+            start: 25,
+            end: 26,
         });
     });
 
@@ -791,7 +791,7 @@ describe("dragging the start flag or the playhead by its line (UI-21)", () => {
         expect(store().playheadRevision).toBe(revision + 1);
     });
 
-    it("a start flag released on the playhead at the show's end pushes nothing past it", () => {
+    it("a start flag released on the playhead at the show's end pushes it a count on: the counts never end (endless counts)", () => {
         store().setShowEndBeat(25);
         store().selectRange(17, 25);
         store().beginLineDrag("start");
@@ -799,8 +799,8 @@ describe("dragging the start flag or the playhead by its line (UI-21)", () => {
         store().endLineDrag();
         expect(store().selection).toEqual({
             kind: "range",
-            start: 24,
-            end: 25,
+            start: 25,
+            end: 26,
         });
     });
 
@@ -895,8 +895,9 @@ describe("the playback cursor (UI-11)", () => {
         expect(store().playheadBeat).toBe(17);
         expect(store().selection).toEqual({ kind: "range", start: 9, end: 17 });
         expect(store().playheadRevision).toBe(revision + 1);
+        // Past where playing on stops too: the counts never end (endless counts)
         store().cue(40);
-        expect(store().cursorBeat).toBe(25);
+        expect(store().cursorBeat).toBe(40);
     });
 
     it("every write of the window puts the cursor back on the playhead", () => {

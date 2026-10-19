@@ -12,6 +12,7 @@ import {
 } from "react";
 import { TimelineLoopBar } from "./TimelineLoopBar";
 import { AddPageFlagMenu } from "./AddPageFlagMenu";
+import { useClipDrops } from "./clipDrops";
 import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import { flushSync } from "react-dom";
 import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react";
@@ -60,6 +61,8 @@ import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
 import { addPageFlagLeft } from "./PageKeepChain";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import { useLatestCallback } from "./useLatestCallback";
+import { TimelineAppendCountsMenu } from "./TimelineAppendCountsMenu";
+import { useViewportExtent } from "./useViewportExtent";
 import {
     createLiveValue,
     type TimelineLiveValue,
@@ -70,6 +73,7 @@ import type {
     TimelineCommonProps,
     TimelineNavigation,
     TimelineTarget,
+    TimelineTrack,
     TimelineTrackId,
 } from "./TimelineViewModel";
 import {
@@ -109,6 +113,10 @@ export function fitBackZoom(
             : Math.max(TIMELINE_DEFAULT_PX_PER_BEAT, fitValue * 2);
     return Math.min(back, TIMELINE_MAX_PX_PER_BEAT);
 }
+
+/** About how wide **+ N counts** is, and the room kept for it after the last beat */
+const APPEND_COUNTS_WIDTH = 84;
+const APPEND_COUNTS_ROOM = APPEND_COUNTS_WIDTH + 16;
 
 /** How much one pixel of wheel or pinch delta zooms */
 const WHEEL_ZOOM_RATE = 0.0025;
@@ -644,6 +652,22 @@ const TimelineSurface = memo(function TimelineSurface({
         () => (basic ? [] : packTimelineTracks(model.tracks)),
         [basic, model.tracks],
     );
+    // A move that stopped fitting a page box (the box was split, or a flag deleted) drops out of
+    // the page row. A dropping clip draws in its own layer over the pinned header, so it is seen
+    // leaving the page box, not sliding out from under the bar; the other clips stay under it
+    const { drops: clipDrops, land: endDrop } = useClipDrops(
+        model.tracks,
+        props.pageMoves,
+    );
+    // The page row where the drops start, in the tracks' coordinates: the pane may be scrolled
+    // down. Read once for the drops, so scrolling mid-drop doesn't restart them
+    const dropFrom = useMemo(
+        () =>
+            clipDrops.size === 0
+                ? 0
+                : (viewportRef.current?.scrollTop ?? 0) + TIMELINE_PAGE_ROW_TOP,
+        [clipDrops],
+    );
     const snapBeats = useMemo(
         () =>
             getPageSnapBeats({
@@ -728,9 +752,14 @@ const TimelineSurface = memo(function TimelineSurface({
     const zoom = useTimelineZoom({
         viewportRef,
         pixelsPerBeat,
-        beatCount: model.beatCount,
+        // Fit fits up to where playback stops (endless counts rule 7), not the counts drawn past it
+        beatCount: props.fitBeatCount ?? model.beatCount,
         leadingInset: initialPageWidth,
-        trailingInset: TIMELINE_END_INSET,
+        // Fitted, **+ N counts** stays in view
+        trailingInset: Math.max(
+            TIMELINE_END_INSET,
+            props.appendCounts ? APPEND_COUNTS_ROOM : 0,
+        ),
         playheadBeat: positionBeat,
         onPixelsPerBeatChange: props.onPixelsPerBeatChange,
         fitted: props.zoomFitted,
@@ -752,6 +781,40 @@ const TimelineSurface = memo(function TimelineSurface({
         loop: props.playLoops ? (props.loop ?? null) : null,
         selectionRange,
     });
+    // Endless counts rule 7: say how wide a screen is, for the room past the end
+    useViewportExtent(viewportRef, props.onViewportExtent);
+    // **+ N counts** goes after the last page's flag; when **+** at the playhead would cover it,
+    // it moves just past that one, so both stay clickable
+    const showAddPageFlag = props.onAddPageFlag != null && !props.isPlaying;
+    // Past the playhead's box's keep chain, if it would cover it
+    const addPageFlagX = addPageFlagLeft({
+        pages: model.pages,
+        beatCount: model.beatCount,
+        positionBeat,
+        pixelsPerBeat,
+        keepChains: props.keepChains,
+    });
+    const lastFlagBeat = Math.min(
+        model.beatCount,
+        model.pages.reduce(
+            (end, page) => Math.max(end, page.endBeat ?? page.atBeat),
+            0,
+        ),
+    );
+    const appendCountsX = (() => {
+        const atFlag = lastFlagBeat * pixelsPerBeat + 8;
+        return showAddPageFlag &&
+            addPageFlagX + 22 > atFlag &&
+            addPageFlagX < atFlag + APPEND_COUNTS_WIDTH
+            ? addPageFlagX + 22
+            : atFlag;
+    })();
+    const showAppendCounts = props.appendCounts != null && !props.isPlaying;
+    // Right-clicking **+ N counts** sets how many counts new pages get
+    const [appendMenuAt, setAppendMenuAt] = useState<{
+        x: number;
+        y: number;
+    } | null>(null);
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
     // UI-12: clicks and scrubs land on a nearby downbeat or page line; Basic's on any count
@@ -855,6 +918,39 @@ const TimelineSurface = memo(function TimelineSurface({
                 : null;
         },
     });
+
+    /** A clip in row `rowIndex`, in the tracks or, while it drops, in the drops' layer */
+    const renderClip = (track: TimelineTrack, rowIndex: number) => (
+        <TimelineTrackClip
+            key={track.id}
+            track={track}
+            pixelsPerBeat={pixelsPerBeat}
+            top={
+                trackTop +
+                rowIndex * rowPitch -
+                (clipHitHeight - trackHeight) / 2
+            }
+            height={clipHitHeight}
+            barHeight={expanded ? undefined : trackHeight}
+            // A clip is its timeline: it shows selected when its range is
+            // the selection, and clicking it selects that range (UI-12)
+            selected={sameRange(getTrackRange(track), selectionRange)}
+            onSelect={selectTrack}
+            onRangeCommit={props.onTimelineRangeCommit}
+            resize={props.clipResize}
+            downbeats={seekSnapBeats}
+            snapPlayhead={playheadAt}
+            beatCount={model.beatCount}
+            snapBeats={snapBeats}
+            micro={!expanded}
+            moveCommands={moveCommands}
+            renaming={renaming === String(track.id)}
+            onRenameStart={startRename}
+            onRenameEnd={endRename}
+            dropFrom={clipDrops.has(track.id) ? dropFrom : undefined}
+            onDropEnd={endDrop}
+        />
+    );
 
     return (
         <TimelineShell
@@ -977,40 +1073,11 @@ const TimelineSurface = memo(function TimelineSurface({
                             />
                         )}
                         {rows.flatMap((row, rowIndex) =>
-                            row.map((track) => (
-                                <TimelineTrackClip
-                                    key={track.id}
-                                    track={track}
-                                    pixelsPerBeat={pixelsPerBeat}
-                                    top={
-                                        trackTop +
-                                        rowIndex * rowPitch -
-                                        (clipHitHeight - trackHeight) / 2
-                                    }
-                                    height={clipHitHeight}
-                                    barHeight={
-                                        expanded ? undefined : trackHeight
-                                    }
-                                    // A clip is its timeline: it shows selected when its range is
-                                    // the selection, and clicking it selects that range (UI-12)
-                                    selected={sameRange(
-                                        getTrackRange(track),
-                                        selectionRange,
-                                    )}
-                                    onSelect={selectTrack}
-                                    onRangeCommit={props.onTimelineRangeCommit}
-                                    resize={props.clipResize}
-                                    downbeats={seekSnapBeats}
-                                    snapPlayhead={playheadAt}
-                                    beatCount={model.beatCount}
-                                    snapBeats={snapBeats}
-                                    micro={!expanded}
-                                    moveCommands={moveCommands}
-                                    renaming={renaming === String(track.id)}
-                                    onRenameStart={startRename}
-                                    onRenameEnd={endRename}
-                                />
-                            )),
+                            row.flatMap((track) =>
+                                clipDrops.has(track.id)
+                                    ? []
+                                    : [renderClip(track, rowIndex)],
+                            ),
                         )}
                         {band?.render({
                             top: trackTop,
@@ -1020,6 +1087,23 @@ const TimelineSurface = memo(function TimelineSurface({
                             snapBeats: seekSnapBeats,
                         })}
                     </div>
+                    {/* The clips dropping out of a page box (`useClipDrops`), over the pinned
+                        header so they are seen leaving it. They take no clicks while they drop */}
+                    {clipDrops.size > 0 && (
+                        <div
+                            data-testid="timeline-clip-drops"
+                            className="pointer-events-none absolute inset-x-0 top-0 z-[3]"
+                            style={{ height: surfaceHeight }}
+                        >
+                            {rows.flatMap((row, rowIndex) =>
+                                row.flatMap((track) =>
+                                    clipDrops.has(track.id)
+                                        ? [renderClip(track, rowIndex)]
+                                        : [],
+                                ),
+                            )}
+                        </div>
+                    )}
                     {/* Pinned to the viewport's top, over the tracks: the ruler and the measure
                         row, which hide the tracks scrolled under them, and the layers that span
                         the pane (playhead, flags, the window and the loop) */}
@@ -1152,7 +1236,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             isPlaying={props.isPlaying}
                             scrubLine={pointer.scrubLine}
                         />
-                        {props.onAddPageFlag && !props.isPlaying && (
+                        {showAddPageFlag && (
                             <AddPageFlagMenu
                                 onAddPage={props.onAddPageFlag}
                                 onAddSubsetPage={props.onAddSubsetPage}
@@ -1172,13 +1256,7 @@ const TimelineSurface = memo(function TimelineSurface({
                                     className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
                                     // Past the playhead's box's keep chain, if it would cover it
                                     style={{
-                                        left: addPageFlagLeft({
-                                            pages: model.pages,
-                                            beatCount: model.beatCount,
-                                            positionBeat,
-                                            pixelsPerBeat,
-                                            keepChains: props.keepChains,
-                                        }),
+                                        left: addPageFlagX,
                                         top: TIMELINE_PAGE_ROW_TOP + 6,
                                     }}
                                 >
@@ -1186,6 +1264,52 @@ const TimelineSurface = memo(function TimelineSurface({
                                 </button>
                             </AddPageFlagMenu>
                         )}
+                        {showAppendCounts && props.appendCounts && (
+                            <button
+                                type="button"
+                                data-testid="timeline-append-counts"
+                                data-timeline-interactive="true"
+                                aria-label={props.appendCounts.title}
+                                title={props.appendCounts.title}
+                                onPointerDown={(event) =>
+                                    event.stopPropagation()
+                                }
+                                onClick={props.appendCounts.onAppend}
+                                onContextMenu={(event) => {
+                                    const { counts, onCountsChange } =
+                                        props.appendCounts ?? {};
+                                    if (counts === undefined || !onCountsChange)
+                                        return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setAppendMenuAt({
+                                        x: event.clientX,
+                                        y: event.clientY,
+                                    });
+                                }}
+                                className="border-accent text-accent bg-bg-1 hover:bg-accent hover:text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex h-16 items-center gap-2 rounded-full border px-6 text-[10px] leading-none font-medium whitespace-nowrap outline-hidden focus-visible:ring-2"
+                                style={{
+                                    left: appendCountsX,
+                                    top: TIMELINE_PAGE_ROW_TOP + 6,
+                                }}
+                            >
+                                <PlusIcon size={9} weight="bold" />
+                                {props.appendCounts.label}
+                            </button>
+                        )}
+                        {appendMenuAt &&
+                            props.appendCounts?.counts !== undefined &&
+                            props.appendCounts.onCountsChange && (
+                                <TimelineAppendCountsMenu
+                                    at={appendMenuAt}
+                                    counts={props.appendCounts.counts}
+                                    onCountsChange={
+                                        props.appendCounts.onCountsChange
+                                    }
+                                    toEnd={props.appendCounts.toEnd}
+                                    onClose={() => setAppendMenuAt(null)}
+                                />
+                            )}
                         <TimelineRangePreview
                             preview={pointer.rangePreview}
                             pixelsPerBeat={pixelsPerBeat}

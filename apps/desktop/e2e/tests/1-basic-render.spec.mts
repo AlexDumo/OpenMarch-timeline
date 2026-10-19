@@ -40,7 +40,7 @@ test("Launch page sub-menus", async ({ electronAppEmpty }) => {
 });
 
 const canvasIsVisible = async (page: Page) => {
-    await expect(page.getByText("Timeline")).toBeVisible();
+    await expect(page.getByTestId("timeline-page-ruler")).toBeVisible();
     await expect(page.getByTestId("fieldCanvas")).toBeVisible();
 };
 

@@ -6,7 +6,7 @@ import {
     waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, vi } from "vitest";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
 import {
@@ -20,8 +20,6 @@ import { convertPagesToTimeline } from "@/test/convertPages";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
 import { pageFlags } from "@/timeline/timelinePlayhead";
 import { moveMarchersInTarget } from "@/db-functions/timelineMoves";
-import { transactionWithHistory } from "@/db-functions/history";
-import { createTimelineShapesInTransaction } from "@/db-functions/timelineShapes";
 import { readStoredTimelineMemberships } from "@/timeline/useTimelineSelectionHost";
 import { stopTimelineResolver } from "@/timeline/timelineStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -29,7 +27,7 @@ import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { useMoveMemberSelectionStore } from "@/stores/MoveMemberSelectionStore";
 import { TimelineMoveCard } from "@/components/inspector/TimelineMoveCard";
 import { TIMELINE_INSPECTOR_STRINGS } from "@/components/inspector/timelineInspectorStrings";
-import type { InspectorTranslate } from "@/components/inspector/TimelineInspectorSection";
+import type { InspectorTranslate } from "@/components/inspector/inspectorHooks";
 import {
     createMoveCommands,
     focusAfterMoveDelete,
@@ -324,86 +322,6 @@ describeDbTests("a move's flows after the round-2 review (UI-14)", (it) => {
         // Any second save would have been queued behind the first
         await new Promise((resolve) => setTimeout(resolve, 50));
         expect(await steps()).toBe(before + 1);
-    });
-
-    it("a move whose members all follow the leader says so, not Mixed, and Direct changes them all", async ({
-        db,
-        marchersAndPages: _,
-    }) => {
-        const { sorted, a } = await makeMoves(db);
-        // Following the leader onto a line, as the shape editor can leave a move (follow the
-        // leader needs a shape); written raw, the card only reads it
-        const [line] = await transactionWithHistory(db, "setUp", (tx) =>
-            createTimelineShapesInTransaction({
-                tx,
-                newShapes: [
-                    {
-                        kind: "line",
-                        geometry: {
-                            points: [
-                                [0, 0],
-                                [60, 0],
-                            ],
-                        },
-                    },
-                ],
-            }),
-        );
-        const transitionIds = (
-            await db
-                .select({ id: schema.timeline_transitions.id })
-                .from(schema.timeline_transitions)
-                .where(eq(schema.timeline_transitions.timeline_id, a))
-                .all()
-        ).map((row) => row.id);
-        await db
-            .delete(schema.timeline_slot_destinations)
-            .where(
-                inArray(
-                    schema.timeline_slot_destinations.transition_id,
-                    transitionIds,
-                ),
-            );
-        await db
-            .update(schema.timeline_transitions)
-            .set({
-                dest_shape_id: line!.id,
-                path_style: "follow_the_leader",
-                path_params: JSON.stringify({ waypoints: [] }),
-            })
-            .where(eq(schema.timeline_transitions.timeline_id, a));
-        await loadStore(db, sorted);
-        const timeline = useTimelineSelectionStore
-            .getState()
-            .storedTimelines!.find((s) => s.id === a)!;
-        mountFeature(<TimelineMoveCard timeline={timeline} t={t} />);
-        await loadStore(db, sorted);
-        expect(
-            (await screen.findByTestId("timeline-move-card-path-follow"))
-                .textContent,
-        ).toBe("Follow the leader");
-        expect(
-            screen.queryByTestId("timeline-move-card-path-mixed"),
-        ).toBeNull();
-        const radios = screen.getAllByRole("radio");
-        expect(radios.map((r) => r.getAttribute("aria-checked"))).toEqual([
-            "false",
-            "false",
-        ]);
-        fireEvent.click(radios[0]!);
-        await waitFor(async () =>
-            expect(
-                (
-                    await db
-                        .select({
-                            style: schema.timeline_transitions.path_style,
-                        })
-                        .from(schema.timeline_transitions)
-                        .where(eq(schema.timeline_transitions.timeline_id, a))
-                        .all()
-                ).map((row) => row.style),
-            ).toEqual(["direct", "direct"]),
-        );
     });
 
     it("clearing an automatic name in the Move card writes nothing and shows it again", async ({

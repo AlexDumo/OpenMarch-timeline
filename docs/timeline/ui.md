@@ -195,6 +195,17 @@ from it. The spec still wins on the model; this file decides presentation.
     (_owner, 2026-10-12_); it never adds beats, so where the music ends on
     the last flag there is no **+** past it. The timeline keeps 32px after
     the last beat so **+** stays on screen at the show's end.
+  - **The page's move drops out of the split box (owner, 2026-10-19).** A page's own move is
+    not drawn as a clip: its box stands for it (UI-10). Splitting the box leaves that move
+    fitting no box, so it shows as a clip for the first time. Instead of appearing in its row,
+    the clip slides down from the page row, drawn over the page bar, in about a third of a
+    second, so it reads as coming out of the page. **Deleting a flag** but not its moves is the
+    same (owner, 2026-10-19): the merged box fits neither page's move, so both drop out of it.
+    Found by identity (a move a page box stood for that now has a clip, `useClipDrops`), so the
+    inspector's **Split page** and redo drop the same way, and a move made on purpose (a window,
+    **Add selected marchers**) just appears, whatever its range. Only the dropping clip draws
+    over the page bar; it takes no clicks until it lands. The page boxes themselves don't
+    animate (owner). With reduced motion nothing moves. V-289.
   - **Subset pages (2026-10-13).** Right-clicking **+** opens a menu with
     **Add page** (the same as clicking **+**) and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
     subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
@@ -666,11 +677,16 @@ from it. The spec still wins on the model; this file decides presentation.
     all as one edit (code review). The edit reads the paths under the write lock, so a choice sent
     twice is one edit.
     It is a radio group (round 2): the arrows move the choice and apply it.
+    **Removed 2026-10-19** (owner: no setting a move's path for now): the card has no Path
+    control; stored paths still play and draw, and `setMovePath` stays for when it returns.
   - **Per-marcher details** (_lead default_, V-46). With a move, the selected marchers'
     explanations and transition editors are about that move: they explain inside it, at P, or at
     its last beat when P is on its end (where the next move starts). They sit under a closed
     "Per-marcher details (16)" disclosure under the card, and when more marchers are selected than
     are shown it says "Showing the first 10 of 16 marchers".
+    **Removed 2026-10-19** with the whole inspector Timeline section (owner: no debug details in
+    the sidebar for users): no per-marcher explanations, show diagnostics or transition, slot
+    and shape editors.
   - **The inspector explains at the playhead** in timeline mode, not the selected page's end
     (_lead default_, V-41), except inside a move, above. On a flag that is the same beat; between
     flags it is where edits land (UI-10). "Select a page to see why…" is gone, since there is
@@ -1252,6 +1268,11 @@ These belong in the inspector (P8.5), not the timeline:
   the ones about that marcher. A transition-wide one (such as `D-VACANT`) of a
   transition without a shape shows once, on the first shown marcher track
   assigned to it. The badge's tooltip lists them.
+  **Removed 2026-10-19** (owner, #319): no diagnostics badge on clips and no
+  diagnostics in the inspector or Show checks; they are engine internals a
+  designer can't act on. The resolver still reports them for tests.
+
+**Removed 2026-10-19** (owner, #319): the inspector's Timeline section, its transition, slot and shape editors included, is gone; the paragraphs below are history.
 
 **Where they are (P8.5).** The inspector's Timeline section
 (`TimelineInspectorSection`, timeline mode only) explains each selected marcher
@@ -1322,7 +1343,7 @@ toasts. After an edit, the controls stay disabled until the inspector shows a
 target built from a newer store version than the edit was planned from; a
 target rebuilt from the same rows (scrubbing, playback) doesn't count.
 
-**Shapes (P8.2).** Below the transitions, `TimelineShapesEditor` draws and
+**Shapes (P8.2), removed 2026-10-19 (#319).** Below the transitions, `TimelineShapesEditor` draws and
 edits the show's spec shapes (`line`, `freehand`, `circle`, `box`, `block`,
 spec 5.2) in absolute field coordinates (D-5). It shows whether a page is
 selected or not.
