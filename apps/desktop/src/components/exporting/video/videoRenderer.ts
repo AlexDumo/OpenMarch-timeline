@@ -1,3 +1,4 @@
+import type { FieldImageSize } from "@/db-functions/fieldFloor";
 import {
     AudioBufferSource,
     CanvasSource,
@@ -47,6 +48,8 @@ export interface VideoExportArgs {
     appearanceSteps: AppearanceStepsByMarcherId | undefined;
     /** The decoded field image, or null when the show has none */
     backgroundImage: ImageBitmap | null;
+    /** The floor's physical size, centered on the field; null places the image by fill or fit */
+    backgroundImageSize?: FieldImageSize | null;
     /** Raw bytes of the selected audio file */
     audioData: ArrayBuffer;
     /** Same offset that live playback applies (workspace setting) */
@@ -223,6 +226,7 @@ export async function exportVideo(
             frameSampler: args.frameSampler,
             appearanceSteps: args.appearanceSteps,
             backgroundImage: args.backgroundImage,
+            backgroundImageSize: args.backgroundImageSize,
             width,
             height,
         });

@@ -8,7 +8,8 @@
  * when they are unavailable (no recent files, no plugins, signed out), and
  * window controls do nothing. Everything else goes to the worker.
  */
-import { WEB_CHANNELS } from "../protocol";
+import { PAGE_CHANNELS, WEB_CHANNELS } from "../protocol";
+import { rasterizeImage } from "./rasterize";
 import { emit, handleInPage, invokeWorker, listenInPage } from "./ipc";
 import { storageKey } from "./channel";
 import { handOffShow } from "./handoff";
@@ -267,6 +268,7 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
     listenInPage("settings:set", (values: Record<string, unknown>) =>
         setSettings(values),
     );
+    handleInPage(PAGE_CHANNELS.rasterizeImage, rasterizeImage);
     handleInPage("get-theme", () => settings.get("theme") ?? "light");
     handleInPage("set-theme", (theme: string) => setSettings({ theme }));
     handleInPage("get-language", () => settings.get("language") ?? "en");
