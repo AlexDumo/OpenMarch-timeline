@@ -3,8 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import type { FieldTheme } from "@openmarch/core";
 import { rgba01 } from "../fieldGeometry";
 import type { FieldMarchers } from "../fieldMarchers";
-import type { FieldDimming } from "../fieldDimming";
-import { labelOpacity, type FieldFollowing } from "../fieldFollowing";
+import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
 import { useFieldDraw } from "../fieldDrawContext";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
@@ -25,7 +24,6 @@ const CENTER_BASELINE = 0.35;
 export default function LabelsLayer({
     marchers,
     dimming,
-    following,
     labels,
     theme,
     atlas,
@@ -33,8 +31,6 @@ export default function LabelsLayer({
     marchers: FieldMarchers;
     /** Marchers whose labels are drawn dimmed (#201). */
     dimming: FieldDimming;
-    /** Marchers whose labels are drawn fainter as Following (#300); dimming wins. */
-    following: FieldFollowing;
     /** Each marcher's drill number, by id. */
     labels: ReadonlyMap<number, string>;
     theme: FieldTheme;
@@ -56,7 +52,6 @@ export default function LabelsLayer({
         idsVersion: -1,
         appearanceVersion: -1,
         dimVersion: -1,
-        followingVersion: -1,
         labels,
         theme,
         shown: new Uint8Array(0) as Uint8Array,
@@ -69,7 +64,6 @@ export default function LabelsLayer({
 
     // New labels or a new theme lay the text out again on the next frame
     useEffect(() => invalidate(), [labels, theme, invalidate]);
-    useEffect(() => following.subscribe(invalidate), [following, invalidate]);
 
     useFrame(() => {
         const { zoom } = draw.view.getState();
@@ -102,26 +96,21 @@ export default function LabelsLayer({
             labels !== last.labels ||
             theme !== last.theme ||
             shown !== last.shown ||
-            dimming.version !== last.dimVersion ||
-            following.version !== last.followingVersion;
+            dimming.version !== last.dimVersion;
         if (newLayout) {
             const color = rgba01(theme.defaultMarcher.label);
-            const faded = new Map<number, typeof color>();
-            const colorOf = (opacity: number): typeof color => {
-                if (opacity === 1) return color;
-                let c = faded.get(opacity);
-                if (!c) {
-                    c = [color[0], color[1], color[2], color[3] * opacity];
-                    faded.set(opacity, c);
-                }
-                return c;
-            };
+            const dimmed: typeof color = [
+                color[0],
+                color[1],
+                color[2],
+                color[3] * DIMMED_OPACITY,
+            ];
             text.setLabels(
                 marchers.ids.map((id, i) => ({
                     text: shown[i] ? (labels.get(id) ?? "") : "",
                     size: LABEL_SIZE,
                     baseline: CENTER_BASELINE,
-                    color: colorOf(labelOpacity(dimming, following, id)),
+                    color: dimming.isDimmed(id) ? dimmed : color,
                 })),
             );
         }
@@ -132,7 +121,6 @@ export default function LabelsLayer({
             idsVersion: marchers.idsVersion,
             appearanceVersion: marchers.appearanceVersion,
             dimVersion: dimming.version,
-            followingVersion: following.version,
             labels,
             theme,
             shown,

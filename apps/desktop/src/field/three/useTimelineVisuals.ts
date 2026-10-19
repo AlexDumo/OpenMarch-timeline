@@ -172,7 +172,7 @@ function useFieldDimming(enabled: boolean): FieldDimming {
 
 /**
  * #300: while paused or scrubbing, the marchers with no coordinate of their
- * own on the count shown are Following, drawn hollow; playing, nobody is. Each
+ * own on the count shown are Following, drawn with a dashed edge; playing, nobody is. Each
  * marcher's Set beats are worked out once per resolver version and kept
  * markers, so a playhead move only looks them up, and `FieldFollowing`
  * redraws only when who's Following changes.

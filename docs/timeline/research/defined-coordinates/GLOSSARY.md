@@ -22,11 +22,13 @@ Terms used throughout:
   real motion; on the first page every marcher is Set. Every other marcher is **Following**: it
   holds from an earlier count, is partway through a move, or stands on a stay move that ends where
   it began (Only Page N, unlink, a kept spot). While paused or scrubbing, the field draws a Following
-  marcher hollow (a full-strength ring in its own color round a quarter-strength fill, so it keeps
-  its contrast and reads by shape, not only by lightness) with its label at 0.75 opacity. Following
-  marchers stay selectable and draggable, and dragging one on the count makes it Set. Playback draws
-  everyone solid, and isolation's dim wins over the hollow look (#300, #301). Say "Set" and "Following" (e.g. "Following Page 2") in the UI, not "pinned",
-  "locked", "kept" or "edited".
+  marcher with a dashed edge at full strength (its outline, or its fill's color for a shape without
+  one) round its fill at 60%; an X dashes its own lines. The dashes keep the shape's contrast and
+  read by shape, not only by lightness, and the label stays solid. Too small on screen for dashes, a
+  Following marcher shows the 60% fill alone. Following marchers stay selectable and draggable, and
+  dragging one on the count makes it Set. Playback draws everyone solid, and isolation's dim wins
+  over the Following look (#300, #301). Say "Set" and "Following" (e.g. "Following Page 2") in the
+  UI, not "pinned", "locked", "kept" or "edited".
 
 About the screenshots: most were taken during the build, before the 2026-10-09 rebase onto #115
 (transport keys). Since then the tooltips are #115's `ShortcutTooltip`, and they may look slightly

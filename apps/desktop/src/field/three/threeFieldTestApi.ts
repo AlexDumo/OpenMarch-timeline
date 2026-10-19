@@ -32,7 +32,7 @@ export type ThreeFieldState = {
     theme(): FieldTheme;
     /** Whether a marcher is drawn dimmed (#201). */
     dimmed(id: number): boolean;
-    /** Whether a marcher is drawn hollow as Following (#300): never while dimmed or playing. */
+    /** Whether a marcher is drawn as Following (a dashed edge) (#300): never while dimmed or playing. */
     following(id: number): boolean;
     /** The app's selection, as the editor reads it. */
     selection(): readonly number[];

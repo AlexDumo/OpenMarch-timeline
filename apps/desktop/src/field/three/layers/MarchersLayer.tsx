@@ -13,7 +13,7 @@ import type { FieldTheme } from "@openmarch/core";
 import type { FieldMarchers } from "../fieldMarchers";
 import {
     drawnFollowing,
-    HOLLOW_FILL_OPACITY,
+    FOLLOWING_LOOK,
     type FieldFollowing,
 } from "../fieldFollowing";
 import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
@@ -42,7 +42,7 @@ attribute vec4 aFill;
 attribute vec4 aOutline;
 attribute float aShape;
 attribute float aOpacity;
-attribute float aHollow;
+attribute float aFollowing;
 attribute float aSelected;
 uniform float uScale;
 uniform float uMargin;
@@ -52,11 +52,11 @@ varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
 varying float vOpacity;
-varying float vHollow;
+varying float vFollowing;
 varying float vSelected;
 void main() {
     vSelected = aSelected;
-    vHollow = aHollow;
+    vFollowing = aFollowing;
     vFill = aFill;
     vOutline = aOutline;
     vOpacity = aOpacity;
@@ -71,31 +71,44 @@ void main() {
     gl_Position = projectionMatrix * viewMatrix * vec4(aPos + vLocal * uScale, 0.0, 1.0);
 }`;
 
+const L = FOLLOWING_LOOK;
 const FRAGMENT = /* glsl */ `
 #define DOT_R 5.0
-#define HOLLOW_FILL ${HOLLOW_FILL_OPACITY.toFixed(3)}
-#define HOLLOW_RING 1.5
+#define PI 3.14159265
+#define FOLLOWING_FILL ${L.fillOpacity.toFixed(3)}
+#define EDGE_WIDTH ${L.edgeWidth.toFixed(3)}
+#define MIN_EDGE_PX ${L.minEdgePx.toFixed(3)}
+#define CIRCLE_DASHES ${L.circleDashes.toFixed(1)}
+#define SIDE_DASHES ${L.sideDashes.toFixed(1)}
+#define GAP ${L.gap.toFixed(3)}
+#define MIN_DASH_RADIUS_PX ${L.minDashRadiusPx.toFixed(3)}
 varying vec2 vLocal;
 varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
 varying float vOpacity;
-varying float vHollow;
+varying float vFollowing;
 varying float vSelected;
 uniform vec4 uRing;
 uniform float uRingInner;
 uniform float uRingOuter;
+uniform float uMargin;
 
+float squareHalf() { return DOT_R * sqrt(PI) * 0.6; }
 float square(vec2 p) {
     vec2 q = abs(p);
-    return max(q.x, q.y) - DOT_R * sqrt(3.14159265) * 0.6;
+    return max(q.x, q.y) - squareHalf();
+}
+// Corners (-hw, hh), (0, -hh), (hw, hh), y down
+float triangleHw() { return DOT_R * 1.2; }
+float triangleHh() { return triangleHw() * sqrt(3.0) * 0.5; }
+float triangleSlant(vec2 p) {
+    float hw = triangleHw();
+    float hh = triangleHh();
+    return dot(vec2(abs(p.x), p.y + hh), normalize(vec2(2.0 * hh, -hw)));
 }
 float triangle(vec2 p) {
-    // Corners (-hw, hh), (0, -hh), (hw, hh), y down
-    float hw = DOT_R * 1.2;
-    float hh = hw * sqrt(3.0) * 0.5;
-    float side = dot(vec2(abs(p.x), p.y + hh), normalize(vec2(2.0 * hh, -hw)));
-    return max(side, p.y - hh);
+    return max(triangleSlant(p), p.y - triangleHh());
 }
 float xMark(vec2 p) {
     // Both lines folded onto one: from the center out to (s, s), 1 unit either side
@@ -106,6 +119,39 @@ float xMark(vec2 p) {
     return max(along - s * 1.41421356, across - 1.0);
 }
 
+/**
+ * Where a point on the shape's edge (or an X's arm) falls among its dashes, in
+ * dashes: a gap is centered on each whole number that 'gapAt' allows. A
+ * circle has CIRCLE_DASHES all round; a square's or triangle's side, and an
+ * X's arm, has SIDE_DASHES from corner to corner, so corners stay solid.
+ */
+float dashPosition(vec2 p, float shape) {
+    if (shape < 0.5) return (atan(p.y, p.x) / (2.0 * PI) + 0.5) * CIRCLE_DASHES;
+    float u;
+    if (shape < 1.5) {
+        vec2 q = abs(p);
+        u = (q.x > q.y ? p.y : p.x) / squareHalf();
+    } else if (shape < 2.5) {
+        float hh = triangleHh();
+        u = triangleSlant(p) > p.y - hh ? p.y / hh : p.x / triangleHw();
+    } else {
+        vec2 q = abs(p);
+        u = (q.x + q.y) / (DOT_R * 1.2 * 2.0) * 2.0 - 1.0;
+    }
+    return (u * 0.5 + 0.5) * SIDE_DASHES;
+}
+
+/** 1 on a dash, 0 in a gap, for a look 'amount' of the way to Following (0 is solid). */
+float dashed(vec2 p, float shape, float amount) {
+    if (amount < 0.001) return 1.0;
+    float k = dashPosition(p, shape);
+    float center = shape < 0.5 ? floor(k + 0.5) : clamp(floor(k + 0.5), 1.0, SIDE_DASHES - 1.0);
+    float off = abs(k - center);
+    float gapHalf = 0.5 * GAP * amount;
+    float fw = fwidth(k);
+    return smoothstep(gapHalf - fw, gapHalf + fw, off);
+}
+
 void main() {
     float d;
     if (vShape < 0.5) d = length(vLocal) - DOT_R;
@@ -114,30 +160,38 @@ void main() {
     else d = xMark(vLocal);
     float aa = 0.5 * fwidth(d);
     float fill = 1.0 - smoothstep(-aa, aa, d);
+    float fillA = vFill.a * fill;
     // An X is its lines only; the others are a fill with the outline drawn over it
     float stroke = vShape > 2.5 ? 0.0 : 1.0 - smoothstep(0.5 - aa, 0.5 + aa, abs(d));
-    float fillA = vFill.a * fill;
     float strokeA = vOutline.a * stroke;
     vec3 strokeRgb = vOutline.rgb;
-    if (vHollow > 0.5 && vShape < 2.5) {
-        // Following (#300): hollow, a full-strength ring inside the edge round a
-        // faint fill, in the outline's color, or the fill's for a dot without one
-        fillA *= HOLLOW_FILL;
-        float ring = 1.0 - smoothstep(HOLLOW_RING * 0.5 - aa, HOLLOW_RING * 0.5 + aa, abs(d + HOLLOW_RING * 0.5));
-        if (vOutline.a < 0.01) {
-            strokeRgb = vFill.rgb;
-            strokeA = vFill.a * ring;
+
+    // Following (#300): the edge dashed at full strength round the fill at 60%.
+    // Too small on screen for dashes, the 60% fill alone
+    float amount = vFollowing;
+    float dashes = amount * step(MIN_DASH_RADIUS_PX, DOT_R / uMargin);
+    if (amount > 0.0) {
+        float on = dashed(vLocal, vShape, dashes);
+        float width = mix(1.0, max(EDGE_WIDTH, MIN_EDGE_PX * uMargin), dashes);
+        if (vShape > 2.5) {
+            // An X dashes its own lines, at full strength
+            fillA *= dashes > 0.0 ? on : mix(1.0, FOLLOWING_FILL, amount);
         } else {
-            strokeA = max(strokeA, vOutline.a * ring);
+            fillA *= mix(1.0, FOLLOWING_FILL, amount);
+            if (vOutline.a >= 0.1) {
+                // The outline, widened inward and dashed
+                float band = 1.0 - smoothstep(0.5 * width - aa, 0.5 * width + aa, abs(d - 0.5 + 0.5 * width));
+                strokeA = vOutline.a * band * on;
+            } else if (dashes > 0.0) {
+                // No outline: the edge dashed in the fill's color
+                float band = 1.0 - smoothstep(0.5 * width - aa, 0.5 * width + aa, abs(d + 0.5 * width));
+                strokeRgb = vFill.rgb;
+                strokeA = vFill.a * band * on;
+            }
         }
     }
     float dotA = strokeA + fillA * (1.0 - strokeA);
     vec3 dotRgb = strokeRgb * strokeA + vFill.rgb * fillA * (1.0 - strokeA);
-    // An X is lines only, so it can't be hollow: a Following X fades instead
-    if (vHollow > 0.5 && vShape > 2.5) {
-        dotA *= 0.5;
-        dotRgb *= 0.5;
-    }
     // The selection ring, between uRingInner and uRingOuter outside the shape's edge
     float ringA = vSelected * uRing.a
         * (smoothstep(uRingInner - aa, uRingInner + aa, d)
@@ -171,7 +225,7 @@ export default function MarchersLayer({
     marchers: FieldMarchers;
     /** Marchers drawn dimmed (#201). */
     dimming: FieldDimming;
-    /** Marchers drawn hollow as Following (#300); dimming wins. */
+    /** Marchers drawn as Following (#300, `FOLLOWING_LOOK`); dimming wins. */
     following: FieldFollowing;
     theme: FieldTheme;
 }) {
@@ -284,7 +338,10 @@ export default function MarchersLayer({
             );
             geometry.setAttribute("aShape", dynamic(new Float32Array(n), 1));
             geometry.setAttribute("aOpacity", dynamic(new Float32Array(n), 1));
-            geometry.setAttribute("aHollow", dynamic(new Float32Array(n), 1));
+            geometry.setAttribute(
+                "aFollowing",
+                dynamic(new Float32Array(n), 1),
+            );
             geometry.setAttribute("aSelected", dynamic(new Float32Array(n), 1));
             geometry.instanceCount = n;
         }
@@ -305,15 +362,15 @@ export default function MarchersLayer({
         }
         if (dimChanged) {
             const opacity = instanced("aOpacity");
-            const hollow = instanced("aHollow");
+            const followingLook = instanced("aFollowing");
             const opacities = opacity.array as Float32Array;
-            const hollows = hollow.array as Float32Array;
+            const amounts = followingLook.array as Float32Array;
             marchers.ids.forEach((id, i) => {
                 opacities[i] = dimming.isDimmed(id) ? DIMMED_OPACITY : 1;
-                hollows[i] = drawnFollowing(dimming, following, id) ? 1 : 0;
+                amounts[i] = drawnFollowing(dimming, following, id) ? 1 : 0;
             });
             opacity.needsUpdate = true;
-            hollow.needsUpdate = true;
+            followingLook.needsUpdate = true;
         }
         if (reselected) {
             const selected = instanced("aSelected");

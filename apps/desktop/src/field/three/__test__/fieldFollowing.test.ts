@@ -2,12 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { FieldDimming } from "../fieldDimming";
 import {
     FieldFollowing,
-    FOLLOWING_LABEL_OPACITY,
-    HOLLOW_FILL_OPACITY,
+    FOLLOWING_LOOK,
     drawnFollowing,
-    labelOpacity,
 } from "../fieldFollowing";
-import { DIMMED_OPACITY } from "../fieldDimming";
 
 describe("FieldFollowing", () => {
     it("marks the Following marchers, and nobody without a set", () => {
@@ -43,10 +40,6 @@ describe("a marcher's drawn look", () => {
         following.set(new Set([1, 2, 3]));
         expect(drawnFollowing(dimming, following, 1)).toBe(true);
         expect(drawnFollowing(dimming, following, 2)).toBe(false);
-        expect(labelOpacity(dimming, following, 1)).toBe(
-            FOLLOWING_LABEL_OPACITY,
-        );
-        expect(labelOpacity(dimming, following, 2)).toBe(DIMMED_OPACITY);
     });
 
     it("is solid when Set", () => {
@@ -54,12 +47,13 @@ describe("a marcher's drawn look", () => {
         const following = new FieldFollowing();
         following.set(new Set([2]));
         expect(drawnFollowing(dimming, following, 1)).toBe(false);
-        expect(labelOpacity(dimming, following, 1)).toBe(1);
     });
 
-    it("keeps a Following label readable: under Set, over dimmed", () => {
-        expect(FOLLOWING_LABEL_OPACITY).toBeLessThan(1);
-        expect(FOLLOWING_LABEL_OPACITY).toBeGreaterThanOrEqual(0.75);
-        expect(HOLLOW_FILL_OPACITY).toBeLessThan(0.5);
+    it("dashes the edge at least 2 px wide round a 60% fill, solid corners", () => {
+        expect(FOLLOWING_LOOK.fillOpacity).toBe(0.6);
+        expect(FOLLOWING_LOOK.edgeWidth).toBeGreaterThanOrEqual(1.5);
+        expect(FOLLOWING_LOOK.edgeWidth).toBeLessThanOrEqual(2);
+        expect(FOLLOWING_LOOK.minEdgePx).toBe(2);
+        expect(FOLLOWING_LOOK.circleDashes).toBe(8);
     });
 });
