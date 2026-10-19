@@ -12,6 +12,7 @@ import type { XY } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
+import { storedBeatIdInTransaction } from "./endlessCounts";
 import { createMarchersInTransaction } from "./marcher";
 import { updateMarcherHomesInTransaction } from "./marcherHome";
 import {
@@ -142,6 +143,11 @@ export async function createItemsInTransaction({
 
     const items: DatabaseItem[] = [];
     for (const [i, newItem] of newItems.entries()) {
+        // Drawn past the stored counts: they are stored up to its beat first (endless counts)
+        const beatId = await storedBeatIdInTransaction({
+            tx,
+            beatId: newItem.beatId,
+        });
         const item = await tx
             .insert(schema.items)
             .values({
@@ -160,7 +166,7 @@ export async function createItemsInTransaction({
             .insert(schema.item_geometry)
             .values({
                 item_id: item.id,
-                beat_id: newItem.beatId,
+                beat_id: beatId,
                 ...geometryValues(newItem.geometry),
             })
             .run();
@@ -168,7 +174,7 @@ export async function createItemsInTransaction({
             await setItemPlacementInTransaction({
                 tx,
                 itemId: item.id,
-                beatId: newItem.beatId,
+                beatId,
                 placement: newItem.placement,
             });
         items.push(item);
@@ -190,7 +196,8 @@ export async function createItems({
 
 /**
  * Sets an item's Outline from a beat on: adds a change on that beat, or replaces the one already
- * there. Never touches the item's moves.
+ * there. Never touches the item's moves. The beat may be an endless one (`endlessIdOf`), past
+ * the stored counts.
  */
 export async function setItemGeometryInTransaction({
     tx,
@@ -203,6 +210,8 @@ export async function setItemGeometryInTransaction({
     beatId: number;
     geometry: ItemGeometryArgs;
 }): Promise<DatabaseItemGeometry> {
+    // Past the stored counts: they are stored up to the beat first (endless counts)
+    beatId = await storedBeatIdInTransaction({ tx, beatId });
     const values = geometryValues(geometry);
     const existing = await tx
         .select({ id: schema.item_geometry.id })

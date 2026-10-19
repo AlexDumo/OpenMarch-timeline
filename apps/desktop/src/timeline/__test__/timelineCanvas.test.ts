@@ -13,6 +13,7 @@ import {
     type TimelinePositionSource,
 } from "../timelineCanvas";
 import { beatAtTime } from "../timeMap";
+import { createCountGrid } from "../countGrid";
 import { useTimelineResolverStore } from "../timelineStore";
 
 /** Beats as `useTimingObjects` builds them: the fixed zero-length beat 0, then `durations`. */
@@ -70,20 +71,25 @@ const applyAll = (
 
 describe("playbackBeat", () => {
     const beats = makeBeats([0.5, 0.5, 1, 1]);
+    const grid = createCountGrid({ beats, measureStarts: [] });
 
     it("maps playback milliseconds to resolver beats, from beat 1 at time 0", () => {
-        expect(playbackBeat(beats, 0)).toBe(1);
-        expect(playbackBeat(beats, 250)).toBeCloseTo(1.5, 12);
-        expect(playbackBeat(beats, 500)).toBe(2);
-        expect(playbackBeat(beats, 1000)).toBe(3);
-        expect(playbackBeat(beats, 1500)).toBeCloseTo(3.5, 12);
-        expect(playbackBeat(beats, 3000)).toBe(5);
-        expect(playbackBeat(beats, 10_000)).toBe(5);
+        expect(playbackBeat(grid, 0)).toBe(1);
+        expect(playbackBeat(grid, 250)).toBeCloseTo(1.5, 12);
+        expect(playbackBeat(grid, 500)).toBe(2);
+        expect(playbackBeat(grid, 1000)).toBe(3);
+        expect(playbackBeat(grid, 1500)).toBeCloseTo(3.5, 12);
+        expect(playbackBeat(grid, 3000)).toBe(5);
     });
 
-    it("agrees with beatAtTime on seconds", () => {
+    it("goes on past the stored counts at the last count's length (endless counts)", () => {
+        // The last count is 1 s: 10 s is 7 counts past the end at 3 s
+        expect(playbackBeat(grid, 10_000)).toBe(12);
+    });
+
+    it("agrees with beatAtTime inside the stored counts", () => {
         for (const ms of [0, 1, 333, 999.5, 2718])
-            expect(playbackBeat(beats, ms)).toBe(beatAtTime(beats, ms / 1000));
+            expect(playbackBeat(grid, ms)).toBe(beatAtTime(beats, ms / 1000));
     });
 });
 

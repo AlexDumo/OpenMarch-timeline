@@ -11,7 +11,6 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import {
-    canPlayOn,
     navigationTarget,
     pageAtPlayhead,
     pageFlags,
@@ -128,11 +127,6 @@ describe("play", () => {
         ).toEqual({ from: 3, to: 9 });
     });
 
-    it("plays on while there is time after the start", () => {
-        expect(canPlayOn(17, 17)).toBe(false);
-        expect(canPlayOn(16, 17)).toBe(true);
-    });
-
     it("a preview always loops back to its start at its end (UI-17)", () => {
         const preview = { kind: "preview", from: 3, to: 11 } as const;
         expect(playbackStep(preview, 10.5, 17, null)).toBeNull();
@@ -140,9 +134,16 @@ describe("play", () => {
         expect(playbackStep(preview, 12, 17, null)).toEqual({ loopTo: 3 });
     });
 
-    it("plays on to the end of the show and stops there", () => {
+    it("plays on to the stop point and stops where it crosses it", () => {
         expect(playbackStep(on, 9, 17, null)).toBeNull();
         expect(playbackStep(on, 17, 17, null)).toBe("stop");
+        expect(playbackStep(on, 17.2, 17, null, 16.9)).toBe("stop");
+    });
+
+    it("started or jumped past the stop point, plays on in silence (endless counts rule 6)", () => {
+        expect(playbackStep(on, 20, 17, null, 19.9)).toBeNull();
+        expect(playbackStep(on, 17, 17, null, 17)).toBeNull();
+        expect(playbackStep(on, 500, 17, null, 499.98)).toBeNull();
     });
 
     it("loopBounds is the isolated range, else the loop, else nothing (UI-17)", () => {
@@ -202,12 +203,12 @@ describeDbTests("useTimelinePlayback", (it) => {
     ) =>
         renderHook(
             () => {
-                const { beats, pages } = useTimingObjects()!;
+                const { beats, pages, countGrid } = useTimingObjects()!;
                 useTimelinePageBridge(bridge);
                 return {
                     pages,
                     beats,
-                    playback: useTimelinePlayback({ beats, pages }),
+                    playback: useTimelinePlayback({ countGrid, pages }),
                     selected: useSelectedPage()!,
                     playing: useIsPlaying()!,
                     selection: useTimelineSelectionStore((s) => s.selection),
@@ -296,7 +297,7 @@ describeDbTests("useTimelinePlayback", (it) => {
         expect(store().playheadBeat).toBe(0);
     });
 
-    it("Shift+click on Previous and Next steps the playhead a beat, inside the show", async ({
+    it("Shift+click on Previous and Next steps the playhead a beat, on past the end", async ({
         db,
         wrapper,
     }) => {
@@ -320,7 +321,7 @@ describeDbTests("useTimelinePlayback", (it) => {
             result.current.playback.onNavigate!("previous-beat");
         });
         expect(result.current.playback.positionBeat).toBe(9);
-        // Not past either end of the show (the playback driver keeps its end)
+        // On past the show's end (the counts never end), but not before its start
         act(() => {
             store().setShowEndBeat(17);
         });
@@ -328,7 +329,7 @@ describeDbTests("useTimelinePlayback", (it) => {
             result.current.playback.onNavigate!("last-page");
             result.current.playback.onNavigate!("next-beat");
         });
-        expect(result.current.playback.positionBeat).toBe(17);
+        expect(result.current.playback.positionBeat).toBe(18);
         act(() => {
             result.current.playback.onNavigate!("first-page");
             result.current.playback.onNavigate!("previous-beat");
@@ -546,14 +547,17 @@ describeDbTests("useTimelinePlayback", (it) => {
             store().setPageBoxes(PAGE_BOXES);
         });
 
-        // Playing on from the end of the show: nothing to play
+        // Playing on from the end of the show plays on, in silence past the music (endless counts)
         act(() => {
             store().seek(17);
         });
         act(() => {
-            startTimelinePlayOn(17, result.current.playing.setIsPlaying);
+            startTimelinePlayOn(result.current.playing.setIsPlaying);
         });
-        expect(result.current.playback.isPlaying).toBe(false);
+        expect(result.current.playback.isPlaying).toBe(true);
+        act(() => {
+            result.current.playing.setIsPlaying(false);
+        });
 
         act(() => {
             store().selectRange(1, 9);

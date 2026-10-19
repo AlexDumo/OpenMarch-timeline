@@ -146,14 +146,15 @@ describe("planPageFlagInsertion", () => {
         });
     });
 
-    test("past the last flag it appends, while the show has the beats", () => {
+    test("past the last flag it appends, at any count (endless counts)", () => {
         expect(plan(18)).toEqual({
             kind: "append",
             beat: 18,
             lastPage: pages[2],
         });
         expect(plan(30)).toMatchObject({ kind: "append", beat: 30 });
-        expect(plan(31)).toBeNull();
+        expect(plan(31)).toMatchObject({ kind: "append", beat: 31 });
+        expect(plan(5000)).toMatchObject({ kind: "append", beat: 5000 });
     });
 
     test("nothing on a flag, at home, or at a fractional beat", () => {
@@ -268,13 +269,14 @@ describeDbTests("page flags in timeline mode (UI-9)", (it) => {
             await roundTrip(db, before, await snapshot(db));
         });
 
-        it("refuses on a flag, at home, past the show's beats, and at a fractional beat, writing nothing", async ({
+        it("refuses on a flag, at home, and at a fractional beat, writing nothing", async ({
             db,
             marchersAndPages: _,
         }) => {
             await setUp(db);
             const before = await snapshot(db);
-            for (const beat of [0, 1, 9, 17, 49, 98, 12.5])
+            // Past the show's beats is allowed now: the counts never end (endlessCounts.test.ts)
+            for (const beat of [0, 1, 9, 17, 49, 12.5, 98.5])
                 await expectRefused(addPageFlag({ db, beat }));
             expect(await snapshot(db)).toEqual(before);
         });

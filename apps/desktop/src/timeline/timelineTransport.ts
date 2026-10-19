@@ -9,12 +9,11 @@ import {
     type TimelinePlaybackRun,
 } from "@/stores/TimelineSelectionStore";
 import {
-    canPlayOn,
     navigationTarget,
     previewBounds,
     type FlagPage,
 } from "./timelinePlayhead";
-import { beatAtTime, timeAtBeat, type BeatTiming } from "./timeMap";
+import type { CountClock } from "./countGrid";
 import {
     getLivePlaybackPosition,
     playbackStartInfoRef,
@@ -105,16 +104,16 @@ const beatStep = (beat: number, direction: "previous-beat" | "next-beat") =>
  * playback jumps there from the beat playing now and goes on (`jumpTimelinePages`).
  */
 export function navigateTimeline(
-    beats: readonly BeatTiming[],
+    clock: CountClock,
     pages: readonly FlagPage[],
     isPlaying: boolean,
     direction: TimelineNavigation,
 ): boolean {
     if (!isPlaying) return navigateTimelinePages(pages, direction);
     const live = playbackStartInfoRef.current
-        ? beatAtTime(beats, getLivePlaybackPosition())
+        ? clock.beatAtTime(getLivePlaybackPosition())
         : displayedBeat(useTimelineSelectionStore.getState());
-    return jumpTimelinePages(beats, pages, Math.floor(live), direction);
+    return jumpTimelinePages(clock, pages, Math.floor(live), direction);
 }
 
 /**
@@ -122,26 +121,26 @@ export function navigateTimeline(
  * as in a DAW, and the playhead stays put. A loop jumped past its end plays on from there;
  * isolation keeps the jump inside the isolated range. Returns false when not playing.
  */
-export function jumpTimelinePlayback(
-    beats: readonly BeatTiming[],
-    beat: number,
-): boolean {
+export function jumpTimelinePlayback(clock: CountClock, beat: number): boolean {
     const state = useTimelineSelectionStore.getState();
     if (!state.playback || !Number.isFinite(beat)) return false;
-    const target = playbackTarget(beats, beat);
+    const target = playbackTarget(beat);
     const run = runAfterJump(state.playback, target);
     if (run !== state.playback) state.setPlayback(run);
-    restartLivePlaybackAt(timeAtBeat(beats, target));
+    restartLivePlaybackAt(clock.timeAtBeat(target));
     state.cue(target);
     return true;
 }
 
-/** Where playback jumped to `beat` goes: inside an isolated range, else inside the show. */
-const playbackTarget = (beats: readonly BeatTiming[], beat: number) => {
+/**
+ * Where playback jumped to `beat` goes: inside an isolated range, else anywhere from the start
+ * (the counts never end, docs/timeline/endless-counts.md).
+ */
+const playbackTarget = (beat: number) => {
     const { isolation } = useTimelineSelectionStore.getState();
     return isolation
         ? Math.min(Math.max(beat, isolation.start), isolation.end - 1)
-        : Math.min(Math.max(beat, 0), beats.length);
+        : Math.max(beat, 0);
 };
 
 /**
@@ -179,13 +178,13 @@ export function suspendTimelinePlayback(
  * run, or playing on when a loop's window doesn't hold it (as `jumpTimelinePlayback` does).
  */
 export function resumeTimelinePlayback(
-    beats: readonly BeatTiming[],
+    clock: CountClock,
     beat: number,
     run: TimelinePlaybackRun,
     setIsPlaying: (isPlaying: boolean) => void,
 ): void {
     const state = useTimelineSelectionStore.getState();
-    const target = playbackTarget(beats, beat);
+    const target = playbackTarget(beat);
     // A suspension whose pause never landed mustn't turn the next ordinary pause into one
     suspendRequested = false;
     state.cue(target);
@@ -308,7 +307,7 @@ function peekStartFlag(): void {
  * over playback, which only marks where a click would jump), and for any other seek.
  */
 export function seekTimeline(
-    beats: readonly BeatTiming[],
+    clock: CountClock,
     beat: number,
     gesture: TimelineSeekGesture | undefined,
     {
@@ -332,8 +331,8 @@ export function seekTimeline(
         const ended = scrub;
         scrub = null;
         if (ended?.suspended)
-            resumeTimelinePlayback(beats, beat, ended.suspended, setIsPlaying);
-        else if (ended?.playing ?? isPlaying) jumpTimelinePlayback(beats, beat);
+            resumeTimelinePlayback(clock, beat, ended.suspended, setIsPlaying);
+        else if (ended?.playing ?? isPlaying) jumpTimelinePlayback(clock, beat);
         else {
             state.seek(beat);
             state.endScrub();
@@ -351,7 +350,7 @@ export function seekTimeline(
         // A press over playback only marks where a click would jump to
         else if (gesture === "drag") {
             scrub.suspended ??= suspendTimelinePlayback(setIsPlaying);
-            if (scrub.suspended) state.cue(playbackTarget(beats, beat));
+            if (scrub.suspended) state.cue(playbackTarget(beat));
         }
     }
     return !scrub.playing || scrub.suspended
@@ -364,15 +363,15 @@ export function seekTimeline(
  * beat playing now. Returns false when there is nowhere to go.
  */
 export function jumpTimelinePages(
-    beats: readonly BeatTiming[],
+    clock: CountClock,
     pages: readonly FlagPage[],
     liveBeat: number,
     direction: TimelineNavigation,
 ): boolean {
     if (direction === "previous-beat" || direction === "next-beat")
-        return jumpTimelinePlayback(beats, beatStep(liveBeat, direction));
+        return jumpTimelinePlayback(clock, beatStep(liveBeat, direction));
     const target = navigationTarget(pages, liveBeat, direction);
-    return target ? jumpTimelinePlayback(beats, target.flag) : false;
+    return target ? jumpTimelinePlayback(clock, target.flag) : false;
 }
 
 /**
@@ -391,16 +390,16 @@ export const loopBounds = (
 
 /**
  * Playing on (UI-17, Play with no loop): plays from `from` (Play: the start flag; Shift+Space: the
- * playhead) to the end of the show. Returns false when there's nothing after it.
+ * playhead) until it reaches where playback stops (the latest of the show's, the music's and the
+ * last move's end; the playback driver stops it there). From at or past that, it plays on in
+ * silence until stopped (endless counts rule 6). Returns true: there is always time after it.
  */
 export function startTimelinePlayOn(
-    showEndBeat: number,
     setIsPlaying: (isPlaying: boolean) => void,
     from?: number,
 ): boolean {
     const state = useTimelineSelectionStore.getState();
     const start = from ?? state.cursorBeat ?? state.playheadBeat;
-    if (!canPlayOn(start, showEndBeat)) return false;
     state.cue(start);
     state.setPlayback({ kind: "on" });
     setIsPlaying(true);
@@ -419,11 +418,9 @@ export function startTimelinePlayOn(
  */
 export function toggleTimelinePlayback({
     isPlaying,
-    showEndBeat,
     setIsPlaying,
 }: {
     isPlaying: boolean;
-    showEndBeat: number;
     setIsPlaying: (isPlaying: boolean) => void;
 }): void {
     if (isPlaying) {
@@ -431,7 +428,7 @@ export function toggleTimelinePlayback({
         return;
     }
     if (isPreviewMode()) {
-        playPreview(showEndBeat, setIsPlaying);
+        playPreview(setIsPlaying);
         return;
     }
     const state = useTimelineSelectionStore.getState();
@@ -444,7 +441,7 @@ export function toggleTimelinePlayback({
     }
     const once = state.startStays ? windowBounds(state) : null;
     if (!once) {
-        startTimelinePlayOn(showEndBeat, setIsPlaying, state.startBeat);
+        startTimelinePlayOn(setIsPlaying, state.startBeat);
         return;
     }
     state.cue(once.from);
@@ -454,15 +451,14 @@ export function toggleTimelinePlayback({
 
 /**
  * Preview's Play: always plays on, with no loop and no window, from the beat on show, or from the
- * start once it has played to the end, as a video does
+ * start once it has played to the end, as a video does: at or past where playback stops (the
+ * store's `showEndBeat`, endless counts rule 6) it starts over rather than playing on in silence
  */
-function playPreview(
-    showEndBeat: number,
-    setIsPlaying: (isPlaying: boolean) => void,
-): void {
-    const from = displayedBeat(useTimelineSelectionStore.getState());
-    if (!startTimelinePlayOn(showEndBeat, setIsPlaying, from))
-        startTimelinePlayOn(showEndBeat, setIsPlaying, 0);
+function playPreview(setIsPlaying: (isPlaying: boolean) => void): void {
+    const state = useTimelineSelectionStore.getState();
+    const from = displayedBeat(state);
+    const stop = state.showEndBeat;
+    startTimelinePlayOn(setIsPlaying, stop !== null && from >= stop ? 0 : from);
 }
 
 /** The edit window Expert's Play plays once (UI-26): `[S, P)`, or `null` with none to play. */
@@ -478,16 +474,14 @@ const windowBounds = (
 
 /**
  * **Play on** (UI-26, Alt+Space, or Alt+click on Play): plays from the start flag on past the
- * playhead to the end of the show, whether or not looping is on. An isolated move loops, as Space
+ * playhead to where playback stops (`startTimelinePlayOn`), whether or not looping is on. An isolated move loops, as Space
  * does. Playing, it stops and goes back, as Space does.
  */
 export function playTimelineOn({
     isPlaying,
-    showEndBeat,
     setIsPlaying,
 }: {
     isPlaying: boolean;
-    showEndBeat: number;
     setIsPlaying: (isPlaying: boolean) => void;
 }): void {
     if (isPlaying) {
@@ -496,10 +490,10 @@ export function playTimelineOn({
     }
     const state = useTimelineSelectionStore.getState();
     if (state.isolation || isPreviewMode()) {
-        toggleTimelinePlayback({ isPlaying, showEndBeat, setIsPlaying });
+        toggleTimelinePlayback({ isPlaying, setIsPlaying });
         return;
     }
-    startTimelinePlayOn(showEndBeat, setIsPlaying, state.startBeat);
+    startTimelinePlayOn(setIsPlaying, state.startBeat);
 }
 
 /**
@@ -509,11 +503,9 @@ export function playTimelineOn({
  */
 export function playTimelinePage({
     isPlaying,
-    showEndBeat,
     setIsPlaying,
 }: {
     isPlaying: boolean;
-    showEndBeat: number;
     setIsPlaying: (isPlaying: boolean) => void;
 }): void {
     if (isPlaying) {
@@ -521,13 +513,13 @@ export function playTimelinePage({
         return;
     }
     if (isPreviewMode()) {
-        playPreview(showEndBeat, setIsPlaying);
+        playPreview(setIsPlaying);
         return;
     }
     const state = useTimelineSelectionStore.getState();
     const bounds = loopBounds(state);
     if (!bounds) {
-        startTimelinePlayOn(showEndBeat, setIsPlaying);
+        startTimelinePlayOn(setIsPlaying);
         return;
     }
     state.cue(bounds.from);

@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
 import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { beatAtTime, beatIndexAtTime } from "@/timeline/timeMap";
+import type { CountClock } from "@/timeline/countGrid";
 import {
     navigateTimeline,
     loopBounds,
@@ -24,7 +23,7 @@ import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useIsPreviewMode } from "@/stores/PreviewModeStore";
 
 interface PlaybackState {
-    readonly beats: readonly Beat[];
+    readonly countGrid: CountClock;
     readonly pages: readonly Page[];
     readonly isPlaying: boolean;
     readonly setIsPlaying: (isPlaying: boolean) => void;
@@ -44,43 +43,31 @@ const playbackCommands = (latest: {
     // UI-12: while playing, a click or page button jumps playback there, and a scrub suspends it
     // until it ends (`seekTimeline`), which says where a scrub's seek landed
     onSeek: (beatIndex, options) => {
-        const { beats, isPlaying, setIsPlaying } = latest.current;
-        return seekTimeline(beats, beatIndex, options?.gesture, {
+        const { countGrid, isPlaying, setIsPlaying } = latest.current;
+        return seekTimeline(countGrid, beatIndex, options?.gesture, {
             isPlaying,
             setIsPlaying,
             line: options?.line,
         });
     },
     onNavigate: (direction) => {
-        const { beats, pages, isPlaying } = latest.current;
-        navigateTimeline(beats, pages, isPlaying, direction);
+        const { countGrid, pages, isPlaying } = latest.current;
+        navigateTimeline(countGrid, pages, isPlaying, direction);
     },
     onPlayingChange: (next) => {
-        const { beats, isPlaying, setIsPlaying } = latest.current;
+        const { isPlaying, setIsPlaying } = latest.current;
         if (next === isPlaying) return;
-        toggleTimelinePlayback({
-            isPlaying,
-            showEndBeat: beats.length,
-            setIsPlaying,
-        });
+        toggleTimelinePlayback({ isPlaying, setIsPlaying });
     },
     // Shift+click on Play, as Shift+Space
     onPlayFromPlayhead: () => {
-        const { beats, isPlaying, setIsPlaying } = latest.current;
-        playTimelinePage({
-            isPlaying,
-            showEndBeat: beats.length,
-            setIsPlaying,
-        });
+        const { isPlaying, setIsPlaying } = latest.current;
+        playTimelinePage({ isPlaying, setIsPlaying });
     },
     // Alt+click on Play, as Alt+Space (UI-26)
     onPlayOn: () => {
-        const { beats, isPlaying, setIsPlaying } = latest.current;
-        playTimelineOn({
-            isPlaying,
-            showEndBeat: beats.length,
-            setIsPlaying,
-        });
+        const { isPlaying, setIsPlaying } = latest.current;
+        playTimelineOn({ isPlaying, setIsPlaying });
     },
 });
 
@@ -89,10 +76,10 @@ const playbackCommands = (latest: {
  * `useTimelineSelectionStore`'s paused playhead, `IsPlayingContext`, and the audio player's
  * `getLivePlaybackPosition`.
  *
- * - While playing, the cursor is `beatIndexAtTime(beats, seconds)`, updated once per animation
- *   frame and re-rendered only when the beat changes. With no beats it returns -1, which is never
- *   used as a position. The playhead line itself follows the fractional `liveBeat` every frame,
- *   without re-rendering the timeline.
+ * - While playing, the cursor is the whole count playing (on the count grid, so past the stored
+ *   counts too), updated once per animation frame and re-rendered only when the count changes.
+ *   The playhead line itself follows the fractional `liveBeat` every frame, without re-rendering
+ *   the timeline.
  * - While paused, the cursor is the playhead, which rests on any whole beat, the end of the show
  *   included (UI-11).
  * - Seeking moves only the playhead; the selection stays. Page navigation moves the playhead to a
@@ -105,10 +92,11 @@ const playbackCommands = (latest: {
  *   pressed, and Shift+Space pauses where it is instead (UI-24).
  */
 export function useTimelinePlayback({
-    beats,
+    countGrid,
     pages,
 }: {
-    beats: readonly Beat[];
+    /** Show time to count and back, past the stored counts too (endless counts) */
+    countGrid: CountClock;
     pages: readonly Page[];
 }): TimelinePlayback {
     const { isPlaying, setIsPlaying } = useIsPlaying()!;
@@ -126,25 +114,25 @@ export function useTimelinePlayback({
         }
         let frame = 0;
         const update = () => {
-            const index = beatIndexAtTime(beats, getLivePlaybackPosition());
-            if (index >= 0) setLiveIndex(index);
+            const beat = countGrid.beatAtTime(getLivePlaybackPosition());
+            if (beat >= 0) setLiveIndex(Math.floor(beat));
             frame = requestAnimationFrame(update);
         };
         update();
         return () => cancelAnimationFrame(frame);
-    }, [beats, isPlaying]);
+    }, [countGrid, isPlaying]);
 
     // The playhead line reads this every frame; nothing re-renders for it
     const liveBeat = useCallback(
         () =>
             playbackStartInfoRef.current
-                ? beatAtTime(beats, getLivePlaybackPosition())
+                ? countGrid.beatAtTime(getLivePlaybackPosition())
                 : null,
-        [beats],
+        [countGrid],
     );
 
     const state: PlaybackState = {
-        beats,
+        countGrid,
         pages,
         isPlaying,
         setIsPlaying,
