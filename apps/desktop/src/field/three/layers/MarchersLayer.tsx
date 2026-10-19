@@ -80,7 +80,7 @@ void main() {
 
 const FRAGMENT = /* glsl */ `
 #define DOT_R 5.0
-#define HOLLOW_RING 1.6
+#define HOLLOW_RING 2.2
 #define FOLLOWING_OPACITY ${FOLLOWING_OPACITY.toFixed(3)}
 varying vec2 vLocal;
 varying vec4 vFill;
@@ -123,8 +123,8 @@ void main() {
     float aa = 0.5 * fwidth(d);
     float fill = 1.0 - smoothstep(-aa, aa, d);
     bool cross = vShape > 2.5;
-    // A hollow Following marcher (#308): no fill inside a band along the edge, at least 1.5 CSS px wide
-    float band = max(HOLLOW_RING, 1.5 * uMargin);
+    // A hollow Following marcher (#308): no fill inside a band along the edge, at least 2 CSS px wide
+    float band = max(HOLLOW_RING, 2.0 * uMargin);
     float hollow = cross ? 0.0 : vHollow;
     fill *= 1.0 - hollow * (1.0 - smoothstep(-band - aa, -band + aa, d));
     // An X is its lines only; the others are a fill with the outline drawn over it

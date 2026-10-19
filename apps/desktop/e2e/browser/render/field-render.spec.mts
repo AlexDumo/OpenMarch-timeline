@@ -360,7 +360,7 @@ test.describe("following-hollow", () => {
         // They stand 80 and 40 field units apart: device px per field unit
         const unit = Math.hypot(b.x - a.x, b.y - a.y) / Math.hypot(80, 40);
         // Points around the Following dot inside its 5-unit edge, along the ring band
-        const around = [3.6, 4.0, 4.4].flatMap((r) =>
+        const around = [3.4, 3.8, 4.2].flatMap((r) =>
             [0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({
                 x: b.x + r * unit * Math.cos((k * Math.PI) / 4),
                 y: b.y + r * unit * Math.sin((k * Math.PI) / 4),
