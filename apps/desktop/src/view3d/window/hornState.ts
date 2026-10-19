@@ -1,8 +1,7 @@
 /**
- * The window's horn state (docs/3d/instruments.md §5): always `up` for
- * the show today; the settings panel can switch it to see the other
- * holds. Not saved anywhere: it is a test control until per-page horn
- * states exist.
+ * The holds the window's horn state preview offers (docs/3d/instruments.md
+ * §5). The show's Horn/Equipment cues decide the hold; the preview, never
+ * saved, only checks the poses (`performers/previewOverrides.ts`).
  */
 import { HOLD_STATES, type HoldState } from "@/view3d/core/instruments/holds";
 

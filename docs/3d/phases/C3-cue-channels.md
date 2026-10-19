@@ -64,8 +64,8 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C3.3: ADR 0004 step 8 merged (Visuals mode)
 
-- Owner: human
-- Status: open
+- Owner: Trevor (3d/visuals-mode)
+- Status: claimed
 - PR: none
 - Parallel: yes
 - Depends on: —
@@ -183,3 +183,165 @@ Nothing yet.
 - 2026-10-12, lead: `3d-async` merged into `main` (PR #129, `dc38f1a1`) and
   was deleted, so the C3.1 to C3.3 trackers now track `main`: each is done
   when its ADR 0004 step is merged into `main`.
+
+### 2026-10-16 · Trevor (3d/visuals-mode) · C3.3
+
+- **Claimed:** ADR 0004 step 8, built as a stack of PRs off `main`, each
+  merging `main` in as it moves:
+  1. V1, this branch: the Editor / Visuals workspace switch (top right of
+     the toolbar; not in Basic), one tab per behavior channel with its cue
+     count (Horn/Equipment names itself by the focused who), and the Who
+     list in the inspector (band, sections, tags, the selection). Focusing
+     a who dims everyone else on the field through `FieldDimming`, ahead of
+     a timeline isolation; dimmed marchers stay selectable.
+  2. V2: the cue band under the timeline's clip rows: the editable lane,
+     the read-only rows and the result row, with add, move and length
+     gestures and count snapping.
+  3. V3: the inspector's selected-cue settings and the why readout
+     (`traceCue`).
+  4. V4: copy and paste, clash and take-over flags on the lanes, the ramp
+     drag, the facing wheel and picking a field point.
+- **Not yet:** hand-picked groups in the Who list ("Marchers in this
+  move"), and hover highlighting on the field (the field has no hover
+  highlight yet). The workspace view isn't saved; every session opens in
+  the Editor.
+- **V2 built (same branch):** the cue band under the timeline's clip rows
+  (`TimelineBand` context, so the timeline needs no Visuals props): the
+  title ("Editing: Facing for Trumpet", folds to itself), grey rows for
+  broader targets above and narrower or overlapping ones below (a click
+  goes to that who), the editable lane and the result row, which reads a
+  compile of the show's cues (colored own, broader, exception or default,
+  hatched where the focused marchers differ). A state draws as its ramp,
+  then its value holding to the next cue; the hold is paint, so a click
+  there adds a cue. Gestures: click adds a state (the channel's first state
+  that fits everyone focused and isn't their default), drag adds a phrase
+  (its first phrase that fits; Feet and Facing have none, so a state),
+  drag moves, a phrase's end stretches, Delete removes. Everything lands on
+  counts; the page and downbeat pull (spec section 7.3) comes with V4. A
+  marcher's carry is their section's usual equipment, ignoring the 3D
+  View's guard equipment toggle, which section 7.5 retires.
+- **V3 built (same branch):** the picked cue's panel in the inspector
+  (value from the channel's library values of its kind, marked where it
+  doesn't fit everyone focused; transition or length; the value's own
+  settings; ripple on or off, its span and order; notes; Delete), each
+  change one undoable edit. Under it, the why readout at the playhead's
+  count: each value the focused who has, how many have it, the cue that set
+  it or where the default comes from, and the cues it beat, from
+  `traceCue`; a cue on the focused who's lane is a link that picks it.
+  `VisualsProvider` compiles once for the band and the inspector. Counts
+  read from 1 in the inspector, as on the timeline.
+- **V4 built (same branch):** every lane drag lands on the count under the
+  pointer, pulled to page lines and downbeats as the playhead is
+  (`snapSeekBeat`; Alt turns it off). A state's ramp start drags to set its
+  transition. Shift-click picks several cues; Cmd/Ctrl+C copies them
+  (spacing in counts, values, settings, transitions, ripples, notes) and
+  Cmd/Ctrl+V, or the band's Paste, puts them at the playhead on the
+  focused who, same channel only, as one undoable edit. Compile's flags
+  that reach the focused marchers ring their cues in red on the lane and
+  the grey rows, with what's wrong in the tooltip, and the band counts
+  them. A Facing angle cue gets a top-down wheel (audience down, side 2
+  right; Shift for 45° steps); a toward-a-point cue picks its point with
+  the next click on the field, through `requestFieldPoint` and the field
+  editor's `takePress`, which now gets the press (field coordinates, the
+  dots' space). Step 8 is complete; step 9 (retiring the 3D window's horn
+  and guard toggles) is next.
+- **Review fixes (same branch):** a Ctrl or Cmd press on the band is the
+  timeline's again (section 7.2: it draws a range, never a cue); the result
+  row rings the counts a flagged cue sets; a phrase draws as long as
+  compile plays it (its value's length range); the facing wheel's arrows
+  no longer also nudge marchers; the focus stays current with the
+  inspector hidden (fullscreen). Not fixed: compile runs the whole show
+  (about 250 ms at 2,000 marchers × 500 counts) on every cue edit, as the
+  3D View does; compile's channel-only `recompile` saves little there,
+  since take-overs and flags are always redone.
+
+### 2026-10-17 · Trevor (3d/visuals-workspace) · C3.3 workspace
+
+- **Owner decision:** "All of these needs to be behind a ui like lighting.
+  Where it is a deeper editing experience separate from the normal 2d
+  editing of the timeline." Recorded in performer-behavior.md section 7.1;
+  it replaces "below Alex's clip rows".
+- **Built:** Visuals mode's own timeline (`VisualsTimeline`, through
+  `TimelineNavigationPanel`): the drill timeline (`Timeline`) with a
+  `readOnly` flag and a `band` prop. Read-only drops the clips and every
+  drill edit (window, start pin, **+**, page flag grips, move menus, range
+  menu, double-click isolation, clip moves and resizes) and draws no
+  Ctrl+drag range; page boxes still select, to go to their page, and the
+  ruler and the surface scrub. The cue band is its lanes, drawn under the
+  waveform where clip rows go, always open (the fold is gone) with taller
+  rows; the timeline scrolls when they're tall. `TimelineBand` is now a
+  prop's type, not a context: the Editor's timeline never gets a band and
+  is as on `timeline/main`.
+- **The field only selects in Visuals:** `FieldEditor.setReadOnly`, on
+  while Visuals shows. Clicks, the marquee and the lasso select; a drag
+  from a marcher does nothing, the selection box has no handles, and the
+  line tool and typed rotations are refused (any in progress end unsaved).
+  The field point pick (`takeFieldPress`) runs first, as before.
+- **Shortcuts:** `isActionOffInWorkspace` turns the drill edits off in
+  Visuals mode (movement, alignment, batch edit, cursor and shape actions,
+  and K), from a key, the palette or a button; selection, playback, page
+  navigation, view and undo stay. Entering Visuals ends any alignment
+  event.
+- **Reads as its own mode:** `<main>` gets an accent gradient tint (theme
+  tokens) and `data-workspace`. The switch stays top right; Basic has no
+  Visuals mode, as before.
+- **Tests:** `TimelineReadOnly.test.tsx`, `workspaceActions.test.ts`,
+  read-only cases in `fieldEditor.test.ts`; `visuals-mode.spec.mts` checks
+  Visuals' timeline has no clips, + or window, page boxes go to their page,
+  a drag and the arrows move no one while click and marquee select, and
+  the Editor has its clips and drags back.
+- **Merged with the review fixes:** the band still lets Ctrl/Cmd presses
+  through (they are never a cue), but Visuals' read-only timeline draws no
+  range, so such a drag scrubs; the review's scenario now checks that.
+- **Merged with step 9:** the editor's band data and the 3D window share
+  one `sectionCueCarry`, now in `view3d/core/marchers/hornChannel.ts`.
+
+### 2026-10-17 · Trevor (3d/visuals-toggles) · ADR 0004 step 9
+
+Retired the 3D window's toggles (performer-behavior.md section 7.5). None
+was ever saved; all three are kept only as preview overrides, in a new
+**Preview only** section of the settings panel (hint: not saved, cues
+decide in the show), each starting on **Follow cues**
+(`window/performers/previewOverrides.ts`, `sceneStore.ts` now holds null
+for "follow").
+
+- **Horn state:** followed, the Horn/Equipment channel starts horns up and
+  plays the compiled cues; before, the toggle replaced the starting hold
+  and the cues still applied over it. Set to up, carry or trail it holds
+  every carrier in that hold for the whole show, ignoring the cues, to
+  check the poses.
+- **Guard equipment:** followed, each guard section carries its own piece.
+  The compile now always fits cues by each section's usual equipment, as
+  the editor's Visuals mode does (`sectionCueCarry`); before, picking a
+  piece changed which Horn/Equipment cues fit the guard. Picking a piece
+  now changes only what's drawn in their hands. "By section" became
+  Follow cues.
+- **Step-off foot:** followed, the show's saved performer default
+  (`useShowPerformerDefaults`), with Feet cues that set a foot keeping
+  theirs. Picking a foot replaces the show's default for the cues that
+  don't set one; the hint names the show's saved foot.
+
+Tests: `performers/__test__/previewOverrides.test.ts`. No e2e covered
+these controls. Open: the Carry, Silk and Uniform channels aren't read by
+the window yet, so with Follow cues a guard section's piece is still its
+section's usual one, not a Carry cue's (C3.5 and on).
+
+### 2026-10-17 · Trevor (3d/visuals-workspace) · kept clear of the open PRs
+
+Reworked so the branch merges cleanly with every open PR on the fork,
+including Alex's shape modes (#288, #181), tempo (#280, #182) and split
+move (#266), the C2 props stack and #290's graphics settings:
+
+- **Field:** read-only and the field point pick moved out of
+  `FieldEditor` into `field/editor/visualsFieldEditor.ts`, a subclass built
+  on the editor's ports and public methods (its drop refuses and its live
+  preview draws nothing while read-only). `fieldEditor.ts`,
+  `selectionFrame.ts` and `takeFieldPress.ts` are as on main. Left over:
+  the selection box and its handles still draw in Visuals mode, inert;
+  hide them once #288's modes land (`ownsSelectionBox`).
+- **Timeline:** `TimelineNavigationPanel` has its own file; the drill
+  panel only exports `PlayingTimeline`. `Timeline` adds the read-only
+  overrides after its common props instead of splitting them.
+- **3D window:** the preview rows stay in the Graphics section, headed
+  "Preview only" by the first of them, until #290 moves the quality rows
+  out.

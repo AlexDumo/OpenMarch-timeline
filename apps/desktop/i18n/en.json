@@ -36,8 +36,12 @@
         "edit": {
             "noRedoAvailable": "No action to redo",
             "noUndoAvailable": "No action to undo",
+            "redidCueEdit": "Redid a cue edit (Visuals)",
+            "redidDrillEdit": "Redid a drill edit (Editor)",
             "redo": "Redo",
-            "undo": "Undo"
+            "undo": "Undo",
+            "undidCueEdit": "Undid a cue edit (Visuals)",
+            "undidDrillEdit": "Undid a drill edit (Editor)"
         },
         "file": {
             "closeFile": "Close file",
@@ -128,6 +132,8 @@
             "runFieldBenchmark": "Run field benchmark",
             "runFieldBenchmarkKeywords": "performance fps speed test frame rate",
             "showShortcuts": "Keyboard shortcuts",
+            "toggleWorkspace": "Switch workspace (Editor or Visuals)",
+            "toggleWorkspaceKeywords": "visuals editor workspace cues mode",
             "showNextPaths": "Show next page paths",
             "showPreviousPaths": "Show previous page paths",
             "toggleNextPaths": "Toggle next page paths",
@@ -289,6 +295,7 @@
     },
     "commandPalette": {
         "close": "Close",
+        "editsDrill": "Edits the drill — switch to Editor",
         "empty": "No matching commands.",
         "navigate": "Navigate",
         "placeholder": "Search commands…",
@@ -2293,24 +2300,26 @@
                 "carry": "Carry",
                 "trail": "Trail"
             },
-            "hornStateHint": "Shows always play horns up. The other positions are here to check the poses.",
+            "hornStateHint": "Holds every horn and drum in one position for the whole show, to check the poses. Follow cues plays the Horn/Equipment cues, horns up where there are none.",
             "guardEquipment": "Guard equipment",
             "guardEquipmentMode": {
-                "section": "By section",
                 "flag6": "6 ft flag",
                 "swingFlag": "Swing flag",
                 "doubleSwingFlag": "Double swing",
                 "rifle": "Rifle",
                 "sabre": "Sabre"
             },
-            "guardEquipmentHint": "By section gives flags the 6 ft flag and rifles the rifle. Pick one piece to put it in every guard member's hands.",
+            "guardEquipmentHint": "Puts one piece in every guard member's hands, to see it. Follow cues gives each section its own: flags the 6 ft flag, rifles the rifle.",
             "stepOffFoot": "Step off",
             "stepOffFootMode": {
                 "left": "Performer's left",
                 "right": "Performer's right"
             },
-            "stepOffFootHint": "The performer's own foot, whichever way they face. Facing you, their left foot is on your right. Starts on the show's saved foot; the other one is a preview and isn't saved.",
+            "stepOffFootHint": "The performer's own foot, whichever way they face. Facing you, their left foot is on your right. Follow cues steps off on the show's saved foot ({foot}), or the foot a Feet cue sets.",
             "keysSection": "Keyboard and mouse",
+            "previewSection": "Preview only",
+            "previewHint": "Not saved. These change only what this window draws; in the show, cues decide. Set them back to Follow cues to see the show.",
+            "followCues": "Follow cues",
             "uniforms": "Band uniform",
             "guardUniforms": "Guard uniform"
         },
@@ -2464,5 +2473,118 @@
             "seconds": "seconds"
         },
         "unsavedChanges": "You have unsaved changes"
+    },
+    "visuals": {
+        "workspace": {
+            "label": "Workspace",
+            "editor": "Editor",
+            "visuals": "Visuals"
+        },
+        "channels": {
+            "feet": "Feet",
+            "horn": "Horn",
+            "equipment": "Equipment",
+            "hornEquipment": "Horn / Equipment",
+            "facing": "Facing",
+            "body": "Body"
+        },
+        "inspector": {
+            "title": "Visuals",
+            "who": "Who",
+            "band": "Band",
+            "selection": "Selection",
+            "selectionCount": "{count, plural, =0 {Nothing selected} one {# selected} other {# selected}}",
+            "sections": "Sections",
+            "tags": "Tags",
+            "clearFocus": "Clear focus",
+            "focusHint": "Click a who to focus it. Everyone else dims on the field."
+        },
+        "band": {
+            "editing": "Editing: {channel} for {who}",
+            "focusFirst": "Visuals: focus a who in the inspector to edit its cues",
+            "selectFirst": "Select marchers on the field to make cues for the selection",
+            "marchers": "{count, plural, one {# marcher} other {# marchers}}",
+            "mixed": "Mixed",
+            "lane": "Cue lane",
+            "paste": "{count, plural, one {Paste # cue at the playhead} other {Paste # cues at the playhead}}",
+            "flagged": "{count, plural, one {# flagged cue} other {# flagged cues}}"
+        },
+        "cue": {
+            "title": "Cue",
+            "delete": "Delete",
+            "where": "{who}, {where}",
+            "value": "Value",
+            "notForEveryone": "{value} (doesn't fit everyone)",
+            "transition": "Transition (counts)",
+            "length": "Length (counts)",
+            "ripple": "Ripple",
+            "rippleSpan": "Ripple over (counts)",
+            "rippleOrder": "Order",
+            "order": {
+                "drill": "Drill order",
+                "left_right": "Left to right",
+                "right_left": "Right to left",
+                "down_form": "Down the form"
+            },
+            "notes": "Notes",
+            "facingWheel": "Facing angle",
+            "pickPoint": "Pick the point on the field",
+            "pickingPoint": "Click a point on the field (Esc cancels)"
+        },
+        "why": {
+            "title": "Why, at {where}",
+            "value": "{value}: {n} of {total}",
+            "setBy": "Set by",
+            "beat": "Beat",
+            "cue": "{value} for {who} on {where}",
+            "takenOver": "(taken over from {channel})",
+            "default": {
+                "library": "The default",
+                "carry": "The default for what they carry",
+                "section_equipment": "The section's usual equipment",
+                "equipment_fallback": "The usual equipment for the section's name",
+                "marcher_carries": "What they usually carry",
+                "section_color": "The section's 2D color",
+                "band_uniform": "The band uniform",
+                "guard_uniform": "The guard uniform"
+            }
+        },
+        "settings": {
+            "pace": "Pace",
+            "moving": "Moving",
+            "onHolds": "On holds",
+            "stepOffFoot": "Step off",
+            "angle": "Horn angle",
+            "degrees": "Angle (degrees)",
+            "x": "Point x",
+            "y": "Point y",
+            "energy": "Energy"
+        },
+        "options": {
+            "single": "Single",
+            "half": "Half time",
+            "double": "Double time",
+            "straightLeg": "Straight leg",
+            "bentLeg": "Bent leg",
+            "highStep": "High step",
+            "stand": "Stand",
+            "markTime": "Mark time",
+            "highMarkTime": "High mark time",
+            "left": "Left",
+            "right": "Right",
+            "box": "The box",
+            "plus10": "10° above the box",
+            "low": "Low",
+            "medium": "Medium",
+            "high": "High"
+        },
+        "flags": {
+            "clash": "clashes with another cue on the same count",
+            "phrase_overlap": "overlaps another phrase",
+            "takeover_while_moving": "takes over the feet while the dot moves",
+            "fits_nobody": "fits none of its marchers",
+            "kind_not_allowed": "a phrase on a channel that takes states only",
+            "transition_cut": "its transition starts before the cue before it lands"
+        }
     }
 }

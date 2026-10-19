@@ -18,6 +18,16 @@
  */
 import type { CueSegment, PerformerCarry } from "@openmarch/core";
 import type { HoldFamily, HoldState } from "../instruments/holds";
+import { carryForSection } from "../instruments/catalog";
+
+/**
+ * What a marcher carries, for the cues that fit them: their section's usual
+ * equipment. The editor's Visuals mode and the 3D window both fit cues by it,
+ * whatever the window's guard equipment preview shows.
+ */
+export function sectionCueCarry(section: string): PerformerCarry {
+    return performerCarryOf(carryForSection(section)?.family ?? null);
+}
 
 /** What a performer carrying `family` carries, as the cue compile groups it. */
 export function performerCarryOf(family: HoldFamily | null): PerformerCarry {

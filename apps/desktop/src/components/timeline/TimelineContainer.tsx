@@ -5,6 +5,8 @@ import ActionButton from "@/shortcuts/ActionButton";
 import EditableAudioPlayer from "./audio/EditableAudioPlayer";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import TimelineModePanel from "./TimelineModePanel";
+import VisualsTimeline from "@/components/visuals/VisualsTimeline";
+import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { T } from "@tolgee/react";
 import clsx from "clsx";
 
@@ -119,16 +121,18 @@ function TimelineZoomControls() {
 }
 
 /**
- * The timeline with the audio player beside it.
+ * The timeline with the audio player beside it: the drill timeline, or in Visuals mode its own
+ * (performer-behavior.md section 7.1). The player stays mounted across the switch.
  * UI-12: perspective and fullscreen live on the field's zoom widget.
  */
 function TimelineModeContainer() {
+    const visuals = useIsVisualsView();
     return (
         <div
             className="flex min-h-0 flex-1 gap-8"
             data-testid="timeline-mode-container"
         >
-            <TimelineModePanel />
+            {visuals ? <VisualsTimeline /> : <TimelineModePanel />}
             <AudioPlayer />
         </div>
     );
