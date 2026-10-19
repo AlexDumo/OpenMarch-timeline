@@ -31,7 +31,9 @@ Terms used throughout:
   UI, not "pinned", "locked", "kept" or "edited".
 - With marchers selected, the timeline shows a **keyframe diamond** at every count after the first
   page where a selected marcher is Set: filled where all of them are Set, hollow where only some
-  are. A click moves the playhead there. They replaced the hold marks and their tooltip (sections 1
+  are. A click moves the playhead there; a right-click (or the context-menu key, or Shift+F10)
+  offers **Unset here** and, where pages follow, **Unset here and on Pages N–M** for the selected
+  marchers Set at that count, without moving the playhead (#306). They replaced the hold marks and their tooltip (sections 1
   and 2, kept below as history) in both modes (#303).
 
 About the screenshots: most were taken during the build, before the 2026-10-09 rebase onto #115

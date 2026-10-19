@@ -1,6 +1,7 @@
 import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
 import type { PageKeepChains } from "./PageKeepChain";
 import type { TimelineClipResizeCommands } from "./TimelineClipResize";
+import type { TimelineKeyframeMenu } from "./TimelineKeyframes";
 import type { ReactNode } from "react";
 import type {
     TimelineAddMarchersMenu,
@@ -289,6 +290,8 @@ export interface TimelineCommonProps
     readonly transportViewControls?: ReactNode;
     /** #303: where the selected marchers are Set, view beats; none without a selection */
     readonly keyframes?: readonly SelectionKeyframe[];
+    /** #306: a keyframe diamond's right-click Unset actions, by view beat; without it, no menu */
+    readonly keyframeMenu?: TimelineKeyframeMenu;
     /** The chains on the page boxes (UI-18 keep later pages); none without a selection */
     readonly keepChains?: PageKeepChains;
     /** UI-19 Basic: the selected marchers' mid-page positions, view beats */

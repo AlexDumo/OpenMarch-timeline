@@ -22,6 +22,7 @@ import {
     unsetFollowingPages,
     unsetHere,
     unsetHereAndFollowing,
+    unsetMenuStateAt,
 } from "@/timeline/timelineUnset";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { keepMarchersOnPage } from "../timelineKeepHere";
@@ -305,12 +306,18 @@ describeDbTests(
             const rows = await snapshot(db);
 
             playheadAt(0);
-            expect((await unsetHere([a, b, c], db)).unset).toEqual([]);
+            expect(
+                (await unsetHere([a, b, c], { database: db })).unset,
+            ).toEqual([]);
             playheadAt(PAGE3.end);
-            expect((await unsetHere([b, c], db)).unset).toEqual([]);
+            expect((await unsetHere([b, c], { database: db })).unset).toEqual(
+                [],
+            );
             expect(await snapshot(db)).toEqual(rows);
 
-            expect((await unsetHere([a, b, c], db)).unset).toEqual([a]);
+            expect(
+                (await unsetHere([a, b, c], { database: db })).unset,
+            ).toEqual([a]);
             await timelineResolverSettled();
             expect((await atFlags(db, a))[3]).toEqual(UP);
             expect((await atFlags(db, b))[3]).toEqual(UP2);
@@ -453,6 +460,34 @@ describeDbTests(
             expect(await following(db, [a])).toEqual(["3", "4"]);
         });
 
+        it("a diamond's menu offers what applies at its count, and nothing while playing", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, c } = await show(db);
+            const at = async (beat: number, isPlaying = false) =>
+                unsetMenuStateAt({
+                    resolver: resolver(),
+                    kept: await readKeptAssignmentIds(db),
+                    marcherIds: [a, c],
+                    beat,
+                    boxes: BOXES,
+                    isPlaying,
+                });
+            expect(await at(PAGE2.end)).toEqual({
+                canUnset: true,
+                followingLabel: "Unset here and on Pages 3–4",
+            });
+            expect(await at(PAGE3.end)).toEqual({
+                canUnset: false,
+                followingLabel: null,
+            });
+            expect(await at(PAGE2.end, true)).toEqual({
+                canUnset: false,
+                followingLabel: null,
+            });
+        });
+
         it("names none where the next page holds a kept spot", async ({
             db,
             marchersAndPages: _,
@@ -471,9 +506,9 @@ describeDbTests(
             const { a, b, c } = await show(db);
             const [homeA] = await atFlags(db, a);
             playheadAt(PAGE2.end);
-            expect((await unsetHereAndFollowing([a, c], db)).unset).toEqual([
-                a,
-            ]);
+            expect(
+                (await unsetHereAndFollowing([a, c], { database: db })).unset,
+            ).toEqual([a]);
             await timelineResolverSettled();
             expect(await atFlags(db, a)).toEqual([
                 homeA,
@@ -484,6 +519,67 @@ describeDbTests(
             ]);
             expect((await atFlags(db, b)).slice(2)).toEqual([UP2, UP2, UP2]);
             expect((await readKeptAssignmentIds(db)).size).toBe(0);
+        });
+    },
+);
+
+describeDbTests(
+    "Unset from a keyframe diamond: at the diamond's count, not the playhead",
+    (it) => {
+        const playheadAt = (beat: number) =>
+            useTimelineSelectionStore.setState({
+                playheadBeat: beat,
+                cursorBeat: null,
+            });
+
+        it("Unset here takes back the spot on the given count and leaves the playhead", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a, b, c } = await show(db);
+            playheadAt(PAGE3.end);
+            expect(
+                (await unsetHere([a, c], { database: db, beat: PAGE2.end }))
+                    .unset,
+            ).toEqual([a]);
+            await timelineResolverSettled();
+            const [homeA] = await atFlags(db, a);
+            expect((await atFlags(db, a)).slice(1)).toEqual([
+                homeA,
+                homeA,
+                UP,
+                UP,
+            ]);
+            expect((await atFlags(db, b)).slice(2)).toEqual([UP2, UP2, UP2]);
+            expect(useTimelineSelectionStore.getState().playheadBeat).toBe(
+                PAGE3.end,
+            );
+        });
+
+        it("Unset here and on Pages N–M lets the following pages follow back from the given count", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a } = await show(db);
+            const [homeA] = await atFlags(db, a);
+            playheadAt(0);
+            expect(
+                (
+                    await unsetHereAndFollowing([a], {
+                        database: db,
+                        beat: PAGE2.end,
+                    })
+                ).unset,
+            ).toEqual([a]);
+            await timelineResolverSettled();
+            expect(await atFlags(db, a)).toEqual([
+                homeA,
+                homeA,
+                homeA,
+                homeA,
+                homeA,
+            ]);
+            expect(useTimelineSelectionStore.getState().playheadBeat).toBe(0);
         });
     },
 );
