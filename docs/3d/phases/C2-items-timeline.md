@@ -157,7 +157,12 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
   draw on the field go through the same seams (`docs/field/porting-fabric-features.md`).
 - **Migration numbers:** items are 0024. C2.3's placements and C2.4's slot
   assignments follow as 0025 and 0026, each registering a rollback in
-  `electron/database/__test__/migrationRollback.ts`.
+  `electron/database/__test__/migrationRollback.ts`. The props stack lands
+  before the Shape tool's #181 (owner, 2026-10-18), whose lab builds ran its
+  own `0024_demonic_scream`: the three were regenerated on 2026-10-18 with
+  dates after it, so a lab file still takes them, and each is safe to run
+  twice (`IF NOT EXISTS`, and the runners skip an `ADD COLUMN` the table
+  already has, `migrations/addColumnGuard.ts`). #181 renumbers after them.
 - **Feet input** for Outline sizes waits on C1.4's `parseLength`; the Props
   panel takes meters until then.
 - **Upstream PR 1013** gets closed with a link once the owner says so.
