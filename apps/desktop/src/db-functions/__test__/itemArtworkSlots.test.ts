@@ -14,11 +14,11 @@ import {
     assignItemArtworkSlot,
     deleteItemArtworkSlots,
     getItemArtworkSlots,
-    getLibraryReferencesInUse,
     setItemArtworkSlot,
     toArtworkAssignments,
 } from "../itemArtworkSlots";
 import { deleteBeatsCarryingCues } from "../beat";
+import { libraryReferences } from "../libraryReferences";
 import { readShowTiming } from "@/timeline/showTiming";
 import { _replaceAllBeatObjects } from "@/components/timeline/audio/EditableAudioPlayerUtils";
 import Measure from "@/global/classes/Measure";
@@ -418,13 +418,26 @@ describeDbTests("itemArtworkSlots", (it) => {
         expect(await rows(db)).toBe(0);
     });
 
+    /** The Versions the show Library registry finds in the Item tables, once each, sorted. */
+    const itemTableVersions = async (db: DbConnection) => {
+        const refs = (await libraryReferences({ db })).filter(
+            (r) => r.source === "itemModels" || r.source === "itemArtworkSlots",
+        );
+        return [...new Set(refs.map((r) => `${r.itemId}@${r.versionHash}`))]
+            .sort()
+            .map((key) => {
+                const [itemId, versionHash] = key.split("@");
+                return { itemId, versionHash };
+            });
+    };
+
     it("reads every Library Version the Item tables keep, dormant assignments and bare slots included", async ({
         db,
         marchersAndPages,
     }) => {
         expect(marchersAndPages).toBeDefined();
         const { beat, riser, panel } = await setUp(db);
-        expect(await getLibraryReferencesInUse({ db })).toEqual([
+        expect(await itemTableVersions(db)).toEqual([
             { itemId: PANEL, versionHash: PANEL_V1 },
         ]);
 
@@ -443,7 +456,7 @@ describeDbTests("itemArtworkSlots", (it) => {
                 assignment: { artwork },
             });
 
-        expect(await getLibraryReferencesInUse({ db })).toEqual([
+        expect(await itemTableVersions(db)).toEqual([
             { itemId: BANNER.itemId, versionHash: BANNER.versionHash },
             { itemId: SUNSET.itemId, versionHash: SUNSET.versionHash },
             { itemId: PANEL, versionHash: PANEL_V1 },

@@ -371,6 +371,3 @@ export function toArtworkAssignments(
     }
     return byItem;
 }
-
-/** The Library references the Item tables use (`itemLibraryKeeps`), for callers of this module. */
-export { itemLibraryKeeps as getLibraryReferencesInUse } from "./itemLibraryKeeps";

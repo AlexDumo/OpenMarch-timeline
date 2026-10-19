@@ -126,7 +126,7 @@ Add the English values to `apps/desktop/i18n/en.json`.
 
 The View settings button opens a panel at the top right, under the button.
 It doesn't block the scene, so the viewer can orbit while trying a look; the
-X, the button again or Esc close it. It has three sections:
+X, the button again or Esc close it. It has four sections:
 
 - **This show**: the venue, saved in the show file and undoable in the
   editor (the hint says so):
@@ -138,11 +138,18 @@ X, the button again or Esc close it. It has three sections:
     (`params.endZoneText`, `endZoneColor`). The text saves on Enter or when
     focus leaves, and each color when its picker closes, so one edit is one
     undo step. Empty text means no lettering.
-- **This computer**: never saved in the show. Preview controls for the horn
-  state, guard equipment and step-off foot. The graphics choices live in the
-  app's Settings window (UI-9); where there is no Settings window (the 3D
-  View web preview), Quality and Resolution are here too, with the same
-  hints.
+- **Graphics**: Quality and Resolution live in the app's Settings window
+  (UI-9). Where there is no Settings window (the 3D View web preview), this
+  section shows them here, with the same hints.
+- **Preview only**: horn state, guard equipment and step-off foot, window
+  state that is never saved, not even per computer (performer-behavior.md
+  section 7.5). Each starts on Follow cues, which draws what the show's
+  compiled cues say: Horn/Equipment cues from horns up, each guard
+  section's own equipment, and the show's saved step-off foot with Feet
+  cues setting their own. Picking a hold holds every carrier in it for the
+  whole show; picking a guard piece puts it in every guard member's hands
+  (cues still fit by section); picking a foot replaces the show's default
+  foot. The section hint says the choices aren't saved and the cues decide.
 - **Keyboard and mouse**: every key and pointer gesture the window knows.
 
 ## UI-8 Opening with the show

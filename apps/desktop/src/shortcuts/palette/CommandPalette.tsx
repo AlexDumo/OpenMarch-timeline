@@ -315,9 +315,10 @@ export default function CommandPalette() {
                                                     }
                                                     title={
                                                         item.disabled
-                                                            ? t(
+                                                            ? (item.disabledReason ??
+                                                              t(
                                                                   "commandPalette.unavailable",
-                                                              )
+                                                              ))
                                                             : undefined
                                                     }
                                                     className="palette-item"
@@ -337,6 +338,17 @@ export default function CommandPalette() {
                                                     <span className="palette-item-label">
                                                         {item.label}
                                                     </span>
+                                                    {item.disabled &&
+                                                        item.disabledReason && (
+                                                            <span
+                                                                className="palette-item-reason"
+                                                                data-testid="palette-item-reason"
+                                                            >
+                                                                {
+                                                                    item.disabledReason
+                                                                }
+                                                            </span>
+                                                        )}
                                                     {!section.heading && (
                                                         <span className="palette-item-group">
                                                             {item.group}

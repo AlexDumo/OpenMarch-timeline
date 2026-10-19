@@ -5,11 +5,10 @@
  * - Venue, saved with the show: the venue, its lighting, the crowd and its
  *   colors, and the end-zone lettering. Every change goes to the editor,
  *   which saves it with undo.
- * - This computer: preview controls for horns, guard equipment and the
- *   step-off foot. Quality, resolution and power live in the app's Settings
- *   window (3D View section), with the other per-computer choices. Where
- *   there is no Settings window (the web preview), quality and resolution
- *   are here too.
+ * - Graphics: quality and resolution live in the app's Settings window (3D View section). Where
+ *   there is no Settings window (the web preview), they are here too.
+ * - Preview only, never saved: horns, guard equipment and the step-off foot,
+ *   overriding the cues in this window alone.
  * - The keyboard and mouse controls, so they can be found.
  *
  * It floats at the right and doesn't block the scene, so the viewer can
@@ -25,7 +24,6 @@ import { QUALITY_MODES } from "../qualityPreference";
 import { HAS_SETTINGS_WINDOW, RESOLUTIONS } from "../renderPrefs";
 import { HOLD_STATES } from "../hornState";
 import { GUARD_EQUIPMENT } from "@/view3d/core/instruments/catalog";
-import type { GuardEquipment } from "../sceneStore";
 import { Segmented } from "./Panel";
 import {
     LightingControl,
@@ -94,16 +92,22 @@ export function SettingsPanel({
                     {hasStands && <CrowdRows />}
                     {kitId !== "gym" && <EndZoneRow />}
                 </Section>
+                {/* Graphics live in the Settings window; the web preview has none */}
+                {!HAS_SETTINGS_WINDOW && (
+                    <Section
+                        title={t("view3d.settings.graphicsSection")}
+                        hint={t("view3d.settings.graphicsHint")}
+                    >
+                        <QualityRow />
+                        <ResolutionRow />
+                    </Section>
+                )}
+                {/* Its own section: window state only, never saved (performer-behavior.md 7.5) */}
                 <Section
-                    title={t("view3d.settings.graphicsSection")}
-                    hint={t("view3d.settings.graphicsHint")}
+                    title={t("view3d.settings.previewSection")}
+                    hint={t("view3d.settings.previewHint")}
+                    testId="view3d-preview-section"
                 >
-                    {!HAS_SETTINGS_WINDOW && (
-                        <>
-                            <QualityRow />
-                            <ResolutionRow />
-                        </>
-                    )}
                     <HornStateRow />
                     <GuardEquipmentRow />
                     <StepOffFootRow />
@@ -119,14 +123,16 @@ export function SettingsPanel({
 function Section({
     title,
     hint,
+    testId,
     children,
 }: {
     title: string;
     hint?: string;
+    testId?: string;
     children: ReactNode;
 }) {
     return (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-8" data-testid={testId}>
             <div className="flex flex-col gap-2">
                 <h3 className="text-sub text-text/60 font-mono tracking-wide uppercase">
                     {title}
@@ -389,87 +395,56 @@ function ResolutionRow() {
 
 /** Which hold the brass plays: a test control until per-page horn states exist. */
 function HornStateRow() {
-    const { t } = useTranslate();
+    // Every carrier in one hold, to check the poses; "Follow cues", the Horn cues decide
     const state = useView3dSceneStore((s) => s.hornState);
     const setState = useView3dSceneStore((s) => s.setHornState);
     return (
-        <Row label={t("view3d.settings.hornState")} stacked>
-            <Segmented
-                value={state}
-                options={HOLD_STATES.map((value) => ({
-                    value,
-                    label: t(`view3d.settings.hornStateMode.${value}`),
-                }))}
-                onChange={setState}
-                label={t("view3d.settings.hornState")}
-                testId="view3d-horn-state-picker"
-            />
-            <p className="text-sub text-text/60">
-                {t("view3d.settings.hornStateHint")}
-            </p>
-        </Row>
+        <PreviewRow
+            name="hornState"
+            value={state}
+            values={HOLD_STATES}
+            onChange={setState}
+            testId="view3d-horn-state-picker"
+        />
     );
 }
 
-const GUARD_CHOICES: readonly GuardEquipment[] = [
-    "section",
-    ...GUARD_EQUIPMENT,
-];
-
-/** What the guard carries: each section's own, or one piece for all, to see the others. */
+/** One piece in every guard member's hands, to see it; off, each section's own. */
 function GuardEquipmentRow() {
-    const { t } = useTranslate();
     const equipment = useView3dSceneStore((s) => s.guardEquipment);
     const setEquipment = useView3dSceneStore((s) => s.setGuardEquipment);
     return (
-        <Row label={t("view3d.settings.guardEquipment")} stacked>
-            <Segmented
-                value={equipment}
-                options={GUARD_CHOICES.map((value) => ({
-                    value,
-                    label: t(`view3d.settings.guardEquipmentMode.${value}`),
-                }))}
-                onChange={setEquipment}
-                label={t("view3d.settings.guardEquipment")}
-                testId="view3d-guard-equipment-picker"
-                className="grid! grid-cols-3 [&>*]:justify-start"
-            />
-            <p className="text-sub text-text/60">
-                {t("view3d.settings.guardEquipmentHint")}
-            </p>
-        </Row>
+        <PreviewRow
+            name="guardEquipment"
+            value={equipment}
+            values={GUARD_EQUIPMENT}
+            onChange={setEquipment}
+            testId="view3d-guard-equipment-picker"
+            className="grid! grid-cols-3 [&>*]:justify-start"
+        />
     );
 }
 
 /**
- * Which foot the band steps off on, always the performer's own: the show's
- * saved default, or an unsaved preview of the other foot. Choosing the
- * show's foot again drops the preview.
+ * Which foot the band steps off on, always the performer's own; off, the
+ * show's saved foot (named in the hint) and the Feet cues decide.
  */
 function StepOffFootRow() {
     const { t } = useTranslate();
     const override = useView3dSceneStore((s) => s.stepOffFoot);
     const setOverride = useView3dSceneStore((s) => s.setStepOffFoot);
     const showFoot = useShowPerformerDefaults().stepOffFoot;
-    const foot = override ?? showFoot;
-    const setFoot = (value: "left" | "right") =>
-        setOverride(value === showFoot ? null : value);
     return (
-        <Row label={t("view3d.settings.stepOffFoot")} stacked>
-            <Segmented
-                value={foot}
-                options={(["left", "right"] as const).map((value) => ({
-                    value,
-                    label: t(`view3d.settings.stepOffFootMode.${value}`),
-                }))}
-                onChange={setFoot}
-                label={t("view3d.settings.stepOffFoot")}
-                testId="view3d-step-off-foot-picker"
-            />
-            <p className="text-sub text-text/60">
-                {t("view3d.settings.stepOffFootHint")}
-            </p>
-        </Row>
+        <PreviewRow
+            name="stepOffFoot"
+            value={override}
+            values={["left", "right"] as const}
+            onChange={setOverride}
+            testId="view3d-step-off-foot-picker"
+            hint={t("view3d.settings.stepOffFootHint", {
+                foot: t(`view3d.settings.stepOffFootMode.${showFoot}`),
+            })}
+        />
     );
 }
 
@@ -506,5 +481,57 @@ function ShortcutList() {
                 </div>
             ))}
         </dl>
+    );
+}
+
+/** "Follow cues", the segmented controls' value for no preview override. */
+const FOLLOW = "follow";
+type Follow = typeof FOLLOW;
+
+/**
+ * A preview override's control: "Follow cues" (null, the start) or one of
+ * `values`. Window state only, never saved (performer-behavior.md 7.5).
+ */
+function PreviewRow<T extends string>({
+    name,
+    value,
+    values,
+    onChange,
+    testId,
+    className,
+    hint,
+}: {
+    /** `view3d.settings.<name>`, `<name>Mode.<value>` and `<name>Hint`. */
+    name: "hornState" | "guardEquipment" | "stepOffFoot";
+    value: T | null;
+    values: readonly T[];
+    onChange: (value: T | null) => void;
+    testId: string;
+    className?: string;
+    /** In place of `<name>Hint`. */
+    hint?: string;
+}) {
+    const { t } = useTranslate();
+    const label = t(`view3d.settings.${name}`);
+    return (
+        <Row label={label} stacked>
+            <Segmented<T | Follow>
+                value={value ?? FOLLOW}
+                options={[
+                    { value: FOLLOW, label: t("view3d.settings.followCues") },
+                    ...values.map((v) => ({
+                        value: v,
+                        label: t(`view3d.settings.${name}Mode.${v}`),
+                    })),
+                ]}
+                onChange={(next) => onChange(next === FOLLOW ? null : next)}
+                label={label}
+                testId={testId}
+                className={className}
+            />
+            <p className="text-sub text-text/60">
+                {hint ?? t(`view3d.settings.${name}Hint`)}
+            </p>
+        </Row>
     );
 }

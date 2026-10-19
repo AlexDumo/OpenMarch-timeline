@@ -2501,6 +2501,48 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
 });
 
 /**
+ * The start flag on a read-only timeline (Visuals mode, performer-behavior.md section 7.1): the
+ * same stem and pennant as `TimelineSelectionRange`'s flag, with no handles and no window. Play
+ * starts here, so it shows though nothing on that timeline drags it.
+ */
+export const TimelineStartFlagMark = memo(function TimelineStartFlagMark({
+    beat,
+    pixelsPerBeat,
+    height,
+}: {
+    /** View beats */
+    beat: number;
+    pixelsPerBeat: number;
+    height: number;
+}) {
+    // Whole pixels, so the stem and the pennant blur on the same pixels
+    const x = Math.round(beatToX(beat, pixelsPerBeat));
+    return (
+        // The 2px stem, with the pennant flush on its left edge
+        <div
+            data-testid="timeline-start-flag-mark"
+            data-beat={beat}
+            title="Start flag: Play starts here"
+            className={clsx(
+                "pointer-events-none absolute top-0 z-40 w-[2px] -translate-x-1/2",
+                START_INK.bg,
+            )}
+            style={{ left: x, height }}
+        >
+            <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                aria-hidden="true"
+                className={clsx("absolute top-0 left-0", START_INK.text)}
+            >
+                <path d="M0 0 L12 0 L0 12 Z" fill="currentColor" />
+            </svg>
+        </div>
+    );
+});
+
+/**
  * Rehearsal marks as tabs in the measure row (UI-12; they sat on the waveform lane before), in
  * place of their measure's number. Clicking one seeks there. Thinned like the measure numbers, so
  * they don't pile up when zoomed out.
