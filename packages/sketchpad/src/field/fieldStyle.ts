@@ -1,4 +1,9 @@
-import { FieldProperties, fieldSvg, type FieldTheme } from "@openmarch/core";
+import {
+    FieldProperties,
+    fieldSvg,
+    svgNum,
+    type FieldTheme,
+} from "@openmarch/core";
 import type {
     FieldColors,
     FieldPropertiesJson,
@@ -141,8 +146,10 @@ export function fieldUnderlayMarkup(snapshot: FieldSnapshot): string {
         },
     });
     const { xPixels, yPixels } = fp.centerFrontPoint;
-    const opacity = style.opacity < 1 ? ` opacity="${style.opacity}"` : "";
-    return `<g data-om-field="1" transform="translate(${-xPixels} ${-yPixels})"${opacity}>${markup}</g>`;
+    // The snapshot comes from a file: only numbers reach the markup
+    const opacity = Math.min(1, Math.max(0, Number(style.opacity) || 0));
+    const opacityAttr = opacity < 1 ? ` opacity="${svgNum(opacity)}"` : "";
+    return `<g data-om-field="1" transform="translate(${-xPixels} ${-yPixels})"${opacityAttr}>${markup}</g>`;
 }
 
 /** A standalone SVG document of the field over `bounds` (scene units) */
