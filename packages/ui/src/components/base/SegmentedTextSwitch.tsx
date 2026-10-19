@@ -53,7 +53,7 @@ export function SegmentedTextSwitch({
                     className={clsx(
                         "border-stroke/0 text-text-subtitle font border text-xs font-thin",
                         "rounded-full px-6 py-2 transition-all duration-150 ease-out outline-none",
-                        "focus-visible:ring-accent-foreground focus-visible:ring-2 focus-visible:ring-offset-2",
+                        "focus-visible:ring-accent focus-visible:ring-offset-bg-1 focus-visible:ring-2 focus-visible:ring-offset-1",
                         "data-[state=on]:text-text data-[state=on]:bg-fg-2 data-[state=on]:border-accent",
                         "disabled:cursor-not-allowed disabled:opacity-60",
                         "hover:text-accent",
