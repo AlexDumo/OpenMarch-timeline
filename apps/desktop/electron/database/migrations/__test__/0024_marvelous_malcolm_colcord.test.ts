@@ -32,6 +32,10 @@ import {
 const ITEMS_MIGRATION = migrationAt(24);
 const LIBRARY_ITEM = "11111111-1111-4111-8111-111111111111";
 const ITEM_TABLES = ["item_geometry", "items"];
+/** `0024_demonic_scream`, the Shape tool's migration on lab builds of #181 */
+const SHAPE_LAB_MIGRATION_MS = 1792165936156;
+/** The date fork builds gave this migration before it was re-dated */
+const EARLIER_FORK_DATE = 1792162434076;
 
 const count = (db: DatabaseSync, table: string) =>
     Number(
@@ -177,6 +181,58 @@ describe(`Migration ${ITEMS_MIGRATION.tag}`, () => {
             expect(
                 db.prepare("SELECT DISTINCT type FROM marchers").all(),
             ).toEqual([{ type: "marcher" }]);
+            insertItems(db);
+            expect(count(db, "items")).toBe(2);
+        });
+    });
+
+    it("runs again on a file that took it under an earlier date, keeping its items", async () => {
+        await open(showPath);
+        // A fork build gave this migration an earlier date, and the file has nothing newer
+        rollBackMigrationsFrom(showPath, ITEMS_MIGRATION.idx + 1);
+        withDb(showPath, (db) => {
+            insertItems(db);
+            db.prepare(
+                "UPDATE __drizzle_migrations SET created_at = ? WHERE created_at = ?",
+            ).run(EARLIER_FORK_DATE, ITEMS_MIGRATION.when);
+        });
+
+        await open(showPath);
+
+        withDb(showPath, (db) => {
+            expect(count(db, "items")).toBe(2);
+            expect(count(db, "item_geometry")).toBe(2);
+            expect(marcherColumns(db).filter((c) => c === "type")).toHaveLength(
+                1,
+            );
+            expect(
+                db
+                    .prepare(
+                        "SELECT count(*) AS n FROM __drizzle_migrations WHERE created_at = ?",
+                    )
+                    .get(ITEMS_MIGRATION.when),
+            ).toEqual({ n: 1 });
+        });
+    });
+
+    it("comes to a file that took the Shape tool's lab migration (#181) first", async () => {
+        expect(ITEMS_MIGRATION.when).toBeGreaterThan(SHAPE_LAB_MIGRATION_MS);
+        await open(showPath);
+        rollBackMigrationsFrom(showPath, ITEMS_MIGRATION.idx);
+        withDb(showPath, (db) =>
+            db
+                .prepare(
+                    "INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('0024_demonic_scream', ?)",
+                )
+                .run(SHAPE_LAB_MIGRATION_MS),
+        );
+
+        await open(showPath);
+
+        withDb(showPath, (db) => {
+            for (const table of ITEM_TABLES)
+                expect(tableNames(db)).toContain(table);
+            expect(marcherColumns(db)).toContain("type");
             insertItems(db);
             expect(count(db, "items")).toBe(2);
         });

@@ -57,6 +57,7 @@ async function itemChangesInTransaction(
             return {
                 id: r.id,
                 beat: ordinal.get(r.beat_id)!,
+                rank: r.beat_rank,
                 state: r.state as PlacementChange["state"],
                 holders: own
                     .filter((m) => m.role === "holder")

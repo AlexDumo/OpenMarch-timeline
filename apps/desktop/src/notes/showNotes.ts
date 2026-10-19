@@ -14,7 +14,6 @@ import {
     crewOutOfReach,
     handConflicts,
     putDownDrifts,
-    type ItemOrigin,
     type PlacementChange,
     type XY,
 } from "@openmarch/core";
@@ -50,7 +49,6 @@ export interface NoteItem {
     /** The item's `marchers` row, which the resolver positions */
     marcherId: number;
     kind: "prop" | "equipment";
-    origin?: ItemOrigin;
 }
 
 export interface ShowNotesInput {
@@ -82,17 +80,22 @@ interface PlacedSpan {
     crew: readonly number[];
 }
 
-/** The spans an item is placed, from each placed change (or a created item's start) to the next. */
+/**
+ * The spans an item is placed, from each placed change (or the show's start, before its first
+ * change: an item from a flag has an explicit held change there) to the next.
+ */
 function placedSpans(
     changes: readonly PlacementChange[],
-    origin: ItemOrigin | undefined,
     beatCount: number,
 ): PlacedSpan[] {
-    const sorted = [...changes].sort((a, b) => a.beat - b.beat || a.id - b.id);
+    const sorted = [...changes].sort(
+        (a, b) =>
+            a.beat - b.beat || (a.rank ?? 0) - (b.rank ?? 0) || a.id - b.id,
+    );
     const spans: PlacedSpan[] = [];
     const last = beatCount - 1;
     const firstBeat = sorted[0]?.beat ?? beatCount;
-    if ((origin?.kind ?? "created") === "created" && firstBeat > 0)
+    if (firstBeat > 0)
         spans.push({ from: 0, to: Math.min(firstBeat - 1, last), crew: [] });
     sorted.forEach((c, i) => {
         // Only the newest change on a beat counts
@@ -109,17 +112,17 @@ function handConflictNotes(input: ShowNotesInput): ShowNote[] {
     return handConflicts(
         input.items.map((item) => ({
             itemId: item.id,
-            origin: item.origin,
             changes: input.changesByItem.get(item.id) ?? [],
         })),
     ).map(
         (c): ShowNote => ({
-            id: `hand_conflict:${c.itemId}:${c.byItemId}:${c.marcherId}:${c.side}:${c.from ?? "start"}`,
+            // byItemId null: the performer's Carry equipment has the hand
+            id: `hand_conflict:${c.itemId}:${c.byItemId ?? "carry"}:${c.marcherId}:${c.side}:${c.from ?? "start"}`,
             kind: "hand_conflict",
             itemId: c.itemId,
             beat: c.from ?? 0,
             until: c.until,
-            otherItemId: c.byItemId,
+            otherItemId: c.byItemId ?? undefined,
             marcherIds: [c.marcherId],
         }),
     );
@@ -128,7 +131,7 @@ function handConflictNotes(input: ShowNotesInput): ShowNote[] {
 function crewNotes(input: ShowNotesInput, item: NoteItem): ShowNote[] {
     const notes: ShowNote[] = [];
     const changes = input.changesByItem.get(item.id) ?? [];
-    for (const span of placedSpans(changes, item.origin, input.beatCount)) {
+    for (const span of placedSpans(changes, input.beatCount)) {
         if (span.crew.length > 0) {
             // Crew distance: from the first count a crew member is out of reach
             for (let beat = span.from; beat <= span.to; beat++) {
@@ -184,7 +187,6 @@ function crewNotes(input: ShowNotesInput, item: NoteItem): ShowNote[] {
 function driftNotes(input: ShowNotesInput, item: NoteItem): ShowNote[] {
     return putDownDrifts(
         input.changesByItem.get(item.id) ?? [],
-        item.origin ?? { kind: "created" },
         item.marcherId,
         input.positionAt,
     ).map(

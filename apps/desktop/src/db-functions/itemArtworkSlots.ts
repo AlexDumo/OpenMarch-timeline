@@ -7,6 +7,9 @@
  * (`assignmentAt`, `slotAssignmentsAt`, `dormantAssignments`, `slotsForItem`) are pure, in
  * `@openmarch/core`; `toArtworkAssignments` maps rows to their input.
  *
+ * An assignment names an Artwork Version the show has embedded (`library_items`); one it doesn't
+ * hold is refused, so a slot never points at nothing.
+ *
  * Rows are stored by slot id and never rewritten when an item's slots change, so an assignment
  * whose slot an update drops stays here, dormant, and is live again on revert. That is also why
  * nothing here checks the slot against the item's model: dormant rows are allowed by design.
@@ -21,6 +24,10 @@ import {
     type LibraryVersionRef,
 } from "@openmarch/core";
 import { schema } from "@/global/database/db";
+import {
+    ARTWORK_SLOT_ID_RULE,
+    isArtworkSlotId,
+} from "@om-electron/database/migrations/artworkSlotId";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 
@@ -71,15 +78,12 @@ const toDatabaseArtworkSlot = (
     updatedAt: row.updated_at,
 });
 
-const SLOT_ID = /^[A-Za-z0-9_]{1,64}$/;
 const PAD_COLOR = /^#[0-9a-f]{6}$/;
 
 /** The row values for an assignment. Throws on a value the table would refuse. */
 const assignmentValues = (slot: string, assignment: ArtworkAssignmentArgs) => {
-    if (!SLOT_ID.test(slot))
-        throw new Error(
-            `Slot id "${slot}" must be 1 to 64 letters, digits or underscores`,
-        );
+    if (!isArtworkSlotId(slot))
+        throw new Error(`Slot id "${slot}" must be ${ARTWORK_SLOT_ID_RULE}`);
     const pan = assignment.pan ?? { x: 0, y: 0 };
     for (const v of [pan.x, pan.y])
         if (!Number.isFinite(v) || v < -1 || v > 1)
@@ -97,9 +101,35 @@ const assignmentValues = (slot: string, assignment: ArtworkAssignmentArgs) => {
     };
 };
 
+/** Throws unless the show has `artwork` embedded as an Artwork Version. */
+const assertEmbeddedArtwork = async (
+    tx: DbTransaction,
+    artwork: LibraryVersionRef | null,
+) => {
+    if (!artwork) return;
+    const row = await tx
+        .select({ kind: schema.library_items.kind })
+        .from(schema.library_items)
+        .where(
+            and(
+                eq(schema.library_items.item_id, artwork.itemId),
+                eq(schema.library_items.version_hash, artwork.versionHash),
+            ),
+        )
+        .get();
+    if (!row)
+        throw new Error(
+            `The show doesn't hold Artwork ${artwork.itemId} at Version ${artwork.versionHash}: embed it first`,
+        );
+    if (row.kind !== "artwork")
+        throw new Error(
+            `Library item ${artwork.itemId} is a ${row.kind}, not an Artwork`,
+        );
+};
+
 /**
  * Sets what sits on an item slot from a beat on: adds a change on that beat, or replaces the one
- * already there in place, so undo restores the same row.
+ * already there in place, so undo restores the same row. The Artwork must be embedded in the show.
  */
 export async function setItemArtworkSlotInTransaction({
     tx,
@@ -115,6 +145,7 @@ export async function setItemArtworkSlotInTransaction({
     assignment: ArtworkAssignmentArgs;
 }): Promise<DatabaseItemArtworkSlot> {
     const values = assignmentValues(slot, assignment);
+    await assertEmbeddedArtwork(tx, assignment.artwork);
     const existing = await tx
         .select({ id: schema.item_artwork_slots.id })
         .from(schema.item_artwork_slots)

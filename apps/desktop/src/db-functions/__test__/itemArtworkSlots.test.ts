@@ -19,6 +19,9 @@ import {
     toArtworkAssignments,
 } from "../itemArtworkSlots";
 import { deleteBeatsCarryingCues } from "../beat";
+import { readShowTiming } from "@/timeline/showTiming";
+import { _replaceAllBeatObjects } from "@/components/timeline/audio/EditableAudioPlayerUtils";
+import Measure from "@/global/classes/Measure";
 
 const BANNER = {
     itemId: "11111111-1111-4111-8111-111111111111",
@@ -67,8 +70,27 @@ const item = (
 const rows = async (db: DbConnection) =>
     (await db.select({ c: count() }).from(schema.item_artwork_slots).get())?.c;
 
-/** Timeline mode, a no-model riser and a panel model prop created on beat 2. */
+/** Embeds an Artwork Version in the show, as the Library does before it is assigned. */
+const embedArtwork = (db: DbConnection, ref: typeof BANNER, name: string) =>
+    db
+        .insert(schema.library_items)
+        .values({
+            item_id: ref.itemId,
+            version_hash: ref.versionHash,
+            kind: "artwork",
+            name,
+            parts: "{}",
+            metadata: "{}",
+        })
+        .run();
+
+/**
+ * Timeline mode, a no-model riser and a panel model prop created on beat 2, and the show's
+ * Banner and Sunset Artworks.
+ */
 const setUp = async (db: DbConnection) => {
+    await embedArtwork(db, BANNER, "Banner");
+    await embedArtwork(db, SUNSET, "Sunset");
     const beats = await beatsInOrder(db);
     const beat = (n: number) => beats[n]!.id;
     const [riser, panel] = await createItems({
@@ -190,6 +212,56 @@ describeDbTests("itemArtworkSlots", (it) => {
                 }),
             ).rejects.toThrow();
             expect(await rows(db)).toBe(0);
+        });
+
+        it("refuses an Artwork Version the show doesn't hold, or a Library item that isn't an Artwork", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            expect(marchersAndPages).toBeDefined();
+            const { beat, riser } = await setUp(db);
+            const assign = (artwork: typeof BANNER) =>
+                assignItemArtworkSlot({
+                    db,
+                    itemId: riser.id,
+                    slot: "top",
+                    beatId: beat(4),
+                    assignment: { artwork },
+                });
+            await expect(
+                assign({ ...BANNER, versionHash: "e".repeat(64) }),
+            ).rejects.toThrow(/doesn't hold/);
+            await db
+                .insert(schema.library_items)
+                .values({
+                    item_id: PANEL,
+                    version_hash: PANEL_V1,
+                    kind: "model",
+                    name: "Panel",
+                    parts: "{}",
+                    metadata: "{}",
+                })
+                .run();
+            await expect(
+                assign({ itemId: PANEL, versionHash: PANEL_V1 }),
+            ).rejects.toThrow(/not an Artwork/);
+            expect(await rows(db)).toBe(0);
+        });
+
+        it("takes the Blender add-on's dashed slot ids", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            expect(marchersAndPages).toBeDefined();
+            const { beat, panel } = await setUp(db);
+            const change = await setItemArtworkSlot({
+                db,
+                itemId: panel.id,
+                slot: "front-panel",
+                beatId: beat(4),
+                assignment: { artwork: BANNER },
+            });
+            expect(change.slot).toBe("front-panel");
         });
 
         it("undoes and redoes a change in one step", async ({
@@ -484,5 +556,62 @@ describeDbTests("itemArtworkSlots", (it) => {
             [riser.id, "front", beat(5), BANNER.itemId],
             [riser.id, "top", beat(5), BANNER.itemId],
         ]);
+    });
+
+    it("keeps slot assignments at their times when a tempo edit replaces every beat", async ({
+        db,
+        marchersAndPages,
+    }) => {
+        expect(marchersAndPages).toBeDefined();
+        const { beat, riser } = await setUp(db);
+        for (const [slot, n, artwork] of [
+            ["top", 4, BANNER],
+            ["top", 9, SUNSET],
+            ["front", 6, BANNER],
+        ] as const)
+            await setItemArtworkSlot({
+                db,
+                itemId: riser.id,
+                slot,
+                beatId: beat(n),
+                assignment: { artwork },
+            });
+        const times = async () => {
+            const { beats } = await readShowTiming(db);
+            const at = new Map(beats.map((b) => [b.id, b.timestamp]));
+            return (await getItemArtworkSlots({ db })).map((a) => [
+                a.slot,
+                at.get(a.beatId),
+                a.artwork?.itemId,
+            ]);
+        };
+        const before = await times();
+
+        // Twice the tempo over the same time
+        const { beats: oldBeats, pages } = await readShowTiming(db);
+        const total = oldBeats.reduce((t, b) => t + b.duration, 0);
+        await _replaceAllBeatObjects({
+            newBeats: Array.from(
+                { length: Math.round(total / 0.25) },
+                (_, i) => ({
+                    id: -1 - i,
+                    position: 0,
+                    index: 0,
+                    duration: 0.25,
+                    timestamp: 0.25 * i,
+                    includeInMeasure: true,
+                    notes: null,
+                }),
+            ),
+            oldBeats: [...oldBeats],
+            newMeasures: [],
+            oldMeasures: (await db.select().from(schema.measures).all()).map(
+                (m) => ({ id: m.id }) as unknown as Measure,
+            ),
+            pages: [...pages],
+        });
+
+        expect(await rows(db)).toBe(3);
+        expect(await times()).toEqual(before);
     });
 });

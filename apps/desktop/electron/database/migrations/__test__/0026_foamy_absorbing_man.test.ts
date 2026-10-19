@@ -1,7 +1,8 @@
 // @vitest-environment node
 /**
  * Migration 0026 adds Artwork slot assignments (props-spec section 4, ADR 0002 D-10): the
- * beat-keyed `item_artwork_slots`. A new table only.
+ * beat-keyed `item_artwork_slots`. A new table only, `IF NOT EXISTS` so the migration can run
+ * twice. Slot ids are letters, digits, underscores or dashes (`artworkSlotId.ts`).
  * It comes after `0020_drop_page_era`, so a timeline file takes it on open and a page-era file
  * takes it in its conversion; it needs no `user_version` bump.
  */
@@ -30,6 +31,10 @@ import {
 
 const SLOTS_MIGRATION = migrationAt(26);
 const ARTWORK_ID = "11111111-1111-4111-8111-111111111111";
+/** `0024_demonic_scream`, the Shape tool's migration on lab builds of #181 */
+const SHAPE_LAB_MIGRATION_MS = 1792165936156;
+/** The date fork builds gave this migration before it was re-dated */
+const EARLIER_FORK_DATE = 1792169561480;
 const ARTWORK_HASH = "a".repeat(64);
 
 type Row = Record<string, string | number | null>;
@@ -158,6 +163,45 @@ describe(`Migration ${SLOTS_MIGRATION.tag}`, () => {
         });
     });
 
+    it("runs again on a file that took it under an earlier date, keeping its rows", async () => {
+        await open(showPath);
+        rollBackMigrationsFrom(showPath, SLOTS_MIGRATION.idx + 1);
+        const rows = withDb(showPath, (db) => {
+            insertAssignments(db);
+            db.prepare(
+                "UPDATE __drizzle_migrations SET created_at = ? WHERE created_at = ?",
+            ).run(EARLIER_FORK_DATE, SLOTS_MIGRATION.when);
+            return count(db, "item_artwork_slots");
+        });
+
+        await open(showPath);
+
+        withDb(showPath, (db) =>
+            expect(count(db, "item_artwork_slots")).toBe(rows),
+        );
+    });
+
+    it("comes to a file that took the Shape tool's lab migration (#181) first", async () => {
+        expect(SLOTS_MIGRATION.when).toBeGreaterThan(SHAPE_LAB_MIGRATION_MS);
+        await open(showPath);
+        // A file from before the props migrations that a lab build of #181 opened
+        rollBackMigrationsFrom(showPath, SLOTS_MIGRATION.idx - 2);
+        withDb(showPath, (db) =>
+            db
+                .prepare(
+                    "INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('0024_demonic_scream', ?)",
+                )
+                .run(SHAPE_LAB_MIGRATION_MS),
+        );
+
+        await open(showPath);
+
+        withDb(showPath, (db) => {
+            expect(hasSlots(db)).toBe(true);
+            insertAssignments(db);
+        });
+    });
+
     describe("constraints", () => {
         let db: DatabaseSync;
         beforeEach(async () => {
@@ -186,6 +230,8 @@ describe(`Migration ${SLOTS_MIGRATION.tag}`, () => {
             ["no slot", { slot: null }],
             ["an empty slot", { slot: "" }],
             ["a slot with a space", { slot: "front panel" }],
+            ["a slot with a dot", { slot: "panel.001" }],
+            ["a slot with a bracket", { slot: "front]" }],
             ["a slot over 64 characters", { slot: "s".repeat(65) }],
             ["an Artwork id with no Version", { library_version_hash: null }],
             ["a Version with no Artwork id", { library_item_id: null }],
@@ -218,6 +264,7 @@ describe(`Migration ${SLOTS_MIGRATION.tag}`, () => {
             ["fitted with a pad color", { fit: "fit", pad_color: "#00ff7f" }],
             ["panned to both corners", { pan_x: -1, pan_y: 1 }],
             ["a model's slot id", { slot: "Panel_L2" }],
+            ["the Blender add-on's dashed slot id", { slot: "front-panel" }],
             [
                 "leaving the slot bare",
                 { library_item_id: null, library_version_hash: null },

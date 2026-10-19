@@ -1,4 +1,4 @@
-CREATE TABLE `item_geometry` (
+CREATE TABLE IF NOT EXISTS `item_geometry` (
 	`id` integer PRIMARY KEY NOT NULL,
 	`item_id` integer NOT NULL,
 	`beat_id` integer NOT NULL,
@@ -22,9 +22,9 @@ CREATE TABLE `item_geometry` (
 	CONSTRAINT "item_geometry_rolls_out_check" CHECK((rolls_out = 0 AND leading_edge IS NULL) OR (rolls_out = 1 AND leading_edge IS NOT NULL AND leading_edge IN ('front', 'back', 'left', 'right')))
 );
 --> statement-breakpoint
-CREATE INDEX `item_geometry_beat_id_idx` ON `item_geometry` (`beat_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `item_geometry_item_beat_unique` ON `item_geometry` (`item_id`,`beat_id`);--> statement-breakpoint
-CREATE TABLE `items` (
+CREATE INDEX IF NOT EXISTS `item_geometry_beat_id_idx` ON `item_geometry` (`beat_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS `item_geometry_item_beat_unique` ON `item_geometry` (`item_id`,`beat_id`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `items` (
 	`id` integer PRIMARY KEY NOT NULL,
 	`marcher_id` integer NOT NULL,
 	`kind` text NOT NULL,
@@ -39,9 +39,13 @@ CREATE TABLE `items` (
 	CONSTRAINT "items_library_check" CHECK((library_item_id IS NULL AND library_version_hash IS NULL) OR (library_item_id IS NOT NULL AND library_version_hash IS NOT NULL AND length(library_item_id) = 36 AND length(library_version_hash) = 64))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `items_marcher_id_unique` ON `items` (`marcher_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS `items_marcher_id_unique` ON `items` (`marcher_id`);--> statement-breakpoint
 -- Marcher type (props-spec section 4). Hand-edited from drizzle-kit's `__new_marchers` rebuild,
 -- whose INSERT ... SELECT copied `type` from a table that doesn't have it yet. ADD COLUMN leaves
 -- `marchers` and every row that references it untouched; the named CHECK matches the snapshot,
 -- so `drizzle-kit generate` stays a no-op. Existing rows are performers.
+-- Safe to run twice: the tables and indexes above are IF NOT EXISTS, and the migration runners
+-- skip an ADD COLUMN the table already has (`addColumnGuard.ts`). It is dated after the Shape
+-- tool's lab migration, so a lab file that took that one still takes this, and a file a fork
+-- build gave this migration under its earlier date takes it again unharmed.
 ALTER TABLE `marchers` ADD COLUMN `type` text DEFAULT 'marcher' NOT NULL CONSTRAINT "marchers_type_check" CHECK(type IN ('marcher', 'item'));

@@ -253,11 +253,7 @@ async function openWithSuspension(
             };
         }
 
-        // A timeline file (or one just converted, which has nothing pending).
-        const migrator = new DrizzleMigrationService(getOrm(db), db);
-        if (migrator.hasPendingMigrations(deps.migrationsFolder))
-            deps.beforeMigrations?.(filePath);
-        await migrator.applyPendingMigrations(deps.migrationsFolder);
+        await migrateTimelineFile(filePath, db, deps);
         keepOpen = true;
         return { status: 200, db, sqlSuspension };
     } finally {
@@ -336,4 +332,35 @@ export function resumeSqlProxyAfterReload(
         const timer = setTimeout(resume, fallbackMs);
         webContents.once("did-navigate", resume);
     });
+}
+
+/** A timeline file (or one just converted, which has nothing pending): migrate, then its floor. */
+async function migrateTimelineFile(
+    filePath: string,
+    db: DatabaseSync,
+    deps: OpenShowDeps,
+): Promise<void> {
+    const migrator = new DrizzleMigrationService(getOrm(db), db);
+    if (migrator.hasPendingMigrations(deps.migrationsFolder))
+        deps.beforeMigrations?.(filePath);
+    await migrator.applyPendingMigrations(deps.migrationsFolder);
+    await convertFieldImage(db);
+}
+
+/**
+ * Makes a legacy field image the show's floor and writes the floor-model version (ADR 0002
+ * D-23). Loaded on demand, like the page converter. A failure never stops the open: the file is
+ * left as it was, and the next open tries again.
+ */
+async function convertFieldImage(db: DatabaseSync): Promise<void> {
+    try {
+        const [{ convertFieldImageOnOpen }, { floorFromFieldImage }] =
+            await Promise.all([
+                import("../database/convertFieldImage"),
+                import("./floor/fieldImageFloor"),
+            ]);
+        await convertFieldImageOnOpen(db, { makeFloor: floorFromFieldImage });
+    } catch (error) {
+        console.error("Couldn't convert the field image on open", error);
+    }
 }

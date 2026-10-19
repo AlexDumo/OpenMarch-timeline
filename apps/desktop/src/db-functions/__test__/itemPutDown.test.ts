@@ -77,7 +77,6 @@ const driftsOf = async (
         toPlacementChanges(await getItemPlacements({ db }), ordinal).get(
             itemId,
         ) ?? [],
-        { kind: "created" },
         marcherId,
         await positionAt(db),
     );

@@ -11,6 +11,7 @@
 import { z } from "zod";
 import type { ModelKind } from "@/view3d/core/sizes";
 import { GARMENT_BODY_TYPES, MODEL_KINDS } from "./rules";
+import { ARTWORK_SLOT_ID } from "../../database/migrations/artworkSlotId";
 
 export type { ModelKind };
 
@@ -326,7 +327,8 @@ export const AttachPointSchema = z.object({
 export type AttachPoint = z.infer<typeof AttachPointSchema>;
 
 export const ArtworkSlotSchema = z.object({
-    id: z.string().min(1),
+    /** 1 to 64 letters, digits, underscores or dashes, as the show file keeps it */
+    id: z.string().regex(ARTWORK_SLOT_ID),
     widthM: z.number().positive(),
     heightM: z.number().positive(),
     /** Where the slot is in the normalized GLB, by index. */

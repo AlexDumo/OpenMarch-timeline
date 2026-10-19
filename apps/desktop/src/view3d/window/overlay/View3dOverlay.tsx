@@ -6,7 +6,9 @@
  *   under them when open;
  * - top right: fullscreen and the settings button, with the settings panel
  *   under them when open;
- * - bottom left: playback controls, then the readout.
+ * - bottom left: playback controls, then the readout;
+ * - bottom right: why the view went to low quality, when it did on its own
+ *   (`QualityNotice.tsx`).
  *
  * In fullscreen, everything but the readout hides after 3 s without pointer
  * movement (not while the settings panel is open), and the readout grows.
@@ -31,6 +33,7 @@ import { CamerasPanel } from "./CamerasPanel";
 import { Panel, ToggleButton } from "./Panel";
 import { HELD_PLAYBACK_ACTIONS, playbackActionForKey } from "./playback";
 import type { View3dPlaybackAction } from "@/view3d/sync/protocol";
+import { QualityNotice } from "./QualityNotice";
 import { Readout } from "./Readout";
 import { SettingsPanel } from "./SettingsPanel";
 import { TransportBar } from "./TransportBar";
@@ -280,6 +283,9 @@ export default function View3dOverlay() {
                     <TransportBar />
                 </div>
                 <Readout large={isFullscreen} />
+                <div className="ml-auto">
+                    <QualityNotice />
+                </div>
             </div>
         </div>
     );

@@ -1,8 +1,8 @@
 {
     "version": "6",
     "dialect": "sqlite",
-    "id": "ad09f219-2b7d-41ed-96ca-d9ce3846bb30",
-    "prevId": "5399df32-f902-413b-b7e5-b30fd922f724",
+    "id": "087ae8cf-5c77-491b-a963-2bfa26d0b87b",
+    "prevId": "7f87e223-f1f5-46ca-b8b0-feaf92f8630d",
     "tables": {
         "audio_files": {
             "name": "audio_files",
@@ -666,7 +666,7 @@
             "checkConstraints": {
                 "item_artwork_slots_slot_check": {
                     "name": "item_artwork_slots_slot_check",
-                    "value": "slot IS NOT NULL AND length(slot) BETWEEN 1 AND 64 AND slot NOT GLOB '*[^A-Za-z0-9_]*'"
+                    "value": "slot IS NOT NULL AND length(slot) BETWEEN 1 AND 64 AND slot NOT GLOB '*[^A-Za-z0-9_-]*'"
                 },
                 "item_artwork_slots_library_check": {
                     "name": "item_artwork_slots_library_check",
@@ -962,9 +962,24 @@
                     "notNull": true,
                     "autoincrement": false
                 },
+                "beat_rank": {
+                    "name": "beat_rank",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "autoincrement": false,
+                    "default": 0
+                },
                 "group_id": {
                     "name": "group_id",
                     "type": "integer",
+                    "primaryKey": false,
+                    "notNull": false,
+                    "autoincrement": false
+                },
+                "ripple_json": {
+                    "name": "ripple_json",
+                    "type": "text",
                     "primaryKey": false,
                     "notNull": false,
                     "autoincrement": false
@@ -1030,9 +1045,13 @@
                     "name": "item_placements_state_check",
                     "value": "state IN ('held', 'placed', 'off_field')"
                 },
-                "item_placements_group_id_check": {
-                    "name": "item_placements_group_id_check",
-                    "value": "group_id IS NULL OR (typeof(group_id) = 'integer' AND group_id >= 1)"
+                "item_placements_beat_rank_check": {
+                    "name": "item_placements_beat_rank_check",
+                    "value": "typeof(beat_rank) = 'integer'"
+                },
+                "item_placements_group_check": {
+                    "name": "item_placements_group_check",
+                    "value": "(group_id IS NULL AND ripple_json IS NULL) OR (typeof(group_id) = 'integer' AND group_id >= 1 AND ripple_json IS NOT NULL AND json_valid(ripple_json) AND json_type(ripple_json) = 'object' AND json_extract(ripple_json, '$.version') = 1 AND json_type(ripple_json, '$.span') = 'integer' AND json_extract(ripple_json, '$.span') >= 1 AND json_extract(ripple_json, '$.order') IN ('drill', 'left_right', 'right_left', 'down_form'))"
                 }
             }
         },

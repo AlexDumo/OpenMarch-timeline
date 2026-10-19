@@ -105,7 +105,9 @@ phases [26.24].
     `core/instruments/model.ts`); `OM_grip_L`: the left grip.
   - Artwork slots: materials or meshes with
     `extras.openmarch.artworkSlot {id, widthM, heightM}`, UV0 spanning the
-    printable area.
+    printable area. A slot id is 1 to 64 letters, digits, underscores or
+    dashes (the add-on writes `front-panel`); the import drops any other id
+    with a note, and the show file keeps the same rule.
   - Stretch: a 3D 9-slice, `extras.openmarch.stretch {x:[a,b],...}`. The slab
     scales and the outside translates rigidly. Axes without a zone are
     flagged, never stretched.
@@ -355,9 +357,11 @@ aliases, never shown as labels [owner, 2026-10-12, Q39–Q41, Q44].
 - Making an item from a performer's implicit flag writes a Carry `none` cue
   for that performer at the item's first count, linked to the item so undo
   and delete remove both [26.14].
-- **New items:** home where created, on field from that count. Before it, a
-  created prop is Off field and an item that came from a flag is held by its
-  original performer [24].
+- **New items:** home where created, on field from that count. Before it,
+  every item is Off field (it has no Outline yet). An item made from a flag
+  gets an explicit held change at its first count, held by its original
+  performer; nothing else records where an item came from (owner,
+  2026-10-18) [24].
 - Every all-marchers loop filters by `type`: drill order, ripple orders,
   coordinate sheets, mobile export, drill numbers, Visuals mode's Who list.
   Props may fill formation slots; band and section cue targets never reach
@@ -395,13 +399,26 @@ deletes the change. It joins undo history and repair like the cue tables.
 - **Item ripples:** one row per item at staggered counts sharing a group id,
   so they edit, move and delete together; the Items tab treats the group like
   a cue ripple with the same orders (drill, left→right, right→left, down the
-  form) [21].
+  form) [21]. Each row carries its own value, so each flag goes to its own
+  performer; the rows store the ripple's span and order as a cue does
+  (`ripple_json`), so the group can be shown, moved and re-timed. A group
+  edit changes the state, never who holds what (owner, 2026-10-18).
+- Of two items' changes on one count, the one written last is newer
+  (`beat_rank`, then id). A change that a beat deletion or a tempo edit
+  lands on a count with another item's change ranks below it, so deleting a
+  count never changes which item a performer holds.
 - A visible trade of equipment between performers is a Placement change; the
   cue channels themselves are hard cuts [26.12].
 - **Hand conflicts are allowed.** The newest Placement takes over at its
   count and is drawn; the displaced item isn't drawn while the conflict
   lasts; a quiet note names it ("Flag not put down, count 9 of page 5"). No
-  data changes automatically [07, 21].
+  data changes automatically [07, 21]. Equipment a Carry cue gives a
+  performer occupies their hands (a sabre the right, a horn, drum, flag or
+  rifle both): an item held in those hands is a hand conflict, and Carry
+  keeps the hand (owner, 2026-10-18).
+- Deleting one of two holders of a two-hand item leaves it held by the other;
+  the notes list names a held change whose holders give fewer hands than the
+  item takes (`shortHandedHolds`).
 - A placed prop may move with no crew (people outside the show). Show
   setting "Warn when a prop moves without a crew", default off, stored in the
   show file [07, 26.19]. A crew-distance note always applies when a crew is
@@ -544,7 +561,9 @@ cascade and its `equipment_name` column are not used [07 revision].
   different flag: a Carry change.
 - Applies only to performers carrying a flag; others are skipped silently. A
   flag of another Cut gets the Artwork fitted per the sizing contract
-  (section 3), with a note when the aspect differs.
+  (section 3), with a note when the aspect differs (by the sizing code's
+  "same aspect" rule: more than 0.5% of the larger, the Cut's aspect being
+  its template's trim box).
 - Default with no Silk cue: a built-in plain silk in the section's 2D color.
 - The silk picker writes a Silk cue (count-keyed), never an appearance row
   [26.1].
@@ -829,7 +848,8 @@ drag-and-drop import [map, 11, 17, 26.5].
 
 ## 15. Open points
 
-- **Where Carry, Silk and Uniform defaults are computed:** in `compileCues`
-  (its input then carries each section's usual equipment and 2D color and
-  each marcher's `isGuard`, a public package API change under ADR 0004 D-6)
-  or in the 3D View. Needed before C3.5.
+- **Where Carry, Silk and Uniform defaults are computed:** settled
+  2026-10-16: in `compileCues`. Its input carries each section's usual
+  equipment and 2D color and each marcher's `isGuard`, and Silk items and
+  flag equipment carry their aspect for the Silk aspect note (ADR 0004,
+  amendment of 2026-10-11, Consequences).

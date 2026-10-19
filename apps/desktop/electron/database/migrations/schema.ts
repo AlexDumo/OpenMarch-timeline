@@ -12,6 +12,10 @@ import {
     primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
+import {
+    ARTWORK_SLOT_ID_BAD_GLOB,
+    ARTWORK_SLOT_ID_MAX_LENGTH,
+} from "./artworkSlotId";
 
 /*************** COMMON COLUMNS ***************/
 
@@ -933,13 +937,30 @@ export const item_geometry = sqliteTable(
 export const PLACEMENT_STATES = ["held", "placed", "off_field"] as const;
 export const HANDS = ["left", "right", "both"] as const;
 export const PLACEMENT_ROLES = ["holder", "crew"] as const;
+/** The orders an item ripple runs in, as a cue ripple's (`cues.ripple_json`) */
+export const ITEM_RIPPLE_ORDERS = [
+    "drill",
+    "left_right",
+    "right_left",
+    "down_form",
+] as const;
 
 /**
  * Where an item is from a beat on (ADR 0002 D-10, props-spec section 4): held by performers
  * (`item_placement_marchers`), placed at its own position with an optional crew, or Off field.
- * Latest wins and the change is instant on its beat's click. The rows of an item ripple, one
- * per item at staggered counts, share a `group_id`. A held row keeps at least one holder, and
- * only a placed row has crew: the write path keeps both (`itemPlacements.ts`).
+ * Latest wins and the change is instant on its beat's click. Before an item's first change it is
+ * placed at its own position (Off field before its first Outline); an item that comes from a flag
+ * gets an explicit held change on its first beat, so nothing about an item's origin is stored.
+ *
+ * Of two items' changes on one beat, the higher `beat_rank`, then the higher `id`, is newer: a
+ * write makes its change the newest on its beat, and a beat deletion or replacement that lands
+ * changes on a beat ranks them below the ones already there, so who holds what stays put.
+ *
+ * The changes of an item ripple, one per item at staggered counts, each with its own value, share
+ * a `group_id` and the ripple they were spread by (`ripple_json`, `{ version: 1, span, order }`
+ * as on a cue), so the group can be shown, re-timed and edited together. A held change keeps at
+ * least one holder, and only a placed change has crew: the write path keeps both
+ * (`itemPlacements.ts`).
  */
 export const item_placements = sqliteTable(
     "item_placements",
@@ -953,8 +974,12 @@ export const item_placements = sqliteTable(
             .references(() => beats.id, { onDelete: "cascade" }),
         /** held, placed or off_field */
         state: text().notNull(),
+        /** Ties between items' changes on one beat: the higher is newer, then the higher id */
+        beat_rank: integer().notNull().default(0),
         /** The item ripple this row is part of, or null */
         group_id: integer(),
+        /** The group's ripple, `{ version: 1, span, order }`: set exactly when `group_id` is */
+        ripple_json: text(),
         ...timestamps,
     },
     (table) => [
@@ -969,8 +994,14 @@ export const item_placements = sqliteTable(
             sql.raw(`state IN (${sqlList(PLACEMENT_STATES)})`),
         ),
         check(
-            "item_placements_group_id_check",
-            sql`group_id IS NULL OR (typeof(group_id) = 'integer' AND group_id >= 1)`,
+            "item_placements_beat_rank_check",
+            sql`typeof(beat_rank) = 'integer'`,
+        ),
+        check(
+            "item_placements_group_check",
+            sql.raw(
+                `(group_id IS NULL AND ripple_json IS NULL) OR (typeof(group_id) = 'integer' AND group_id >= 1 AND ripple_json IS NOT NULL AND json_valid(ripple_json) AND json_type(ripple_json) = 'object' AND json_extract(ripple_json, '$.version') = 1 AND json_type(ripple_json, '$.span') = 'integer' AND json_extract(ripple_json, '$.span') >= 1 AND json_extract(ripple_json, '$.order') IN (${sqlList(ITEM_RIPPLE_ORDERS)}))`,
+            ),
         ),
     ],
 );
@@ -1029,7 +1060,10 @@ export const item_artwork_slots = sqliteTable(
         beat_id: integer()
             .notNull()
             .references(() => beats.id, { onDelete: "cascade" }),
-        /** The slot id: `top`, `front` or `back` with no model, else one the model declares */
+        /**
+         * The slot id: `top`, `front` or `back` with no model, else one the model declares; 1 to
+         * 64 letters, digits, underscores or dashes (`artworkSlotId.ts`)
+         */
         slot: text().notNull(),
         /**
          * The Artwork and the Version it pins, or both null for a bare slot. No foreign key, as on
@@ -1055,7 +1089,9 @@ export const item_artwork_slots = sqliteTable(
         index("item_artwork_slots_beat_id_idx").on(table.beat_id),
         check(
             "item_artwork_slots_slot_check",
-            sql`slot IS NOT NULL AND length(slot) BETWEEN 1 AND 64 AND slot NOT GLOB '*[^A-Za-z0-9_]*'`,
+            sql.raw(
+                `slot IS NOT NULL AND length(slot) BETWEEN 1 AND ${ARTWORK_SLOT_ID_MAX_LENGTH} AND slot NOT GLOB '${ARTWORK_SLOT_ID_BAD_GLOB}'`,
+            ),
         ),
         check(
             "item_artwork_slots_library_check",

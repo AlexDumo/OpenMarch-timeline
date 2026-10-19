@@ -12,7 +12,7 @@ import {
     carryCuesPastDeletedBeatsInTransaction,
     type CueCarryResult,
 } from "./cues";
-import { carryItemChangesPastDeletedBeatsInTransaction } from "./items";
+import { carryItemChangesPastDeletedBeatsInTransaction } from "./itemBeatRemap";
 
 export const FIRST_BEAT_ID = 0;
 
