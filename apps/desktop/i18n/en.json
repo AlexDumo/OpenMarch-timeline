@@ -117,6 +117,7 @@
             "nextPage": "Next page (timeline)",
             "playPause": "Play / pause audio",
             "previousPage": "Previous page (timeline)",
+            "splitMoveAtPlayhead": "Split the move at the playhead",
             "tapBeats": "Add {count} temporary beats",
             "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again"
         },
@@ -956,6 +957,8 @@
                 "pathMixed": "Mixed",
                 "paused": "Pause to delete a move.",
                 "selectMarchers": "Select them",
+                "split": "Split at playhead",
+                "splitHelp": "Put the playhead inside the move to split it there.",
                 "title": "Move"
             },
             "notInTimeline": "{marcher} isn't in the timeline yet.",

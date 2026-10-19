@@ -669,6 +669,15 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // UI-27: the move the playhead is inside becomes two that meet there (Expert); unbound
+    timelineSplitMoveAtPlayhead: {
+        labelKey: "actions.timeline.splitMoveAtPlayhead",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: [],
+    },
+
     // Timeline (audio editor)
     timelinePlayPause: {
         labelKey: "actions.timeline.playPause",

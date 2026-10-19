@@ -824,6 +824,16 @@ const TimelineSurface = memo(function TimelineSurface({
             onEdit: () => moveCommands.onEdit(trackId),
             onRename: () => setRenaming(String(trackId)),
             onDelete: () => moveCommands.onDelete(trackId),
+            // UI-27
+            ...(moveCommands.onSplit
+                ? { onSplit: () => moveCommands.onSplit!(trackId) }
+                : {}),
+            ...(moveCommands.splitDisabledReason
+                ? {
+                      splitDisabledReason: () =>
+                          moveCommands.splitDisabledReason!(trackId),
+                  }
+                : {}),
             disabledReason: moveCommands.disabledReason,
         };
     const rangeMenu = useTimelineRangeMenu({

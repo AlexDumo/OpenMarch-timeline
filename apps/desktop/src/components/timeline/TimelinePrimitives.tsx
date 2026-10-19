@@ -1447,6 +1447,15 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 onEdit: () => moveCommands.onEdit(trackId),
                 onRename: () => onRenameStart?.(trackId),
                 onDelete: () => moveCommands.onDelete(trackId),
+                ...(moveCommands.onSplit
+                    ? { onSplit: () => moveCommands.onSplit!(trackId) }
+                    : {}),
+                ...(moveCommands.splitDisabledReason
+                    ? {
+                          splitDisabledReason: () =>
+                              moveCommands.splitDisabledReason!(trackId),
+                      }
+                    : {}),
                 disabledReason: moveCommands.disabledReason,
             },
         [moveCommands, onRenameStart, trackId],

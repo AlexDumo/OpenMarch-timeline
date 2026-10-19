@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
     ArrowLineRightIcon,
+    ScissorsIcon,
     TrashIcon,
     UsersThreeIcon,
 } from "@phosphor-icons/react";
@@ -190,6 +191,10 @@ export function TimelineMoveCard({
     // Only whether P is at the move's end, so the card doesn't render on every beat played
     const atEnd = useTimelineSelectionStore(
         (s) => s.playheadBeat === timeline.end,
+    );
+    // Likewise only whether P is strictly inside the move: Split at playhead needs that (UI-27)
+    const playheadInside = useTimelineSelectionStore(
+        (s) => timeline.start < s.playheadBeat && s.playheadBeat < timeline.end,
     );
     const path = useMovePath(timeline.id);
     // One path edit at a time; a choice made meanwhile (the arrows pressed again) goes next. The
@@ -438,6 +443,24 @@ export function TimelineMoveCard({
                     <UsersThreeIcon size={16} />
                     {t("inspector.timeline.move.selectMarchers")}
                 </Button>
+            </div>
+            <div className="flex flex-col gap-6">
+                <Button
+                    size="compact"
+                    variant="secondary"
+                    className={clsx("w-fit", FOCUS_RING)}
+                    data-testid="timeline-move-card-split"
+                    disabled={isPlaying || !playheadInside}
+                    onClick={() =>
+                        void moves.splitMoveAtPlayhead(timeline.id, isPlaying)
+                    }
+                >
+                    <ScissorsIcon size={16} />
+                    {t("inspector.timeline.move.split")}
+                </Button>
+                {!isPlaying && !playheadInside && (
+                    <Help>{t("inspector.timeline.move.splitHelp")}</Help>
+                )}
             </div>
             <div className="flex flex-col gap-6">
                 <Button

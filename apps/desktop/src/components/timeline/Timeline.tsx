@@ -723,6 +723,25 @@ export function Timeline(props: TimelineProps) {
               }
             : undefined,
     );
+    // UI-27: Split at playhead, by stored id too; its reason is read as the menu opens
+    const splitMove = useLatestCallback(
+        moveCommands?.onSplit
+            ? (trackId: string | number) => {
+                  const id = storedIdOf(trackId);
+                  if (id !== null) moveCommands.onSplit!(id);
+              }
+            : undefined,
+    );
+    const splitMoveReason = useLatestCallback(
+        moveCommands?.splitDisabledReason
+            ? (trackId: string | number): string | null => {
+                  const id = storedIdOf(trackId);
+                  return id === null
+                      ? null
+                      : moveCommands.splitDisabledReason!(id);
+              }
+            : undefined,
+    );
     const moveDisabledReason = moveCommands?.disabledReason;
     // Stable while only closures change, like the other commands, so memoized clips don't redraw
     const trackMoveCommands = useMemo(
@@ -733,9 +752,20 @@ export function Timeline(props: TimelineProps) {
                       onEdit: editMove,
                       onDelete: deleteMove,
                       onRename: renameMove,
+                      ...(splitMove ? { onSplit: splitMove } : {}),
+                      ...(splitMoveReason
+                          ? { splitDisabledReason: splitMoveReason }
+                          : {}),
                   }
                 : undefined,
-        [deleteMove, editMove, moveDisabledReason, renameMove],
+        [
+            deleteMove,
+            editMove,
+            moveDisabledReason,
+            renameMove,
+            splitMove,
+            splitMoveReason,
+        ],
     );
     // Page flags move in spec beats; the grips work in view beats
     const flagMove = props.pageFlagMove;

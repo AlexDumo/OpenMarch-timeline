@@ -1216,6 +1216,44 @@ from it. The spec still wins on the model; this file decides presentation.
     rule: `seek` swaps behind the start flag, `beginScrub` makes an Expert scrub a playhead line drag,
     the store keeps `loop` equal to the window, and `fieldBeat` is the beat the field draws.
     `playTimelineOn` is Alt+Space.
+- **UI-27: splitting a move at the playhead (project owner, 2026-10-19).** The owner wants a
+  transition (not a page) cut into two moves at the paused playhead, "saving the positions of the
+  marchers at the point along the split", and, since paths won't always be straight lines, cut by
+  time at the playhead rather than by geometry. Arcs are deprecated and pathways will be redone;
+  for now a path is a straight line. Built on branch `timeline/split-at-playhead`; feel items are
+  V-289 to V-292.
+  - **Where it is.** A move's menu (right-click, the ⋯ button, Shift+F10) gets **Split at
+    playhead** after **Rename move…**, and the Move card gets a **Split at playhead** button above
+    Delete. ⌘K has **Split the move at the playhead** (`timelineSplitMoveAtPlayhead`, unbound):
+    it acts on the window's move when the playhead is inside it, else on the one move the playhead
+    is strictly inside; with none or several it says so ("Several moves cross Page 3 count 4.
+    Right-click the one to split."). A page's own move has no clip or card, so it isn't offered;
+    **+** and **Split page** are the page's tools (_lead default_, V-292). Hidden in Basic, where
+    there are no moves to split.
+  - **When.** Only while paused ("Pause to split a move."), and only with the playhead strictly
+    inside the move: on an end there is nothing to split off, and the entry is disabled with "Put
+    the playhead inside the move to split it there." (the Move card shows the same help).
+  - **What it writes** (`splitTimelineAtBeat`, one undoable edit). The move keeps its id, name,
+    transitions and destinations and now runs from the playhead to its end: it is the half that
+    still arrives where the move did (_lead default_, V-291). A new move ("Move N") runs from the
+    move's start to the playhead; each of the move's transitions gets a shapeless direct
+    counterpart there whose destinations are where its marchers were at the playhead, with the
+    rows that began before it, cut at the playhead, on their own layers. Rows ending at or before
+    the playhead leave the original, and a transition nobody takes any more goes with them. A kept
+    row split in two is kept in both halves, as Basic's split leaves it. Refused before any write:
+    a move already over either half (one timeline per range), and a move with nobody moving before
+    or after the playhead.
+  - **Motion.** A direct path is a straight line at a constant speed per count, so the halves play
+    exactly as the whole did, including rows another move hides at the playhead (their point is
+    extrapolated along their own line). Any other path style is sampled at the playhead: before it
+    the marchers go straight to where they were, from it the transition keeps its style from
+    there. The toast says so: "Split Move 2 at Page 3 count 4 · 3 marchers' paths are straight
+    before it". Follow-the-leader's second half keeps its waypoints even where the leader has
+    passed them, and inherits order from the new straight first half (so it falls back to slot
+    order): both are known gaps until pathways are redone.
+  - **After.** The new move before the playhead becomes the window (its clip selected, the Move
+    card on it), ending any isolation (_lead default_, V-290), with **Undo** on the toast as for
+    Delete move.
 
 ## Mapping the spec onto the view model
 

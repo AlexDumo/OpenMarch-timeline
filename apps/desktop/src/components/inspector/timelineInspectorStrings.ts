@@ -18,6 +18,9 @@ export const TIMELINE_INSPECTOR_STRINGS = {
     "inspector.timeline.move.selectMarchers": "Select them",
     "inspector.timeline.move.delete": "Delete move",
     "inspector.timeline.move.paused": "Pause to delete a move.",
+    "inspector.timeline.move.split": "Split at playhead",
+    "inspector.timeline.move.splitHelp":
+        "Put the playhead inside the move to split it there.",
     "inspector.timeline.move.nameLimit": "{max} characters at most.",
     "inspector.timeline.move.path": "Path",
     "inspector.timeline.move.pathMixed": "Mixed",

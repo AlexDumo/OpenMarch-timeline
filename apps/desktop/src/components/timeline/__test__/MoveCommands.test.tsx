@@ -119,6 +119,61 @@ describeDbTests("a move's commands (UI-14 review)", (it) => {
         expect(await count(db, id)).toBe(0);
     });
 
+    it("Split at playhead makes the move two that meet at the playhead, and selects the new one (UI-27)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        render(<Toaster />);
+        const id = await makeMove(db);
+        const move = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.id, id))
+            .get())!;
+        const store = useTimelineSelectionStore.getState();
+        const timelineCount = async () =>
+            (await db.select().from(schema.timelines).all()).length;
+        const stored = await timelineCount();
+        // The playhead on the move's end: nothing to split off
+        store.selectRange(move.start_beat, move.end_beat);
+        await commands(db).splitMoveAtPlayhead(id);
+        expect(await timelineCount()).toBe(stored);
+        expect(
+            await screen.findByText(
+                "Put the playhead inside the move to split it there.",
+            ),
+        ).toBeTruthy();
+
+        // Inside it: two moves, the new one before the playhead is the window
+        store.selectRange(move.start_beat, move.start_beat + 1);
+        const undo = vi.fn();
+        await act(() => commands(db, undo).splitMoveAtPlayhead(id));
+        const timelines = await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.end_beat, move.end_beat))
+            .all();
+        expect(timelines).toMatchObject([
+            { id, start_beat: move.start_beat + 1 },
+        ]);
+        const before = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.end_beat, move.start_beat + 1))
+            .get())!;
+        expect(before.start_beat).toBe(move.start_beat);
+        expect(useTimelineSelectionStore.getState().selection).toEqual({
+            kind: "range",
+            start: move.start_beat,
+            end: move.start_beat + 1,
+        });
+        expect(await screen.findByText(/^Split Move 1 at /)).toBeTruthy();
+        const button = await screen.findByRole("button", { name: "Undo" });
+        act(() => button.click());
+        expect(undo).toHaveBeenCalledTimes(1);
+        expect(toastTimelineError).not.toHaveBeenCalled();
+    });
+
     it("the delete toast says what went, and its Undo runs the app's undo", async ({
         db,
         marchersAndPages: _,
