@@ -5,11 +5,17 @@ import type Page from "@/global/classes/Page";
 import { db } from "@/global/database/db";
 import { useCollisionStore } from "@/stores/CollisionStore";
 import {
+    displayedBeat,
     isolatedTimeline,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import {
+    resolverSpans,
+    useTimelineResolverStore,
+} from "@/timeline/timelineStore";
+import { followingAt, marcherSetBeats } from "@/timeline/timelineSetFollowing";
+import { useKeptAssignmentsStore } from "@/timeline/useKeepLaterPages";
 import { useTimelineFocusScene } from "@/timeline/useTimelineFocusScene";
 import { ghostColorFor } from "@/timeline/useTimelineFocusScene";
 import { useTimelinePathSamples } from "@/timeline/useTimelinePathSamples";
@@ -20,6 +26,7 @@ import {
     type OverlayPlan,
 } from "@/field/timelineOverlays";
 import { FieldDimming } from "./fieldDimming";
+import { FieldFollowing } from "./fieldFollowing";
 
 /**
  * Everything the timeline draws on the field (fork #201): the selected page's
@@ -27,8 +34,9 @@ import { FieldDimming } from "./fieldDimming";
  * (`useTimelinePathSamples`), an isolated move's focus scene
  * (`useTimelineFocusScene`, which also publishes the isolation plan the
  * playhead driver draws members at), collision markers (`useCollisionStore`),
- * and who's dimmed. Plans change on page changes, edits and setting changes,
- * never per frame; dimming goes to the layers through {@link FieldDimming},
+ * who's dimmed, and who's Following (#300). Plans change on page changes,
+ * edits and setting changes, never per frame; dimming and the Following look
+ * go to the layers through {@link FieldDimming} and {@link FieldFollowing},
  * outside React.
  */
 // eslint-disable-next-line max-lines-per-function
@@ -49,6 +57,7 @@ export function useTimelineVisuals({
     focus: OverlayPlan | null;
     collisions: OverlayPlan | null;
     dimming: FieldDimming;
+    following: FieldFollowing;
     /** Whether the resolver is ready: the timeline draws nothing before. */
     ready: boolean;
 } {
@@ -130,7 +139,8 @@ export function useTimelineVisuals({
     );
 
     const dimming = useFieldDimming(ready);
-    return { paths, focus, collisions, dimming, ready };
+    const following = useFieldFollowing(ready && !isPlaying);
+    return { paths, focus, collisions, dimming, following, ready };
 }
 
 /**
@@ -158,4 +168,80 @@ function useFieldDimming(enabled: boolean): FieldDimming {
         });
     }, [dimming, enabled]);
     return dimming;
+}
+
+/**
+ * #300: while paused or scrubbing, the marchers with no coordinate of their
+ * own on the count shown are Following, drawn with a dashed edge; playing, nobody is. Each
+ * marcher's Set beats are worked out once per resolver version and kept
+ * markers, so a playhead move only looks them up, and `FieldFollowing`
+ * redraws only when who's Following changes.
+ */
+function useFieldFollowing(enabled: boolean): FieldFollowing {
+    const following = useMemo(() => new FieldFollowing(), []);
+    useEffect(() => {
+        if (!enabled) {
+            following.set(null);
+            return;
+        }
+        let setBeats: Map<number, readonly number[]> | null = null;
+        const update = () => {
+            const { resolver } = useTimelineResolverStore.getState();
+            if (!resolver) {
+                following.set(null);
+                return;
+            }
+            if (!setBeats) {
+                const kept = useKeptAssignmentsStore.getState().ids;
+                setBeats = new Map(
+                    resolver
+                        .marcherIds()
+                        .map((id) => [
+                            id,
+                            marcherSetBeats(
+                                resolverSpans(resolver, id),
+                                (beat) => resolver.positionAt(id, beat),
+                                kept,
+                            ),
+                        ]),
+                );
+            }
+            following.set(
+                followingAt(
+                    setBeats,
+                    displayedBeat(useTimelineSelectionStore.getState()),
+                ),
+            );
+        };
+        // Called inside the stores' writes: a failed update mustn't stop their other listeners
+        const safely = (fresh: boolean) => {
+            if (fresh) setBeats = null;
+            try {
+                update();
+            } catch (error) {
+                console.error("Error finding the Following marchers", error);
+            }
+        };
+        safely(true);
+        const unsubscribes = [
+            useTimelineResolverStore.subscribe((state, previous) => {
+                if (
+                    state.version !== previous.version ||
+                    state.resolver !== previous.resolver
+                )
+                    safely(true);
+            }),
+            useKeptAssignmentsStore.subscribe((state, previous) => {
+                if (state.ids !== previous.ids) safely(true);
+            }),
+            useTimelineSelectionStore.subscribe((state, previous) => {
+                if (displayedBeat(state) !== displayedBeat(previous))
+                    safely(false);
+            }),
+        ];
+        return () => {
+            for (const unsubscribe of unsubscribes) unsubscribe();
+        };
+    }, [following, enabled]);
+    return following;
 }

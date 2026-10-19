@@ -18,6 +18,17 @@ Terms used throughout:
   there (TL only, stored in the file). Don't call this "pinned" or "locked": "pin" is the start
   flag's word (UI-11, UI-17), and "Lock here" was a deferred idea.
 - The **selected page** is the page box the playhead is in.
+- On the playhead's exact count, a marcher is **Set** when a move of its own ends on that count with
+  real motion; on the first page every marcher is Set. Every other marcher is **Following**: it
+  holds from an earlier count, is partway through a move, or stands on a stay move that ends where
+  it began (Only Page N, unlink, a kept spot). While paused or scrubbing, the field draws a Following
+  marcher with a dashed edge at full strength: a shape with an outline dashes the outline round its
+  fill at 60%, one without dashes its edge in its fill's color with nothing inside, and an X dashes
+  its own lines, at any size (a small shape gets fewer, longer dashes). The dashes keep the shape's
+  contrast and read by shape, not only by lightness; the label is a little fainter (0.75). Following marchers stay selectable and draggable, and
+  dragging one on the count makes it Set. Playback draws everyone solid, and isolation's dim wins
+  over the Following look (#300, #301). Say "Set" and "Following" (e.g. "Following Page 2") in the
+  UI, not "pinned", "locked", "kept" or "edited".
 
 About the screenshots: most were taken during the build, before the 2026-10-09 rebase onto #115
 (transport keys). Since then the tooltips are #115's `ShortcutTooltip`, and they may look slightly
