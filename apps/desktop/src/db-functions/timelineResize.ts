@@ -4,6 +4,9 @@ import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { refuse } from "./timelineErrors";
 import { setTimelineRangeInTransaction } from "./timelineTransitionsInTransaction";
+import { updateTimelineAssignmentsInTransaction } from "./timelineAssignments";
+import { PAGE_TAKEOVER_REFUSAL, readPageBoxes } from "./timelineMoveNames";
+import { pageTimelineIds } from "@/timeline/timelineViewModel";
 import { ensureCountsInTransaction } from "./endlessCounts";
 
 /**
@@ -56,11 +59,18 @@ export interface TimelineResizeLimits {
         readonly min: TimelineResizeBound;
         readonly max: TimelineResizeBound;
     };
-    /** Other stored timelines' ranges; a resize can't land on one (C-12, resize-move E8) */
+    /**
+     * The ranges of other stored timelines that share a marcher with this one; a resize can't land
+     * on one (resize-move E8; spec §6.2 L-4: one marcher can't have two moves over the same
+     * counts). A move with none of the same marchers may share a range (UI-25, owner 2026-10-18),
+     * except a page's own move this one would take over (`pageTakeover`, `pageMoveTakenOver`)
+     */
     readonly taken: readonly {
         readonly timelineId: number;
         readonly start: number;
         readonly end: number;
+        /** Landing here would make this move the page's own move (`pageMoveTakenOver`) */
+        readonly pageTakeover?: boolean;
     }[];
 }
 
@@ -75,7 +85,32 @@ export interface ResizeRow {
 /** A row of the same marchers in another timeline. */
 export interface ResizeOtherRow extends ResizeRow {
     readonly timelineId: number;
+    /**
+     * The row is in a page's own timeline (the one its page box stands for, UI-25). A move grows
+     * over those whatever their layer: it goes above them (`growOverLayers`), and the page's
+     * move for that marcher catches up after it (owner, 2026-10-16)
+     */
+    readonly pageMove?: boolean;
 }
+
+/**
+ * Whether row `a` of a move over `range` may be raised over a page's own moves: not when the
+ * marcher has another row over the move at a higher layer, which the raised row would then
+ * override (that row may be a page's own move too). Both `timelineResizeLimits` and
+ * `growOverLayers` follow it, so a resize never raises a row it wasn't let through for.
+ */
+const canRiseOverPageMoves = (
+    a: ResizeRow,
+    others: readonly ResizeOtherRow[],
+    range: { readonly start: number; readonly end: number },
+): boolean =>
+    !others.some(
+        (o) =>
+            o.marcherId === a.marcherId &&
+            o.layer > a.layer &&
+            o.start < range.end &&
+            range.start < o.end,
+    );
 
 const tighter = (
     current: TimelineResizeBound,
@@ -89,7 +124,7 @@ const tighter = (
 
 /**
  * The limits for resizing the timeline `[start, end)` whose assignment rows are `own`, given the
- * same marchers' rows in other timelines (`others`) and every other timeline's range (`taken`).
+ * same marchers' rows in other timelines (`others`) and those timelines' ranges (`taken`).
  * Pure; `readTimelineResizeLimits` reads its inputs.
  *
  * - **Start edge.** It stays before the end (one beat minimum) and can't pass a row that starts
@@ -100,7 +135,14 @@ const tighter = (
  *
  * Rows that already overlap the move never limit it (E6): only rows wholly on the far side of the
  * edge do.
+ *
+ * A page's own moves (`pageMove`) don't stop an edge either, whatever their layer (owner,
+ * 2026-10-16, for a move split off a page, which sits on the page's layer): the resize puts the
+ * marcher's row above them (`growOverLayers`). Unless the marcher has another row over the move
+ * at a higher layer than its own, which the raised row would then override: then they stop it
+ * as any move does.
  */
+// eslint-disable-next-line max-lines-per-function
 export function timelineResizeLimits({
     timelineId,
     start,
@@ -172,9 +214,11 @@ export function timelineResizeLimits({
                 { kind: "member", beat: a.start },
                 true,
             );
+        const canRise = canRiseOverPageMoves(a, others, { start, end });
         // E3, E5: the marcher's other moves that would collide or win over the grown part
         for (const o of others) {
             if (o.marcherId !== a.marcherId || o.layer < a.layer) continue;
+            if (o.pageMove && canRise) continue;
             if (anchoredStart && o.end <= start)
                 startMin = tighter(startMin, o.end, moveStop(o), true);
             if (anchoredEnd && o.start >= end)
@@ -191,11 +235,19 @@ export function timelineResizeLimits({
     };
 }
 
-/** Reads `timelineResizeLimits`' inputs for a stored timeline. `null` if it doesn't exist. */
-export async function readTimelineResizeLimits(
+/** `timelineResizeLimits`' inputs for a stored timeline, read; `null` if it doesn't exist. */
+// eslint-disable-next-line max-lines-per-function
+async function readResizeInputs(
     db: DbConnection | DbTransaction,
     timelineId: number,
-): Promise<TimelineResizeLimits | null> {
+): Promise<{
+    timelineId: number;
+    start: number;
+    end: number;
+    own: (ResizeRow & { id: number })[];
+    others: ResizeOtherRow[];
+    taken: TimelineResizeLimits["taken"];
+} | null> {
     const L = schema.timelines;
     const T = schema.timeline_transitions;
     const A = schema.timeline_assignments;
@@ -250,19 +302,87 @@ export async function readTimelineResizeLimits(
             .where(ne(L.id, timelineId))
             .all()
     ).map((t) => ({ timelineId: t.timelineId, start: t.start, end: t.end }));
-    return timelineResizeLimits({
+    const pages = pageTimelineIds(
+        [
+            ...taken.map((t) => ({ id: t.timelineId, ...t })),
+            {
+                id: timelineId,
+                start: timeline.start_beat,
+                end: timeline.end_beat,
+            },
+        ],
+        await readPageBoxes(db),
+    );
+    return {
         timelineId,
         start: timeline.start_beat,
         end: timeline.end_beat,
         own: own.map((a) => ({
+            id: a.id,
             marcherId: a.marcher_id,
             start: a.start_beat,
             end: a.end_beat,
             layer: a.layer,
         })),
-        others,
-        taken,
-    });
+        others: others.map((o) =>
+            pages.has(o.timelineId) ? { ...o, pageMove: true } : o,
+        ),
+        // Only moves with one of the same marchers: the rest may share the range (L-4). But not a
+        // newer page's own move, which landing on its counts would take over (UI-25)
+        taken: taken.flatMap((t) =>
+            others.some((o) => o.timelineId === t.timelineId)
+                ? [t]
+                : pages.has(t.timelineId) && timelineId < t.timelineId
+                  ? [{ ...t, pageTakeover: true }]
+                  : [],
+        ),
+    };
+}
+
+/** Reads `timelineResizeLimits`' inputs for a stored timeline. `null` if it doesn't exist. */
+export async function readTimelineResizeLimits(
+    db: DbConnection | DbTransaction,
+    timelineId: number,
+): Promise<TimelineResizeLimits | null> {
+    const inputs = await readResizeInputs(db, timelineId);
+    return inputs && timelineResizeLimits(inputs);
+}
+
+/**
+ * The layer each of a resized move's rows goes to (by assignment id), for the rows the new range
+ * grows over a page's own moves at the same or a higher layer: one above the highest of them, so
+ * the move overrides them there and the page's move catches up after it (R-5). Rows that grow
+ * over nothing of the kind keep their layer, and so do rows that can't rise
+ * (`canRiseOverPageMoves`): they grow underneath, as over any higher move, and
+ * `timelineResizeLimits` stopped their edges at the page moves beyond.
+ */
+export function growOverLayers(
+    own: readonly (ResizeRow & { readonly id: number })[],
+    others: readonly ResizeOtherRow[],
+    from: { readonly start: number; readonly end: number },
+    to: { readonly start: number; readonly end: number },
+): Map<number, number> {
+    const out = new Map<number, number>();
+    for (const a of own) {
+        if (!canRiseOverPageMoves(a, others, from)) continue;
+        // The part of the new range this row gains (R-E1: rows anchored at a moved edge follow it)
+        const grown: { start: number; end: number }[] = [];
+        if (a.start === from.start && to.start < from.start)
+            grown.push({ start: to.start, end: from.start });
+        if (a.end === from.end && to.end > from.end)
+            grown.push({ start: from.end, end: to.end });
+        let layer = a.layer;
+        for (const o of others)
+            if (
+                o.pageMove &&
+                o.marcherId === a.marcherId &&
+                o.layer >= a.layer &&
+                grown.some((g) => o.start < g.end && g.start < o.end)
+            )
+                layer = Math.max(layer, o.layer + 1);
+        if (layer !== a.layer) out.set(a.id, layer);
+    }
+    return out;
 }
 
 /** Why `[start, end)` is outside `limits`, as a sentence for a toast; `null` when it fits. */
@@ -297,7 +417,9 @@ export function timelineResizeRefusal(
     }
     const same = limits.taken.find((t) => t.start === start && t.end === end);
     if (same)
-        return "Another move or page already covers exactly these counts; two can't share the same counts.";
+        return same.pageTakeover
+            ? PAGE_TAKEOVER_REFUSAL
+            : "Another move with some of the same marchers already covers exactly these counts.";
     return null;
 }
 
@@ -310,7 +432,8 @@ export interface ResizeTimelineResult {
 /**
  * Changes a timeline's range to `[start, end)` (resize-move): every transition it owns and every
  * row anchored at a moved edge follow (R-E1). Refused (`E-ARGS`, nothing written) when the range
- * is outside `timelineResizeLimits`, or is another timeline's range (C-12).
+ * is outside `timelineResizeLimits`, or is the range of another timeline with one of the same
+ * marchers (L-4).
  */
 export async function resizeTimelineInTransaction({
     tx,
@@ -323,13 +446,28 @@ export async function resizeTimelineInTransaction({
     start: number;
     end: number;
 }): Promise<ResizeTimelineResult> {
-    const limits = await readTimelineResizeLimits(tx, timelineId);
-    if (!limits) refuse(`timeline ${timelineId} does not exist`);
+    const inputs = await readResizeInputs(tx, timelineId);
+    if (!inputs) refuse(`timeline ${timelineId} does not exist`);
+    const limits = timelineResizeLimits(inputs);
     const from = { start: limits.start, end: limits.end };
     if (start === from.start && end === from.end)
         return { timelineId, from, to: from };
     const refusal = timelineResizeRefusal(limits, start, end);
     if (refusal) refuse(refusal);
+    // Over a page's own moves the rows go above them first, so the new range overlaps nothing on
+    // their layer (I-A3) and overrides those moves there
+    const raised = growOverLayers(inputs.own, inputs.others, from, {
+        start,
+        end,
+    });
+    if (raised.size > 0)
+        await updateTimelineAssignmentsInTransaction({
+            tx,
+            modifiedAssignments: [...raised].map(([id, layer]) => ({
+                id,
+                layer,
+            })),
+        });
     // A move may run past the show's end; the counts it lands on are stored (endless counts)
     await ensureCountsInTransaction({ tx, through: end });
     await setTimelineRangeInTransaction({ tx, timelineId, start, end });

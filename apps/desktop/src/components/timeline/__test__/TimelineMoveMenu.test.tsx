@@ -172,6 +172,48 @@ describe("the clip's menu (UI-14)", () => {
         expect(moves.onEdit).toHaveBeenCalledWith(7);
     });
 
+    it("offers Split at playhead after Rename when given, by stored timeline id (UI-27)", () => {
+        const moves = show({
+            moves: commands({
+                onSplit: vi.fn(),
+                splitDisabledReason: () => null,
+            }),
+        });
+        fireEvent.contextMenu(clipButton());
+        expect(items()).toEqual([
+            "Edit move",
+            "Rename move…",
+            "Split at playhead",
+            "Delete move",
+        ]);
+        fireEvent.click(screen.getByTestId("timeline-move-menu-split"));
+        expect(moves.onSplit).toHaveBeenCalledWith(7);
+    });
+
+    it("disables Split at playhead with its reason while the playhead is outside the move", () => {
+        const moves = show({
+            moves: commands({
+                onSplit: vi.fn(),
+                splitDisabledReason: () =>
+                    "Put the playhead inside the move to split it there.",
+            }),
+        });
+        fireEvent.contextMenu(clipButton());
+        const split = screen.getByTestId("timeline-move-menu-split");
+        expect(split.getAttribute("data-disabled")).not.toBeNull();
+        expect(
+            screen.getByTestId("timeline-move-menu-split-reason").textContent,
+        ).toBe("Put the playhead inside the move to split it there.");
+        fireEvent.click(split);
+        expect(moves.onSplit).not.toHaveBeenCalled();
+        // Edit and Delete stay available: only the split is blocked
+        expect(
+            screen
+                .getByTestId("timeline-move-menu-edit")
+                .getAttribute("data-disabled"),
+        ).toBeNull();
+    });
+
     it("keeps Delete page alone on a page box, and nothing on a dragged range", () => {
         show({
             onDeletePageFlag: vi.fn(),

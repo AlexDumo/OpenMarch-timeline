@@ -10,18 +10,18 @@
 
 This spec is written to be **checked**. Every rule, invariant and test has an ID, and the QA catalogue in §12 refers back to them.
 
-| Prefix | Meaning |
-|---|---|
-| `D-n` | Design decision (§4) |
-| `I-xx` | Invariant on stored data (§6). Violations are rejected on write. |
-| `E-xx` | Error code raised when an invariant is violated |
-| `R-n` | Normative resolution rule (§8). Together, these define the reference oracle. |
-| `W-n` | Invalidation rule (§9) |
-| `U-n` | Undo-safety rule for the schema (§6.1) |
-| `L-n` | Layer priority rule for the app's write path (§6.2) |
-| `P-n` | Property that must hold for every valid dataset (§12.5) |
-| `D-XXXX` (caps) | Runtime diagnostic, a warning or info message that is not an error (§8.9) |
-| `QA-…` | Test case (§12) |
+| Prefix          | Meaning                                                                      |
+| --------------- | ---------------------------------------------------------------------------- |
+| `D-n`           | Design decision (§4)                                                         |
+| `I-xx`          | Invariant on stored data (§6). Violations are rejected on write.             |
+| `E-xx`          | Error code raised when an invariant is violated                              |
+| `R-n`           | Normative resolution rule (§8). Together, these define the reference oracle. |
+| `W-n`           | Invalidation rule (§9)                                                       |
+| `U-n`           | Undo-safety rule for the schema (§6.1)                                       |
+| `L-n`           | Layer priority rule for the app's write path (§6.2)                          |
+| `P-n`           | Property that must hold for every valid dataset (§12.5)                      |
+| `D-XXXX` (caps) | Runtime diagnostic, a warning or info message that is not an error (§8.9)    |
+| `QA-…`          | Test case (§12)                                                              |
 
 **Status tags.** Each section is marked with one of these:
 
@@ -54,27 +54,27 @@ The design replaces the current model, which stores one coordinate per (marcher,
 
 ## 2. Glossary
 
-| Term | Definition |
-|---|---|
-| **Beat** | The time unit. A beat position `b` is a real number. Authored boundaries are integers. Beat 0 is the start of the show. |
-| **Range** | A half-open interval `[start, end)` of beats. |
-| **Marcher** | A real performer. It has a *home* position, which is where it stands before its first assignment. |
-| **Shape** | A formation drawn in absolute field coordinates, such as a line, freehand curve, circle, box or block. It has no knowledge of time or of marchers. **Optional**: a transition can place its slots individually instead (D-16). |
-| **Timeline** | A container with a range: a track in the UI. It has **no effect on resolution** (R-1). *App restriction (implementation-plan.md C-11): it is the container for start and stop, and every transition in it spans its whole range. App restriction (C-12): at most one timeline has a given range, and a page's box in the UI is the timeline ending at its flag.* |
-| **Transition** | Motion over a range, in a given path style, into slot destinations. The destinations come from a shape or are placed individually. It owns `slot_count` **anonymous slots**. It does **not** store where marchers start. |
-| **Slot** | An anonymous position within a transition, numbered `0…slot_count-1`. Its destination is sampled from the transition's shape, or is an individually placed point (R-13). |
-| **Individual destination** | A point placed by hand for one slot of a transition that has no shape (`slot_destinations`, D-16). "Move marcher 7 here" means setting the point of marcher 7's slot. |
-| **Assignment** | A stored row saying *marcher m occupies slot k of transition T over range [s, e), at layer L*. This is the only link between real marchers and slots. |
-| **Layer** | An integer precedence. Where a marcher's assignments overlap in time, the higher layer wins. The resolver reads it as stored. The app derives it from the ranges (§6.2, D-18) and never asks the designer for it. |
-| **Base row** | An assignment in a page's own move: the timeline a page's box stands for, stored as such by the app (ADR 0001). Base rows are underneath every other row (L-1). |
-| **Span** | A derived, non-overlapping piece of one marcher's timeline, produced by flattening that marcher's assignments across layers (R-2). A span is either a **hold** (no assignment) or covers part of exactly one assignment. |
-| **Origin** | Where a marcher actually is at the start of a span (R-4). Derived, never stored. |
-| **Founding span** | A span that starts exactly at its transition's `start_beat` (R-3). |
-| **Join / resume** | A non-founding span. A **join** is the first span of its assignment. A **resume** is a later span of the same assignment, after a higher layer let go. |
-| **Steal** | A higher-layer assignment that overrides part of a lower-layer one. The overridden transition keeps running *hypothetically*. |
-| **Order-sensitive** | A path style that reads marcher ordering as well as positions. Only `follow_the_leader` is order-sensitive. |
-| **Trail** | For follow-the-leader: the polyline every member walks along (R-9). |
-| **FTL** | Short for follow-the-leader. |
+| Term                       | Definition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Beat**                   | The time unit. A beat position `b` is a real number. Authored boundaries are integers. Beat 0 is the start of the show.                                                                                                                                                                                                                                                                                                                                                                    |
+| **Range**                  | A half-open interval `[start, end)` of beats.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Marcher**                | A real performer. It has a _home_ position, which is where it stands before its first assignment.                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Shape**                  | A formation drawn in absolute field coordinates, such as a line, freehand curve, circle, box or block. It has no knowledge of time or of marchers. **Optional**: a transition can place its slots individually instead (D-16).                                                                                                                                                                                                                                                             |
+| **Timeline**               | A container with a range: a track in the UI. It has **no effect on resolution** (R-1). _App restriction (implementation-plan.md C-11): it is the container for start and stop, and every transition in it spans its whole range. App restriction (C-12): at most one timeline has a given range, and a page's box in the UI is the timeline ending at its flag; relaxed by UI-25 (2026-10-16): a move split off another keeps its range, and the page box is the oldest timeline over it._ |
+| **Transition**             | Motion over a range, in a given path style, into slot destinations. The destinations come from a shape or are placed individually. It owns `slot_count` **anonymous slots**. It does **not** store where marchers start.                                                                                                                                                                                                                                                                   |
+| **Slot**                   | An anonymous position within a transition, numbered `0…slot_count-1`. Its destination is sampled from the transition's shape, or is an individually placed point (R-13).                                                                                                                                                                                                                                                                                                                   |
+| **Individual destination** | A point placed by hand for one slot of a transition that has no shape (`slot_destinations`, D-16). "Move marcher 7 here" means setting the point of marcher 7's slot.                                                                                                                                                                                                                                                                                                                      |
+| **Assignment**             | A stored row saying _marcher m occupies slot k of transition T over range [s, e), at layer L_. This is the only link between real marchers and slots.                                                                                                                                                                                                                                                                                                                                      |
+| **Layer**                  | An integer precedence. Where a marcher's assignments overlap in time, the higher layer wins. The resolver reads it as stored. The app derives it from the ranges (§6.2, D-18) and never asks the designer for it.                                                                                                                                                                                                                                                                          |
+| **Base row**               | An assignment in a page's own move: the timeline a page's box stands for, stored as such by the app (ADR 0001). Base rows are underneath every other row (L-1).                                                                                                                                                                                                                                                                                                                            |
+| **Span**                   | A derived, non-overlapping piece of one marcher's timeline, produced by flattening that marcher's assignments across layers (R-2). A span is either a **hold** (no assignment) or covers part of exactly one assignment.                                                                                                                                                                                                                                                                   |
+| **Origin**                 | Where a marcher actually is at the start of a span (R-4). Derived, never stored.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Founding span**          | A span that starts exactly at its transition's `start_beat` (R-3).                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Join / resume**          | A non-founding span. A **join** is the first span of its assignment. A **resume** is a later span of the same assignment, after a higher layer let go.                                                                                                                                                                                                                                                                                                                                     |
+| **Steal**                  | A higher-layer assignment that overrides part of a lower-layer one. The overridden transition keeps running _hypothetically_.                                                                                                                                                                                                                                                                                                                                                              |
+| **Order-sensitive**        | A path style that reads marcher ordering as well as positions. Only `follow_the_leader` is order-sensitive.                                                                                                                                                                                                                                                                                                                                                                                |
+| **Trail**                  | For follow-the-leader: the polyline every member walks along (R-9).                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **FTL**                    | Short for follow-the-leader.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ---
 
@@ -100,35 +100,35 @@ flowchart LR
 
 The four concepts are strictly separated. Merging any two of them is the failure this design exists to prevent:
 
-- **Shapes** say *where*, with no time. They are optional. A transition can instead place each slot's destination individually, and nothing downstream can tell the difference (D-16).
-- **Timelines** say *which track*. They carry no motion. In the app they also say *when*: every transition in a timeline starts and ends with it (C-11 in implementation-plan.md), while assignments still come and go inside it.
-- **Transitions** say *how and when* for anonymous slots. A transition is a function whose starting point is filled in at resolve time. Its start state is an input to resolution, not stored data.
-- **Assignments** say *who*, *when* and *with what precedence*.
+- **Shapes** say _where_, with no time. They are optional. A transition can instead place each slot's destination individually, and nothing downstream can tell the difference (D-16).
+- **Timelines** say _which track_. They carry no motion. In the app they also say _when_: every transition in a timeline starts and ends with it (C-11 in implementation-plan.md), while assignments still come and go inside it.
+- **Transitions** say _how and when_ for anonymous slots. A transition is a function whose starting point is filled in at resolve time. Its start state is an input to resolution, not stored data.
+- **Assignments** say _who_, _when_ and _with what precedence_.
 
 ---
 
 ## 4. Decision record
 
-| ID | Decision | Status | Rationale |
-|---|---|---|---|
-| D-1 | **SQLite, with relational tables for the links and JSON for the leaves.** Shape geometry and path parameters are opaque JSON columns. | Decided | Nothing ever queries into geometry, so JSON is fine there. The assignment table is a many-to-many relationship over ranges, which is exactly what relational storage is good at. A document model would make it worse. |
-| D-2 | **Positions are generated, not stored.** A marcher's coordinate at a beat is computed on demand. Only authored facts are persisted. | Decided | This was "path 1" in the discussion. Storing sampled coordinates ("path 2") creates a second source of truth and makes invalidation per-sample. Sampled data remains a valid **export** format (§11). |
-| D-3 | **Cache at the boundaries, not the interior.** The cached state is where marchers are when each span starts, plus FTL trails. Nothing between boundaries is cached. | Decided | A start state is fixed once the authored data is fixed. Caching it removes the recursive walk up the chain from the per-frame path (§9.6). |
-| D-4 | **Slots are separate from marchers.** Transitions own anonymous slots, and assignments put marchers into them. | Decided | Lets a designer author "a 16-person circle" before deciding who is in it. |
-| D-5 | **Shapes are absolute.** No shape or path is positioned relative to upstream geometry. | Decided | An upstream edit makes the drill *look worse*: marchers take a longer approach and move faster. It never makes the drill *invalid*, so there are no cascading conflicts to resolve. §8.11 makes this hold numerically too. |
-| D-6 | **Precedence is an explicit integer `layer`.** The resolver reads it as stored and never infers precedence itself. | Decided | Stays predictable when steals are stacked. Cost: the UI eventually has to show layers. *Amended by D-18 (2026-10-16): the stored integer stays, but the app derives it from the ranges (base rows lowest, then the later start, then the shorter on a shared start). That ranking is a fixed function of what the timeline shows, so it stays predictable when steals stack, which was D-6's concern with inference by "most recent". The UI shows stacking order and overridden counts instead of numbers.* |
-| D-7 | **Progress is measured against the transition's natural end** (`T.end_beat`), not against the end of the span after clipping. | Decided | This is what makes steals correct. A marcher stolen halfway through is halfway there, not at the destination. |
-| D-8 | **Invalidation pushes, recompute pulls.** An edit marks dependents dirty straight away. Nothing is recomputed until something reads it. | Decided | Work scales with what the playhead needs, not with the length of the show. |
-| D-9 | **Order is a runtime input that only order-sensitive styles read.** It is not glue that users maintain everywhere. | Decided | Avoids Pyware's gluing model, which forces an ordering onto shapes (such as boxes) that don't need one. |
-| D-10 | **Origins are cached per *span*, and entries per FTL transition. Nothing is cached per transition for direct or arc motion.** | Proposed | Stacked steals create resumes (A → B → A), which is a **cycle** at the transition level. At the span level the graph is guaranteed acyclic (§9.3). |
-| D-11 | **`arc` is order-free.** Each marcher moves along its own circular arc, controlled by a shared `bulge`. | Proposed | Earlier drafts listed arc as order-sensitive, but nothing in its definition needs order. A shared curved path that marchers walk in sequence is FTL with waypoints. |
-| D-12 | **Joins and resumes rebase.** A non-founding span of direct or arc motion starts from the marcher's actual position and finishes when the transition finishes. Non-founding FTL spans fall back to direct motion toward an FTL target, and raise a diagnostic. | Proposed | Keeps every marcher's position continuous. FTL has no well-defined meaning for a marcher who is not on the trail. |
-| D-13 | **Empty slots are valid.** An unfilled slot is *vacant*: allowed, flagged, and not an error. Over-filling a transition is an error. | Proposed | Designers author slots before they cast marchers (D-4). |
-| D-14 | **One edit is one database transaction, and the resolver hears about it once, as a batch.** The batch comes from a change log that triggers maintain, so it includes cascaded deletes and every row a multi-statement procedure changes. | Proposed (v0.2) | SQLite aborts only the failing *statement*, not the transaction. A single user edit can also change rows the app never touched directly. Both problems go away if the write wrapper owns atomicity and the database reports what actually changed (§6, §10.2). |
-| D-15 | **Arcs are minor arcs only: `\|bulge\| ≤ ½`.** | Proposed (v0.4) | A major arc can carry a stolen marcher farther from its target than where it started. Chained steals then make positions grow geometrically, all the way to NaN (Appendix D). A minor arc never increases the distance to its target, which gives the provable bound in §8.11. The alternative was a runtime guard that clamps or flags out-of-range positions, and that would break D-5. **This is a product restriction.** The nearest remaining tool, FTL with waypoints, is not an exact substitute. It changes the path geometry, and it changes group motion: members follow one another instead of each sweeping its own arc. QA-SC-14 judges the restriction explicitly. |
-| D-16 | **Shapes are optional. A transition's slot destinations come from a shape *or* from individually placed points, never both.** | Proposed (v0.6) | Designers need to move marchers individually as well as by shape. The resolver only ever needed one destination point per slot; a shape is just one way to produce those points. So individual placement is a second *source* of slot destinations, and assignments, layers, steals, FTL ordering, invalidation and the derived-range bound (§8.11) are unchanged. Points are keyed by slot, not by marcher, which keeps D-4. Follow-the-leader still needs a shape, because it follows a path (I-T5). Mixing the two in one transition (a shape with a few slots nudged) is Q-14. |
-| D-17 | **Triggers check; they never rewrite.** A change that touches several rows, such as the anchored range edit (R-E1), is an app procedure made of explicit statements, ordered so that every intermediate state is valid. | Proposed (v0.7) | The app's undo replays each edit's row changes in reverse. That only works if every step of the edit landed on a valid state, and if replaying a statement has no side effects. A trigger that rewrites rows breaks both (§6.1, Appendix G). |
-| D-18 | **The app derives every layer from the ranges: base rows lowest, then the later start, then the earlier end (§6.2).** Nobody types or picks a layer, and no code chooses one outside the layer module. | Decided (project owner, 2026-10-16) | Keeps D-6's stored integer, so the resolver, triggers and `ref/` are unchanged. "Last edited on top" made playback depend on edit history the timeline doesn't show: a page-flag drag hid a breakaway, a one-count nudge flipped a path, and two identical timelines played differently. Start, then end, ranks a marcher's overlapping rows straight off the timeline. Cases and animations: [research/layer-priority](research/layer-priority/README.md). |
+| ID   | Decision                                                                                                                                                                                                                                                       | Status                              | Rationale                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D-1  | **SQLite, with relational tables for the links and JSON for the leaves.** Shape geometry and path parameters are opaque JSON columns.                                                                                                                          | Decided                             | Nothing ever queries into geometry, so JSON is fine there. The assignment table is a many-to-many relationship over ranges, which is exactly what relational storage is good at. A document model would make it worse.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| D-2  | **Positions are generated, not stored.** A marcher's coordinate at a beat is computed on demand. Only authored facts are persisted.                                                                                                                            | Decided                             | This was "path 1" in the discussion. Storing sampled coordinates ("path 2") creates a second source of truth and makes invalidation per-sample. Sampled data remains a valid **export** format (§11).                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| D-3  | **Cache at the boundaries, not the interior.** The cached state is where marchers are when each span starts, plus FTL trails. Nothing between boundaries is cached.                                                                                            | Decided                             | A start state is fixed once the authored data is fixed. Caching it removes the recursive walk up the chain from the per-frame path (§9.6).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| D-4  | **Slots are separate from marchers.** Transitions own anonymous slots, and assignments put marchers into them.                                                                                                                                                 | Decided                             | Lets a designer author "a 16-person circle" before deciding who is in it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| D-5  | **Shapes are absolute.** No shape or path is positioned relative to upstream geometry.                                                                                                                                                                         | Decided                             | An upstream edit makes the drill _look worse_: marchers take a longer approach and move faster. It never makes the drill _invalid_, so there are no cascading conflicts to resolve. §8.11 makes this hold numerically too.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| D-6  | **Precedence is an explicit integer `layer`.** The resolver reads it as stored and never infers precedence itself.                                                                                                                                             | Decided                             | Stays predictable when steals are stacked. Cost: the UI eventually has to show layers. _Amended by D-18 (2026-10-16): the stored integer stays, but the app derives it from the ranges (base rows lowest, then the later start, then the shorter on a shared start). That ranking is a fixed function of what the timeline shows, so it stays predictable when steals stack, which was D-6's concern with inference by "most recent". The UI shows stacking order and overridden counts instead of numbers._                                                                                                                                                                     |
+| D-7  | **Progress is measured against the transition's natural end** (`T.end_beat`), not against the end of the span after clipping.                                                                                                                                  | Decided                             | This is what makes steals correct. A marcher stolen halfway through is halfway there, not at the destination.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| D-8  | **Invalidation pushes, recompute pulls.** An edit marks dependents dirty straight away. Nothing is recomputed until something reads it.                                                                                                                        | Decided                             | Work scales with what the playhead needs, not with the length of the show.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| D-9  | **Order is a runtime input that only order-sensitive styles read.** It is not glue that users maintain everywhere.                                                                                                                                             | Decided                             | Avoids Pyware's gluing model, which forces an ordering onto shapes (such as boxes) that don't need one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| D-10 | **Origins are cached per _span_, and entries per FTL transition. Nothing is cached per transition for direct or arc motion.**                                                                                                                                  | Proposed                            | Stacked steals create resumes (A → B → A), which is a **cycle** at the transition level. At the span level the graph is guaranteed acyclic (§9.3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| D-11 | **`arc` is order-free.** Each marcher moves along its own circular arc, controlled by a shared `bulge`.                                                                                                                                                        | Proposed                            | Earlier drafts listed arc as order-sensitive, but nothing in its definition needs order. A shared curved path that marchers walk in sequence is FTL with waypoints.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| D-12 | **Joins and resumes rebase.** A non-founding span of direct or arc motion starts from the marcher's actual position and finishes when the transition finishes. Non-founding FTL spans fall back to direct motion toward an FTL target, and raise a diagnostic. | Proposed                            | Keeps every marcher's position continuous. FTL has no well-defined meaning for a marcher who is not on the trail.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| D-13 | **Empty slots are valid.** An unfilled slot is _vacant_: allowed, flagged, and not an error. Over-filling a transition is an error.                                                                                                                            | Proposed                            | Designers author slots before they cast marchers (D-4).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| D-14 | **One edit is one database transaction, and the resolver hears about it once, as a batch.** The batch comes from a change log that triggers maintain, so it includes cascaded deletes and every row a multi-statement procedure changes.                       | Proposed (v0.2)                     | SQLite aborts only the failing _statement_, not the transaction. A single user edit can also change rows the app never touched directly. Both problems go away if the write wrapper owns atomicity and the database reports what actually changed (§6, §10.2).                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| D-15 | **Arcs are minor arcs only: `\|bulge\| ≤ ½`.**                                                                                                                                                                                                                 | Proposed (v0.4)                     | A major arc can carry a stolen marcher farther from its target than where it started. Chained steals then make positions grow geometrically, all the way to NaN (Appendix D). A minor arc never increases the distance to its target, which gives the provable bound in §8.11. The alternative was a runtime guard that clamps or flags out-of-range positions, and that would break D-5. **This is a product restriction.** The nearest remaining tool, FTL with waypoints, is not an exact substitute. It changes the path geometry, and it changes group motion: members follow one another instead of each sweeping its own arc. QA-SC-14 judges the restriction explicitly. |
+| D-16 | **Shapes are optional. A transition's slot destinations come from a shape _or_ from individually placed points, never both.**                                                                                                                                  | Proposed (v0.6)                     | Designers need to move marchers individually as well as by shape. The resolver only ever needed one destination point per slot; a shape is just one way to produce those points. So individual placement is a second _source_ of slot destinations, and assignments, layers, steals, FTL ordering, invalidation and the derived-range bound (§8.11) are unchanged. Points are keyed by slot, not by marcher, which keeps D-4. Follow-the-leader still needs a shape, because it follows a path (I-T5). Mixing the two in one transition (a shape with a few slots nudged) is Q-14.                                                                                               |
+| D-17 | **Triggers check; they never rewrite.** A change that touches several rows, such as the anchored range edit (R-E1), is an app procedure made of explicit statements, ordered so that every intermediate state is valid.                                        | Proposed (v0.7)                     | The app's undo replays each edit's row changes in reverse. That only works if every step of the edit landed on a valid state, and if replaying a statement has no side effects. A trigger that rewrites rows breaks both (§6.1, Appendix G).                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| D-18 | **The app derives every layer from the ranges: base rows lowest, then the later start, then the earlier end (§6.2).** Nobody types or picks a layer, and no code chooses one outside the layer module.                                                         | Decided (project owner, 2026-10-16) | Keeps D-6's stored integer, so the resolver, triggers and `ref/` are unchanged. "Last edited on top" made playback depend on edit history the timeline doesn't show: a page-flag drag hid a breakaway, a one-count nudge flipped a path, and two identical timelines played differently. Start, then end, ranks a marcher's overlapping rows straight off the timeline. Cases and animations: [research/layer-priority](research/layer-priority/README.md).                                                                                                                                                                                                                      |
 
 ---
 
@@ -374,13 +374,13 @@ CREATE TRIGGER log_slot_destinations_del AFTER DELETE ON slot_destinations BEGIN
 
 **Shape `geometry`, by `kind`** (I-S1). All coordinates are absolute field units (D-5).
 
-| kind | geometry | Closed | Traversal |
-|---|---|---|---|
-| `line` | `{"points": [[x0,y0],[x1,y1]]}` (exactly 2 **distinct** points) | no | `points[0]` → `points[1]` |
-| `freehand` | `{"points": [[x,y], …]}` (2 or more points, total length > 0) | no | in point order |
-| `circle` | `{"center":[x,y], "radius": r>0, "start_angle": θ₀ ∈ [0, 2π) (radians), "clockwise": bool}` | yes | θ = θ₀ ± 2πt (− when clockwise) |
-| `box` | `{"origin":[x,y], "width": w>0, "height": h>0}` | yes | origin → (x+w, y) → (x+w, y+h) → (x, y+h) → origin |
-| `block` | `{"origin":[x,y], "rows": R≥1, "cols": C≥1, "spacing":[dx,dy]}` | n/a (grid) | row-major |
+| kind       | geometry                                                                                    | Closed     | Traversal                                          |
+| ---------- | ------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------- |
+| `line`     | `{"points": [[x0,y0],[x1,y1]]}` (exactly 2 **distinct** points)                             | no         | `points[0]` → `points[1]`                          |
+| `freehand` | `{"points": [[x,y], …]}` (2 or more points, total length > 0)                               | no         | in point order                                     |
+| `circle`   | `{"center":[x,y], "radius": r>0, "start_angle": θ₀ ∈ [0, 2π) (radians), "clockwise": bool}` | yes        | θ = θ₀ ± 2πt (− when clockwise)                    |
+| `box`      | `{"origin":[x,y], "width": w>0, "height": h>0}`                                             | yes        | origin → (x+w, y) → (x+w, y+h) → (x, y+h) → origin |
+| `block`    | `{"origin":[x,y], "rows": R≥1, "cols": C≥1, "spacing":[dx,dy]}`                             | n/a (grid) | row-major                                          |
 
 Every number in `geometry` and `path_params` MUST be finite. Every authored point MUST lie within `[−10⁶, 10⁶]²`: every home, every waypoint, every individual destination, and every point of every shape, including a block's whole grid, a box's far corner and a circle's whole perimeter. Circle start angles MUST be normalized to `[0, 2π)` when authored or imported. Take `θ mod 2π`, and store 0 if rounding produces exactly 2π (I-S1, I-T2). These bounds keep §8's arithmetic well-conditioned (§8.10) and bound every derived position (§8.11). SQLite's `json_valid` accepts `1e999`, so finiteness and the point bounds are checked in the app write path (QA-DB-31). The circle radius, the circle start angle and the arc bulge are also enforced by CHECKs. A `freehand` path may repeat consecutive points. §8.10 defines how those evaluate.
 
@@ -388,11 +388,11 @@ Every number in `geometry` and `path_params` MUST be finite. Every authored poin
 
 **Transition `path_params`, by `path_style`** (I-T2):
 
-| path_style | path_params | Reads order? |
-|---|---|---|
-| `direct` | `NULL` | no |
-| `arc` | `{"bulge": k}` with \|k\| ≤ ½: minor arcs only (D-15, enforced by a CHECK). k = 0 is a straight line and \|k\| = ½ is a semicircle. | no |
-| `follow_the_leader` | `{"waypoints": [[x,y], …]}`. May be empty. Absolute coordinates. | **yes** |
+| path_style          | path_params                                                                                                                         | Reads order? |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `direct`            | `NULL`                                                                                                                              | no           |
+| `arc`               | `{"bulge": k}` with \|k\| ≤ ½: minor arcs only (D-15, enforced by a CHECK). k = 0 is a straight line and \|k\| = ½ is a semicircle. | no           |
+| `follow_the_leader` | `{"waypoints": [[x,y], …]}`. May be empty. Absolute coordinates.                                                                    | **yes**      |
 
 "Left" and "right" for `bulge` follow the rotation `(dx, dy) → (−dy, dx)` in field coordinates. Whether that looks like left on screen depends on which way the renderer's y-axis points. Positive bulge means the arc bows toward `+90°` from the chord direction.
 
@@ -400,7 +400,7 @@ Every number in `geometry` and `path_params` MUST be finite. Every authored poin
 
 ## 6. Invariants [Proposed]
 
-**Transactions.** One user edit is one SQLite transaction. The database does **not** guarantee that on its own. `RAISE(ABORT)` in a trigger, and every CHECK, UNIQUE and foreign-key failure, roll back only the *statement* that failed. If the caller commits anyway, earlier statements in the same transaction survive (QA-DB-26b reproduces this). Atomicity therefore comes from the write wrapper, which is **normative**:
+**Transactions.** One user edit is one SQLite transaction. The database does **not** guarantee that on its own. `RAISE(ABORT)` in a trigger, and every CHECK, UNIQUE and foreign-key failure, roll back only the _statement_ that failed. If the caller commits anyway, earlier statements in the same transaction survive (QA-DB-26b reproduces this). Atomicity therefore comes from the write wrapper, which is **normative**:
 
 ```
 BEGIN
@@ -414,25 +414,25 @@ after COMMIT: resolver.notify(batch)
 
 With this wrapper, the resolver never sees a partial edit, and a rejected edit leaves no trace (QA-DB-26, QA-DB-30).
 
-| ID | Invariant | Enforced by | Error |
-|---|---|---|---|
-| I-S1 | Shape geometry matches the schema for its `kind` (§5.2). Every number is finite. Every point of the shape lies within `[−10⁶, 10⁶]²`, and a circle's `start_angle` lies in `[0, 2π)`. Line endpoints are distinct, and freehand paths have positive length. | App write path. The circle radius and start angle are also checked by a CHECK. | `E-S1` |
-| I-T1 | A transition's range lies inside its timeline's range | Triggers `tr_in_timeline_*`, `tl_contains_upd` | `E-T1` |
-| I-T2 | `path_params` matches the schema for its `path_style` (§5.2). Every number is finite. Waypoints lie within `[−10⁶, 10⁶]²`, and `\|bulge\| ≤ ½` (minor arcs only, D-15). | App write path. The bulge is also checked by a CHECK. | `E-P1` |
-| I-T3 | A `follow_the_leader` transition's destination is not a `block` | Triggers `tr_dest_*`, `shape_dest_upd` | `E-T3` |
-| I-T4 | For a `block` destination, `rows × cols ≥ slot_count` | Triggers `tr_dest_*`, `shape_dest_upd` | `E-T4` |
-| I-A1 | An assignment's range lies inside its transition's range | Triggers `asn_bounds_*`, `tr_range_check` | `E-A1` |
-| I-A2 | `0 ≤ slot_index < slot_count` | CHECK constraint plus triggers `asn_bounds_*`, `tr_slots_upd` | `E-A2` |
-| I-A3 | A marcher has no two assignments that overlap in time **at the same layer** | Triggers `asn_overlap_*` | `E-A3` |
-| I-A4 | Each (transition, slot) holds at most one assignment | `UNIQUE(transition_id, slot_index)` | constraint |
-| I-A5 | A marcher appears at most once per transition | `UNIQUE(transition_id, marcher_id)` | constraint |
-| I-A6 | Every range has positive length | CHECK `end_beat > start_beat` | constraint |
-| I-D1 | A shape that a transition uses cannot be deleted | FK `ON DELETE RESTRICT` | constraint |
-| I-T5 | A `follow_the_leader` transition has a shape | CHECK | constraint |
-| I-T6 | A transition has a shape **or** individual destinations, never both. With no shape, it has exactly one destination for each slot `0…slot_count−1`. | Triggers `sd_ins`, `sd_upd`, `tr_shape_set`, `tr_slots_dest_upd`. Completeness is checked **at commit** through the `commit_violations` view, because a transition and its points are inserted in the same edit. | `E-T6` |
-| I-D2 | Individual destinations are finite and within `[−10⁶, 10⁶]²` | CHECK | constraint |
-| I-N1 | Integer columns (beats, slots, layers, ids) hold integers | `STRICT` tables | constraint |
-| I-N2 | Beats lie in `[0, 2³¹−1]`, `layer` in `[−1000, 1000]` and `slot_count` in `[1, 10000]`. Home coordinates are finite with \|x\|, \|y\| ≤ 10⁶. | CHECK constraints | constraint |
+| ID   | Invariant                                                                                                                                                                                                                                                   | Enforced by                                                                                                                                                                                                      | Error      |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| I-S1 | Shape geometry matches the schema for its `kind` (§5.2). Every number is finite. Every point of the shape lies within `[−10⁶, 10⁶]²`, and a circle's `start_angle` lies in `[0, 2π)`. Line endpoints are distinct, and freehand paths have positive length. | App write path. The circle radius and start angle are also checked by a CHECK.                                                                                                                                   | `E-S1`     |
+| I-T1 | A transition's range lies inside its timeline's range                                                                                                                                                                                                       | Triggers `tr_in_timeline_*`, `tl_contains_upd`                                                                                                                                                                   | `E-T1`     |
+| I-T2 | `path_params` matches the schema for its `path_style` (§5.2). Every number is finite. Waypoints lie within `[−10⁶, 10⁶]²`, and `\|bulge\| ≤ ½` (minor arcs only, D-15).                                                                                     | App write path. The bulge is also checked by a CHECK.                                                                                                                                                            | `E-P1`     |
+| I-T3 | A `follow_the_leader` transition's destination is not a `block`                                                                                                                                                                                             | Triggers `tr_dest_*`, `shape_dest_upd`                                                                                                                                                                           | `E-T3`     |
+| I-T4 | For a `block` destination, `rows × cols ≥ slot_count`                                                                                                                                                                                                       | Triggers `tr_dest_*`, `shape_dest_upd`                                                                                                                                                                           | `E-T4`     |
+| I-A1 | An assignment's range lies inside its transition's range                                                                                                                                                                                                    | Triggers `asn_bounds_*`, `tr_range_check`                                                                                                                                                                        | `E-A1`     |
+| I-A2 | `0 ≤ slot_index < slot_count`                                                                                                                                                                                                                               | CHECK constraint plus triggers `asn_bounds_*`, `tr_slots_upd`                                                                                                                                                    | `E-A2`     |
+| I-A3 | A marcher has no two assignments that overlap in time **at the same layer**                                                                                                                                                                                 | Triggers `asn_overlap_*`                                                                                                                                                                                         | `E-A3`     |
+| I-A4 | Each (transition, slot) holds at most one assignment                                                                                                                                                                                                        | `UNIQUE(transition_id, slot_index)`                                                                                                                                                                              | constraint |
+| I-A5 | A marcher appears at most once per transition                                                                                                                                                                                                               | `UNIQUE(transition_id, marcher_id)`                                                                                                                                                                              | constraint |
+| I-A6 | Every range has positive length                                                                                                                                                                                                                             | CHECK `end_beat > start_beat`                                                                                                                                                                                    | constraint |
+| I-D1 | A shape that a transition uses cannot be deleted                                                                                                                                                                                                            | FK `ON DELETE RESTRICT`                                                                                                                                                                                          | constraint |
+| I-T5 | A `follow_the_leader` transition has a shape                                                                                                                                                                                                                | CHECK                                                                                                                                                                                                            | constraint |
+| I-T6 | A transition has a shape **or** individual destinations, never both. With no shape, it has exactly one destination for each slot `0…slot_count−1`.                                                                                                          | Triggers `sd_ins`, `sd_upd`, `tr_shape_set`, `tr_slots_dest_upd`. Completeness is checked **at commit** through the `commit_violations` view, because a transition and its points are inserted in the same edit. | `E-T6`     |
+| I-D2 | Individual destinations are finite and within `[−10⁶, 10⁶]²`                                                                                                                                                                                                | CHECK                                                                                                                                                                                                            | constraint |
+| I-N1 | Integer columns (beats, slots, layers, ids) hold integers                                                                                                                                                                                                   | `STRICT` tables                                                                                                                                                                                                  | constraint |
+| I-N2 | Beats lie in `[0, 2³¹−1]`, `layer` in `[−1000, 1000]` and `slot_count` in `[1, 10000]`. Home coordinates are finite with \|x\|, \|y\| ≤ 10⁶.                                                                                                                | CHECK constraints                                                                                                                                                                                                | constraint |
 
 Because of I-A3, at most one winner exists for any beat in R-2.
 
@@ -457,7 +457,7 @@ CREATE TABLE history_stats (id INTEGER PRIMARY KEY CHECK (id = 1), cur_undo_grou
 
 **How it works.**
 
-- **Record.** Every data table has `AFTER INSERT`, `UPDATE` and `DELETE` triggers. Each one writes the *inverse* of one row change into `history_undo`, tagged with `cur_undo_group`. An insert logs a `DELETE`, a delete logs an `INSERT` of the old row, and an update logs an `UPDATE` back to the old values. Each edit bumps `cur_undo_group`, so one edit is one group. For example:
+- **Record.** Every data table has `AFTER INSERT`, `UPDATE` and `DELETE` triggers. Each one writes the _inverse_ of one row change into `history_undo`, tagged with `cur_undo_group`. An insert logs a `DELETE`, a delete logs an `INSERT` of the old row, and an update logs an `UPDATE` back to the old values. Each edit bumps `cur_undo_group`, so one edit is one group. For example:
   ```sql
   CREATE TRIGGER hist_slot_destinations_insert AFTER INSERT ON slot_destinations BEGIN
     INSERT INTO history_undo(history_group, sql)
@@ -474,19 +474,19 @@ CREATE TABLE history_stats (id INTEGER PRIMARY KEY CHECK (id = 1), cur_undo_grou
 
 That argument needs four things. The schema in §5.1 meets all four, and they are normative for any future change to it:
 
-| ID | Rule | Why | What breaks without it |
-|---|---|---|---|
-| U-1 | **No trigger modifies a data table.** A trigger may `RAISE`, or write to bookkeeping tables (`change_log`, `history_*`). Changes to several rows are app procedures made of explicit statements (D-17). | A rewriting trigger makes one statement change several rows, in an order the trigger chooses. Undo replays those changes in reverse, and replaying the first statement fires the trigger again. | v0.6's `tr_range_anchor`. Undoing a shrink restores the assignment before its transition, and the assignment check rejects it (QA-UNDO-1). |
-| U-2 | **Every check is a condition on the resulting state.** A trigger may read `NEW` and other rows. It never compares `NEW` with `OLD`. | Undo reverses the direction of every change. A check on direction, such as "may only grow", would reject the reverse step even though it lands on a valid state. | — |
-| U-3 | **Every invariant is checked from every side that can break it**, so every intermediate state is valid, not just the state at commit. For example, I-A1 is checked when an assignment changes (`asn_bounds_*`) and when its transition's range changes (`tr_range_check`). Only invariants that can't be judged until the edit is complete go in `commit_violations` (I-T6 completeness). | If an edit can pass through an unchecked invalid state, its undo steps back onto that state from the checked side, and is rejected. | Without `tr_range_check`, "shrink T, then fix its rows" commits, and its undo is rejected (QA-UNDO-1b). |
-| U-4 | **Foreign keys use only `ON DELETE CASCADE` or `RESTRICT`.** There are no `ON UPDATE` actions, and primary keys are never changed. | SQLite logs each cascaded child delete before its parent's. QA-UNDO-3 pins this, two levels deep. Undo therefore re-inserts every parent before its children. On redo, the parent's delete finds its children already gone, so the cascade has nothing left to do. | If a future SQLite logged the parent first, QA-UNDO-3 would fail. The fallback is `RESTRICT` plus explicit child-first deletes in app code. |
+| ID  | Rule                                                                                                                                                                                                                                                                                                                                                                                      | Why                                                                                                                                                                                                                                                                | What breaks without it                                                                                                                      |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| U-1 | **No trigger modifies a data table.** A trigger may `RAISE`, or write to bookkeeping tables (`change_log`, `history_*`). Changes to several rows are app procedures made of explicit statements (D-17).                                                                                                                                                                                   | A rewriting trigger makes one statement change several rows, in an order the trigger chooses. Undo replays those changes in reverse, and replaying the first statement fires the trigger again.                                                                    | v0.6's `tr_range_anchor`. Undoing a shrink restores the assignment before its transition, and the assignment check rejects it (QA-UNDO-1).  |
+| U-2 | **Every check is a condition on the resulting state.** A trigger may read `NEW` and other rows. It never compares `NEW` with `OLD`.                                                                                                                                                                                                                                                       | Undo reverses the direction of every change. A check on direction, such as "may only grow", would reject the reverse step even though it lands on a valid state.                                                                                                   | —                                                                                                                                           |
+| U-3 | **Every invariant is checked from every side that can break it**, so every intermediate state is valid, not just the state at commit. For example, I-A1 is checked when an assignment changes (`asn_bounds_*`) and when its transition's range changes (`tr_range_check`). Only invariants that can't be judged until the edit is complete go in `commit_violations` (I-T6 completeness). | If an edit can pass through an unchecked invalid state, its undo steps back onto that state from the checked side, and is rejected.                                                                                                                                | Without `tr_range_check`, "shrink T, then fix its rows" commits, and its undo is rejected (QA-UNDO-1b).                                     |
+| U-4 | **Foreign keys use only `ON DELETE CASCADE` or `RESTRICT`.** There are no `ON UPDATE` actions, and primary keys are never changed.                                                                                                                                                                                                                                                        | SQLite logs each cascaded child delete before its parent's. QA-UNDO-3 pins this, two levels deep. Undo therefore re-inserts every parent before its children. On redo, the parent's delete finds its children already gone, so the cascade has nothing left to do. | If a future SQLite logged the parent first, QA-UNDO-3 would fail. The fallback is `RESTRICT` plus explicit child-first deletes in app code. |
 
 **The range edit, before and after.** Shrink T from `[8,24)` to `[8,16)`. M1's row is `[8,24)`, so it is anchored at both ends.
 
-| | v0.6 (trigger) | v0.7 (procedure, R-E1) |
-|---|---|---|
-| Edit | `UPDATE T end = 16`. The trigger moves M1 to `[8,16)`. Logged: T, then M1. | Union `[8,24)` equals the old range, so step 1 is skipped. M1 → `[8,16)`, then T → `[8,16)`. Logged: M1, then T. |
-| Undo (reverse order) | M1 → `[8,24)` while T is still `[8,16)`. **Rejected (E-A1).** | T → `[8,24)`, then M1 → `[8,24)`. Valid at every step. |
+|                      | v0.6 (trigger)                                                             | v0.7 (procedure, R-E1)                                                                                           |
+| -------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Edit                 | `UPDATE T end = 16`. The trigger moves M1 to `[8,16)`. Logged: T, then M1. | Union `[8,24)` equals the old range, so step 1 is skipped. M1 → `[8,16)`, then T → `[8,16)`. Logged: M1, then T. |
+| Undo (reverse order) | M1 → `[8,24)` while T is still `[8,16)`. **Rejected (E-A1).**              | T → `[8,24)`, then M1 → `[8,24)`. Valid at every step.                                                           |
 
 **Operational rules:**
 
@@ -507,10 +507,10 @@ The resolver only reads `layer` (R-2). This section says how the app's write pat
 - **L-5: the number.** `layer(r)` is 0 if `r` beats no row it overlaps. Otherwise it is one more than the highest layer among the overlapping rows it beats. A base row is 0 unless it overlaps another base row it beats. A row that would need a layer above 1000 (I-N2) is refused (`E-A3`).
 - **L-6: one writer.** Every edit that writes, moves or deletes assignments, or adds, moves or removes a page's mark, ends by setting the layers of the marchers it touched from L-1 to L-5, in the same transaction. No other code chooses a layer, and no UI edits one. So that every intermediate state stays valid in both directions (§6.1), the edit first moves every row it will move, and every row of a touched marcher whose derived layer will change, to a distinct negative temporary layer in `[−1000, −1]`. Then it makes its changes, then writes the derived layers. Derived layers are never negative, so the final writes can't collide with a temporary one in any order, and undo replays through the same valid states. Statement-ordering tricks that kept same-layer rows apart during an edit are no longer needed.
 
-| ID | Invariant | Enforced by | Error |
-|---|---|---|---|
-| I-L1 | Every stored layer equals L-5's | The layer module on every write; a test after every command | test failure |
-| I-L2 | No two rows of one marcher of the same kind share the same range | Write path (L-4) | `E-ARGS` |
+| ID   | Invariant                                                        | Enforced by                                                 | Error        |
+| ---- | ---------------------------------------------------------------- | ----------------------------------------------------------- | ------------ |
+| I-L1 | Every stored layer equals L-5's                                  | The layer module on every write; a test after every command | test failure |
+| I-L2 | No two rows of one marcher of the same kind share the same range | Write path (L-4)                                            | `E-ARGS`     |
 
 Steals are unchanged: an overridden row keeps running hypothetically, and a row that picks a marcher back up rebases (D-12). **Follow-the-leader founders depend on layers** (R-9, QA-REG-4): a row that a higher layer overrides at an FTL transition's start makes that marcher a joiner. So an edit that changes a marcher's ranking, such as moving the end of one of two rows that start together, can change who founds an FTL move and shift every member's target, even though the edited row isn't in that move. The FTL diagnostics report it. One non-base row can never hide another entirely, since hiding it would need the same start and a later end. Several shorter rows inside a longer one can still cover all of it; that's the designer's choice, shown by the longer row's faded counts.
 
@@ -519,7 +519,7 @@ Steals are unchanged: an overridden row keeps running hypothetically, and a row 
 ## 7. Time model [Decided; details Proposed]
 
 - The resolver works on **beat positions** (real numbers). Converting a wall-clock timestamp to a beat position is the tempo map's job, which is **out of scope**. See Q-9.
-- Every range is half-open, `[start, end)`. Where two spans meet at beat `c`, the later span *owns* `c`. Positions agree at `c` anyway (P-1).
+- Every range is half-open, `[start, end)`. Where two spans meet at beat `c`, the later span _owns_ `c`. Positions agree at `c` anyway (P-1).
 - Authored bounds are integers, enforced by `STRICT` tables (I-N1) within the range set by I-N2. Sub-beat authoring is **[Open] Q-6**.
 - A query before a marcher's first assignment returns home. A query after the last one returns the last exit position.
 
@@ -566,12 +566,12 @@ The flattened spans are: hold(−∞,0) · A[0,4) founding · B[4,6) founding ·
 
 For a span `s` whose winner is row `r` in transition `T`:
 
-| Kind | Condition |
-|---|---|
-| `hold` | `s` has no winner |
-| `founding` | `s.start = T.start_beat` |
-| `join` | not founding, and `s` is the first span of row `r` |
-| `resume` | `s` is not the first span of row `r` |
+| Kind       | Condition                                          |
+| ---------- | -------------------------------------------------- |
+| `hold`     | `s` has no winner                                  |
+| `founding` | `s.start = T.start_beat`                           |
+| `join`     | not founding, and `s` is the first span of row `r` |
+| `resume`   | `s` is not the first span of row `r`               |
 
 Note: a row that begins at `T.start_beat`, but is overridden at that moment by a higher layer, produces a first span that is a **join**, not founding (QA-FL-03).
 
@@ -602,11 +602,11 @@ For joins and resumes, the same formula **rebases** the motion: whatever distanc
 
 `eval(s, b)` for `b ∈ [s.start, s.end]`:
 
-| Span | Result |
-|---|---|
-| **R-6** `hold` | `origin(s)` |
+| Span                       | Result                                                                |
+| -------------------------- | --------------------------------------------------------------------- |
+| **R-6** `hold`             | `origin(s)`                                                           |
 | **R-7** `direct`, any kind | `lerp(origin(s), dest, p(s,b))`, where `dest = destinations[T][slot]` |
-| **R-8** `arc`, any kind | `arcPoint(origin(s), dest, bulge, p(s,b))`, as defined below |
+| **R-8** `arc`, any kind    | `arcPoint(origin(s), dest, bulge, p(s,b))`, as defined below          |
 
 `lerp(a, b, t)` is endpoint-exact: it returns `a` for `t ≤ 0` and `b` for `t ≥ 1`, bit for bit (§8.10).
 
@@ -645,9 +645,9 @@ Each `follow_the_leader` transition `T` with `n = slot_count` has one derived **
    - `trail(d)` is `pre.pointAtDistance(d)` when `d < destOffset`, and `destPath(d − destOffset)` otherwise.
 5. **Targets.**
    - Members: `target[m_q] = p_{n−m+q}`.
-   - Every **other assignment row** of `T` is a non-member occupant. That includes joiners, rows overridden at the transition's start, and rows that higher layers override completely. Sort them by `(slot_index, marcher_id)`. The *k*-th gets `p_{n−m−1−k}`, so they queue behind the tail. There are always enough points, because of I-A4.
+   - Every **other assignment row** of `T` is a non-member occupant. That includes joiners, rows overridden at the transition's start, and rows that higher layers override completely. Sort them by `(slot_index, marcher_id)`. The _k_-th gets `p_{n−m−1−k}`, so they queue behind the tail. There are always enough points, because of I-A4.
    - A row reserves a point whether or not it currently produces a span (QA-REG-3). That does **not** make targets independent of layering. Layering elsewhere decides who is a founding member, which changes `m` and so shifts every index `n−m+q` and `n−m−1−k`. For example, overriding one of two founders at `T`'s start swaps both targets even though `T`'s own rows never change (QA-REG-4). §9.4 step 3.4 invalidates the entry in that case.
-   - Targets are distinct *sample indexes*. Two different indexes can still fall on the same coordinate (§8.10, QA-DG-5).
+   - Targets are distinct _sample indexes_. Two different indexes can still fall on the same coordinate (§8.10, QA-DG-5).
 
 Consequences, each tested in §12:
 
@@ -705,13 +705,13 @@ Curves are never flattened, so FTL arrival and trail adherence are exact at ever
 
 Diagnostics never block playback or writes. The inspector MUST show them.
 
-| Code | Level | Raised when |
-|---|---|---|
-| `D-VACANT` | warning | Slot `k` of `T` has no assignment |
-| `D-REBASE` | info | A direct or arc span is a join or resume (R-5 rebase) |
-| `D-FTL-NONFOUNDING` | warning | An FTL span is a join or resume, so R-11 applies |
-| `D-FTL-EMPTY` | warning | An FTL transition has no founding spans |
-| `D-ORDER-FALLBACK` | info | `inherit` could not find a single upstream source, so slot order was used |
+| Code                | Level   | Raised when                                                               |
+| ------------------- | ------- | ------------------------------------------------------------------------- |
+| `D-VACANT`          | warning | Slot `k` of `T` has no assignment                                         |
+| `D-REBASE`          | info    | A direct or arc span is a join or resume (R-5 rebase)                     |
+| `D-FTL-NONFOUNDING` | warning | An FTL span is a join or resume, so R-11 applies                          |
+| `D-FTL-EMPTY`       | warning | An FTL transition has no founding spans                                   |
+| `D-ORDER-FALLBACK`  | info    | `inherit` could not find a single upstream source, so slot order was used |
 
 ### 8.10 Degenerate geometry [added in v0.2]
 
@@ -732,7 +732,7 @@ These rules keep every evaluation finite. QA-DG-1 to QA-DG-6 test them, and P-11
 
 ### 8.11 Derived range [added in v0.4]
 
-Authored points are bounded (I-S1), but positions are *derived*. An arc's origin is wherever the previous motion left the marcher, and that can lie outside the authored bounds. In v0.3, bulges could go up to 2. The third review chained 40 partial arcs, each stolen halfway, each leaving the marcher farther from its target than it started. The marcher reached about 3.4×10¹⁸, and a chain of about 1,000 produced NaN. v0.4 closes this with a restriction and a theorem.
+Authored points are bounded (I-S1), but positions are _derived_. An arc's origin is wherever the previous motion left the marcher, and that can lie outside the authored bounds. In v0.3, bulges could go up to 2. The third review chained 40 partial arcs, each stolen halfway, each leaving the marcher farther from its target than it started. The marcher reached about 3.4×10¹⁸, and a chain of about 1,000 produced NaN. v0.4 closes this with a restriction and a theorem.
 
 **Restriction.** Arcs are minor: `|bulge| ≤ ½` (I-T2, D-15).
 
@@ -757,7 +757,6 @@ Homes start with `|P| ≤ β`. Only arcs grow the squared norm, and each by at m
 - In practice positions stay far inside the bound. The reviewer's construction at the maximum allowed bulge ran 1,000 partial arcs without the marcher ever getting farther than its starting distance of 10⁶ (QA-REG-5). A randomized adversarial variant never exceeded about 1.8×10⁶.
 
 **Checked by** P-13, at every probe of every property-checked show, including 30 adversarial arc chains. Re-enabling major arcs (mutation M7) violates it.
-
 
 ---
 
@@ -812,14 +811,14 @@ flowchart TB
 
 ### 9.2 Cache inventory
 
-| # | Cache | Key | Value | Depends on | Tier |
-|---|---|---|---|---|---|
-| 1 | `spans` | marcher | Span[] (R-2), sorted | that marcher's assignment rows | local |
-| 2 | `spansByTransition` | transition | span references | `spans` | local |
-| 3 | `destinations` | transition | `slot_count × 2` floats (R-13) | the shape's geometry and `slot_count`, or the transition's `slot_destinations` rows | local |
-| 4 | `ftlGeometry` | FTL transition | the exact destination path and its length (R-13) | dest shape | local |
-| 5 | `origin` | (marcher, span.start) | xy | the previous span's evaluation (R-4) | **cascading** |
-| 6 | `ftlEntry` | FTL transition | members in q order, order source, startDist, endDist, targets (R-9); the trail references `ftlGeometry` | founding origins, `ftlGeometry`, the order source, and **every assignment row of T** (for targets) | **cascading** |
+| #   | Cache               | Key                   | Value                                                                                                   | Depends on                                                                                         | Tier          |
+| --- | ------------------- | --------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------- |
+| 1   | `spans`             | marcher               | Span[] (R-2), sorted                                                                                    | that marcher's assignment rows                                                                     | local         |
+| 2   | `spansByTransition` | transition            | span references                                                                                         | `spans`                                                                                            | local         |
+| 3   | `destinations`      | transition            | `slot_count × 2` floats (R-13)                                                                          | the shape's geometry and `slot_count`, or the transition's `slot_destinations` rows                | local         |
+| 4   | `ftlGeometry`       | FTL transition        | the exact destination path and its length (R-13)                                                        | dest shape                                                                                         | local         |
+| 5   | `origin`            | (marcher, span.start) | xy                                                                                                      | the previous span's evaluation (R-4)                                                               | **cascading** |
+| 6   | `ftlEntry`          | FTL transition        | members in q order, order source, startDist, endDist, targets (R-9); the trail references `ftlGeometry` | founding origins, `ftlGeometry`, the order source, and **every assignment row of T** (for targets) | **cascading** |
 
 Origins are keyed by `(marcher, span.start)`, not by span index. When `spans[m]` is rebuilt, entries whose start comes before the edit keep their key and stay valid.
 
@@ -848,7 +847,7 @@ Consequences:
 - A cold compile computes each node exactly once.
 - **Termination is not bounded stack depth [v0.5].** Dependency depth equals the number of spans in a chain, which can reach tens of thousands. Pull-compile and the dirty walk MUST use an explicit work stack or an equivalent loop, not language recursion. Suppose a node comes back to the top of the work stack while its own dependencies are still unresolved. That is a cycle, and valid data can't produce one (see above). An implementation MUST treat it as an internal error and fail loudly rather than loop (QA-REG-6). The reference oracle (§12.1) is deliberately recursive, so it only runs on small shows.
 
-**I-C1: cache closure** (runtime invariant). If a node is cached, every node it depends on is also cached. Pull-compile maintains this, because it computes dependencies first. The dirty walk maintains it by evicting dependents along with the node they depend on. Early stopping in the walk (W-4) is correct *because* of I-C1: an uncached node can have no cached dependents. I-C1 also requires every cached origin key to belong to a span that currently exists. A key left behind by a rebuild is a stale node, and P-4 checks for both.
+**I-C1: cache closure** (runtime invariant). If a node is cached, every node it depends on is also cached. Pull-compile maintains this, because it computes dependencies first. The dirty walk maintains it by evicting dependents along with the node they depend on. Early stopping in the walk (W-4) is correct _because_ of I-C1: an uncached node can have no cached dependents. I-C1 also requires every cached origin key to belong to a span that currently exists. A key left behind by a rebuild is a stale node, and P-4 checks for both.
 
 ### 9.4 Invalidation rules
 
@@ -862,25 +861,25 @@ The resolver processes one **batch** per committed transaction (§10.2). It neve
    - For a transition whose range changed, every marcher with a row in it. `b₀ ≤ min(old start, new start)`.
    - Every inserted, deleted or re-homed marcher. `b₀ = −∞`.
 3. **For each affected marcher**, in this order:
-   1. **Evict along the old structure.** Dirty `origin(s)` for every *old* span with `s.start ≥ b₀`. W-1 applies, so old founding spans also dirty their FTL entry.
+   1. **Evict along the old structure.** Dirty `origin(s)` for every _old_ span with `s.start ≥ b₀`. W-1 applies, so old founding spans also dirty their FTL entry.
    2. **Rebuild** `spans[m]`, or drop it if the marcher was deleted.
    3. **Re-index** `spansByTransition` for **every transition in the old or new spans**, not just the edited row's transition. Remove all of `m`'s old spans and add all of its new ones.
    4. **Dirty `ftlEntry(T)`** for every FTL transition `T` that appears in `m`'s old spans, new spans **or changed row images**. The last group catches rows that produce no span because a higher layer overrides them completely. Those rows still hold targets (R-9 step 5).
 4. **Transition and shape changes.** Recompute the local caches, then seed W-3 using the **new** index. For a deleted transition, drop its local caches, its entry and its index.
 
-| Change | Local recompute | Dirty seeds |
-|---|---|---|
-| Shape `S` geometry or kind | `destinations` and `ftlGeometry` of every T with `dest_shape_id = S` | W-3 for each such T |
-| `T.slot_count`, `T.dest_shape_id` (including switching between a shape and individual destinations) | `destinations[T]` and `ftlGeometry[T]` | W-3 for T |
-| Individual destination inserted, updated or deleted | `destinations[T]` | W-3 for T |
-| `T.path_style` | `ftlGeometry[T]` (create or drop) | W-3 for T |
-| `T.path_params` | `ftlGeometry[T]` if FTL | W-3 for T |
-| `T.order_mode` | none | W-3 for T |
-| `T.start_beat` or `T.end_beat` (with R-E1) | step 3 for every marcher with a row in T | W-3 for T |
-| Transition inserted or deleted | create or drop its local caches | W-3, or drop |
-| Assignment insert, update or delete (including cascades, R-E1 procedure rows, undo and redo) | step 3 for its marcher | steps 3.1 and 3.4 |
-| Marcher insert, delete or home change | step 3 with `b₀ = −∞` | steps 3.1 and 3.4 |
-| Timeline range | none (containment only, I-T1) | none |
+| Change                                                                                              | Local recompute                                                      | Dirty seeds         |
+| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------- |
+| Shape `S` geometry or kind                                                                          | `destinations` and `ftlGeometry` of every T with `dest_shape_id = S` | W-3 for each such T |
+| `T.slot_count`, `T.dest_shape_id` (including switching between a shape and individual destinations) | `destinations[T]` and `ftlGeometry[T]`                               | W-3 for T           |
+| Individual destination inserted, updated or deleted                                                 | `destinations[T]`                                                    | W-3 for T           |
+| `T.path_style`                                                                                      | `ftlGeometry[T]` (create or drop)                                    | W-3 for T           |
+| `T.path_params`                                                                                     | `ftlGeometry[T]` if FTL                                              | W-3 for T           |
+| `T.order_mode`                                                                                      | none                                                                 | W-3 for T           |
+| `T.start_beat` or `T.end_beat` (with R-E1)                                                          | step 3 for every marcher with a row in T                             | W-3 for T           |
+| Transition inserted or deleted                                                                      | create or drop its local caches                                      | W-3, or drop        |
+| Assignment insert, update or delete (including cascades, R-E1 procedure rows, undo and redo)        | step 3 for its marcher                                               | steps 3.1 and 3.4   |
+| Marcher insert, delete or home change                                                               | step 3 with `b₀ = −∞`                                                | steps 3.1 and 3.4   |
+| Timeline range                                                                                      | none (containment only, I-T1)                                        | none                |
 
 **Walk rules:**
 
@@ -934,14 +933,14 @@ The symbols are:
 - `m_T`: members of an FTL transition
 - `o_T`: non-member occupants of an FTL transition
 
-| Operation | Bound | Why |
-|---|---|---|
-| `positionAt`, warm cache | O(log k), plus O(log P_T) in an FTL founding span | binary search for the span; `q` from a marcher → q map in O(1); a binary search along the trail (O(1) on a circle's exact path) |
-| `positionsAt` for a whole frame, warm cache | O(M log k + M_F log P_max), where M_F is the number of marchers currently in FTL founding spans | per marcher |
-| Cold compile of the whole show | O(S log P_max + Σ_FTL (m_T log m_T + o_T log o_T + P_T)) | each DAG node is computed once; an origin that follows an FTL span pays one trail search; non-member targets are sorted using a per-transition row index, never a scan of all assignments |
-| Applying a batch | O(Σ over affected marchers of (r² + old spans + new spans)), plus index updates and the dirty walk | §9.4 |
-| Dirty walk | O(nodes dirtied + Σ over dirtied FTL entries of \|spans in T\|) | W-4 |
-| Rebuilding one marcher's spans | O(r²) naive, or O(r log r) with a sweep | r is the number of rows for that marcher, about 20 |
+| Operation                                   | Bound                                                                                              | Why                                                                                                                                                                                       |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `positionAt`, warm cache                    | O(log k), plus O(log P_T) in an FTL founding span                                                  | binary search for the span; `q` from a marcher → q map in O(1); a binary search along the trail (O(1) on a circle's exact path)                                                           |
+| `positionsAt` for a whole frame, warm cache | O(M log k + M_F log P_max), where M_F is the number of marchers currently in FTL founding spans    | per marcher                                                                                                                                                                               |
+| Cold compile of the whole show              | O(S log P_max + Σ_FTL (m_T log m_T + o_T log o_T + P_T))                                           | each DAG node is computed once; an origin that follows an FTL span pays one trail search; non-member targets are sorted using a per-transition row index, never a scan of all assignments |
+| Applying a batch                            | O(Σ over affected marchers of (r² + old spans + new spans)), plus index updates and the dirty walk | §9.4                                                                                                                                                                                      |
+| Dirty walk                                  | O(nodes dirtied + Σ over dirtied FTL entries of \|spans in T\|)                                    | W-4                                                                                                                                                                                       |
+| Rebuilding one marcher's spans              | O(r²) naive, or O(r log r) with a sweep                                                            | r is the number of rows for that marcher, about 20                                                                                                                                        |
 
 Without the origin and entry caches, a single query would re-walk the whole chain. Under FTL, every level needs every member resolved, so the cost grows exponentially with chain depth. **Caching the boundaries is what makes on-demand generation viable (D-2, D-3).** The cost of a full compile grows with the amount of authored data, not with the length of the show.
 
@@ -961,12 +960,12 @@ An informational timing (QA-CX-06) measured warm per-member FTL evaluation at 50
 type Beat = number;
 type XY = readonly [number, number];
 
-type SpanKind = 'hold' | 'founding' | 'join' | 'resume';
+type SpanKind = "hold" | "founding" | "join" | "resume";
 
 interface SpanInfo {
   marcherId: number;
-  start: Beat;              // −Infinity for the leading hold
-  end: Beat;                // +Infinity for the trailing hold
+  start: Beat; // −Infinity for the leading hold
+  end: Beat; // +Infinity for the trailing hold
   kind: SpanKind;
   assignmentId: number | null;
   transitionId: number | null;
@@ -974,12 +973,12 @@ interface SpanInfo {
 }
 
 type OrderSource =
-  | { kind: 'inherit'; fromTransitionId: number }
-  | { kind: 'slot'; fallback: boolean };      // fallback = true means D-ORDER-FALLBACK was raised
+  | { kind: "inherit"; fromTransitionId: number }
+  | { kind: "slot"; fallback: boolean }; // fallback = true means D-ORDER-FALLBACK was raised
 
 interface FtlEntryInfo {
   transitionId: number;
-  members: number[];        // marcher ids, q = 0 (tail) … m−1 (leader)
+  members: number[]; // marcher ids, q = 0 (tail) … m−1 (leader)
   orderSource: OrderSource;
   startDist: number[];
   endDist: number[];
@@ -989,8 +988,8 @@ interface FtlEntryInfo {
 interface Explanation {
   span: SpanInfo;
   origin: XY;
-  originFrom: SpanInfo | 'home';
-  progress: number | null;  // null for holds
+  originFrom: SpanInfo | "home";
+  progress: number | null; // null for holds
   ftl?: { q: number | null; entry: FtlEntryInfo };
   diagnostics: Diagnostic[];
 }
@@ -998,10 +997,15 @@ interface Explanation {
 /** One committed transaction, as read from change_log (§10.2). Replaces v0.1's per-edit `Edit`. */
 interface ChangeBatch {
   changes: Array<{
-    table: 'marchers' | 'shapes' | 'transitions' | 'assignments' | 'slot_destinations';   // slot_destinations: rowId = transition id
+    table:
+      | "marchers"
+      | "shapes"
+      | "transitions"
+      | "assignments"
+      | "slot_destinations"; // slot_destinations: rowId = transition id
     rowId: number;
-    before: RowImage | null;   // null on insert
-    after: RowImage | null;    // null on delete
+    before: RowImage | null; // null on insert
+    after: RowImage | null; // null on delete
   }>;
 }
 
@@ -1019,22 +1023,22 @@ interface Counters {
   ftlGeometryComputed: number;
   cacheHits: number;
   cacheMisses: number;
-  dirtyVisits: number;      // number of nodes the walk touched
+  dirtyVisits: number; // number of nodes the walk touched
   spanLookups: number;
 }
 
 interface Resolver {
   positionAt(marcherId: number, beat: Beat): XY;
-  positionsAt(beat: Beat, out: Float64Array): void;   // marcher order is marcherIds()
+  positionsAt(beat: Beat, out: Float64Array): void; // marcher order is marcherIds()
   marcherIds(): readonly number[];
   explain(marcherId: number, beat: Beat): Explanation;
   ftlEntry(transitionId: number): FtlEntryInfo;
-  notify(batch: ChangeBatch): InvalidationReport;     // after COMMIT; applied atomically (§10.2)
-  warmAll(): void;                                    // compile every node
+  notify(batch: ChangeBatch): InvalidationReport; // after COMMIT; applied atomically (§10.2)
+  warmAll(): void; // compile every node
   counters(): Counters;
   resetCounters(): void;
   diagnostics(): Diagnostic[];
-  checkCacheClosure(): boolean;                       // I-C1; debug builds only
+  checkCacheClosure(): boolean; // I-C1; debug builds only
 }
 ```
 
@@ -1052,7 +1056,7 @@ Resolver arithmetic and every cache MUST use `Float64`. The golden fixtures are 
 
 ## 11. Export format (not state) [Decided]
 
-Keyframe data (timestamps plus coordinates, with linear interpolation between them) is the correct **wire format** for a player that doesn't include the resolver. It MUST be produced *from* the resolver:
+Keyframe data (timestamps plus coordinates, with linear interpolation between them) is the correct **wire format** for a player that doesn't include the resolver. It MUST be produced _from_ the resolver:
 
 - one keyframe at each span boundary;
 - extra keyframes along arc and FTL spans so that chord error stays within tolerance.
@@ -1076,78 +1080,78 @@ It MUST NOT be read back into the editor as state (D-2).
 
 `ref/db_tests.py` runs QA-DB-01 to QA-DB-24, QA-DB-13b and QA-DB-26 to QA-DB-41 against the DDL in §5.1, and every case behaves as expected. QA-DB-25 covers checks that live in the app write path.
 
-| ID | Case | Expect |
-|---|---|---|
-| QA-DB-01 | Assignment extends past its transition's end | reject E-A1 |
-| QA-DB-02 | `slot_index ≥ slot_count` | reject E-A2 |
-| QA-DB-03 | Two assignments in the same slot | reject (UNIQUE) |
-| QA-DB-04 | Same marcher twice in one transition | reject (E-A3 or UNIQUE) |
-| QA-DB-05 | Same marcher, same layer, overlapping ranges across two transitions | reject E-A3 |
-| QA-DB-06 | Same marcher, overlapping, **higher** layer (a steal) | accept |
-| QA-DB-07 | Same layer, ranges that touch end to start (half-open) | accept |
-| QA-DB-08 | Transition outside its timeline | reject E-T1 |
-| QA-DB-09 | Timeline shrunk below one of its transitions | reject E-T1 |
-| QA-DB-10 | `slot_count` shrunk below an occupied slot | reject E-A2 |
-| QA-DB-11 | Transition stretched with the R-E1 procedure; the anchored assignment follows | accept; the row becomes `[0,24)` |
-| QA-DB-12 | Transition shrunk with the procedure; an unanchored row is left outside | reject E-A1 |
-| QA-DB-13 | Procedure moves the transition's start past an anchored row's end | reject (empty range) |
-| QA-DB-13b | A plain range `UPDATE`, without the procedure, that strands an assignment | reject E-A1 (`tr_range_check`) |
-| QA-DB-14 | FTL transition into a `block` | reject E-T3 |
-| QA-DB-15 | `block` destination with too many slots | reject E-T4 |
-| QA-DB-16 | `block` destination exactly at capacity | accept |
-| QA-DB-17 | Delete a shape that a transition uses | reject (FK) |
-| QA-DB-18 | Delete a transition | accept; its assignments cascade |
-| QA-DB-19 | Unknown `path_style` | reject (CHECK) |
-| QA-DB-20 | Geometry that is not valid JSON | reject (CHECK) |
-| QA-DB-21 | Reshape a `block` so it is too small for a transition using it | reject E-T4 |
-| QA-DB-22 | Zero-length assignment | reject (CHECK) |
-| QA-DB-23 | Update an assignment so it overlaps another at the same layer | reject E-A3 |
-| QA-DB-24 | Stretch a transition (procedure) into a same-layer neighbour | reject E-A3 |
-| QA-DB-25 | I-S1 and I-T2 (JSON *shape*, not just validity): bad geometry for the kind, bad params for the style | reject E-S1 / E-P1 in the app write path |
-| QA-DB-26 | A single edit contains a label update and then an invalid insert, run through the write wrapper | the whole edit rolls back; the label is unchanged |
-| QA-DB-26b | The same, but the caller commits after catching the error (**informational**) | the label change persists, which is why the wrapper is required |
-| QA-DB-27 | Fractional `slot_index`, `start_beat`, `end_beat` or `layer`; text in an integer column | reject (STRICT, I-N1) |
-| QA-DB-28 | Negative beat; beat above 2³¹−1; layer out of range; infinite or NaN home coordinate | reject (I-N2) |
-| QA-DB-29 | Stretch a transition with the R-E1 procedure, then delete it (cascade) | the change log holds the moved row with before- and after-images, and every cascaded delete |
-| QA-DB-30 | An edit that rolls back | no change-log rows, so no notification |
-| QA-DB-31 | Geometry containing `Infinity`, compared with `1e999` | `json_valid` rejects the first and accepts the second, so finiteness must be checked in the app (I-S1) |
-| QA-DB-32 | Circle radius of 10⁴, 0, 2×10⁶, `"5"` (a string), or missing | only 10⁴ is accepted |
-| QA-DB-33 | Arc bulge of 0.5, −0.5, 0.6, 2, `1e999`, `"0.5"` (a string), or no params; direct transition with no params | only 0.5, −0.5 and the direct transition are accepted |
-| QA-DB-34 | Circle `start_angle` of 0, 6.28, 6.3, −0.1, `1e20`, `"1"` (a string), or missing | only 0 and 6.28 are accepted |
-| QA-DB-35 | A shapeless direct transition and a point for each of its slots, in one edit | accept |
-| QA-DB-36 | A shapeless transition with one slot left unplaced, in an edit that also renames a marcher | rejected at commit (`E-T6`), and the whole edit is rolled back |
-| QA-DB-37 | Follow-the-leader without a shape | reject (I-T5) |
-| QA-DB-38 | A point on a shaped transition; setting a shape while points exist; converting shape → individual and individual → shape, each in one edit | the first two are rejected; both conversions are accepted |
-| QA-DB-39 | A point at `slot_index ≥ slot_count`; shrinking `slot_count` below a placed slot; growing it without placing the new slot; growing it and placing the new slot | the first three are rejected; the last is accepted |
-| QA-DB-40 | A point with an out-of-range, infinite, NaN or text coordinate | reject (I-D2) |
-| QA-DB-41 | Insert, update and cascade-delete individual points | the change log holds every change, under the transition's id |
+| ID        | Case                                                                                                                                                           | Expect                                                                                                 |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| QA-DB-01  | Assignment extends past its transition's end                                                                                                                   | reject E-A1                                                                                            |
+| QA-DB-02  | `slot_index ≥ slot_count`                                                                                                                                      | reject E-A2                                                                                            |
+| QA-DB-03  | Two assignments in the same slot                                                                                                                               | reject (UNIQUE)                                                                                        |
+| QA-DB-04  | Same marcher twice in one transition                                                                                                                           | reject (E-A3 or UNIQUE)                                                                                |
+| QA-DB-05  | Same marcher, same layer, overlapping ranges across two transitions                                                                                            | reject E-A3                                                                                            |
+| QA-DB-06  | Same marcher, overlapping, **higher** layer (a steal)                                                                                                          | accept                                                                                                 |
+| QA-DB-07  | Same layer, ranges that touch end to start (half-open)                                                                                                         | accept                                                                                                 |
+| QA-DB-08  | Transition outside its timeline                                                                                                                                | reject E-T1                                                                                            |
+| QA-DB-09  | Timeline shrunk below one of its transitions                                                                                                                   | reject E-T1                                                                                            |
+| QA-DB-10  | `slot_count` shrunk below an occupied slot                                                                                                                     | reject E-A2                                                                                            |
+| QA-DB-11  | Transition stretched with the R-E1 procedure; the anchored assignment follows                                                                                  | accept; the row becomes `[0,24)`                                                                       |
+| QA-DB-12  | Transition shrunk with the procedure; an unanchored row is left outside                                                                                        | reject E-A1                                                                                            |
+| QA-DB-13  | Procedure moves the transition's start past an anchored row's end                                                                                              | reject (empty range)                                                                                   |
+| QA-DB-13b | A plain range `UPDATE`, without the procedure, that strands an assignment                                                                                      | reject E-A1 (`tr_range_check`)                                                                         |
+| QA-DB-14  | FTL transition into a `block`                                                                                                                                  | reject E-T3                                                                                            |
+| QA-DB-15  | `block` destination with too many slots                                                                                                                        | reject E-T4                                                                                            |
+| QA-DB-16  | `block` destination exactly at capacity                                                                                                                        | accept                                                                                                 |
+| QA-DB-17  | Delete a shape that a transition uses                                                                                                                          | reject (FK)                                                                                            |
+| QA-DB-18  | Delete a transition                                                                                                                                            | accept; its assignments cascade                                                                        |
+| QA-DB-19  | Unknown `path_style`                                                                                                                                           | reject (CHECK)                                                                                         |
+| QA-DB-20  | Geometry that is not valid JSON                                                                                                                                | reject (CHECK)                                                                                         |
+| QA-DB-21  | Reshape a `block` so it is too small for a transition using it                                                                                                 | reject E-T4                                                                                            |
+| QA-DB-22  | Zero-length assignment                                                                                                                                         | reject (CHECK)                                                                                         |
+| QA-DB-23  | Update an assignment so it overlaps another at the same layer                                                                                                  | reject E-A3                                                                                            |
+| QA-DB-24  | Stretch a transition (procedure) into a same-layer neighbour                                                                                                   | reject E-A3                                                                                            |
+| QA-DB-25  | I-S1 and I-T2 (JSON _shape_, not just validity): bad geometry for the kind, bad params for the style                                                           | reject E-S1 / E-P1 in the app write path                                                               |
+| QA-DB-26  | A single edit contains a label update and then an invalid insert, run through the write wrapper                                                                | the whole edit rolls back; the label is unchanged                                                      |
+| QA-DB-26b | The same, but the caller commits after catching the error (**informational**)                                                                                  | the label change persists, which is why the wrapper is required                                        |
+| QA-DB-27  | Fractional `slot_index`, `start_beat`, `end_beat` or `layer`; text in an integer column                                                                        | reject (STRICT, I-N1)                                                                                  |
+| QA-DB-28  | Negative beat; beat above 2³¹−1; layer out of range; infinite or NaN home coordinate                                                                           | reject (I-N2)                                                                                          |
+| QA-DB-29  | Stretch a transition with the R-E1 procedure, then delete it (cascade)                                                                                         | the change log holds the moved row with before- and after-images, and every cascaded delete            |
+| QA-DB-30  | An edit that rolls back                                                                                                                                        | no change-log rows, so no notification                                                                 |
+| QA-DB-31  | Geometry containing `Infinity`, compared with `1e999`                                                                                                          | `json_valid` rejects the first and accepts the second, so finiteness must be checked in the app (I-S1) |
+| QA-DB-32  | Circle radius of 10⁴, 0, 2×10⁶, `"5"` (a string), or missing                                                                                                   | only 10⁴ is accepted                                                                                   |
+| QA-DB-33  | Arc bulge of 0.5, −0.5, 0.6, 2, `1e999`, `"0.5"` (a string), or no params; direct transition with no params                                                    | only 0.5, −0.5 and the direct transition are accepted                                                  |
+| QA-DB-34  | Circle `start_angle` of 0, 6.28, 6.3, −0.1, `1e20`, `"1"` (a string), or missing                                                                               | only 0 and 6.28 are accepted                                                                           |
+| QA-DB-35  | A shapeless direct transition and a point for each of its slots, in one edit                                                                                   | accept                                                                                                 |
+| QA-DB-36  | A shapeless transition with one slot left unplaced, in an edit that also renames a marcher                                                                     | rejected at commit (`E-T6`), and the whole edit is rolled back                                         |
+| QA-DB-37  | Follow-the-leader without a shape                                                                                                                              | reject (I-T5)                                                                                          |
+| QA-DB-38  | A point on a shaped transition; setting a shape while points exist; converting shape → individual and individual → shape, each in one edit                     | the first two are rejected; both conversions are accepted                                              |
+| QA-DB-39  | A point at `slot_index ≥ slot_count`; shrinking `slot_count` below a placed slot; growing it without placing the new slot; growing it and placing the new slot | the first three are rejected; the last is accepted                                                     |
+| QA-DB-40  | A point with an out-of-range, infinite, NaN or text coordinate                                                                                                 | reject (I-D2)                                                                                          |
+| QA-DB-41  | Insert, update and cascade-delete individual points                                                                                                            | the change log holds every change, under the transition's id                                           |
 
 **Undo and redo (QA-UNDO)** [added in v0.7]. `ref/undo_tests.py` runs QA-UNDO-1 to -8 on the §5.1 schema with the app's history tables and triggers (§6.1). "Round trip" means edit, undo, redo, undo, with the database compared exactly against the expected state after every step.
 
-| ID | Case | Expect |
-|---|---|---|
-| QA-UNDO-1 | **Negative control** (informational). The v0.6 `tr_range_anchor` trigger restored; shrink a transition's end, then undo | undo is rejected (E-A1) and the data stays at the edited state. This reproduces Appendix G. |
-| QA-UNDO-1b | **Negative control for U-3** (informational). `tr_range_check` removed; one edit shrinks T and then fixes its rows | the edit commits, and its undo is rejected |
-| QA-UNDO-2a–f | Round trip of the R-E1 procedure: shrink the end, grow the end, grow the start, shrink the start, shift right, shift left. An unanchored row stays inside every target. | every step matches exactly |
-| QA-UNDO-2g | The procedure with a target that strands the unanchored row | reject E-A1; the data and history are unchanged |
-| QA-UNDO-3 | Round trip of cascade deletes: a transition, a marcher, and a timeline holding two transitions (two levels of cascade) | every step matches exactly. Every child's inverse is logged before its parent's (U-4). |
-| QA-UNDO-4 | Round trip of shape → individual, individual → shape, and grow-and-place (commit-time invariants) | every step matches exactly |
-| QA-UNDO-5 | A rejected edit, then undo | no history is added, and the undo restores the edit before it |
-| QA-UNDO-6 | Undo, then a new edit; undo on an empty stack | the new edit clears redo; undo on an empty stack does nothing |
-| QA-UNDO-7 | Undo and redo of a range edit | each emits a change-log batch naming the transition and its assignments |
-| QA-UNDO-8 | `group_limit = 3`, five edits, then four undos | three whole groups are kept; three undos restore exactly, and the fourth does nothing |
-| QA-UNDO-9 | **End-to-end fuzz with undo** (`ref/e2e.mjs`). Undos, redos and bursts of both are mixed into the random edits, with `group_limit = 20`. After each one, the database is compared with a snapshot, and the resolver, fed only the change log, is compared with a fresh oracle. **Negative control:** with the v0.6 trigger restored (`--v06-anchor`), undo must break. | no rejected undo or redo, no snapshot mismatch, and no divergence. The negative control fails, as expected. |
+| ID           | Case                                                                                                                                                                                                                                                                                                                                                                   | Expect                                                                                                      |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| QA-UNDO-1    | **Negative control** (informational). The v0.6 `tr_range_anchor` trigger restored; shrink a transition's end, then undo                                                                                                                                                                                                                                                | undo is rejected (E-A1) and the data stays at the edited state. This reproduces Appendix G.                 |
+| QA-UNDO-1b   | **Negative control for U-3** (informational). `tr_range_check` removed; one edit shrinks T and then fixes its rows                                                                                                                                                                                                                                                     | the edit commits, and its undo is rejected                                                                  |
+| QA-UNDO-2a–f | Round trip of the R-E1 procedure: shrink the end, grow the end, grow the start, shrink the start, shift right, shift left. An unanchored row stays inside every target.                                                                                                                                                                                                | every step matches exactly                                                                                  |
+| QA-UNDO-2g   | The procedure with a target that strands the unanchored row                                                                                                                                                                                                                                                                                                            | reject E-A1; the data and history are unchanged                                                             |
+| QA-UNDO-3    | Round trip of cascade deletes: a transition, a marcher, and a timeline holding two transitions (two levels of cascade)                                                                                                                                                                                                                                                 | every step matches exactly. Every child's inverse is logged before its parent's (U-4).                      |
+| QA-UNDO-4    | Round trip of shape → individual, individual → shape, and grow-and-place (commit-time invariants)                                                                                                                                                                                                                                                                      | every step matches exactly                                                                                  |
+| QA-UNDO-5    | A rejected edit, then undo                                                                                                                                                                                                                                                                                                                                             | no history is added, and the undo restores the edit before it                                               |
+| QA-UNDO-6    | Undo, then a new edit; undo on an empty stack                                                                                                                                                                                                                                                                                                                          | the new edit clears redo; undo on an empty stack does nothing                                               |
+| QA-UNDO-7    | Undo and redo of a range edit                                                                                                                                                                                                                                                                                                                                          | each emits a change-log batch naming the transition and its assignments                                     |
+| QA-UNDO-8    | `group_limit = 3`, five edits, then four undos                                                                                                                                                                                                                                                                                                                         | three whole groups are kept; three undos restore exactly, and the fourth does nothing                       |
+| QA-UNDO-9    | **End-to-end fuzz with undo** (`ref/e2e.mjs`). Undos, redos and bursts of both are mixed into the random edits, with `group_limit = 20`. After each one, the database is compared with a snapshot, and the resolver, fed only the change log, is compared with a fresh oracle. **Negative control:** with the v0.6 trigger restored (`--v06-anchor`), undo must break. | no rejected undo or redo, no snapshot mismatch, and no divergence. The negative control fails, as expected. |
 
 ### 12.3 Flattening tests (QA-FL)
 
-| ID | Case | Expect |
-|---|---|---|
-| QA-FL-01 | Marcher with no rows | one hold `(−∞, ∞)` |
-| QA-FL-02 | G3 rows | exactly the 7 spans listed in R-2, with kinds as in R-3 |
-| QA-FL-03 | Row A `[0,16)` at L0 in T `[0,16)`, overridden by row B `[0,4)` at L1 | A's first span is `[4,16)`, kind **join** |
+| ID       | Case                                                                          | Expect                                                                |
+| -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| QA-FL-01 | Marcher with no rows                                                          | one hold `(−∞, ∞)`                                                    |
+| QA-FL-02 | G3 rows                                                                       | exactly the 7 spans listed in R-2, with kinds as in R-3               |
+| QA-FL-03 | Row A `[0,16)` at L0 in T `[0,16)`, overridden by row B `[0,4)` at L1         | A's first span is `[4,16)`, kind **join**                             |
 | QA-FL-04 | Rows A `[0,8)` L0 and B `[8,16)` L0, plus a lower-layer row C `[4,12)` at L−1 | C's cut points **do not** split A or B: spans are A`[0,8)`, B`[8,16)` |
-| QA-FL-05 | Any fixture | the output satisfies R-2's partition conditions |
-| QA-FL-06 | Rows inserted in a different order, or with different row ids | identical spans |
+| QA-FL-05 | Any fixture                                                                   | the output satisfies R-2's partition conditions                       |
+| QA-FL-06 | Rows inserted in a different order, or with different row ids                 | identical spans                                                       |
 
 ### 12.4 Golden vectors (QA-GV)
 
@@ -1155,17 +1159,17 @@ Output of `positionAt(marcher, beat)`.
 
 **G1: baseline.** M1 has home (0,0). T1 `[0,16)` goes to P(16,0). The row is M1→T1 `[0,16)`.
 
-| beat | −1 | 0 | 4 | 15.999 | 16 | 100 |
-|---|---|---|---|---|---|---|
-| M1 | (0,0) | (0,0) | (4,0) | (15.999,0) | (16,0) | (16,0) |
+| beat | −1    | 0     | 4     | 15.999     | 16     | 100    |
+| ---- | ----- | ----- | ----- | ---------- | ------ | ------ |
+| M1   | (0,0) | (0,0) | (4,0) | (15.999,0) | (16,0) | (16,0) |
 
 **G2: flutter steal (D-7).** M1 has home (0,0). A `[0,16)` goes to P(16,0). B `[8,16)` goes to P(8,8). The rows are A `[0,16)` at L0 and B `[8,16)` at L1.
 
-| beat | 4 | 7.999 | 8 | 12 | 16 |
-|---|---|---|---|---|---|
-| M1 | (4,0) | (7.999,0) | (8,0) | (8,4) | (8,8) |
+| beat | 4     | 7.999     | 8     | 12    | 16    |
+| ---- | ----- | --------- | ----- | ----- | ----- |
+| M1   | (4,0) | (7.999,0) | (8,0) | (8,4) | (8,8) |
 
-*Failure signature:* a position near (16,0) just before beat 8 means the progress denominator is using the clipped span end.
+_Failure signature:_ a position near (16,0) just before beat 8 means the progress denominator is using the clipped span end.
 
 **G3: stacked steals, with resumes and a transition-level cycle.** M1 has home (0,0).
 
@@ -1173,23 +1177,23 @@ Output of `positionAt(marcher, beat)`.
 - B `[4,12)` goes to P(4,8), at L1.
 - C `[6,10)` goes to P(10,10), at L2.
 
-| beat | 2 | 4 | 6 | 8 | 10 | 11 | 12 | 14 | 16 |
-|---|---|---|---|---|---|---|---|---|---|
-| M1 | (2,0) | (4,0) | (4,2) | (7,6) | (10,10) | (7,9) | (4,8) | (10,4) | (16,0) |
+| beat | 2     | 4     | 6     | 8     | 10      | 11    | 12    | 14     | 16     |
+| ---- | ----- | ----- | ----- | ----- | ------- | ----- | ----- | ------ | ------ |
+| M1   | (2,0) | (4,0) | (4,2) | (7,6) | (10,10) | (7,9) | (4,8) | (10,4) | (16,0) |
 
 This MUST resolve without any recursion error. A → B → A is a cycle between transitions, but not between spans (§9.3).
 
 **G4: gap.** M1 has home (0,0). T1 `[0,8)` goes to P(8,0). T2 `[12,20)` goes to P(8,8).
 
-| beat | 4 | 8 | 10 | 12 | 16 | 20 |
-|---|---|---|---|---|---|---|
-| M1 | (4,0) | (8,0) | (8,0) | (8,0) | (8,4) | (8,8) |
+| beat | 4     | 8     | 10    | 12    | 16    | 20    |
+| ---- | ----- | ----- | ----- | ----- | ----- | ----- |
+| M1   | (4,0) | (8,0) | (8,0) | (8,0) | (8,4) | (8,8) |
 
 **G5: join into a direct transition.** M2 has home (0,0). T1 `[0,16)` goes to P(0,16). The row is M2→T1 `[8,16)`, kind **join**, which raises `D-REBASE`.
 
-| beat | 4 | 8 | 12 | 16 |
-|---|---|---|---|---|
-| M2 | (0,0) | (0,0) | (0,8) | (0,16) |
+| beat | 4     | 8     | 12    | 16     |
+| ---- | ----- | ----- | ----- | ------ |
+| M2   | (0,0) | (0,0) | (0,8) | (0,16) |
 
 **G6: FTL, with order inherited from an order-free upstream.**
 
@@ -1204,30 +1208,30 @@ The expected entry is:
 - startDist = 0, 2, 4, 6
 - endDist = 8, 10, 12, 14
 
-| beat | M1 | M2 | M3 | M4 |
-|---|---|---|---|---|
-| 8 | (4,0) | (6,0) | (6,2) | (6,4) |
-| 12 | (6,2) | (6,4) | (6,6) | (6,8) |
+| beat | M1    | M2    | M3    | M4    |
+| ---- | ----- | ----- | ----- | ----- |
+| 8    | (4,0) | (6,0) | (6,2) | (6,4) |
+| 12   | (6,2) | (6,4) | (6,6) | (6,8) |
 
-*Failure signature:* M1 at (3,1) on beat 8 means FTL fell back to straight-line motion. Every FTL position must lie on the trail (P-6).
+_Failure signature:_ M1 at (3,1) on beat 8 means FTL fell back to straight-line motion. Every FTL position must lie on the trail (P-6).
 
 **G7: G6 after moving T1's shape to `[[0,−4],[6,−4]]`** (scenario 6). Homes are unchanged.
 
 The expected entry now has endDist = 12, 14, 16, 18. Each marcher travels 12 instead of 8, so it moves 1.5× faster.
 
-| beat | M1 | M2 | M3 | M4 |
-|---|---|---|---|---|
-| 8 | (6,−4) | (6,−2) | (6,0) | (6,2) |
-| 12 | (6,2) | (6,4) | (6,6) | (6,8) |
+| beat | M1     | M2     | M3    | M4    |
+| ---- | ------ | ------ | ----- | ----- |
+| 8    | (6,−4) | (6,−2) | (6,0) | (6,2) |
+| 12   | (6,2)  | (6,4)  | (6,6) | (6,8) |
 
 The final positions MUST equal G6's. `destinations[T2]` and `ftlGeometry[T2]` MUST NOT be recomputed (check `counters()`).
 
 **G8: arc.** M1 has home (0,0). T1 `[0,8)` is `arc` to P(8,0).
 
-| bulge | beat 2 | beat 4 | beat 6 | beat 8 |
-|---|---|---|---|---|
-| 0.5 | (1.1716, 2.8284) | (4, 4) | (6.8284, 2.8284) | (8, 0) |
-| −0.125 | — | (4, −1) | — | (8, 0) |
+| bulge  | beat 2           | beat 4  | beat 6           | beat 8 |
+| ------ | ---------------- | ------- | ---------------- | ------ |
+| 0.5    | (1.1716, 2.8284) | (4, 4)  | (6.8284, 2.8284) | (8, 0) |
+| −0.125 | —                | (4, −1) | —                | (8, 0) |
 
 **G9: FTL with a vacant slot.** G6 without M1. T2 still has 4 slots, so `D-VACANT` is raised.
 
@@ -1241,18 +1245,18 @@ The result looks bad but is valid, which is what D-5 intends.
 
 **G11: FTL join.** G6, but M1's T2 row is `[8,12)`, which makes it a **join**. The other members are M2–M4 with endDist = 8, 10, 12. M1 is not a member, so its target is the tail point p₀ = (6,2). `D-FTL-NONFOUNDING` is raised.
 
-| beat | 8 | 10 | 12 |
-|---|---|---|---|
-| M1 | (0,0) | (3,1) | (6,2) |
+| beat | 8     | 10    | 12    |
+| ---- | ----- | ----- | ----- |
+| M1   | (0,0) | (3,1) | (6,2) |
 
 M1 MUST NOT end on the same point as M4 at (6,8).
 
 **G12: FTL resume.** G6, plus T5 `[6,8)` to P(10,10), with the row M4→T5 `[6,8)` at L1. M4 is stolen from the lead of the FTL and then comes back as a **resume**.
 
-| beat | 6 | 8 | 10 | 12 |
-|---|---|---|---|---|
-| M4 | (6,2) | (10,10) | (8,9) | (6,8) |
-| M3 (unaffected) | — | (6,2) | — | (6,6) |
+| beat            | 6     | 8       | 10    | 12    |
+| --------------- | ----- | ------- | ----- | ----- |
+| M4              | (6,2) | (10,10) | (8,9) | (6,8) |
+| M3 (unaffected) | —     | (6,2)   | —     | (6,6) |
 
 **G13: individual moves mixed with a shape (D-16).** M1, M2 and M3 all have home (0,0).
 
@@ -1261,40 +1265,40 @@ M1 MUST NOT end on the same point as M4 at (6,8).
 - Halfway through T2, M2 is pulled out by T4 `[12,16)`. T4 is a one-slot individual move to (20,20), assigned at layer 1.
 - M3 then does T3 `[16,24)`, an individual **arc** (bulge ½) to (8,18).
 
-| marcher | beat 4 | beat 8 | beat 12 | beat 14 | beat 16 | beat 20 | beat 24 |
-|---|---|---|---|---|---|---|---|
-| M1 | (2,2) | (4,4) | (2,7) | — | (0,10) | — | — |
-| M2 | — | (−2,6) | (1,8) | (10.5,14) | (20,20) | — | — |
-| M3 | — | — | — | — | (8,10) | (4,14) | (8,18) |
+| marcher | beat 4 | beat 8 | beat 12 | beat 14   | beat 16 | beat 20 | beat 24 |
+| ------- | ------ | ------ | ------- | --------- | ------- | ------- | ------- |
+| M1      | (2,2)  | (4,4)  | (2,7)   | —         | (0,10)  | —       | —       |
+| M2      | —      | (−2,6) | (1,8)   | (10.5,14) | (20,20) | —       | —       |
+| M3      | —      | —      | —       | —         | (8,10)  | (4,14)  | (8,18)  |
 
 **Degenerate geometry (QA-DG), §8.10.** All FTL transitions here run `[0,8)` with `order_mode = 'slot'` and no waypoints, unless stated otherwise. The oracle and the cached resolver MUST agree, and no value may be NaN.
 
-| ID | Fixture | Expected |
-|---|---|---|
-| QA-DG-1 | One-slot FTL. M1 has home (0,0). Destination line `[[4,0],[4,6]]`. | beat 4: (2,0). Beat 8: (4,0), the entrance point. |
-| QA-DG-2 | Coincident founders. M1 and M2 both have home (0,0). Destination line `[[2,0],[2,4]]`, 2 slots. | beat 4: M1 (1,0), M2 (2,1). Beat 8: M1 (2,0), M2 (2,4). |
-| QA-DG-3 | Repeated waypoints `[[2,2],[2,2]]`. Leader M2 already stands on the entrance at (2,2). M1 has home (0,0). Destination line `[[2,2],[2,6]]`. | beat 4: M1 (1,1), M2 (2,4). Beat 8: M1 (2,2), M2 (2,6). |
-| QA-DG-4 | No founders: every row is `[4,8)`. M1 (home (0,0)) is in slot 0, M2 (home (0,2)) in slot 1. Destination line `[[4,0],[4,6]]`. | `D-FTL-EMPTY`. Beat 6: M1 (2,3), M2 (2,1). Beat 8: M1 (4,6), M2 (4,0). |
+| ID      | Fixture                                                                                                                                             | Expected                                                                                    |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| QA-DG-1 | One-slot FTL. M1 has home (0,0). Destination line `[[4,0],[4,6]]`.                                                                                  | beat 4: (2,0). Beat 8: (4,0), the entrance point.                                           |
+| QA-DG-2 | Coincident founders. M1 and M2 both have home (0,0). Destination line `[[2,0],[2,4]]`, 2 slots.                                                     | beat 4: M1 (1,0), M2 (2,1). Beat 8: M1 (2,0), M2 (2,4).                                     |
+| QA-DG-3 | Repeated waypoints `[[2,2],[2,2]]`. Leader M2 already stands on the entrance at (2,2). M1 has home (0,0). Destination line `[[2,2],[2,6]]`.         | beat 4: M1 (1,1), M2 (2,4). Beat 8: M1 (2,2), M2 (2,6).                                     |
+| QA-DG-4 | No founders: every row is `[4,8)`. M1 (home (0,0)) is in slot 0, M2 (home (0,2)) in slot 1. Destination line `[[4,0],[4,6]]`.                       | `D-FTL-EMPTY`. Beat 6: M1 (2,3), M2 (2,1). Beat 8: M1 (4,6), M2 (4,0).                      |
 | QA-DG-5 | Freehand destination `[[0,2],[0,2],[4,2],[4,2],[0,2]]`, 3 slots. M3 (home (−4,0)) in slot 0, M2 (home (−2,0)) in slot 1, M1 (home (0,0)) in slot 2. | beat 8: M1 (0,2), M2 (4,2), M3 (0,2). Indexes 2 and 0 share a coordinate, which is allowed. |
-| QA-DG-6 | Arc from (3,3) to P(3,3), bulge 0.5 | beat 4: (3,3) |
-| QA-DG-7 | Like G6, but T1 has 3 slots (M1–M3). In T2, the founders' slots are permuted (M1:3, M2:1, M3:2), and M4 joins in slot 0 over `[8,12)`. | beat 12: M1 (6,4), M2 (6,6), M3 (6,8), M4 (6,2) |
+| QA-DG-6 | Arc from (3,3) to P(3,3), bulge 0.5                                                                                                                 | beat 4: (3,3)                                                                               |
+| QA-DG-7 | Like G6, but T1 has 3 slots (M1–M3). In T2, the founders' slots are permuted (M1:3, M2:1, M3:2), and M4 joins in slot 0 over `[8,12)`.              | beat 12: M1 (6,4), M2 (6,6), M3 (6,8), M4 (6,2)                                             |
 
 ### 12.5 Properties (QA-P): run on every fixture and on randomly generated ones
 
-| ID | Property |
-|---|---|
-| P-1 | **Continuity.** At every span boundary `c`, `eval(prev, c) = eval(next, c)` within ε. |
-| P-2 | **Determinism.** Shuffling row insertion order or renumbering ids gives identical positions and identical FTL members. |
-| P-3 | **Cache equivalence.** After any sequence of edits, the incremental resolver, a freshly built resolver and the oracle agree within ε at sampled beats. |
-| P-4 | **Closure.** `checkCacheClosure()` (I-C1) is true after every batch and every query. That includes having no stale origin keys. |
-| P-5 | **No overtaking (FTL).** For q < q′, the trail distance `d_q(b)` from R-10 is ≤ `d_q′(b)` at every beat, whether or not either member is currently stolen. Each `d_q(b)` never decreases over time. |
-| P-6 | **Trail adherence (FTL).** During its founding span, every member's position lies on the trail: on the polyline part or on the exact destination path. |
-| P-7 | **Arrival.** A span that runs to `T.end_beat` ends at its destination (direct or arc) or at its target (FTL), bit for bit (§8.10). |
-| P-8 | **Absolute shapes.** Editing shape S leaves `destinations` and `ftlGeometry` unchanged, bit for bit, for every transition that doesn't use S. |
-| P-9 | **Holding.** A marcher's position is constant during a hold span. |
-| P-10 | **Timeline independence.** Changing any timeline's name or range, within I-T1, never changes any position. |
-| P-11 | **Finite.** No position, distance or target is ever NaN or infinite. |
-| P-12 | **Causality [v0.3].** Adding or removing an assignment in transition `T` changes no position before `T.start_beat`. |
+| ID   | Property                                                                                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P-1  | **Continuity.** At every span boundary `c`, `eval(prev, c) = eval(next, c)` within ε.                                                                                                                        |
+| P-2  | **Determinism.** Shuffling row insertion order or renumbering ids gives identical positions and identical FTL members.                                                                                       |
+| P-3  | **Cache equivalence.** After any sequence of edits, the incremental resolver, a freshly built resolver and the oracle agree within ε at sampled beats.                                                       |
+| P-4  | **Closure.** `checkCacheClosure()` (I-C1) is true after every batch and every query. That includes having no stale origin keys.                                                                              |
+| P-5  | **No overtaking (FTL).** For q < q′, the trail distance `d_q(b)` from R-10 is ≤ `d_q′(b)` at every beat, whether or not either member is currently stolen. Each `d_q(b)` never decreases over time.          |
+| P-6  | **Trail adherence (FTL).** During its founding span, every member's position lies on the trail: on the polyline part or on the exact destination path.                                                       |
+| P-7  | **Arrival.** A span that runs to `T.end_beat` ends at its destination (direct or arc) or at its target (FTL), bit for bit (§8.10).                                                                           |
+| P-8  | **Absolute shapes.** Editing shape S leaves `destinations` and `ftlGeometry` unchanged, bit for bit, for every transition that doesn't use S.                                                                |
+| P-9  | **Holding.** A marcher's position is constant during a hold span.                                                                                                                                            |
+| P-10 | **Timeline independence.** Changing any timeline's name or range, within I-T1, never changes any position.                                                                                                   |
+| P-11 | **Finite.** No position, distance or target is ever NaN or infinite.                                                                                                                                         |
+| P-12 | **Causality [v0.3].** Adding or removing an assignment in transition `T` changes no position before `T.start_beat`.                                                                                          |
 | P-13 | **Derived range [v0.4].** Every position satisfies `\|P\| ≤ β·√(1 + a)`, where β is the largest distance of any authored point from the field origin and `a` is the number of arc spans in the show (§8.11). |
 
 **How each property is checked.**
@@ -1305,38 +1309,38 @@ M1 MUST NOT end on the same point as M4 at (6,8).
 - The fuzzers assert P-3 and P-4.
 - P-8 and P-10 follow from the design (D-5, R-1). QA-INV-03 and the scenarios exercise them, but neither has a dedicated automated assertion yet.
 
-P-12 exists because P-1 alone misses the classic steal bug. If progress is measured against the clipped span end instead of `T.end_beat`, every position stays continuous. The marcher simply moves too fast before the steal. Adding or removing the steal then changes positions *before* the stealing transition starts, and P-12 catches that.
+P-12 exists because P-1 alone misses the classic steal bug. If progress is measured against the clipped span end instead of `T.end_beat`, every position stays continuous. The marcher simply moves too fast before the steal. Adding or removing the steal then changes positions _before_ the stealing transition starts, and P-12 catches that.
 
 ### 12.6 Invalidation tests (QA-INV)
 
-| ID | Case | Expect |
-|---|---|---|
-| QA-INV-01 | 1,000 random edits across every edit kind, on each fixture | P-3 and P-4 hold after each edit |
-| QA-INV-02 | Chain A → B → C → D; edit B's shape | origins for spans starting before B.start are not dirtied; origins in C and D are dirtied |
-| QA-INV-03 | G6 → G7 (move the upstream shape) | `destinations[T2]` and `ftlGeometry[T2]` are not recomputed; `ftlEntry[T2]` is recomputed once |
-| QA-INV-04 | Delete M1's T2 row in G6 | T2's members drop to 3 and remaining members re-target to p₁…p₃; matches the oracle |
-| QA-INV-05 | Toggle T2's `order_mode` in G6 | only `ftlEntry(T2)` and what it reaches are dirtied |
-| QA-INV-06 | Edits on G3, which has a transition cycle | the walk terminates; P-3 holds |
-| QA-INV-07 | Change a marcher's home | only that marcher's origins, and any FTL entries they reach, are dirtied |
-| QA-INV-08 | **Differential fuzz** (`ref/fuzz.mjs`). Random shows get random batches of 1–3 edits, drawn from 15 kinds of edit, and are compared with the oracle after every batch. | zero divergences, closure violations or exceptions |
-| QA-INV-09 | **End-to-end fuzz** (`ref/e2e.mjs`). Random SQL edits, undos and redos go through the write wrapper, and the database rejects invalid edits. Each committed change log becomes the resolver's batch. | zero divergences, closure violations or exceptions |
-| QA-REG-1 | **Review finding 1.** A 4-slot FTL has founders M2 and M3, and joiner M1 in slot 3, whose target is p₁ = (6,4). Insert joiner M4 in slot 2. | M1 re-targets to p₀ = (6,2). Under the v0.1 rules it stays at (6,4). |
-| QA-REG-2 | **Review finding 2.** An FTL has 3 founders. A layer-1 row for M1 at the FTL's start turns M1 into a joiner. | The founding members become [M2, M3]. The v0.1 rules keep a stale M1. |
-| QA-REG-3 | **Found by the end-to-end fuzzer.** A 4-slot FTL has joiner M1 in slot 3, and a row for M5 in slot 2 that a higher layer overrides completely. Delete M5. | M1 moves from p₀ = (6,2) to p₁ = (6,4). |
-| QA-REG-4 | **Second review.** A 2-slot FTL has founders M1 and M2. Add a layer-1 row for M2 in another transition at the FTL's start. The FTL's own rows are unchanged. | M1 becomes the only founder and moves from p₀ = (6,2) to p₁ = (6,8). Under the v0.1 rules it stays at p₀. |
-| QA-REG-5 | **Third review.** Starting at (10⁶, 0), 40 or 1,000 transitions arc toward (0,0) at bulge ½. Each is stolen halfway, and the next starts from the partial exit. A direct move to (1,1) follows. | Every position stays within β√(1+a). In practice it never passes 10⁶. The direct move arrives exactly at (1,1). The same chain at bulge 2, which the schema now rejects, reaches about 3.7×10¹⁸. |
-| QA-REG-6 | **Fourth review.** Three shows, each queried cold (no warming) on a deliberately small stack (`node --stack-size=300`): 20,000 half-completed direct transitions; the same chain again after its *first* shape is edited; 5,000 chained FTL transitions. | The end positions match an independent loop and the last shape's points. There is no stack overflow. The v0.4 recursive resolver overflows on all three. |
+| ID        | Case                                                                                                                                                                                                                                                     | Expect                                                                                                                                                                                           |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| QA-INV-01 | 1,000 random edits across every edit kind, on each fixture                                                                                                                                                                                               | P-3 and P-4 hold after each edit                                                                                                                                                                 |
+| QA-INV-02 | Chain A → B → C → D; edit B's shape                                                                                                                                                                                                                      | origins for spans starting before B.start are not dirtied; origins in C and D are dirtied                                                                                                        |
+| QA-INV-03 | G6 → G7 (move the upstream shape)                                                                                                                                                                                                                        | `destinations[T2]` and `ftlGeometry[T2]` are not recomputed; `ftlEntry[T2]` is recomputed once                                                                                                   |
+| QA-INV-04 | Delete M1's T2 row in G6                                                                                                                                                                                                                                 | T2's members drop to 3 and remaining members re-target to p₁…p₃; matches the oracle                                                                                                              |
+| QA-INV-05 | Toggle T2's `order_mode` in G6                                                                                                                                                                                                                           | only `ftlEntry(T2)` and what it reaches are dirtied                                                                                                                                              |
+| QA-INV-06 | Edits on G3, which has a transition cycle                                                                                                                                                                                                                | the walk terminates; P-3 holds                                                                                                                                                                   |
+| QA-INV-07 | Change a marcher's home                                                                                                                                                                                                                                  | only that marcher's origins, and any FTL entries they reach, are dirtied                                                                                                                         |
+| QA-INV-08 | **Differential fuzz** (`ref/fuzz.mjs`). Random shows get random batches of 1–3 edits, drawn from 15 kinds of edit, and are compared with the oracle after every batch.                                                                                   | zero divergences, closure violations or exceptions                                                                                                                                               |
+| QA-INV-09 | **End-to-end fuzz** (`ref/e2e.mjs`). Random SQL edits, undos and redos go through the write wrapper, and the database rejects invalid edits. Each committed change log becomes the resolver's batch.                                                     | zero divergences, closure violations or exceptions                                                                                                                                               |
+| QA-REG-1  | **Review finding 1.** A 4-slot FTL has founders M2 and M3, and joiner M1 in slot 3, whose target is p₁ = (6,4). Insert joiner M4 in slot 2.                                                                                                              | M1 re-targets to p₀ = (6,2). Under the v0.1 rules it stays at (6,4).                                                                                                                             |
+| QA-REG-2  | **Review finding 2.** An FTL has 3 founders. A layer-1 row for M1 at the FTL's start turns M1 into a joiner.                                                                                                                                             | The founding members become [M2, M3]. The v0.1 rules keep a stale M1.                                                                                                                            |
+| QA-REG-3  | **Found by the end-to-end fuzzer.** A 4-slot FTL has joiner M1 in slot 3, and a row for M5 in slot 2 that a higher layer overrides completely. Delete M5.                                                                                                | M1 moves from p₀ = (6,2) to p₁ = (6,4).                                                                                                                                                          |
+| QA-REG-4  | **Second review.** A 2-slot FTL has founders M1 and M2. Add a layer-1 row for M2 in another transition at the FTL's start. The FTL's own rows are unchanged.                                                                                             | M1 becomes the only founder and moves from p₀ = (6,2) to p₁ = (6,8). Under the v0.1 rules it stays at p₀.                                                                                        |
+| QA-REG-5  | **Third review.** Starting at (10⁶, 0), 40 or 1,000 transitions arc toward (0,0) at bulge ½. Each is stolen halfway, and the next starts from the partial exit. A direct move to (1,1) follows.                                                          | Every position stays within β√(1+a). In practice it never passes 10⁶. The direct move arrives exactly at (1,1). The same chain at bulge 2, which the schema now rejects, reaches about 3.7×10¹⁸. |
+| QA-REG-6  | **Fourth review.** Three shows, each queried cold (no warming) on a deliberately small stack (`node --stack-size=300`): 20,000 half-completed direct transitions; the same chain again after its _first_ shape is edited; 5,000 chained FTL transitions. | The end positions match an independent loop and the last shape's points. There is no stack overflow. The v0.4 recursive resolver overflows on all three.                                         |
 
 ### 12.7 Complexity tests (QA-CX): assert on counters, never on wall-clock time
 
-| ID | Case | Expect |
-|---|---|---|
-| QA-CX-01 | `warmAll()` on any fixture | `originsComputed` = total spans, and `ftlEntriesComputed` = number of FTL transitions with at least one span: each computed **exactly once** |
-| QA-CX-02 | `positionsAt` twice, warm | the second call adds 0 to `originsComputed` and `ftlEntriesComputed`, and `spanLookups` increases by M |
-| QA-CX-03 | Any edit | `dirtyVisits` = `originsDirtied + ftlEntriesDirtied`; no node is visited twice |
-| QA-CX-04 | Double the show by appending a copy of the chain | cold-compile counters double, and do not quadruple |
-| QA-CX-05 | **Ladder:** 2 marchers through 20 consecutive FTL transitions, 2 slots each. The dependency graph has about 62 nodes but about 2²⁰ paths. Edit the first FTL's destination shape. | `dirtyVisits` ≤ the number of nodes (about 62). Without W-4 the walk visits nodes once per path and explodes. |
-| QA-CX-06 | **Informational timing.** Warm FTL evaluation per member, at 50 and at 5,000 members | The cost should grow no faster than log P_T. Measured 1.0–1.7× across runs (wall clock, so not a gate). |
+| ID       | Case                                                                                                                                                                              | Expect                                                                                                                                       |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| QA-CX-01 | `warmAll()` on any fixture                                                                                                                                                        | `originsComputed` = total spans, and `ftlEntriesComputed` = number of FTL transitions with at least one span: each computed **exactly once** |
+| QA-CX-02 | `positionsAt` twice, warm                                                                                                                                                         | the second call adds 0 to `originsComputed` and `ftlEntriesComputed`, and `spanLookups` increases by M                                       |
+| QA-CX-03 | Any edit                                                                                                                                                                          | `dirtyVisits` = `originsDirtied + ftlEntriesDirtied`; no node is visited twice                                                               |
+| QA-CX-04 | Double the show by appending a copy of the chain                                                                                                                                  | cold-compile counters double, and do not quadruple                                                                                           |
+| QA-CX-05 | **Ladder:** 2 marchers through 20 consecutive FTL transitions, 2 slots each. The dependency graph has about 62 nodes but about 2²⁰ paths. Edit the first FTL's destination shape. | `dirtyVisits` ≤ the number of nodes (about 62). Without W-4 the walk visits nodes once per path and explodes.                                |
+| QA-CX-06 | **Informational timing.** Warm FTL evaluation per member, at 50 and at 5,000 members                                                                                              | The cost should grow no faster than log P_T. Measured 1.0–1.7× across runs (wall clock, so not a gate).                                      |
 
 The reference resolver passes QA-CX-01, -02, -03 and -05 (`ref/cx.mjs`). QA-CX-04 has not been run.
 
@@ -1344,76 +1348,76 @@ The reference resolver passes QA-CX-01, -02, -03 and -05 (`ref/cx.mjs`). QA-CX-0
 
 These are the harness brief's scenarios, restated with pass criteria.
 
-| ID | Scenario | Pass criteria |
-|---|---|---|
-| QA-SC-01 | **Baseline.** 16 marchers go from a 4×4 block to a 16-slot circle, `direct`. | At the end, every marcher is on its circle point (R-13). No diagnostics. P-1 to P-4 hold. |
-| QA-SC-02 | **Chain.** A → B → C → D, all direct, 8 beats each. | Each transition's founding origins equal the previous transition's destinations. QA-INV-02 passes. |
-| QA-SC-03 | **Flutter steal.** 16 marchers march forward for 16 counts. At beat 8, the four marchers at each end are stolen by an L1 transition. | Per-marcher checks follow G2. Stolen marchers' origins equal A's evaluation at p = 0.5. No jumps (P-1). |
-| QA-SC-04 | **Stacked steals.** Layers 0, 1 and 2 overlap on the same marchers. | G3. No recursion error. P-4 holds. |
-| QA-SC-05 | **Follow-the-leader.** Circle → freehand squiggle. | G6 pattern. P-5 and P-6 hold. The inspector shows the trail and the order source. |
-| QA-SC-06 | **Upstream edit under FTL.** SC-05, then move the circle 4 steps downfield. | G7 pattern. Final positions are unchanged. No errors and no new diagnostics. QA-INV-03 passes. |
-| QA-SC-07 | **Ordering laundering.** FTL → box (direct) → FTL. | The second FTL's order source is `inherit(box transition)`, and its members are in box slot order. **Variant:** permute the box's slot assignments; the second FTL's order follows the box, not the first FTL. Record a judgement in FINDINGS (Q-4). |
-| QA-SC-08 | **Gap.** | G4. |
-| QA-SC-09 | **Join vs. steal.** | G5 (direct join rebases). G11 (FTL join goes to a tail point with no collision). G12 (FTL resume). |
-| QA-SC-10 | **Slot count mismatch.** | Over-filling is rejected (QA-DB-02, -03). Under-filling renders, with `D-VACANT` per empty slot. FTL ignores the vacancy (G9). |
-| QA-SC-11 | **Scale.** A seeded generator produces 250 marchers, 200 transitions across 10 timelines and 120 shapes of mixed kinds. The style mix is 60% direct, 10% arc, 30% FTL. Slot counts are 8–32. At least one dependency chain is 30 or more transitions deep. Every marcher has at least 10 rows. 10% of rows get an L1 steal covering their second half. | QA-PF budgets are recorded. P-3 holds over 1,000 random edits. The output is identical for the same seed. |
-| QA-SC-12 | **Ladder.** | QA-CX-05. |
-| QA-SC-13 | **Order fallback.** | G10. `D-ORDER-FALLBACK` is shown in the inspector. |
-| QA-SC-14 | **Arcs at the limit [v0.5].** A block swings through a semicircle (bulge ½). Then a drill move that designers would normally author as a larger arc is rebuilt with the tools that remain: two chained minor arcs, or FTL with waypoints. | A person judges whether minor arcs are enough in practice (D-15, Q-13) and records the verdict in FINDINGS. |
-| QA-SC-15 | **Individual and shape moves together [v0.6].** A block moves as a shape. One marcher is pulled out individually partway through, then rejoins. Later the whole group is converted from its shape to individual points and hand-adjusted. | A person judges that individual moves feel like the current page-based editing, and that converting a shape to points loses nothing visible (D-16, Q-14). |
+| ID       | Scenario                                                                                                                                                                                                                                                                                                                                               | Pass criteria                                                                                                                                                                                                                                        |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| QA-SC-01 | **Baseline.** 16 marchers go from a 4×4 block to a 16-slot circle, `direct`.                                                                                                                                                                                                                                                                           | At the end, every marcher is on its circle point (R-13). No diagnostics. P-1 to P-4 hold.                                                                                                                                                            |
+| QA-SC-02 | **Chain.** A → B → C → D, all direct, 8 beats each.                                                                                                                                                                                                                                                                                                    | Each transition's founding origins equal the previous transition's destinations. QA-INV-02 passes.                                                                                                                                                   |
+| QA-SC-03 | **Flutter steal.** 16 marchers march forward for 16 counts. At beat 8, the four marchers at each end are stolen by an L1 transition.                                                                                                                                                                                                                   | Per-marcher checks follow G2. Stolen marchers' origins equal A's evaluation at p = 0.5. No jumps (P-1).                                                                                                                                              |
+| QA-SC-04 | **Stacked steals.** Layers 0, 1 and 2 overlap on the same marchers.                                                                                                                                                                                                                                                                                    | G3. No recursion error. P-4 holds.                                                                                                                                                                                                                   |
+| QA-SC-05 | **Follow-the-leader.** Circle → freehand squiggle.                                                                                                                                                                                                                                                                                                     | G6 pattern. P-5 and P-6 hold. The inspector shows the trail and the order source.                                                                                                                                                                    |
+| QA-SC-06 | **Upstream edit under FTL.** SC-05, then move the circle 4 steps downfield.                                                                                                                                                                                                                                                                            | G7 pattern. Final positions are unchanged. No errors and no new diagnostics. QA-INV-03 passes.                                                                                                                                                       |
+| QA-SC-07 | **Ordering laundering.** FTL → box (direct) → FTL.                                                                                                                                                                                                                                                                                                     | The second FTL's order source is `inherit(box transition)`, and its members are in box slot order. **Variant:** permute the box's slot assignments; the second FTL's order follows the box, not the first FTL. Record a judgement in FINDINGS (Q-4). |
+| QA-SC-08 | **Gap.**                                                                                                                                                                                                                                                                                                                                               | G4.                                                                                                                                                                                                                                                  |
+| QA-SC-09 | **Join vs. steal.**                                                                                                                                                                                                                                                                                                                                    | G5 (direct join rebases). G11 (FTL join goes to a tail point with no collision). G12 (FTL resume).                                                                                                                                                   |
+| QA-SC-10 | **Slot count mismatch.**                                                                                                                                                                                                                                                                                                                               | Over-filling is rejected (QA-DB-02, -03). Under-filling renders, with `D-VACANT` per empty slot. FTL ignores the vacancy (G9).                                                                                                                       |
+| QA-SC-11 | **Scale.** A seeded generator produces 250 marchers, 200 transitions across 10 timelines and 120 shapes of mixed kinds. The style mix is 60% direct, 10% arc, 30% FTL. Slot counts are 8–32. At least one dependency chain is 30 or more transitions deep. Every marcher has at least 10 rows. 10% of rows get an L1 steal covering their second half. | QA-PF budgets are recorded. P-3 holds over 1,000 random edits. The output is identical for the same seed.                                                                                                                                            |
+| QA-SC-12 | **Ladder.**                                                                                                                                                                                                                                                                                                                                            | QA-CX-05.                                                                                                                                                                                                                                            |
+| QA-SC-13 | **Order fallback.**                                                                                                                                                                                                                                                                                                                                    | G10. `D-ORDER-FALLBACK` is shown in the inspector.                                                                                                                                                                                                   |
+| QA-SC-14 | **Arcs at the limit [v0.5].** A block swings through a semicircle (bulge ½). Then a drill move that designers would normally author as a larger arc is rebuilt with the tools that remain: two chained minor arcs, or FTL with waypoints.                                                                                                              | A person judges whether minor arcs are enough in practice (D-15, Q-13) and records the verdict in FINDINGS.                                                                                                                                          |
+| QA-SC-15 | **Individual and shape moves together [v0.6].** A block moves as a shape. One marcher is pulled out individually partway through, then rejoins. Later the whole group is converted from its shape to individual points and hand-adjusted.                                                                                                              | A person judges that individual moves feel like the current page-based editing, and that converting a shape to points loses nothing visible (D-16, Q-14).                                                                                            |
 
 ### 12.9 Performance budgets (QA-PF) [Provisional]
 
 These are starting targets. Missing one is a **finding** to write up, not a reason to block.
 
-| ID | Metric (SC-11 fixture, reference laptop) | Target |
-|---|---|---|
-| QA-PF-01 | `positionsAt` for 250 marchers, warm, p99 (resolver only, not drawing) | ≤ 1 ms |
-| QA-PF-02 | Cold `warmAll()` | ≤ 16 ms (one frame). ≤ 50 ms is acceptable if idle warming is in place. |
-| QA-PF-03 | Worst-case edit (the earliest shape in the deepest chain): walk time, then the first pull at the playhead | walk ≤ 2 ms; pull ≤ 16 ms |
-| QA-PF-04 | Total memory held by derived caches | ≤ 5 MB |
+| ID       | Metric (SC-11 fixture, reference laptop)                                                                  | Target                                                                  |
+| -------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| QA-PF-01 | `positionsAt` for 250 marchers, warm, p99 (resolver only, not drawing)                                    | ≤ 1 ms                                                                  |
+| QA-PF-02 | Cold `warmAll()`                                                                                          | ≤ 16 ms (one frame). ≤ 50 ms is acceptable if idle warming is in place. |
+| QA-PF-03 | Worst-case edit (the earliest shape in the deepest chain): walk time, then the first pull at the playhead | walk ≤ 2 ms; pull ≤ 16 ms                                               |
+| QA-PF-04 | Total memory held by derived caches                                                                       | ≤ 5 MB                                                                  |
 
 ### 12.10 Reference implementation and evidence [added in v0.2, extended in v0.3 and v0.7]
 
 The `ref/` folder that ships with this spec contains everything behind the claims in this document. `./run_all.sh` runs all of it as a single gate.
 
-| File | Contents |
-|---|---|
-| `schema.sql` | The DDL in §5.1 |
-| `db_tests.py` | QA-DB-01 to -24, -13b and -26 to -41, run against real SQLite |
-| `history.py`, `history.mjs` | A reference model of the app's undo and redo on its history tables (§6.1): the inverse-SQL triggers, undo, redo and group-limit pruning, all inside the write wrapper. Also the R-E1 range procedure. |
-| `undo_tests.py` | QA-UNDO-1 to -8 |
-| `geom.mjs` | Shared, stateless geometry: R-2, R-8, R-13 and §8.10 |
-| `oracle.mjs` | The uncached reference oracle (§8) |
-| `resolver.mjs` | A cached, incremental resolver implementing §9 and §10.2. Passing `rules: 'v0.1'` reproduces the original invalidation rules. |
-| `golden.mjs` | G1–G12, asserted against both the oracle and the resolver |
-| `regress.mjs` | QA-REG-1 to -4 and QA-DG-1 to -7. The known v0.1 failures are marked as expected. |
-| `props.mjs` | Direct property checks (§12.5), with independent geometry and boundary-valued shows |
-| `mutate.py` | Mutation test for `props.mjs`: re-introduces nine known bugs and requires a named property to catch each one |
-| `fuzz.mjs` | The differential fuzzer (QA-INV-08). `--expect-fail` inverts the exit status for the v0.1 run. |
-| `e2e.mjs` | The end-to-end SQLite fuzzer, with undo and redo (QA-INV-09, QA-UNDO-9). Needs Node 22 or later for `node:sqlite`. `--v06-anchor --expect-fail` restores the v0.6 range trigger as a negative control. |
-| `cx.mjs` | Counter-based complexity checks (QA-CX), plus the informational timing CX-06 |
-| `deep.mjs` | Deep chains queried cold on a small stack (QA-REG-6) |
-| `run_all.sh` | Runs everything above. Exits non-zero on any unexpected result, including either negative-control run (v0.1 fuzz rules, v0.6 range trigger) finding no failures. |
+| File                        | Contents                                                                                                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `schema.sql`                | The DDL in §5.1                                                                                                                                                                                        |
+| `db_tests.py`               | QA-DB-01 to -24, -13b and -26 to -41, run against real SQLite                                                                                                                                          |
+| `history.py`, `history.mjs` | A reference model of the app's undo and redo on its history tables (§6.1): the inverse-SQL triggers, undo, redo and group-limit pruning, all inside the write wrapper. Also the R-E1 range procedure.  |
+| `undo_tests.py`             | QA-UNDO-1 to -8                                                                                                                                                                                        |
+| `geom.mjs`                  | Shared, stateless geometry: R-2, R-8, R-13 and §8.10                                                                                                                                                   |
+| `oracle.mjs`                | The uncached reference oracle (§8)                                                                                                                                                                     |
+| `resolver.mjs`              | A cached, incremental resolver implementing §9 and §10.2. Passing `rules: 'v0.1'` reproduces the original invalidation rules.                                                                          |
+| `golden.mjs`                | G1–G12, asserted against both the oracle and the resolver                                                                                                                                              |
+| `regress.mjs`               | QA-REG-1 to -4 and QA-DG-1 to -7. The known v0.1 failures are marked as expected.                                                                                                                      |
+| `props.mjs`                 | Direct property checks (§12.5), with independent geometry and boundary-valued shows                                                                                                                    |
+| `mutate.py`                 | Mutation test for `props.mjs`: re-introduces nine known bugs and requires a named property to catch each one                                                                                           |
+| `fuzz.mjs`                  | The differential fuzzer (QA-INV-08). `--expect-fail` inverts the exit status for the v0.1 run.                                                                                                         |
+| `e2e.mjs`                   | The end-to-end SQLite fuzzer, with undo and redo (QA-INV-09, QA-UNDO-9). Needs Node 22 or later for `node:sqlite`. `--v06-anchor --expect-fail` restores the v0.6 range trigger as a negative control. |
+| `cx.mjs`                    | Counter-based complexity checks (QA-CX), plus the informational timing CX-06                                                                                                                           |
+| `deep.mjs`                  | Deep chains queried cold on a small stack (QA-REG-6)                                                                                                                                                   |
+| `run_all.sh`                | Runs everything above. Exits non-zero on any unexpected result, including either negative-control run (v0.1 fuzz rules, v0.6 range trigger) finding no failures.                                       |
 
 Every script exits non-zero on an unexpected failure. As negative controls, breaking the steal rule (D-7), re-enabling major arcs (D-15) or putting back a row-rewriting range trigger (U-1) in a copy of the folder makes `run_all.sh` fail.
 
 Results at the time of writing, using each script's default seeds:
 
-| Check | Result |
-|---|---|
-| Storage | 50 of 50 pass. QA-DB-26b is informational: it passes by reproducing the hazard. |
-| Undo and redo | 15 of 15 pass. QA-UNDO-1 and -1b are informational: they pass by reproducing the failure. |
-| Golden vectors | All 14 fixtures (G1–G13, plus G8b) pass on both the oracle and the cached resolver. |
-| Regressions and degenerate geometry | 13 pass under the current rules, including QA-REG-5 at 40 and at 1,000 arcs. QA-REG-1, -2 and -4 fail under the v0.1 rules, as expected. |
-| Properties | 300 ordinary shows, 300 boundary-valued shows and 30 adversarial arc chains: 253,917 checks, including 20,000 arc cross-checks against the centre form, with 0 failures. About 30% of direct and arc transitions are placed individually. |
-| Mutation test | All 9 seeded bugs are caught, each by a named property. The bugs are: 720-segment circle flattening; the v0.2 arc formula; major arcs re-enabled (P-13); the v0.3 arc dividing by the chord (R-8 finiteness); interpolation that isn't endpoint-exact (bit-exact P-7); a clipped progress denominator; an off-by-one FTL target; drifting holds; and joiner targets ordered by row id. |
-| Differential fuzz, v0.2+ rules | 1,000 seeds and 71,591 batches: no divergences, closure violations or exceptions. The batches include 5,359 individual-point edits and 7,220 switches between a shape and individual points. |
-| Differential fuzz, v0.1 rules | Fails, as expected: at least 276 of 300 seeds fail, with wrong positions, stale cache keys and more than 130 exceptions. Since v0.5 those exceptions are explicit dependency-cycle errors (§9.3) rather than stack overflows. |
-| End-to-end fuzz, with undo | 600 seeds: 28,069 committed edits (11,473 changing individual points; 2,248 using the R-E1 procedure), 11,239 undos and 1,897 redos. The database rejected another 10,099 edits, including 3,341 for missing or misplaced individual destinations (`E-T6`) and 1,364 range changes that would strand a row (`E-A1`). No undo or redo was rejected, every one restored its snapshot exactly, and the resolver matched the oracle after every edit, undo and redo. No divergences, closure violations or exceptions. |
-| End-to-end fuzz, v0.6 range trigger | Fails, as expected: undo breaks in 83 of 300 seeds. |
-| Deep chains | QA-REG-6 passes with a 300 KB stack: 20,000 direct transitions (with a 39,999-node dirty walk after an edit) and 5,000 FTL transitions. |
-| Complexity | QA-CX-01, -02, -03 and -05 pass. CX-06 is informational: warm per-member FTL cost grows 1.0–1.7× from 50 to 5,000 members, depending on the run. |
+| Check                               | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Storage                             | 50 of 50 pass. QA-DB-26b is informational: it passes by reproducing the hazard.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Undo and redo                       | 15 of 15 pass. QA-UNDO-1 and -1b are informational: they pass by reproducing the failure.                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Golden vectors                      | All 14 fixtures (G1–G13, plus G8b) pass on both the oracle and the cached resolver.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Regressions and degenerate geometry | 13 pass under the current rules, including QA-REG-5 at 40 and at 1,000 arcs. QA-REG-1, -2 and -4 fail under the v0.1 rules, as expected.                                                                                                                                                                                                                                                                                                                                                                           |
+| Properties                          | 300 ordinary shows, 300 boundary-valued shows and 30 adversarial arc chains: 253,917 checks, including 20,000 arc cross-checks against the centre form, with 0 failures. About 30% of direct and arc transitions are placed individually.                                                                                                                                                                                                                                                                          |
+| Mutation test                       | All 9 seeded bugs are caught, each by a named property. The bugs are: 720-segment circle flattening; the v0.2 arc formula; major arcs re-enabled (P-13); the v0.3 arc dividing by the chord (R-8 finiteness); interpolation that isn't endpoint-exact (bit-exact P-7); a clipped progress denominator; an off-by-one FTL target; drifting holds; and joiner targets ordered by row id.                                                                                                                             |
+| Differential fuzz, v0.2+ rules      | 1,000 seeds and 71,591 batches: no divergences, closure violations or exceptions. The batches include 5,359 individual-point edits and 7,220 switches between a shape and individual points.                                                                                                                                                                                                                                                                                                                       |
+| Differential fuzz, v0.1 rules       | Fails, as expected: at least 276 of 300 seeds fail, with wrong positions, stale cache keys and more than 130 exceptions. Since v0.5 those exceptions are explicit dependency-cycle errors (§9.3) rather than stack overflows.                                                                                                                                                                                                                                                                                      |
+| End-to-end fuzz, with undo          | 600 seeds: 28,069 committed edits (11,473 changing individual points; 2,248 using the R-E1 procedure), 11,239 undos and 1,897 redos. The database rejected another 10,099 edits, including 3,341 for missing or misplaced individual destinations (`E-T6`) and 1,364 range changes that would strand a row (`E-A1`). No undo or redo was rejected, every one restored its snapshot exactly, and the resolver matched the oracle after every edit, undo and redo. No divergences, closure violations or exceptions. |
+| End-to-end fuzz, v0.6 range trigger | Fails, as expected: undo breaks in 83 of 300 seeds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Deep chains                         | QA-REG-6 passes with a 300 KB stack: 20,000 direct transitions (with a 39,999-node dirty walk after an edit) and 5,000 FTL transitions.                                                                                                                                                                                                                                                                                                                                                                            |
+| Complexity                          | QA-CX-01, -02, -03 and -05 pass. CX-06 is informational: warm per-member FTL cost grows 1.0–1.7× from 50 to 5,000 members, depending on the run.                                                                                                                                                                                                                                                                                                                                                                   |
 
 **What this evidence shows, and what it doesn't:**
 
@@ -1438,22 +1442,22 @@ Results at the time of writing, using each script's default seeds:
 
 ## 13. Open questions
 
-| ID | Question | Current behaviour |
-|---|---|---|
-| Q-1 | Should stretching a transition ripple into its neighbours, or should assignment bounds be nullable and inherit the transition's range? | Anchored rewrite, done by an app procedure. Aborts on conflict (R-E1). |
-| Q-2 | Should transition beats be absolute or relative to their timeline? Moving a timeline currently means moving each of its transitions. | Absolute. |
-| Q-3 | What should FTL joins and resumes mean, beyond the direct fallback? Should the UI prevent them? | R-11 fallback plus a diagnostic. |
-| Q-4 | Is losing FTL order through an order-free transition acceptable, or should order-free transitions pass order through? | Laundered, following the upstream slot order (R-12). |
-| Q-5 | Should vacant FTL points be kept as gaps (current), or should members close up the spacing? | Gaps at the entrance end. |
-| Q-6 | Sub-beat authoring (half counts): should beats be `REAL`, or should there be a subdivision column? | `INTEGER` bounds. |
-| Q-7 | FTL spacing. When upstream spacing differs from destination spacing, members move at different speeds. Should all members share one speed? | Each member has its own constant speed. |
-| Q-8 | How and when to show `layer` in the UI. | Resolved by D-18 (2026-10-16): never as a number. Clips stack by who wins, and overridden counts are drawn faded. |
-| Q-9 | Tempo map: the interface for converting a timestamp to a beat position. | Out of scope. |
-| Q-10 | Should an explicit "hold" be authorable, rather than implied by a gap? | Gaps imply holds. |
-| Q-11 | Physical feasibility: should the engine flag speeds a marcher can't sustain, abrupt direction changes, or collisions between marchers? | Out of scope for v0.2 (§14). Candidate future diagnostics: `D-SPEED`, `D-TURN`, `D-COLLIDE`. |
-| Q-12 | Should a row that a higher layer overrides completely still reserve an FTL point? | Yes (R-9 step 5). A reserved point stays put while its row exists. Targets still depend on layering through founding membership (QA-REG-4). The cost is a point nobody fills. |
-| Q-13 | Do designers need major arcs (`\|bulge\| > ½`)? | Not supported (D-15). QA-SC-14 is the acceptance check. There are two ways back. One is a derived-range guard, which weakens D-5. The other is a rule that major-arc spans can't be stolen partway through, because a major arc that completes always ends exactly on its target. |
-| Q-14 | Should a transition be able to use a shape **and** override a few of its slots individually? | Not in v0.6: a transition uses one or the other (I-T6). The workaround is to convert the shape to individual points, which copies its samples, and adjust from there. The copied points no longer follow later edits to the shape. An override table keyed by `(transition, slot)` would fit the model if needed. |
+| ID   | Question                                                                                                                                   | Current behaviour                                                                                                                                                                                                                                                                                                 |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q-1  | Should stretching a transition ripple into its neighbours, or should assignment bounds be nullable and inherit the transition's range?     | Anchored rewrite, done by an app procedure. Aborts on conflict (R-E1).                                                                                                                                                                                                                                            |
+| Q-2  | Should transition beats be absolute or relative to their timeline? Moving a timeline currently means moving each of its transitions.       | Absolute.                                                                                                                                                                                                                                                                                                         |
+| Q-3  | What should FTL joins and resumes mean, beyond the direct fallback? Should the UI prevent them?                                            | R-11 fallback plus a diagnostic.                                                                                                                                                                                                                                                                                  |
+| Q-4  | Is losing FTL order through an order-free transition acceptable, or should order-free transitions pass order through?                      | Laundered, following the upstream slot order (R-12).                                                                                                                                                                                                                                                              |
+| Q-5  | Should vacant FTL points be kept as gaps (current), or should members close up the spacing?                                                | Gaps at the entrance end.                                                                                                                                                                                                                                                                                         |
+| Q-6  | Sub-beat authoring (half counts): should beats be `REAL`, or should there be a subdivision column?                                         | `INTEGER` bounds.                                                                                                                                                                                                                                                                                                 |
+| Q-7  | FTL spacing. When upstream spacing differs from destination spacing, members move at different speeds. Should all members share one speed? | Each member has its own constant speed.                                                                                                                                                                                                                                                                           |
+| Q-8  | How and when to show `layer` in the UI.                                                                                                    | Resolved by D-18 (2026-10-16): never as a number. Clips stack by who wins, and overridden counts are drawn faded.                                                                                                                                                                                                 |
+| Q-9  | Tempo map: the interface for converting a timestamp to a beat position.                                                                    | Out of scope.                                                                                                                                                                                                                                                                                                     |
+| Q-10 | Should an explicit "hold" be authorable, rather than implied by a gap?                                                                     | Gaps imply holds.                                                                                                                                                                                                                                                                                                 |
+| Q-11 | Physical feasibility: should the engine flag speeds a marcher can't sustain, abrupt direction changes, or collisions between marchers?     | Out of scope for v0.2 (§14). Candidate future diagnostics: `D-SPEED`, `D-TURN`, `D-COLLIDE`.                                                                                                                                                                                                                      |
+| Q-12 | Should a row that a higher layer overrides completely still reserve an FTL point?                                                          | Yes (R-9 step 5). A reserved point stays put while its row exists. Targets still depend on layering through founding membership (QA-REG-4). The cost is a point nobody fills.                                                                                                                                     |
+| Q-13 | Do designers need major arcs (`\|bulge\| > ½`)?                                                                                            | Not supported (D-15). QA-SC-14 is the acceptance check. There are two ways back. One is a derived-range guard, which weakens D-5. The other is a rule that major-arc spans can't be stolen partway through, because a major arc that completes always ends exactly on its target.                                 |
+| Q-14 | Should a transition be able to use a shape **and** override a few of its slots individually?                                               | Not in v0.6: a transition uses one or the other (I-T6). The workaround is to convert the shape to individual points, which copies its samples, and adjust from there. The copied points no longer follow later edits to the shape. An override table keyed by `(transition, slot)` would fit the model if needed. |
 
 ---
 
@@ -1494,19 +1498,19 @@ This spec does not cover:
 
 Before changing the spec, I checked each finding: by reproducing it in SQLite, by a directed test, or by the differential fuzzer.
 
-| # | Finding | Confirmed? | Change in v0.2 | Evidence |
-|---|---|---|---|---|
-| 1 | Editing FTL joiners can leave cached targets stale | Yes | `ftlEntry` now depends on every row of T. A batch dirties the FTL entries of the transitions in its changed row images (§9.2, §9.4 step 3.4). | QA-REG-1. The v0.1 rules fail it. |
-| 2 | `spansByTransition` must be updated for transitions other than the edited row's | Yes, and worse: stale entries can also cause infinite recursion | Every transition in the old and new spans is re-indexed. Eviction follows the old structure first. I-C1 now forbids stale keys (§9.3, §9.4 steps 3.1–3.3). | QA-REG-2. The v0.1 rules fail the differential fuzzer on at least 281 of 300 seeds. |
-| 3 | `RAISE(ABORT)` doesn't roll back the whole transaction | Yes, reproduced | The write wrapper is now normative (§6) | QA-DB-26, -26b, -30 |
-| 4 | `INTEGER` columns accept values such as 0.5 | Yes, reproduced | `STRICT` tables and range CHECKs (I-N1, I-N2) | QA-DB-27, -28 |
-| 5 | The notification API can't describe deletes or multi-row edits | Yes | One batch per transaction, taken from a trigger-maintained change log, coalesced per row and applied atomically (D-14, §10.2) | QA-DB-29; QA-INV-09 (the end-to-end fuzzer) |
-| 6 | "Slot numbering is ignored under inherit" has an exception | Yes | R-12 now covers founder order only. R-9 step 5 states the joiner rule. | QA-DG-7 |
-| 7 | Distinct indexes don't guarantee distinct positions | Yes | R-9 and R-11 now say "distinct sample indexes". Geometric collisions are out of scope. | QA-DG-5 puts two indexes on one coordinate |
-| 8 | Degenerate geometry has no defined behaviour | Yes | New §8.10. Line endpoints must be distinct. | QA-DG-1 to -6; P-11 |
-| 9 | The complexity bounds leave out trail searches | Yes | §9.6 corrected | Bounds corrected; the counters check QA-CX |
-| 10 | The evidence wasn't included, and agreeing with an oracle built from the same rules isn't independent | Partly | `ref/` now ships with the spec, and §12.10 says what the evidence does and doesn't show. For the caching layer, the differential fuzz *is* independent of §8. Whether the spec matches the design's intent still rests on the hand-calculated goldens and on people judging the scenarios. | §12.10 |
-| 11 | Physical feasibility isn't addressed | Yes | Declared a non-goal, with candidate future diagnostics | §14, Q-11 |
+| #   | Finding                                                                                               | Confirmed?                                                      | Change in v0.2                                                                                                                                                                                                                                                                             | Evidence                                                                            |
+| --- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| 1   | Editing FTL joiners can leave cached targets stale                                                    | Yes                                                             | `ftlEntry` now depends on every row of T. A batch dirties the FTL entries of the transitions in its changed row images (§9.2, §9.4 step 3.4).                                                                                                                                              | QA-REG-1. The v0.1 rules fail it.                                                   |
+| 2   | `spansByTransition` must be updated for transitions other than the edited row's                       | Yes, and worse: stale entries can also cause infinite recursion | Every transition in the old and new spans is re-indexed. Eviction follows the old structure first. I-C1 now forbids stale keys (§9.3, §9.4 steps 3.1–3.3).                                                                                                                                 | QA-REG-2. The v0.1 rules fail the differential fuzzer on at least 281 of 300 seeds. |
+| 3   | `RAISE(ABORT)` doesn't roll back the whole transaction                                                | Yes, reproduced                                                 | The write wrapper is now normative (§6)                                                                                                                                                                                                                                                    | QA-DB-26, -26b, -30                                                                 |
+| 4   | `INTEGER` columns accept values such as 0.5                                                           | Yes, reproduced                                                 | `STRICT` tables and range CHECKs (I-N1, I-N2)                                                                                                                                                                                                                                              | QA-DB-27, -28                                                                       |
+| 5   | The notification API can't describe deletes or multi-row edits                                        | Yes                                                             | One batch per transaction, taken from a trigger-maintained change log, coalesced per row and applied atomically (D-14, §10.2)                                                                                                                                                              | QA-DB-29; QA-INV-09 (the end-to-end fuzzer)                                         |
+| 6   | "Slot numbering is ignored under inherit" has an exception                                            | Yes                                                             | R-12 now covers founder order only. R-9 step 5 states the joiner rule.                                                                                                                                                                                                                     | QA-DG-7                                                                             |
+| 7   | Distinct indexes don't guarantee distinct positions                                                   | Yes                                                             | R-9 and R-11 now say "distinct sample indexes". Geometric collisions are out of scope.                                                                                                                                                                                                     | QA-DG-5 puts two indexes on one coordinate                                          |
+| 8   | Degenerate geometry has no defined behaviour                                                          | Yes                                                             | New §8.10. Line endpoints must be distinct.                                                                                                                                                                                                                                                | QA-DG-1 to -6; P-11                                                                 |
+| 9   | The complexity bounds leave out trail searches                                                        | Yes                                                             | §9.6 corrected                                                                                                                                                                                                                                                                             | Bounds corrected; the counters check QA-CX                                          |
+| 10  | The evidence wasn't included, and agreeing with an oracle built from the same rules isn't independent | Partly                                                          | `ref/` now ships with the spec, and §12.10 says what the evidence does and doesn't show. For the caching layer, the differential fuzz _is_ independent of §8. Whether the spec matches the design's intent still rests on the hand-calculated goldens and on people judging the scenarios. | §12.10                                                                              |
+| 11  | Physical feasibility isn't addressed                                                                  | Yes                                                             | Declared a non-goal, with candidate future diagnostics                                                                                                                                                                                                                                     | §14, Q-11                                                                           |
 
 **Also found while fixing these:**
 
@@ -1519,13 +1523,13 @@ Before changing the spec, I checked each finding: by reproducing it in SQLite, b
 
 The reviewer reran every v0.2 check and reproduced the results. As before, I reproduced each finding before changing anything.
 
-| # | Finding | Confirmed? | Change in v0.3 | Evidence |
-|---|---|---|---|---|
-| 1 | Circle flattening breaks the 0.01 tolerance at large radii | Yes. At radius 10,000 the chord error was 0.095, and an FTL arrival missed its exact point by 0.093. | Nothing is flattened any more. FTL trails use the exact destination path (R-9, R-13). The radius is bounded at 10⁶ by a CHECK. | P-6 and P-7 at boundary scale. Mutation M1 (720-segment flattening) is caught. |
-| 2 | Finite inputs can still give NaN or discontinuous arcs | Yes. NaN at bulge 10²⁰⁰; a 0.006 drift at the start with a 10⁶ chord and bulge 10⁻⁹. | A chord-relative arc formula with exact endpoints (R-8). `\|bulge\| ≤ 2` and coordinates ≤ 10⁶ (I-S1, I-T2, CHECKs). | P-1, P-7 and P-11 at the bounds; 20,000 R-8 cross-checks against the centre form; mutation M2 is caught; QA-DB-32, -33 |
-| 3 | "Targets depend on T's own rows, not on layering" is wrong | Yes, reproduced with the reviewer's two-founder example. The invalidation rules already handled it; only the wording was wrong. | R-9 step 5 and Q-12 reworded | QA-REG-4 (passes under v0.2+, fails under the v0.1 rules) |
-| 4 | The evidence is narrower than the property catalogue; shared geometry hides errors; scripts don't fail their exit status | Yes | `props.mjs` asserts eight properties using independent geometry and boundary-valued shows, including the new P-12. `mutate.py` shows it catches six seeded bugs. Every script now exits non-zero on an unexpected failure, and `run_all.sh` is the gate. | §12.5, §12.10 |
-| 5 | `indexOf` and full scans exceed the stated bounds | Yes | A marcher → q map; row indexes by marcher and by transition; the complexity table now includes occupant sorting (§9.6) | CX-06: per-member cost grows 1.1–1.7× from 50 to 5,000 members, compared with 14× for the v0.2 reference |
+| #   | Finding                                                                                                                  | Confirmed?                                                                                                                      | Change in v0.3                                                                                                                                                                                                                                           | Evidence                                                                                                               |
+| --- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1   | Circle flattening breaks the 0.01 tolerance at large radii                                                               | Yes. At radius 10,000 the chord error was 0.095, and an FTL arrival missed its exact point by 0.093.                            | Nothing is flattened any more. FTL trails use the exact destination path (R-9, R-13). The radius is bounded at 10⁶ by a CHECK.                                                                                                                           | P-6 and P-7 at boundary scale. Mutation M1 (720-segment flattening) is caught.                                         |
+| 2   | Finite inputs can still give NaN or discontinuous arcs                                                                   | Yes. NaN at bulge 10²⁰⁰; a 0.006 drift at the start with a 10⁶ chord and bulge 10⁻⁹.                                            | A chord-relative arc formula with exact endpoints (R-8). `\|bulge\| ≤ 2` and coordinates ≤ 10⁶ (I-S1, I-T2, CHECKs).                                                                                                                                     | P-1, P-7 and P-11 at the bounds; 20,000 R-8 cross-checks against the centre form; mutation M2 is caught; QA-DB-32, -33 |
+| 3   | "Targets depend on T's own rows, not on layering" is wrong                                                               | Yes, reproduced with the reviewer's two-founder example. The invalidation rules already handled it; only the wording was wrong. | R-9 step 5 and Q-12 reworded                                                                                                                                                                                                                             | QA-REG-4 (passes under v0.2+, fails under the v0.1 rules)                                                              |
+| 4   | The evidence is narrower than the property catalogue; shared geometry hides errors; scripts don't fail their exit status | Yes                                                                                                                             | `props.mjs` asserts eight properties using independent geometry and boundary-valued shows, including the new P-12. `mutate.py` shows it catches six seeded bugs. Every script now exits non-zero on an unexpected failure, and `run_all.sh` is the gate. | §12.5, §12.10                                                                                                          |
+| 5   | `indexOf` and full scans exceed the stated bounds                                                                        | Yes                                                                                                                             | A marcher → q map; row indexes by marcher and by transition; the complexity table now includes occupant sorting (§9.6)                                                                                                                                   | CX-06: per-member cost grows 1.1–1.7× from 50 to 5,000 members, compared with 14× for the v0.2 reference               |
 
 **Also found while fixing these:**
 
@@ -1539,11 +1543,11 @@ The reviewer reran every v0.2 check and reproduced the results. As before, I rep
 
 The reviewer found no remaining structural contradiction in the timeline, assignment or invalidation model. All three findings were in the numerical domain, and all three reproduced exactly as reported.
 
-| # | Finding | Confirmed? | Change in v0.4 | Evidence |
-|---|---|---|---|---|
-| 1 | Bounded authored coordinates don't bound derived positions | Yes. 40 chained partial arcs at bulge 2 reached (−3.44×10¹⁸, −1.35×10¹⁸), and the next direct move to (1,1) arrived at (0,0). A chain of about 1,000 gave NaN. | Minor arcs only (D-15, enforced by a CHECK), plus the derived-range theorem (§8.11). Interpolation, arcs and FTL spans now return their endpoints exactly (§8.10). D-5's promise now holds numerically. | P-13 at every probe, including the adversarial chains. QA-REG-5: 1,000 arcs stay within 10⁶ and the final move arrives exactly. Mutations M7 (major arcs) and M9 (non-exact interpolation) are caught. |
-| 2 | Circle start angles need normalization or bounds | Yes. At `start_angle = 10²⁰`, all four quarter-circle samples coincided. | Start angles are normalized to `[0, 2π)` when authored or imported (I-S1, enforced by a CHECK) | QA-DB-34 |
-| 3 | The arc formula underflows at tiny chords | Yes. `arcPoint((0,0), (MIN_VALUE,0), 0, ½)` returned NaN. | `φ = 2·atan(2k)`, with no division by the chord. Chords shorter than `ε_geom = 10⁻⁹` are evaluated as straight lines (R-8, §8.10). | R-8 finiteness checks at `Number.MIN_VALUE`; mutation M8 (the v0.3 formula) is caught |
+| #   | Finding                                                    | Confirmed?                                                                                                                                                     | Change in v0.4                                                                                                                                                                                          | Evidence                                                                                                                                                                                               |
+| --- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Bounded authored coordinates don't bound derived positions | Yes. 40 chained partial arcs at bulge 2 reached (−3.44×10¹⁸, −1.35×10¹⁸), and the next direct move to (1,1) arrived at (0,0). A chain of about 1,000 gave NaN. | Minor arcs only (D-15, enforced by a CHECK), plus the derived-range theorem (§8.11). Interpolation, arcs and FTL spans now return their endpoints exactly (§8.10). D-5's promise now holds numerically. | P-13 at every probe, including the adversarial chains. QA-REG-5: 1,000 arcs stay within 10⁶ and the final move arrives exactly. Mutations M7 (major arcs) and M9 (non-exact interpolation) are caught. |
+| 2   | Circle start angles need normalization or bounds           | Yes. At `start_angle = 10²⁰`, all four quarter-circle samples coincided.                                                                                       | Start angles are normalized to `[0, 2π)` when authored or imported (I-S1, enforced by a CHECK)                                                                                                          | QA-DB-34                                                                                                                                                                                               |
+| 3   | The arc formula underflows at tiny chords                  | Yes. `arcPoint((0,0), (MIN_VALUE,0), 0, ½)` returned NaN.                                                                                                      | `φ = 2·atan(2k)`, with no division by the chord. Chords shorter than `ε_geom = 10⁻⁹` are evaluated as straight lines (R-8, §8.10).                                                                      | R-8 finiteness checks at `Number.MIN_VALUE`; mutation M8 (the v0.3 formula) is caught                                                                                                                  |
 
 **Also found while fixing these:**
 
@@ -1556,12 +1560,12 @@ The reviewer found no remaining structural contradiction in the timeline, assign
 
 The reviewer accepted the core design and found no new structural contradiction. There was one real defect, in the reference code, plus three clarifications.
 
-| # | Finding | Confirmed? | Change in v0.5 | Evidence |
-|---|---|---|---|---|
-| 1 | Deep cold queries overflow the call stack | Yes. With Node's default stack, 5,000 direct transitions overflowed; with a smaller stack, 3,000 did. The limit depends on the platform, which is why recursion can't be relied on. | Pull-compile and the dirty walk use explicit work stacks (§9.3). A cycle is detected and reported instead of looping. | QA-REG-6 on a 300 KB stack; the v0.4 resolver fails all three of its checks |
-| 2 | Minor-arcs-only is a product restriction; FTL with waypoints isn't an exact substitute | Agreed | D-15 says so. New visual acceptance scenario QA-SC-14. | — |
-| 3 | The Float32 allowance rests only on small golden fixtures | Agreed | Float64 is required for resolver arithmetic and caches. Float32 is allowed only for rendering and export (§10.1). | — |
-| 4 | R-8 says "no step divides by the chord", but `u = (B − A)/c` does | Correct | R-8 now names the one division and the `ε_geom` guard that protects it | — |
+| #   | Finding                                                                                | Confirmed?                                                                                                                                                                          | Change in v0.5                                                                                                        | Evidence                                                                    |
+| --- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 1   | Deep cold queries overflow the call stack                                              | Yes. With Node's default stack, 5,000 direct transitions overflowed; with a smaller stack, 3,000 did. The limit depends on the platform, which is why recursion can't be relied on. | Pull-compile and the dirty walk use explicit work stacks (§9.3). A cycle is detected and reported instead of looping. | QA-REG-6 on a 300 KB stack; the v0.4 resolver fails all three of its checks |
+| 2   | Minor-arcs-only is a product restriction; FTL with waypoints isn't an exact substitute | Agreed                                                                                                                                                                              | D-15 says so. New visual acceptance scenario QA-SC-14.                                                                | —                                                                           |
+| 3   | The Float32 allowance rests only on small golden fixtures                              | Agreed                                                                                                                                                                              | Float64 is required for resolver arithmetic and caches. Float32 is allowed only for rendering and export (§10.1).     | —                                                                           |
+| 4   | R-8 says "no step divides by the chord", but `u = (B − A)/c` does                      | Correct                                                                                                                                                                             | R-8 now names the one division and the `ε_geom` guard that protects it                                                | —                                                                           |
 
 **Also found while fixing these:** the first iterative version made the expected-failure v0.1 fuzz run exhaust memory. Stale v0.1 index entries form a dependency cycle. Recursion used to turn that into a quick stack-overflow exception, but a work stack just keeps growing. The resolver now detects the cycle and throws. The requirement to fail loudly on a cycle is in §9.3.
 
@@ -1589,12 +1593,12 @@ The reviewer accepted the core design and found no new structural contradiction.
 - invalidation (apart from one new edit kind in §9.4);
 - the derived-range bound, which now counts individual destinations as authored points.
 
-| Evidence | Result |
-|---|---|
-| Storage | QA-DB-35 to -41 cover completeness at commit, FTL without a shape, exclusivity, switching sources both ways, consistency with `slot_count`, coordinate bounds, and change logging |
-| Golden | G13: an individual placement, then a shape move, a one-marcher individual steal partway through the shape move, and an individual arc |
-| Fuzzing | Both fuzzers now generate individual transitions, edit individual points and switch sources. See §12.10 for the counts. |
-| Properties | About 30% of generated direct and arc transitions are individual. P-7 arrival and the P-13 bound are checked against the placed points. |
+| Evidence   | Result                                                                                                                                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Storage    | QA-DB-35 to -41 cover completeness at commit, FTL without a shape, exclusivity, switching sources both ways, consistency with `slot_count`, coordinate bounds, and change logging |
+| Golden     | G13: an individual placement, then a shape move, a one-marcher individual steal partway through the shape move, and an individual arc                                             |
+| Fuzzing    | Both fuzzers now generate individual transitions, edit individual points and switch sources. See §12.10 for the counts.                                                           |
+| Properties | About 30% of generated direct and arc transitions are individual. P-7 arrival and the P-13 bound are checked against the placed points.                                           |
 
 **Also found while making the change:** a `props.mjs` failure message read the shape's kind, and a shapeless transition has none. With a real arrival failure on an individual arc, that would have crashed the checker instead of reporting the failure. Mutation M2 exposed it, and it is fixed.
 
@@ -1604,9 +1608,9 @@ The reviewer accepted the core design and found no new structural contradiction.
 
 **Finding (from the implementing agent):** the range-edit trigger breaks undo. Undo replays changes in reverse, so undoing a transition shrink tries to grow the assignment before the transition, and is rejected. The proposed fix was to do the range rewrite in app code, with the statements in an order that stays valid when reversed.
 
-| # | Finding | Confirmed? | Change in v0.7 | Evidence |
-|---|---|---|---|---|
-| 1 | `tr_range_anchor` breaks undo | Yes, reproduced two ways. A direct shrink can't be undone under the v0.6 trigger. The end-to-end fuzzer with the v0.6 trigger restored breaks undo in 83 of 300 seeds. Grows happened to undo correctly; shrinks and shifts did not. | The trigger is gone. `tr_range_check`, a pure check, enforces I-A1 from the transition side. R-E1 is an app procedure: grow to the union, move the anchored rows, shrink to the target (§6). §6.1 states the undo model and the four rules that make it safe (U-1 to U-4); D-17 records the decision. | QA-UNDO-1 to -9; QA-DB-11, -12, -13, -13b, -24, -29 |
+| #   | Finding                       | Confirmed?                                                                                                                                                                                                                           | Change in v0.7                                                                                                                                                                                                                                                                                        | Evidence                                            |
+| --- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| 1   | `tr_range_anchor` breaks undo | Yes, reproduced two ways. A direct shrink can't be undone under the v0.6 trigger. The end-to-end fuzzer with the v0.6 trigger restored breaks undo in 83 of 300 seeds. Grows happened to undo correctly; shrinks and shifts did not. | The trigger is gone. `tr_range_check`, a pure check, enforces I-A1 from the transition side. R-E1 is an app procedure: grow to the union, move the anchored rows, shrink to the target (§6). §6.1 states the undo model and the four rules that make it safe (U-1 to U-4); D-17 records the decision. | QA-UNDO-1 to -9; QA-DB-11, -12, -13, -13b, -24, -29 |
 
 **Also checked:**
 
@@ -1620,29 +1624,29 @@ The reviewer accepted the core design and found no new structural contradiction.
 
 **Why:** each edit had its own layer rule (one above whatever it overlaps, keep the old layer, rise over page moves only, copy a neighbour's, or a number typed in the inspector). A whole-move drag kept its layer and was refused with `E-A3` where an edge drag over the same counts was allowed. "Last edited on top" was considered and rejected: it makes playback depend on edit history that nothing on screen shows. [research/layer-priority](research/layer-priority/README.md) has ten simulated cases comparing the two.
 
-| Section | Change |
-|---|---|
-| §2 | **Layer** says it's derived; new term **base row** |
-| §4 | D-6 amended; new D-18 |
-| §6.2 | New: L-1 to L-6, I-L1, I-L2, and a note on FTL founders |
-| §13 | Q-8 resolved |
+| Section | Change                                                  |
+| ------- | ------------------------------------------------------- |
+| §2      | **Layer** says it's derived; new term **base row**      |
+| §4      | D-6 amended; new D-18                                   |
+| §6.2    | New: L-1 to L-6, I-L1, I-L2, and a note on FTL founders |
+| §13     | Q-8 resolved                                            |
 
 **Unchanged:** the schema, the triggers (I-A3 still guards every write), R-2 and every other resolution rule, `ref/`, and the QA catalogue. The app stores which timeline is a page's own (ADR 0001), which is an app table, not part of §5.
 
 **New tests for the app (QA-LP):**
 
-| ID | Setup | Expected |
-|---|---|---|
-| QA-LP-1 | A base row and a non-base row overlap | Base row 0, other row 1 |
-| QA-LP-2 | Two non-base rows `[4,12)` and `[8,16)` | `[8,16)` wins from 8 to 12 |
-| QA-LP-3 | Same start: `[8,10)` and `[8,16)` | `[8,10)` wins; `[8,16)` resumes at 10 |
-| QA-LP-4 | A write that would give one marcher two non-base rows `[8,16)` | Refused, `E-ARGS` |
-| QA-LP-5 | Three deep: base `[0,16)`, `[4,14)`, `[6,10)` | Layers 0, 1, 2 |
-| QA-LP-6 | Lengthen a base row around a non-base row inside it | Winners unchanged |
-| QA-LP-7 | The same rows written in two different orders | Identical layers |
-| QA-LP-8 | A row that would need layer 1001 | Refused, `E-A3` |
-| QA-LP-9 | Undo and redo of an edit that changed layers | Layers restored exactly; every intermediate state valid |
-| QA-LP-10 | Property: random rows for one marcher | I-L1 holds, and R-2's winner matches L-1 to L-3 at every beat |
-| QA-LP-11 | Two base rows `[0,16)` (old page move, marked) and `[0,8)` (new page after a flag insert) | `[0,8)` wins on 0 to 8; layers 0 and 1 |
+| ID       | Setup                                                                                                             | Expected                                                                     |
+| -------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| QA-LP-1  | A base row and a non-base row overlap                                                                             | Base row 0, other row 1                                                      |
+| QA-LP-2  | Two non-base rows `[4,12)` and `[8,16)`                                                                           | `[8,16)` wins from 8 to 12                                                   |
+| QA-LP-3  | Same start: `[8,10)` and `[8,16)`                                                                                 | `[8,10)` wins; `[8,16)` resumes at 10                                        |
+| QA-LP-4  | A write that would give one marcher two non-base rows `[8,16)`                                                    | Refused, `E-ARGS`                                                            |
+| QA-LP-5  | Three deep: base `[0,16)`, `[4,14)`, `[6,10)`                                                                     | Layers 0, 1, 2                                                               |
+| QA-LP-6  | Lengthen a base row around a non-base row inside it                                                               | Winners unchanged                                                            |
+| QA-LP-7  | The same rows written in two different orders                                                                     | Identical layers                                                             |
+| QA-LP-8  | A row that would need layer 1001                                                                                  | Refused, `E-A3`                                                              |
+| QA-LP-9  | Undo and redo of an edit that changed layers                                                                      | Layers restored exactly; every intermediate state valid                      |
+| QA-LP-10 | Property: random rows for one marcher                                                                             | I-L1 holds, and R-2's winner matches L-1 to L-3 at every beat                |
+| QA-LP-11 | Two base rows `[0,16)` (old page move, marked) and `[0,8)` (new page after a flag insert)                         | `[0,8)` wins on 0 to 8; layers 0 and 1                                       |
 | QA-LP-12 | An FTL transition whose founder also has a same-start row elsewhere; shorten that row so it wins at the FTL start | The marcher becomes a joiner; founders and targets update; diagnostic raised |
-| QA-LP-13 | A flag drag that would give one marcher two non-base rows with the same range | The drag stops one beat short |
+| QA-LP-13 | A flag drag that would give one marcher two non-base rows with the same range                                     | The drag stops one beat short                                                |

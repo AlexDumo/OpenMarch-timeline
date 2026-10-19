@@ -6,6 +6,7 @@ import {
     HouseIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { animated, useSpring } from "@react-spring/web";
 import { flushSync } from "react-dom";
 import {
     isLayoutResizing,
@@ -13,6 +14,7 @@ import {
 } from "@/global/layoutResize";
 import { START_INK } from "./startFlagInk";
 import { isMac } from "./platform";
+import { prefersReducedMotion } from "./reducedMotion";
 import {
     TransportButton,
     TransportNavigationButton,
@@ -85,6 +87,11 @@ import {
     useReleasedPreview,
     type TimelineClipResizeCommands,
 } from "./TimelineClipResize";
+import {
+    isVerticalPeel,
+    useClipPeel,
+    type TimelineClipPeel,
+} from "./TimelineClipPeel";
 import { useLatestCallback } from "./useLatestCallback";
 import {
     createLiveValue,
@@ -832,9 +839,13 @@ export const TimelineRuler = memo(function TimelineRuler({
     // (a scrub moves the window's end every beat)
     const selectedRange = getSelectionRange(selection);
     const homeSelected = selection?.kind === "home";
+    // UI-25: a move split off a page's timeline has the box's range; while its clip is the
+    // window, the box isn't selected
+    const onClip = selection?.kind === "range" && selection.onClip === true;
     const selectedBoxIds = pageBoxes
         .filter(
-            ({ range }) => range !== null && sameRange(range, selectedRange),
+            ({ range }) =>
+                !onClip && range !== null && sameRange(range, selectedRange),
         )
         .map(({ page }) => page.id)
         .join("\n");
@@ -1355,6 +1366,48 @@ export function TimelineMoveNameField({
     );
 }
 
+/** The drop's spring: about a third of a second, no overshoot (a clip can't bounce into its row) */
+const CLIP_DROP_SPRING = { tension: 260, friction: 30, clamp: true };
+
+/**
+ * A clip dropping out of a page box (`useClipDrops`): its top springs from `dropFrom` (the page
+ * row, where the pinned header hides it) to `top`, so it slides out from under the page bar into
+ * its row. `dropping` is true until it lands: only then does the clip read the spring, which
+ * reaches the DOM a frame after a change, so a clip at rest draws where it is, the frame it is.
+ * A new `top` mid-way (the rows repacked) ends the drop. With reduced motion there is no drop.
+ */
+function useClipDropSpring(top: number, dropFrom: number | undefined) {
+    const dropped = dropFrom !== undefined && !prefersReducedMotion();
+    // The top the clip is dropping to; null once it lands or its top moves on
+    const [droppingTo, setDroppingTo] = useState<number | null>(
+        dropped ? top : null,
+    );
+    const [spring, api] = useSpring(() => ({
+        // The first paint is already up in the page row
+        y: dropped ? dropFrom : top,
+        config: CLIP_DROP_SPRING,
+    }));
+    useEffect(() => {
+        if (!dropped) return;
+        setDroppingTo(top);
+        void api.start({
+            from: { y: dropFrom },
+            to: { y: top },
+            onRest: () => setDroppingTo(null),
+        });
+        // The top is read when the drop starts; a later change ends the drop instead
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, dropped, dropFrom]);
+    const dropping = droppingTo !== null && droppingTo === top;
+    useEffect(() => {
+        if (droppingTo !== null && !dropping) {
+            api.stop();
+            setDroppingTo(null);
+        }
+    }, [api, dropping, droppingTo]);
+    return { y: dropping ? spring.y : top, dropping };
+}
+
 export const TimelineTrackClip = memo(function TimelineTrackClip({
     track,
     pixelsPerBeat,
@@ -1375,15 +1428,29 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     onRenameStart,
     onRenameEnd,
     resize,
+    peel,
+    dropFrom,
+    onDropEnd,
 }: {
     track: TimelineTrack;
     pixelsPerBeat: number;
     top: number;
     height: number;
     selected: boolean;
+    /**
+     * The clip dropped out of a page box (`useClipDrops`): the top it slides down from, the page
+     * row, to `top`
+     */
+    dropFrom?: number;
+    /** The drop landed (or there was none to make): the clip is in its row */
+    onDropEnd?: (trackId: TimelineTrackId) => void;
     /** Another clip of the same spec timeline is selected; this one moves with it */
     linked?: boolean;
-    onSelect?: (trackId: TimelineTrackId) => void;
+    /** A click selects the clip; Shift+click (`extend`) also selects it beside the selected one (UI-25) */
+    onSelect?: (
+        trackId: TimelineTrackId,
+        options?: { readonly extend?: boolean },
+    ) => void;
     onRangeCommit?: (change: TimelineRangeChange) => TimelineRangeCommitResult;
     beatCount?: number;
     /** Page lines the clip's edges snap to while it moves (ui.md UI-2); Alt turns snapping off */
@@ -1413,6 +1480,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     snapPlayhead?: () => number;
     /** Dragging the clip's start or end edge resizes it (resize-move); without it, no handles */
     resize?: TimelineClipResizeCommands;
+    /** UI-25: dragging the clip down splits the selected marchers off; onto a move, merges */
+    peel?: TimelineClipPeel;
 }) {
     const range = getTrackRange(track);
     // Where a move drag draws the clip, on the view axis. It's where it's drawn, not an offset
@@ -1447,7 +1516,19 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 onEdit: () => moveCommands.onEdit(trackId),
                 onRename: () => onRenameStart?.(trackId),
                 onDelete: () => moveCommands.onDelete(trackId),
+                ...(moveCommands.onSplit
+                    ? { onSplit: () => moveCommands.onSplit!(trackId) }
+                    : {}),
+                ...(moveCommands.splitDisabledReason
+                    ? {
+                          splitDisabledReason: () =>
+                              moveCommands.splitDisabledReason!(trackId),
+                      }
+                    : {}),
                 disabledReason: moveCommands.disabledReason,
+                ...(moveCommands.extraFor
+                    ? { extra: () => moveCommands.extraFor!(trackId) }
+                    : {}),
             },
         [moveCommands, onRenameStart, trackId],
     );
@@ -1486,12 +1567,16 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         offset: number;
         /** Past the drag threshold: a move, not a click (UI-12: a click never snaps the clip) */
         moved: boolean;
+        startClientY: number;
+        /** UI-25: the drag is up or down (split or merge), locked once it moves */
+        vertical: boolean;
         /**
          * Where the clip was drawn when the drag started, set once it moves: a drop still waiting
          * for its range (a move or a resize), or the range
          */
         from: TimelineBeatRange | null;
     } | null>(null);
+    const peeling = useClipPeel({ trackId: track.id, peel, clipRef });
 
     // A dropped clip stays drawn where it was dropped until its range arrives (or the commit
     // wrote nothing), instead of jumping back for a moment
@@ -1530,7 +1615,13 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         draggedRef.current = true;
         setMoving(false);
         backToStart(from);
+        peeling.cancel();
     });
+    const drop = useClipDropSpring(top, dropFrom);
+    const dropEnded = useLatestCallback(() => onDropEnd?.(track.id))!;
+    useEffect(() => {
+        if (dropFrom !== undefined && !drop.dropping) dropEnded();
+    }, [drop.dropping, dropEnded, dropFrom]);
     const edgeResize = useClipEdgeResize({
         trackId: track.id,
         label: track.label,
@@ -1597,7 +1688,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
 
     return (
         <>
-            <button
+            <animated.button
+                data-dropping={drop.dropping || undefined}
                 type="button"
                 data-timeline-interactive="true"
                 data-testid="timeline-clip"
@@ -1623,7 +1715,10 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     draggedRef.current = false;
                     // macOS ctrl+click opens the context menu (UI-9: no selection change)
                     if (!dragged && !event.ctrlKey && !isRangeModifier(event))
-                        onSelect?.(track.id);
+                        onSelect?.(
+                            track.id,
+                            event.shiftKey ? { extend: true } : undefined,
+                        );
                 }}
                 onKeyDown={(event) => {
                     if (!moveMenu) return;
@@ -1677,7 +1772,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     edgeResize.resetClick();
                     // Ctrl (Cmd on macOS) draws a range from here instead (the surface handles it)
                     if (
-                        !canMove ||
+                        (!canMove && !peel) ||
                         event.button !== 0 ||
                         event.ctrlKey ||
                         isRangeModifier(event)
@@ -1689,8 +1784,10 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     dragRef.current = {
                         pointerId: event.pointerId,
                         startClientX: event.clientX,
+                        startClientY: event.clientY,
                         offset: 0,
                         moved: false,
+                        vertical: false,
                         from: null,
                     };
                     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -1698,12 +1795,37 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 onPointerMove={(event) => {
                     const drag = dragRef.current;
                     if (!drag || drag.pointerId !== event.pointerId) return;
+                    // UI-25: up or down first is a split or a merge, sideways a re-time
+                    if (drag.vertical) {
+                        peeling.move(
+                            event.clientX,
+                            event.clientY,
+                            drag.startClientY,
+                        );
+                        return;
+                    }
+                    const dx = event.clientX - drag.startClientX;
+                    const dy = event.clientY - drag.startClientY;
+                    if (!drag.moved && peel && isVerticalPeel(dx, dy)) {
+                        drag.vertical = true;
+                        drag.moved = true;
+                        setMoving(true);
+                        peeling.move(
+                            event.clientX,
+                            event.clientY,
+                            drag.startClientY,
+                        );
+                        return;
+                    }
+                    // Sideways first is a re-time; mostly up or down waits for the vertical lock
                     if (
                         !drag.moved &&
-                        Math.abs(event.clientX - drag.startClientX) <
-                            TIMELINE_RANGE_DRAG_PX
+                        (Math.abs(dx) < TIMELINE_RANGE_DRAG_PX ||
+                            (peel !== undefined &&
+                                2 * Math.abs(dx) <= Math.abs(dy)))
                     )
                         return;
+                    if (!canMove) return;
                     if (!drag.moved) {
                         drag.from = {
                             startBeatIndex: drawn.startBeatIndex,
@@ -1735,6 +1857,11 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     // A press that didn't move is a click: it selects (onClick) and moves nothing,
                     // even with an edge near a page line, which a zero offset would snap to
                     if (!drag.moved) return;
+                    if (drag.vertical) {
+                        draggedRef.current = true;
+                        peeling.commit();
+                        return;
+                    }
                     const from = drag.from!;
                     // Recompute with the release's modifier state, as the selection flags do
                     const offset = getOffset(
@@ -1767,6 +1894,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     setMoving(false);
                     // A press that never moved leaves a dropped clip's wait alone
                     if (drag?.moved) backToStart(drag.from);
+                    peeling.cancel();
                 }}
                 className={clsx(
                     // Focus is an offset outline, so it reads apart from the selected clip's
@@ -1778,7 +1906,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 )}
                 style={{
                     left,
-                    top,
+                    top: drop.y,
                     width,
                     height,
                     boxShadow: selected
@@ -1875,7 +2003,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         {track.label}
                     </span>
                 )}
-            </button>
+            </animated.button>
             {menuShown && moveMenu && (
                 <DropdownMenu.Root
                     open={menuOpen}
@@ -1947,6 +2075,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                     {description}
                 </span>
             )}
+            {peeling.overlay}
             {renaming && onRenameDone && (
                 <TimelineMoveNameField
                     initial={track.label}
@@ -2973,7 +3102,7 @@ export const useTimelinePointer = ({
         ),
     );
     // Every move of a scrub writes where the line is drawn (`scrubLineBeat`, view beats): the
-    // playhead, **+**, the played waveform and the window's tint move themselves to it without a
+    // playhead, the played waveform and the window's tint move themselves to it without a
     // render (`useScrubFollow`, `useScrubStretch`). `null` when not scrubbing.
     const [scrubLine] = useState(() => createLiveValue<number | null>(null));
     const gesture = useRef<{
