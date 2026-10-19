@@ -358,24 +358,28 @@ export default function AudioPlayer() {
                         if (isCancelled) return;
 
                         if (e.data.type === "audioProcessed") {
-                            const { audioBuffer: bufferData } = e.data as {
-                                audioBuffer: {
-                                    numberOfChannels: number;
-                                    length: number;
-                                    sampleRate: number;
-                                    channelData: Float32Array[];
+                            const { audioBuffer: bufferData, musicLength } =
+                                e.data as {
+                                    audioBuffer: {
+                                        numberOfChannels: number;
+                                        length: number;
+                                        sampleRate: number;
+                                        channelData: Float32Array[];
+                                    };
+                                    musicLength: number;
                                 };
-                            };
                             const channels = bufferData.channelData;
 
-                            // The envelope first: the channels then move to the engine
-                            setAudioEnvelopeState(
-                                audioEnvelope({
+                            // The envelope first: the channels then move to the engine. Its
+                            // length is the music's, not the silence padded after it
+                            setAudioEnvelopeState({
+                                ...audioEnvelope({
                                     ...bufferData,
                                     getChannelData: (channel) =>
                                         channels[channel]!,
                                 }),
-                            );
+                                seconds: musicLength / bufferData.sampleRate,
+                            });
                             engine.send(
                                 { type: "music", channels },
                                 channels.map((c) => c.buffer as ArrayBuffer),

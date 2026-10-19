@@ -9,7 +9,10 @@ export interface AudioEnvelope {
     readonly peaks: Float32Array;
     /** Envelope values per second */
     readonly rate: number;
-    /** How long the audio is: the last value's slot can run past it */
+    /**
+     * How long the music is (the audio player gives the length before the silence it pads to
+     * cover the show): the last value's slot can run past it
+     */
     readonly seconds: number;
 }
 
