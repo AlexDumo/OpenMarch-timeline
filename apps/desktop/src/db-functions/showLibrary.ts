@@ -9,7 +9,7 @@
  * The editor is the show's only writer (D-4): it reads a Version's parts from the local Library
  * over `library:read-parts` and embeds them here. Nothing here touches the local Library.
  */
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 // The main process embeds a floor on open (D-23), so no renderer database module here
 import * as schema from "@om-electron/database/migrations/schema";
@@ -24,7 +24,12 @@ import {
     type LibraryItemKind,
 } from "@om-electron/main/library/types";
 import { hashParts, versionHashOf } from "@/view3d/library/showHash";
-import { libraryKeepsFromFloor } from "./fieldFloor";
+import {
+    keepsOf,
+    libraryReferences,
+    LIBRARY_REFERENCE_SOURCES,
+    type LibraryReference,
+} from "./libraryReferences";
 import {
     planLibraryPrune,
     type LibraryKeep,
@@ -316,68 +321,42 @@ export async function readEmbeddedVersion({
  * Library items an undo or redo row names. History lives in the show file and outlives the
  * session, so an item a past edit used must survive a prune: undoing that edit brings the use
  * back. Matching on the item id anywhere in the row's SQL is coarse, and keeps every Version of
- * the item, which errs toward keeping.
+ * the item, which errs toward keeping. One source of `libraryReferences`.
  */
 export async function libraryKeepsFromHistory({
     db,
 }: {
     db: DbConnection | DbTransaction;
 }): Promise<LibraryKeep[]> {
-    const rows = await db
-        .selectDistinct({ item_id: schema.library_items.item_id })
-        .from(schema.library_items)
-        .where(
-            sql`EXISTS (SELECT 1 FROM history_undo WHERE instr(history_undo.sql, ${schema.library_items.item_id}) > 0)
-             OR EXISTS (SELECT 1 FROM history_redo WHERE instr(history_redo.sql, ${schema.library_items.item_id}) > 0)`,
-        )
-        .orderBy(schema.library_items.item_id)
-        .all();
-    return rows.map((r) => ({ itemId: r.item_id }));
+    return keepsOf(await LIBRARY_REFERENCE_SOURCES.history.read(db));
 }
 
-/** A cue value naming a Library item: `library:<item id>@<version hash>` (ADR 0004). */
-const LIBRARY_CUE_VALUE = /^library:([^@]+)@(.+)$/;
 const libraryCueValue = (ref: LibraryRef) =>
     `library:${ref.itemId}@${ref.versionHash}`;
 
-/** True when the show has a cue table: a page-era file that hasn't converted has none. */
-async function hasCueTable(db: DbConnection | DbTransaction): Promise<boolean> {
-    const found = await db
-        .select({ n: sql<number>`count(*)` })
-        .from(sql`sqlite_schema`)
-        .where(sql`type = 'table' AND name = 'cues'`)
-        .get();
-    return !!found?.n;
-}
-
 /**
- * Library Versions the show's cues name (Carry, Silk and Uniform values). Save never prunes a
- * Library item a cue names (ADR 0004 amendment of 2026-10-11, and of 2026-10-15). A page-era file
- * that hasn't converted has no cue table, and keeps nothing for cues.
+ * Library Versions the show's cues name (Carry, Silk and Uniform values), each once. Save never
+ * prunes a Library item a cue names (ADR 0004 amendment of 2026-10-11, and of 2026-10-15). One
+ * source of `libraryReferences`.
  */
 export async function libraryKeepsFromCues({
     db,
 }: {
     db: DbConnection | DbTransaction;
 }): Promise<LibraryKeep[]> {
-    if (!(await hasCueTable(db))) return [];
-    const rows = await db
-        .selectDistinct({ value: schema.cues.value })
-        .from(schema.cues)
-        .where(sql`${schema.cues.value} LIKE 'library:%'`)
-        .all();
-    const keeps: LibraryKeep[] = [];
-    for (const { value } of rows) {
-        const match = LIBRARY_CUE_VALUE.exec(value);
-        if (match) keeps.push({ itemId: match[1]!, versionHash: match[2]! });
-    }
-    return keeps;
+    const keeps = new Map<string, LibraryKeep>();
+    for (const ref of await LIBRARY_REFERENCE_SOURCES.cues.read(db))
+        keeps.set(`${ref.itemId}@${ref.versionHash}`, {
+            itemId: ref.itemId,
+            versionHash: ref.versionHash!,
+        });
+    return [...keeps.values()];
 }
 
 /**
  * Removes the Versions nothing keeps, then the blobs no remaining Version names (props-spec.md
- * section 2). `keep` is what the show's other tables use (Item tables); the Versions cues,
- * history and the show's floor (D-23) name are added here.
+ * section 2). Everything the show names is kept (`libraryReferences`: cues, the floor, the Item
+ * tables and history); `keep` adds more.
  */
 export async function pruneShowLibraryInTransaction({
     tx,
@@ -425,12 +404,7 @@ export async function pruneShowLibraryInTransaction({
     const plan = planLibraryPrune({
         items,
         blobHashes,
-        keep: [
-            ...keep,
-            ...(await libraryKeepsFromCues({ db: tx })),
-            ...(await libraryKeepsFromHistory({ db: tx })),
-            ...(await libraryKeepsFromFloor({ db: tx })),
-        ],
+        keep: [...keep, ...keepsOf(await libraryReferences({ db: tx }))],
     });
     if (unreadable.length > 0) plan.blobs = [];
 
@@ -456,12 +430,6 @@ function safeJson(text: string): unknown {
     }
 }
 
-/** Matches cues naming any Version of `itemId`, exactly (no LIKE wildcards or case folding). */
-const namesLibraryItem = (itemId: string) => {
-    const prefix = `library:${itemId}@`;
-    return sql`substr(${schema.cues.value}, 1, ${prefix.length}) = ${prefix}`;
-};
-
 /** A cue that names a Library item, with where it sits, for the list "Replace with…" shows. */
 export interface LibraryCueUse {
     cue: DatabaseCue;
@@ -471,15 +439,45 @@ export interface LibraryCueUse {
     tagName: string | null;
 }
 
+/** A prop or piece of equipment using a Library item, as its model or on an Artwork slot. */
+export interface LibraryItemUse {
+    marcherId: number;
+    /** The item's name, else its drill number */
+    label: string;
+    /** The Artwork slot it sits on; null for the item's model */
+    slot: string | null;
+}
+
 /** What stops a show's Library item from being deleted (props-spec.md section 2, [26.10]). */
 export interface LibraryItemUses {
     /** Cues naming any Version of the item, by beat */
     cues: LibraryCueUse[];
+    /** True when it is the show's floor (D-23) */
+    floor: boolean;
+    /** Props and equipment using it, as a model or on a slot, dormant assignments included */
+    items: LibraryItemUse[];
     /** Other embedded items whose Versions pin it, such as a Uniform pinning its Artwork */
     pinnedBy: { itemId: string; name: string }[];
 }
 
-/** The cues and items that use any Version of `itemId`. Never writes. */
+/** Whether anything in `uses` stops the delete. */
+export const isInUse = (uses: LibraryItemUses) =>
+    uses.cues.length > 0 ||
+    uses.floor ||
+    uses.items.length > 0 ||
+    uses.pinnedBy.length > 0;
+
+/** Whether "Replace with…" can clear `uses`: cues alone use the item. */
+export const isReplaceable = (uses: LibraryItemUses) =>
+    uses.cues.length > 0 &&
+    !uses.floor &&
+    uses.items.length === 0 &&
+    uses.pinnedBy.length === 0;
+
+/**
+ * What uses any Version of `itemId`, from `libraryReferences` (cues, the floor, the Item
+ * tables) and other items' pins. History isn't a use: see `deleteShowLibraryItem`. Never writes.
+ */
 export async function libraryItemUses({
     db,
     itemId,
@@ -487,7 +485,25 @@ export async function libraryItemUses({
     db: DbConnection | DbTransaction;
     itemId: string;
 }): Promise<LibraryItemUses> {
-    const pinnedBy = new Map<string, string>();
+    const refs = (await libraryReferences({ db })).filter(
+        (r) => r.itemId === itemId,
+    );
+    return {
+        cues: await cueUses(
+            db,
+            refs.flatMap((r) => (r.source === "cues" ? [r.cueId] : [])),
+        ),
+        floor: refs.some((r) => r.source === "floor"),
+        items: await itemUses(db, refs),
+        pinnedBy: await pinnedBy(db, itemId),
+    };
+}
+
+async function pinnedBy(
+    db: DbConnection | DbTransaction,
+    itemId: string,
+): Promise<{ itemId: string; name: string }[]> {
+    const found = new Map<string, string>();
     const others = await db
         .select({
             item_id: schema.library_items.item_id,
@@ -502,66 +518,112 @@ export async function libraryItemUses({
         const pins = z.array(LibraryRefSchema).safeParse(safeJson(other.pins));
         // A row that can't be read might pin it, so it counts as a use
         if (!pins.success || pins.data.some((pin) => pin.itemId === itemId))
-            pinnedBy.set(other.item_id, other.name);
+            found.set(other.item_id, other.name);
     }
+    return [...found].map(([id, name]) => ({ itemId: id, name }));
+}
 
+/** The cues with ids `cueIds`, with their beat and tag, by beat. */
+async function cueUses(
+    db: DbConnection | DbTransaction,
+    cueIds: readonly number[],
+): Promise<LibraryCueUse[]> {
+    if (cueIds.length === 0) return [];
+    const ids = new Set(cueIds);
+    const beats = await db
+        .select({ id: schema.beats.id })
+        .from(schema.beats)
+        .orderBy(asc(schema.beats.position), asc(schema.beats.id))
+        .all();
+    const indexOf = new Map(beats.map((b, i) => [b.id, i]));
+    const tags = new Map(
+        (
+            await db
+                .select({ id: schema.tags.id, name: schema.tags.name })
+                .from(schema.tags)
+                .all()
+        ).map((t) => [t.id, t.name]),
+    );
     const cues: LibraryCueUse[] = [];
-    if (await hasCueTable(db)) {
-        const ids = new Set(
-            (
-                await db
-                    .select({ id: schema.cues.id })
-                    .from(schema.cues)
-                    .where(namesLibraryItem(itemId))
-                    .all()
-            ).map((r) => r.id),
-        );
-        if (ids.size > 0) {
-            const beats = await db
-                .select({ id: schema.beats.id })
-                .from(schema.beats)
-                .orderBy(asc(schema.beats.position), asc(schema.beats.id))
-                .all();
-            const indexOf = new Map(beats.map((b, i) => [b.id, i]));
-            const tags = new Map(
-                (
-                    await db
-                        .select({ id: schema.tags.id, name: schema.tags.name })
-                        .from(schema.tags)
-                        .all()
-                ).map((t) => [t.id, t.name]),
-            );
-            for (const cue of await getCues({ db })) {
-                if (!ids.has(cue.id)) continue;
-                cues.push({
-                    cue,
-                    // A cue's beat always exists: deleting a beat moves or deletes its cues
-                    beatIndex: indexOf.get(cue.beatId) ?? 0,
-                    tagName:
-                        cue.target.kind === "tag"
-                            ? (tags.get(cue.target.tagId) ?? null)
-                            : null,
-                });
-            }
-            cues.sort(
-                (a, b) => a.beatIndex - b.beatIndex || a.cue.id - b.cue.id,
-            );
-        }
+    for (const cue of await getCues({ db })) {
+        if (!ids.has(cue.id)) continue;
+        cues.push({
+            cue,
+            // A cue's beat always exists: deleting a beat moves or deletes its cues
+            beatIndex: indexOf.get(cue.beatId) ?? 0,
+            tagName:
+                cue.target.kind === "tag"
+                    ? (tags.get(cue.target.tagId) ?? null)
+                    : null,
+        });
     }
-    return {
-        cues,
-        pinnedBy: [...pinnedBy].map(([id, name]) => ({ itemId: id, name })),
-    };
+    return cues.sort(
+        (a, b) => a.beatIndex - b.beatIndex || a.cue.id - b.cue.id,
+    );
+}
+
+/** The props and equipment among `refs`, named, by name then slot. */
+async function itemUses(
+    db: DbConnection | DbTransaction,
+    refs: readonly LibraryReference[],
+): Promise<LibraryItemUse[]> {
+    const raw = refs.flatMap(
+        (r): { marcherId: number; slot: string | null }[] =>
+            r.source === "itemModels"
+                ? [{ marcherId: r.marcherId, slot: null }]
+                : r.source === "itemArtworkSlots"
+                  ? [{ marcherId: r.marcherId, slot: r.slot }]
+                  : [],
+    );
+    if (raw.length === 0) return [];
+    const marchers = await db
+        .select({
+            id: schema.marchers.id,
+            name: schema.marchers.name,
+            drill_prefix: schema.marchers.drill_prefix,
+            drill_order: schema.marchers.drill_order,
+        })
+        .from(schema.marchers)
+        .where(
+            inArray(
+                schema.marchers.id,
+                raw.map((r) => r.marcherId),
+            ),
+        )
+        .all();
+    const labels = new Map(
+        marchers.map((m) => [
+            m.id,
+            m.name?.trim() || `${m.drill_prefix}${m.drill_order}`,
+        ]),
+    );
+    const seen = new Set<string>();
+    const uses: LibraryItemUse[] = [];
+    for (const r of raw) {
+        const key = `${r.marcherId}:${r.slot ?? ""}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        uses.push({
+            ...r,
+            label: labels.get(r.marcherId) ?? `#${r.marcherId}`,
+        });
+    }
+    return uses.sort(
+        (a, b) =>
+            a.label.localeCompare(b.label) ||
+            (a.slot ?? "").localeCompare(b.slot ?? ""),
+    );
 }
 
 /**
  * What deleting a show's Library item did:
  *
  * - `deleted`: every Version and the blobs only it named are gone;
- * - `inUse`: cues or other items use it, and nothing changed;
+ * - `inUse`: cues, the floor, props or other items use it, and nothing changed;
  * - `keptForUndo`: nothing uses it now, but an undo or redo row names it, so it stays until a
  *   later prune finds nothing naming it (props-spec.md section 2: undoing an old edit must find
- *   the item it used). After "Replace with…" this is always the outcome: the replace is undoable.
+ *   the item it used). The show prunes when it closes. After "Replace with…" this is always the
+ *   outcome: the replace is undoable.
  */
 export type DeleteShowLibraryItemResult =
     | { outcome: "deleted" }
@@ -572,8 +634,8 @@ async function deleteUnusedInTransaction(
     tx: DbTransaction,
     itemId: string,
 ): Promise<DeleteShowLibraryItemResult> {
-    const history = await libraryKeepsFromHistory({ db: tx });
-    if (history.some((k) => k.itemId === itemId))
+    const history = await LIBRARY_REFERENCE_SOURCES.history.read(tx);
+    if (history.some((r) => r.itemId === itemId))
         return { outcome: "keptForUndo" };
     await tx
         .delete(schema.library_items)
@@ -591,40 +653,75 @@ async function deleteUnusedInTransaction(
     return { outcome: "deleted" };
 }
 
-/** Throws unless `to` is embedded, of the same kind as `itemId`, and another item. */
+/**
+ * What an item is for within its kind: an Artwork's surface (Silk, Base floor, Uniform part…) or
+ * a model's kind (prop, equipment), from its sidecar; null for a Uniform or an unreadable
+ * sidecar. "Replace with…" matches on it, so a Silk is never replaced with a floor.
+ */
+export function libraryRoleOf(
+    kind: LibraryItemKind,
+    sidecar: unknown,
+): string | null {
+    if (kind === "uniform" || typeof sidecar !== "object" || sidecar === null)
+        return null;
+    const { kind: modelKind, surface } = sidecar as {
+        kind?: unknown;
+        surface?: unknown;
+    };
+    const role = kind === "model" ? modelKind : surface;
+    return typeof role === "string" ? role : null;
+}
+
+/** Throws unless `to` is embedded, of the same kind and role as `itemId`, and another item. */
 async function assertReplacementInTransaction(
     tx: DbTransaction,
     itemId: string,
     to: LibraryRef,
 ): Promise<void> {
-    const kindOf = async (where: ReturnType<typeof isLibraryVersion>) =>
-        (
-            await tx
-                .select({ kind: schema.library_items.kind })
-                .from(schema.library_items)
-                .where(where)
-                .get()
-        )?.kind;
+    const describe = async (where: ReturnType<typeof isLibraryVersion>) => {
+        const row = await tx
+            .select({
+                kind: schema.library_items.kind,
+                sidecar: schema.library_items.sidecar,
+            })
+            .from(schema.library_items)
+            .where(where)
+            .get();
+        return row
+            ? {
+                  kind: row.kind,
+                  role: libraryRoleOf(
+                      row.kind as LibraryItemKind,
+                      row.sidecar === null ? null : safeJson(row.sidecar),
+                  ),
+              }
+            : undefined;
+    };
     if (to.itemId === itemId)
         throw new Error(`Can't replace ${itemId} with itself`);
-    const toKind = await kindOf(isLibraryVersion(to));
-    if (!toKind)
+    const target = await describe(isLibraryVersion(to));
+    if (!target)
         throw new Error(
             `The show doesn't have ${to.itemId}@${to.versionHash} to replace ${itemId} with`,
         );
-    const fromKind = await kindOf(eq(schema.library_items.item_id, itemId));
-    if (fromKind && fromKind !== toKind)
+    const from = await describe(eq(schema.library_items.item_id, itemId));
+    if (from && from.kind !== target.kind)
         throw new Error(
-            `Can't replace a ${fromKind} with a ${toKind}: the kind must match`,
+            `Can't replace a ${from.kind} with a ${target.kind}: the kind must match`,
+        );
+    if (from && from.role !== target.role)
+        throw new Error(
+            `Can't replace a ${from.role ?? "plain"} ${from.kind} with a ${target.role ?? "plain"} one: the role must match`,
         );
 }
 
 /**
  * Deletes the show's copy of a Library item, every Version (props-spec.md section 2, [26.10]).
  *
- * Without `replaceWith`, it's refused while a cue or another item uses it. With it ("Replace
- * with…"), every cue naming the item is pointed at `replaceWith` first, as one undoable edit, in
- * the same transaction; another item pinning it still refuses. The delete itself is never in
+ * Without `replaceWith`, it's refused while anything uses it (`libraryItemUses`: cues, the
+ * show's floor, props and equipment, other items' pins). With it ("Replace with…"), every cue
+ * naming the item is pointed at `replaceWith` first, as one undoable edit, in the same
+ * transaction; any other use still refuses. The delete itself is never in
  * history, like embedding and pruning, so see {@link DeleteShowLibraryItemResult} for when the
  * item stays.
  */
@@ -640,10 +737,20 @@ export async function deleteShowLibraryItem({
     if (!replaceWith)
         return await db.transaction(async (tx) => {
             const uses = await libraryItemUses({ db: tx, itemId });
-            if (uses.cues.length > 0 || uses.pinnedBy.length > 0)
-                return { outcome: "inUse", uses };
+            if (isInUse(uses)) return { outcome: "inUse", uses };
             return await deleteUnusedInTransaction(tx, itemId);
         });
+
+    // Checked first, outside history: an undoable edit must change something
+    const found = await db.transaction(async (tx) => {
+        await assertReplacementInTransaction(tx, itemId, replaceWith);
+        return await libraryItemUses({ db: tx, itemId });
+    });
+    if (!isInUse(found))
+        return await db.transaction((tx) =>
+            deleteUnusedInTransaction(tx, itemId),
+        );
+    if (!isReplaceable(found)) return { outcome: "inUse", uses: found };
 
     return await transactionWithHistory(
         db,
@@ -651,7 +758,9 @@ export async function deleteShowLibraryItem({
         async (tx): Promise<DeleteShowLibraryItemResult> => {
             await assertReplacementInTransaction(tx, itemId, replaceWith);
             const uses = await libraryItemUses({ db: tx, itemId });
-            if (uses.pinnedBy.length > 0) return { outcome: "inUse", uses };
+            // Something else started using it since: nothing is changed
+            if (!isReplaceable(uses))
+                throw new Error(`${itemId} is in use beyond its cues`);
             const value = libraryCueValue(replaceWith);
             await updateCuesInTransaction({
                 tx,

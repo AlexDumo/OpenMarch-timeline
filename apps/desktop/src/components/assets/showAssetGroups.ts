@@ -5,7 +5,10 @@
  * my Library"; a newer Version or changed details in the Library are noted,
  * never applied silently (props-spec.md section 2).
  */
-import type { ShowLibraryItem } from "@/db-functions/showLibrary";
+import {
+    libraryRoleOf,
+    type ShowLibraryItem,
+} from "@/db-functions/showLibrary";
 import type { LibraryItemSummary } from "@/view3d/library/protocol";
 import {
     findLibraryUpdates,
@@ -24,6 +27,8 @@ export interface ShowAssetItem {
     name: string;
     kind: LibraryItemKind;
     group: LibraryGroup;
+    /** What it is for within its kind (an Artwork's surface, a model's kind); "Replace with…" matches it */
+    role: string | null;
     builtIn: boolean;
     /** The newest embedded Version, the one "Add to my Library" sends. */
     newest: ShowLibraryItem;
@@ -72,6 +77,7 @@ export function showAssetGroups(
                 newest.kind,
                 sidecarJsonDetail(newest.kind, newest.sidecar),
             ),
+            role: libraryRoleOf(newest.kind, newest.sidecar),
             builtIn: newest.builtIn,
             newest,
             versions: versions.length,

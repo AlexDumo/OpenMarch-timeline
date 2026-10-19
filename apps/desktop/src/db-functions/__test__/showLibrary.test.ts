@@ -4,6 +4,12 @@ import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { tablesWithHistory } from "../historyTriggers";
 import {
+    libraryReferences,
+    LIBRARY_REFERENCE_SOURCES,
+} from "../libraryReferences";
+import { getFieldFloorImage, setFieldFloorInTransaction } from "../fieldFloor";
+import { setFieldFloor } from "../fieldFloorEdits";
+import {
     embedLibraryVersionInTransaction,
     embedLibraryVersions,
     getShowLibraryItems,
@@ -632,6 +638,8 @@ describeDbTests("showLibrary", (it) => {
                 await db.run(sql`DROP TABLE cues`);
                 expect(await libraryItemUses({ db, itemId: FLAG })).toEqual({
                     cues: [],
+                    floor: false,
+                    items: [],
                     pinnedBy: [],
                 });
             });
@@ -711,6 +719,44 @@ describeDbTests("showLibrary", (it) => {
                 ]);
             });
 
+            it("refuses a replacement of another role, such as the floor for a Silk", async ({
+                db,
+            }) => {
+                const silk = await version(
+                    FLAG,
+                    {
+                        original: bytes("flag.png"),
+                        sidecar: bytes('{"surface":"silk"}'),
+                    },
+                    { kind: "artwork", name: "Flag" },
+                );
+                const floor = await version(
+                    "44444444-4444-4444-8444-444444444444",
+                    {
+                        original: bytes("floor.png"),
+                        sidecar: bytes('{"surface":"baseFloor"}'),
+                    },
+                    { kind: "artwork", name: "Field image" },
+                );
+                await embedLibraryVersion({ db, version: silk });
+                await embedLibraryVersion({ db, version: floor });
+                await addCues(db, [silkCue(silk.versionHash)]);
+
+                await expect(
+                    deleteShowLibraryItem({
+                        db,
+                        itemId: FLAG,
+                        replaceWith: {
+                            itemId: floor.itemId,
+                            versionHash: floor.versionHash,
+                        },
+                    }),
+                ).rejects.toThrow(/role/);
+                expect((await getCues({ db }))[0]!.value).toBe(
+                    `library:${FLAG}@${silk.versionHash}`,
+                );
+            });
+
             it("refuses a replacement of another kind, or one the show lacks, and changes nothing", async ({
                 db,
             }) => {
@@ -745,6 +791,215 @@ describeDbTests("showLibrary", (it) => {
                 );
                 expect(await itemIds(db)).toEqual([RIFLE, FLAG].sort());
             });
+        });
+    });
+
+    describe("references (libraryReferences)", () => {
+        const FLOOR_ID = "55555555-5555-4555-8555-555555555555";
+        const floorVersion = () =>
+            version(
+                FLOOR_ID,
+                {
+                    original: bytes("tarp.png"),
+                    display: bytes("tarp display"),
+                    sidecar: bytes('{"surface":"baseFloor"}'),
+                },
+                { kind: "artwork", name: "Field image" },
+            );
+        const refOf = (v: EmbedLibraryVersion) => ({
+            itemId: v.itemId,
+            versionHash: v.versionHash,
+        });
+
+        /**
+         * The props packages' Item tables (C2.1 `items`, C2.4 `item_artwork_slots`), as far as
+         * the references go, for a branch that doesn't have them yet.
+         */
+        const addItemTables = async (db: DbConnection) => {
+            await db.run(
+                sql.raw(`CREATE TABLE IF NOT EXISTS items (
+                    id INTEGER PRIMARY KEY,
+                    marcher_id INTEGER NOT NULL,
+                    library_item_id TEXT,
+                    library_version_hash TEXT)`),
+            );
+            await db.run(
+                sql.raw(`CREATE TABLE IF NOT EXISTS item_artwork_slots (
+                    id INTEGER PRIMARY KEY,
+                    item_id INTEGER NOT NULL,
+                    beat_id INTEGER NOT NULL,
+                    slot TEXT NOT NULL,
+                    library_item_id TEXT,
+                    library_version_hash TEXT)`),
+            );
+        };
+        const addProp = async (
+            db: DbConnection,
+            id: number,
+            name: string,
+            model: { itemId: string; versionHash: string } | null,
+        ) => {
+            await db.run(
+                sql`INSERT INTO marchers (id, name, section, drill_prefix, drill_order) VALUES (${id}, ${name}, 'Prop', 'P', ${id})`,
+            );
+            await db.run(
+                sql`INSERT INTO items (id, marcher_id, library_item_id, library_version_hash) VALUES (${id}, ${id}, ${model?.itemId ?? null}, ${model?.versionHash ?? null})`,
+            );
+        };
+
+        /** Tables with a Library column that no registry source reads. */
+        const uncoveredTables = async (db: DbConnection) => {
+            const covered = new Set(
+                Object.values(LIBRARY_REFERENCE_SOURCES).flatMap(
+                    (s) => s.tables,
+                ),
+            );
+            const tables = await db
+                .select({ name: sql<string>`name` })
+                .from(sql`sqlite_schema`)
+                .where(
+                    sql`type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%'`,
+                )
+                .all();
+            const uncovered: string[] = [];
+            for (const { name } of tables) {
+                // The Library's own tables hold it; they don't reference it
+                if (name === "library_items" || name === "library_blobs")
+                    continue;
+                const columns = await db
+                    .select({ name: sql<string>`name` })
+                    .from(sql`pragma_table_info(${name})`)
+                    .all();
+                if (
+                    columns.some((c) =>
+                        /^library_(item_id|version_hash)$/.test(c.name),
+                    ) &&
+                    !covered.has(name)
+                )
+                    uncovered.push(name);
+            }
+            return uncovered;
+        };
+
+        it("reads every table that has a Library column", async ({ db }) => {
+            await addItemTables(db);
+            expect(await uncoveredTables(db)).toEqual([]);
+        });
+
+        it("fails for a table with a Library column no source reads", async ({
+            db,
+        }) => {
+            await db.run(
+                sql.raw(
+                    "CREATE TABLE widgets (id INTEGER PRIMARY KEY, library_item_id TEXT, library_version_hash TEXT)",
+                ),
+            );
+            expect(await uncoveredTables(db)).toEqual(["widgets"]);
+        });
+
+        it("names the floor, a converted one outside history included, and refuses to delete it", async ({
+            db,
+        }) => {
+            const floor = await floorVersion();
+            await embedLibraryVersion({ db, version: floor });
+            await db.transaction((tx) =>
+                setFieldFloorInTransaction({ tx, floor: refOf(floor) }),
+            );
+            // As convert on open leaves it: no undo row names it
+            await db.run(sql`DELETE FROM history_undo`);
+
+            expect(await libraryReferences({ db })).toContainEqual({
+                source: "floor",
+                ...refOf(floor),
+            });
+            const result = await deleteShowLibraryItem({
+                db,
+                itemId: FLOOR_ID,
+            });
+            expect(result).toMatchObject({
+                outcome: "inUse",
+                uses: { floor: true, cues: [], items: [], pinnedBy: [] },
+            });
+            expect(await getFieldFloorImage({ db })).not.toBeNull();
+        });
+
+        it("refuses to delete an uploaded floor, whose new id no undo row holds yet", async ({
+            db,
+        }) => {
+            const floor = await floorVersion();
+            await embedLibraryVersion({ db, version: floor });
+            await setFieldFloor({ db, floor: refOf(floor) });
+            expect(
+                await deleteShowLibraryItem({ db, itemId: FLOOR_ID }),
+            ).toMatchObject({ outcome: "inUse", uses: { floor: true } });
+        });
+
+        it("names item models and slot artwork, dormant ones included, and refuses to delete them", async ({
+            db,
+        }) => {
+            await addItemTables(db);
+            const r = await rifle();
+            const f = await flag();
+            await embedLibraryVersion({ db, version: r });
+            await embedLibraryVersion({ db, version: f });
+            await addProp(db, 41, "Rifle 1", refOf(r));
+            await addProp(db, 42, "", null);
+            // A slot the model no longer declares stays stored, dormant
+            await db.run(
+                sql`INSERT INTO item_artwork_slots (item_id, beat_id, slot, library_item_id, library_version_hash) VALUES (42, 0, 'retired', ${FLAG}, ${f.versionHash})`,
+            );
+
+            const refs = await libraryReferences({ db });
+            expect(refs).toContainEqual({
+                source: "itemModels",
+                ...refOf(r),
+                marcherId: 41,
+            });
+            expect(refs).toContainEqual({
+                source: "itemArtworkSlots",
+                ...refOf(f),
+                marcherId: 42,
+                slot: "retired",
+            });
+
+            expect(
+                await deleteShowLibraryItem({ db, itemId: RIFLE }),
+            ).toMatchObject({
+                outcome: "inUse",
+                uses: {
+                    items: [{ marcherId: 41, label: "Rifle 1", slot: null }],
+                },
+            });
+            expect(
+                await deleteShowLibraryItem({ db, itemId: FLAG }),
+            ).toMatchObject({
+                outcome: "inUse",
+                uses: {
+                    items: [{ marcherId: 42, label: "P42", slot: "retired" }],
+                },
+            });
+            // Replace with… only moves cues: an item use still refuses
+            const other = await version(UNIFORM, {
+                glb: bytes("glTF other rifle"),
+                sidecar: bytes('{"kind":"rifle"}'),
+            });
+            await embedLibraryVersion({ db, version: other });
+            expect(
+                await deleteShowLibraryItem({
+                    db,
+                    itemId: RIFLE,
+                    replaceWith: refOf(other),
+                }),
+            ).toMatchObject({
+                outcome: "inUse",
+                uses: { items: [{ marcherId: 41 }] },
+            });
+
+            // And the prune keeps both
+            await pruneShowLibrary({ db, keep: [] });
+            expect(
+                (await getShowLibraryItems({ db })).map((i) => i.itemId).sort(),
+            ).toEqual([RIFLE, FLAG].sort());
         });
     });
 });

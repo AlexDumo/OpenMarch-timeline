@@ -154,13 +154,19 @@ describe("Deleting from this show", () => {
         beatIndex: id * 8,
         tagName: null,
     });
+    const noUses: LibraryItemUses = {
+        cues: [],
+        floor: false,
+        items: [],
+        pinnedBy: [],
+    };
     const fakeDeletion = (
-        uses: LibraryItemUses,
+        found: Partial<LibraryItemUses>,
         outcome: "deleted" | "keptForUndo" = "deleted",
     ) => {
         const calls: string[] = [];
         const deletion: ShowAssetDeletion = {
-            uses: async () => uses,
+            uses: async () => ({ ...noUses, ...found }),
             remove: async (itemId, to) => {
                 calls.push(
                     to
@@ -183,12 +189,19 @@ describe("Deleting from this show", () => {
     it("deletes an item nothing uses after asking", async () => {
         const silk = showItem(1, "Old silk");
         show = [silk];
-        const { deletion, calls } = fakeDeletion({ cues: [], pinnedBy: [] });
-        setup([], deletion);
+        const { deletion, calls } = fakeDeletion({});
+        const lib = setup([librarySummary(silk)], deletion);
+        await waitFor(() => expect(lib.calls.list).toHaveLength(1));
 
         const dialog = await openDelete("Old silk");
         expect(dialog).toHaveTextContent("Delete Old silk from this show?");
-        expect(dialog).toHaveTextContent("This can't be undone.");
+        await waitFor(() =>
+            expect(
+                within(dialog).getByTestId("delete-show-asset-confirm-text"),
+            ).toHaveTextContent(
+                "Your Library keeps its own copy. This can't be undone.",
+            ),
+        );
         await userEvent.click(
             within(dialog).getByTestId("delete-show-asset-confirm"),
         );
@@ -205,7 +218,10 @@ describe("Deleting from this show", () => {
             embeddedAt: "2026-10-02T00:00:00.000Z",
         });
         const rifle = showItem(3, "Rifle", { kind: "model", sidecar: null });
-        show = [old, fresh, rifle];
+        const floor = showItem(4, "Field image", {
+            sidecar: { surface: "baseFloor" },
+        });
+        show = [old, fresh, rifle, floor];
         const { deletion, calls } = fakeDeletion(
             {
                 cues: [
@@ -213,7 +229,6 @@ describe("Deleting from this show", () => {
                     silkCue(2, { target: { kind: "band" } }),
                     silkCue(3, { target: { kind: "set", marcherIds: [4, 5] } }),
                 ],
-                pinnedBy: [],
             },
             "keptForUndo",
         );
@@ -238,8 +253,11 @@ describe("Deleting from this show", () => {
         await userEvent.click(
             within(dialog).getByTestId("delete-show-asset-replacement"),
         );
-        // Only items of the same kind are offered
+        // Only items of the same kind and role are offered: never the floor for a Silk
         expect(screen.queryByRole("option", { name: "Rifle" })).toBeNull();
+        expect(
+            screen.queryByRole("option", { name: "Field image" }),
+        ).toBeNull();
         await userEvent.click(screen.getByRole("option", { name: "New silk" }));
         await userEvent.click(confirm);
 
@@ -249,14 +267,13 @@ describe("Deleting from this show", () => {
             ]),
         );
         expect(toast.success).toHaveBeenCalledWith(
-            "Replaced Old silk with New silk. Old silk stays in this show while Undo can bring it back, and goes once nothing can.",
+            "Replaced Old silk with New silk. Old silk stays in this show while Undo can bring it back, and is removed when the show closes after that.",
         );
     });
 
     it("can't delete an item another item pins", async () => {
         show = [showItem(1, "Crest")];
         const { deletion } = fakeDeletion({
-            cues: [],
             pinnedBy: [{ itemId: "u", name: "Home uniform" }],
         });
         setup([], deletion);
@@ -269,6 +286,81 @@ describe("Deleting from this show", () => {
         );
         expect(
             within(dialog).queryByTestId("delete-show-asset-confirm"),
+        ).toBeNull();
+    });
+
+    it("can't delete the show's floor, and says where to change it", async () => {
+        show = [
+            showItem(1, "Field image", { sidecar: { surface: "baseFloor" } }),
+        ];
+        const { deletion } = fakeDeletion({ floor: true });
+        setup([], deletion);
+
+        const dialog = await openDelete("Field image");
+        expect(dialog).toHaveTextContent("Field image is in use");
+        expect(
+            within(dialog).getByTestId("delete-show-asset-floor"),
+        ).toHaveTextContent(
+            "It's this show's floor, so it can't be deleted. Change the floor in Field settings → Image.",
+        );
+        expect(
+            within(dialog).queryByTestId("delete-show-asset-confirm"),
+        ).toBeNull();
+    });
+
+    it("lists the props that use it, and offers no Replace while they do", async () => {
+        show = [showItem(1, "Crest"), showItem(2, "Other crest")];
+        const { deletion } = fakeDeletion({
+            cues: [silkCue(1)],
+            items: [
+                { marcherId: 7, label: "Flat 1", slot: "front" },
+                { marcherId: 8, label: "Rifle 2", slot: null },
+            ],
+        });
+        setup([], deletion);
+
+        const dialog = await openDelete("Crest");
+        const items = within(dialog).getByTestId("delete-show-asset-item-uses");
+        expect(
+            within(items)
+                .getAllByRole("listitem")
+                .map((li) => li.textContent),
+        ).toEqual(["Flat 1 · front artwork", "Rifle 2 · model"]);
+        expect(dialog).toHaveTextContent("A cue uses it too:");
+        expect(
+            within(dialog).queryByTestId("delete-show-asset-replacement"),
+        ).toBeNull();
+        expect(
+            within(dialog).queryByTestId("delete-show-asset-confirm"),
+        ).toBeNull();
+    });
+
+    it("says the item goes for good when the Library has no copy, and offers to add one first", async () => {
+        const silk = showItem(1, "Shared silk");
+        show = [silk];
+        const { deletion } = fakeDeletion({});
+        const lib = setup([], deletion);
+        lib.on("addFromShow", () =>
+            ok({ outcome: "created", item: { id: silk.itemId } }),
+        );
+        await waitFor(() => expect(lib.calls.list).toHaveLength(1));
+
+        const dialog = await openDelete("Shared silk");
+        const text = within(dialog).getByTestId(
+            "delete-show-asset-confirm-text",
+        );
+        expect(text).toHaveTextContent(
+            "Your Library doesn't have a copy, so it will be gone for good.",
+        );
+        await userEvent.click(
+            within(dialog).getByTestId("delete-show-asset-add-to-library"),
+        );
+        await waitFor(() => expect(lib.calls.addFromShow).toHaveLength(1));
+        await waitFor(() =>
+            expect(text).toHaveTextContent("Your Library keeps its own copy."),
+        );
+        expect(
+            within(dialog).queryByTestId("delete-show-asset-add-to-library"),
         ).toBeNull();
     });
 });

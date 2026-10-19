@@ -96,7 +96,7 @@ export default function ShowAssets({
     const [deleting, setDeleting] = useState<ShowAssetItem | null>(null);
     const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
-    const add = async (item: ShowAssetItem) => {
+    const add = async (item: ShowAssetItem): Promise<boolean> => {
         setAdding(item.itemId);
         try {
             const request = await buildAddFromShowRequest({
@@ -106,9 +106,11 @@ export default function ShowAssets({
             const result = await api.addFromShow(request);
             if (!result.ok) throw new Error(result.error.message);
             toast.success(t("assets.show.added", { name: item.name }));
+            return true;
         } catch (error) {
             console.error(error);
             toast.error(t("assets.show.addFailed", { name: item.name }));
+            return false;
         } finally {
             setAdding(null);
         }
@@ -179,6 +181,7 @@ export default function ShowAssets({
                 item={deleting}
                 candidates={allItems}
                 deletion={deletion}
+                onAddToLibrary={add}
                 onClose={() => setDeleting(null)}
                 onDeleted={onItemDeleted}
             />

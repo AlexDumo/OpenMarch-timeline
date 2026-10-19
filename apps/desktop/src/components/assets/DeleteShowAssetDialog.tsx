@@ -1,9 +1,11 @@
 /**
  * Deleting the show's copy of a Library item (props-spec.md section 2, [26.10]). While cues use
  * it, the delete is refused: the dialog lists the cues and offers "Replace with…" another item of
- * the same kind, which points them at it as one undoable edit. An item another item pins, such as
- * a Uniform's Artwork, can't be deleted at all. The delete itself isn't undoable, so an item Undo
- * could bring back stays until nothing can; the local Library keeps its own copy.
+ * the same kind and role (a Silk for a Silk), which points them at it as one undoable edit. The
+ * show's floor, an item a prop uses, and an item another item pins (a Uniform's Artwork) can't be
+ * deleted at all; the dialog lists those uses too. The delete itself isn't undoable, so an item
+ * Undo could bring back stays until nothing can. When the local Library has no copy, the dialog
+ * says the item will be gone for good and offers to add it to the Library first.
  */
 import { useEffect, useState } from "react";
 import { T, useTranslate } from "@tolgee/react";
@@ -19,10 +21,12 @@ import {
     SelectItem,
     SelectTriggerButton,
 } from "@openmarch/ui";
-import type {
-    DeleteShowLibraryItemResult,
-    LibraryCueUse,
-    LibraryItemUses,
+import {
+    isInUse,
+    isReplaceable,
+    type DeleteShowLibraryItemResult,
+    type LibraryCueUse,
+    type LibraryItemUses,
 } from "@/db-functions/showLibrary";
 import type { LibraryRef } from "@/view3d/library/showLibraryPrune";
 import type { ShowAssetItem } from "./showAssetGroups";
@@ -51,6 +55,7 @@ export default function DeleteShowAssetDialog({
     deletion,
     onClose,
     onDeleted,
+    onAddToLibrary,
 }: {
     /** The item to delete; the dialog is open while it's set */
     item: ShowAssetItem | null;
@@ -59,8 +64,12 @@ export default function DeleteShowAssetDialog({
     deletion: ShowAssetDeletion;
     onClose: () => void;
     onDeleted: (result: ShowAssetDeleted) => void;
+    /** Adds the item to the local Library; true once it's there */
+    onAddToLibrary?: (item: ShowAssetItem) => Promise<boolean>;
 }) {
     const [uses, setUses] = useState<LibraryItemUses | null>(null);
+    const [addedToLibrary, setAddedToLibrary] = useState(false);
+    const [adding, setAdding] = useState(false);
     const [replacement, setReplacement] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [failed, setFailed] = useState(false);
@@ -69,6 +78,7 @@ export default function DeleteShowAssetDialog({
         setUses(null);
         setReplacement(null);
         setFailed(false);
+        setAddedToLibrary(false);
         if (!item) return;
         let live = true;
         deletion.uses(item.itemId).then(
@@ -83,14 +93,28 @@ export default function DeleteShowAssetDialog({
         };
     }, [item, deletion]);
 
+    // Same kind and role: a Silk is never replaced with a floor or a Uniform part
     const sameKind = item
         ? candidates.filter(
-              (c) => c.kind === item.kind && c.itemId !== item.itemId,
+              (c) =>
+                  c.kind === item.kind &&
+                  c.role === item.role &&
+                  c.itemId !== item.itemId,
           )
         : [];
-    const inUse = !!uses && (uses.cues.length > 0 || uses.pinnedBy.length > 0);
-    const replaceable =
-        !!uses && uses.cues.length > 0 && uses.pinnedBy.length === 0;
+    const inUse = !!uses && isInUse(uses);
+    const replaceable = !!uses && isReplaceable(uses);
+    const inLibrary = addedToLibrary || item?.inLibrary === true;
+
+    const addToLibrary = async () => {
+        if (!item || !onAddToLibrary) return;
+        setAdding(true);
+        try {
+            if (await onAddToLibrary(item)) setAddedToLibrary(true);
+        } finally {
+            setAdding(false);
+        }
+    };
     const chosen = sameKind.find((c) => c.itemId === replacement) ?? null;
 
     const confirmDelete = async () => {
@@ -145,8 +169,16 @@ export default function DeleteShowAssetDialog({
                                 </span>
                             )
                         ) : !inUse ? (
-                            <span>
-                                <T keyName="assets.show.delete.confirm" />
+                            <span data-testid="delete-show-asset-confirm-text">
+                                <T
+                                    keyName={
+                                        inLibrary
+                                            ? "assets.show.delete.confirm"
+                                            : item.inLibrary === false
+                                              ? "assets.show.delete.confirmNoCopy"
+                                              : "assets.show.delete.confirmUnknownCopy"
+                                    }
+                                />
                             </span>
                         ) : (
                             <InUse
@@ -169,6 +201,19 @@ export default function DeleteShowAssetDialog({
                                 <T keyName="assets.show.delete.cancel" />
                             </Button>
                         </AlertDialogCancel>
+                        {!inUse &&
+                            !inLibrary &&
+                            item.inLibrary === false &&
+                            onAddToLibrary && (
+                                <Button
+                                    variant="secondary"
+                                    disabled={busy || adding || uses === null}
+                                    onClick={() => void addToLibrary()}
+                                    data-testid="delete-show-asset-add-to-library"
+                                >
+                                    <T keyName="assets.show.delete.addFirst" />
+                                </Button>
+                            )}
                         {(!inUse || replaceable) && (
                             <Button
                                 variant="red"
@@ -210,6 +255,41 @@ function InUse({
     const { t } = useTranslate();
     return (
         <>
+            {uses.floor && (
+                <span data-testid="delete-show-asset-floor">
+                    <T keyName="assets.show.delete.isFloor" />
+                </span>
+            )}
+            {uses.items.length > 0 && (
+                <div className="flex flex-col gap-4">
+                    <span>
+                        <T
+                            keyName="assets.show.delete.usedByItems"
+                            params={{ count: uses.items.length }}
+                        />
+                    </span>
+                    <ul
+                        className="rounded-6 border-stroke text-sub flex max-h-[10rem] flex-col gap-2 overflow-y-auto border px-8 py-6"
+                        data-testid="delete-show-asset-item-uses"
+                    >
+                        {uses.items.map((use) => (
+                            <li
+                                key={`${use.marcherId}:${use.slot ?? ""}`}
+                                className="truncate"
+                            >
+                                {[
+                                    use.label,
+                                    use.slot === null
+                                        ? t("assets.show.delete.itemModel")
+                                        : t("assets.show.delete.itemSlot", {
+                                              slot: use.slot,
+                                          }),
+                                ].join(" · ")}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
             {uses.pinnedBy.length > 0 && (
                 <span data-testid="delete-show-asset-pinned">
                     <T
@@ -224,7 +304,11 @@ function InUse({
                 <div className="flex flex-col gap-4">
                     <span>
                         <T
-                            keyName="assets.show.delete.usedByCues"
+                            keyName={
+                                replaceable
+                                    ? "assets.show.delete.usedByCues"
+                                    : "assets.show.delete.alsoUsedByCues"
+                            }
                             params={{ count: uses.cues.length }}
                         />
                     </span>
