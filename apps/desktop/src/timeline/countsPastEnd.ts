@@ -43,7 +43,9 @@ const usable = (duration: number | undefined): duration is number =>
  *   counts), and the last measure's counts (then that one's, for counts the last measure lacks)
  *   set the pattern of count lengths, so mixed meter (long and short counts) and the tempo carry
  *   on. With one measure, it sets both itself. If the last measure is short of that meter, the
- *   first new counts finish it; otherwise the first new count starts a measure.
+ *   first new counts finish it; otherwise the first new count starts a measure. A last measure
+ *   longer than the one before it sets the meter itself, so storing counts (which puts a measure
+ *   line after it) changes none of the counts after them.
  *
  * `measureStarts` are ordinals of measures' first beats, in any order. A count with no usable
  * length (zero, or none at all) takes the last usable one, else `fallbackDuration`.
@@ -78,8 +80,11 @@ export function countContinuation({
 
     const last = starts[starts.length - 1]!;
     const reference = starts.length >= 2 ? starts[starts.length - 2]! : last;
-    const meter = starts.length >= 2 ? last - reference : beats.length - last;
     const lastMeasureCounts = beats.length - last;
+    const meter = Math.max(
+        starts.length >= 2 ? last - reference : lastMeasureCounts,
+        lastMeasureCounts,
+    );
     // The newest lengths: the last measure's own counts, then the measure before it for the rest
     const pattern = Array.from({ length: meter }, (_, i) => {
         const duration =

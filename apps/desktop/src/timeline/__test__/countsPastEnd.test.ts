@@ -15,6 +15,49 @@ const show = (...durations: number[]) => [
 const repeat = <T>(n: number, value: T): T[] => Array(n).fill(value);
 
 describe("countContinuation", () => {
+    it("doesn't change the counts after the ones it stores, a long last measure included", () => {
+        // Measures of [meter before, last measure] counts, then store `k` counts (a measure line on
+        // each downbeat, as the append writes) and continue again: the same counts follow
+        for (const [before, lastCounts] of [
+            [4, 6],
+            [4, 2],
+            [3, 4],
+            [6, 6],
+            [2, 7],
+        ] as const)
+            for (const k of [1, 2, 5, 9]) {
+                const beats = show(
+                    ...repeat(before, 0.5),
+                    ...Array.from(
+                        { length: lastCounts },
+                        (_, i) => 0.6 + i / 10,
+                    ),
+                );
+                const measureStarts = [1, 1 + before];
+                const c1 = countContinuation({ beats, measureStarts });
+                const ahead = continuedCounts(c1, k + 12);
+                const stored = ahead.slice(0, k);
+                const grown = [
+                    ...beats,
+                    ...stored.map((s) => ({ duration: s.duration })),
+                ];
+                const grownStarts = [
+                    ...measureStarts,
+                    ...stored.flatMap((s, i) =>
+                        s.downbeat ? [beats.length + i] : [],
+                    ),
+                ];
+                const c2 = countContinuation({
+                    beats: grown,
+                    measureStarts: grownStarts,
+                });
+                expect(
+                    continuedCounts(c2, 12),
+                    `${before}/${lastCounts} +${k}`,
+                ).toEqual(ahead.slice(k));
+            }
+    });
+
     it("without measures, carries on at the last count's length", () => {
         const c = countContinuation({
             beats: show(0.5, 0.5, 0.4),
