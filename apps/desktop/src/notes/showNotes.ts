@@ -4,12 +4,13 @@
  * modal, never a block: a note names what and where, and at most offers a one-click fix. Nothing
  * here changes data.
  *
- * One shape, `ShowNote`, from three producers:
+ * One shape, `ShowNote`, from two producers:
  * - items: hand conflicts (Carry's equipment included), short-handed holds, crew distance,
  *   crew-less moves (when the show's "Warn when a prop moves without a crew" is on) and put-down
  *   drift;
- * - cues: the cue compiler's notes (`CompiledCues.notes`: `carry_mismatch`, `silk_aspect`);
- * - timeline: the resolver's diagnostics (D-VACANT, D-REBASE and the rest).
+ * - cues: the cue compiler's notes (`CompiledCues.notes`: `carry_mismatch`, `silk_aspect`).
+ *
+ * The timeline resolver's diagnostics are not shown here (owner, 2026-10-19, ADR 0002 D-22).
  *
  * Beats are ordinals, as the timeline resolver counts them. The words come at display time
  * (`ShowNotesList`), with counts as the transport says them ("Page 1 count 7").
@@ -21,8 +22,6 @@ import {
     shortHandedHolds,
     type CarryChange,
     type CueNote,
-    type Diagnostic,
-    type DiagnosticCode,
     type Hand,
     type PlacementChange,
     type PutDownAnchor,
@@ -38,11 +37,9 @@ export type ShowNoteKind =
     | "put_down_drift"
     // cues
     | "carry_mismatch"
-    | "silk_aspect"
-    // the timeline's diagnostics
-    | "timeline";
+    | "silk_aspect";
 
-export type ShowNoteSource = "items" | "cues" | "timeline";
+export type ShowNoteSource = "items" | "cues";
 
 /** The one-click fix a note offers, if any. */
 export type ShowNoteAction = { kind: "snap_to_holder"; placementId: number };
@@ -54,8 +51,6 @@ export interface ShowNoteWhat {
     /** The performers: the hand's owner, the far crew, the holders, the cue's marchers */
     marcherIds: readonly number[];
     cueIds: readonly number[];
-    /** A timeline diagnostic's move */
-    transitionId: number | null;
 }
 
 export interface ShowNote {
@@ -77,10 +72,8 @@ export interface ShowNote {
         /** Short-handed hold: hands needed and given */
         needed?: number;
         held?: number;
-        /** Timeline: the diagnostic */
-        code?: DiagnosticCode;
-        level?: Diagnostic["level"];
-        slot?: number | null;
+        /** A warning rather than information */
+        level?: "warning" | "info";
     };
     action?: ShowNoteAction;
 }
@@ -89,7 +82,6 @@ const what = (w: Partial<ShowNoteWhat>): ShowNoteWhat => ({
     itemIds: w.itemIds ?? [],
     marcherIds: w.marcherIds ?? [],
     cueIds: w.cueIds ?? [],
-    transitionId: w.transitionId ?? null,
 });
 
 // ---------------------------------------------------------------------------
@@ -468,37 +460,11 @@ export function cueNotes(
     });
 }
 
-/**
- * The timeline resolver's diagnostics, each on its move's flag. `transitionBeat` gives a move's
- * end beat, null for one it doesn't know.
- */
-export function timelineNotes(
-    diagnostics: readonly Diagnostic[],
-    transitionBeat: (transitionId: number) => number | null,
-): ShowNote[] {
-    return diagnostics.map((d, i): ShowNote => {
-        const beat = transitionBeat(d.transitionId);
-        return {
-            id: `timeline:${d.code}:${d.transitionId}:${d.marcherId ?? ""}:${d.slot ?? ""}:${i}`,
-            kind: "timeline",
-            source: "timeline",
-            beat,
-            until: beat === null ? null : beat + 1,
-            what: what({
-                marcherIds: d.marcherId === null ? [] : [d.marcherId],
-                transitionId: d.transitionId,
-            }),
-            detail: { code: d.code, level: d.level, slot: d.slot },
-        };
-    });
-}
-
 /** Every note, by count (those with none first), then source, then id. */
 export function sortShowNotes(notes: readonly ShowNote[]): ShowNote[] {
     const order: Record<ShowNoteSource, number> = {
         items: 0,
         cues: 1,
-        timeline: 2,
     };
     return [...notes].sort(
         (a, b) =>

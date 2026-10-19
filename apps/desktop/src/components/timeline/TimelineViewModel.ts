@@ -97,13 +97,6 @@ export interface TimelineTarget {
 /** What a track stands for: a marcher or a shape (stories), or a whole stored timeline (UI-9) */
 export type TimelineTrackTargetType = TimelineTarget["type"] | "timeline";
 
-/** The diagnostics (spec §8.9) in a track's range, shown as a badge on its clip */
-export interface TimelineTrackDiagnostics {
-    readonly level: "warning" | "info";
-    /** One line per diagnostic, for the badge's tooltip */
-    readonly messages: readonly string[];
-}
-
 export interface TimelineTrack {
     readonly id: TimelineTrackId;
     /**
@@ -118,7 +111,6 @@ export interface TimelineTrack {
     readonly legs: readonly TimelineLeg[];
     /** A gap-free, non-overlapping partition of the track's complete range. */
     readonly activitySpans: readonly TimelineActivitySpan[];
-    readonly diagnostics?: TimelineTrackDiagnostics;
     /**
      * What screen readers call the clip, when the owner can say more than the label (UI-14 review:
      * "Move 1, Page 3, counts 1–4"); without it, the label and its beats

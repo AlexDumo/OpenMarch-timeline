@@ -247,33 +247,6 @@ describe("the timeline with adapter tracks", () => {
         expect(screen.getByText("4 counts")).toBeInTheDocument();
     });
 
-    it("badges a clip that has diagnostics", () => {
-        render(
-            <Timeline
-                mode="expanded"
-                beats={appBeats(16)}
-                pages={[]}
-                measures={[]}
-                timelines={[
-                    input("A", 1, 1, 9, {
-                        diagnostics: {
-                            level: "warning",
-                            messages: ["D-VACANT: Slot 1 of transition 1"],
-                        },
-                    }),
-                    input("B", 1, 1, 9),
-                ]}
-                showTransport={false}
-            />,
-        );
-        const badges = screen.getAllByTestId("timeline-track-diagnostics");
-        expect(badges).toHaveLength(1);
-        expect(badges[0]).toHaveAttribute("data-level", "warning");
-        expect(
-            screen.getByLabelText(/^A timeline, .*1 diagnostic$/),
-        ).toHaveAttribute("title", "A\nD-VACANT: Slot 1 of transition 1");
-    });
-
     it("draws spec beat 1 at x = 0 and sends spec beats back", () => {
         const onTimelineRangeCommit = vi.fn();
         render(

@@ -639,15 +639,6 @@ const STATIC_ACTIONS = {
         defaultBindings: ["$mod+A", "Control+A"],
     },
 
-    // Shapes
-    createCircle: {
-        labelKey: "actions.shape.createCircle",
-        category: "shape",
-        editsDrill: true,
-        scope: "canvas",
-        defaultBindings: ["O"],
-    },
-
     // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it
     // follow again (timeline mode)
     toggleKeepOnPage: {
