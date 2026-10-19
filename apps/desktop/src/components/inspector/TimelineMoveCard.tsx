@@ -83,7 +83,12 @@ export function TimelineMoveCard({
     const atEnd = useTimelineSelectionStore(
         (s) => s.playheadBeat === timeline.end,
     );
-    // Likewise only whether P is strictly inside the move: Split at playhead needs that (UI-27)
+    // Split at playhead is on the card only while this move is isolated (UI-27): otherwise the
+    // window ends at the playhead, so the playhead is never inside the move the card is about
+    const isolated = useTimelineSelectionStore(
+        (s) => s.isolation?.timelineId === timeline.id,
+    );
+    // Likewise only whether P is strictly inside the move: the split needs that
     const playheadInside = useTimelineSelectionStore(
         (s) => timeline.start < s.playheadBeat && s.playheadBeat < timeline.end,
     );
@@ -264,24 +269,29 @@ export function TimelineMoveCard({
                     {t("inspector.timeline.move.selectMarchers")}
                 </Button>
             </div>
-            <div className="flex flex-col gap-6">
-                <Button
-                    size="compact"
-                    variant="secondary"
-                    className={clsx("w-fit", FOCUS_RING)}
-                    data-testid="timeline-move-card-split"
-                    disabled={isPlaying || !playheadInside}
-                    onClick={() =>
-                        void moves.splitMoveAtPlayhead(timeline.id, isPlaying)
-                    }
-                >
-                    <ScissorsIcon size={16} />
-                    {t("inspector.timeline.move.split")}
-                </Button>
-                {!isPlaying && !playheadInside && (
-                    <Help>{t("inspector.timeline.move.splitHelp")}</Help>
-                )}
-            </div>
+            {isolated && (
+                <div className="flex flex-col gap-6">
+                    <Button
+                        size="compact"
+                        variant="secondary"
+                        className={clsx("w-fit", FOCUS_RING)}
+                        data-testid="timeline-move-card-split"
+                        disabled={isPlaying || !playheadInside}
+                        onClick={() =>
+                            void moves.splitMoveAtPlayhead(
+                                timeline.id,
+                                isPlaying,
+                            )
+                        }
+                    >
+                        <ScissorsIcon size={16} />
+                        {t("inspector.timeline.move.split")}
+                    </Button>
+                    {!isPlaying && !playheadInside && (
+                        <Help>{t("inspector.timeline.move.splitHelp")}</Help>
+                    )}
+                </div>
+            )}
             <div className="flex flex-col gap-6">
                 <Button
                     size="compact"

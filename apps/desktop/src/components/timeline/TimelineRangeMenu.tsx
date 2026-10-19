@@ -102,9 +102,10 @@ export function TimelineMoveMenuItems({
     actions: TimelineMoveMenuActions;
 }) {
     const reason = actions.disabledReason ?? null;
-    // Read as the menu renders: the playhead may have moved since the clip's actions were made
+    // Read as the menu renders: the playhead may have moved since the clip's actions were made.
+    // Its own reason first, so playing says "Pause to split a move."
     const splitReason = actions.onSplit
-        ? (reason ?? actions.splitDisabledReason?.() ?? null)
+        ? (actions.splitDisabledReason?.() ?? reason)
         : null;
     return (
         <>

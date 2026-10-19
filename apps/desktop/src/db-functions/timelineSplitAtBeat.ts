@@ -41,19 +41,24 @@ import {
  *   positions at `beat`, one slot per marcher in it, and the rows that started before `beat`
  *   (cut at `beat` where they crossed it), on their own layers. A kept row split in two is kept in
  *   both halves, as Basic's split leaves it (`splitMovesAtBeatInTransaction`).
+ * - A row that another move on a higher layer cuts into several visible pieces before `beat`
+ *   (spec R-2) keeps only its last piece in that counterpart. Each earlier piece starts from
+ *   where the other move left the marcher, so it heads somewhere else: it gets a row of its own,
+ *   over just that piece, in one more shapeless direct transition of the new move (a transition
+ *   holds one row per marcher, so the k-th earlier pieces of a transition's rows share one).
  *
  * **Motion is unchanged for direct paths.** A direct span is a straight line at a constant speed
  * per beat over its progress (spec R-5, R-7), so the first half reaching the sampled point over
  * its own counts, and the second starting from it, trace what the whole did:
  * `lerp(A, lerp(A, B, p), b/p) = lerp(A, B, b)`. A row hidden at `beat` by another move on a
- * higher layer, or ending before it, gets the point its own span would have reached
- * (`extrapolateAlongChord`), which is exact too.
+ * higher layer, or ending before it, and each earlier piece get the point their own span would
+ * have reached (`extrapolateAlongChord`), which is exact too.
  *
  * **Any other path style is sampled** (project owner, 2026-10-19: arcs are deprecated and
  * pathways will be redone, so for now a path is a straight line). Before `beat` its marchers go
- * straight to where they were; from `beat` the transition keeps its style and parameters from
- * there. Those marchers are listed in `motionChanged` with the count their path changes from, for
- * the toast.
+ * straight to where they were; from `beat` the transition keeps its style and parameters but
+ * starts again from there, so the path after `beat` changes too. Those marchers are listed in
+ * `motionChanged` with the count their path changes from, for the toast.
  *
  * Refused (`E-ARGS`) before any write: a beat that isn't whole or strictly inside the move, a
  * move that already runs over either half (one timeline per range, C-12), and a move with no row
@@ -75,10 +80,19 @@ export interface SplitTimelineResult {
     motionChanged: MotionChange[];
 }
 
-/** A first-half row with the point it heads for. */
+/** A first-half row: the row it comes from, the counts it covers and the point it heads for. */
 interface FirstHalfRow {
     row: DatabaseTimelineAssignment;
+    start: number;
+    end: number;
     point: XY;
+}
+
+/** A row's part of the first half: one row in the counterpart, and one per earlier piece. */
+interface FirstHalfOf {
+    main: FirstHalfRow;
+    /** Earlier visible pieces, in order: the k-th goes to the transition's k-th extra transition */
+    earlier: FirstHalfRow[];
 }
 
 type Row = DatabaseTimelineAssignment;
@@ -157,11 +171,16 @@ export async function splitTimelineAtBeatInTransaction({
 
     const plans: TransitionPlan[] = transitions.map((t) => {
         const own = rows.filter((r) => r.transition_id === t.id);
+        const halves = own
+            .filter((r) => r.start_beat < beat)
+            .map((row) => firstHalfOf(resolver, t, row, beat, noteChange));
+        const extras = Math.max(0, ...halves.map((h) => h.earlier.length));
         return {
             t,
-            first: own
-                .filter((r) => r.start_beat < beat)
-                .map((row) => firstHalfOf(resolver, t, row, beat, noteChange)),
+            first: halves.map((h) => h.main),
+            earlier: Array.from({ length: extras }, (_, k) =>
+                halves.flatMap((h) => (h.earlier[k] ? [h.earlier[k]] : [])),
+            ),
             anyAfter: own.some((r) => r.end_beat > beat),
         };
     });
@@ -174,11 +193,17 @@ export async function splitTimelineAtBeatInTransaction({
 /** One transition's part of a split: its first-half rows, and whether anyone stays after. */
 interface TransitionPlan {
     t: DatabaseTimelineTransition;
+    /** The counterpart's rows */
     first: FirstHalfRow[];
+    /** The rows of each extra transition, for pieces cut off by a higher layer */
+    earlier: FirstHalfRow[][];
     anyAfter: boolean;
 }
 
-/** The writes of a split, in the order the triggers want (see the module comment). */
+/**
+ * The writes of a split, in the order the triggers want: rows inside their transition, and
+ * transitions inside their timeline, at every step.
+ */
 async function writeSplit({
     tx,
     timelineId,
@@ -327,42 +352,60 @@ async function writeBeforeMove(
         startBeat: s0,
         endBeat: beat,
     });
-    for (const { t, first } of plans) {
-        if (first.length === 0) continue;
-        const [created] = await createTimelineTransitionsInTransaction({
-            tx,
-            newTransitions: [
-                {
-                    timelineId: before.id,
-                    slotCount: first.length,
-                    destination: {
-                        kind: "individual",
-                        points: first.map((f) => f.point),
-                    },
-                    pathStyle: "direct",
-                    pathParams: null,
-                    orderMode: t.order_mode as "inherit" | "slot",
-                },
-            ],
-        });
-        const made = await createTimelineAssignmentsInTransaction({
-            tx,
-            newAssignments: first.map((f, slot) => ({
-                marcherId: f.row.marcher_id,
-                transitionId: created!.id,
-                slotIndex: slot,
-                startBeat: f.row.start_beat,
-                endBeat: Math.min(f.row.end_beat, beat),
-                layer: f.row.layer,
-            })),
-        });
-        await markAssignmentsKeptInTransaction(
-            tx,
-            made.filter((_, i) => kept.has(first[i]!.row.id)).map((a) => a.id),
-        );
-    }
+    for (const { t, first, earlier } of plans)
+        for (const rows of [first, ...earlier])
+            await writeFirstHalfTransition(tx, { before, t, rows, kept });
 
     return before;
+}
+
+/** One shapeless direct transition of the new move, with `rows` in slot order. */
+async function writeFirstHalfTransition(
+    tx: DbTransaction,
+    {
+        before,
+        t,
+        rows,
+        kept,
+    }: {
+        before: DatabaseTimeline;
+        t: DatabaseTimelineTransition;
+        rows: readonly FirstHalfRow[];
+        kept: ReadonlySet<number>;
+    },
+): Promise<void> {
+    if (rows.length === 0) return;
+    const [created] = await createTimelineTransitionsInTransaction({
+        tx,
+        newTransitions: [
+            {
+                timelineId: before.id,
+                slotCount: rows.length,
+                destination: {
+                    kind: "individual",
+                    points: rows.map((f) => f.point),
+                },
+                pathStyle: "direct",
+                pathParams: null,
+                orderMode: t.order_mode as "inherit" | "slot",
+            },
+        ],
+    });
+    const made = await createTimelineAssignmentsInTransaction({
+        tx,
+        newAssignments: rows.map((f, slot) => ({
+            marcherId: f.row.marcher_id,
+            transitionId: created!.id,
+            slotIndex: slot,
+            startBeat: f.start,
+            endBeat: f.end,
+            layer: f.row.layer,
+        })),
+    });
+    await markAssignmentsKeptInTransaction(
+        tx,
+        made.filter((_, i) => kept.has(rows[i]!.row.id)).map((a) => a.id),
+    );
 }
 
 /** The visible pieces of `row` (spec R-2: an assignment cut by higher layers), in order. */
@@ -373,10 +416,12 @@ const piecesOf = (resolver: Resolver, row: Row) =>
         .sort((a, b) => a.start - b.start);
 
 /**
- * Where `row` heads in the first half: the marcher's position at `beat` when its row is what
- * shows there, else the point its own span would have reached by `beat` (`extrapolateAlongChord`;
- * exact for a direct span). Rows of any other path style are noted as changed, since a straight
- * line replaces their path before the beat.
+ * Where `row` heads in the first half. Its last visible piece before `beat` heads for the
+ * marcher's position at `beat` when the row is what shows there, else the point its span would
+ * have reached by `beat` (`extrapolateAlongChord`; exact for a direct span). Each earlier piece
+ * (cut off by a higher layer) gets a row of its own over just that piece, heading for the point
+ * its span would have reached by `beat`. Rows of any other path style are noted as changed from
+ * their first piece, since straight lines replace their path before the beat.
  */
 function firstHalfOf(
     resolver: Resolver,
@@ -384,28 +429,40 @@ function firstHalfOf(
     row: Row,
     beat: number,
     noteChange: (marcherId: number, fromBeat: number) => void,
-): FirstHalfRow {
+): FirstHalfOf {
     const m = row.marcher_id;
-    const pieces = piecesOf(resolver, row);
-    const through = pieces.find((p) => p.start < beat && beat <= p.end);
-    if (through) {
-        if (t.path_style !== "direct") noteChange(m, through.start);
-        return { row, point: resolver.positionAt(m, beat) };
-    }
-    const last = [...pieces].reverse().find((p) => p.end <= beat);
-    if (last) {
-        if (t.path_style !== "direct") noteChange(m, last.start);
-        const origin = resolver.explain(m, last.start).origin;
-        return {
-            row,
-            point: extrapolateAlongChord(
-                origin,
-                resolver.positionAt(m, last.end),
-                (last.end - last.start) / (t.end_beat - last.start),
-                (beat - last.start) / (t.end_beat - last.start),
-            ),
-        };
-    }
+    const end = Math.min(row.end_beat, beat);
+    const pieces = piecesOf(resolver, row).filter((p) => p.start < beat);
+    const last = pieces[pieces.length - 1];
     // Hidden by another move until the beat or later: it never shows in the first half
-    return { row, point: resolver.positionAt(m, beat) };
+    if (!last)
+        return {
+            main: {
+                row,
+                start: row.start_beat,
+                end,
+                point: resolver.positionAt(m, beat),
+            },
+            earlier: [],
+        };
+    if (t.path_style !== "direct") noteChange(m, pieces[0]!.start);
+    /** Where piece `p`'s straight span would be at `beat` */
+    const reachedBy = (p: { start: number; end: number }) =>
+        extrapolateAlongChord(
+            resolver.explain(m, p.start).origin,
+            resolver.positionAt(m, p.end),
+            (p.end - p.start) / (t.end_beat - p.start),
+            (beat - p.start) / (t.end_beat - p.start),
+        );
+    const earlier = pieces.slice(0, -1).map((p) => ({
+        row,
+        start: p.start,
+        end: p.end,
+        point: reachedBy(p),
+    }));
+    // With earlier pieces of its own, the row's main part starts at its last piece
+    const start = earlier.length > 0 ? last.start : row.start_beat;
+    const point =
+        beat <= last.end ? resolver.positionAt(m, beat) : reachedBy(last);
+    return { main: { row, start, end, point }, earlier };
 }

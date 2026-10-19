@@ -310,7 +310,8 @@ export default function TimelineModePanel() {
         [isPlaying, moves],
     );
     // UI-27: ⌘K's Split at playhead acts on the move the playhead is inside (Expert only: Basic
-    // has no moves to split, its + splits the page's moves at a new flag)
+    // has no moves to split, its + splits the page's moves at a new flag). Greyed out while
+    // playing, as the menus' entry is
     useActionHandler(
         "timelineSplitMoveAtPlayhead",
         () => {
@@ -321,7 +322,7 @@ export default function TimelineModePanel() {
             }
             void moves.splitMoveAtPlayhead(target.id, isPlaying);
         },
-        { enabled: !basic },
+        { enabled: !basic && !isPlaying },
     );
     const clipResize = useTimelineClipResize({ database: db, timelines });
     const queryClient = useQueryClient();

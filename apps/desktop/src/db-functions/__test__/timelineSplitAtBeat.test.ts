@@ -127,6 +127,44 @@ const expectRefused = async (
     expect(await snapshot(db)).toEqual(before);
 };
 
+/** A one-marcher move over `[start, end)` on layer 1, heading for `point`. */
+const overlay = (
+    db: DbConnection,
+    marcherId: number,
+    start: number,
+    end: number,
+    point: [number, number],
+) =>
+    transactionWithHistory(db, "overlay", async (tx) => {
+        const [t] = await createTimelinesInTransaction({
+            tx,
+            newTimelines: [{ startBeat: start, endBeat: end }],
+        });
+        const [made] = await createTimelineTransitionsInTransaction({
+            tx,
+            newTransitions: [
+                {
+                    timelineId: t!.id,
+                    slotCount: 1,
+                    destination: { kind: "individual", points: [point] },
+                },
+            ],
+        });
+        await createTimelineAssignmentsInTransaction({
+            tx,
+            newAssignments: [
+                {
+                    marcherId,
+                    transitionId: made!.id,
+                    slotIndex: 0,
+                    startBeat: start,
+                    endBeat: end,
+                    layer: 1,
+                },
+            ],
+        });
+    });
+
 describeDbTests("Split at playhead (UI-27)", (it) => {
     it("a direct move splits into two that play exactly as the one did", async ({
         db,
@@ -196,6 +234,73 @@ describeDbTests("Split at playhead (UI-27)", (it) => {
         expect((await snapshot(db)).data).toEqual(original.data);
         await performRedo(db);
         expect((await snapshot(db)).data).toEqual(split.data);
+    });
+
+    it("a row another move cuts before the beat keeps each piece's line", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const { timeline, transition } = await page2(db);
+        const [cut] = await rowsOf(db, transition.id);
+        const m = cut!.marcher_id;
+        // Two one-marcher moves on a higher layer cut the row into three pieces before 15:
+        // [9, 10), [11, 12) and [13, 17), each starting where the other move left the marcher
+        await overlay(db, m, 10, 11, [123, 456]);
+        await overlay(db, m, 12, 13, [-200, 80]);
+        const before = positions(await resolverOf(db), 48);
+        const original = await snapshot(db);
+
+        const result = await splitTimelineAtBeat({
+            db,
+            timelineId: timeline.id,
+            beat: 15,
+        });
+        expect(result.motionChanged).toEqual([]);
+        expectSamePositions(before, positions(await resolverOf(db), 48), 1e-9);
+
+        // The counterpart holds the last piece; each earlier piece has a transition of its own
+        const made = await transitionsOf(db, result.before.id);
+        expect(made.length).toBe(3);
+        const piecesOfM = (await Promise.all(made.map((t) => rowsOf(db, t.id))))
+            .flat()
+            .filter((r) => r.marcher_id === m)
+            .map((r) => [r.start_beat, r.end_beat])
+            .sort((a, b) => a[0]! - b[0]!);
+        expect(piecesOfM).toEqual([
+            [9, 10],
+            [11, 12],
+            [13, 15],
+        ]);
+        expect(made.every((t) => t.path_style === "direct")).toBe(true);
+
+        await performUndo(db);
+        expect((await snapshot(db)).data).toEqual(original.data);
+    });
+
+    it("rows ending before the beat, or hidden over it, play as they did", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const { timeline, transition } = await page2(db);
+        const [short, covered] = await rowsOf(db, transition.id);
+        await transactionWithHistory(db, "short row", (tx) =>
+            tx
+                .update(schema.timeline_assignments)
+                .set({ end_beat: 11 })
+                .where(eq(schema.timeline_assignments.id, short!.id)),
+        );
+        await overlay(db, covered!.marcher_id, 12, 15, [40, -40]);
+        const before = positions(await resolverOf(db), 48);
+
+        const result = await splitTimelineAtBeat({
+            db,
+            timelineId: timeline.id,
+            beat: 13,
+        });
+        expect(result.motionChanged).toEqual([]);
+        expectSamePositions(before, positions(await resolverOf(db), 48), 1e-9);
     });
 
     it("follow the leader goes straight before the beat and says who changed", async ({

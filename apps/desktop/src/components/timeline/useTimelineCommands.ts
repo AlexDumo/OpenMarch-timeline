@@ -176,6 +176,12 @@ export function focusAfterMoveDelete(timelineId: number): void {
 /** Moves being deleted now, across every caller, so a repeated Delete doesn't delete twice */
 const deletingMoves = new Set<number>();
 
+/**
+ * Moves being split now, likewise: a second click or ⌘K before the first lands reads the old
+ * range, and would be refused with an error toast just after the split worked
+ */
+const splittingMoves = new Set<number>();
+
 /** How long the delete toast stays, unless another edit, undo or redo closes it first */
 const DELETE_TOAST_MS = 8000;
 
@@ -242,16 +248,21 @@ export function splitMoveBlocker(
     playheadBeat: number,
     isPlaying: boolean,
 ): string | null {
-    if (isPlaying) return "Pause to split a move.";
+    if (isPlaying)
+        return tolgee.t("timeline.moveSplit.paused", "Pause to split a move.");
     if (move && !(move.start < playheadBeat && playheadBeat < move.end))
-        return "Put the playhead inside the move to split it there.";
+        return tolgee.t(
+            "inspector.timeline.move.splitHelp",
+            "Put the playhead inside the move to split it there.",
+        );
     return null;
 }
 
 /**
- * The move ⌘K's **Split at playhead** acts on (UI-27): the window's move when the playhead is
- * inside it, else the one move (not a page's) the playhead is strictly inside. With none, or
- * several, the reason to show instead.
+ * The move ⌘K's **Split at playhead** acts on (UI-27): while a move is isolated, that move, and
+ * only with the playhead inside it; else the window's move when the playhead is inside it, else
+ * the one move (not a page's) the playhead is strictly inside. With none, or several, the reason
+ * to show instead.
  */
 export function moveAtPlayhead(
     state: Pick<
@@ -266,6 +277,14 @@ export function moveAtPlayhead(
     const beat = state.playheadBeat;
     const inside = (t: { start: number; end: number }) =>
         t.start < beat && beat < t.end;
+    // Isolated, the split is of the move being edited, never another one under the playhead
+    if (state.isolation) {
+        const isolated = state.storedTimelines?.find(
+            (t) => t.id === state.isolation!.timelineId,
+        );
+        if (isolated && inside(isolated)) return isolated;
+        return "Put the playhead inside the move you're editing to split it.";
+    }
     const current = windowMove(state);
     if (current && inside(current)) return current;
     const isPage = (t: { start: number; end: number }) =>
@@ -282,7 +301,8 @@ export function moveAtPlayhead(
 
 /**
  * "Split Move 2 at Page 3 count 4", and when paths changed (a path that wasn't a straight line
- * before the split, UI-27), "… · 3 marchers' paths are straight before it".
+ * before the split, UI-27), "… · 3 marchers' paths are redrawn: straight before it, restarted
+ * after".
  */
 export function moveSplitMessage(
     label: string,
@@ -299,11 +319,11 @@ export function moveSplitMessage(
         changed.length === 1
             ? tolgee.t(
                   "timeline.moveSplit.oneChanged",
-                  "1 marcher's path is straight before it",
+                  "1 marcher's path is redrawn: straight before it, restarted after",
               )
             : tolgee.t(
                   "timeline.moveSplit.changed",
-                  "{count} marchers' paths are straight before it",
+                  "{count} marchers' paths are redrawn: straight before it, restarted after",
                   { count: changed.length },
               );
     return `${base} · ${note}`;
@@ -465,13 +485,19 @@ async function splitMoveAtPlayhead({
     label: string;
     report: (timelineId: number, error: unknown) => Promise<void>;
 }): Promise<void> {
-    if (!move || deletingMoves.has(timelineId)) return;
+    if (
+        !move ||
+        deletingMoves.has(timelineId) ||
+        splittingMoves.has(timelineId)
+    )
+        return;
     const { playheadBeat, pageBoxes } = useTimelineSelectionStore.getState();
     const reason = splitMoveBlocker(move, playheadBeat, isPlaying);
     if (reason !== null) {
         toast.error(reason, { id: "timeline-split-move" });
         return;
     }
+    splittingMoves.add(timelineId);
     try {
         const { before, motionChanged } = await splitTimelineAtBeat({
             db: database,
@@ -491,5 +517,7 @@ async function splitMoveAtPlayhead({
         );
     } catch (error: unknown) {
         await report(timelineId, error);
+    } finally {
+        splittingMoves.delete(timelineId);
     }
 }
