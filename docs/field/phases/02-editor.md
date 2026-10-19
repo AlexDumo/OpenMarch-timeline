@@ -179,8 +179,10 @@ they pass alone and in Electron.
 - The view opens once the field and a page are loaded, and centers again on
   each resize until 250 ms later, as the panels around the field settle (Fabric
   centers once more at 250 ms). Unlike Fabric, none of that undoes a zoom or
-  pan the user has already made. A resize keeps the zoom and the top-left anchor; in
-  fullscreen it fits again.
+  pan the user has already made. The same 250 ms window follows each Preview
+  switch, while its glide waits for and follows the new pane. After that a
+  resize keeps the zoom and the top-left anchor; in Preview it fits again
+  (`fitAfterResize`).
 - **Decided (for the #208 checklist):** the new field applies the pan limit
   after every navigation. Fabric skipped it for right-drag, the zoom buttons
   and touch pinch (a right-drag could take the field off screen until the

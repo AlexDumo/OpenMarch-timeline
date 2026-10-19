@@ -79,6 +79,7 @@ export function resetView() {
     const fit = fittedView();
     if (!fit) return;
     stopGlide();
+    rebaseOnResize = false;
     navigated = false;
     useFieldViewStore.setState({ ...fit, baseZoom: fit.zoom });
 }
@@ -99,11 +100,18 @@ let glides = 0;
 /** A glide waiting for the pane's new size (`glideToFitAfterResize`). */
 let pendingGlide: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * A Preview switch's glide was stopped before it began: the next resize
+ * still makes the new mode's fit 100%, without moving the view.
+ */
+let rebaseOnResize = false;
+
 /** Stops the glide where it is, or one waiting to start. */
 const stopGlide = () => {
     if (pendingGlide !== null) {
         clearTimeout(pendingGlide);
         pendingGlide = null;
+        rebaseOnResize = true;
     }
     if (gliding === null) return;
     gliding = null;
@@ -136,6 +144,7 @@ export function glideToFit() {
         panY: current.panY,
     };
     stopGlide();
+    rebaseOnResize = false;
     const id = ++glides;
     gliding = id;
     navigated = false;
@@ -181,17 +190,6 @@ export function glideToFitAfterResize() {
 }
 
 /**
- * The pane was resized: starts a glide waiting for it. Whether one started.
- */
-export function startGlideAfterResize(): boolean {
-    if (pendingGlide === null) return false;
-    clearTimeout(pendingGlide);
-    pendingGlide = null;
-    glideToFit();
-    return true;
-}
-
-/**
  * Fits the field again while the panels around it settle, as the show opens
  * or Preview switches, unless the user has already moved the view. A glide
  * under way follows the pane already.
@@ -201,11 +199,26 @@ export function settleView() {
 }
 
 /**
- * Fits the field again after the pane is resized in Preview, which keeps the
- * field fitted. A glide under way follows the pane already.
+ * The pane was resized (after the show opened). In order: a Preview switch's
+ * glide waiting for the new size starts; Preview keeps the field fitted; until
+ * the view has `settled`, the field fits again. Otherwise a resize keeps the
+ * zoom and the top-left (UI-19), and a glide under way follows the pane.
  */
-export function refitPreview() {
-    if (gliding === null && pendingGlide === null) resetView();
+export function fitAfterResize(settled: boolean) {
+    if (rebaseOnResize) {
+        rebaseOnResize = false;
+        const fit = fittedView();
+        if (fit) useFieldViewStore.setState({ baseZoom: fit.zoom });
+    }
+    if (pendingGlide !== null) {
+        clearTimeout(pendingGlide);
+        pendingGlide = null;
+        glideToFit();
+    } else if (isPreviewMode()) {
+        if (gliding === null) resetView();
+    } else if (!settled) {
+        settleView();
+    }
 }
 
 /**
@@ -304,7 +317,12 @@ export function attachFieldNavigation(
         listenForPanDrags(surface),
         listenForTouch(surface, local, settings),
     ];
-    return () => detach.forEach((cleanup) => cleanup());
+    return () => {
+        detach.forEach((cleanup) => cleanup());
+        // Nothing to glide once the field is gone
+        stopGlide();
+        rebaseOnResize = false;
+    };
 }
 
 function listenForWheel(

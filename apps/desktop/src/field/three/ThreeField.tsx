@@ -17,7 +17,7 @@ import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { isPreviewMode, useIsPreviewMode } from "@/stores/PreviewModeStore";
+import { useIsPreviewMode } from "@/stores/PreviewModeStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     allItemsQueryOptions,
@@ -77,11 +77,10 @@ import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
     attachFieldNavigation,
+    fitAfterResize,
     glideToFitAfterResize,
-    refitPreview,
     resetView,
     settleView,
-    startGlideAfterResize,
 } from "./fieldNavigation";
 import { GlyphAtlas } from "./sdfText";
 import { selectionBoxPadding } from "./selectionRing";
@@ -764,12 +763,8 @@ function FieldCamera({
         if (!opened.current) {
             opened.current = true;
             resetView();
-        } else if (startGlideAfterResize()) {
-            // A Preview switch's glide, now that the pane has its new size
-        } else if (isPreviewMode()) {
-            refitPreview();
-        } else if (!settled.current) {
-            settleView();
+        } else {
+            fitAfterResize(settled.current);
         }
     }, [width, height, fieldProperties, ready, opened, settled]);
 

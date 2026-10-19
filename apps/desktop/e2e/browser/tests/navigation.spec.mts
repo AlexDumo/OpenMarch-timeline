@@ -217,7 +217,7 @@ test("Reset fits the whole field into the pane the timeline leaves", async ({
  * every frame for `ms`. With `interrupt`, scrolls or presses the field that
  * many frames after the click.
  */
-const zoomsAfterReset = (
+const zoomsAfterClick = (
     page: Page,
     ms: number,
     interrupt?: { after: number; by: "wheel" | "press" },
@@ -288,7 +288,11 @@ async function landsOnView(page: Page, expected: () => Promise<View>) {
     expectNear(fit.pan.y, want.pan.y);
 }
 
-/** Several frames strictly between where the zoom began and where it landed. */
+/**
+ * Several frames strictly between where the zoom began and where it landed,
+ * and every frame on the way there: it never heads off toward another fit
+ * first.
+ */
 function glided(zooms: number[], from: number) {
     const to = zooms.at(-1)!;
     const [low, high] = from < to ? [from, to] : [to, from];
@@ -296,6 +300,10 @@ function glided(zooms: number[], from: number) {
         (zoom) => zoom > low + 0.005 && zoom < high - 0.005,
     );
     expect(between.length).toBeGreaterThanOrEqual(3);
+    const direction = Math.sign(to - from);
+    zooms.slice(1).forEach((zoom, i) => {
+        expect((zoom - zooms[i]) * direction).toBeGreaterThanOrEqual(-1e-9);
+    });
 }
 
 /** Names a GPU to the field, which otherwise sees the software WebGL here. */
@@ -334,7 +342,7 @@ test.describe("at full quality", () => {
         const zoomedIn = (await settledView(page)).zoom;
 
         // It zooms out over several frames, never past the fit, and lands on it
-        const zooms = await zoomsAfterReset(page, 1500);
+        const zooms = await zoomsAfterClick(page, 1500);
         const gliding = zooms.filter(
             (zoom) => zoom < zoomedIn - 0.01 && zoom > opened.zoom + 0.01,
         );
@@ -353,7 +361,7 @@ test.describe("at full quality", () => {
         for (let i = 0; i < 4; i++) await page.getByTitle("Zoom In").click();
         await settledView(page);
         for (const by of ["wheel", "press"] as const) {
-            const stopped = await zoomsAfterReset(page, 800, { after: 3, by });
+            const stopped = await zoomsAfterClick(page, 800, { after: 3, by });
             const after = stopped.slice(4);
             expect(after.every((zoom) => zoom === after[0])).toBe(true);
             expect(after[0]).toBeGreaterThan(opened.zoom + 0.01);
@@ -374,7 +382,7 @@ test.describe("at full quality", () => {
             landsOnView(page, expected);
 
         // Entering Preview glides there, and its fit is 100%
-        const entering = await zoomsAfterReset(
+        const entering = await zoomsAfterClick(
             page,
             1500,
             undefined,
@@ -393,7 +401,7 @@ test.describe("at full quality", () => {
 
         // Leaving Preview glides back to the editor's fit
         const inPreview = (await settledView(page)).zoom;
-        const leaving = await zoomsAfterReset(
+        const leaving = await zoomsAfterClick(
             page,
             1500,
             undefined,
@@ -415,7 +423,7 @@ test.describe("in Performance mode", () => {
         for (let i = 0; i < 4; i++) await page.getByTitle("Zoom In").click();
         await settledView(page);
 
-        const zooms = await zoomsAfterReset(page, 300);
+        const zooms = await zoomsAfterClick(page, 300);
         zooms.forEach((zoom) => expectNear(zoom, opened.zoom, 0.005));
     });
 });
