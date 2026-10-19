@@ -10,6 +10,7 @@ import { TolgeeProvider } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useStartFlagKeyStore } from "@/stores/StartFlagKeyStore";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { DEFAULT_START_FLAG_POSITIONS } from "@/timeline/startFlagLevels";
 import { StartFlagPositionsButton } from "../StartFlagPositionsButton";
 import { TransportTooltipProvider } from "../ShortcutTooltip";
@@ -57,6 +58,7 @@ beforeEach(() => {
         latched: false,
         pressedAt: null,
     });
+    useShortcutOverridesStore.setState({ overrides: {} });
 });
 afterEach(cleanup);
 
@@ -99,5 +101,30 @@ describe("the start flag positions popover", () => {
         });
         expect(button).toHaveAttribute("data-drawing", "true");
         expect(button).toHaveAttribute("data-hold", "true");
+    });
+
+    it("names the Hold block after its key, and says when no key is set", () => {
+        open();
+        expect(
+            screen.getByRole("region", { name: "Hold N" }),
+        ).toBeInTheDocument();
+        cleanup();
+        useShortcutOverridesStore.setState({
+            overrides: { toggleStartFlagPositions: [] },
+        });
+        open();
+        expect(
+            screen.getByRole("region", { name: "Hold (no key set)" }),
+        ).toBeInTheDocument();
+        act(() => {
+            useStartFlagKeyStore.getState().toggleLatched();
+        });
+        expect(
+            screen
+                .getByTestId("start-flag-positions")
+                .getAttribute("aria-label"),
+        ).toBe(
+            "Start flag positions: Hold (no key set) · Dots: All · Paths: All",
+        );
     });
 });

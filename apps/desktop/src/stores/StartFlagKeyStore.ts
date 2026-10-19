@@ -69,6 +69,7 @@ export const useStartFlagKeyStore = create<StartFlagKeyStore>((set, get) => ({
 /** The start flag positions levels the field draws now. */
 export function useStartFlagLevelsInEffect(): StartFlagLevels {
     const settings = useUiSettingsStore((s) => s.uiSettings.startFlagPositions);
-    const hold = useStartFlagKeyStore(isStartFlagHoldActive);
-    return hold ? settings.hold : settings.always;
+    const held = useStartFlagKeyStore((s) => s.held);
+    const latched = useStartFlagKeyStore((s) => s.latched);
+    return startFlagLevelsInEffect(settings, { held, latched });
 }

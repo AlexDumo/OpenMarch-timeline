@@ -7,6 +7,7 @@ import { getActionShortcutKeys } from "@/shortcuts/labels";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import {
     isStartFlagHoldActive,
+    startFlagLevelsInEffect,
     useStartFlagKeyStore,
 } from "@/stores/StartFlagKeyStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
@@ -89,17 +90,22 @@ function LevelsBlock({
 export function StartFlagPositionsButton() {
     const { t } = useTranslate();
     const settings = useUiSettingsStore((s) => s.uiSettings.startFlagPositions);
-    const hold = useStartFlagKeyStore(isStartFlagHoldActive);
+    const held = useStartFlagKeyStore((s) => s.held);
+    const latched = useStartFlagKeyStore((s) => s.latched);
+    const keyState = { held, latched };
+    const hold = isStartFlagHoldActive(keyState);
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const key = getActionShortcutKeys("toggleStartFlagPositions", {
         overrides,
     })?.join(" + ");
-    const levels = hold ? settings.hold : settings.always;
+    const levels = startFlagLevelsInEffect(settings, keyState);
     const drawing = startFlagLevelsDrawAnything(levels);
     const label = t("timeline.startFlagPositions.label");
-    const holdTitle = t("timeline.startFlagPositions.hold", {
-        key: key ?? "N",
-    });
+    // With the action unbound there is no key to hold
+    const holdTitle =
+        key === undefined
+            ? t("timeline.startFlagPositions.holdNoKey")
+            : t("timeline.startFlagPositions.hold", { key });
     const stateLine = t("timeline.startFlagPositions.stateLine", {
         state: hold ? holdTitle : t("timeline.startFlagPositions.always"),
         dots: levelName(t, levels.dots),
