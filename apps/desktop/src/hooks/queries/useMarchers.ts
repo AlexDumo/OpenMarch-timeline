@@ -12,15 +12,13 @@ import {
     DbConnection,
     createMarchers,
     getMarchers,
+    getMarcherRowsIncludingItems,
     deleteMarchers,
     updateMarchers,
     NewMarcherArgs,
     ModifiedMarcherArgs,
 } from "@/db-functions";
-import Marcher, {
-    dbMarcherToMarcher,
-    performersOnly,
-} from "@/global/classes/Marcher";
+import Marcher, { dbMarcherToMarcher } from "@/global/classes/Marcher";
 import { DEFAULT_STALE_TIME } from "./constants";
 import { invalidateCueQueries } from "./useCues";
 
@@ -36,11 +34,18 @@ export const marcherKeys = {
     byStartBeat: (startBeat: number) =>
         [KEY_BASE, "startBeat", startBeat] as const,
     single: (marcherId: number) => [KEY_BASE, "single", marcherId] as const,
+    /** Every marchers row, items included (`allMarcherRowsQueryOptions`) */
+    rowsIncludingItems: () => [KEY_BASE, "rowsIncludingItems"] as const,
 };
 
 const marcherQueries = {
     getAll: async (db: DbConnection): Promise<Marcher[]> => {
         return (await getMarchers({ db })).map(dbMarcherToMarcher);
+    },
+    getAllRows: async (db: DbConnection): Promise<Marcher[]> => {
+        return (await getMarcherRowsIncludingItems({ db })).map(
+            dbMarcherToMarcher,
+        );
     },
     getById: async (
         db: DbConnection,
@@ -54,10 +59,8 @@ const marcherQueries = {
 };
 
 /**
- * Query options for the marchers query
- *
- * @param args - the filters to use for the query, or the marcher id to fetch
- * @returns
+ * The performers in the show (`getMarchers`): every marcher except items, the props and
+ * equipment rows. Use it wherever "every marcher" means performers, which is nearly everywhere.
  */
 export const allMarchersQueryOptions = () => {
     return queryOptions<Marcher[]>({
@@ -70,13 +73,17 @@ export const allMarchersQueryOptions = () => {
 };
 
 /**
- * The performers in the show: the marchers query (same key and cache) without items, the props
- * and equipment rows (`performersOnly`). Use it wherever "every marcher" means performers.
+ * Every marchers row, items (props and equipment) included (`getMarcherRowsIncludingItems`):
+ * only for code that draws, selects or writes items too, such as the field and the selection.
+ * Check rows with `isPerformer` where they need telling apart.
  */
-export const performersQueryOptions = () => {
+export const allMarcherRowsQueryOptions = () => {
     return queryOptions<Marcher[]>({
-        ...allMarchersQueryOptions(),
-        select: performersOnly,
+        queryKey: marcherKeys.rowsIncludingItems(),
+        queryFn: async () => {
+            return await marcherQueries.getAllRows(db);
+        },
+        staleTime: DEFAULT_STALE_TIME,
     });
 };
 

@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     deleteMarchersMutationOptions,
     updateMarchersMutationOptions,
-    performersQueryOptions,
+    allMarchersQueryOptions,
 } from "@/hooks/queries";
 import { ModifiedMarcherArgs } from "@/db-functions";
 import { MarcherFormContents } from "@/components/marcher/MarchersModal";
@@ -55,7 +55,7 @@ export default function MarcherList({
         isSuccess: marchersSuccess,
         isLoading: marchersLoading,
         isError: marchersError,
-    } = useQuery(performersQueryOptions()); // Items are not edited as marchers
+    } = useQuery(allMarchersQueryOptions()); // Performers: items are not edited as marchers
 
     // localMarchers are the marchers that are displayed in the table
     const [localMarchers, setLocalMarchers] = useState<Marcher[]>();

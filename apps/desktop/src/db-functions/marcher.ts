@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import { DbConnection, DbTransaction } from "./types";
 import { schema } from "@/global/database/db";
 import { transactionWithHistory, createAllUndoTriggers } from "./history";
@@ -55,16 +55,35 @@ const ensureUndoTriggers = async (db: DbConnection) => {
 };
 
 /**
- * @param db The database connection, or undefined to create a new connection
- * @returns An array of all marchers in the database
+ * The performers in the show: every marchers row except items, the props and equipment that are
+ * marchers rows of type `item` (props-spec section 4). Most code means performers when it says
+ * "every marcher"; the few places that need items too use {@link getMarcherRowsIncludingItems}.
+ *
+ * @param db The database connection
+ * @returns The performers, in row order
  */
 export async function getMarchers({
     db,
 }: {
     db: DbConnection;
 }): Promise<DatabaseMarcher[]> {
-    const response = await db.select().from(schema.marchers);
-    return response;
+    return await db
+        .select()
+        .from(schema.marchers)
+        .where(ne(schema.marchers.type, "item"));
+}
+
+/**
+ * Every marchers row, items (props and equipment) included: for the field, which draws and
+ * selects items, item writes, history and repair. Anything that means performers uses
+ * {@link getMarchers}.
+ */
+export async function getMarcherRowsIncludingItems({
+    db,
+}: {
+    db: DbConnection;
+}): Promise<DatabaseMarcher[]> {
+    return await db.select().from(schema.marchers);
 }
 
 export async function createMarchersInTransaction({
