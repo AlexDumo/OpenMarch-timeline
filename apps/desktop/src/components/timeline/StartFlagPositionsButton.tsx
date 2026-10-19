@@ -3,6 +3,7 @@ import { PathIcon } from "@phosphor-icons/react";
 import { SegmentedTextSwitch } from "@openmarch/ui";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { getActionShortcutKeys } from "@/shortcuts/labels";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import {
@@ -10,12 +11,16 @@ import {
     startFlagLevelsInEffect,
     useStartFlagKeyStore,
 } from "@/stores/StartFlagKeyStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     setStartFlagDots,
     setStartFlagPaths,
     START_FLAG_LEVEL_ORDER,
-    startFlagLevelsDrawAnything,
+    startFlagLevelsDrawFor,
     type StartFlagLevel,
     type StartFlagLevels,
     type StartFlagPositionsSettings,
@@ -83,8 +88,8 @@ function LevelsBlock({
 
 /**
  * Start flag positions (fork #331): one icon on the transport's right, by Fit. In the accent
- * color while the levels in effect draw something, with a soft highlight while N is held or
- * latched (the Hold N state). Its popover sets both states' dots and paths; paths never go wider
+ * color while the field draws something (dots at All, or at Selected with a selection, over a
+ * window), with a soft highlight while N is held or latched (the Hold N state). Its popover sets both states' dots and paths; paths never go wider
  * than dots (`setStartFlagDots`, `setStartFlagPaths`).
  */
 export function StartFlagPositionsButton() {
@@ -99,7 +104,17 @@ export function StartFlagPositionsButton() {
         overrides,
     })?.join(" + ");
     const levels = startFlagLevelsInEffect(settings, keyState);
-    const drawing = startFlagLevelsDrawAnything(levels);
+    const anySelected =
+        (useSelectedMarchers()?.selectedMarchers.length ?? 0) > 0;
+    // A window to draw: not home, not isolating, and the canvas after the start flag (playback
+    // keeps the plans from before Play)
+    const hasWindow = useTimelineSelectionStore(
+        (s) =>
+            s.selection.kind === "range" &&
+            s.isolation === null &&
+            (s.playback !== null || displayedBeat(s) > s.startBeat),
+    );
+    const drawing = hasWindow && startFlagLevelsDrawFor(levels, anySelected);
     const label = t("timeline.startFlagPositions.label");
     // With the action unbound there is no key to hold
     const holdTitle =
