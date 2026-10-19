@@ -91,6 +91,32 @@ describe("readOpenMarchMetadata", () => {
         expect(meta.notes).toHaveLength(2);
     });
 
+    it("keeps the Blender add-on's dashed slot ids and drops ids the show file can't store", () => {
+        const slot = (id: string) => ({
+            extras: {
+                openmarch: { artworkSlot: { id, widthM: 1, heightM: 1 } },
+            },
+        });
+        const meta = readOpenMarchMetadata({
+            materials: [
+                slot("front-panel"),
+                slot("material-001"),
+                slot("Front Panel"),
+                slot("panel.001"),
+                slot("x".repeat(65)),
+            ],
+        });
+        expect(meta.slots.map((s) => s.id)).toEqual([
+            "front-panel",
+            "material-001",
+        ]);
+        expect(meta.notes.map((n) => n.reason)).toEqual([
+            expect.stringContaining("dashes"),
+            expect.stringContaining("dashes"),
+            expect.stringContaining("dashes"),
+        ]);
+    });
+
     it("reads fits from mesh nodes or their meshes", () => {
         const meta = readOpenMarchMetadata({
             meshes: [{}, { extras: { openmarch: { fit: "neutral-broad" } } }],

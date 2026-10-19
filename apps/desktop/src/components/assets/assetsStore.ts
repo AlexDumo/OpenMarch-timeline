@@ -8,12 +8,24 @@
  * each import in the open show.
  */
 import { create } from "zustand";
+import { conToastError } from "@/utilities/utils";
 import {
     createImportReview,
     type ImportReviewClient,
     type ImportReviewStore,
 } from "@/components/library/import/importReview";
 import type { ImportedVersion } from "@/view3d/library/showLibraryEmbed";
+import type { PickContext, PickPurpose } from "@/view3d/library/protocol";
+
+/** What a contextual link ("Upload floor…") starts an import with. */
+export interface StartImportOptions {
+    /** Defaults to `any`, as the Assets panel's Import… */
+    purpose?: PickPurpose;
+    /** Pre-fills the review: surface, size, kind */
+    context?: PickContext;
+    /** Runs once the show holds its copy of what was saved, such as setting the floor */
+    onEmbedded?: (saved: ImportedVersion[]) => void | Promise<void>;
+}
 
 export interface AssetsHighlight {
     itemIds: string[];
@@ -28,12 +40,12 @@ interface AssetsState {
      * Embeds saved Versions in the open show (ADR 0002 D-12). Set by
      * `AssetsHost`, read at commit time so a review outlives the panel.
      */
-    onImported: ((saved: ImportedVersion[]) => void) | null;
+    onImported: ((saved: ImportedVersion[]) => Promise<void> | void) | null;
     setOnImported(
-        onImported: ((saved: ImportedVersion[]) => void) | null,
+        onImported: ((saved: ImportedVersion[]) => Promise<void> | void) | null,
     ): void;
     /** Opens the file dialog and, once files are picked, the review. */
-    startImport(client: ImportReviewClient): void;
+    startImport(client: ImportReviewClient, options?: StartImportOptions): void;
     /** Clears the highlight if it's still the one with this `seq`. */
     clearHighlight(seq: number): void;
 }
@@ -47,13 +59,30 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         set({ onImported });
     },
 
-    startImport(client) {
+    startImport(client, { purpose = "any", context, onEmbedded } = {}) {
         if (get().review) return;
         const review = createImportReview(client, {
             onClose: () => {
                 if (get().review === review) set({ review: null });
             },
-            onImported: (saved) => get().onImported?.(saved),
+            onImported: (saved) => {
+                void (async () => {
+                    const embed = get().onImported;
+                    // Without the show's copy there's nothing for onEmbedded to name
+                    if (!embed) return;
+                    try {
+                        await embed(saved);
+                    } catch {
+                        // The embed reports its own failure
+                        return;
+                    }
+                    try {
+                        await onEmbedded?.(saved);
+                    } catch (error) {
+                        conToastError("Couldn't finish the import", error);
+                    }
+                })();
+            },
             // Land on the Library with the new items highlighted. Pages the
             // pipeline skipped keep the summary open so its notes are read.
             onCommitted: (itemIds, done) => {
@@ -79,7 +108,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
             },
         });
         set({ review });
-        void review.getState().pick("any");
+        void review.getState().pick(purpose, context);
     },
 
     clearHighlight(seq) {

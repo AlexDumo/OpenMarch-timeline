@@ -1,4 +1,5 @@
 import type { LabeledHoldMarks } from "./PageHoldMark";
+import type { TimelineBand } from "./TimelineBand";
 import type { PageKeepChains } from "./PageKeepChain";
 import type { TimelineClipResizeCommands } from "./TimelineClipResize";
 import type { TimelineClipPeel } from "./TimelineClipPeel";
@@ -288,6 +289,19 @@ export interface TimelineCommonProps
     readonly showTransport?: boolean;
     /** The playback clock shown in the transport. The app passes its audio clock; stories pass none. */
     readonly transportClock?: ReactNode;
+    /**
+     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): page
+     * boxes select and the ruler seeks, but nothing draws a range. The owner passes no editing
+     * commands
+     */
+    readonly readOnly?: boolean;
+    /**
+     * A read-only timeline's start flag (view beats), drawn with no handles: Play starts there,
+     * so it shows even where nothing moves it by hand
+     */
+    readonly startFlagBeat?: number;
+    /** Lanes drawn where the clip rows go, under the waveform (Visuals mode's cue lanes) */
+    readonly band?: TimelineBand;
     /** Extra transport controls, such as volume, the metronome and fullscreen */
     readonly transportAccessories?: ReactNode;
     readonly className?: string;

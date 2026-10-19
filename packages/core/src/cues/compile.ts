@@ -1,3 +1,4 @@
+import { sameAspect } from "../sizes/aspect";
 import {
     GUARD_CARRIES,
     cueSettings,
@@ -676,6 +677,7 @@ function compileLookup(input: CompileInput): CueValueLookup {
         name: e.name,
         holds: e.holds,
         ...(e.label !== undefined ? { label: e.label } : {}),
+        ...(e.aspect !== undefined ? { aspect: e.aspect } : {}),
     });
     const equipment = [
         ...(input.sections ?? []).flatMap((s) =>
@@ -1000,6 +1002,14 @@ export function compileCues(
                       );
             channels.set(channel, result.base);
         }
+        noteSilkAspects(
+            lookup,
+            marcher.id,
+            looksOf(marcher).carry.holds,
+            channels.get("carry")!,
+            channels.get("silk")!,
+            notes,
+        );
         applyTakeovers(lookup, marcher.id, channels, input.travels, flags);
         for (const [channel, segments] of channels)
             byKey.set(segmentKey(marcher.id, channel), segments);
@@ -1016,6 +1026,43 @@ export function compileCues(
     };
     compileStates.set(compiled, state);
     return compiled;
+}
+
+/**
+ * Notes each Silk cue whose Artwork's aspect differs from the Cut of a flag
+ * Carry gives the marcher while the silk applies. The silk still applies:
+ * the Artwork is fitted to the Cut per the sizing contract (props-spec.md
+ * section 3), and "differs" is that contract's rule (`sameAspect`, 0.5%
+ * of the larger). An unknown aspect on either side is no note. Runs on the
+ * channels before take-overs: no Carry or Silk value takes another over.
+ */
+function noteSilkAspects(
+    lookup: CueValueLookup,
+    marcherId: number,
+    /** What Carry gives when its value doesn't say, as in `holdsOver`. */
+    usual: PerformerCarry,
+    carry: readonly CueSegment[],
+    silk: readonly CueSegment[],
+    notes: FlagCollector<CueNoteKind>,
+): void {
+    for (const seg of silk) {
+        if (seg.kind !== "state" || seg.cueId === null || seg.value === null)
+            continue;
+        const artworkAspect = lookup(seg.value)?.aspect;
+        if (artworkAspect === undefined) continue;
+        const differs = carry.some((held) => {
+            if (held.to <= seg.from || held.from >= seg.to) return false;
+            const equipment =
+                held.value === null ? undefined : lookup(held.value);
+            const cutAspect = equipment?.aspect;
+            return (
+                (equipment?.holds ?? usual) === "flag" &&
+                cutAspect !== undefined &&
+                !sameAspect(cutAspect, artworkAspect)
+            );
+        });
+        if (differs) notes.add("silk_aspect", [seg.cueId], marcherId);
+    }
 }
 
 /** Each cue on its count, sorted by count then id; cues on unknown beats are dropped. */

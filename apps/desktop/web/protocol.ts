@@ -7,7 +7,10 @@
 /** Page to worker. */
 export type ToWorker =
     | { type: "invoke"; id: number; channel: string; args: unknown[] }
-    | { type: "send"; channel: string; args: unknown[] };
+    | { type: "send"; channel: string; args: unknown[] }
+    /** The page's answer to an `ask` */
+    | { type: "answer"; id: number; ok: true; value: unknown }
+    | { type: "answer"; id: number; ok: false; error: string };
 
 /** Worker to page. */
 export type FromWorker =
@@ -20,7 +23,9 @@ export type FromWorker =
           value: unknown;
       }
     | { type: "result"; id: number; ok: false; error: string }
-    | { type: "emit"; channel: string; args: unknown[] };
+    | { type: "emit"; channel: string; args: unknown[] }
+    /** Something only the page can do, such as drawing an SVG (`PAGE_CHANNELS`) */
+    | { type: "ask"; id: number; channel: string; args: unknown[] };
 
 export type WorkerStatus = {
     /**
@@ -57,6 +62,24 @@ export const WEB_CHANNELS = {
      */
     keptShow: "web:keptShow",
 } as const;
+
+/** Channels the worker asks the page, which has the DOM the worker lacks. */
+export const PAGE_CHANNELS = {
+    /**
+     * (bytes: Uint8Array, format: "svg" | "pdf", long: number) => RasterizedImage: an SVG, or
+     * a PDF's first page, drawn as a PNG `long` pixels on its long edge. For a field image
+     * that becomes the show's floor (ADR 0002 D-23).
+     */
+    rasterizeImage: "web:rasterizeImage",
+} as const;
+
+export interface RasterizedImage {
+    png: Uint8Array;
+    width: number;
+    height: number;
+    /** Pages in a PDF; 1 for an SVG */
+    pageCount: number;
+}
 
 /** Messages the worker sends the page unasked, like `webContents.send`. */
 export const WEB_EVENTS = {

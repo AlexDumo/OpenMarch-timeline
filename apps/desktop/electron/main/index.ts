@@ -21,6 +21,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import * as DatabaseServices from "../database/database.services";
+import { LIBRARY_LIMITS } from "../../src/view3d/library/protocol";
 import { applicationMenu } from "./application-menu";
 import { openSettingsWindow } from "./settings-window";
 import { TRAFFIC_LIGHT_POSITION } from "./traffic-lights";
@@ -452,6 +453,46 @@ async function openRecentFile(filePath: string) {
     return resCode;
 }
 
+/** A new show copies a previous show's field image as its own floor (ADR 0002 D-23). */
+function handleNewShowFloorIpc() {
+    ipcMain.handle(
+        "newShow:setFloorFromImage",
+        async (event, image: unknown) => {
+            if (event.sender !== win?.webContents)
+                throw new Error("Only the editor sets the floor");
+            if (
+                !(image instanceof Uint8Array) ||
+                image.byteLength === 0 ||
+                image.byteLength > LIBRARY_LIMITS.artworkBytes
+            )
+                throw new Error("Not a field image");
+            const [{ setFloorFromImage }, { floorFromFieldImage }] =
+                await Promise.all([
+                    import("../database/convertFieldImage"),
+                    import("./floor/fieldImageFloor"),
+                ]);
+            await setFloorFromImage(
+                DatabaseServices.getOrmConnection() as never,
+                image,
+                floorFromFieldImage,
+            );
+        },
+    );
+    ipcMain.handle(
+        "newShow:setFloorFromVersion",
+        async (event, version: unknown) => {
+            if (event.sender !== win?.webContents)
+                throw new Error("Only the editor sets the floor");
+            const { setFloorFromVersion, parseFloorVersion } =
+                await import("../database/convertFieldImage");
+            await setFloorFromVersion(
+                DatabaseServices.getOrmConnection() as never,
+                parseFloorVersion(version),
+            );
+        },
+    );
+}
+
 function initDatabaseIpcHandlers() {
     ipcMain.handle("database:isReady", DatabaseServices.databaseIsReady);
     ipcMain.handle("database:getPath", () => DatabaseServices.getDbPath());
@@ -494,6 +535,7 @@ function initDatabaseIpcHandlers() {
     ipcMain.handle("newShow:choosePreviousDotsFile", async () =>
         choosePreviousDotsFile(win),
     );
+    handleNewShowFloorIpc();
     ipcMain.handle("database:repair", async (_, dbPath: string) => {
         try {
             DatabaseServices.closePersistentConnection();
@@ -1295,6 +1337,9 @@ export async function saveFile() {
         .then(async (path) => {
             if (path.canceled || !path.filePath) return 0;
 
+            // Save prunes the show Library (C2.1), so the copy carries only what the show uses
+            await pruneShowLibrary();
+
             // Make a copy into a temp file
             const tempPath = path.filePath + ".tmp";
             if (fs.existsSync(tempPath)) {
@@ -1394,6 +1439,21 @@ function requestSvgBeforeClose(win: BrowserWindow): Promise<string> {
 }
 
 /**
+ * Prunes the open show's Library (C2.1). Loaded when first used: it runs the renderer's
+ * db-functions, which stay out of the startup bundle.
+ */
+async function pruneShowLibrary() {
+    try {
+        const { pruneShowLibraryAt } =
+            await import("../database/showLibraryPrune");
+        await pruneShowLibraryAt(DatabaseServices.getDbPath());
+    } catch (error) {
+        // Never stops the close or the copy
+        console.error("Couldn't load the show Library prune", error);
+    }
+}
+
+/**
  * Closes the current database file.
  *
  * @returns 200 for success, -1 for failure
@@ -1428,6 +1488,9 @@ async function closeCurrentFileNow(isAppQuitting: boolean) {
     } catch (error) {
         console.error("Error getting SVG on close:", error);
     }
+
+    // The app autosaves, so closing is when save prunes the show Library (C2.1)
+    await pruneShowLibrary();
 
     // Close the current file
     DatabaseServices.setDbPath("", false);

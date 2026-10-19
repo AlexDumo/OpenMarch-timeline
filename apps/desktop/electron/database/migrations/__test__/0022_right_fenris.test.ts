@@ -24,12 +24,26 @@ import {
     migrationsFolder,
     withDb,
 } from "../../__test__/convertOnOpenFixtures";
+import {
+    migrationAt,
+    rollBackMigrationsFrom,
+} from "../../__test__/migrationRollback";
 
-type Journal = { entries: { idx: number; tag: string; when: number }[] };
-const journal: Journal = JSON.parse(
-    fs.readFileSync(path.join(migrationsFolder, "meta/_journal.json"), "utf-8"),
-);
-const CUE_MIGRATION = journal.entries.find((e) => e.idx === 22)!;
+const CUE_MIGRATION = migrationAt(22);
+
+/**
+ * Tables later migrations add (0023's cameras, 0024's items, 0025's Placement, 0026's slots),
+ * gone from a file
+ * from before 0022 too
+ */
+const LATER_TABLES = [
+    "view3d_cameras",
+    "items",
+    "item_geometry",
+    "item_placements",
+    "item_placement_marchers",
+    "item_artwork_slots",
+];
 
 const CUE_TABLES = [
     "cue_marchers",
@@ -37,9 +51,6 @@ const CUE_TABLES = [
     "page_performer_settings",
     "phrase_assets",
 ];
-
-/** Tables later migrations add (0023's 3D View cameras), gone from a file from before 0022 too */
-const LATER_TABLES = ["view3d_cameras"];
 
 const tableNames = (db: DatabaseSync) =>
     (
@@ -61,15 +72,7 @@ const count = (db: DatabaseSync, table: string) =>
 
 /** Turns a migrated file back into one from before 0022: no cue tables, 0022 not recorded. */
 const removeCueMigration = (filePath: string) =>
-    withDb(filePath, (db) => {
-        db.exec("PRAGMA foreign_keys = OFF");
-        for (const table of [...CUE_TABLES, ...LATER_TABLES])
-            db.exec(`DROP TABLE ${table}`);
-        // This migration and every later one: the migrator applies only those after the last it finds
-        db.prepare(
-            "DELETE FROM __drizzle_migrations WHERE created_at >= ?",
-        ).run(CUE_MIGRATION.when);
-    });
+    rollBackMigrationsFrom(filePath, CUE_MIGRATION.idx);
 
 const migrate = async (db: DatabaseSync) => {
     applyFileVersionDecision(db, false);

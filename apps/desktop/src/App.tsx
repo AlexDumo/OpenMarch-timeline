@@ -1,6 +1,9 @@
 import { threeZoomControls } from "@/field/three/fieldNavigation";
 import Toolbar from "@/components/toolbar/Toolbar";
 import Inspector from "@/components/inspector/Inspector";
+import VisualsInspector from "@/components/visuals/VisualsInspector";
+import { VisualsProvider } from "@/components/visuals/VisualsProvider";
+import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import SidebarModal from "@/components/sidebar/SidebarModal";
 import { SelectedPageProvider } from "@/context/SelectedPageContext";
 import { SelectedMarchersProvider } from "@/context/SelectedMarchersContext";
@@ -94,6 +97,7 @@ function App() {
     );
     const pluginsLoadedRef = useRef(false);
     const { isFullscreen } = useFullscreenStore();
+    const visuals = useIsVisualsView();
 
     // Check if running in codegen mode
     const isCodegen = window.electron.isCodegen;
@@ -255,7 +259,15 @@ function App() {
                 {process.env.NODE_ENV !== "production" && (
                     <ReactQueryDevtools initialIsOpen={false} />
                 )}
-                <main className="bg-bg-1 text-text outline-accent flex h-screen min-h-0 w-screen min-w-0 flex-col overflow-hidden font-sans">
+                <main
+                    data-workspace={visuals ? "visuals" : "editor"}
+                    className={clsx(
+                        "bg-bg-1 text-text outline-accent relative flex h-screen min-h-0 w-screen min-w-0 flex-col overflow-hidden font-sans",
+                        // Visuals mode is its own workspace (performer-behavior.md 7.1): a tint says so
+                        visuals &&
+                            "before:to-accent/10 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-linear-to-b before:from-transparent",
+                    )}
+                >
                     {analyticsConsent === null &&
                         !isCodegen &&
                         !welcomeFlowAsksAnalytics && (
@@ -305,61 +317,68 @@ function App() {
                                             <SvgPreviewHandler />
                                             <TitleBar showControls />
                                             <FocusNotice />
-                                            <div
-                                                id="app"
-                                                className="flex h-full min-h-0 w-full gap-8 px-8 pb-8"
-                                            >
+                                            <VisualsProvider>
                                                 <div
-                                                    id="workspace"
-                                                    className="relative flex h-full min-h-0 w-full min-w-0 flex-col gap-8"
+                                                    id="app"
+                                                    className="flex h-full min-h-0 w-full gap-8 px-8 pb-8"
                                                 >
                                                     <div
-                                                        className={
-                                                            timelineFocussedClass
-                                                        }
+                                                        id="workspace"
+                                                        className="relative flex h-full min-h-0 w-full min-w-0 flex-col gap-8"
                                                     >
-                                                        <Toolbar />
-                                                    </div>
-                                                    <div
-                                                        className={clsx(
-                                                            "relative flex h-full min-h-0 min-w-0 gap-8",
-                                                            timelineFocussedClass,
-                                                        )}
-                                                    >
-                                                        {!isFullscreen && (
-                                                            <>
-                                                                <Sidebar />
-                                                                <SidebarModal />
-                                                            </>
-                                                        )}
-                                                        <Suspense>
-                                                            <ThreeField />
-                                                        </Suspense>
-                                                        <CanvasZoomControls
-                                                            canvas={
-                                                                threeZoomControls
+                                                        <div
+                                                            className={
+                                                                timelineFocussedClass
                                                             }
-                                                        />
-                                                    </div>
-                                                    {focussedComponent ===
-                                                    "timeline" ? (
-                                                        <TimelineContainer />
-                                                    ) : (
-                                                        <TimelineSplitter>
+                                                        >
+                                                            <Toolbar />
+                                                        </div>
+                                                        <div
+                                                            className={clsx(
+                                                                "relative flex h-full min-h-0 min-w-0 gap-8",
+                                                                timelineFocussedClass,
+                                                            )}
+                                                        >
+                                                            {!isFullscreen &&
+                                                                !visuals && (
+                                                                    <>
+                                                                        <Sidebar />
+                                                                        <SidebarModal />
+                                                                    </>
+                                                                )}
+                                                            <Suspense>
+                                                                <ThreeField />
+                                                            </Suspense>
+                                                            <CanvasZoomControls
+                                                                canvas={
+                                                                    threeZoomControls
+                                                                }
+                                                            />
+                                                        </div>
+                                                        {focussedComponent ===
+                                                        "timeline" ? (
                                                             <TimelineContainer />
-                                                        </TimelineSplitter>
+                                                        ) : (
+                                                            <TimelineSplitter>
+                                                                <TimelineContainer />
+                                                            </TimelineSplitter>
+                                                        )}
+                                                    </div>
+                                                    {!isFullscreen && (
+                                                        <div
+                                                            className={
+                                                                timelineFocussedClass
+                                                            }
+                                                        >
+                                                            {visuals ? (
+                                                                <VisualsInspector />
+                                                            ) : (
+                                                                <Inspector />
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
-                                                {!isFullscreen && (
-                                                    <div
-                                                        className={
-                                                            timelineFocussedClass
-                                                        }
-                                                    >
-                                                        <Inspector />
-                                                    </div>
-                                                )}
-                                            </div>
+                                            </VisualsProvider>
                                             <Toaster />
                                         </SelectedAudioFileProvider>
                                     </SelectedMarchersProvider>

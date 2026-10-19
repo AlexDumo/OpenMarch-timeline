@@ -14,6 +14,7 @@ import {
 import { FieldProperties } from "@openmarch/core";
 import { DB, schema } from "@/global/database/db";
 import { FieldPropertiesSchema } from "@/components/field/fieldPropertiesSchema";
+import { performersOnly } from "@/global/classes/Marcher";
 import { generatePageNames } from "@/global/classes/Page";
 import { getPagesInOrder } from "@/db-functions";
 import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
@@ -259,6 +260,7 @@ async function readShowRows(db: DB) {
                 drill_prefix: true,
                 drill_order: true,
                 section: true,
+                type: true,
                 // STUDENT PRIVACY - these columns are omitted and never pushed to server
                 name: false,
                 year: false,
@@ -276,7 +278,8 @@ async function readShowRows(db: DB) {
     return {
         timingRows,
         fieldPropsRow,
-        marchersRows,
+        // The mobile app gets performers only: items (props and equipment) are not performers
+        marchersRows: performersOnly(marchersRows),
         pagesRows,
         measuresRows,
         workspaceSettings,
@@ -315,9 +318,13 @@ function buildOpenMarchFromRows(data: DotsData): OpenMarchShowData {
         marchersRows,
         pagesRows,
         measuresRows,
-        positionRows,
         workspaceSettings,
     } = data;
+    // Positions of performers only, as `marchersRows` (items are sampled and stored too)
+    const performerIds = new Set(marchersRows.map((m) => m.id));
+    const positionRows = data.positionRows.filter((p) =>
+        performerIds.has(p.marcher_id),
+    );
 
     if (!fieldPropsRow) {
         throw new Error("Field properties not found");

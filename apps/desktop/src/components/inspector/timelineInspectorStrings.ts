@@ -187,9 +187,6 @@ export const TIMELINE_INSPECTOR_STRINGS = {
 
     "inspector.timeline.diagnostics.title": "Diagnostics",
     "inspector.timeline.diagnostics.none": "No diagnostics.",
-    "inspector.timeline.diagnostics.showTitle": "Show diagnostics ({count})",
-    "inspector.timeline.diagnostics.showNone":
-        "No diagnostics for the whole show.",
     "inspector.timeline.diagnostics.warning": "Warning",
     "inspector.timeline.diagnostics.info": "Info",
     "inspector.timeline.diagnostics.transition": "Transition {id}",

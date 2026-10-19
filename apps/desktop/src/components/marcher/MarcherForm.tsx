@@ -22,7 +22,7 @@ import FormField from "../ui/FormField";
 import { T, useTolgee } from "@tolgee/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    allMarchersQueryOptions,
+    allMarcherRowsQueryOptions,
     marcherQueryByIdOptions,
     createMarchersMutationOptions,
     updateMarchersMutationOptions,
@@ -87,8 +87,9 @@ const MarcherForm: React.FC<MarcherFormProps> = ({
         useState<boolean>(false);
     const [drillOrderError, setDrillOrderError] = useState<string>("");
     const queryClient = useQueryClient();
+    // Items too: a performer can't take a prop's drill number
     const { data: dbMarchers, isSuccess: dbMarchersLoaded } = useQuery({
-        ...allMarchersQueryOptions(),
+        ...allMarcherRowsQueryOptions(),
         enabled: !existingMarchers && !wizardMode,
     });
     const marchers = existingMarchers ?? dbMarchers;
