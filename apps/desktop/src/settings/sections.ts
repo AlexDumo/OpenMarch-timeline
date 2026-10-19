@@ -124,7 +124,6 @@ const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
             "settings.view3d.resolution",
             "settings.view3d.pauseWhenIdle",
             "settings.view3d.saveOnBattery",
-            "settings.view3d.drawWithoutGpu",
         ],
     },
     {

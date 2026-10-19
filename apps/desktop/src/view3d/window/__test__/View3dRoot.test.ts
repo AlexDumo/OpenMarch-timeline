@@ -29,19 +29,10 @@ describe("readView3dWindowParams", () => {
 });
 
 describe("viewportFallback", () => {
-    it("draws the scene only on a GPU", () => {
+    it("draws the scene wherever there is WebGL, even in software", () => {
         expect(viewportFallback("hardware")).toBeNull();
-        expect(viewportFallback("software")).toBe(
-            "view3d.window.gpuUnavailable",
-        );
+        expect(viewportFallback("software")).toBeNull();
         expect(viewportFallback("none")).toBe(
-            "view3d.window.graphicsUnavailable",
-        );
-    });
-
-    it("draws in software when the viewer allows it", () => {
-        expect(viewportFallback("software", true)).toBeNull();
-        expect(viewportFallback("none", true)).toBe(
             "view3d.window.graphicsUnavailable",
         );
     });

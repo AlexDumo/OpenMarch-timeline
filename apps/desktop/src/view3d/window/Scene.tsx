@@ -141,6 +141,7 @@ export default function Scene() {
             data-testid="view3d-scene"
             data-kit={kitId ?? ""}
             data-lighting={lighting ?? ""}
+            data-quality={quality}
         >
             <Canvas
                 shadows

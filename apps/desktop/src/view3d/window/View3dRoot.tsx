@@ -21,28 +21,18 @@ import { probeWebGL, type GlKind } from "@/field/fieldQuality";
 import tolgee from "@/global/singletons/Tolgee";
 import { startView3dSync } from "@/view3d/sync/view3dSyncStore";
 import View3dOverlay from "./overlay/View3dOverlay";
-import {
-    DRAW_WITHOUT_GPU_STORAGE_KEY,
-    loadDrawWithoutGpu,
-} from "./renderPrefs";
-import { startPrefsSync } from "./sceneStore";
+import { startPrefsSync, useView3dSceneStore } from "./sceneStore";
 import Scene from "./Scene";
 
 /**
  * What the viewport shows instead of the scene, as a translation key, or null
- * to draw the scene. The scene draws only on a GPU unless the viewer turned
- * on Draw without a graphics card in Settings: WebGL drawn in software runs
- * the whole view on the CPU, too slow to use and hard on the battery.
+ * to draw the scene. Only no WebGL at all stops it. WebGL drawn in software
+ * runs the whole view on the CPU, so the scene draws at low quality there
+ * and says why (`sceneStore.ts` `softwareGl`, `overlay/QualityNotice.tsx`),
+ * like the 2D field.
  */
-export function viewportFallback(
-    kind: GlKind,
-    drawWithoutGpu = false,
-): string | null {
-    if (kind === "hardware") return null;
-    if (kind === "software" && drawWithoutGpu) return null;
-    return kind === "software"
-        ? "view3d.window.gpuUnavailable"
-        : "view3d.window.graphicsUnavailable";
+export function viewportFallback(kind: GlKind): string | null {
+    return kind === "none" ? "view3d.window.graphicsUnavailable" : null;
 }
 
 export interface View3dWindowParams {
@@ -110,10 +100,15 @@ export default function View3dRoot() {
 function View3dWindow() {
     const { t } = useTranslate();
     const title = t("view3d.window.title", { showName: params.showName });
-    // Probed once, before the scene creates its own context.
-    const [glKind] = useState(() => probeWebGL().kind);
-    const drawWithoutGpu = useDrawWithoutGpu();
-    const fallback = viewportFallback(glKind, drawWithoutGpu);
+    // Probed once, before the scene creates its own context, and recorded
+    // before the scene's first render so it builds at low quality from the
+    // start on software WebGL.
+    const [glKind] = useState(() => {
+        const kind = probeWebGL().kind;
+        useView3dSceneStore.getState()._setSoftwareGl(kind === "software");
+        return kind;
+    });
+    const fallback = viewportFallback(glKind);
 
     useEffect(() => {
         document.title = title;
@@ -141,23 +136,6 @@ function View3dWindow() {
             </div>
         </main>
     );
-}
-
-/** The Settings window's Draw without a graphics card choice, kept current. */
-function useDrawWithoutGpu(): boolean {
-    const [on, setOn] = useState(() => loadDrawWithoutGpu());
-    useEffect(() => {
-        const onStorage = (event: StorageEvent) => {
-            if (
-                event.key === null ||
-                event.key === DRAW_WITHOUT_GPU_STORAGE_KEY
-            )
-                setOn(loadDrawWithoutGpu());
-        };
-        window.addEventListener("storage", onStorage);
-        return () => window.removeEventListener("storage", onStorage);
-    }, []);
-    return on;
 }
 
 function ViewportMessage({ keyName }: { keyName: string }) {

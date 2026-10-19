@@ -331,19 +331,21 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   switch to night is now 50 ms. It runs only with
   `KHR_parallel_shader_compile`; without it the compile would block, so the
   switch pays instead.
-- GPU only: under SwiftShader the 3D View drew the whole scene on the CPU.
-  The window now probes WebGL with the field's `probeWebGL()` before the
-  scene mounts and shows "3D View needs a graphics card (GPU)" on a software
-  renderer instead of drawing. `failIfMajorPerformanceCaveat` doesn't catch
-  SwiftShader in Chromium 148, so the probe reads the renderer name. The P5.1
-  SwiftShader numbers above describe a path that no longer draws unless the
-  viewer turns on Draw without a graphics card.
+- Software WebGL: under SwiftShader the 3D View draws the whole scene on the
+  CPU. The window probes WebGL with the field's `probeWebGL()` before the
+  scene mounts (`failIfMajorPerformanceCaveat` doesn't catch SwiftShader in
+  Chromium 148, so the probe reads the renderer name) and, on a software
+  renderer, draws at Low whatever the quality choice and shows a notice that
+  it will be slow, like the 2D field (ui.md UI-9). A first version refused
+  to draw there, with a Settings switch to draw anyway; the owner chose
+  degrading instead (2026-10-18), so the switch is gone.
 - Settings: the per-computer choices moved out of the 3D View's panel into
   the app's Settings window (3D View section): quality, a new Resolution
-  (Sharp 2x, Balanced 1.5x, Fast 1x), the two power switches and Draw
-  without a graphics card. The windows share local storage, and the 3D
-  window applies a change as it is saved. Resolution at high, same fixture,
-  GPU ms a frame: Sharp 10.0, Balanced 7.15 (−29%), Fast 5.35 (−47%).
+  (Sharp 2x, Balanced 1.5x, Fast 1x) and the two power switches. The
+  windows share local storage, and the 3D window applies a change as it is
+  saved. The web preview, which has no Settings window, keeps Quality and
+  Resolution in its panel. Resolution at high, same fixture, GPU ms a frame:
+  Sharp 10.0, Balanced 7.15 (−29%), Fast 5.35 (−47%).
 - Machine and fixture: Apple M1 Pro, web preview in headless Chromium 148
   (ANGLE Metal, no frame cap), 1400 × 900 at DPR 2 (2800 × 1713 canvas), LHB
   demo (385 marchers), hs kit by day, Podium camera, 3 s orbit drag, GPU time
@@ -355,8 +357,7 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   Night and dusk turn the right lights on (checked through the settings
   panel). Idle: 0 frames drawn in 5 s once settled.
 - Not run: the GPU benchmark harness, an energy reading on battery, an
-  integrated GPU, Electron end to end (the spec's GPU check was updated to
-  match).
+  integrated GPU, Electron end to end.
 - Next: the marchers are now most of the frame (≈ 7.5 of 9.7 ms at high),
   mostly fill at DPR 2.
 

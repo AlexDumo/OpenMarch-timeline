@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-    DRAW_WITHOUT_GPU_STORAGE_KEY,
     RESOLUTION_STORAGE_KEY,
-    loadDrawWithoutGpu,
     loadResolution,
     maxPixelRatio,
     parseResolution,
-    saveDrawWithoutGpu,
     saveResolution,
 } from "../renderPrefs";
 
@@ -53,19 +50,5 @@ describe("resolution", () => {
         expect(maxPixelRatio("sharp")).toBe(2);
         expect(maxPixelRatio("balanced")).toBe(1.5);
         expect(maxPixelRatio("fast")).toBe(1);
-    });
-});
-
-describe("draw without a GPU", () => {
-    it("is off unless saved on", () => {
-        const storage = memoryStorage();
-        expect(loadDrawWithoutGpu(storage)).toBe(false);
-        storage.setItem(DRAW_WITHOUT_GPU_STORAGE_KEY, "yes");
-        expect(loadDrawWithoutGpu(storage)).toBe(false);
-        saveDrawWithoutGpu(true, storage);
-        expect(loadDrawWithoutGpu(storage)).toBe(true);
-        saveDrawWithoutGpu(false, storage);
-        expect(loadDrawWithoutGpu(storage)).toBe(false);
-        expect(loadDrawWithoutGpu(broken)).toBe(false);
     });
 });

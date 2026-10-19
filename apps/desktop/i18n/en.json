@@ -1914,8 +1914,6 @@
         "tolgeeDevToolsToggle": "Tolgee In-Context Translating",
         "view3d": "3D View",
         "view3d.description": "How the 3D View draws on this computer. Not saved in the show.",
-        "view3d.drawWithoutGpu": "Draw without a graphics card",
-        "view3d.drawWithoutGpu.description": "Lets the 3D View draw on a computer without a working graphics card. It runs on the processor instead, which is slow and uses a lot of battery.",
         "view3d.pauseWhenIdle": "Pause drawing when nothing moves",
         "view3d.pauseWhenIdle.description": "Stops drawing while the show is paused and the camera is still.",
         "view3d.quality": "Quality",
@@ -2208,8 +2206,21 @@
         },
         "window": {
             "title": "3D View — {showName}",
-            "graphicsUnavailable": "3D View needs WebGL, which isn't available on this computer.",
-            "gpuUnavailable": "3D View needs a graphics card (GPU). This computer is drawing graphics in software, which is too slow for 3D."
+            "graphicsUnavailable": "3D View needs WebGL, which isn't available on this computer."
+        },
+        "quality": {
+            "title": "The 3D View is in low-quality mode",
+            "software": {
+                "desktop": "Graphics run in software on this computer, so the 3D View draws at low quality, and it will still be slow. For the full view, update your graphics drivers and restart OpenMarch.",
+                "web": "Graphics run in software in this browser, so the 3D View draws at low quality, and it will still be slow. For the full view, turn on graphics acceleration (in Chrome or Edge: Settings, System, \"Use graphics acceleration when available\") and restart the browser."
+            },
+            "autoLowered": {
+                "settings": "Switched to Low because the view was stuttering. To keep full quality, choose High in Settings, 3D View.",
+                "panel": "Switched to Low because the view was stuttering. To keep full quality, choose High under Quality in View settings."
+            },
+            "softwareHint": "Stays on Low because graphics run in software here.",
+            "autoLoweredHint": "Switched to Low because the view was stuttering. Choose High to keep full quality.",
+            "dismiss": "Got it"
         },
         "playback": {
             "label": "Playback"

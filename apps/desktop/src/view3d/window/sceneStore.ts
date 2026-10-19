@@ -39,7 +39,11 @@
  *   the scene lowers `quality` once with `_autoLower()` when frames are slow
  *   (P5.1), and `autoLowered` says so.
  * - `resolution`: the most device pixels drawn per screen pixel
- *   (`renderPrefs.ts`), saved per computer.
+ *   (`renderPrefs.ts`), saved per computer. Set it with `setResolution`.
+ * - `softwareGl`: WebGL draws in software here (SwiftShader, llvmpipe,
+ *   Microsoft Basic Render), which `View3dRoot` probes before the scene
+ *   mounts. Then `quality` stays `low` whatever the mode, like the 2D field's
+ *   low-quality mode (`fieldQuality.ts`); `low` also draws at 1x.
  *
  * The app's Settings window saves the quality, power and resolution choices;
  * `startPrefsSync()` picks them up while the window is open.
@@ -81,6 +85,7 @@ import {
 import {
     RESOLUTION_STORAGE_KEY,
     loadResolution,
+    saveResolution,
     type Resolution,
 } from "./renderPrefs";
 import type { StepOffFoot } from "./performers/marchers/marcherBodies";
@@ -123,6 +128,12 @@ export interface View3dSceneState {
     /** Scene only: the automatic fallback fired. */
     _autoLower: () => void;
     resolution: Resolution;
+    /** Saves the choice and applies it. */
+    setResolution: (resolution: Resolution) => void;
+    /** True when WebGL draws in software: the scene stays on `low`. */
+    softwareGl: boolean;
+    /** Window only, before the scene mounts: what the WebGL probe found. */
+    _setSoftwareGl: (softwareGl: boolean) => void;
     /** Rereads a choice saved elsewhere: a storage key, or null for all. */
     _loadPref: (key: string | null) => void;
     /** Scene only. */
@@ -138,6 +149,11 @@ export interface View3dSceneState {
 const ORIGIN: Vector3Tuple = [0, 0, 0];
 
 const startMode = loadQualityMode();
+
+/** The quality a mode starts at here: always `low` on software WebGL. */
+function startQuality(mode: QualityMode, softwareGl: boolean): View3dQuality {
+    return softwareGl ? "low" : initialQuality(mode);
+}
 
 /** The cameras for `kit` with the show's list for `kitId`, if it has one. */
 function camerasFor(
@@ -181,20 +197,31 @@ export const useView3dSceneStore = create<View3dSceneState>()((set, get) => ({
         saveQualityMode(mode);
         set({
             qualityMode: mode,
-            quality: initialQuality(mode),
+            quality: startQuality(mode, get().softwareGl),
             autoLowered: false,
         });
     },
     autoLowered: false,
     _autoLower: () => set({ quality: "low", autoLowered: true }),
     resolution: loadResolution(),
+    setResolution: (resolution) => {
+        saveResolution(resolution);
+        set({ resolution });
+    },
+    softwareGl: false,
+    _setSoftwareGl: (softwareGl) =>
+        set({
+            softwareGl,
+            quality: startQuality(get().qualityMode, softwareGl),
+            autoLowered: false,
+        }),
     _loadPref: (key) => {
         if (key === null || key === QUALITY_STORAGE_KEY) {
             const mode = loadQualityMode();
             if (mode !== get().qualityMode)
                 set({
                     qualityMode: mode,
-                    quality: initialQuality(mode),
+                    quality: startQuality(mode, get().softwareGl),
                     autoLowered: false,
                 });
         }

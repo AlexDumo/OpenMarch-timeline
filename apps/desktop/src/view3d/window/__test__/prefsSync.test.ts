@@ -50,3 +50,33 @@ describe("startPrefsSync", () => {
         expect(useView3dSceneStore.getState().resolution).toBe("sharp");
     });
 });
+
+describe("software WebGL", () => {
+    afterEach(() => {
+        useView3dSceneStore.getState()._setSoftwareGl(false);
+        useView3dSceneStore.getState().setQualityMode("auto");
+        localStorage.clear();
+    });
+
+    it("stays on low whatever quality is chosen", () => {
+        const stop = startPrefsSync();
+        const store = useView3dSceneStore.getState();
+        store.setQualityMode("high");
+        store._setSoftwareGl(true);
+        expect(useView3dSceneStore.getState().quality).toBe("low");
+
+        store.setQualityMode("auto");
+        expect(useView3dSceneStore.getState().quality).toBe("low");
+        savedElsewhere(QUALITY_STORAGE_KEY, "high");
+        expect(useView3dSceneStore.getState().qualityMode).toBe("high");
+        expect(useView3dSceneStore.getState().quality).toBe("low");
+        stop();
+    });
+
+    it("draws the chosen quality on a GPU", () => {
+        const store = useView3dSceneStore.getState();
+        store.setQualityMode("high");
+        store._setSoftwareGl(false);
+        expect(useView3dSceneStore.getState().quality).toBe("high");
+    });
+});

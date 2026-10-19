@@ -16,9 +16,7 @@ import {
 } from "@/view3d/window/drawPolicy";
 import {
     RESOLUTIONS,
-    loadDrawWithoutGpu,
     loadResolution,
-    saveDrawWithoutGpu,
     saveResolution,
 } from "@/view3d/window/renderPrefs";
 
@@ -32,9 +30,6 @@ export default function View3dSettings() {
     const [quality, setQuality] = useState(() => loadQualityMode());
     const [resolution, setResolution] = useState(() => loadResolution());
     const [power, setPower] = useState(() => loadPowerPrefs());
-    const [drawWithoutGpu, setDrawWithoutGpu] = useState(() =>
-        loadDrawWithoutGpu(),
-    );
 
     const changePower = (prefs: PowerPrefs) => {
         savePowerPrefs(prefs);
@@ -116,23 +111,6 @@ export default function View3dSettings() {
                     onCheckedChange={(saveOnBattery) =>
                         changePower({ ...power, saveOnBattery })
                     }
-                />
-            </SettingRow>
-
-            <SettingRow
-                label={<T keyName="settings.view3d.drawWithoutGpu" />}
-                htmlFor="view3d-draw-without-gpu"
-                description={
-                    <T keyName="settings.view3d.drawWithoutGpu.description" />
-                }
-            >
-                <Switch
-                    id="view3d-draw-without-gpu"
-                    checked={drawWithoutGpu}
-                    onCheckedChange={(on) => {
-                        saveDrawWithoutGpu(on);
-                        setDrawWithoutGpu(on);
-                    }}
                 />
             </SettingRow>
         </SettingsPanel>

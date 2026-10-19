@@ -24,11 +24,6 @@ describe("View3dSettings", () => {
             "data-state",
             "on",
         );
-        expect(
-            screen.getByRole("switch", {
-                name: "Draw without a graphics card",
-            }),
-        ).not.toBeChecked();
     });
 
     it("saves each choice where the 3D View reads it", async () => {
@@ -41,11 +36,6 @@ describe("View3dSettings", () => {
                 name: "Pause drawing when nothing moves",
             }),
         );
-        await user.click(
-            screen.getByRole("switch", {
-                name: "Draw without a graphics card",
-            }),
-        );
 
         expect(localStorage.getItem("view3d.quality")).toBe("low");
         expect(localStorage.getItem("view3d.resolution")).toBe("balanced");
@@ -53,7 +43,6 @@ describe("View3dSettings", () => {
             pauseWhenIdle: false,
             saveOnBattery: true,
         });
-        expect(localStorage.getItem("view3d.drawWithoutGpu")).toBe("true");
     });
 
     it("shows what was saved before", async () => {

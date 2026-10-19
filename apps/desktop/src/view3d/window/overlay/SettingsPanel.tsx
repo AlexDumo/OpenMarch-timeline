@@ -7,7 +7,9 @@
  *   which saves it with undo.
  * - This computer: preview controls for horns, guard equipment and the
  *   step-off foot. Quality, resolution and power live in the app's Settings
- *   window (3D View section), with the other per-computer choices.
+ *   window (3D View section), with the other per-computer choices. Where
+ *   there is no Settings window (the web preview), quality and resolution
+ *   are here too.
  * - The keyboard and mouse controls, so they can be found.
  *
  * It floats at the right and doesn't block the scene, so the viewer can
@@ -19,6 +21,8 @@ import { XIcon } from "@phosphor-icons/react";
 import { Input, Switch } from "@openmarch/ui";
 import clsx from "clsx";
 import { useView3dSceneStore } from "../sceneStore";
+import { QUALITY_MODES } from "../qualityPreference";
+import { HAS_SETTINGS_WINDOW, RESOLUTIONS } from "../renderPrefs";
 import { HOLD_STATES } from "../hornState";
 import { GUARD_EQUIPMENT } from "@/view3d/core/instruments/catalog";
 import type { GuardEquipment } from "../sceneStore";
@@ -94,6 +98,12 @@ export function SettingsPanel({
                     title={t("view3d.settings.graphicsSection")}
                     hint={t("view3d.settings.graphicsHint")}
                 >
+                    {!HAS_SETTINGS_WINDOW && (
+                        <>
+                            <QualityRow />
+                            <ResolutionRow />
+                        </>
+                    )}
                     <HornStateRow />
                     <GuardEquipmentRow />
                     <StepOffFootRow />
@@ -313,6 +323,67 @@ function ColorField({
                 className="border-stroke rounded-4 size-28 shrink-0 cursor-pointer border bg-transparent p-2"
             />
         </label>
+    );
+}
+
+/**
+ * Quality, for the web preview, which has no Settings window. Says why when
+ * the view went to Low on its own or WebGL draws in software.
+ */
+function QualityRow() {
+    const { t } = useTranslate();
+    const mode = useView3dSceneStore((s) => s.qualityMode);
+    const setMode = useView3dSceneStore((s) => s.setQualityMode);
+    const autoLowered = useView3dSceneStore((s) => s.autoLowered);
+    const softwareGl = useView3dSceneStore((s) => s.softwareGl);
+    const hint = softwareGl
+        ? t("view3d.quality.softwareHint")
+        : mode === "auto" && autoLowered
+          ? t("view3d.quality.autoLoweredHint")
+          : t(`settings.view3d.quality.${mode}.description`);
+    return (
+        <Row label={t("settings.view3d.quality")} stacked>
+            <Segmented
+                value={mode}
+                options={QUALITY_MODES.map((value) => ({
+                    value,
+                    label: t(`settings.view3d.quality.${value}`),
+                }))}
+                onChange={setMode}
+                label={t("settings.view3d.quality")}
+                testId="view3d-quality-picker"
+            />
+            <p
+                className="text-sub text-text/60"
+                data-testid="view3d-quality-hint"
+            >
+                {hint}
+            </p>
+        </Row>
+    );
+}
+
+/** Resolution, for the web preview, which has no Settings window. */
+function ResolutionRow() {
+    const { t } = useTranslate();
+    const resolution = useView3dSceneStore((s) => s.resolution);
+    const setResolution = useView3dSceneStore((s) => s.setResolution);
+    return (
+        <Row label={t("settings.view3d.resolution")} stacked>
+            <Segmented
+                value={resolution}
+                options={RESOLUTIONS.map((value) => ({
+                    value,
+                    label: t(`settings.view3d.resolution.${value}`),
+                }))}
+                onChange={setResolution}
+                label={t("settings.view3d.resolution")}
+                testId="view3d-resolution-picker"
+            />
+            <p className="text-sub text-text/60">
+                {t(`settings.view3d.resolution.${resolution}.description`)}
+            </p>
+        </Row>
     );
 }
 
