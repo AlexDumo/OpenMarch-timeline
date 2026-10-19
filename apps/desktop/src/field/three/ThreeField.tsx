@@ -184,6 +184,7 @@ function ThreeFieldView() {
     const { isPlaying } = useIsPlaying()!;
     const { beats, pages } = useTimingObjects()!;
     const preview = useIsPreviewMode();
+    const panning = useFieldViewStore((s) => s.panning);
     const { image: fieldImage, size: fieldImageSize } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
@@ -413,7 +414,7 @@ function ThreeFieldView() {
         return () => setActiveFieldEditor(null);
     }, [editor]);
     // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1). Preview
-    // edits nothing, and its field takes no input at all (below)
+    // edits nothing: the editor hears no presses there at all (`EditorInput`), only navigation
     const visuals = useIsVisualsView();
     const previewing = useIsPreviewMode();
     useEffect(
@@ -486,10 +487,10 @@ function ThreeFieldView() {
     return (
         <div
             ref={root}
-            // Preview edits nothing: the field takes no input there
+            // Preview edits nothing, but the view still moves: a hand to drag it
             className={clsx(
                 "rounded-6 relative h-full w-full touch-none overflow-hidden",
-                preview && "pointer-events-none",
+                preview && (panning ? "cursor-grabbing" : "cursor-grab"),
             )}
             data-testid="threeField"
         >
@@ -518,9 +519,6 @@ function ThreeFieldView() {
             <div className="relative h-full w-full">
                 {fieldProperties && quality.reason !== "noWebGL" && (
                     <Canvas
-                        // R3F sets pointer-events back to auto on its own wrapper: Preview turns
-                        // them off there too, so no press, wheel or pinch reaches the field
-                        style={preview ? NO_POINTER_EVENTS : undefined}
                         resize={{ offsetSize: true }}
                         key={canvasKey}
                         // The field canvas, for the scenarios
@@ -686,9 +684,6 @@ function useFieldItems(
     );
 }
 
-/** The field canvas in Preview: no input */
-const NO_POINTER_EVENTS = { pointerEvents: "none" } as const;
-
 /** How long to wait for Preview's layout to settle. */
 const PREVIEW_SETTLE_MS = 250;
 
@@ -814,8 +809,13 @@ function EditorInput({
 }) {
     const canvas = useThree((s) => s.gl.domElement);
     const invalidate = useThree((s) => s.invalidate);
+    // Preview edits nothing, and selects nothing: presses only move the view (`fieldNavigation`)
+    const preview = useIsPreviewMode();
 
-    useEffect(() => attachFieldPointerInput(canvas, editor), [canvas, editor]);
+    useEffect(
+        () => (preview ? undefined : attachFieldPointerInput(canvas, editor)),
+        [canvas, editor, preview],
+    );
     // A drag moves marchers outside the playhead's fills: draw them
     useEffect(() => marchers.subscribe(invalidate), [marchers, invalidate]);
 
