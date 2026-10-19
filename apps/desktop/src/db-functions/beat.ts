@@ -526,8 +526,9 @@ export async function deleteBeatsCarryingCues({
  * Deletes beats the user chose to delete (a beat, a measure, a tempo group): their cues and item
  * Outline changes carry forward to the next beat first (ADR 0004 amendment of 2026-10-15), in
  * the same transaction.
- * Replacing every beat (an import) uses {@link deleteBeatsInTransaction}, whose cues go with
- * their beats.
+ * Replacing every beat (an import, a tempo edit) uses {@link deleteBeatsInTransaction}, whose
+ * cues go with their beats; item changes are first re-mapped onto the new beats by time
+ * (`remapItemChangesOntoReplacementBeatsInTransaction`).
  */
 export const deleteBeatsCarryingCuesInTransaction = async ({
     tx,

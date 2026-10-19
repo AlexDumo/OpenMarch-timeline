@@ -341,8 +341,10 @@ export async function updateItems({
  * 0004 amendment of 2026-10-15). Call it in the deletion's transaction, before the beats go, so
  * one undo restores both. Per item, of the changes on a run of deleted beats only the last is
  * kept: it moves to the first surviving beat after the run, unless the item already has a change
- * there, which wins. With no beat after the run, the changes go with their beats. Without this,
- * deleting the count a prop was made on would leave it Off field for good.
+ * there, which wins. With no beat after the run, the changes go with their beats, unless that
+ * would leave the item no Outline at all: then its last change moves to the last surviving beat
+ * before the run. Without this, deleting the count a prop was made on would leave it Off field
+ * for good.
  */
 export async function carryItemGeometryPastDeletedBeatsInTransaction({
     tx,
@@ -362,15 +364,25 @@ export async function carryItemGeometryPastDeletedBeatsInTransaction({
         .all();
     if (!rows.some((row) => beatIds.has(row.beat_id))) return;
     const { order, nextBeat } = await beatsAfterDeletion(tx, beatIds);
+    const keepsAnOutline = new Set(
+        rows.filter((row) => !beatIds.has(row.beat_id)).map((r) => r.item_id),
+    );
+    const survivorsInOrder = [...order.entries()]
+        .filter(([id]) => !beatIds.has(id))
+        .sort((a, b) => a[1] - b[1]);
+    const lastSurvivorBefore = (at: number) =>
+        survivorsInOrder.findLast(([, i]) => i < at)?.[0] ?? null;
 
     // The last change per item and destination; the rest go with their beats
     const kept = new Map<string, { id: number; to: number; at: number }>();
     for (const row of rows) {
         if (!beatIds.has(row.beat_id)) continue;
-        const to = nextBeat.get(row.beat_id) ?? null;
+        const at = order.get(row.beat_id)!;
+        const to =
+            nextBeat.get(row.beat_id) ??
+            (keepsAnOutline.has(row.item_id) ? null : lastSurvivorBefore(at));
         if (to === null) continue;
         const key = `${row.item_id}|${to}`;
-        const at = order.get(row.beat_id)!;
         const current = kept.get(key);
         if (!current || at > current.at) kept.set(key, { id: row.id, to, at });
     }
