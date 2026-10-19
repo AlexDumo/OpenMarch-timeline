@@ -1,3 +1,4 @@
+import { endlessIdOf } from "@/timeline/endlessTimeline";
 import { describe, expect, it } from "vitest";
 import type { DatabaseItemGeometry } from "@/db-functions/items";
 import {
@@ -63,7 +64,11 @@ describe("outlineWriteBeat", () => {
         expect(outlineWriteBeat(beats, 3.6)?.id).toBe(13);
         expect(outlineWriteBeat(beats, 3)?.id).toBe(13);
         expect(outlineWriteBeat(beats, 0)?.id).toBe(10);
-        expect(outlineWriteBeat(beats, 40)?.id).toBe(15);
+        // Past the stored counts: the endless beat there, which the write stores (endless counts)
+        expect(outlineWriteBeat(beats, 40)).toEqual({
+            id: endlessIdOf(40),
+            index: 40,
+        });
         expect(outlineWriteBeat([], 2)).toBeUndefined();
     });
 });

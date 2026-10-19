@@ -9,6 +9,11 @@ export interface AudioEnvelope {
     readonly peaks: Float32Array;
     /** Envelope values per second */
     readonly rate: number;
+    /**
+     * How long the music is (the audio player gives the length before the silence it pads to
+     * cover the show): the last value's slot can run past it
+     */
+    readonly seconds: number;
 }
 
 /** How many envelope values a second of audio gets: fine enough for 64px-a-beat zoom */
@@ -94,7 +99,11 @@ export function audioEnvelope(
             peaks[slot] = peak;
         }
     }
-    return { peaks, rate: buffer.sampleRate / window };
+    return {
+        peaks,
+        rate: buffer.sampleRate / window,
+        seconds: buffer.length / buffer.sampleRate,
+    };
 }
 
 /**

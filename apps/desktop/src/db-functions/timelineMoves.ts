@@ -10,6 +10,7 @@ import { readTimelineTables, shapeFromRow } from "@/timeline/timelineRows";
 import { pageEndBeat } from "@/timeline/timelineCanvas";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
+import { ensureCountsInTransaction } from "./endlessCounts";
 import { updateMarcherHomesInTransaction } from "./marcherHome";
 import {
     setTimelineTransitionDestinationInTransaction,
@@ -879,6 +880,8 @@ export const moveMarchersInRangeInTransaction = async ({
     refuseDuplicateMarchers(moves);
     for (const m of moves)
         assertValid(validateDestination([m.x, m.y]), "position");
+    // A move past the show's end stores the counts it lands on first (endless counts)
+    await ensureCountsInTransaction({ tx, through: range.end });
     const marcherIds = moves.map((m) => m.marcherId);
     // Membership by range, not by one timeline: a file from before C-12 may hold two over it
     const sameRange = (await timelinesWithRange(tx, range)).map((t) => t.id);

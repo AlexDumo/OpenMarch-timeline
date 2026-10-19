@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import type { CountGrid } from "../countGrid";
 import type { ComponentType, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { describeDbTests, type DbConnection, schema } from "@/test/base";
@@ -87,6 +88,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
                 useTimelinePlaybackDriver(true);
                 return {
                     beats: useTimingObjects()!.beats,
+                    countGrid: useTimingObjects()!.countGrid,
                     playing: useIsPlaying()!,
                 };
             },
@@ -117,7 +119,6 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         act(() => {
             toggleTimelinePlayback({
                 isPlaying: result.current.playing.isPlaying,
-                showEndBeat: result.current.beats.length,
                 setIsPlaying: result.current.playing.setIsPlaying,
             });
         });
@@ -285,7 +286,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         audio.seconds = 1;
         frame();
         act(() => {
-            seekTimeline(result.current.beats, 14, undefined, {
+            seekTimeline(result.current.countGrid, 14, undefined, {
                 isPlaying: true,
                 setIsPlaying: result.current.playing.setIsPlaying,
             });
@@ -431,6 +432,51 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().selection).toEqual({ kind: "range", start: 1, end: 9 });
     });
 
+    it("plays on past the stored counts to the last move's end, and stops there (endless counts)", async ({
+        db,
+        wrapper,
+    }) => {
+        const { result } = await setUp(db, wrapper);
+        act(() => {
+            store().setStoredTimelines([
+                { id: 1, start: 20, end: 30, marcherIds: new Set([1]) },
+            ]);
+        });
+        await waitFor(() => expect(store().showEndBeat).toBe(30));
+        audio.seconds = 7.9;
+        play(result);
+        frame();
+        audio.seconds = 10; // beat 21, past the stored counts: it plays on
+        frame();
+        expect(result.current.playing.isPlaying).toBe(true);
+        const pressedAt = store().playheadBeat;
+        audio.seconds = 14.5; // beat 30, the last move's end
+        frame();
+        expect(result.current.playing.isPlaying).toBe(false);
+        // It stops as Stop does, back to where Play was pressed (UI-24)
+        expect(store().playheadBeat).toBe(pressedAt);
+    });
+
+    it("played from past where it stops, it plays on in silence until stopped (endless counts)", async ({
+        db,
+        wrapper,
+    }) => {
+        const { result } = await setUp(db, wrapper);
+        act(() => {
+            store().seek(40);
+        });
+        audio.seconds = 19.5; // beat 40
+        play(result);
+        frame();
+        audio.seconds = 30; // beat 61
+        frame();
+        expect(result.current.playing.isPlaying).toBe(true);
+        act(() => {
+            result.current.playing.setIsPlaying(false);
+        });
+        expect(store().playheadBeat).toBe(61);
+    });
+
     it("pausing leaves the playhead on the last whole beat played", async ({
         db,
         wrapper,
@@ -503,7 +549,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         expect(store().playheadBeat).toBe(9);
     });
 
-    it("clamps seeks to the end of the show and ignores non-finite ones", async ({
+    it("seeks past the end of the show (the counts never end) and ignores non-finite ones", async ({
         db,
         wrapper,
     }) => {
@@ -511,11 +557,11 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         act(() => {
             store().seek(40);
         });
-        expect(store().playheadBeat).toBe(17);
+        expect(store().playheadBeat).toBe(40);
         act(() => {
             store().seek(Number.NaN);
         });
-        expect(store().playheadBeat).toBe(17);
+        expect(store().playheadBeat).toBe(40);
     });
 
     it("Space loops the loop, which is the window, and never moves P (UI-17, UI-26)", async ({
@@ -659,7 +705,7 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
         /** Sends seeks as the timeline does, recording each play/pause they cause */
         const scrubber = (result: {
             current: {
-                beats: readonly { timestamp: number; duration: number }[];
+                countGrid: CountGrid;
                 playing: {
                     isPlaying: boolean;
                     setIsPlaying: (p: boolean) => void;
@@ -675,10 +721,15 @@ describeDbTests("useTimelinePlaybackDriver", (it) => {
             const send = (beat: number, gesture?: TimelineSeekGesture) => {
                 let landed: number | null = null;
                 act(() => {
-                    landed = seekTimeline(result.current.beats, beat, gesture, {
-                        isPlaying: result.current.playing.isPlaying,
-                        setIsPlaying,
-                    });
+                    landed = seekTimeline(
+                        result.current.countGrid,
+                        beat,
+                        gesture,
+                        {
+                            isPlaying: result.current.playing.isPlaying,
+                            setIsPlaying,
+                        },
+                    );
                 });
                 return landed;
             };

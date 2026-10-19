@@ -22,12 +22,13 @@ vi.mock("@/components/timeline/audio/AudioPlayer", () => ({
 const store = () => useTimelineSelectionStore.getState();
 const transport = () => ({
     isPlaying: false,
-    showEndBeat: 16,
     setIsPlaying: vi.fn(),
 });
 
 beforeEach(() => {
     store().reset();
+    // Where playback stops, as the playback driver sets it (endless counts rule 6)
+    store().setShowEndBeat(16);
     store().setStartStays(true);
     store().setPageBoxes([
         { start: 0, end: 4 },

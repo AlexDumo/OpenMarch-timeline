@@ -10,6 +10,13 @@ import {
 } from "@/timeline/timelineWaveform";
 import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
 import type Beat from "@/global/classes/Beat";
+import type { CountGrid } from "@/timeline/countGrid";
+import { musicEndBeat } from "@/timeline/countsPastEnd";
+import { beatsThrough } from "@/timeline/endlessTimeline";
+import {
+    useMusicEndSeconds,
+    usePlaybackStopBeat,
+} from "@/timeline/usePlaybackStopBeat";
 import {
     TimelineWaveformProvider,
     type TimelineInput,
@@ -39,34 +46,42 @@ const SPEED_BUTTON = <TimelineSpeedButton />;
 
 /**
  * UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis, as the
- * drill timeline's panel draws it. Hidden in settings, the lane goes away as it does with no audio.
- * In page boxes (`inBoxes`, as Basic draws them) a silent placeholder counts as no audio too, as
- * the lane sets the pane's height there (UI-19).
+ * drill timeline's panel draws it: in full, past the stored counts to the music's end (endless
+ * counts). Hidden in settings, the lane goes away as it does with no audio. In page boxes
+ * (`inBoxes`, as Basic draws them) a silent placeholder counts as no audio too, as the lane sets
+ * the pane's height there (UI-19).
  */
-function useWaveformLane(beats: readonly Beat[], inBoxes = false) {
+function useWaveformLane(
+    beats: readonly Beat[],
+    countGrid: CountGrid,
+    inBoxes = false,
+) {
     const envelope = useAudioEnvelopeStore((s) => s.envelope);
     const waveformHidden = useUiSettingsStore(
         (s) => s.uiSettings.timelineWaveformStyle === "hidden",
     );
+    const musicEnd = useMusicEndSeconds();
     return useMemo(() => {
         if (!envelope || waveformHidden) return null;
+        const through =
+            musicEnd === null ? 0 : musicEndBeat(countGrid, musicEnd);
         const peaks = peaksByBeat(
             envelope,
-            beats,
+            beatsThrough(countGrid, beats, through),
             createTimelineBeatAxis(beats).offset,
         );
         if (inBoxes && !peaks.some((beat) => beat.some((peak) => peak > 0)))
             return null;
         return { peaksByBeat: peaks };
-    }, [envelope, beats, waveformHidden, inBoxes]);
+    }, [envelope, beats, countGrid, musicEnd, waveformHidden, inBoxes]);
 }
 
 /** A page box or home goes to that page, as in the drill timeline (UI-9), without the loop */
-function useGoToPage(beats: readonly Beat[]) {
+function useGoToPage(countGrid: CountGrid) {
     const { isPlaying } = useIsPlaying()!;
     return (next: TimelineSelection) => {
         if (isPlaying && next?.kind === "home") {
-            jumpTimelinePlayback(beats, 0);
+            jumpTimelinePlayback(countGrid, 0);
             return;
         }
         if (isPlaying) return;
@@ -95,9 +110,11 @@ function useSavedZoomFit() {
  * read-only (`TimelineProps.readOnly`), with `band` in place of the clip rows. Always expanded.
  */
 export function TimelineNavigationPanel({ band }: { band: TimelineBand }) {
-    const { beats, pages, measures } = useTimingObjects()!;
-    const waveform = useWaveformLane(beats);
-    const goTo = useGoToPage(beats);
+    const { beats, pages, measures, countGrid } = useTimingObjects()!;
+    const waveform = useWaveformLane(beats, countGrid);
+    const goTo = useGoToPage(countGrid);
+    // The counts go on past the stored ones, as on the drill timeline (endless counts)
+    const stopBeat = usePlaybackStopBeat();
     const zoomFit = useSavedZoomFit();
     return (
         <TimelineWaveformProvider waveform={waveform ?? NO_WAVEFORM}>
@@ -115,6 +132,8 @@ export function TimelineNavigationPanel({ band }: { band: TimelineBand }) {
                 transportAccessories={LOOP_BUTTONS}
                 transportSecondary={SOUND_BUTTON}
                 onSelectionChange={goTo}
+                countGrid={countGrid}
+                fitBeat={stopBeat}
             />
         </TimelineWaveformProvider>
     );
@@ -127,9 +146,11 @@ export function TimelineNavigationPanel({ band }: { band: TimelineBand }) {
  * sound.
  */
 export function PreviewTimelinePanel() {
-    const { beats, pages, measures } = useTimingObjects()!;
-    const waveform = useWaveformLane(beats, true);
-    const goTo = useGoToPage(beats);
+    const { beats, pages, measures, countGrid } = useTimingObjects()!;
+    const waveform = useWaveformLane(beats, countGrid, true);
+    const goTo = useGoToPage(countGrid);
+    // The counts go on past the stored ones, as on the drill timeline (endless counts)
+    const stopBeat = usePlaybackStopBeat();
     const zoomFit = useSavedZoomFit();
     return (
         <TimelineWaveformProvider waveform={waveform ?? NO_WAVEFORM}>
@@ -148,6 +169,8 @@ export function PreviewTimelinePanel() {
                 transportAccessories={SPEED_BUTTON}
                 transportSecondary={SOUND_BUTTON}
                 onSelectionChange={goTo}
+                countGrid={countGrid}
+                fitBeat={stopBeat}
             />
         </TimelineWaveformProvider>
     );

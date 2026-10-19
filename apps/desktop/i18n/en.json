@@ -384,6 +384,8 @@
     },
     "exportCoordinates": {
         "abbreviateCoordinateDescriptions": "Abbreviate coordinate descriptions",
+        "addPagesToEnd": "Add pages to the end",
+        "addPagesToEndTitle": "{counts, plural, one {Add a page every count up to the end of the last move} other {Add a page every # counts up to the end of the last move}}",
         "cancel": "Cancel",
         "cancelledByUser": "Export cancelled by user",
         "coordinatesError": "Error: Could not calculate coordinates for marcher page {id}",
@@ -435,6 +437,7 @@
         "marchersWithoutPositions": "No positions found for {drillNumbers}.",
         "measuresHeader": "Measure",
         "mobile": "Mobile",
+        "movesPastEnd": "{count, plural, one {# move runs past the end of the show (Pg {page}) and won't be in this export.} other {# moves run past the end of the show (Pg {page}) and won't be in this export.}}",
         "mobilePreviewAlt": "OpenMarch mobile export preview",
         "noFieldProperties": "No field properties provided",
         "noMarcher": "No marcher provided",
@@ -2021,6 +2024,13 @@
             "deleteWithMoves": "Delete page and its moves",
             "followAgain": "Let selected marchers follow again",
             "keepHere": "Keep selected marchers here"
+        },
+        "appendCounts": {
+            "label": "{counts, plural, one {# count} other {# counts}}",
+            "title": "{counts, plural, one {Add a page of # count after the last page. Right-click to change how many.} other {Add a page of # counts after the last page. Right-click to change how many.}}",
+            "pagesAdded": "{pages, plural, one {Added # page to the end of the show.} other {Added # pages to the end of the show.}}",
+            "pagesToEnd": "{counts, plural, one {Create pages every count to the end} other {Create pages every # counts to the end}}",
+            "pagesToEndTitle": "{counts, plural, one {Add pages every count to the end of the music} other {Add pages every # counts to the end of the music}}"
         }
     },
     "titlebar": {
@@ -2126,6 +2136,7 @@
             "count": "Count {count} of {total}",
             "noPages": "No pages",
             "page": "Page {page}",
+            "pastEnd": "END +{count}",
             "showTime": "Show time"
         },
         "unit": {

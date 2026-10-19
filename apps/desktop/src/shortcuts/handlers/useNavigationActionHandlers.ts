@@ -17,7 +17,7 @@ import { useEditorReadiness } from "./useEditorReadiness";
 // eslint-disable-next-line max-lines-per-function
 export function useNavigationActionHandlers() {
     const { ready } = useEditorReadiness();
-    const { pages, beats } = useTimingObjects()!;
+    const { pages, countGrid } = useTimingObjects()!;
     const isPlayingContext = useIsPlaying();
     const isPlaying = isPlayingContext?.isPlaying ?? false;
     const setIsPlaying = isPlayingContext?.setIsPlaying ?? (() => {});
@@ -29,17 +29,13 @@ export function useNavigationActionHandlers() {
      * Playing, it jumps playback there, as the transport's Previous and Next do.
      */
     const navigate = (target: TimelineNavigation) =>
-        navigateTimeline(beats, pages, isPlaying, target);
+        navigateTimeline(countGrid, pages, isPlaying, target);
 
     const goNext = () => navigate("next-page");
     const goPrevious = () => navigate("previous-page");
     // Playing, each jump restarts the audio, so a held key jumps once rather than stuttering
     const enabled = { enabled: canNavigate, ignoreRepeat: isPlaying };
-    const transport = () => ({
-        isPlaying,
-        showEndBeat: beats.length,
-        setIsPlaying,
-    });
+    const transport = () => ({ isPlaying, setIsPlaying });
 
     useActionHandler("nextPage", goNext, enabled);
     useActionHandler("timelineNextPage", goNext, enabled);

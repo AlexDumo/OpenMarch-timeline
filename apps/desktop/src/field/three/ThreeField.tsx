@@ -1,3 +1,4 @@
+import type { CountClock } from "@/timeline/countGrid";
 import {
     useCallback,
     useEffect,
@@ -46,7 +47,6 @@ import {
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useIsolationPlanStore } from "@/timeline/timelineIsolationPlan";
 import { playbackBeat } from "@/timeline/positionBuffer";
-import type { BeatTiming } from "@/timeline/timeMap";
 import { installFieldTestApi } from "@/field/fieldTestApi";
 import {
     probeWebGL,
@@ -182,7 +182,7 @@ function ThreeFieldView() {
     const { selectedPage } = useSelectedPage()!;
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const { isPlaying } = useIsPlaying()!;
-    const { beats, pages } = useTimingObjects()!;
+    const { beats, pages, countGrid } = useTimingObjects()!;
     const preview = useIsPreviewMode();
     const panning = useFieldViewStore((s) => s.panning);
     const { image: fieldImage, size: fieldImageSize } = useFieldImage();
@@ -564,7 +564,7 @@ function ThreeFieldView() {
                         <PlayheadDriver
                             marchers={marchers}
                             isPlaying={isPlaying}
-                            beats={beats}
+                            clock={countGrid}
                             appearanceSteps={appearanceSteps}
                         />
                         <FieldLayer
@@ -837,12 +837,13 @@ function EditorInput({
 function PlayheadDriver({
     marchers,
     isPlaying,
-    beats,
+    clock,
     appearanceSteps,
 }: {
     marchers: FieldMarchers;
     isPlaying: boolean;
-    beats: readonly BeatTiming[];
+    /** The show's counts, past the stored ones too: marchers follow moves past the end */
+    clock: CountClock;
     appearanceSteps: AppearanceStepsByMarcherId | undefined;
 }) {
     const invalidate = useThree((s) => s.invalidate);
@@ -885,7 +886,7 @@ function PlayheadDriver({
     // Before the layers' frame hooks (priority 0), so they draw this frame's positions
     useFrame(() => {
         if (!isPlaying) return;
-        marchers.fill(playbackBeat(beats, getLivePlaybackPosition() * 1000));
+        marchers.fill(playbackBeat(clock, getLivePlaybackPosition() * 1000));
         invalidate();
     }, -1);
 

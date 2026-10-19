@@ -1,4 +1,4 @@
-import { beatAtTime, type BeatTiming } from "./timeMap";
+import type { CountClock } from "./countGrid";
 
 /**
  * Every marcher's position at one beat, in one reused buffer, for render
@@ -94,14 +94,15 @@ export class PositionBuffer {
 }
 
 /**
- * The resolver beat to draw at a playback time.
+ * The resolver beat to draw at a playback time, past the stored counts too (endless counts: the
+ * marchers follow moves past the show's end, and hold where none goes on).
  *
- * @param beats the show's beats, ascending by position, with cumulative timestamps (seconds)
+ * @param clock the show's count grid (`useTimingObjects().countGrid`)
  * @param timeMilliseconds playback time in milliseconds, as the audio clock gives it
  */
 export function playbackBeat(
-    beats: readonly BeatTiming[],
+    clock: CountClock,
     timeMilliseconds: number,
 ): number {
-    return beatAtTime(beats, timeMilliseconds / 1000);
+    return clock.beatAtTime(timeMilliseconds / 1000);
 }
