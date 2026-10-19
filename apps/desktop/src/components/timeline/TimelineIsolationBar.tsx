@@ -16,6 +16,7 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
+import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import {
     basicPageBox,
     planCanvasEdit,
@@ -232,6 +233,8 @@ export function TimelineFromStartBadge() {
     const playing = useTimelineSelectionStore((s) => s.playback !== null);
     const { pages } = useTimingObjects()!;
     const basic = useIsBasicMode();
+    // What a drop edits: nothing drops in Visuals mode (performer-behavior.md 7.1)
+    const visuals = useIsVisualsView();
     const range = selection.kind === "range" ? selection : null;
     // The pin only matters while it bounds the window (not when P is on or before it)
     const pinShown = pinned && range !== null && range.start === startBeat;
@@ -324,7 +327,7 @@ export function TimelineFromStartBadge() {
     }, [flashKey]);
     // Announced once the window settles, not on every beat of a scrub; and at once when the line
     // comes back (leaving isolation, UI-14 round-2 review), not with what it said while hidden
-    const hidden = isolated || selection.kind === "none";
+    const hidden = isolated || visuals || selection.kind === "none";
     const [announced, setAnnounced] = useState(sentence);
     const wasHidden = useRef(hidden);
     // Before paint, so the live region never shows the stale sentence

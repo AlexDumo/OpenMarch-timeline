@@ -940,6 +940,8 @@ type PerformHistoryActionResponse = {
     pageIdToGoTo: number | undefined;
     marcherIdsToSelect: Set<number> | undefined;
     queriesToInvalidate: string[][] | undefined;
+    /** The tables the action changed; empty when it didn't apply or there was nothing to do */
+    tableNames: ReadonlySet<string>;
     /**
      * True when the stack was empty, so nothing changed. Read in the action's own lock turn, so
      * an edit or action queued before it counts.
@@ -992,6 +994,7 @@ export async function performHistoryAction(
             pageIdToGoTo: undefined,
             marcherIdsToSelect: undefined,
             queriesToInvalidate: undefined,
+            tableNames: new Set(),
             failure: {
                 kind: "error",
                 message: response.error?.message ?? "unknown error",
@@ -1006,6 +1009,7 @@ export async function performHistoryAction(
         pageIdToGoTo: timelineFocus?.pageIdToGoTo,
         marcherIdsToSelect: timelineFocus?.marcherIdsToSelect,
         queriesToInvalidate,
+        tableNames: response.tableNames,
         nothingToDo: response.sqlStatements.length === 0,
     };
 }

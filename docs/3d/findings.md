@@ -308,6 +308,59 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   reads one matrix per influence. That needs its own spike before the
   owner picks it over the fallback.
 
+### 2026-10-16 · trevor (3d/p7-unlit-lights) · where the GPU frame goes (P7.2)
+
+- Result: **unlit lights were a third of the GPU frame.** Hiding a light while
+  its intensity is 0 cuts the frame from 13.87 to 9.72 ms at high (−30%) and
+  2.42 to 1.81 ms at low (−25%), by day, with identical pixels.
+- Breakdown, high, by switching one part off at a time (GPU ms a frame, two
+  fresh pages each): whole frame 14.3; no marchers 6.8 (marchers ≈ 7.5); no
+  light-pole spots 9.3 (≈ 5); no shadows 13.3 (the shadow map isn't redrawn
+  while the camera orbits); crowd and stands under 1; 1x pixel ratio 7–10;
+  empty scene 1.4. The marchers are 1.19M of 1.22M triangles.
+- Cause: by day the four pole spots have intensity 0 but stay visible, and
+  three.js shades every visible light for every pixel whatever its
+  intensity. The pro roof spots, gym show spots and the night sun did the
+  same. `setLightIntensity` (environment/lighting.ts) now sets the intensity
+  and hides the light at 0.
+- Cost: each preset now lights the scene with its own set of lights, so its
+  shaders differ. Compiled on the switch, the first change to night froze
+  the window for 1.46 s (before: 0.14 s). `warmLighting.ts` compiles the
+  kit's other presets in the background with `compileAsync` once the scene
+  stops adding shaders (38 ms, 13 ms of it on the main thread); the first
+  switch to night is now 50 ms. It runs only with
+  `KHR_parallel_shader_compile`; without it the compile would block, so the
+  switch pays instead.
+- Software WebGL: under SwiftShader the 3D View draws the whole scene on the
+  CPU. The window probes WebGL with the field's `probeWebGL()` before the
+  scene mounts (`failIfMajorPerformanceCaveat` doesn't catch SwiftShader in
+  Chromium 148, so the probe reads the renderer name) and, on a software
+  renderer, draws at Low whatever the quality choice and shows a notice that
+  it will be slow, like the 2D field (ui.md UI-9). A first version refused
+  to draw there, with a Settings switch to draw anyway; the owner chose
+  degrading instead (2026-10-18), so the switch is gone.
+- Settings: the per-computer choices moved out of the 3D View's panel into
+  the app's Settings window (3D View section): quality, a new Resolution
+  (Sharp 2x, Balanced 1.5x, Fast 1x) and the two power switches. The
+  windows share local storage, and the 3D window applies a change as it is
+  saved. The web preview, which has no Settings window, keeps Quality and
+  Resolution in its panel. Resolution at high, same fixture, GPU ms a frame:
+  Sharp 10.0, Balanced 7.15 (−29%), Fast 5.35 (−47%).
+- Machine and fixture: Apple M1 Pro, web preview in headless Chromium 148
+  (ANGLE Metal, no frame cap), 1400 × 900 at DPR 2 (2800 × 1713 canvas), LHB
+  demo (385 marchers), hs kit by day, Podium camera, 3 s orbit drag, GPU time
+  from `EXT_disjoint_timer_query_webgl2` medians, three alternating rounds
+  of a fresh page each. The before numbers hold the unlit lights visible in
+  the same build, which is what the old code did. A temporary hook exposed
+  the renderer; it was not committed.
+- Parity: day before against after, 0 of 1.2M pixels differ by more than 1.
+  Night and dusk turn the right lights on (checked through the settings
+  panel). Idle: 0 frames drawn in 5 s once settled.
+- Not run: the GPU benchmark harness, an energy reading on battery, an
+  integrated GPU, Electron end to end.
+- Next: the marchers are now most of the frame (≈ 7.5 of 9.7 ms at high),
+  mostly fill at DPR 2.
+
 ### 2026-10-11 · trevor (3d/cue-compose-pass) · compose once per frame (performer-behavior §8.5)
 
 <!-- cspell:ignore GLSL texel texels readPixels lerping -->
@@ -402,6 +455,65 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   Iris Xe, `pro`, the shadow pass (still unpatched), and a parity test of
   the composed pose against a mixer-layered one.
 
+### 2026-10-16 · trevor (3d/body-look-key) · body draw calls (P7.2)
+
+- Result: 129 draw calls a frame become 57 at high and 42 become 30 at
+  low; frame time is within noise at high and 1% to 2% better at low.
+- Change: body meshes group by what the uniform draws on the body
+  (`bodyKey`), not by the whole look. Looks that differed only in what they
+  carry, how they hold it, its fill color or finish each had their own
+  body mesh and material; they now share one.
+- Machine and fixture: M1 Pro, the 3D web preview (`view3d-web`, Chromium
+  on Metal, 1400 × 900 at device pixel ratio 2), LHB '26 Daft Punk demo
+  (385 marchers), high school venue, Podium camera, a 5 s orbit drag.
+  `timeline/main` and the branch ran on two dev servers and the runs
+  alternated, 3 to 4 each. Draws counted by wrapping the WebGL draw calls;
+  GPU time from `EXT_disjoint_timer_query_webgl2` around each frame; CPU
+  from DevTools `TaskDuration`. The preview needed #277's `sqlReadBatch`
+  host fix to place any marchers.
+
+  | Build                         | Draws a frame | GPU p50 (ms) | Frames in 5 s  |
+  | ----------------------------- | ------------- | ------------ | -------------- |
+  | `timeline/main`, high         | 129           | 14.1 to 14.6 | 645 to 659     |
+  | `bodyKey` grouping, high      | 57            | 14.4 to 14.8 | 645 to 654     |
+  | Per-look texture (C4.3), high | 50            | 14.8 to 15.3 | 602 to 633     |
+  | `timeline/main`, low          | 42            | 2.43 to 2.46 | 2,427 to 2,460 |
+  | `bodyKey` grouping, low       | 30            | 2.39 to 2.40 | 2,474 to 2,477 |
+  | Per-look texture (C4.3), low  | 29            | 2.50 to 2.55 | 2,288 to 2,314 |
+
+  The texture's low rows come from an earlier session, where
+  `timeline/main` read 2.47 to 2.48 ms and 2,360 to 2,374 frames. High is
+  capped near the display's 120 Hz; low isn't, so its frame counts are the
+  throughput.
+
+- Reading: cutting body draws doesn't buy frame time on this machine. The
+  frame is GPU-bound: a CPU profile of the orbit spends 35% in
+  `uniformMatrix4fv` and 18% in `drawElementsInstanced`, which is the main
+  thread waiting on a full command buffer, and under 1% in three.js's own
+  JavaScript. `bodyKey` grouping is kept: it takes 72 draws a frame off
+  the bodies at high, is
+  within noise at high and about 1% to 2% faster at low, and may help more
+  on drivers with heavier per-draw overhead (untested).
+- C4.3's per-look texture (one material, one body mesh per body type,
+  every look a row of a float texture read with `texelFetch`) met its draw
+  goal, 16 looks in the calls of one, with pixel parity, but cost 4% to 6%
+  more GPU time than per-look materials. Replacing the fetches with
+  constants made it 6% faster than `timeline/main`, so the cost is the
+  per-fragment fetch and the branches on a per-instance style, not the
+  hidden shako triangles (an inference: their cost wasn't measured on its
+  own, so C4.3's done-when stays open). Fetching lazily and reading the option texels once
+  per fragment only narrowed it. Parked on the local branch
+  `3d/look-texture-spike`; it is worth another look only if custom uniforms
+  (C5) make shows with many looks common.
+- Parity: the four camera views at high and low against `timeline/main`
+  differ on at most 69 of 1.2 M pixels (0.006%), all on edges where a horn
+  meets a face, from the new draw order.
+- Not run: the GPU benchmark harness (`task/gpu-benchmark`, not on
+  `main`); the timings are the web preview's. A real energy reading on
+  battery is still open.
+- Next for battery: find what the GPU spends 14 ms on at high (turf,
+  shadows, crowd, body fill), by toggling each; draw calls aren't it.
+
 ### 2026-10-11 · trevor (3d/cue-layering) · step 6, the layered renderer
 
 <!-- cspell:ignore readPixels -->
@@ -457,6 +569,32 @@ a flat silk needs few cells, and `guard.test.ts` pins their own budgets.
   frame is about 1 ms cheaper at high); the bake fits 4096 wide with room
   to spare and takes 0.19 s. The integrated-GPU budget is still
   unmeasured.
+
+### 2026-10-13 · trevor (3d/c4-silk) · C4.4, silk mesh and wave
+
+- Change measured: silks drawn in their own instanced cloth mesh per tier
+  with the stateless wave before skinning, against the flags' silks inside
+  the instrument mesh (56 × 36 at high, 6 × 4 at low).
+- Method: the web preview (`view3d-web:dev`) with a debug hook never
+  committed, LHB '26 Daft Punk demo (40 Color Guard 6 ft flags), Press box,
+  show clock pinned at 8.0 s (39 silks moving), headless Chromium, ANGLE
+  Metal, Apple M1 Pro. `renderer.info` with the silk meshes shown and
+  hidden; 100 frames synced with `readPixels` at 1920 × 1080, 3 rounds,
+  medians. The `task/gpu-benchmark` harness is not on this branch and was
+  not run.
+- Draw calls: +1 with 40 silks (high 121 against 120, low 49 against 48),
+  +1 with 72 swing silks and +1 with 144 double-swing silks: one call per
+  tier in use, at most 2.
+- Triangles: +7,680 for 40 silks on the 12 × 8 tier; the instrument mesh
+  sheds the old silk grids.
+- Frame time: high 5.75 against 5.68 ms (+0.07), low 3.29 against 3.03 ms
+  (+0.26), within run-to-run noise of a few tenths.
+- Scrubbing: the same count drawn after scrubbing away and back gives a
+  byte-identical screenshot (high and low); unit tests check the same
+  per-instance inputs and vertices after a scrub.
+- Not measured: a base M1, Intel Iris Xe (C4.7). The swing silks were
+  measured at the old 1.5 × 0.7 m size, before C4.11's 44 × 66 in cut; the
+  grid's cell count, and so its triangles, doesn't depend on the size.
 
 ## Packaging
 

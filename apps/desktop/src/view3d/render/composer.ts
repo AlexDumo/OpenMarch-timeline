@@ -378,19 +378,24 @@ export class Composer {
     }
 }
 
-/** The skinning shader's head: the composed texture and one slot per instance. */
-const COMPOSED_HEAD = /* glsl */ `
+/** The composed texture and its lookup, for any shader that skins from it. */
+export const COMPOSED_BONE_SHADER = /* glsl */ `
 uniform highp sampler2D uComposed;
-attribute vec4 skinIndex;
-attribute vec4 skinWeight;
-attribute float aSlot;
-attribute vec3 aSkin;
-varying vec3 vSkinTone;
 mat4 composedBone(int slot, int bone) {
   int x = (slot % ${COMPOSED_PER_ROW}) * ${COMPOSED_STRIDE} + bone * 4, y = slot / ${COMPOSED_PER_ROW};
   return mat4(texelFetch(uComposed, ivec2(x, y), 0), texelFetch(uComposed, ivec2(x + 1, y), 0),
               texelFetch(uComposed, ivec2(x + 2, y), 0), texelFetch(uComposed, ivec2(x + 3, y), 0));
 }
+`;
+
+/** The skinning shader's head: the composed texture and one slot per instance. */
+const COMPOSED_HEAD = /* glsl */ `
+${COMPOSED_BONE_SHADER}
+attribute vec4 skinIndex;
+attribute vec4 skinWeight;
+attribute float aSlot;
+attribute vec3 aSkin;
+varying vec3 vSkinTone;
 `;
 
 const COMPOSED_SKINBASE = /* glsl */ `

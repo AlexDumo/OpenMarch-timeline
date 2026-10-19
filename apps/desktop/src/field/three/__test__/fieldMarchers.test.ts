@@ -187,3 +187,51 @@ describe("FieldMarchers appearance", () => {
         expect(calls).toBe(2);
     });
 });
+
+describe("FieldMarchers with items", () => {
+    /** Marcher 2 is an item, drawn from beat 4 on. */
+    const items = {
+        ids: new Set([2]),
+        drawnAt: (id: number, beat: number) => id !== 2 || beat >= 4,
+    };
+
+    it("marks items, which the dot and label layers leave to the items layer", () => {
+        const { positionSource } = source([1, 2]);
+        const marchers = new FieldMarchers(positionSource);
+        marchers.fill(5);
+        marchers.setItems(items);
+        expect(Array.from(marchers.isItem)).toEqual([0, 1]);
+    });
+
+    it("hides an item where it isn't drawn, as it does a hidden marcher", () => {
+        const { positionSource } = source([1, 2]);
+        const marchers = new FieldMarchers(positionSource);
+        marchers.setItems(items);
+        marchers.fill(2);
+        expect(Array.from(marchers.hidden)).toEqual([0, 1]);
+        const { appearanceVersion } = marchers;
+        marchers.fill(4);
+        expect(Array.from(marchers.hidden)).toEqual([0, 0]);
+        expect(marchers.appearanceVersion).toBe(appearanceVersion + 1);
+        // Nothing changed: nothing to restyle
+        marchers.fill(5);
+        expect(marchers.appearanceVersion).toBe(appearanceVersion + 1);
+    });
+
+    it("keeps a marcher hidden by its appearance hidden", () => {
+        const { positionSource } = source([1, 2]);
+        const marchers = new FieldMarchers(positionSource);
+        marchers.setAppearanceSteps(steps);
+        marchers.setItems(items);
+        marchers.fill(8);
+        expect(Array.from(marchers.hidden)).toEqual([1, 0]);
+    });
+
+    it("tells the beat it last drew", () => {
+        const { positionSource } = source([1]);
+        const marchers = new FieldMarchers(positionSource);
+        expect(marchers.drawnBeat).toBeNull();
+        marchers.fill(7.5);
+        expect(marchers.drawnBeat).toBe(7.5);
+    });
+});

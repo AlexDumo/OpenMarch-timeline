@@ -46,6 +46,7 @@ import {
     TimelineRangePreview,
     TimelineRuler,
     TimelineSelectionRange,
+    TimelineStartFlagMark,
     type TimelineSelectionInteraction,
     TimelineShell,
     TimelineTrackClip,
@@ -698,9 +699,12 @@ const TimelineSurface = memo(function TimelineSurface({
     // is as tall as the surface (`TimelinePaneStretchContext`)
     const viewportHeight = useElementHeight(viewportRef);
     const stretch = useContext(TimelinePaneStretchContext);
+    // Lanes in place of the clip rows (Visuals mode's cue lanes, performer-behavior.md 7.1)
+    const band = basic ? undefined : props.band;
+    const contentHeight = band ? trackTop + band.height : timelineHeight;
     const surfaceHeight = stretch
-        ? Math.max(timelineHeight, viewportHeight)
-        : timelineHeight;
+        ? Math.max(contentHeight, viewportHeight)
+        : contentHeight;
     // The ruler, measure row and the layers spanning the pane stay pinned at the viewport's top
     // while the tracks scroll under them, so they are as tall as the visible pane
     const pinnedHeight =
@@ -815,9 +819,9 @@ const TimelineSurface = memo(function TimelineSurface({
     const pointer = useTimelinePointer({
         seekSnapBeats,
         onSeek: props.onSeek,
-        // Basic draws no ranges: every drag scrubs
+        // Basic and a read-only timeline draw no ranges: every drag scrubs
         onRangeSelect:
-            onSelectionChange && !basic
+            onSelectionChange && !basic && !props.readOnly
                 ? (range) =>
                       onSelectionChange({ kind: "range", range, drawn: true })
                 : undefined,
@@ -1051,6 +1055,13 @@ const TimelineSurface = memo(function TimelineSurface({
                                 />
                             )),
                         )}
+                        {band?.render({
+                            top: trackTop,
+                            width,
+                            pixelsPerBeat,
+                            beatCount: model.beatCount,
+                            snapBeats: seekSnapBeats,
+                        })}
                     </div>
                     {/* Pinned to the viewport's top, over the tracks: the ruler and the measure
                         row, which hide the tracks scrolled under them, and the layers that span
@@ -1272,6 +1283,14 @@ const TimelineSurface = memo(function TimelineSurface({
                                 onChange={props.onLoopChange}
                             />
                         )}
+                        {props.readOnly &&
+                            props.startFlagBeat !== undefined && (
+                                <TimelineStartFlagMark
+                                    beat={props.startFlagBeat}
+                                    pixelsPerBeat={pixelsPerBeat}
+                                    height={pinnedHeight}
+                                />
+                            )}
                         {selectionRange && !basic && (
                             <TimelineSelectionRange
                                 range={selectionRange}

@@ -529,7 +529,7 @@ export default function TimelineModePanel() {
  * playhead) with it, and the zoom every frame of a pinch, so all of them are read here, under the
  * panel: they re-render the timeline, not the panel and its queries.
  */
-function PlayingTimeline({
+export function PlayingTimeline({
     basic = false,
     countGrid,
     ...props

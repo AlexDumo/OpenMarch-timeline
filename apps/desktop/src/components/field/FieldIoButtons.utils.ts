@@ -3,6 +3,7 @@ import {
     updateFieldsPropertiesJSON,
 } from "@/global/classes/FieldProperties";
 import { FieldPropertiesSchema } from "./fieldPropertiesSchema";
+import { exportableFieldJson, importedFieldJson } from "./fieldFileFloor";
 import type { ZodError } from "zod";
 
 /**
@@ -74,8 +75,11 @@ export const handleFileInputChange = async (
             throw new Error(errorDetails);
         }
 
-        // Validation succeeded, proceed with import
-        const validatedJson = JSON.stringify(result.data);
+        // Validation succeeded, proceed with import. The show keeps its own floor (D-23).
+        const validatedJson = importedFieldJson(
+            result.data,
+            await getFieldPropertiesJSON(),
+        );
 
         // Update field properties with validated data
         await updateFieldsPropertiesJSON(validatedJson);
@@ -95,7 +99,7 @@ export const handleFileInputChange = async (
  */
 export const handleExport = async () => {
     try {
-        const jsonStr = await getFieldPropertiesJSON();
+        const jsonStr = exportableFieldJson(await getFieldPropertiesJSON());
         const blob = new Blob([jsonStr], { type: "application/json" });
         const url = URL.createObjectURL(blob);
 

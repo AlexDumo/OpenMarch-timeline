@@ -10,6 +10,7 @@ import {
     type RefObject,
 } from "react";
 import clsx from "clsx";
+import { useShallow } from "zustand/react/shallow";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera, WebGLRenderer } from "three";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -20,10 +21,16 @@ import { useIsPlaying } from "@/context/IsPlayingContext";
 import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
+    allItemsQueryOptions,
     allMarchersQueryOptions,
     fieldPropertiesQueryOptions,
+    itemGeometryQueryOptions,
     moveMarchersInTargetMutationOptions,
 } from "@/hooks/queries";
+import {
+    beatIndexesById,
+    itemOutlineChanges,
+} from "@/items/itemOutlineTimeline";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useTimingObjects } from "@/hooks";
 import { useFieldImage } from "@/view3d/window/useFieldImage";
@@ -49,13 +56,23 @@ import {
 } from "@/field/fieldQuality";
 import { FieldEditor } from "@/field/editor/fieldEditor";
 import { ruledMove } from "@/field/editor/moveRules";
+import { VisualsFieldEditor } from "@/field/editor/visualsFieldEditor";
+import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
 import { publishLinePreviews, useFieldLineTool } from "@/field/fieldLineTool";
+import { useFieldItemWrites } from "@/field/fieldItemWrites";
+import {
+    snapToRounding,
+    useFieldPropTool,
+    usePropDrawn,
+} from "@/field/fieldPropTool";
+import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import { FieldMarchers } from "./fieldMarchers";
+import { FieldItems } from "./fieldItems";
 import FieldOverlay from "./FieldOverlay";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
@@ -72,6 +89,7 @@ import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
+import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
 import { useTimelineVisuals } from "./useTimelineVisuals";
@@ -91,6 +109,7 @@ import {
 import { FieldUnavailable, useFieldQualityNotice } from "./FieldQualityNotice";
 import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
+import PropDrawingNotice from "@/components/items/PropDrawingNotice";
 import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
 import {
@@ -106,6 +125,8 @@ import {
  * labels (1.9) and marchers (2). Collision markers sit over the marchers.
  */
 const FOCUS_ORDER = 1.4;
+/** Props and equipment lie on the field, under everything the timeline draws (C2.1). */
+const ITEMS_ORDER = 1.3;
 const PATHS_ORDER = 1.5;
 const COLLISIONS_ORDER = 4;
 
@@ -161,7 +182,7 @@ function ThreeFieldView() {
     const { selectedPage } = useSelectedPage()!;
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const { isPlaying } = useIsPlaying()!;
-    const { pages, countGrid } = useTimingObjects()!;
+    const { beats, pages, countGrid } = useTimingObjects()!;
     const isFullscreen = useFullscreenStore((s) => s.isFullscreen);
     const perspective = useFullscreenStore((s) => s.perspective);
     const setPerspective = useFullscreenStore((s) => s.setPerspective);
@@ -169,7 +190,7 @@ function ThreeFieldView() {
     useEffect(() => {
         if (!isFullscreen) setPerspective(0);
     }, [isFullscreen, setPerspective]);
-    const { image: fieldImage } = useFieldImage();
+    const { image: fieldImage, size: fieldImageSize } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
         () =>
@@ -179,10 +200,11 @@ function ThreeFieldView() {
                       fieldImage && {
                           width: fieldImage.width,
                           height: fieldImage.height,
+                          size: fieldImageSize,
                       },
                   )
                 : null,
-        [fieldProperties, fieldImage],
+        [fieldProperties, fieldImage, fieldImageSize],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const { mutateAsync: moveMarchers } = useMutation(
@@ -205,15 +227,19 @@ function ThreeFieldView() {
     const startOver = useCallback(() => setCanvasKey((key) => key + 1), []);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
+    const items = useMemo(() => new FieldItems(marchers), [marchers]);
+    const itemLabels = useFieldItems(items, beats);
+    const saveItem = useFieldItemWrites(items);
+    const propDrawn = usePropDrawn();
     const labels = useMemo(
         () =>
             new Map(
                 (marcherRows ?? []).map((marcher) => [
                     marcher.id,
-                    marcher.drill_number,
+                    itemLabels.get(marcher.id) ?? marcher.drill_number,
                 ]),
             ),
-        [marcherRows],
+        [marcherRows, itemLabels],
     );
     const atlases = useMemo(
         () => ({
@@ -287,6 +313,8 @@ function ThreeFieldView() {
     );
     const benchMarchers = useCallback(() => marchers.ids.length, [marchers]);
     const latest = useRef({
+        saveItem,
+        propDrawn,
         labels,
         pageId: selectedPage?.id ?? null,
         marcherRows,
@@ -297,6 +325,8 @@ function ThreeFieldView() {
         fieldProperties,
     });
     latest.current = {
+        saveItem,
+        propDrawn,
         labels,
         pageId: selectedPage?.id ?? null,
         fieldImage: fieldImagePlan,
@@ -309,7 +339,7 @@ function ThreeFieldView() {
 
     const editor = useMemo(
         () =>
-            new FieldEditor(
+            new VisualsFieldEditor(
                 {
                     selection: {
                         get: () => selection.current,
@@ -349,6 +379,23 @@ function ThreeFieldView() {
                     // #203: the line tool's previews are the alignment event's, which Shift+Enter applies
                     lineFinished: publishLinePreviews,
                     stepGrid: () => latest.current.fieldProperties ?? null,
+                    // C2.1: items are hit anywhere inside their Outline
+                    isItem: (id) => items.isItem(id),
+                    itemAt: (point) => items.itemAt(point),
+                    itemFrame: (id) => items.frameOf(id),
+                    previewItem: (id, size) =>
+                        items.setPreview(
+                            id,
+                            size && {
+                                width: size.width / PIXELS_PER_METER,
+                                depth: size.depth / PIXELS_PER_METER,
+                                rotation: size.rotation,
+                            },
+                        ),
+                    saveItem: (id, size) => latest.current.saveItem(id, size),
+                    snap: (point) =>
+                        snapToRounding(point, latest.current.fieldProperties),
+                    propDrawn: (outline) => latest.current.propDrawn(outline),
                 },
                 {
                     isMac: isMacPlatform(),
@@ -365,18 +412,22 @@ function ThreeFieldView() {
                     }),
                 },
             ),
-        [marchers],
+        [marchers, items],
     );
     useEffect(() => {
         setActiveFieldEditor(editor);
         return () => setActiveFieldEditor(null);
     }, [editor]);
+    // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1)
+    const visuals = useIsVisualsView();
+    useEffect(() => editor.setReadOnly(visuals), [editor, visuals]);
     // A rotation typed into the inspector belongs to its selection and page:
     // when either changes before it's saved, it's dropped (#198)
     useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
     useFieldLineTool(editor);
+    useFieldPropTool(editor);
     // A finished line follows its marchers to another page
     useEffect(
         () => marchers.subscribe(() => editor.refreshLineTool()),
@@ -396,20 +447,22 @@ function ThreeFieldView() {
                 selection: () => selection.current,
                 activeGesture: () => editor.activeGesture(),
                 handles() {
-                    const box = drawnSelectionBox(marchers, editor);
+                    const box = drawnSelectionBox(marchers, editor, items);
                     return (
                         box &&
                         selectionHandles(box, useFieldViewStore.getState().zoom)
                     );
                 },
                 lineTool: () => editor.lineToolShape(),
+                items,
+                propTool: () => editor.propToolShape(),
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
                 dimmed: (id) => dimming.isDimmed(id),
             }),
         );
         return () => installFieldTestApi(undefined);
-    }, [marchers, editor, dimming]);
+    }, [marchers, items, editor, dimming]);
 
     // Navigation (#194): wheel, pan drags and touch anywhere on the field
     useEffect(() => {
@@ -445,6 +498,7 @@ function ThreeFieldView() {
         >
             <TimelineIsolationBar />
             <TimelineFromStartBadge />
+            <PropDrawingNotice />
             <FieldBenchmark
                 frames={benchFrames}
                 view={benchView}
@@ -527,6 +581,13 @@ function ThreeFieldView() {
                             image={fieldImage}
                             placement={fieldImagePlan}
                         />
+                        <ItemsLayer
+                            marchers={marchers}
+                            items={items}
+                            dimming={dimming}
+                            theme={fieldProperties.theme}
+                            renderOrder={ITEMS_ORDER}
+                        />
                         <OverlayLayer
                             plan={timeline.focus}
                             renderOrder={FOCUS_ORDER}
@@ -562,6 +623,7 @@ function ThreeFieldView() {
                 {fieldProperties && (
                     <FieldOverlay
                         marchers={marchers}
+                        items={items}
                         editor={editor}
                         theme={fieldProperties.theme}
                     />
@@ -573,6 +635,57 @@ function ThreeFieldView() {
             </div>
             <KeptMarkTooltipView tooltip={keptMarkTooltip} />
         </div>
+    );
+}
+
+/**
+ * Keeps the field's items (C2.1) in step with the show: which marchers rows
+ * are items, their Outline changes by beat, and which the user hid. Returns
+ * each item's label by marcher id: its name (or drill number) when names are
+ * shown, else nothing.
+ */
+function useFieldItems(
+    items: FieldItems,
+    beats: readonly { id: number; index: number }[],
+): ReadonlyMap<number, string> {
+    const { data: itemRows } = useQuery(allItemsQueryOptions());
+    const { data: geometry } = useQuery(itemGeometryQueryOptions());
+    const { hiddenPropIds, showPropNames, propNameOverrides } =
+        useUiSettingsStore(
+            useShallow((s) => ({
+                hiddenPropIds: s.uiSettings.hiddenPropIds,
+                showPropNames: s.uiSettings.showPropNames,
+                propNameOverrides: s.uiSettings.propNameOverrides,
+            })),
+        );
+    useEffect(() => {
+        const rows = itemRows ?? [];
+        items.set({
+            itemIds: new Set(rows.map((item) => item.marcher_id)),
+            changes: itemOutlineChanges({
+                items: rows,
+                geometry: geometry ?? [],
+                beatIndexes: beatIndexesById(beats),
+            }),
+            hidden: new Set(
+                rows
+                    .filter((item) => hiddenPropIds[item.id])
+                    .map((item) => item.marcher_id),
+            ),
+        });
+    }, [items, itemRows, geometry, beats, hiddenPropIds]);
+    return useMemo(
+        () =>
+            new Map(
+                (itemRows ?? []).map((item) => [
+                    item.marcher_id,
+                    (propNameOverrides[item.id] ?? showPropNames)
+                        ? item.marcher.name ||
+                          `${item.marcher.drill_prefix}${item.marcher.drill_order}`
+                        : "",
+                ]),
+            ),
+        [itemRows, showPropNames, propNameOverrides],
     );
 }
 
