@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { droppedClips, pageBoxKeys } from "../clipDrops";
+import {
+    droppedClips,
+    initialClipDrops,
+    landClip,
+    nextClipDrops,
+    pageBoxKeys,
+} from "../clipDrops";
 import type { TimelinePageMarker, TimelineTrack } from "../TimelineViewModel";
 
 /**
@@ -80,5 +86,61 @@ describe("droppedClips", () => {
             activitySpans: [],
         };
         expect(droppedClips([], boxes, [empty]).size).toBe(0);
+    });
+});
+
+describe("nextClipDrops", () => {
+    const whole = [page(1, 0, true), page(2, 1), page(3, 9)];
+    const split = [page(1, 0, true), page(4, 1), page(2, 5), page(3, 9)];
+
+    it("a drop stays until its clip lands, however often the rows are rebuilt", () => {
+        let state = initialClipDrops([], whole, 17);
+        state = nextClipDrops(state, [track("move", 1, 9)], split, 17);
+        expect([...state.drops]).toEqual(["move"]);
+        // A query settling: the same rows, new arrays
+        state = nextClipDrops(state, [track("move", 1, 9)], [...split], 17);
+        expect([...state.drops]).toEqual(["move"]);
+        state = landClip(state, "move");
+        expect(state.drops.size).toBe(0);
+    });
+
+    it("a drop whose clip leaves the rows (undo) ends", () => {
+        let state = initialClipDrops([], whole, 17);
+        state = nextClipDrops(state, [track("move", 1, 9)], split, 17);
+        state = nextClipDrops(state, [], whole, 17);
+        expect(state.drops.size).toBe(0);
+    });
+
+    it("the new pages arriving before the tracks still drop the move", () => {
+        let state = initialClipDrops([], whole, 17);
+        // The split boxes first, the page's move a render later
+        state = nextClipDrops(state, [], split, 17);
+        state = nextClipDrops(state, [track("move", 1, 9)], split, 17);
+        expect([...state.drops]).toEqual(["move"]);
+    });
+
+    it("deleting a flag but not its moves drops both", () => {
+        let state = initialClipDrops([], split, 17);
+        state = nextClipDrops(state, [], whole, 17);
+        state = nextClipDrops(
+            state,
+            [track("first", 1, 5), track("second", 5, 9)],
+            whole,
+            17,
+        );
+        expect([...state.drops].sort()).toEqual(["first", "second"]);
+    });
+
+    it("once the rows change, earlier boxes no longer count", () => {
+        let state = initialClipDrops([], whole, 17);
+        state = nextClipDrops(state, [track("window", 3, 7)], split, 17);
+        // Page 1's old box (1:9) is not a box since the rows changed
+        state = nextClipDrops(
+            state,
+            [track("window", 3, 7), track("late", 1, 9)],
+            split,
+            17,
+        );
+        expect(state.drops.size).toBe(0);
     });
 });

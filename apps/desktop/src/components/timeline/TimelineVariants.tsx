@@ -645,34 +645,15 @@ const TimelineSurface = memo(function TimelineSurface({
         () => (basic ? [] : packTimelineTracks(model.tracks)),
         [basic, model.tracks],
     );
-    // A move that stopped fitting a page box (the box was split) drops out of the page row
-    const clipDrops = useClipDrops(model.tracks, model.pages, model.beatCount);
-    // While a clip drops, the tracks draw over the pinned header, so it is seen leaving the page
-    // box, not sliding out from under the bar. The drops that landed, for the current drops
-    const [landed, setLanded] = useState<{
-        drops: typeof clipDrops;
-        ids: ReadonlySet<TimelineTrackId>;
-    }>(() => ({ drops: clipDrops, ids: new Set() }));
-    const endDrop = useCallback(
-        (trackId: TimelineTrackId) =>
-            setLanded((previous) =>
-                previous.drops === clipDrops && previous.ids.has(trackId)
-                    ? previous
-                    : {
-                          drops: clipDrops,
-                          ids: new Set(
-                              previous.drops === clipDrops
-                                  ? [...previous.ids, trackId]
-                                  : [trackId],
-                          ),
-                      },
-            ),
-        [clipDrops],
+    // A move that stopped fitting a page box (the box was split, or a flag deleted) drops out of
+    // the page row. While one drops, the tracks draw over the pinned header, so it is seen leaving
+    // the page box, not sliding out from under the bar
+    const { drops: clipDrops, land: endDrop } = useClipDrops(
+        model.tracks,
+        model.pages,
+        model.beatCount,
     );
-    const dropsInFlight =
-        landed.drops === clipDrops
-            ? [...clipDrops].some((id) => !landed.ids.has(id))
-            : clipDrops.size > 0;
+    const dropsInFlight = clipDrops.size > 0;
     const snapBeats = useMemo(
         () =>
             getPageSnapBeats({

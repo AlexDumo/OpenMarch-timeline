@@ -149,4 +149,36 @@ describe("a page's move drops out of its split box (UI-9)", () => {
         expect(shown.dataset.dropping).toBeUndefined();
         expect(clipTop(shown)).toBeGreaterThan(TIMELINE_PAGE_ROW_TOP);
     });
+
+    it("keeps dropping over the header while the data settles", async () => {
+        Globals.assign({ skipAnimation: false });
+        const { rerender } = render(show(PAGES, []));
+        rerender(show(PAGES_SPLIT, [clip("Page 1's move", 1, 9)]));
+        // A query settling mid-drop: the same pages and moves, new arrays
+        rerender(show([...PAGES_SPLIT], [clip("Page 1's move", 1, 9)]));
+        expect(theClip("Page 1's move").dataset.dropping).toBe("true");
+        expect(screen.getByTestId("timeline-tracks").className).toContain(
+            "z-[3]",
+        );
+    });
+
+    it("drops when the new pages arrive before the move", () => {
+        const { rerender } = render(show(PAGES, []));
+        rerender(show(PAGES_SPLIT, []));
+        rerender(show(PAGES_SPLIT, [clip("Page 1's move", 1, 9)]));
+        const dropped = theClip("Page 1's move");
+        expect(dropped.dataset.dropping).toBe("true");
+        expect(clipTop(dropped)).toBe(TIMELINE_PAGE_ROW_TOP);
+    });
+
+    it("deleting a flag but not its moves drops both moves", () => {
+        // Pages 1 and 2 each stand for their move; deleting the flag between them merges the boxes
+        const { rerender } = render(show(PAGES_SPLIT, []));
+        rerender(show(PAGES, []));
+        rerender(show(PAGES, [clip("First", 1, 5), clip("Second", 5, 9)]));
+        for (const label of ["First", "Second"]) {
+            expect(theClip(label).dataset.dropping).toBe("true");
+            expect(clipTop(theClip(label))).toBe(TIMELINE_PAGE_ROW_TOP);
+        }
+    });
 });

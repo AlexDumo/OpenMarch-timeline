@@ -198,12 +198,13 @@ from it. The spec still wins on the model; this file decides presentation.
   - **The page's move drops out of the split box (owner, 2026-10-19).** A page's own move is
     not drawn as a clip: its box stands for it (UI-10). Splitting the box leaves that move
     fitting no box, so it shows as a clip for the first time. Instead of appearing in its row,
-    the clip slides down from the page row, out from under the page bar, in about a third of a
-    second, so it reads as coming out of the page. Found from the view model alone (a clip new to
-    the rows whose range was a page box's range, `useClipDrops`), so the inspector's **Split
-    page** and redo drop the same way, and a move made on purpose (a window, **Add selected
-    marchers**) just appears. The page boxes themselves don't animate (owner). With reduced
-    motion nothing moves. V-289.
+    the clip slides down from the page row, drawn over the page bar, in about a third of a
+    second, so it reads as coming out of the page. **Deleting a flag** but not its moves is the
+    same (owner, 2026-10-19): the merged box fits neither page's move, so both drop out of it.
+    Found from the view model alone (a clip new to the rows whose range was a page box's range,
+    `useClipDrops`), so the inspector's **Split page** and redo drop the same way, and a move made
+    on purpose (a window, **Add selected marchers**) just appears. The page boxes themselves don't
+    animate (owner). With reduced motion nothing moves. V-289.
   - **Subset pages (2026-10-13).** Right-clicking **+** opens a menu with
     **Add page** (the same as clicking **+**) and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
     subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
