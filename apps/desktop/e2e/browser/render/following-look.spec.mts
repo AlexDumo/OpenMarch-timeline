@@ -230,55 +230,28 @@ test.describe("following look, measured", () => {
             const { page } = show;
             await onPage1(page);
             if (zoom.times > 1) await zoomBy(page, zoom.times);
-            const png = await field(page).screenshot();
-            const box = (await field(page).boundingBox())!;
-            const scale = png.readUInt32BE(16) / box.width;
-            const drawn = await page.evaluate(() =>
-                window.fieldTest!.marchers().map((m) => ({
-                    id: m.id,
-                    screen: m.screen,
-                })),
-            );
-            const at = (id: number) => {
-                const { screen } = drawn.find((m) => m.id === id)!;
-                return {
-                    x: (screen.x - box.x) * scale,
-                    y: (screen.y - box.y) * scale,
-                };
-            };
-            const profiles = await edgeProfiles(
-                page,
-                png,
-                sections.map((s) => ({
-                    shape: s.shape,
-                    style: s.style,
-                    set: at(s.set),
-                    following: at(s.following),
-                })),
-            );
-            for (const [i, s] of sections.entries()) {
-                const profile = profiles[i]!;
-                // Dashes at any size: fewer, longer ones on a small shape
-                const least = profile.small
-                    ? { circle: 4, square: 4, triangle: 3, x: 4 }[s.shape]
-                    : { circle: 8, square: 8, triangle: 6, x: 8 }[s.shape];
-                expect(profile.gaps, `${s.name} gaps`).toBeGreaterThanOrEqual(
-                    least,
-                );
-                expect(profile.dash, `${s.name} dash`).toBeGreaterThan(0.8);
-                // The fill, where it's big enough to read: 60% inside an
-                // outline, nothing without one (an X's lines are its dashes)
-                if (
-                    profile.small ||
-                    s.shape === "x" ||
-                    s.style.name === "outline"
-                )
-                    continue;
-                if (s.style.name === "both")
-                    expect(profile.fill, `${s.name} fill`).toBeCloseTo(0.6, 1);
-                else expect(profile.fill, `${s.name} fill`).toBeLessThan(0.1);
-            }
+            await expectDashed(page);
         });
+
+    // #302: Stop eases the dashes in, ending at the same look
+    test("Stop after Play ends at the full dashed look", async ({ show }) => {
+        const { page } = show;
+        await onPage1(page);
+        const following = () =>
+            page.evaluate(
+                () =>
+                    window.fieldTest!.marchers().filter((m) => m.following)
+                        .length,
+            );
+        await page.keyboard.press("Space");
+        await expect.poll(following).toBe(0);
+        await page.keyboard.press("Space");
+        // Who's Following is known at once, before the ease is done
+        await expect.poll(following).toBe(sections.length);
+        await settle(page);
+        await page.waitForTimeout(300);
+        await expectDashed(page);
+    });
 });
 
 test.describe("following look, dark", () => {
@@ -394,6 +367,57 @@ test.describe("following look, isolated", () => {
 });
 
 type ShapeName = (typeof SHAPES)[number];
+
+/**
+ * Checks the full Following look in a field capture: every Following shape's
+ * edge dashed at full strength (fewer, longer dashes on a small shape), and
+ * its fill 60% inside an outline, nothing without one.
+ */
+async function expectDashed(page: Page) {
+    const png = await field(page).screenshot();
+    const box = (await field(page).boundingBox())!;
+    const scale = png.readUInt32BE(16) / box.width;
+    const drawn = await page.evaluate(() =>
+        window.fieldTest!.marchers().map((m) => ({
+            id: m.id,
+            screen: m.screen,
+        })),
+    );
+    const at = (id: number) => {
+        const { screen } = drawn.find((m) => m.id === id)!;
+        return {
+            x: (screen.x - box.x) * scale,
+            y: (screen.y - box.y) * scale,
+        };
+    };
+    const profiles = await edgeProfiles(
+        page,
+        png,
+        sections.map((s) => ({
+            shape: s.shape,
+            style: s.style,
+            set: at(s.set),
+            following: at(s.following),
+        })),
+    );
+    for (const [i, s] of sections.entries()) {
+        const profile = profiles[i]!;
+        // Dashes at any size: fewer, longer ones on a small shape
+        const least = profile.small
+            ? { circle: 4, square: 4, triangle: 3, x: 4 }[s.shape]
+            : { circle: 8, square: 8, triangle: 6, x: 8 }[s.shape];
+        expect(profile.gaps, `${s.name} gaps`).toBeGreaterThanOrEqual(least);
+        expect(profile.dash, `${s.name} dash`).toBeGreaterThan(0.8);
+        // The fill, where it's big enough to read: 60% inside an
+        // outline, nothing without one (an X's lines are its dashes)
+        if (profile.small || s.shape === "x" || s.style.name === "outline")
+            continue;
+        if (s.style.name === "both")
+            expect(profile.fill, `${s.name} fill`).toBeCloseTo(0.6, 1);
+        else expect(profile.fill, `${s.name} fill`).toBeLessThan(0.1);
+    }
+}
+
 type Point = { x: number; y: number };
 
 /** The colors at device-pixel `points` in a field capture, as [r, g, b], interpolated between pixels. */

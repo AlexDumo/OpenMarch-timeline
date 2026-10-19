@@ -192,3 +192,35 @@ test("everyone is solid while playing, and Following again after Stop", async ({
     await page.keyboard.press("Space");
     await expect.poll(() => following(page)).toEqual(["T1", "T2", "T3"]);
 });
+
+test("selecting and dragging right after Stop don't wait for the dashed look", async ({
+    show,
+}) => {
+    const { page } = show;
+    await open(page);
+    // Page 2's flag: T2 and T3 follow
+    await goTo(page, "m5");
+    await expect.poll(() => following(page)).toEqual(["T2", "T3"]);
+    const flag = (await drawnMarchers(page)).find(
+        (m) => m.drillNumber === "T1",
+    )!;
+
+    await page.keyboard.press("Space");
+    await expect
+        .poll(
+            async () =>
+                (await drawnMarchers(page)).find((m) => m.drillNumber === "T1")!
+                    .y,
+        )
+        .not.toBe(flag.y);
+    // Stop goes back to page 2's flag; the dashes ease in (#302) while the
+    // designer is already dragging T3 there
+    await page.keyboard.press("Space");
+    await dragMarcher(page, "T3", { x: 0, y: 40 });
+    await expectCanvasMatchesShow(show);
+    await expect.poll(() => following(page)).toEqual(["T2"]);
+    await clickMarcher(page, "T2");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([2]);
+});
