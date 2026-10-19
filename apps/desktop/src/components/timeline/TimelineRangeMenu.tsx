@@ -24,7 +24,7 @@ import type { TimelineBeatRange } from "./TimelineViewModel";
  */
 
 /** The menus' entry style; `data-[disabled]` dims an unavailable one */
-const ITEM_CLASS =
+export const TIMELINE_MENU_ITEM_CLASS =
     "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
 
 /** A shortcut after an entry's words, as the transport's popover shows Ctrl+M */
@@ -99,7 +99,7 @@ export function TimelineMoveMenuItems({
                 data-testid="timeline-move-menu-edit"
                 disabled={reason !== null}
                 onSelect={actions.onEdit}
-                className={ITEM_CLASS}
+                className={TIMELINE_MENU_ITEM_CLASS}
             >
                 <PencilSimpleIcon size={14} />
                 Edit move
@@ -107,7 +107,7 @@ export function TimelineMoveMenuItems({
             <DropdownMenu.Item
                 data-testid="timeline-move-menu-rename"
                 onSelect={actions.onRename}
-                className={ITEM_CLASS}
+                className={TIMELINE_MENU_ITEM_CLASS}
             >
                 <CursorTextIcon size={14} />
                 Rename move…
@@ -117,7 +117,7 @@ export function TimelineMoveMenuItems({
                 data-testid="timeline-move-menu-delete"
                 disabled={reason !== null}
                 onSelect={actions.onDelete}
-                className={`${ITEM_CLASS} text-red`}
+                className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
             >
                 <TrashIcon size={14} />
                 Delete move
@@ -318,7 +318,7 @@ export function useTimelineRangeMenu({
                         <DropdownMenu.Item
                             disabled={disabledReason !== null}
                             onSelect={() => menu.onAdd?.(open.target)}
-                            className={ITEM_CLASS}
+                            className={TIMELINE_MENU_ITEM_CLASS}
                         >
                             <UserPlusIcon size={14} />
                             Add selected marchers
@@ -341,7 +341,7 @@ export function useTimelineRangeMenu({
                                 onSelect={() =>
                                     menu?.keepHere?.onKeep(open.target.pageId!)
                                 }
-                                className={ITEM_CLASS}
+                                className={TIMELINE_MENU_ITEM_CLASS}
                             >
                                 <LinkBreakIcon size={14} />
                                 {tolgee.t(
@@ -359,7 +359,7 @@ export function useTimelineRangeMenu({
                                         open.target.pageId!,
                                     )
                                 }
-                                className={ITEM_CLASS}
+                                className={TIMELINE_MENU_ITEM_CLASS}
                             >
                                 <LinkSimpleIcon size={14} />
                                 {tolgee.t(
@@ -383,7 +383,7 @@ export function useTimelineRangeMenu({
                                         ),
                                     )
                                 }
-                                className={ITEM_CLASS}
+                                className={TIMELINE_MENU_ITEM_CLASS}
                             >
                                 {menu.subset.isSubset(open.target.pageId)
                                     ? tolgee.t(
@@ -404,7 +404,7 @@ export function useTimelineRangeMenu({
                             onSelect={() =>
                                 menu.onDeleteFlag?.(open.target.pageId!)
                             }
-                            className={`${ITEM_CLASS} text-red`}
+                            className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
                         >
                             <FlagIcon size={14} />
                             Delete page
@@ -419,7 +419,7 @@ export function useTimelineRangeMenu({
                                         open.target.pageId!,
                                     )
                                 }
-                                className={`${ITEM_CLASS} text-red`}
+                                className={`${TIMELINE_MENU_ITEM_CLASS} text-red`}
                             >
                                 <TrashIcon size={14} />
                                 {tolgee.t(

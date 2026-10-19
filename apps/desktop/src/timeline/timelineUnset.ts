@@ -164,41 +164,96 @@ export function useUnsetFollowingPages(
     }, [resolver, version, kept, marcherIds, beat, boxes]);
 }
 
+/**
+ * A keyframe diamond's menu at `beat` (#306), as the inspector offers the Unset actions at the count
+ * shown: **Unset here** where some of `marcherIds` are Set at `beat`, and the second entry's label
+ * where pages follow (`unsetFollowingPages`). Neither while playing.
+ */
+export function unsetMenuStateAt({
+    isPlaying,
+    ...at
+}: Parameters<typeof unsetFollowingPages>[0] & { isPlaying: boolean }): {
+    canUnset: boolean;
+    followingLabel: string | null;
+} {
+    if (isPlaying) return { canUnset: false, followingLabel: null };
+    const following = unsetFollowingPages(at);
+    return {
+        canUnset: unsetTargets(at).length > 0,
+        followingLabel: following ? unsetFollowingLabel(following) : null,
+    };
+}
+
+/**
+ * A keyframe diamond's menu for `marcherIds` (#306), by spec beat: `unsetMenuStateAt` read when
+ * it opens, and the Unset actions at the diamond's count, leaving the playhead where it is.
+ */
+export function useKeyframeUnsetMenu(
+    marcherIds: readonly number[],
+    isPlaying: boolean,
+) {
+    return useMemo(
+        () => ({
+            stateFor: (beat: number) =>
+                unsetMenuStateAt({
+                    resolver: useTimelineResolverStore.getState().resolver,
+                    kept: useKeptAssignmentsStore.getState().ids,
+                    boxes: useTimelineSelectionStore.getState().pageBoxes,
+                    marcherIds,
+                    beat,
+                    isPlaying,
+                }),
+            onUnset: (beat: number) => void unsetHere(marcherIds, { beat }),
+            onUnsetAndFollowing: (beat: number) =>
+                void unsetHereAndFollowing(marcherIds, { beat }),
+        }),
+        [marcherIds, isPlaying],
+    );
+}
+
 /** The page box holding `beat` (`start < beat ≤ end`), from the Basic locks' boxes. */
 const boxHolding = (beat: number) =>
     useBasicLocksStore
         .getState()
         .boxes.find((b) => b.start < beat && beat <= b.end);
 
-/**
- * **Unset here** for `marcherIds` at the count shown. In Basic, marchers locked on the page (their
- * moves there need Expert) are left alone with the lock toast, and a shared move's slot is taken
- * out rather than left vacant.
- */
-export function unsetHere(
-    marcherIds: readonly number[],
-    database: DbConnection = db,
-): Promise<UnsetResult> {
-    return unsetSetMarchers(marcherIds, true, database);
+/** Where an Unset acts: the count shown unless `beat` names another (a keyframe diamond's, #306) */
+export interface UnsetOptions {
+    readonly beat?: number;
+    readonly database?: DbConnection;
 }
 
 /**
- * **Unset here and on Pages N–M** for `marcherIds` at the count shown: as `unsetHere`, but the
- * later pages that followed the spot follow back to the earlier one.
+ * **Unset here** for `marcherIds` at the count shown, or at `beat` without moving the playhead. In
+ * Basic, marchers locked on the page (their moves there need Expert) are left alone with the lock
+ * toast, and a shared move's slot is taken out rather than left vacant.
+ */
+export function unsetHere(
+    marcherIds: readonly number[],
+    options: UnsetOptions = {},
+): Promise<UnsetResult> {
+    return unsetSetMarchers(marcherIds, true, options);
+}
+
+/**
+ * **Unset here and on Pages N–M** for `marcherIds` at the count shown (or `beat`): as
+ * `unsetHere`, but the later pages that followed the spot follow back to the earlier one.
  */
 export function unsetHereAndFollowing(
     marcherIds: readonly number[],
-    database: DbConnection = db,
+    options: UnsetOptions = {},
 ): Promise<UnsetResult> {
-    return unsetSetMarchers(marcherIds, false, database);
+    return unsetSetMarchers(marcherIds, false, options);
 }
 
 async function unsetSetMarchers(
     marcherIds: readonly number[],
     keepLaterPages: boolean,
-    database: DbConnection,
+    {
+        beat = displayedBeat(useTimelineSelectionStore.getState()),
+        database = db,
+    }: UnsetOptions,
 ): Promise<UnsetResult> {
-    const beat = displayedBeat(useTimelineSelectionStore.getState());
     let targets = unsetTargets({
         resolver: useTimelineResolverStore.getState().resolver,
         kept: useKeptAssignmentsStore.getState().ids,

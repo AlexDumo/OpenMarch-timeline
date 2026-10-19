@@ -2,6 +2,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
 import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
+import type Beat from "@/global/classes/Beat";
+import type Page from "@/global/classes/Page";
+import { Timeline } from "../Timeline";
+import type { TimelineKeyframeMenu } from "../TimelineKeyframes";
 import {
     BasicTimeline,
     CollapsedTimeline,
@@ -101,6 +105,140 @@ describe.each([
     });
 });
 
+/** A diamond menu that can Unset at any count, and names Pages 3–4 as following at beat 16 */
+const keyframeMenu = (
+    state: Partial<ReturnType<TimelineKeyframeMenu["stateFor"]>> = {},
+) => {
+    const menu = {
+        stateFor: vi.fn((beat: number) => ({
+            canUnset: true,
+            followingLabel: beat === 16 ? "Unset here and on Pages 3–4" : null,
+            ...state,
+        })),
+        onUnset: vi.fn(),
+        onUnsetAndFollowing: vi.fn(),
+    };
+    return menu;
+};
+
+const menuItems = () =>
+    screen.queryAllByRole("menuitem").map((item) => item.textContent);
+
+describe.each([
+    ["Expert", ExpandedTimeline],
+    ["Basic", BasicTimeline],
+    ["Expert, compact", CollapsedTimeline],
+] as const)(
+    "a keyframe diamond's right-click menu in %s (#306)",
+    (_, Variant) => {
+        it("offers both Unset actions where pages follow the count, and they act on the diamond's count", () => {
+            const menu = keyframeMenu();
+            const onSeek = vi.fn();
+            render(
+                <Variant
+                    {...commonProps}
+                    keyframes={KEYFRAMES}
+                    keyframeMenu={menu}
+                    onSeek={onSeek}
+                />,
+            );
+            fireEvent.contextMenu(
+                screen.getByTestId("timeline-keyframe-16-filled"),
+            );
+            expect(menuItems()).toEqual([
+                "Unset here",
+                "Unset here and on Pages 3–4",
+            ]);
+            expect(menu.stateFor).toHaveBeenCalledWith(16);
+            fireEvent.click(
+                screen.getByRole("menuitem", { name: "Unset here" }),
+            );
+            expect(menu.onUnset.mock.calls).toEqual([[16]]);
+
+            fireEvent.contextMenu(
+                screen.getByTestId("timeline-keyframe-16-filled"),
+            );
+            fireEvent.click(
+                screen.getByRole("menuitem", {
+                    name: "Unset here and on Pages 3–4",
+                }),
+            );
+            expect(menu.onUnsetAndFollowing.mock.calls).toEqual([[16]]);
+            // The playhead stays where it is
+            expect(onSeek).not.toHaveBeenCalled();
+        });
+
+        it("offers only Unset here where no pages follow, on a hollow diamond too", () => {
+            const menu = keyframeMenu();
+            render(
+                <Variant
+                    {...commonProps}
+                    keyframes={KEYFRAMES}
+                    keyframeMenu={menu}
+                />,
+            );
+            fireEvent.contextMenu(
+                screen.getByTestId("timeline-keyframe-20-hollow"),
+            );
+            expect(menuItems()).toEqual(["Unset here"]);
+            fireEvent.click(
+                screen.getByRole("menuitem", { name: "Unset here" }),
+            );
+            expect(menu.onUnset.mock.calls).toEqual([[20]]);
+        });
+
+        it("greys out Unset here when it can't run (playing)", () => {
+            const menu = keyframeMenu({
+                canUnset: false,
+                followingLabel: null,
+            });
+            render(
+                <Variant
+                    {...commonProps}
+                    keyframes={KEYFRAMES}
+                    keyframeMenu={menu}
+                />,
+            );
+            fireEvent.contextMenu(
+                screen.getByTestId("timeline-keyframe-16-filled"),
+            );
+            const item = screen.getByRole("menuitem", { name: "Unset here" });
+            expect(item).toHaveAttribute("aria-disabled", "true");
+            fireEvent.click(item);
+            expect(menu.onUnset).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ["the context-menu key", { key: "ContextMenu" }],
+            ["Shift+F10", { key: "F10", shiftKey: true }],
+        ])("opens from the keyboard with %s on a focused diamond", (_, key) => {
+            const menu = keyframeMenu();
+            render(
+                <Variant
+                    {...commonProps}
+                    keyframes={KEYFRAMES}
+                    keyframeMenu={menu}
+                />,
+            );
+            const diamond = screen.getByTestId("timeline-keyframe-16-filled");
+            diamond.focus();
+            fireEvent.keyDown(diamond, key);
+            expect(menuItems()).toEqual([
+                "Unset here",
+                "Unset here and on Pages 3–4",
+            ]);
+        });
+
+        it("opens no menu without one", () => {
+            render(<Variant {...commonProps} keyframes={KEYFRAMES} />);
+            fireEvent.contextMenu(
+                screen.getByTestId("timeline-keyframe-16-filled"),
+            );
+            expect(menuItems()).toEqual([]);
+        });
+    },
+);
+
 describe("beside the selection's keyframes", () => {
     it("the page boxes still select on a click and scrub on a drag", () => {
         const onSeek = vi.fn();
@@ -135,5 +273,96 @@ describe("beside the selection's keyframes", () => {
         expect(
             screen.getByRole("button", { name: "Page 2" }),
         ).not.toHaveAttribute("aria-describedby");
+    });
+});
+
+/** The zero-length beat 0, then `count` timed beats: the view axis is one beat behind the show's */
+const appBeats = (count: number): Beat[] =>
+    Array.from({ length: count + 1 }, (_, index) => ({
+        id: index + 1,
+        position: index,
+        duration: index === 0 ? 0 : 0.5,
+        includeInMeasure: true,
+        notes: null,
+        index,
+        timestamp: index === 0 ? 0 : (index - 1) * 0.5,
+    }));
+
+const BEATS = appBeats(24);
+
+const appPage = (id: number, name: string, beats: Beat[]): Page =>
+    ({
+        id,
+        name,
+        counts: id === 1 ? 0 : beats.length,
+        notes: null,
+        order: id - 1,
+        nextPageId: id < 4 ? id + 1 : null,
+        previousPageId: id === 1 ? null : id - 1,
+        isSubset: false,
+        duration: beats.length * 0.5,
+        beats,
+        measures: null,
+        measureBeatToStartOn: null,
+        measureBeatToEndOn: null,
+        timestamp: beats[0]!.timestamp,
+    }) as unknown as Page;
+
+// Home, then pages 2, 3 and 4 of eight beats each: page 2's flag is the show's beat 17
+const PAGES = [
+    appPage(1, "1", [BEATS[0]!]),
+    appPage(2, "2", BEATS.slice(1, 9)),
+    appPage(3, "3", BEATS.slice(9, 17)),
+    appPage(4, "4", BEATS.slice(17, 25)),
+];
+
+const showTimeline = (props: Partial<Parameters<typeof Timeline>[0]> = {}) =>
+    render(
+        <Timeline
+            mode="expanded"
+            beats={BEATS}
+            pages={PAGES}
+            measures={[]}
+            timelines={[]}
+            showTransport={false}
+            pixelsPerBeat={16}
+            keyframes={[{ beat: 17, set: 1, total: 1 }]}
+            {...props}
+        />,
+    );
+
+describe("a keyframe diamond's menu in the Timeline (#306)", () => {
+    it("acts on the show's beat, not the timeline's", () => {
+        const menu = keyframeMenu();
+        showTimeline({ keyframeMenu: menu });
+        // Drawn at the timeline's beat 16, one behind the show's
+        fireEvent.contextMenu(
+            screen.getByTestId("timeline-keyframe-16-filled"),
+        );
+        expect(menu.stateFor).toHaveBeenCalledWith(17);
+        fireEvent.click(screen.getByRole("menuitem", { name: "Unset here" }));
+        expect(menu.onUnset.mock.calls).toEqual([[17]]);
+    });
+
+    it("without a menu, a right-click on a diamond goes on to the timeline's own menu", () => {
+        const onAdd = vi.fn();
+        // A selected range over the diamond, which has the timeline's menu: spec beats
+        // [15, 19), drawn as view beats [14, 18)
+        showTimeline({
+            addSelectedMarchers: { onAdd },
+            selection: {
+                kind: "range",
+                range: { startBeatIndex: 15, endBeatIndex: 19 },
+            },
+        });
+        // jsdom lays nothing out: clientX is px from beat 0
+        fireEvent.contextMenu(
+            screen.getByTestId("timeline-keyframe-16-filled"),
+            { clientX: 16 * 16 },
+        );
+        expect(menuItems()).toEqual([
+            expect.stringContaining("Add selected marchers"),
+        ]);
+        expect(screen.queryByTestId("timeline-keyframe-menu")).toBeNull();
     });
 });

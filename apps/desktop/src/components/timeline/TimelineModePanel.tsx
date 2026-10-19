@@ -61,6 +61,7 @@ import { useTimelineClipResize } from "./useTimelineClipResize";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
 import { useSelectionKeyframes } from "@/timeline/useSelectionKeyframes";
+import { useKeyframeUnsetMenu } from "@/timeline/timelineUnset";
 import {
     useKeepToggle,
     useMarcherNameOf,
@@ -209,6 +210,8 @@ export default function TimelineModePanel() {
     );
     // #303: where the selected marchers are Set, as keyframes on the timeline
     const keyframes = useSelectionKeyframes(selectedIdList);
+    // #306: a diamond's right-click Unset actions at its count
+    const keyframeMenu = useKeyframeUnsetMenu(selectedIdList, isPlaying);
     // UI-18 keep later pages: the chains on the page boxes, and the page box menu's entries
     // (named up to three; K's target says so, from the current page)
     const keepStates = usePageKeepStates(pages, selectedIdList);
@@ -415,6 +418,7 @@ export default function TimelineModePanel() {
                     transportSecondary={SOUND_BUTTON}
                     transportViewControls={basic ? undefined : COMPACT_BUTTON}
                     keyframes={keyframes}
+                    keyframeMenu={keyframeMenu}
                     keepChains={keepChains}
                     keepHere={keepHere}
                     onSelectionChange={changeSelection}

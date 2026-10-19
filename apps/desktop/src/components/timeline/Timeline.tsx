@@ -28,6 +28,7 @@ import {
 } from "./TimelineVariants";
 import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
 import type { PageKeepChains } from "./PageKeepChain";
+import type { TimelineKeyframeMenu } from "./TimelineKeyframes";
 import type {
     TimelineAddMarchersMenu,
     TimelineKeepHereMenu,
@@ -218,6 +219,8 @@ export interface TimelineProps {
     readonly onOpenRange?: (range: TimelineBeatRange) => void;
     /** #303: where the selected marchers are Set, spec beats; none without a selection */
     readonly keyframes?: readonly SelectionKeyframe[];
+    /** #306: a keyframe diamond's right-click Unset actions, by spec beat; without it, no menu */
+    readonly keyframeMenu?: TimelineKeyframeMenu;
     /** The chains on the page boxes (UI-18 keep later pages), by page id; none without a selection */
     readonly keepChains?: PageKeepChains;
     /** The page box menu's **Keep selected marchers here** and **Let selected marchers follow again** */
@@ -757,6 +760,18 @@ export function Timeline(props: TimelineProps) {
             })),
         [axis, keyframes],
     );
+    // #306: their menu acts on spec beats
+    const { keyframeMenu } = props;
+    const viewKeyframeMenu = useMemo<TimelineKeyframeMenu | undefined>(
+        () =>
+            keyframeMenu && {
+                stateFor: (beat) => keyframeMenu.stateFor(axis.toSpec(beat)),
+                onUnset: (beat) => keyframeMenu.onUnset(axis.toSpec(beat)),
+                onUnsetAndFollowing: (beat) =>
+                    keyframeMenu.onUnsetAndFollowing(axis.toSpec(beat)),
+            },
+        [axis, keyframeMenu],
+    );
     const commonProps = {
         model,
         positionBeat,
@@ -795,6 +810,7 @@ export function Timeline(props: TimelineProps) {
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,
         keyframes: viewKeyframes,
+        keyframeMenu: viewKeyframeMenu,
         keepChains: props.keepChains,
         basicPoints: viewBasicPoints,
         onRemoveBasicPoint: removeBasicPoint,

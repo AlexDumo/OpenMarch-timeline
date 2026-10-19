@@ -93,7 +93,10 @@ import {
     useLiveValue,
 } from "./timelineLiveValue";
 import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
-import { TimelineKeyframes } from "./TimelineKeyframes";
+import {
+    TimelineKeyframes,
+    type TimelineKeyframeMenu,
+} from "./TimelineKeyframes";
 import {
     chainFit,
     KEEP_DOT_SIZE,
@@ -734,6 +737,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     seekSnapBeats = [],
     positionBeat,
     keyframes,
+    keyframeMenu,
     keepChains,
     scrubLine,
     pageFlagMove,
@@ -765,6 +769,8 @@ export const TimelineRuler = memo(function TimelineRuler({
     flagSnapPlayhead?: () => BeatPosition;
     /** Where the selected marchers are Set (#303); none without a selection */
     keyframes?: readonly SelectionKeyframe[];
+    /** A diamond's right-click Unset actions (#306), by view beat; without it, no menu */
+    keyframeMenu?: TimelineKeyframeMenu;
     /** The chains on the page boxes (UI-18 keep later pages), by page id */
     keepChains?: PageKeepChains;
 }) {
@@ -904,6 +910,7 @@ export const TimelineRuler = memo(function TimelineRuler({
                     pages={pages}
                     pixelsPerBeat={pixelsPerBeat}
                     onSeek={onSeek}
+                    menu={keyframeMenu}
                 />
             )}
             {showMeasures && (

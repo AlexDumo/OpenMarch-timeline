@@ -914,7 +914,10 @@ from it. The spec still wins on the model; this file decides presentation.
     after a persona study, `research/defined-coordinates/08-ux-study-feedback-text.md`). With
     marchers selected, in both modes, the timeline shows a **keyframe diamond** at every count where
     a selected marcher is Set (#300, #303): filled where all of them are Set, hollow where only some
-    are, at the exact count, on the page row's bottom edge. A click moves the playhead there. Each
+    are, at the exact count, on the page row's bottom edge. A click moves the playhead there. A
+    right-click (or the context-menu key, or Shift+F10 on a focused diamond) offers **Unset here**
+    and, where pages follow, **Unset here and on Pages N–M** for the selected marchers Set at that
+    count, leaving the playhead where it is (#306, V-297 to V-299). Each
     one's tooltip and accessible name give its count and how many selected marchers are Set there
     ("Page 2, count 8: 2 of 3 selected marchers Set"; "Page 2, count 8: Set" for one). The first page
     gets none: everyone is Set there. Nothing shows without a selection. They replaced the page
