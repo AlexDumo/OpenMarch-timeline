@@ -14,6 +14,7 @@
  */
 // cspell:words gltf
 import { z } from "zod";
+import { ARTWORK_SLOT_ID } from "@om-electron/database/migrations/artworkSlotId";
 import { ARTWORK_SURFACES, type ArtworkSurface } from "@/view3d/core/sizes";
 import type { ModelKind } from "@/view3d/core/sizes";
 import {
@@ -228,7 +229,7 @@ export const ModelImportChoicesSchema = z.strictObject({
         .array(
             z.strictObject({
                 material: z.number().int().nonnegative(),
-                id: z.string().regex(/^[A-Za-z0-9_]{1,64}$/),
+                id: z.string().regex(ARTWORK_SLOT_ID),
                 widthM: finitePositive,
                 heightM: finitePositive,
             }),

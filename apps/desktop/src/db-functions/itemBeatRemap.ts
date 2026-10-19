@@ -143,6 +143,33 @@ export const BEAT_KEYED_ITEM_TABLES: readonly BeatKeyedItemTableEntry[] = [
         },
         landed: rankLandedPlacements,
     },
+    {
+        // One assignment per slot
+        name: "item_artwork_slots",
+        rows: async (tx) =>
+            (
+                await tx
+                    .select({
+                        id: schema.item_artwork_slots.id,
+                        item_id: schema.item_artwork_slots.item_id,
+                        slot: schema.item_artwork_slots.slot,
+                        beat_id: schema.item_artwork_slots.beat_id,
+                    })
+                    .from(schema.item_artwork_slots)
+                    .all()
+            ).map((r) => ({
+                id: r.id,
+                beatId: r.beat_id,
+                key: `${r.item_id}|${r.slot}`,
+            })),
+        move: async (tx, id, beatId) => {
+            await tx
+                .update(schema.item_artwork_slots)
+                .set({ beat_id: beatId })
+                .where(eq(schema.item_artwork_slots.id, id))
+                .run();
+        },
+    },
 ];
 
 /** Whether the file has table `name`: item tables come with timeline-only migrations. */

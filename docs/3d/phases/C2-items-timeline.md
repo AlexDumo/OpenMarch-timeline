@@ -89,9 +89,9 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.4: Artwork slot assignments
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-slots-v2)
+- Status: in-review
+- PR: #282
 - Parallel: yes
 - Depends on: C2.1, C1.11
 
@@ -222,6 +222,39 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 - **Left:** no UI yet; the Items tab (C3.7) and put-down (C2.5) use these.
 - **Checks:** desktop and core vitest (full suites); migration tests;
   type-check, lint, format, spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-slots-v2) · C2.4
+
+- **Done:** migration 0026 (timeline-only): `item_artwork_slots`, one
+  Artwork Version (or none) per item, slot and beat, with fit, pan and pad
+  color, in history and repair. Core: `slotsForItem`, `assignmentAt`,
+  `slotAssignmentsAt`, `dormantAssignments`, `sameSizeSlots`,
+  `effectiveDpi`, `defaultAssignmentScope`. Writes: assign for the show or
+  from the count, replace in place, delete; each one undo step. Slot
+  assignments on deleted beats carry forward per slot. The save prune keeps
+  every Version an assignment names, dormant ones included.
+- **Left:** no UI yet: the Items tab (C3.7) and C5.5 use these.
+- **Checks:** desktop and core vitest (full suites); migration tests;
+  type-check, lint, format, spellcheck.
+
+### 2026-10-19 · review fixes (3d/c2-slots-v2) · C2.4
+
+- **Done:** slot ids take dashes, the Blender add-on's default
+  (`front-panel`): one rule (`migrations/artworkSlotId.ts`) for the
+  `item_artwork_slots` CHECK, the slot writes, the model import (which drops
+  any other id with a note) and the import choices. An assignment whose
+  Artwork Version the show hasn't embedded, or whose Library item isn't an
+  Artwork, is refused. Slot assignments are in `BEAT_KEYED_ITEM_TABLES`, so
+  tempo edits and MusicXML import keep them. 0026 regenerated, dated after
+  #181's lab migration and safe to run twice.
+- **Library references:** the show Library's one registry
+  (`libraryReferences`, from #286) reads `items` and `item_artwork_slots`,
+  so the prune keeps what they name, dormant assignments included, and
+  deleting a Library item a prop or slot uses is refused (Replace with…
+  rewrites cues only, so it refuses too). The props stack's own copy
+  (`itemLibraryKeeps`) is gone.
+- **Left:** a file a fork build gave the old 0026 keeps the dash-refusing
+  CHECK.
 
 ### 2026-10-18 · review fixes (3d/c2-placement-v2) · C2.3
 
