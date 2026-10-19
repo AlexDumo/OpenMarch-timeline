@@ -106,7 +106,6 @@ describeDbTests("timeline play, pause, play", (it) => {
             act(() => {
                 toggleTimelinePlayback({
                     isPlaying: false,
-                    showEndBeat: result.current.timing.beats.length,
                     setIsPlaying: result.current.playing.setIsPlaying,
                 });
             });
@@ -117,7 +116,6 @@ describeDbTests("timeline play, pause, play", (it) => {
             act(() => {
                 playTimelinePage({
                     isPlaying: true,
-                    showEndBeat: result.current.timing.beats.length,
                     setIsPlaying: result.current.playing.setIsPlaying,
                 });
             });
@@ -134,7 +132,6 @@ describeDbTests("timeline play, pause, play", (it) => {
             ]);
             store().selectRange(5, 9);
         });
-        expect(store().startPinned).toBe(false);
         writes = 0;
         playPause(3.1); // beat 7.2: Shift+Space pauses in place, P moves to 7
         expect(store().cursorBeat).toBeNull();

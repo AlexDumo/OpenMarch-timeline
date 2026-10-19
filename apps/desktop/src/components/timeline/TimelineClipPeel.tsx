@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { TimelineTrackId } from "./TimelineViewModel";
 
 /**
- * Dragging a move's clip up or down (docs/timeline/ui.md UI-25, _experimental_, V-280 to V-283):
+ * Dragging a move's clip up or down (docs/timeline/ui.md UI-25, _experimental_, V-330 to V-333):
  *
  * - **Drag out:** with marchers selected that are in the move, dragging its clip down into empty
  *   space below it peels them off into a new move (the same edit as **Split N selected into new
@@ -44,16 +44,16 @@ export interface TimelineClipPeel<Id = TimelineTrackId> {
     readonly onMerge: (id: Id, target: TimelinePeelTarget<Id>) => void;
 }
 
-/** How far up or down the pointer goes before a press on a clip is this gesture (V-280). */
+/** How far up or down the pointer goes before a press on a clip is this gesture (V-330). */
 export const PEEL_START_PX = 10;
 /**
  * How far down from the press the pointer goes, below the clip's bottom edge, before a drop splits
- * (V-281). From the press, not the clip's edge: the timeline is usually fitted to its rows at the
+ * (V-331). From the press, not the clip's edge: the timeline is usually fitted to its rows at the
  * bottom of the window (UI-19), so there is little room below the last row.
  */
 export const PEEL_SPLIT_PX = 24;
 
-/** Whether a drag that moved `dx`, `dy` so far is a vertical one (the axis lock, V-280). */
+/** Whether a drag that moved `dx`, `dy` so far is a vertical one (the axis lock, V-330). */
 export const isVerticalPeel = (dx: number, dy: number): boolean =>
     Math.abs(dy) >= PEEL_START_PX && Math.abs(dy) >= 2 * Math.abs(dx);
 

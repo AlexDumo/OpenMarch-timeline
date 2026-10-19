@@ -43,6 +43,15 @@ describe("isolatedTimelineName", () => {
             "Page 2 count 5 to page 3 count 4",
         );
     });
+
+    it("names an empty window (both lines on one beat, UI-21) by its beat, not as pages backwards", () => {
+        expect(isolatedTimelineName({ start: 17, end: 17 }, PAGES)).toBe(
+            "Page 2's flag",
+        );
+        expect(isolatedTimelineName({ start: 13, end: 13 }, PAGES)).toBe(
+            "Page 2, count 4",
+        );
+    });
 });
 
 describe("the field line's words (UI-12)", () => {
@@ -137,7 +146,6 @@ describe("the field line past the last flag in Basic (UI-19)", () => {
                 selection: { kind: "range", start, end },
                 isolation: null,
                 pageBoxes: BOXES,
-                startPinned: false,
             },
             basic,
             false,

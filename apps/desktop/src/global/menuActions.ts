@@ -25,6 +25,11 @@ export const PLAYBACK_MENU_ACTIONS: readonly MenuAction[] = [
         label: "Play from Playhead / Pause",
         accelerator: "Shift+Space",
     },
+    {
+        action: "playOn",
+        label: "Play On from Start Flag",
+        accelerator: "Alt+Space",
+    },
     { action: "toggleLoop", label: "Loop On / Off", accelerator: "C" },
 ];
 

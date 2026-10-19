@@ -1,17 +1,14 @@
-import type { AssignmentRow, Diagnostic, SpanInfo } from "@openmarch/core";
+import type { AssignmentRow, SpanInfo } from "@openmarch/core";
 import type {
     TimelineInput,
     TimelineLegInput,
 } from "@/components/timeline/Timeline";
-import type {
-    TimelineActivitySpan,
-    TimelineTrackDiagnostics,
-} from "@/components/timeline/TimelineViewModel";
+import type { TimelineActivitySpan } from "@/components/timeline/TimelineViewModel";
 
 /**
  * The view-model adapter (docs/timeline/ui.md, "Mapping the spec onto the view model";
  * docs/timeline/phases/08-authoring-ui.md P8.8). Pure: the stored timeline tables, the resolver's
- * spans and its diagnostics in, the timeline's tracks out. Nothing it builds is stored.
+ * spans in, the timeline's tracks out. Nothing it builds is stored.
  *
  * Under UI-9 the app draws one track per stored timeline (`buildTimelineClipTracks`). The marcher
  * and shape tracks below (`buildTimelineTracks`, UI-3) are what it drew before.
@@ -30,10 +27,6 @@ import type {
  *   (U-Q4, decided in ui.md).
  * - **Linked clips:** every track carries its spec timeline id as `linkId`, because moving a clip
  *   moves its whole timeline (ui.md, `TimelineRangeChange`).
- * - **Diagnostics (§8.9):** a track's badge lists the diagnostics of its transitions that concern
- *   its target: for a shape, all of them; for a marcher, the ones about that marcher. A
- *   transition-wide one (such as `D-VACANT`) of a transition without a shape shows once, on the
- *   first shown marcher track assigned to it.
  * - **Default track set (U-Q1, decided in ui.md):** every shape track, plus the marcher tracks of
  *   individually moved marchers (assigned to a one-slot transition without a shape in that
  *   timeline) and of the selected marchers. `"all"` shows every marcher track.
@@ -90,7 +83,6 @@ export interface TimelineViewSources {
      * for marchers whose spans a track needs. See `resolverSpans` in `timelineStore.ts`.
      */
     readonly spansOf: (marcherId: number) => readonly SpanInfo[];
-    readonly diagnostics: readonly Diagnostic[];
 }
 
 /** Which tracks to build (U-Q1). */
@@ -190,18 +182,6 @@ function activityOver(
     return out;
 }
 
-function diagnosticsBadge(
-    diagnostics: readonly Diagnostic[],
-): TimelineTrackDiagnostics | undefined {
-    if (diagnostics.length === 0) return undefined;
-    return {
-        level: diagnostics.some((d) => d.level === "warning")
-            ? "warning"
-            : "info",
-        messages: diagnostics.map((d) => `${d.code}: ${d.message}`),
-    };
-}
-
 // ---------------------------------------------------------------------------
 // The adapter
 // ---------------------------------------------------------------------------
@@ -229,7 +209,6 @@ interface BuildContext {
     readonly rowsByTransition: ReadonlyMap<number, AssignmentRow[]>;
     readonly shapeName: ReadonlyMap<number, string | null>;
     readonly marcherLabel: ReadonlyMap<number, string>;
-    readonly diagnosticsByTransition: ReadonlyMap<number, Diagnostic[]>;
     /** Memoized `sources.spansOf` */
     readonly spansOf: (marcherId: number) => readonly SpanInfo[];
 }
@@ -251,10 +230,6 @@ export function buildTimelineTracks(
         rowsByTransition: groupBy(tables.assignments, (r) => r.transition),
         shapeName: new Map(tables.shapes.map((s) => [s.id, s.name])),
         marcherLabel: new Map(tables.marchers.map((m) => [m.id, m.label])),
-        diagnosticsByTransition: groupBy(
-            sources.diagnostics,
-            (d) => d.transitionId,
-        ),
         spansOf: (marcherId) => {
             let spans = spanCache.get(marcherId);
             if (!spans)
@@ -460,7 +435,6 @@ function overridingSpans(
  * - **Activity:** active where at least one member's winning span (R-2) is in one of its
  *   transitions, and inactive where every member is stolen or there are none (UI-4's rule over
  *   the whole timeline).
- * - **Diagnostics:** every diagnostic of its transitions.
  * - **Order and color:** by start, then id; the color goes by the timeline's id
  *   (`timelineColor`), so it never changes while the timeline exists.
  * - **Overridden by:** where it is dashed, the other timelines whose spans took its members
@@ -477,10 +451,6 @@ export function buildTimelineClipTracks(
         (t) => t.timelineId,
     );
     const rowsByTransition = groupBy(tables.assignments, (r) => r.transition);
-    const diagnosticsByTransition = groupBy(
-        sources.diagnostics,
-        (d) => d.transitionId,
-    );
     const timelineOfTransition = new Map(
         tables.transitions.map((t) => [t.id, t.timelineId]),
     );
@@ -531,13 +501,6 @@ export function buildTimelineClipTracks(
                 ],
                 activitySpans: activity,
                 ...(overriddenBy.length > 0 ? { overriddenBy } : {}),
-                diagnostics: diagnosticsBadge(
-                    [...ids]
-                        .sort((a, b) => a - b)
-                        .flatMap(
-                            (tid) => diagnosticsByTransition.get(tid) ?? [],
-                        ),
-                ),
             };
         });
 }
@@ -595,11 +558,6 @@ function tracksOfTimeline(
         (r) => r.marcher,
     );
     const inTimeline = new Set(transitions.map((t) => t.id));
-    // Transition-wide diagnostics (such as D-VACANT) of a transition without a shape track go on
-    // one marcher track only: the first shown one assigned to it
-    const unclaimed = new Set(
-        transitions.filter((t) => t.destShapeId == null).map((t) => t.id),
-    );
     for (const [marcherId, rows] of [...byMarcher].sort(([a], [b]) => a - b)) {
         const individual = rows.some((row) => {
             const t = transitionById.get(row.transition)!;
@@ -614,16 +572,6 @@ function tracksOfTimeline(
         const spans = spansOf(marcherId);
         // Spans can lag the tables for a moment after a commit; skip until they catch up
         if (spans.length === 0) continue;
-        const diagnostics = [...new Set(rows.map((r) => r.transition))]
-            .sort((a, b) => a - b)
-            .flatMap((tid) => {
-                const wide = unclaimed.delete(tid);
-                return (context.diagnosticsByTransition.get(tid) ?? []).filter(
-                    (d) =>
-                        d.marcherId === marcherId ||
-                        (wide && d.marcherId === null),
-                );
-            });
         tracks.push(
             marcherTrack({
                 timelineId,
@@ -635,7 +583,6 @@ function tracksOfTimeline(
                 color,
                 inTimeline,
                 spans,
-                diagnostics,
             }),
         );
     }
@@ -684,7 +631,6 @@ function marcherTrack({
     color,
     inTimeline,
     spans,
-    diagnostics,
 }: {
     timelineId: number;
     /**
@@ -697,8 +643,6 @@ function marcherTrack({
     color: string;
     inTimeline: ReadonlySet<number>;
     spans: readonly SpanInfo[];
-    /** The badge's diagnostics, chosen by the caller */
-    diagnostics: readonly Diagnostic[];
 }): TimelineInput {
     const id = marcherTrackId(timelineId, marcherId);
     const legs: TimelineLegInput[] = [];
@@ -728,7 +672,6 @@ function marcherTrack({
         endBeatIndex: clip.end,
         legs,
         activitySpans: activityOver(clip, union(active)),
-        diagnostics: diagnosticsBadge(diagnostics),
     };
 }
 
@@ -788,10 +731,6 @@ function shapeTrack({
             if (span.transitionId != null && ids.has(span.transitionId))
                 active.push({ start: span.start, end: span.end });
 
-    const diagnostics = [...ids]
-        .sort((a, b) => a - b)
-        .flatMap((tid) => context.diagnosticsByTransition.get(tid) ?? []);
-
     return {
         id,
         linkId: timelineId,
@@ -803,7 +742,6 @@ function shapeTrack({
         endBeatIndex: clip.end,
         legs,
         activitySpans: activityOver(clip, union(active)),
-        diagnostics: diagnosticsBadge(diagnostics),
     };
 }
 

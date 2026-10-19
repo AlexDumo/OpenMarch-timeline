@@ -157,7 +157,7 @@ export function mergeBlocker(
 }
 
 /**
- * Which way two moves merge (UI-25, _lead default_, V-283): into the page's own timeline when one
+ * Which way two moves merge (UI-25, _lead default_, V-333): into the page's own timeline when one
  * of them is it (the page box keeps standing for it), else into `preferredTarget`.
  */
 export function mergeDirection(

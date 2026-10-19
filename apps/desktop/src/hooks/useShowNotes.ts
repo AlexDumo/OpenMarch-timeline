@@ -1,7 +1,7 @@
 /**
  * The show's checks, live (ADR 0002 D-22, C2.6): items and their Placement from the database,
  * positions and put-downs from the timeline resolver store, the cue compiler's notes and Carry
- * hands (`useShowCueChecks`), and the resolver's diagnostics, through the pure producers in
+ * hands (`useShowCueChecks`), through the pure producers in
  * `notes/showNotes.ts`. Recomputes on every resolver version, so a drill edit raises or clears a
  * note at once. The crew checks look only at motion breaks (moves' ends, put-downs), so a long
  * show with many props stays cheap (see the benchmark in `showNotes.test.ts`).
@@ -16,7 +16,6 @@ import {
 import type {
     CarryChange,
     CueNote,
-    Diagnostic,
     FieldProperties,
     PutDownResolver,
     Resolver,
@@ -35,17 +34,13 @@ import {
     warnPropMovesWithoutCrewOf,
     type WorkspaceSettings,
 } from "@/settings/workspaceSettings";
-import {
-    getTimelineHost,
-    useTimelineResolverStore,
-} from "@/timeline/timelineStore";
+import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { conToastError } from "@/utilities/utils";
 import {
     cueNotes,
     CREW_REACH_STEPS,
     itemNotes,
     sortShowNotes,
-    timelineNotes,
     type NoteItem,
     type ShowNote,
 } from "@/notes/showNotes";
@@ -157,9 +152,6 @@ export type ShowNotesResolver = Pick<
 /** What the checks read besides the database and positions. */
 export interface ShowNotesExtras {
     cues?: ShowCueChecks | null;
-    diagnostics?: readonly Diagnostic[];
-    /** A move's end beat, for the timeline's diagnostics */
-    transitionEnd?: (transitionId: number) => number | null;
 }
 
 const label = (m: Pick<Marcher, "name" | "drill_number"> | undefined) =>
@@ -223,10 +215,6 @@ export function showNotesFrom(
             warnPropMovesWithoutCrew: warnPropMovesWithoutCrewOf(data.settings),
         }),
         ...cueNotes(extras.cues?.notes ?? ([] as CueNote[]), cueBeat),
-        ...timelineNotes(
-            extras.diagnostics ?? [],
-            extras.transitionEnd ?? (() => null),
-        ),
     ]);
     const marchers = new Map(data.marchers.map((m) => [m.id, m]));
     const itemRows = new Map(data.items.map((i) => [i.id, i]));
@@ -245,13 +233,11 @@ const noNotes: ShowNote[] = [];
 
 /**
  * The show's checks over `resolver`, recomputed when `version` changes. Empty until the data and
- * the resolver are ready. `transitionEnd` places the timeline's diagnostics; without it they are
- * placed on their marcher's move (`spanInfos`).
+ * the resolver are ready.
  */
 export function useShowNotesWith(
-    resolver: (ShowNotesResolver & Pick<Resolver, "diagnostics">) | null,
+    resolver: ShowNotesResolver | null,
     version: unknown,
-    transitionEnd?: (transitionId: number) => number | null,
 ): ShowNotes {
     const queries = useQueries({
         queries: [
@@ -275,46 +261,18 @@ export function useShowNotesWith(
                 marcherName: () => "",
                 isLoading: queries.isLoading,
             };
-        const diagnostics = resolver.diagnostics();
-        const known = new Set(resolver.marcherIds());
-        const fromSpans = (transitionId: number) => {
-            const d = diagnostics.find(
-                (x) => x.transitionId === transitionId && x.marcherId !== null,
-            );
-            if (!d || d.marcherId === null || !known.has(d.marcherId))
-                return null;
-            return (
-                resolver
-                    .spanInfos(d.marcherId)
-                    .find((s) => s.transitionId === transitionId)?.end ?? null
-            );
-        };
         return {
-            ...showNotesFrom(queries.data, resolver, {
-                cues,
-                diagnostics,
-                transitionEnd: transitionEnd ?? fromSpans,
-            }),
+            ...showNotesFrom(queries.data, resolver, { cues }),
             isLoading: queries.isLoading,
         };
-    }, [
-        queries.data,
-        queries.isLoading,
-        resolver,
-        version,
-        cues,
-        transitionEnd,
-    ]);
+    }, [queries.data, queries.isLoading, resolver, version, cues]);
 }
-
-const hostTransitionEnd = (id: number) =>
-    getTimelineHost()?.snapshot.transitions[id]?.end ?? null;
 
 /** The show's checks over the editor's resolver store. */
 export function useShowNotes(): ShowNotes {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
-    return useShowNotesWith(resolver, version, hostTransitionEnd);
+    return useShowNotesWith(resolver, version);
 }
 
 /** Snap to holder, the put-down drift note's one-click fix: one undoable edit. */

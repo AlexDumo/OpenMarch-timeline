@@ -45,6 +45,7 @@ import type {
 import type {
     TimelineActivitySpan,
     TimelineBasicPoint,
+    TimelineAppendCounts,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineNavigation,
@@ -54,8 +55,8 @@ import type {
     TimelineSeekOptions,
     TimelineSelection,
     TimelineTarget,
+    TimelineViewportExtent,
     TimelineTrack,
-    TimelineTrackDiagnostics,
     TimelineTrackTargetType,
     TimelineViewModel,
     TimelineWaveform,
@@ -87,7 +88,6 @@ export interface TimelineInput {
     readonly endBeatIndex: number;
     readonly legs: readonly TimelineLegInput[];
     readonly activitySpans: readonly TimelineActivitySpan[];
-    readonly diagnostics?: TimelineTrackDiagnostics;
     /**
      * Where other timelines take every member of this one (the dashed spans, UI-4), in spec beats:
      * which timeline, and its part of the range (UI-14 review)
@@ -133,6 +133,8 @@ export interface TimelinePlayback {
     readonly playLoops?: boolean;
     /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     readonly onPlayFromPlayhead?: () => void;
+    /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
+    readonly onPlayOn?: () => void;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -155,6 +157,8 @@ export interface TimelineProps {
      * commands given are ignored
      */
     readonly readOnly?: boolean;
+    /** A read-only timeline with no start flag drawn (Preview, which always plays on) */
+    readonly hideStartFlag?: boolean;
     /** Lanes drawn in place of the clip rows, under the waveform (Visuals mode's cue lanes) */
     readonly band?: TimelineBand;
     readonly mode: TimelineMode;
@@ -188,8 +192,6 @@ export interface TimelineProps {
     ) => TimelineRangeCommitResult;
     /** Resizing a clip by its edges (resize-move), in spec beats */
     readonly clipResize?: TimelineClipResizeCommands;
-    /** Unpins the start flag (UI-12), from its pin */
-    readonly onUnpinStart?: () => void;
     /** The loop (UI-17), spec beats; `null` or absent when looping is off */
     readonly loop?: TimelineBeatRange | null;
     /** A loop end dragged or stepped (UI-17), spec beats */
@@ -213,6 +215,12 @@ export interface TimelineProps {
      * `pageId` to a subset page, or back to a numbered one. Without it, the menu has no such entry.
      */
     readonly onSetPageSubset?: (pageId: number, subset: boolean) => void;
+    /** **+ N counts** after the last page, shown while paused */
+    readonly appendCounts?: TimelineAppendCounts;
+    /** The beats Fit fits (rule 7, where playback stops), in spec beats; without it, every beat */
+    readonly fitBeat?: number;
+    /** The scroller's width in counts, so the owner leaves room past where playback stops */
+    readonly onViewportExtent?: (extent: TimelineViewportExtent) => void;
     /** The page box menu's **Delete page** (UI-9 Deleting a flag), by page id */
     readonly onDeletePageFlag?: (pageId: number) => void;
     /** The page box menu's **Delete page and its moves**, by page id */
@@ -272,12 +280,19 @@ export function TimelineWaveformProvider({
     );
 }
 
+const NO_PEAKS: readonly number[] = [];
+
+/** The injected waveform on `beatCount` beats: beats after the music (or with none) have no peaks */
 const useTimelineWaveform = (beatCount: number): TimelineWaveform => {
     const injected = useContext(TimelineWaveformContext);
     return useMemo(() => {
-        if (injected?.peaksByBeat.length === beatCount) return injected;
+        const peaks = injected?.peaksByBeat ?? [];
+        if (injected && peaks.length === beatCount) return injected;
         return {
-            peaksByBeat: Array.from({ length: beatCount }, () => []),
+            peaksByBeat: Array.from(
+                { length: beatCount },
+                (_, i) => peaks[i] ?? NO_PEAKS,
+            ),
         };
     }, [beatCount, injected]);
 };
@@ -296,7 +311,6 @@ const toTrack = (timeline: TimelineInput): TimelineTrack => ({
         texture: leg.texture,
     })),
     activitySpans: timeline.activitySpans,
-    diagnostics: timeline.diagnostics,
     ...(timeline.accessibleName
         ? { accessibleName: timeline.accessibleName }
         : {}),
@@ -366,7 +380,6 @@ export const selectionToView = (
                         ),
                     }
                   : {}),
-              ...(selection.startPinned ? { startPinned: true } : {}),
               ...(selection.timelineId !== undefined
                   ? { timelineId: selection.timelineId }
                   : {}),
@@ -896,6 +909,7 @@ export function Timeline(props: TimelineProps) {
         onPlayingChange: useLatestCallback(playback.onPlayingChange),
         playLoops: playback.playLoops,
         onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
+        onPlayOn: useLatestCallback(playback.onPlayOn),
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,
@@ -909,10 +923,15 @@ export function Timeline(props: TimelineProps) {
         onAddSubsetPage: useLatestCallback(props.onAddSubsetPage),
         addPageNames: props.addPageNames,
         pageFlagMove,
+        appendCounts: props.appendCounts,
+        fitBeatCount:
+            props.fitBeat === undefined
+                ? undefined
+                : Math.min(axis.toView(props.fitBeat), axis.beatCount),
+        onViewportExtent: useLatestCallback(props.onViewportExtent),
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
-        onUnpinStart: useLatestCallback(props.onUnpinStart),
         loop: viewLoop,
         onLoopChange: changeLoop,
         transportSecondary: props.transportSecondary,
@@ -933,7 +952,9 @@ export function Timeline(props: TimelineProps) {
         ? {
               ...commonProps,
               ...READ_ONLY_EDITS,
-              startFlagBeat: readOnlyStartFlag(selection),
+              startFlagBeat: props.hideStartFlag
+                  ? undefined
+                  : readOnlyStartFlag(selection),
               band: props.band,
           }
         : { ...commonProps, band: props.band };
@@ -949,6 +970,7 @@ export function Timeline(props: TimelineProps) {
 
 export type {
     TimelineActivitySpan,
+    TimelineAppendCounts,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineSeekGesture,

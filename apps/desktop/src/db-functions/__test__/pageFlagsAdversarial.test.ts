@@ -114,7 +114,8 @@ const ORIGINAL: Row[] = [
 /** The expected grid after + at `beat` on ORIGINAL, with the new page as -1, or null if refused. */
 const expectedAfterPlus = (beat: number): Row[] | null => {
     if (!Number.isInteger(beat)) return null;
-    if (beat > 49) return beat <= 97 ? [...ORIGINAL, [-1, 49, beat]] : null;
+    // Past the stored counts too (endless counts), up to the most one edit stores
+    if (beat > 49) return beat <= 20_097 ? [...ORIGINAL, [-1, 49, beat]] : null;
     const i = ORIGINAL.findIndex(
         ([id, s, e]) => id !== 0 && s < beat && beat < e,
     );

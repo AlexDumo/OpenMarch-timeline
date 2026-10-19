@@ -38,7 +38,6 @@ const notesOf = async (db: DbConnection) => {
             fieldProperties: undefined,
         },
         resolver,
-        { diagnostics: resolver.diagnostics() },
     );
 };
 

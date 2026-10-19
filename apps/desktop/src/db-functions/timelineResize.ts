@@ -7,6 +7,7 @@ import { setTimelineRangeInTransaction } from "./timelineTransitionsInTransactio
 import { updateTimelineAssignmentsInTransaction } from "./timelineAssignments";
 import { readPageBoxes } from "./timelineMoveNames";
 import { pageTimelineIds } from "@/timeline/timelineViewModel";
+import { ensureCountsInTransaction } from "./endlessCounts";
 
 /**
  * Resizing a move: dragging a clip's start or end edge changes its timeline's range
@@ -444,6 +445,8 @@ export async function resizeTimelineInTransaction({
                 layer,
             })),
         });
+    // A move may run past the show's end; the counts it lands on are stored (endless counts)
+    await ensureCountsInTransaction({ tx, through: end });
     await setTimelineRangeInTransaction({ tx, timelineId, start, end });
     return { timelineId, from, to: { start, end } };
 }

@@ -19,6 +19,7 @@ import {
     type DatabaseTimelineAssignment,
 } from "./timelineAssignments";
 import { stealLayer } from "./timelineCommands";
+import { ensureCountsInTransaction } from "./endlessCounts";
 import {
     createRangeTimelineInTransaction,
     readMoveWords,
@@ -282,6 +283,8 @@ export const addMarchersToTimelineInTransaction = async ({
     const labels = await marcherLabels(tx, ids);
     const missing = ids.find((id) => !labels.has(id));
     if (missing !== undefined) refuse(`marcher ${missing} does not exist`);
+    // Past the show's end, the counts the move lands on are stored first (endless counts)
+    await ensureCountsInTransaction({ tx, through: end });
 
     const existing =
         (into === undefined

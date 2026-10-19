@@ -25,6 +25,7 @@ import {
     splitMovesAtBeatInTransaction,
     type SplitMovesResult,
 } from "./timelinePointMoves";
+import { ensureCountsInTransaction } from "./endlessCounts";
 
 /**
  * Page flags in timeline mode (docs/timeline/ui.md UI-9 **+** and Deleting a flag; P8.13).
@@ -83,9 +84,10 @@ export function pageFlagGrid(
 
 /**
  * What **+** does at `beat` (UI-9): inside a page (strictly between its start and its flag) it
- * splits that page; past the last flag, while the show still has beats up to `beat`, it appends a
- * page ending there. On a flag, at or before home's flag (beat 1), past the show's beats, or at a
- * fractional beat, there's nothing to add (null).
+ * splits that page; past the last flag it appends a page ending there, at any count: the counts
+ * never end (docs/timeline/endless-counts.md), and `addPageFlagInTransaction` stores any it needs. On
+ * a flag, at or before home's flag (beat 1), or at a fractional beat, there's nothing to add
+ * (null).
  */
 export function planPageFlagInsertion(
     grid: PageFlagGrid,
@@ -94,10 +96,7 @@ export function planPageFlagInsertion(
     if (!Number.isInteger(beat) || grid.pages.length === 0) return null;
     const pages = grid.pages;
     const lastPage = pages[pages.length - 1]!;
-    if (beat > lastPage.end)
-        return beat <= grid.beatCount
-            ? { kind: "append", beat, lastPage }
-            : null;
+    if (beat > lastPage.end) return { kind: "append", beat, lastPage };
     for (let i = 0; i < pages.length; i++) {
         const page = pages[i]!;
         if (page.start < beat && beat < page.end)
@@ -167,7 +166,8 @@ export interface AddedPageFlag {
  *   subset, which takes a letter and leaves every later page's number. Splitting the last page also
  *   rewrites `last_page_counts` so its flag stays where it was.
  * - **Append:** a new page starts at the last flag and ends at `beat` (`last_page_counts`); a
- *   `subset` one takes the last page's number and the next letter.
+ *   `subset` one takes the last page's number and the next letter. Past the stored counts, the
+ *   counts up to `beat` are stored first (`ensureCountsInTransaction`), in the same edit.
  *
  * With `splitMoves` (Basic, README "Basic's panel"), a split first splits each marcher's move
  * across `beat` there (`splitMovesAtBeatInTransaction` on the split page's box), so no simple
@@ -187,11 +187,17 @@ export async function addPageFlagInTransaction({
     /** Make the new page a subset page (**Add subset page**) */
     subset?: boolean;
 }): Promise<AddedPageFlag> {
-    const grid = await readPageGrid(tx);
-    const plan = planPageFlagInsertion(gridOf(grid), beat);
+    let grid = await readPageGrid(tx);
+    let plan = planPageFlagInsertion(gridOf(grid), beat);
+    // A flag past the stored counts stores the counts up to it first (endless counts, rule 3)
+    if (plan?.kind === "append" && beat > grid.beatIds.length) {
+        await ensureCountsInTransaction({ tx, through: beat });
+        grid = await readPageGrid(tx);
+        plan = planPageFlagInsertion(gridOf(grid), beat);
+    }
     if (!plan)
         refuse(
-            `no page can be added at beat ${beat}: it is on a flag, at home, or past the show's beats`,
+            `no page can be added at beat ${beat}: it is on a flag, at home, or between counts`,
         );
 
     if (plan.kind === "split") {
@@ -362,14 +368,15 @@ export async function deletePageFlags({
  * and 10):
  *
  * - `flag`: the neighboring flag (page `pageId`'s; home's is page 0). Every page keeps a count.
- * - `show-end`: the show's last beat, for the last flag.
+ * - `open`: nothing, for the last flag past every move: the counts never end
+ *   (docs/timeline/endless-counts.md), so its `max` is `Infinity`.
  * - `move`: a timeline in the way. `timelineId` is set when one timeline is to blame: one with an
  *   edge on the flag that the flag would leave behind, or one whose range the page timeline would
  *   take (C-12). `message` is the ripple's own refusal otherwise.
  */
 export type PageFlagMoveBlock =
     | { kind: "flag"; pageId: number }
-    | { kind: "show-end" }
+    | { kind: "open" }
     | { kind: "move"; timelineId?: number; message: string };
 
 /** Where page `pageId`'s flag can go: any beat in `[min, max]`, and what stops it at each end. */
@@ -500,19 +507,25 @@ export function planPageFlagMoveLimits(
     const next = grid.pages[index + 1];
     const previous = grid.pages[index - 1]!;
     const from = page.end;
+    // The last flag can go anywhere past the stored counts (they are stored when it lands): only
+    // moves stop it, so it walks to just past the furthest edge, and then nothing can
+    let furthest = Math.max(grid.beatIds.length, from);
+    if (!next)
+        for (const row of [
+            ...rows.timelines,
+            ...rows.transitions,
+            ...rows.assignments,
+        ])
+            furthest = Math.max(furthest, row.end_beat);
     const walk = (step: -1 | 1) => {
         const bound =
-            step < 0
-                ? page.start + 1
-                : next
-                  ? next.end - 1
-                  : grid.beatIds.length;
+            step < 0 ? page.start + 1 : next ? next.end - 1 : furthest + 1;
         const edge: PageFlagMoveBlock =
             step < 0
                 ? { kind: "flag", pageId: previous.id }
                 : next
                   ? { kind: "flag", pageId: next.id }
-                  : { kind: "show-end" };
+                  : { kind: "open" };
         // Walk every beat to the neighbor: a refused beat with an allowed one past it is a hole
         // the flag passes over; the refused beats past the last allowed one stop it
         let reached = from;
@@ -540,6 +553,9 @@ export function planPageFlagMoveLimits(
             stop = null;
             reached = beat;
         }
+        // Past every move, the last flag is free
+        if (step > 0 && !next && reached === bound)
+            return { beat: Infinity, block: edge, holes };
         return { beat: reached, block: stop ?? edge, holes };
     };
     const down = walk(-1);
@@ -595,11 +611,13 @@ export interface MovedPageFlag {
  * inside a `transactionWithHistory`. Page N gains what page N+1 loses; every other flag stays.
  * The page after it starts at `beat` instead (for the last page, `last_page_counts` changes), and
  * `last_page_counts` is rewritten when that page is the last, so the last flag stays where it was.
+ * The last flag can move past the stored counts: they are stored up to it first
+ * (`ensureCountsInTransaction`), in the same edit.
  *
  * Unlike **+** and Delete flag, this runs `withTimelinePageRipple`: timelines track a flag that
  * moves (ui.md U-Q5), so every row edge on the flag follows it and every other edge keeps its
  * beat. Refuses (`E-ARGS`) outside timeline mode, for home or a page that doesn't exist, and past
- * `planPageFlagMoveLimits` (a neighboring flag, the show's end, or a timeline in the way).
+ * `planPageFlagMoveLimits` (a neighboring flag or a timeline in the way).
  */
 export async function movePageFlagInTransaction({
     tx,
@@ -611,12 +629,18 @@ export async function movePageFlagInTransaction({
     beat: number;
 }): Promise<MovedPageFlag> {
     if (pageId === FIRST_PAGE_ID) refuse("home's flag can't move");
-    const grid = await readPageGrid(tx);
+    if (!Number.isInteger(beat))
+        refuse(`page flags are on whole beats, not beat ${beat}`);
+    let grid = await readPageGrid(tx);
+    const last = grid.pages[grid.pages.length - 1];
+    // The last flag past the stored counts stores them first; nothing else moves for it
+    if (last?.id === pageId && beat > grid.beatIds.length) {
+        await ensureCountsInTransaction({ tx, through: beat });
+        grid = await readPageGrid(tx);
+    }
     const index = grid.pages.findIndex((p) => p.id === pageId);
     if (index < 0) refuse(`page ${pageId} doesn't exist`);
     const page = grid.pages[index]!;
-    if (!Number.isInteger(beat))
-        refuse(`page flags are on whole beats, not beat ${beat}`);
     const from = page.end;
     if (beat === from) return { pageId, from, to: beat };
     const limits = planPageFlagMoveLimits(
@@ -633,8 +657,8 @@ export async function movePageFlagInTransaction({
             `page ${pageId}'s flag can't move to beat ${beat}: ${
                 block.kind === "flag"
                     ? "it would pass the next flag"
-                    : block.kind === "show-end"
-                      ? "the show ends first"
+                    : block.kind === "open"
+                      ? "nothing is in the way"
                       : block.message
             }`,
         );

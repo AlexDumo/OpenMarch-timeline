@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    countsPastEnd,
     formatLength,
     pageCountAt,
     pausedPageCount,
@@ -154,5 +155,26 @@ describe("formatLength", () => {
     it("clamps bad values to zero", () => {
         expect(formatLength(Number.NaN, "metric").value).toBe("0.0");
         expect(formatLength(-3, "imperial").value).toBe("0");
+    });
+});
+
+describe("countsPastEnd", () => {
+    // 0.5 s counts past the stored ones: count n past the end (6 s) is playing in (6 + (n-1)/2, 6 + n/2]
+    const clock = {
+        timeAtBeat: (b: number) => b * 0.5,
+        beatAtTime: (s: number) => s * 2,
+    };
+
+    it("is null up to the show's end, and without pages", () => {
+        expect(countsPastEnd(pages, 3000, clock)).toBeNull();
+        expect(countsPastEnd(pages, 6000, clock)).toBeNull();
+        expect(countsPastEnd([], 9000, clock)).toBeNull();
+    });
+
+    it("numbers the count playing past the end, as the timeline's END +n", () => {
+        expect(countsPastEnd(pages, 6100, clock)).toBe(1);
+        expect(countsPastEnd(pages, 6500, clock)).toBe(1);
+        expect(countsPastEnd(pages, 6600, clock)).toBe(2);
+        expect(countsPastEnd(pages, 8500, clock)).toBe(5);
     });
 });
