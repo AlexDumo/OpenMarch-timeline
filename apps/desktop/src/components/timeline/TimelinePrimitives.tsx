@@ -4,7 +4,6 @@ import {
     ArrowsOutLineHorizontalIcon,
     DotsThreeIcon,
     HouseIcon,
-    WarningIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { animated, useSpring } from "@react-spring/web";
@@ -1667,21 +1666,13 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 ref={clipRef}
                 {...timelineRangeTargetProps(range, track.id)}
                 // UI-14 review: a move is named as one, in counts (`describeMoveClips`)
-                aria-label={`${track.accessibleName ?? `${track.label} timeline, beats ${range.startBeatIndex + 1} through ${range.endBeatIndex}`}${
-                    track.diagnostics
-                        ? `, ${track.diagnostics.messages.length} ${track.diagnostics.messages.length === 1 ? "diagnostic" : "diagnostics"}`
-                        : ""
-                }${moveMenu && selected ? ", selected" : ""}`}
+                aria-label={`${track.accessibleName ?? `${track.label} timeline, beats ${range.startBeatIndex + 1} through ${range.endBeatIndex}`}${moveMenu && selected ? ", selected" : ""}`}
                 // A move says "selected" in its name (UI-14 round-2 review: "pressed" read as a
                 // toggle); other clips keep the pressed state
                 aria-pressed={moveMenu ? undefined : selected}
                 aria-describedby={description ? descriptionId : undefined}
                 data-linked={linked || undefined}
-                title={[
-                    track.label,
-                    track.description,
-                    ...(track.diagnostics?.messages ?? []),
-                ]
+                title={[track.label, track.description]
                     .filter(Boolean)
                     .join("\n")}
                 onClick={(event) => {
@@ -1927,24 +1918,6 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                             />
                         );
                     })}
-                {track.diagnostics && (
-                    <span
-                        data-testid="timeline-track-diagnostics"
-                        data-level={track.diagnostics.level}
-                        className={clsx(
-                            "pointer-events-none absolute top-1/2 right-2 flex -translate-y-1/2 items-center",
-                            track.diagnostics.level === "warning"
-                                ? "text-yellow"
-                                : "text-text-subtitle",
-                        )}
-                    >
-                        {micro ? (
-                            <span className="block size-[5px] rounded-full bg-current" />
-                        ) : (
-                            <WarningIcon size={12} weight="fill" />
-                        )}
-                    </span>
-                )}
                 {labelShown && (
                     <span
                         data-testid="timeline-clip-label"
@@ -1954,9 +1927,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                             right:
                                 menuShown && menuInside
                                     ? CLIP_MENU_BUTTON_WIDTH + 2
-                                    : track.diagnostics
-                                      ? 16
-                                      : 4,
+                                    : 4,
                         }}
                     >
                         {track.label}

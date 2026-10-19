@@ -127,6 +127,6 @@ test("Refresh during wizard discards draft and returns to launch page", async ({
         // are recent files, and each test starts with none.
         page.getByRole("tab", { name: "Recent Files" }),
     ).toBeVisible();
-    await expect(page.getByText("Timeline")).not.toBeVisible();
+    await expect(page.getByTestId("timeline-page-ruler")).not.toBeVisible();
     await expect(dialog).not.toBeVisible();
 });

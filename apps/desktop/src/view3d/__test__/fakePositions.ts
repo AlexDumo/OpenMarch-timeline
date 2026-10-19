@@ -1,4 +1,5 @@
 import { ShowPositions } from "../positions";
+import { createCountGrid } from "@/timeline/countGrid";
 
 /** Where a marcher is, in pixels, at a show time in milliseconds. */
 export type Track = (ms: number) => { x: number; y: number };
@@ -27,10 +28,13 @@ export function fakeShowPositions(
                 });
             },
         },
-        [
-            { timestamp: 0, duration: 0 },
-            { timestamp: 0, duration: SHOW_SECONDS },
-        ],
+        createCountGrid({
+            beats: [
+                { timestamp: 0, duration: 0 },
+                { timestamp: 0, duration: SHOW_SECONDS },
+            ],
+            measureStarts: [],
+        }),
     );
 }
 

@@ -27,6 +27,8 @@ interface AudioOffsetResponse {
     };
     /** `null` when the caller asked for no waveform */
     waveformBuffer: ArrayBuffer | null;
+    /** The offset music's length in samples, before the silence padding to `minimumDuration` */
+    musicLength: number;
 }
 
 interface ErrorResponse {
@@ -205,6 +207,7 @@ onmessage = async (e: MessageEvent<AudioOffsetMessage>) => {
             processedLength = offsetResult.newLength;
         }
 
+        const musicLength = processedLength;
         // Apply minimum duration padding if needed
         if (minimumDuration !== undefined && minimumDuration > 0) {
             const paddingResult = padAudioToMinimumDuration(
@@ -238,6 +241,7 @@ onmessage = async (e: MessageEvent<AudioOffsetMessage>) => {
                 channelData: processedChannelData,
             },
             waveformBuffer,
+            musicLength,
         };
 
         // Transfer the buffers to avoid copying

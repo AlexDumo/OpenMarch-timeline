@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from "react";
 import clsx from "clsx";
-import { PlusIcon, MinusIcon } from "@phosphor-icons/react";
+import { PlusIcon, MinusIcon, PerspectiveIcon } from "@phosphor-icons/react";
 import { Slider } from "@openmarch/ui";
-import {
-    FullscreenButton,
-    PerspectiveButton,
-} from "@/components/timeline/PerspectiveSlider";
 import { MAX_ZOOM, MIN_ZOOM } from "@/field/editor/view";
 
 /**
@@ -169,7 +165,7 @@ export default function CanvasZoomControls({
     return (
         <div
             className={clsx(
-                "group border-stroke bg-bg-1 pointer-events-auto absolute right-6 bottom-6 z-10 flex min-w-200 flex-col overflow-hidden rounded-lg border shadow-lg",
+                "group border-stroke bg-bg-1 pointer-events-auto absolute right-6 bottom-6 z-10 flex w-160 flex-col overflow-hidden rounded-lg border shadow-lg",
             )}
         >
             <div className="border-stroke flex items-center border-b px-12 py-2">
@@ -187,9 +183,6 @@ export default function CanvasZoomControls({
                 />
             </div>
             <div className="flex items-stretch justify-between">
-                {/* The field's view controls (UI-12): fullscreen and perspective */}
-                <PerspectiveButton />
-                <FullscreenButton />
                 {/* Hamburger Icon (placeholder for future menu) */}
                 {/* <button
                 className="text-text hover:bg-fg-2 flex items-center justify-center p-2 transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50"
@@ -200,10 +193,22 @@ export default function CanvasZoomControls({
                 <NavigationTooltip />
             </button> */}
 
+                {/* Perspective: a placeholder until the field can tilt again */}
+                <button
+                    type="button"
+                    data-testid="field-perspective"
+                    disabled
+                    aria-label="Perspective"
+                    title="Perspective (coming soon)"
+                    className="border-stroke text-text flex items-center justify-center border-r px-8 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                    <PerspectiveIcon size={16} />
+                </button>
+
                 {/* Zoom Out Button */}
                 <button
                     onClick={handleZoomOut}
-                    className="border-stroke text-text flex w-full items-center justify-center border-l p-2 transition-colors duration-150 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="border-stroke text-text flex w-full items-center justify-center p-2 transition-colors duration-150 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!canvas || currentZoom <= getMinZoom()}
                     title="Zoom Out"
                 >

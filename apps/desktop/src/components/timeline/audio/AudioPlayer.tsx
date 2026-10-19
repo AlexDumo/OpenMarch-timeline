@@ -18,7 +18,8 @@ import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { timeAtBeat } from "@/timeline/timeMap";
+import { measuresThrough, metronomeBeats } from "@/timeline/endlessTimeline";
+import { usePlaybackStopBeat } from "@/timeline/usePlaybackStopBeat";
 import AudioOffsetWorker from "@/workers/audioOffset.worker.ts?worker";
 import {
     audioEnvelope,
@@ -150,7 +151,26 @@ export default function AudioPlayer() {
     const selectedPageContext = useSelectedPage();
     const isPlayingContext = useIsPlaying();
     const selectedAudioFileContext = useSelectedAudioFile();
-    const { beats, measures, pages } = useTimingObjects();
+    const {
+        beats: storedBeats,
+        measures: storedMeasures,
+        pages,
+        countGrid,
+    } = useTimingObjects();
+    // The metronome counts on past the stored counts, up to where playing on stops (EC-6)
+    const stopBeat = usePlaybackStopBeat();
+    const beats = useMemo(
+        () => metronomeBeats(countGrid, storedBeats, stopBeat).slice(),
+        [countGrid, storedBeats, stopBeat],
+    );
+    const measures = useMemo(
+        () =>
+            // Only the measures the clicks reach: none past the stop point (EC-6)
+            measuresThrough(countGrid, storedMeasures, beats).filter(
+                (measure) => measure.startBeat.index < beats.length,
+            ),
+        [beats, countGrid, storedMeasures],
+    );
     const { data: workspaceSettings } = useQuery(
         workspaceSettingsQueryOptions(),
     );
@@ -187,7 +207,7 @@ export default function AudioPlayer() {
     const playheadRevision = useTimelineSelectionStore((s) =>
         isPlaying ? s.playheadRevision : -1,
     );
-    const startSeconds = timeAtBeat(beats, playheadBeat);
+    const startSeconds = countGrid.timeAtBeat(playheadBeat);
     const restartKey = playheadRevision;
     const playbackSpeed = usePlaybackSpeedStore(effectivePlaybackSpeed);
 
@@ -342,24 +362,28 @@ export default function AudioPlayer() {
                         if (isCancelled) return;
 
                         if (e.data.type === "audioProcessed") {
-                            const { audioBuffer: bufferData } = e.data as {
-                                audioBuffer: {
-                                    numberOfChannels: number;
-                                    length: number;
-                                    sampleRate: number;
-                                    channelData: Float32Array[];
+                            const { audioBuffer: bufferData, musicLength } =
+                                e.data as {
+                                    audioBuffer: {
+                                        numberOfChannels: number;
+                                        length: number;
+                                        sampleRate: number;
+                                        channelData: Float32Array[];
+                                    };
+                                    musicLength: number;
                                 };
-                            };
                             const channels = bufferData.channelData;
 
-                            // The envelope first: the channels then move to the engine
-                            setAudioEnvelopeState(
-                                audioEnvelope({
+                            // The envelope first: the channels then move to the engine. Its
+                            // length is the music's, not the silence padded after it
+                            setAudioEnvelopeState({
+                                ...audioEnvelope({
                                     ...bufferData,
                                     getChannelData: (channel) =>
                                         channels[channel]!,
                                 }),
-                            );
+                                seconds: musicLength / bufferData.sampleRate,
+                            });
                             engine.send(
                                 { type: "music", channels },
                                 channels.map((c) => c.buffer as ArrayBuffer),

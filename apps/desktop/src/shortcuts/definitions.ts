@@ -573,6 +573,16 @@ const STATIC_ACTIONS = {
         defaultBindings: ["$mod+Shift+V"],
         ignoreRepeat: true,
     },
+    // Preview: watch the show without editing it (the workspace switch's third mode)
+    togglePreview: {
+        labelKey: "actions.ui.togglePreview",
+        keywordsKey: "actions.ui.togglePreviewKeywords",
+        category: "ui",
+        editsDrill: false,
+        scope: "global",
+        defaultBindings: ["Alt+P"],
+        ignoreRepeat: true,
+    },
     // UI-17 follow-up: ? lists every shortcut
     showShortcuts: {
         labelKey: "actions.ui.showShortcuts",
@@ -637,15 +647,6 @@ const STATIC_ACTIONS = {
         editsDrill: false,
         scope: "canvas",
         defaultBindings: ["$mod+A", "Control+A"],
-    },
-
-    // Shapes
-    createCircle: {
-        labelKey: "actions.shape.createCircle",
-        category: "shape",
-        editsDrill: true,
-        scope: "canvas",
-        defaultBindings: ["O"],
     },
 
     // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it

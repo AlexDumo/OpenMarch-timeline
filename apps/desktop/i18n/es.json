@@ -81,7 +81,6 @@
         "shape": {
             "applyQuick": "Ajustar a la forma",
             "create": "Crear forma",
-            "createCircle": "Crear círculo",
             "delete": "Elimina las formas seleccionadas actualmente",
             "noMarchersSelected": "Ningún manifestante seleccionado"
         },
@@ -1189,10 +1188,7 @@
             "label": "Página {pageName}",
             "subset": "Subconjunto"
         },
-        "pages": "Páginas",
-        "perspective": {
-            "label": "Perspectiva"
-        }
+        "pages": "Páginas"
     },
     "titlebar": {
         "bugReport": "Enviar error o comentarios",

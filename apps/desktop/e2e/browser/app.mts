@@ -104,7 +104,7 @@ export async function createMarchers(
     const before = (await drawnMarchers(page)).length;
 
     await page.locator("#sidebar-launcher-marchers").click();
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
     const form = page.locator("#marcherForm");
     await form.getByRole("combobox").click();
     await page.getByRole("option", { name: section, exact: true }).click();

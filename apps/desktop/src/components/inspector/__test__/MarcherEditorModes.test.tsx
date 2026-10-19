@@ -14,12 +14,10 @@ import { createMarchers } from "@/db-functions/marcher";
 import { createLastPage, getPages } from "@/db-functions/page";
 import { stopTimelineResolver } from "@/timeline/timelineStore";
 import MarcherEditor from "../MarcherEditor";
-import { TimelineInspectorSection } from "../TimelineInspectorSection";
 
 /**
  * The inspector on the `base.tsx` fixtures (docs/timeline/phases/07-page-parity.md P7.18): the
- * marcher's coordinates come from the resolver, after an edit that writes only timeline rows, and
- * the timeline section explains the marcher's position.
+ * marcher's coordinates come from the resolver, after an edit that writes only timeline rows.
  */
 
 // Queries invalidate through the app's query client; use the harness's (see `featureHarness.tsx`)
@@ -48,14 +46,9 @@ describeDbTests("the marcher inspector", (it) => {
         marchersAndPages,
     }) => {
         const id = marchersAndPages.expectedMarchers[4]!.id;
-        const { page, result } = await setUpFeature(
-            <>
-                <MarcherEditor />
-                <TimelineInspectorSection />
-            </>,
-            PAGE,
-            [id],
-        );
+        const { page, result } = await setUpFeature(<MarcherEditor />, PAGE, [
+            id,
+        ]);
         // Move the marcher to where it stands on page 1
         const [x, y] = await positionOn(db, probed().pages[1]!, id);
         expect(await positionOn(db, page, id)).not.toEqual([x, y]);
@@ -75,11 +68,6 @@ describeDbTests("the marcher inspector", (it) => {
             expect(xSteps).toBeCloseTo(expected.xSteps, 6);
             expect(ySteps).toBeCloseTo(expected.ySteps, 6);
         });
-
-        // The timeline section explains the position
-        await waitFor(() =>
-            expect(result.queryAllByText(/ at beat /).length).toBe(1),
-        );
     });
 
     it("shows coordinates for a marcher and a page created after the conversion", async ({
