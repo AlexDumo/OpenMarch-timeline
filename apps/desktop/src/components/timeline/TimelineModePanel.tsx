@@ -730,22 +730,18 @@ function useAppendCountsControls({
     const { mutate: appendPage } = useMutation(
         appendPageOfCountsMutationOptions(queryClient, selectAddedPage),
     );
+    // The pill's right-click menu sets the file's default new page counts
+    const saveCounts = settings
+        ? (next: number) =>
+              updateSettings({ ...settings, defaultNewPageCounts: next })
+        : undefined;
     if (hidden) return undefined;
     return {
         label: t("timeline.appendCounts.label", { counts }),
         title: t("timeline.appendCounts.title", { counts }),
         onAppend: () => appendPage(counts),
         counts,
-        // The pill's right-click menu sets the file's default new page counts
-        ...(settings
-            ? {
-                  onCountsChange: (next: number) =>
-                      updateSettings({
-                          ...settings,
-                          defaultNewPageCounts: next,
-                      }),
-              }
-            : {}),
+        ...(saveCounts ? { onCountsChange: saveCounts } : {}),
         ...(musicEndBeat !== null && musicEndBeat - lastFlag > counts
             ? {
                   toEnd: {
@@ -757,8 +753,12 @@ function useAppendCountsControls({
                           t("timeline.appendCounts.pagesToEndTitle", {
                               counts: shown,
                           }),
+                      // A new length is saved once the pages are in: the settings write
+                      // can't run inside the pages' transaction
                       onAppend: (shown: number) =>
-                          addPagesToEnd(musicEndBeat, shown),
+                          addPagesToEnd(musicEndBeat, shown, () => {
+                              if (shown !== counts) saveCounts?.(shown);
+                          }),
                   },
               }
             : {}),

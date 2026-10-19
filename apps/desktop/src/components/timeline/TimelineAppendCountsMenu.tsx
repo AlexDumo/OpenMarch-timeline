@@ -29,7 +29,8 @@ export const parsePageCounts = (text: string): number | null => {
  * closes, the box losing focus to outside it included (Escape cancels, EC-16); and, when the music
  * runs on past the last page, pages every N counts to its end (EC-10). That action follows the box:
  * it reads and makes pages of the number typed there while it is a whole number (else the saved
- * one), and picking it saves that number too, as the menu closes.
+ * one), and picking it saves that number too (`toEnd.onAppend` does, once the pages are in, so the
+ * menu's close doesn't).
  * Focus moving inside the menu never saves: a half-typed "1" on the way to "12" stays unsaved.
  * Opens where the pill was right-clicked.
  */
@@ -70,10 +71,17 @@ export function TimelineAppendCountsMenu({
     const cancelled = useRef(false);
     // Every way the menu closes goes through here, once: it saves a whole number unless cancelled
     const closed = useRef(false);
+    // Set when the to-the-end action is picked: it saves the length itself, after its edit
+    const picked = useRef(false);
     const close = () => {
         if (closed.current) return;
         closed.current = true;
-        if (!cancelled.current && parsed !== null && parsed !== counts)
+        if (
+            !cancelled.current &&
+            !picked.current &&
+            parsed !== null &&
+            parsed !== counts
+        )
             onCountsChange(parsed);
         onClose();
     };
@@ -117,7 +125,10 @@ export function TimelineAppendCountsMenu({
                                 className={ACTION_CLASS}
                                 onPointerMove={keepTyping}
                                 onPointerLeave={keepTyping}
-                                onSelect={() => toEnd.onAppend(shown)}
+                                onSelect={() => {
+                                    picked.current = true;
+                                    toEnd.onAppend(shown);
+                                }}
                             >
                                 <PlusIcon size={12} weight="bold" />
                                 {toEnd.label(shown)}

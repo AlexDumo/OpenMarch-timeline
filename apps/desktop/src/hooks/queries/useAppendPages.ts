@@ -69,11 +69,15 @@ export const appendPagesToEndMutationOptions = (
  * "Create pages every N counts to the end" and the export tabs' "moves past the end" warning.
  * `counts` is the file's "Default new page counts" setting; `addPagesToEnd(untilBeat)` is one
  * undoable edit (pages of `counts`, or of the length given), and says how many pages it added in
- * a toast.
+ * a toast; `onDone` runs once it has committed.
  */
 export function usePagesToEnd(): {
     readonly counts: number;
-    readonly addPagesToEnd: (untilBeat: number, pageCounts?: number) => void;
+    readonly addPagesToEnd: (
+        untilBeat: number,
+        pageCounts?: number,
+        onDone?: () => void,
+    ) => void;
     readonly isPending: boolean;
 } {
     const { t } = useTolgee();
@@ -91,8 +95,11 @@ export function usePagesToEnd(): {
     );
     return {
         counts,
-        addPagesToEnd: (untilBeat, pageCounts = counts) =>
-            mutate({ counts: pageCounts, untilBeat }),
+        addPagesToEnd: (untilBeat, pageCounts = counts, onDone) =>
+            mutate(
+                { counts: pageCounts, untilBeat },
+                { onSuccess: () => onDone?.() },
+            ),
         isPending,
     };
 }

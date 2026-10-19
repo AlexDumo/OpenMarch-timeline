@@ -152,7 +152,8 @@ export interface TimelineAppendCounts {
     /**
      * "Create pages every 16 counts to the end", when the music runs on past the last page (EC-10):
      * an entry in the pill's right-click menu. Each takes the page length the menu shows: the one
-     * typed in its box, else `counts`.
+     * typed in its box, else `counts`; `onAppend` also saves that length as the default once the
+     * pages are in (the menu doesn't save it itself when this is picked).
      */
     readonly toEnd?: {
         readonly label: (counts: number) => string;

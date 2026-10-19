@@ -271,7 +271,7 @@ describe("changing how many counts + N counts adds", () => {
         expect(onCountsChange).toHaveBeenCalledWith(12);
     });
 
-    it("the to-the-end action follows the typed number, makes pages of it and saves it", () => {
+    it("the to-the-end action follows the typed number and makes pages of it, leaving the save to it", () => {
         const onCountsChange = vi.fn();
         const onPages = vi.fn();
         show({
@@ -307,8 +307,8 @@ describe("changing how many counts + N counts adds", () => {
         );
         fireEvent.click(action);
         expect(onPages).toHaveBeenCalledWith(12);
-        expect(onCountsChange).toHaveBeenCalledTimes(1);
-        expect(onCountsChange).toHaveBeenCalledWith(12);
+        // The pages' edit saves 12 once it commits; a save from the menu would run inside it
+        expect(onCountsChange).not.toHaveBeenCalled();
         expect(screen.queryByTestId("timeline-append-counts-menu")).toBeNull();
     });
 
