@@ -251,7 +251,7 @@ test("the inspector edits the picked cue and says why the who does what it does"
 
     // the default, before any cue
     await expect(page.getByTestId("visuals-why")).toContainText(
-        "Why, at count 1",
+        "Why, at the start",
     );
     await expect(page.getByTestId("visuals-why-group")).toContainText(
         "The default",
@@ -266,7 +266,7 @@ test("the inspector edits the picked cue and says why the who does what it does"
     const [{ id }] = await show.query<{ id: number }>("SELECT id FROM cues");
     await page.getByTestId(`visuals-cue-${id}`).click();
     await expect(page.getByTestId("visuals-cue-panel")).toContainText(
-        "Trumpet, count 1",
+        "Trumpet, the start",
     );
     await expect(page.getByTestId("visuals-why-group")).toContainText("Set by");
 
@@ -355,6 +355,65 @@ test("the ramp sets a transition, a copy pastes onto another who, and clashes ar
     await expect(
         page.locator('[data-testid="visuals-result-span"][data-flagged]'),
     ).not.toHaveCount(0);
+});
+
+test("a states-only lane saves what its drag shows, Feet adds no default, and Esc drops a drag", async ({
+    show,
+}) => {
+    const { page } = show;
+    const cues = () =>
+        show.query<StoredCue & { settings_json: string }>(
+            "SELECT id, channel, kind, target_kind, target_section, beat_id, value, length, settings_json FROM cues ORDER BY id",
+        );
+    await expect(page.getByRole("heading", { name: "Page 0" })).toBeVisible();
+    await page.getByTestId("workspace-view-visuals").click();
+    await page.getByTestId("visuals-who-section-Trumpet").click();
+    await page.getByTestId("visuals-tab-feet").click();
+
+    // Feet has no phrases: the drag draws one count where it is, and saves a state there
+    const from = await laneX(page, 2);
+    const to = await laneX(page, 7);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 6 });
+    const preview = page.getByTestId("visuals-lane-preview");
+    await expect(preview).toHaveAttribute("data-kind", "state");
+    const shown = (await preview.boundingBox())!;
+    expect(shown.width).toBeCloseTo(from.perCount, 0);
+    await page.mouse.up();
+    await expect.poll(cues).toEqual([
+        expect.objectContaining({
+            channel: "feet",
+            kind: "state",
+            beat_id: 8,
+            length: null,
+        }),
+    ]);
+    // a Step that marks time on holds, not the default Step
+    expect(JSON.parse((await cues())[0]!.settings_json)).toEqual({
+        onHolds: "markTime",
+    });
+
+    // Esc mid-drag saves nothing, and clears the picked cue
+    const [made] = await cues();
+    await page.getByTestId(`visuals-cue-${made!.id}`).click();
+    await expect(page.getByTestId(`visuals-cue-${made!.id}`)).toHaveAttribute(
+        "aria-selected",
+        "true",
+    );
+    const at12 = await laneX(page, 12);
+    await page.mouse.move(at12.x, at12.y);
+    await page.mouse.down();
+    await page.mouse.move(at12.x + at12.perCount * 2, at12.y, { steps: 3 });
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("visuals-lane-preview")).toHaveCount(0);
+    await page.mouse.up();
+    await waitForIdle(page);
+    expect(await cues()).toHaveLength(1);
+    await expect(page.getByTestId(`visuals-cue-${made!.id}`)).toHaveAttribute(
+        "aria-selected",
+        "false",
+    );
 });
 
 // The review fix (8b46cd0ef) let Ctrl/Cmd presses through the band to draw the drill
@@ -462,6 +521,8 @@ test("Visuals has its own timeline, and the field only selects there", async ({
         });
     await page.getByRole("button", { name: "Page 1", exact: true }).click();
     await expect(position("Page 1")).toBeVisible();
+    // the start flag still shows, where Play starts
+    await expect(page.getByTestId("timeline-start-flag-mark")).toBeVisible();
     await page.getByTestId("timeline-initial-page").click();
     await expect(position("Home")).toBeVisible();
 

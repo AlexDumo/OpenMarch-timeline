@@ -4,7 +4,7 @@
  * or length (a phrase), the value's own settings, its ripple and notes.
  * Each change is one undoable edit. No popovers: everything is here.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { T, useTolgee } from "@tolgee/react";
 import {
@@ -33,7 +33,9 @@ import {
     updateCuesMutationOptions,
 } from "@/hooks/queries/useCues";
 import { useVisualsStore } from "@/stores/VisualsStore";
+import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useVisualsData } from "./VisualsProvider";
+import { countWords } from "./countWhere";
 import { useTargetLabel } from "./useTargetLabel";
 import FacingWheel from "./FacingWheel";
 import {
@@ -187,6 +189,15 @@ export default function VisualsCuePanel() {
     const cue: DatabaseCue | undefined = cues?.find(
         (c) => c.id === selectedCueId,
     );
+    const { beats, pages } = useTimingObjects();
+    // Counts as the transport reads them: "Page 2 count 16"
+    const where = useMemo(
+        () =>
+            data
+                ? countWords(beats, pages, data.counts)
+                : (count: number) => `count ${count + 1}`,
+        [data, beats, pages],
+    );
     if (!cue || !data) return null;
 
     const value = cueLibraryValue(cue.value);
@@ -223,7 +234,7 @@ export default function VisualsCuePanel() {
             <p className="text-sub text-text-subtitle">
                 {t("visuals.cue.where", {
                     who: targetLabel(cue.target),
-                    count: count === undefined ? "–" : count + 1,
+                    where: count === undefined ? "–" : where(count),
                 })}
             </p>
             <Field label={<T keyName="visuals.cue.value" />}>

@@ -2,8 +2,8 @@
  * The why readout in Visuals mode's inspector (performer-behavior.md
  * section 7.1): at the playhead's count, what the focused who does on the
  * current tab, how many of them do it, the cue that set it (or where the
- * default comes from) and the cues it beat. Counts read from 1, as the
- * timeline's do.
+ * default comes from) and the cues it beat. Counts read as the transport's
+ * do: "Page 2 count 16" (`countWords`).
  */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ import { useVisualsData } from "./VisualsProvider";
 import { useTargetLabel } from "./useTargetLabel";
 import { whyAt } from "./visualsWhy";
 import { countAtBeatIndex } from "./visualsLanes";
+import { countWords } from "./countWhere";
 
 export default function VisualsWhyReadout() {
     const { t } = useTolgee();
@@ -27,7 +28,7 @@ export default function VisualsWhyReadout() {
     const focusIds = useVisualsStore((s) => s.focusMarcherIds);
     const selectCue = useVisualsStore((s) => s.selectCue);
     const beatIndex = useTimelineSelectionStore(displayedBeat);
-    const { beats } = useTimingObjects();
+    const { beats, pages } = useTimingObjects();
     const { data: cues } = useQuery(allCuesQueryOptions());
     const targetLabel = useTargetLabel();
 
@@ -46,7 +47,12 @@ export default function VisualsWhyReadout() {
         });
     }, [data, focusIds, count]);
 
-    if (!data || count === null || groups.length === 0) return null;
+    const where = useMemo(
+        () => (data ? countWords(beats, pages, data.counts) : null),
+        [data, beats, pages],
+    );
+
+    if (!data || !where || count === null || groups.length === 0) return null;
     const cueById = new Map((cues ?? []).map((c) => [c.id, c]));
     const describe = (id: number) => {
         const cue = cueById.get(id);
@@ -55,7 +61,7 @@ export default function VisualsWhyReadout() {
         return t("visuals.why.cue", {
             value: cueLibraryValue(cue.value)?.name ?? cue.value,
             who: targetLabel(cue.target),
-            count: at === undefined ? "–" : at + 1,
+            where: at === undefined ? "–" : where(at),
         });
     };
     const ownIds = new Set(data.lanes.own.map((c) => c.id));
@@ -95,7 +101,7 @@ export default function VisualsWhyReadout() {
             data-testid="visuals-why"
         >
             <p className="text-body text-text">
-                {t("visuals.why.title", { count: count + 1 })}
+                {t("visuals.why.title", { where: where(count) })}
             </p>
             {groups.map((group, i) => (
                 <div

@@ -6,10 +6,12 @@
  * hatched where the who is mixed and ringed where a flagged cue sets it.
  *
  * On the lane, a click on empty space adds a state on that count, and a drag
- * adds a phrase of that length; dragging a cue moves it, dragging a phrase's
- * end sets its length, and Delete removes the picked cue. Everything lands on
- * a count: there is nothing between counts. A Ctrl or Cmd press is the
- * timeline's everywhere on the band (a drawn range), never a cue gesture.
+ * adds a phrase of that length (on a states-only channel, a state where it is
+ * let go: `laneCreate`); dragging a cue moves it, dragging a phrase's end sets
+ * its length, Delete removes the picked cue and Esc drops a drag or the picked
+ * cues. Everything lands on a count: there is nothing between counts. A Ctrl
+ * or Cmd press is the timeline's everywhere on the band (a drawn range), never
+ * a cue gesture.
  */
 import {
     useRef,
@@ -40,11 +42,12 @@ import type {
     TimelineBandGeometry,
 } from "@/components/timeline/TimelineBand";
 import type { VisualsBandData } from "./useVisualsBandData";
+import { pasteBeat } from "./countWhere";
 import { useTargetLabel } from "./useTargetLabel";
 import {
     copyCues,
     countAtBeatIndex,
-    newCueValue,
+    laneCreate,
     pastedCues,
     type LaneCue,
     type LaneRow,
@@ -187,7 +190,7 @@ function GreyRow({
 }
 
 type Gesture =
-    /** A drag on empty lane: a state on one count, a phrase over several. */
+    /** A drag on empty lane: what `laneCreate` makes of it. */
     | { kind: "create"; start: number; end: number }
     /** A cue dragged by `grab` counts from its count. */
     | { kind: "move"; cue: LaneCue; grab: number; count: number }
@@ -261,22 +264,21 @@ function EditableLane({
     };
     const { target, channel, carries } = data;
 
-    const add = (from: number, to: number) => {
-        if (!target) return;
-        const start = Math.min(from, to);
-        const length = Math.abs(to - from) + 1;
-        const phrase =
-            length >= 2 ? newCueValue(channel, "phrase", carries) : null;
-        const value = phrase ?? newCueValue(channel, "state", carries);
-        if (!value) return;
+    // What a press from `start` to `end` adds, and so what the lane draws while it's held
+    const creating = (start: number, end: number) =>
+        laneCreate(channel, carries, start, end);
+    const add = (start: number, end: number) => {
+        const made = creating(start, end);
+        if (!target || !made) return;
         createCues([
             {
                 channel,
-                kind: phrase ? "phrase" : "state",
+                kind: made.kind,
                 target,
-                beatId: data.counts.beatIdOfCount[start]!,
-                value,
-                length: phrase ? length : null,
+                beatId: data.counts.beatIdOfCount[made.count]!,
+                value: made.value,
+                length: made.kind === "phrase" ? made.length : null,
+                ...(made.settings ? { settings: made.settings } : {}),
             },
         ]);
     };
@@ -366,7 +368,16 @@ function EditableLane({
     };
     const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
         const mod = e.metaKey || e.ctrlKey;
-        if ((e.key === "Delete" || e.key === "Backspace") && selected.length) {
+        if (e.key === "Escape" && (gestureRef.current || selected.length)) {
+            // Esc drops a drag in progress, saving nothing, and the picked cues
+            e.preventDefault();
+            e.stopPropagation();
+            setGesture(null);
+            clearSelectedCues();
+        } else if (
+            (e.key === "Delete" || e.key === "Backspace") &&
+            selected.length
+        ) {
             e.preventDefault();
             e.stopPropagation();
             deleteCues(new Set(selected));
@@ -403,6 +414,11 @@ function EditableLane({
             return { ...cue, from: gesture.from };
         return cue;
     });
+    // A drag on empty lane draws what its release adds: a phrase's span, or one count
+    const preview =
+        gesture?.kind === "create"
+            ? creating(gesture.start, gesture.end)
+            : null;
     const flagTitle = (cue: LaneCue) => {
         const kinds = flags.get(cue.id);
         return kinds
@@ -503,16 +519,14 @@ function EditableLane({
                     </div>
                 );
             })}
-            {gesture?.kind === "create" && (
+            {preview && (
                 <div
+                    data-testid="visuals-lane-preview"
+                    data-kind={preview.kind}
                     className="bg-accent/30 rounded-4 pointer-events-none absolute top-0"
                     style={{
-                        left:
-                            Math.min(gesture.start, gesture.end) *
-                            pixelsPerBeat,
-                        width:
-                            (Math.abs(gesture.end - gesture.start) + 1) *
-                            pixelsPerBeat,
+                        left: preview.count * pixelsPerBeat,
+                        width: preview.length * pixelsPerBeat,
                         height: LANE,
                     }}
                 />
@@ -574,7 +588,7 @@ function BandBody({
     const { pixelsPerBeat, top, width, snapBeats } = geometry;
     const clipboard = useVisualsStore((s) => s.clipboard);
     const beatIndex = useTimelineSelectionStore(displayedBeat);
-    const { beats } = useTimingObjects();
+    const { beats, pages } = useTimingObjects();
     const queryClient = useQueryClient();
     const { mutate: createCues } = useMutation(
         createCuesMutationOptions(queryClient),
@@ -585,7 +599,13 @@ function BandBody({
         !!data?.target && !!clipboard && clipboard.channel === data.channel;
     const pasteAt = () => {
         if (!data?.target || !clipboard || !canPaste) return;
-        const count = countAtBeatIndex(beats, beatIndex, data.counts);
+        // After a page box, on the page's first count, not its last (`pasteBeat`)
+        const from = pasteBeat(
+            beatIndex,
+            useTimelineSelectionStore.getState().selection,
+            pages,
+        );
+        const count = countAtBeatIndex(beats, from, data.counts);
         if (count === null) return;
         const made = pastedCues(clipboard, count, data.target, data.counts);
         // one undoable edit for the whole paste

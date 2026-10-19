@@ -9,6 +9,7 @@ import {
     flagsByCue,
     pastedCues,
     laneCue,
+    laneCreate,
     newCueValue,
     resultRow,
     targetKey,
@@ -251,6 +252,61 @@ describe("newCueValue", () => {
         // winds and guard together share no horn state
         expect(
             newCueValue("horn_equipment", "state", ["winds", "flag"]),
+        ).toBeNull();
+    });
+});
+
+describe("laneCreate (what a press on the lane adds, and draws while held)", () => {
+    it("makes a drag a phrase of that length where the channel has one", () => {
+        expect(laneCreate("horn_equipment", ["flag"], 6, 3)).toEqual({
+            kind: "phrase",
+            value: "builtin:flag.dropSpin",
+            count: 3,
+            length: 4,
+        });
+    });
+
+    it("on a states-only channel, puts one state where the drag is let go", () => {
+        // Facing, Feet and the winds' Horn have no phrases (performer-behavior.md 3)
+        for (const [channel, carries] of [
+            ["facing", ["winds"]],
+            ["feet", ["winds"]],
+            ["horn_equipment", ["winds"]],
+        ] as const) {
+            const made = laneCreate(channel, carries, 20, 27);
+            expect(made, channel).toMatchObject({
+                kind: "state",
+                count: 27,
+                length: 1,
+            });
+        }
+    });
+
+    it("makes a click on Feet mark time on holds, not the default Step", () => {
+        expect(laneCreate("feet", ["winds", "flag"], 4, 4)).toEqual({
+            kind: "state",
+            value: "builtin:feet.step",
+            settings: { onHolds: "markTime" },
+            count: 4,
+            length: 1,
+        });
+        // and its block says so
+        expect(
+            laneCue(
+                cue({
+                    target: { kind: "band" },
+                    channel: "feet",
+                    value: "builtin:feet.step",
+                    settings: { onHolds: "markTime" },
+                }),
+                counts,
+            )?.label,
+        ).toBe("MT");
+    });
+
+    it("adds nothing where nothing fits everyone", () => {
+        expect(
+            laneCreate("horn_equipment", ["winds", "flag"], 2, 2),
         ).toBeNull();
     });
 });

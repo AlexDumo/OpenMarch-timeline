@@ -166,7 +166,8 @@ export function laneCue(cue: DatabaseCue, counts: CountIndex): LaneCue | null {
     const count = counts.countOfBeatId.get(cue.beatId);
     if (count === undefined) return null;
     const value = cueLibraryValue(cue.value);
-    const label = value?.label ?? cue.value;
+    const label =
+        cueLabel(cue.value, cue.settings) ?? value?.label ?? cue.value;
     if (cue.kind === "phrase") {
         // as compile plays it: held to the value's range, never under 2
         const min = Math.max(2, value?.minLength ?? 2);
@@ -388,6 +389,83 @@ export function newCueValue(
         candidates[0]?.id ??
         null
     );
+}
+
+const FEET_STEP = "builtin:feet.step";
+
+/**
+ * A cue's label where its settings name it, as compile labels its segments: Feet's one value,
+ * Step, reads by its pace and what it does on holds ("½", "2×", "MT"). Null for the value's own.
+ */
+function cueLabel(
+    value: string,
+    settings: Readonly<Record<string, unknown>> | undefined,
+): string | null {
+    if (value !== FEET_STEP || !settings) return null;
+    if (settings.pace === "half") return "½";
+    if (settings.pace === "double") return "2×";
+    if (settings.onHolds === "markTime" || settings.onHolds === "highMarkTime")
+        return "MT";
+    return null;
+}
+
+/**
+ * Settings that make a value differ from the default, for a channel whose only state is the
+ * default (Feet: Step): a click there adds mark time on holds, not a cue that changes nothing.
+ */
+const NOT_DEFAULT_SETTINGS: Readonly<
+    Record<string, Readonly<Record<string, string>>>
+> = {
+    [FEET_STEP]: { onHolds: "markTime" },
+};
+
+/** What a press on the lane adds (`laneCreate`). */
+export interface LaneCreate {
+    kind: "state" | "phrase";
+    value: string;
+    /** Only where the value alone would be the default (`NOT_DEFAULT_SETTINGS`). */
+    settings?: Record<string, string>;
+    /** The cue's count: a state's, a phrase's first. */
+    count: number;
+    /** Counts it covers on the lane: a phrase's length, 1 for a state. */
+    length: number;
+}
+
+/**
+ * What a press from count `start` released on `end` adds (performer-behavior.md section 7.2),
+ * and so what the lane draws while it is held: a drag over 2 counts or more is a phrase of that
+ * length where the channel has one for everyone focused; otherwise a state on the release's
+ * count. A states-only channel (Feet, Facing, the winds' Horn) draws no span, as it saves none.
+ * Null when nothing fits.
+ */
+export function laneCreate(
+    channel: VisualsChannel,
+    carries: readonly PerformerCarry[],
+    start: number,
+    end: number,
+): LaneCreate | null {
+    const length = Math.abs(end - start) + 1;
+    const phrase = length >= 2 ? newCueValue(channel, "phrase", carries) : null;
+    if (phrase)
+        return {
+            kind: "phrase",
+            value: phrase,
+            count: Math.min(start, end),
+            length,
+        };
+    const value = newCueValue(channel, "state", carries);
+    if (!value) return null;
+    const isDefault = carries.every(
+        (c) => defaultCueValue(channel, c) === value,
+    );
+    const settings = isDefault ? NOT_DEFAULT_SETTINGS[value] : undefined;
+    return {
+        kind: "state",
+        value,
+        ...(settings ? { settings: { ...settings } } : {}),
+        count: end,
+        length: 1,
+    };
 }
 
 /**
