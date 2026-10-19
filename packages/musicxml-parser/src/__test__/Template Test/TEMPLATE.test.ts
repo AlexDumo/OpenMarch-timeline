@@ -1,11 +1,7 @@
+import { extractXmlFromMxlFile } from "../../read";
 import { describe, expect, test } from "vitest";
 import { parseMusicXml } from "../../parser";
-import {
-    extractXmlFromMxlFile,
-    type Measure,
-    type Beat,
-    secondsPerQuarterNote,
-} from "../../utils";
+import { type Measure, type Beat, secondsPerQuarterNote } from "../../utils";
 import {
     measuresEqual,
     beatsEqual,

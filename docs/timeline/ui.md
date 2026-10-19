@@ -71,15 +71,14 @@ from it. The spec still wins on the model; this file decides presentation.
   UI-9's **Add selected marchers**; clip moves stand._ A clip move shifts its whole spec
   timeline, every transition and assignment in it, by the dragged beats
   (`shiftTimeline`); shapes and destinations stay put, so every position moves
-  in time only. A shift that would leave beat 0 or overlap the same marcher's
-  row at the same layer in another timeline is refused (E-ARGS, E-A3), and a
-  clip dropped where it started writes nothing. Create Track's target is a
+  in time only. A shift that would leave beat 0 is refused (E-ARGS), and a
+  clip dropped where it started writes nothing. Overlapping the same marchers'
+  other moves is fine: spec §6.2 decides who plays (2026-10-16; such a shift
+  was refused with E-A3 before). Create Track's target is a
   shape picked by selecting its track, which takes the selected marchers, or
-  else the one selected marcher. Its assignments go one layer above the
-  highest layer the marchers already have in the range (0 where they have
-  none), so the new track steals the range (R-2) the way a breakaway does
-  (G2). Why: at layer 0 it would overlap a converted show's page moves and
-  always be refused (E-A3). A block with fewer cells than marchers is refused
+  else the one selected marcher. Its layers follow spec §6.2: it is above
+  the page moves it overlaps, so it steals that range (R-2) the way a
+  breakaway does (G2). A block with fewer cells than marchers is refused
   (E-T4). A marcher's new track starts at its position at the range start, so
   it doesn't jump there, but it holds still over the range. If the track steals
   a move in progress, the marcher stops for the range and the stolen move then
@@ -97,11 +96,9 @@ from it. The spec still wins on the model; this file decides presentation.
   `p_{n-m+q}` by trail order (R-9, R-12), so under `inherit` their slots don't
   matter and one more founder shifts every target. New marchers take its
   lowest vacant slots, and recasting it is refused. A marcher cast into an
-  existing transition gets an assignment over the whole transition, one layer
-  above the highest layer it already has over those beats (0 where it has
-  none), so it steals them like Create Track does (UI-6); the inspector then
-  names the moves it steals from. The layer is chosen per marcher, since layers
-  only rank one marcher's own moves (R-2). A recast that wouldn't shorten the
+  existing transition gets an assignment over the whole transition, ranked
+  against that marcher's other moves by spec §6.2; the inspector then names
+  the moves that take over from it and the moves it takes over. A recast that wouldn't shorten the
   total distance is refused, so ties never reshuffle anybody. Recasting a
   direct or arc move changes the slot order that a later follow-the-leader
   move under `inherit` takes its trail order from (R-12), so it can reorder
@@ -246,17 +243,16 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Removing marchers.** Removing a marcher from a timeline deletes its
     assignment and its own one-slot transition. It never deletes the
     timeline, which stays stored, and selectable, even with nobody in it.
-  - **Layers.** A marcher can be added to a timeline that lies wholly inside
-    the range of a timeline it's already in. The new transition goes one layer
-    above its highest layer there and steals those beats (R-2). Once its
-    ending coordinate is edited, the old move resumes after it from that new
-    point and still ends where it ended (R-5, D-12, D-7), so its path after
-    the steal changes. Adding to a timeline that only partly overlaps one of
-    the marcher's timelines is refused (E-ARGS); the database wouldn't refuse
-    it, since the new row is a layer up. Adding to a range that strictly
-    contains one of the marcher's timelines is refused too, since the new
-    layer would steal that whole move (P8.14, lead, 2026-10-02). Ctrl+click
-    on the timeline is ignored (it opens the context menu on macOS).
+  - **Layers.** A marcher can be in timelines that overlap. Who plays follows
+    spec §6.2 (project owner, 2026-10-16): a page's own move is underneath;
+    otherwise the move that starts later takes over, and of two that start
+    together the shorter one wins. When the winning move ends, the other one
+    resumes from where the marcher is and still ends where it ended (R-5,
+    D-12, D-7). Adding to a timeline that partly overlaps, or strictly
+    contains, one of the marcher's timelines is allowed; it was refused before
+    (P8.14). Adding one that has exactly the same counts as another of the
+    marcher's moves is refused (L-4). Ctrl+click on the timeline is ignored
+    (it opens the context menu on macOS).
   - **Creating a timeline.** Click and drag on empty timeline space selects a
     range (snapping as in UI-2), which acts as an empty timeline that isn't
     stored yet; **Add selected marchers** on it creates the timeline. It
@@ -276,9 +272,9 @@ from it. The spec still wins on the model; this file decides presentation.
     assignment in the selected timeline (a converted or shape-cast show), a
     canvas edit of it is refused with a hint to use the inspector. UI-9's own
     flows never make a second row.
-  - **New marchers and overlaps** (_lead default_). A new marcher joins
-    stored timelines in start order and skips one that only partly overlaps a
-    timeline it has already joined.
+  - **New marchers and overlaps** (_lead default_). Superseded: since the
+    2026-10-08 amendment a new marcher stands at home with no moves, and
+    since 2026-10-16 partial overlaps are allowed (spec §6.2).
   - **Deleting a flag.** Deleting page N's flag deletes N's row and moves
     page N+1's start back to N's start, the exact inverse of **+**: N+1 keeps
     its flag, id and data (per-page data follows the page that keeps its
@@ -315,10 +311,15 @@ from it. The spec still wins on the model; this file decides presentation.
     any moved marcher that isn't in it (UI-9's own transition and layer rules),
     and sets their endings. There is no **Add selected marchers** step; the
     menu item is removed. A window that crosses page flags passes through
-    (project owner, 2026-10-04; research/ownership/10-cross-page-windows.md):
-    the drag overrides the moved marchers' moves inside the window, which stay
-    stored underneath and come back when it is deleted, and a move the window
-    runs into partway catches up after it (R-5). An info toast names what was
+    (project owner, 2026-10-04; research/ownership/10-cross-page-windows.md).
+    Who plays inside the window follows spec §6.2 like everywhere else
+    (project owner, 2026-10-16): the drag wins over page moves and over moves
+    that started before the window, which stay stored underneath and come back
+    when it is deleted; a move that starts inside the window wins from its
+    start. One that also ends inside the window hands the marchers back, so
+    they still arrive where they were dropped. One that runs past P means they
+    aren't at the dropped spot at P, and the toast names the move that takes
+    over. A move the window runs into partway catches up after it (R-5). An info toast names what was
     passed through, including page flags with no stored move under sparse rows,
     and offers **Start from Page N** (was "Only change Page N", renamed by
     defined-coordinates 07c §2), which moves them from the last flag before P
@@ -736,10 +737,10 @@ from it. The spec still wins on the model; this file decides presentation.
     a dashed red outline. Release commits where it waits. It never merges into the other timeline
     (owner, 2026-10-08, V-127).
   - **Walls.** An edge stops at what it would collide with or be cut short by, and the readout names
-    it: a neighboring flag, a move attached to the flag, another move on the same marchers at the
-    same or a higher layer (it never takes over the overlap: owner, 2026-10-08, V-121), a marcher
-    joining or leaving partway, or 1 count. It grows over moves it
-    already overrides (the page moves under a breakaway), which catch up where it ends (V-20, V-21).
+    it: a neighboring flag, a move attached to the flag, a marcher joining or leaving partway, or
+    1 count. Other moves on the same marchers don't stop it (project owner, 2026-10-16, replacing
+    V-121): where it now overlaps them, spec §6.2 decides who plays, and the counts that don't play
+    are drawn faded. A page's moves it grows over catch up where it ends (V-20, V-21).
   - **Readouts.** One wording: "Page 3: 8 → 11 counts", "Move 3: 4 → 6 counts", then the reason.
   - **One edit, Esc cancels.** A drag commits once, on release, as one undoable edit. Esc, a lost
     pointer, or a drag brought back writes nothing. Esc during a clip drag never also leaves
@@ -1196,7 +1197,8 @@ These belong in the inspector (P8.5), not the timeline:
 
 - path style, bulge, waypoints, destination shape, `slot_count`, `order_mode`
   and slot casting;
-- the layer of each assignment (spec Q-8 stays open for anything richer);
+- which moves take over from each assignment, and why ("starts later", "same start, shorter").
+  There is no layer field: layers are derived (spec §6.2, D-18);
 - diagnostics (§8.9 requires them). The timeline adds a warning badge on any
   clip whose range has a diagnostic; the inspector lists them. A shape track's
   badge counts all of its transitions' diagnostics; a marcher track's counts
@@ -1208,7 +1210,7 @@ These belong in the inspector (P8.5), not the timeline:
 (`TimelineInspectorSection`, timeline mode only) explains each selected marcher
 (up to 10) at the selected page's end beat from `explain`: span kind with a
 plain-language note, its beats, the transition and the spec timeline it belongs
-to, the assignment's layer, slot, progress, origin (home, or the end of the
+to, which move it is following there and why (spec §6.2), slot, progress, origin (home, or the end of the
 previous span), path style, bulge, waypoints, destination, and for
 follow-the-leader spans the member order place, order source and target. It
 then lists that marcher's diagnostics, and below it every diagnostic of the
@@ -1253,14 +1255,13 @@ sums up the vacant slots as ranges, such as "0–9, 12, … (+N)" (D-13,
 - the slot, typed as a number: a vacant slot is taken, and an occupied one is
   traded with its marcher (both rows are deleted and inserted again, so no
   moment has two marchers in one slot);
-- the layer (a whole number from -1000 to 1000), with a note that the higher
-  layer wins where a marcher's moves overlap. The same layer over the same
-  beats as another of its moves is refused (E-A3);
 - the first and end beats, inside the transition (E-A1);
 - removal, which leaves the slot vacant.
 
-Each member says where it's stolen: the beats where a higher layer wins, and
-by which transition (R-2), the inspector's counterpart of UI-1's dashed spans.
+Each member says where it's stolen: the beats where another move takes over,
+by which transition, and why ("starts later", "same start, shorter"; spec
+§6.2), the inspector's counterpart of UI-1's dashed spans. P8.4's layer field
+is removed (project owner, 2026-10-16): no layer is typed anywhere.
 Two actions cast (UI-7): **Cast selected marchers** puts the selected marchers
 who aren't in the transition into its vacant slots (nearest, or lowest for
 follow the leader), and a note names the moves the cast steals beats from;
@@ -1371,10 +1372,9 @@ points (P7.2).
 - **U-Q2:** what resizing a clip edge means. Decided (C-11, P8.10): a range
   edit of the clip's whole timeline. The timeline and every transition in it
   move together, and assignments anchored at the moved edge follow (R-E1).
-- **U-Q3:** how layers show on the timeline, if at all (spec Q-8). Since
-  P8.4 the inspector shows and edits each assignment's layer and where it's
-  stolen (UI-7); the timeline itself still shows steals only as dashed spans
-  (UI-1).
+- **U-Q3:** how layers show on the timeline, if at all (spec Q-8). Decided
+  (project owner, 2026-10-16): never as numbers. Clips stack by who plays, and
+  the counts a move loses are drawn faded (spec §6.2, D-18).
 - **U-Q4:** the shape track's activity rule. Decided: UI-4.
 - **U-Q5:** the rest of UI-9. Decided (2026-10-01): per-page data follows the
   page that keeps its flag (UI-9 **+**); timelines track flags that move;
