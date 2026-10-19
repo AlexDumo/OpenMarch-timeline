@@ -3,8 +3,8 @@ import {
     GUARD_UNIFORM_PRESET_IDS,
     UNIFORM_PRESET_IDS,
 } from "../marchers/uniformPresets";
-import FootballTemplates from "@/global/classes/fieldTemplates/Football";
-import GridFieldTemplates from "@/global/classes/fieldTemplates/GridFields";
+import { FootballFieldTemplates as FootballTemplates } from "@openmarch/core";
+import { GridFieldTemplates } from "@openmarch/core";
 import {
     DEFAULT_VENUE_PARAMS,
     KIT_LIGHTING,

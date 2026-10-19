@@ -1,6 +1,6 @@
-import { FieldProperties } from "@openmarch/core";
+import { FieldProperties } from "../../FieldProperties";
 import { describe, expect, it, beforeEach } from "vitest";
-import FieldPropertiesTemplates from "../../FieldProperties.templates";
+import { FieldPropertiesTemplates } from "..";
 
 describe("FieldProperties.templates", () => {
     describe("college", () => {

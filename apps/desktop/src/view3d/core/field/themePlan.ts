@@ -17,7 +17,7 @@ import { planImage } from "./imagePlan";
 
 /**
  * The `theme` style (blank kit): the 2D canvas's field, painted with the
- * `FieldTheme` colors. Mirrors the 2D field's plan (`fieldPlan.ts`) element
+ * `FieldTheme` colors. Mirrors the 2D field's plan (`fieldPlan.ts` in `@openmarch/core`) element
  * for element, with the editor's default of grid and half lines on. Only the
  * checkpoint labels outside the field's edges are left out, because the
  * surface covers the footprint.
