@@ -125,59 +125,67 @@ const KeyframeDiamond = memo(function KeyframeDiamond({
     menu?: TimelineKeyframeMenu;
 }) {
     const filled = keyframe.set === keyframe.total;
+    const button = (
+        <button
+            type="button"
+            data-testid={`timeline-keyframe-${keyframe.beat}-${filled ? "filled" : "hollow"}`}
+            data-timeline-interactive="true"
+            aria-label={label}
+            aria-haspopup={menu ? "menu" : undefined}
+            // Under the start flag (z-40) and the playhead (z-50), over the flag grips (z-35)
+            className="group/keyframe focus-visible:ring-accent pointer-events-auto absolute z-[36] flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
+            style={{
+                left,
+                top: TIMELINE_PAGE_ROW_BOTTOM,
+                width: TARGET_SIZE,
+                height: TARGET_SIZE,
+            }}
+            // A press here is the diamond's: the timeline under it mustn't scrub
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => onSeek?.(keyframe.beat)}
+            // With its own menu, the page menu on the surface must not open too
+            onContextMenu={
+                menu ? (event) => event.stopPropagation() : undefined
+            }
+            onKeyDown={menu ? openMenuFromKeyboard : undefined}
+        >
+            <span
+                aria-hidden="true"
+                className={clsx(
+                    "border-text block rotate-45 border-[1.5px] group-hover/keyframe:scale-125",
+                    filled ? "bg-text" : "bg-bg-1",
+                )}
+                style={{
+                    width: DIAMOND_SIZE - 2,
+                    height: DIAMOND_SIZE - 2,
+                }}
+            />
+        </button>
+    );
+    // Without a menu, a right-click goes on to the timeline's own
+    if (!menu)
+        return (
+            <ShortcutTooltip label={label} side="top" closeOnPress>
+                {button}
+            </ShortcutTooltip>
+        );
     return (
         <ContextMenu.Root>
             <ShortcutTooltip label={label} side="top" closeOnPress>
-                <ContextMenu.Trigger asChild disabled={!menu}>
-                    <button
-                        type="button"
-                        data-testid={`timeline-keyframe-${keyframe.beat}-${filled ? "filled" : "hollow"}`}
-                        data-timeline-interactive="true"
-                        aria-label={label}
-                        aria-haspopup={menu ? "menu" : undefined}
-                        // Under the start flag (z-40) and the playhead (z-50), over the flag grips (z-35)
-                        className="group/keyframe focus-visible:ring-accent pointer-events-auto absolute z-[36] flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
-                        style={{
-                            left,
-                            top: TIMELINE_PAGE_ROW_BOTTOM,
-                            width: TARGET_SIZE,
-                            height: TARGET_SIZE,
-                        }}
-                        // A press here is the diamond's: the timeline under it mustn't scrub
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => onSeek?.(keyframe.beat)}
-                        // The page menu on the surface must not open too
-                        onContextMenu={(event) => event.stopPropagation()}
-                        onKeyDown={menu ? openMenuFromKeyboard : undefined}
-                    >
-                        <span
-                            aria-hidden="true"
-                            className={clsx(
-                                "border-text block rotate-45 border-[1.5px] group-hover/keyframe:scale-125",
-                                filled ? "bg-text" : "bg-bg-1",
-                            )}
-                            style={{
-                                width: DIAMOND_SIZE - 2,
-                                height: DIAMOND_SIZE - 2,
-                            }}
-                        />
-                    </button>
-                </ContextMenu.Trigger>
+                <ContextMenu.Trigger asChild>{button}</ContextMenu.Trigger>
             </ShortcutTooltip>
-            {menu && (
-                <ContextMenu.Portal>
-                    <ContextMenu.Content
-                        // React bubbles the portal's presses to the timeline, which would scrub
-                        // and capture the pointer
-                        data-timeline-interactive="true"
-                        data-testid="timeline-keyframe-menu"
-                        className={TIMELINE_MENU_CONTENT_CLASS}
-                        {...KEEP_MENU_EVENTS}
-                    >
-                        <KeyframeMenuItems beat={keyframe.beat} menu={menu} />
-                    </ContextMenu.Content>
-                </ContextMenu.Portal>
-            )}
+            <ContextMenu.Portal>
+                <ContextMenu.Content
+                    // React bubbles the portal's presses to the timeline, which would scrub
+                    // and capture the pointer
+                    data-timeline-interactive="true"
+                    data-testid="timeline-keyframe-menu"
+                    className={TIMELINE_MENU_CONTENT_CLASS}
+                    {...KEEP_MENU_EVENTS}
+                >
+                    <KeyframeMenuItems beat={keyframe.beat} menu={menu} />
+                </ContextMenu.Content>
+            </ContextMenu.Portal>
         </ContextMenu.Root>
     );
 });

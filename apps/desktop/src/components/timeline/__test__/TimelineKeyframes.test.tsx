@@ -2,6 +2,9 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
 import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
+import type Beat from "@/global/classes/Beat";
+import type Page from "@/global/classes/Page";
+import { Timeline } from "../Timeline";
 import type { TimelineKeyframeMenu } from "../TimelineKeyframes";
 import {
     BasicTimeline,
@@ -270,5 +273,96 @@ describe("beside the selection's keyframes", () => {
         expect(
             screen.getByRole("button", { name: "Page 2" }),
         ).not.toHaveAttribute("aria-describedby");
+    });
+});
+
+/** The zero-length beat 0, then `count` timed beats: the view axis is one beat behind the show's */
+const appBeats = (count: number): Beat[] =>
+    Array.from({ length: count + 1 }, (_, index) => ({
+        id: index + 1,
+        position: index,
+        duration: index === 0 ? 0 : 0.5,
+        includeInMeasure: true,
+        notes: null,
+        index,
+        timestamp: index === 0 ? 0 : (index - 1) * 0.5,
+    }));
+
+const BEATS = appBeats(24);
+
+const appPage = (id: number, name: string, beats: Beat[]): Page =>
+    ({
+        id,
+        name,
+        counts: id === 1 ? 0 : beats.length,
+        notes: null,
+        order: id - 1,
+        nextPageId: id < 4 ? id + 1 : null,
+        previousPageId: id === 1 ? null : id - 1,
+        isSubset: false,
+        duration: beats.length * 0.5,
+        beats,
+        measures: null,
+        measureBeatToStartOn: null,
+        measureBeatToEndOn: null,
+        timestamp: beats[0]!.timestamp,
+    }) as unknown as Page;
+
+// Home, then pages 2, 3 and 4 of eight beats each: page 2's flag is the show's beat 17
+const PAGES = [
+    appPage(1, "1", [BEATS[0]!]),
+    appPage(2, "2", BEATS.slice(1, 9)),
+    appPage(3, "3", BEATS.slice(9, 17)),
+    appPage(4, "4", BEATS.slice(17, 25)),
+];
+
+const showTimeline = (props: Partial<Parameters<typeof Timeline>[0]> = {}) =>
+    render(
+        <Timeline
+            mode="expanded"
+            beats={BEATS}
+            pages={PAGES}
+            measures={[]}
+            timelines={[]}
+            showTransport={false}
+            pixelsPerBeat={16}
+            keyframes={[{ beat: 17, set: 1, total: 1 }]}
+            {...props}
+        />,
+    );
+
+describe("a keyframe diamond's menu in the Timeline (#306)", () => {
+    it("acts on the show's beat, not the timeline's", () => {
+        const menu = keyframeMenu();
+        showTimeline({ keyframeMenu: menu });
+        // Drawn at the timeline's beat 16, one behind the show's
+        fireEvent.contextMenu(
+            screen.getByTestId("timeline-keyframe-16-filled"),
+        );
+        expect(menu.stateFor).toHaveBeenCalledWith(17);
+        fireEvent.click(screen.getByRole("menuitem", { name: "Unset here" }));
+        expect(menu.onUnset.mock.calls).toEqual([[17]]);
+    });
+
+    it("without a menu, a right-click on a diamond goes on to the timeline's own menu", () => {
+        const onAdd = vi.fn();
+        // A selected range over the diamond, which has the timeline's menu: spec beats
+        // [15, 19), drawn as view beats [14, 18)
+        showTimeline({
+            addSelectedMarchers: { onAdd },
+            selection: {
+                kind: "range",
+                range: { startBeatIndex: 15, endBeatIndex: 19 },
+            },
+        });
+        // jsdom lays nothing out: clientX is px from beat 0
+        fireEvent.contextMenu(
+            screen.getByTestId("timeline-keyframe-16-filled"),
+            { clientX: 16 * 16 },
+        );
+        expect(menuItems()).toEqual([
+            expect.stringContaining("Add selected marchers"),
+        ]);
+        expect(screen.queryByTestId("timeline-keyframe-menu")).toBeNull();
     });
 });
