@@ -104,9 +104,18 @@ export function unsetFollowingPages({
         (p) => p.range && p.range.start < beat && beat <= p.flag,
     );
     if (!holding) return null;
+    // Later pages follow the spot only if nothing of the marcher's own ends after it in this page
+    const flag = holding.flag;
+    const lastInPage = targets.filter(
+        (id) =>
+            !resolverSpans(resolver, id).some(
+                (s) => s.kind !== "hold" && s.end > beat && s.end <= flag,
+            ),
+    );
+    if (lastInPage.length === 0) return null;
     const states = pageKeepStates({
         pages,
-        marcherIds: targets,
+        marcherIds: lastInPage,
         spansOf: (id) => resolverSpans(resolver, id),
         kept,
     });

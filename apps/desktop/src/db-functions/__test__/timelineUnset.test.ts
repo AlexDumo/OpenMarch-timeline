@@ -438,6 +438,21 @@ describeDbTests(
             expect(await following(db, [a, b, c])).toBeNull();
         });
 
+        it("names none mid-page when the marchers move again before the page's flag", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            const { a } = await show(db);
+            // a is Set on count 13 and moves on to page 2's flag, which pages 3–4 follow
+            await move(db, { start: PAGE2.start, end: 13 }, [
+                { marcherId: a, xy: ELSEWHERE },
+            ]);
+            playheadAt(13);
+            expect(await following(db, [a])).toBeNull();
+            playheadAt(PAGE2.end);
+            expect(await following(db, [a])).toEqual(["3", "4"]);
+        });
+
         it("names none where the next page holds a kept spot", async ({
             db,
             marchersAndPages: _,
