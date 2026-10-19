@@ -8,6 +8,7 @@ import {
     drawnFollowing,
     followingAmount,
     labelOpacity,
+    labelWeight,
     type FadeClock,
 } from "../fieldFollowing";
 
@@ -66,14 +67,14 @@ function manualClock() {
     };
 }
 
-/** The look a marcher is drawn with: how far along the dashes, how opaque its label. */
+/** The look a marcher is drawn with: how far along the dashes, how much lighter its label. */
 const look = (
     dimming: FieldDimming,
     following: FieldFollowing,
     id: number,
 ) => ({
     amount: followingAmount(dimming, following, id),
-    label: labelOpacity(dimming, following, id),
+    label: labelWeight(dimming, following, id),
 });
 
 describe("easing into the Following look on Stop", () => {
@@ -85,18 +86,21 @@ describe("easing into the Following look on Stop", () => {
         // Who's Following is known straight away: selecting doesn't wait
         expect(following.isFollowing(1)).toBe(true);
         expect(drawnFollowing(dimming, following, 1)).toBe(true);
-        expect(look(dimming, following, 1)).toEqual({ amount: 0, label: 1 });
+        expect(look(dimming, following, 1)).toEqual({ amount: 0, label: 0 });
         time.frame(FOLLOWING_EASE_MS / 2);
-        // Ease-out: past halfway at half the time
+        // Ease-out: past halfway at half the time, the label thinning with the dashes
         const middle = look(dimming, following, 1);
         expect(middle.amount).toBeGreaterThan(0.5);
         expect(middle.amount).toBeLessThan(1);
-        expect(middle.label).toBeLessThan(1);
-        expect(middle.label).toBeGreaterThan(FOLLOWING_LOOK.labelOpacity);
+        expect(middle.label).toBeCloseTo(
+            FOLLOWING_LOOK.labelThinning * middle.amount,
+        );
+        // The label stays at full opacity all the way
+        expect(labelOpacity(dimming, 1)).toBe(1);
         time.frame(FOLLOWING_EASE_MS / 2);
         expect(look(dimming, following, 1)).toEqual({
             amount: 1,
-            label: FOLLOWING_LOOK.labelOpacity,
+            label: FOLLOWING_LOOK.labelThinning,
         });
         expect(time.waiting).toBe(false);
     });
@@ -120,7 +124,7 @@ describe("easing into the Following look on Stop", () => {
         following.set(new Set([1]), { ease: true });
         time.frame(16);
         following.set(null);
-        expect(look(dimming, following, 1)).toEqual({ amount: 0, label: 1 });
+        expect(look(dimming, following, 1)).toEqual({ amount: 0, label: 0 });
         expect(time.waiting).toBe(false);
     });
 
@@ -143,7 +147,7 @@ describe("easing into the Following look on Stop", () => {
         following.set(new Set([1]));
         expect(look(dimming, following, 1)).toEqual({
             amount: 1,
-            label: FOLLOWING_LOOK.labelOpacity,
+            label: FOLLOWING_LOOK.labelThinning,
         });
         expect(time.waiting).toBe(false);
     });
@@ -175,18 +179,24 @@ describe("a marcher's drawn look", () => {
         expect(drawnFollowing(dimming, following, 1)).toBe(false);
     });
 
-    it("draws a Following label a little fainter, still readable; dim wins", () => {
+    it("draws a Following label lighter in weight at full opacity; dim wins", () => {
         const dimming = new FieldDimming();
         const following = new FieldFollowing();
+        // FieldDimming's set is who stays bright: 4 is outside the isolated move
         dimming.set(new Set([1, 2, 3]));
-        following.set(new Set([2, 3]));
-        expect(labelOpacity(dimming, following, 1)).toBe(1);
-        expect(labelOpacity(dimming, following, 3)).toBe(
-            FOLLOWING_LOOK.labelOpacity,
+        following.set(new Set([2, 3, 4]));
+        // Set: bold, solid
+        expect(labelWeight(dimming, following, 1)).toBe(0);
+        expect(labelOpacity(dimming, 1)).toBe(1);
+        // Following: lighter, still solid
+        expect(labelWeight(dimming, following, 3)).toBe(
+            FOLLOWING_LOOK.labelThinning,
         );
-        expect(labelOpacity(dimming, following, 4)).toBe(DIMMED_OPACITY);
-        expect(FOLLOWING_LOOK.labelOpacity).toBeGreaterThanOrEqual(0.7);
-        expect(FOLLOWING_LOOK.labelOpacity).toBeLessThan(1);
+        expect(labelOpacity(dimming, 3)).toBe(1);
+        // Dimmed and Following: isolation's dim, at the Set weight
+        expect(labelWeight(dimming, following, 4)).toBe(0);
+        expect(labelOpacity(dimming, 4)).toBe(DIMMED_OPACITY);
+        expect(FOLLOWING_LOOK.labelThinning).toBeGreaterThan(0);
     });
 
     it("dashes the edge at least 2 px wide round a 60% fill, solid corners", () => {

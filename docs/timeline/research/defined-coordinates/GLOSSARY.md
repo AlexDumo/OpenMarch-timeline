@@ -25,7 +25,7 @@ Terms used throughout:
   marcher with a dashed edge at full strength: a shape with an outline dashes the outline round its
   fill at 60%, one without dashes its edge in its fill's color with nothing inside, and an X dashes
   its own lines, at any size (a small shape gets fewer, longer dashes). The dashes keep the shape's
-  contrast and read by shape, not only by lightness; the label is a little fainter (0.75). Following marchers stay selectable and draggable, and
+  contrast and read by shape, not only by lightness; the label is drawn lighter in weight at full opacity (#324). Following marchers stay selectable and draggable, and
   dragging one on the count makes it Set. Playback draws everyone solid, and isolation's dim wins
   over the Following look (#300, #301). Say "Set" and "Following" (e.g. "Following Page 2") in the
   UI, not "pinned", "locked", "kept" or "edited".
