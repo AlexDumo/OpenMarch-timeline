@@ -148,7 +148,6 @@ const COMPACT_BUTTON = <TimelineCompactButton />;
 export const toTimelineSelection = (
     selection: TimelineEditSelection,
     startBeat?: number,
-    startPinned = false,
 ): TimelineSelection =>
     selection.kind === "range"
         ? {
@@ -161,7 +160,6 @@ export const toTimelineSelection = (
               ...(startBeat !== undefined && startBeat !== selection.start
                   ? { startFlagBeatIndex: startBeat }
                   : {}),
-              ...(startPinned ? { startPinned: true } : {}),
           }
         : selection.kind === "home"
           ? { kind: "home" }
@@ -429,7 +427,6 @@ export default function TimelineModePanel() {
                 const s = useTimelineSelectionStore.getState();
                 windowBeforeClick.current = s.isolation?.restore ?? {
                     startBeat: s.startBeat,
-                    startPinned: s.startPinned,
                     playheadBeat: s.playheadBeat,
                 };
             }}
@@ -458,9 +455,6 @@ export default function TimelineModePanel() {
                         basic ? undefined : commands.commitTimelineRange
                     }
                     clipResize={basic ? undefined : clipResize}
-                    onUnpinStart={() =>
-                        useTimelineSelectionStore.getState().unpinStart()
-                    }
                     onOpenRange={
                         basic
                             ? undefined
@@ -573,13 +567,9 @@ export function PlayingTimeline({
             }),
         [],
     );
-    // UI-12: the pin shows outside isolation, whose start flag is the isolated move's own
-    const startPinned = useTimelineSelectionStore(
-        (s) => s.startPinned && s.isolation === null,
-    );
     const selection = useMemo(
-        () => toTimelineSelection(editSelection, startBeat, startPinned),
-        [editSelection, startBeat, startPinned],
+        () => toTimelineSelection(editSelection, startBeat),
+        [editSelection, startBeat],
     );
     // UI-12: the paused clock reads the beat the timeline shows, not the selected page's end
     const shownBeat = useTimelineSelectionStore(displayedBeat);

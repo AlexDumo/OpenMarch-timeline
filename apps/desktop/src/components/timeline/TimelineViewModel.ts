@@ -197,11 +197,6 @@ export type TimelineSelection =
           readonly via?: "pages";
           /** The range was drawn by dragging on empty timeline space (Ctrl+drag) */
           readonly drawn?: boolean;
-          /**
-           * The start flag was placed by hand and stays through navigation (UI-10 pinning); UI-12
-           * draws it with a pin that unpins it
-           */
-          readonly startPinned?: boolean;
       }
     | null;
 
@@ -267,6 +262,8 @@ export interface TimelineInteractionProps {
     readonly playLoops?: boolean;
     /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     readonly onPlayFromPlayhead?: () => void;
+    /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
+    readonly onPlayOn?: () => void;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
@@ -333,8 +330,6 @@ export interface TimelineCommonProps
     ) => TimelineRangeCommitResult;
     /** Resizing a clip by its edges (resize-move), in view beats; without it clips have no handles */
     readonly clipResize?: TimelineClipResizeCommands;
-    /** Unpins the start flag (UI-12), from its pin */
-    readonly onUnpinStart?: () => void;
     /** The loop (UI-17), view beats; `null` or absent when looping is off */
     readonly loop?: TimelineBeatRange | null;
     /** A loop end dragged or stepped (UI-17), view beats */

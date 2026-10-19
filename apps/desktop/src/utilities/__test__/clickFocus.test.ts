@@ -113,6 +113,20 @@ describe("installClickFocusMarker", () => {
         expect(marked(second)).toBe(false);
     });
 
+    it("marks a clicked toggle group item, which an arrow leaves for a ringed one", () => {
+        first.setAttribute("role", "radio");
+        second.setAttribute("role", "radio");
+        first.focus();
+        press(" ");
+        vi.runAllTimers();
+        expect(marked(first)).toBe(true);
+        // The group's arrow keys move focus to the next item, as keyboard focus
+        keyboardFocus = true;
+        second.focus();
+        expect(marked(first)).toBe(false);
+        expect(marked(second)).toBe(false);
+    });
+
     it("decides on the first press of a held key", () => {
         first.focus();
         first.addEventListener("keydown", (event) => event.stopPropagation());

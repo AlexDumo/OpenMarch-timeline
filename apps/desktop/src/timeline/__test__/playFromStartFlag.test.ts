@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
-import { playTimelinePage, toggleTimelinePlayback } from "../timelineTransport";
+import {
+    playTimelineOn,
+    playTimelinePage,
+    toggleTimelinePlayback,
+} from "../timelineTransport";
 
 /**
- * Where Play starts (lab test playback-start, project owner 2026-10-13: version B): Space plays on
- * from the start flag, and Shift+Space (or Shift+click on Play) plays on from the playhead.
- * Looping is unchanged.
+ * Where Play starts (lab test playback-start, project owner 2026-10-13: version B): Alt+Space plays
+ * on from the start flag, and Shift+Space (or Shift+click on Play) plays on from the playhead. In
+ * Expert, Space plays the window once (UI-26). Looping is unchanged.
  */
 
 vi.mock("@/components/timeline/audio/AudioPlayer", () => ({
@@ -21,6 +25,7 @@ const transport = () => ({
 
 beforeEach(() => {
     store().reset();
+    store().setStartStays(true);
     store().setPageBoxes([
         { start: 0, end: 4 },
         { start: 4, end: 8 },
@@ -32,8 +37,26 @@ beforeEach(() => {
 });
 
 describe("where Play starts", () => {
-    it("Space plays on from the start flag", () => {
+    it("Alt+Space plays on from the start flag", () => {
         expect(store().startBeat).toBe(4);
+        playTimelineOn(transport());
+        expect(store().cursorBeat).toBe(4);
+        expect(store().playback).toEqual({ kind: "on" });
+    });
+
+    it("Space plays the window once, from the start flag to the playhead (UI-26)", () => {
+        toggleTimelinePlayback(transport());
+        expect(store().cursorBeat).toBe(4);
+        expect(store().playback).toEqual({
+            kind: "preview",
+            from: 4,
+            to: 6,
+            once: true,
+        });
+    });
+
+    it("Space plays on from the start flag in Basic", () => {
+        store().setStartStays(false);
         toggleTimelinePlayback(transport());
         expect(store().cursorBeat).toBe(4);
         expect(store().playback).toEqual({ kind: "on" });

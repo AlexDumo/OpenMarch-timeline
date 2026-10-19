@@ -16,10 +16,7 @@ import {
     windowMove,
     type StoredTimelineMembership,
 } from "@/stores/TimelineSelectionStore";
-import {
-    groupDiagnosticsByTransition,
-    type MarcherInspection,
-} from "@/timeline/timelineInspector";
+import type { MarcherInspection } from "@/timeline/timelineInspector";
 import { useTimelineInspections } from "@/timeline/useTimelineInspections";
 import type {
     TransitionEditTarget,
@@ -318,51 +315,6 @@ export function MarcherInspectionView({
     );
 }
 
-/** The whole show's diagnostics, by transition (spec 8.9: the inspector MUST show them). */
-export function ShowDiagnosticsList({
-    diagnostics,
-    t,
-}: {
-    diagnostics: readonly Diagnostic[];
-    t: InspectorTranslate;
-}) {
-    const groups = useMemo(
-        () => groupDiagnosticsByTransition(diagnostics),
-        [diagnostics],
-    );
-    if (diagnostics.length === 0)
-        return (
-            <p className="text-sub" data-testid="timeline-show-diagnostics">
-                {t("inspector.timeline.diagnostics.showNone")}
-            </p>
-        );
-    return (
-        <div
-            className="flex flex-col gap-8"
-            data-testid="timeline-show-diagnostics"
-        >
-            {groups.map((group) => (
-                <ul
-                    key={group.transitionId}
-                    className="flex flex-col gap-4"
-                    aria-label={t("inspector.timeline.diagnostics.transition", {
-                        id: group.transitionId,
-                    })}
-                >
-                    {group.diagnostics.map((d, i) => (
-                        <DiagnosticItem
-                            key={`${d.code}-${d.marcherId ?? ""}-${d.slot ?? ""}-${i}`}
-                            diagnostic={d}
-                            t={t}
-                            showTransition
-                        />
-                    ))}
-                </ul>
-            ))}
-        </div>
-    );
-}
-
 /**
  * The playhead's beat and the move the window is on, held together while the playhead is scrubbed
  * (code review): the inspector's explanations and editors are rebuilt once the scrub ends, not on
@@ -420,7 +372,6 @@ function TimelineInspectorContent() {
     const {
         inspections,
         omitted,
-        diagnostics,
         unknownMarcherIds,
         transitionEdits = NO_EDITS,
         shapeOptions = NO_SHAPES,
@@ -544,14 +495,6 @@ function TimelineInspectorContent() {
                 database={db}
                 t={t}
             />
-            <div>
-                <h5 className="text-body font-medium">
-                    {t("inspector.timeline.diagnostics.showTitle", {
-                        count: diagnostics.length,
-                    })}
-                </h5>
-                <ShowDiagnosticsList diagnostics={diagnostics} t={t} />
-            </div>
         </InspectorCollapsible>
     );
 }
@@ -559,7 +502,8 @@ function TimelineInspectorContent() {
 /**
  * The inspector's timeline section (P8.5): for the selected marchers, why each is where it is at
  * the paused playhead (UI-14; it read the selected page's end beat before), from the resolver's
- * `explain`, and the show's diagnostics. While the window is a move with a clip, its Move card
+ * `explain`. The show's diagnostics are in the inspector's Show checks (`ShowChecksSection`). While
+ * the window is a move with a clip, its Move card
  * comes first (UI-14).
  */
 export function TimelineInspectorSection() {

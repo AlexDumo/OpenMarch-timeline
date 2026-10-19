@@ -107,33 +107,33 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.5: Put-down and Snap to holder
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-putdown-v2)
+- Status: in-review
+- PR: #283
 - Parallel: yes
 - Depends on: C2.3
 
 **Goal:** a released item lands where its holder was.
 
-**Scope:** on a held → placed change, write the item a move ending at the holder's position (the midpoint of the holders' hands for several); when the holder's drill later changes, the quiet note "put down away from its holder" with one-click "Snap to holder". No "follows marcher" span.
+**Scope:** on a held → placed change, the item lands at the holder's position (the midpoint of the holders' hands for several). Amended 2026-10-19 (owner): a hidden mechanism derived from Placement, never a stored move, clip or step-size entry (`withPutDowns`, props-spec section 4); when the item's own move ends on the release away from the holder, the quiet note "put down away from its holder" with one-click "Snap to holder".
 
 **Tickets:** 07, 24.
 
-**Done when:** releasing, then editing the holder's drill, raises the note, and Snap to holder clears it in one undoable step.
+**Done when:** releasing puts the item at its holder and it stays consistent through every Placement, holder and count edit; an own move ending on the release away from the holder raises the note, and Snap to holder clears it in one undoable step.
 
 **Checks:** unit and history tests; type-check, lint, format, spellcheck.
 
 ### C2.6: The show's notes list
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-putdown-v2)
+- Status: in-review
+- PR: #283
 - Parallel: yes
 - Depends on: C2.3
 
 **Goal:** one quiet place for every check, never a modal or a block.
 
-**Scope:** a notes model that names counts ("Flag not put down, count 9 of page 5"), shown on the thing and in a show-wide list. First producers: hand conflicts, crew distance, crew-less moves (when the setting is on), put-down drift. Later phases add fit, print, budget, platform, obstacle, Garment-fit, Horn/Equipment-mismatch and Silk-aspect notes. The list lives in Visuals mode (with a cross-phase note to C3.3 if Visuals mode hasn't landed); the 3D View shows a small note count for the moment viewed.
+**Scope:** a notes model that names counts ("Flag isn't drawn, Page 5 count 9"), shown on the thing and in a show-wide list. Amended 2026-10-19 (owner): one list, "Show checks", in the inspector (Editor and Visuals), replacing "Show diagnostics" and holding the cue compiler's notes and the timeline's diagnostics too. First producers: hand conflicts, crew distance, crew-less moves (when the setting is on), put-down drift. Later phases add fit, print, budget, platform, obstacle, Garment-fit, Horn/Equipment-mismatch and Silk-aspect notes. The list lives in Visuals mode (with a cross-phase note to C3.3 if Visuals mode hasn't landed); the 3D View shows a small note count for the moment viewed.
 
 **Tickets:** 07, 18, 21, 24, 25, 26.16.
 
@@ -236,6 +236,52 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 - **Left:** no UI yet: the Items tab (C3.7) and C5.5 use these.
 - **Checks:** desktop and core vitest (full suites); migration tests;
   type-check, lint, format, spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-putdown-v2) · C2.5 and C2.6
+
+- **Done (C2.5):** a released item is put down where its holder stands at
+  the release (`itemPutDown.ts`, core `putDownDrifts`): a placed change
+  records where. Editing the holder's drill afterwards raises a put-down
+  drift note, and Snap to holder moves the item to the holder's spot in one
+  undoable step.
+- **Done (C2.6):** the show's notes list (`showNotes.ts`, `useShowNotes`,
+  `ShowNotesList`) with its first four producers: hand conflicts, crew
+  distance, crew-less moves (when the show's warning is on) and put-down
+  drift. Quiet: never a modal, never a block. Shown in the Props panel, and
+  an item's own notes in its editor.
+- **Checks:** desktop and core vitest (full suites); type-check, lint,
+  format, spellcheck.
+
+### 2026-10-19 · review fixes (3d/c2-putdown-v2) · C2.5 and C2.6
+
+- **Done (C2.5, owner decision):** put-down is a hidden mechanism. Nothing
+  is written: `withPutDowns` (core `items/putDown.ts`) wraps the resolver, so
+  a released item is at its holder's spot from the release until its own
+  next move, which blends from there. The store, exports and the 3D View
+  window read positions through it (`setTimelinePutDownItems`, fed by
+  `usePutDownItems`). No "Move N" clip, no step size, nothing to edit, and
+  it can't outlive the release (held change deleted or changed, Off field, a
+  placed change inside the hold, holder deleted, ripple re-timed, counts
+  deleted: all tested). Placement edits write no moves, so they never fail
+  with E-ARGS. An own move ending on the release wins; Snap to holder
+  rewrites that move's end.
+- **Done (C2.6, owner decision):** one "Show checks" list in the inspector,
+  in the Editor and Visuals, replacing "Show diagnostics" and the Props
+  panel's list. One `ShowNote` shape (kind, source, where, what, action) from
+  the item checks (now with Carry clashes and short-handed holds), the cue
+  compiler's notes (`useShowCueChecks`, compiled as the 3D View compiles,
+  with the Silk aspects) and the timeline's diagnostics. Counts read as the
+  transport says them (`beatWhere`). Clicking a note seeks and selects.
+  Hand conflicts are one note per item and performer (a 4-item ripple is 3
+  notes, not 12). Crew checks look at motion breaks only: the 100 props ×
+  6000 beats benchmark test runs well under 50 ms. "Warn when a prop moves
+  without a crew" is a switch in Workspace settings; the 3D View's readout
+  shows the checks at the moment viewed.
+- **Left:** commands that compute from the stored drill (align, distribute)
+  see an item's own drill, not its put-down. Without model grips every item
+  takes both hands, so a one-hand hold is a short-handed note.
+- **Checks:** desktop and core vitest (touched areas); type-check, lint,
+  format; app run in the headless harness.
 
 ### 2026-10-19 · review fixes (3d/c2-slots-v2) · C2.4
 

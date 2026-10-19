@@ -7,14 +7,23 @@
  * The show time is written every frame through a ref; React re-renders only
  * when the page or count changes. The test ids are the ones P1.4's debug
  * readout used.
+ *
+ * Beside the count, how many of the show's checks (ADR 0002 D-22, the
+ * editor's "Show checks") apply at the moment viewed, when any do.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
 import { fieldPropertiesQueryOptions } from "@/hooks/queries/useFieldProperties";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useView3dSyncStore } from "@/view3d/sync/view3dSyncStore";
+import { view3dResolverQueryOptions } from "@/view3d/positions";
+import { putDownItemsQueryOptions } from "@/hooks/queries/usePutDownItems";
+import { useShowNotesWith } from "@/hooks/useShowNotes";
+import { notesAt, type ShowNote } from "@/notes/showNotes";
+import { playbackBeat } from "@/timeline/positionBuffer";
+import type { CountClock } from "@/timeline/countGrid";
 import { useCameraStore } from "../camera/cameraStore";
 import {
     formatLength,
@@ -50,10 +59,14 @@ const samePageCount = (a: PageCount | null, b: PageCount | null) =>
 function useLivePageCount(
     pages: readonly ReadoutPage[],
     timeRef: React.RefObject<HTMLSpanElement | null>,
-): PageCount | null {
+    checks: { notes: readonly ShowNote[]; clock: CountClock },
+): { current: PageCount | null; checkCount: number } {
     const [live, setLive] = useState<PageCount | null>(null);
+    const [checkCount, setCheckCount] = useState(0);
     const pagesRef = useRef(pages);
     pagesRef.current = pages;
+    const checksRef = useRef(checks);
+    checksRef.current = checks;
 
     useEffect(() => {
         let frame = 0;
@@ -74,19 +87,37 @@ function useLivePageCount(
                     )) ||
                 pageCountAt(pagesRef.current, showMs);
             setLive((prev) => (samePageCount(prev, next) ? prev : next));
+            const { notes, clock } = checksRef.current;
+            setCheckCount(
+                notes.length === 0
+                    ? 0
+                    : notesAt(notes, playbackBeat(clock, showMs)),
+            );
             frame = requestAnimationFrame(update);
         };
         update();
         return () => cancelAnimationFrame(frame);
     }, [timeRef]);
 
-    return live;
+    return { current: live, checkCount };
+}
+
+/** The show's checks in the window, over its own resolver (put-downs included). */
+function useWindowChecks(): readonly ShowNote[] {
+    const { data: resolver } = useQuery(view3dResolverQueryOptions());
+    const { data: putDownItems } = useQuery(putDownItemsQueryOptions());
+    const version = useMemo(() => {
+        if (resolver && putDownItems) resolver.setPutDownItems(putDownItems);
+        return {};
+    }, [resolver, putDownItems]);
+    return useShowNotesWith(resolver ?? null, version).notes;
 }
 
 export function Readout({ large }: { large: boolean }) {
     const { t } = useTranslate();
     const timeRef = useRef<HTMLSpanElement>(null);
-    const { pages } = useTimingObjects();
+    const { pages, countGrid } = useTimingObjects();
+    const notes = useWindowChecks();
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
     );
@@ -95,7 +126,10 @@ export function Readout({ large }: { large: boolean }) {
     const field = useQuery(fieldPropertiesQueryOptions());
     const system = field.data?.measurementSystem ?? "imperial";
 
-    const current = useLivePageCount(pages, timeRef);
+    const { current, checkCount } = useLivePageCount(pages, timeRef, {
+        notes,
+        clock: countGrid,
+    });
 
     const length = (meters: number) => {
         const { value, unit } = formatLength(meters, system);
@@ -132,6 +166,15 @@ export function Readout({ large }: { large: boolean }) {
                             count: current.count,
                             total: current.total,
                         })}
+                    </span>
+                )}
+                {checkCount > 0 && (
+                    <span
+                        className="text-yellow"
+                        data-testid="view3d-check-count"
+                        data-count={checkCount}
+                    >
+                        {t("view3d.readout.checks", { count: checkCount })}
                     </span>
                 )}
                 <span

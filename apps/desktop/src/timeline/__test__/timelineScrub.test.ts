@@ -22,6 +22,7 @@ const paused = { isPlaying: false, setIsPlaying: () => {} };
 
 beforeEach(() => {
     store().reset();
+    store().setStartStays(true);
     store().setShowEndBeat(17);
     store().setPageBoxes([
         { start: 1, end: 9 },
@@ -30,7 +31,8 @@ beforeEach(() => {
 });
 
 describe("scrubbing while paused", () => {
-    it("seeks once per whole beat, skipping moves within the beat it is on", () => {
+    it("seeks once per whole beat, skipping moves within the beat it is on, in Basic", () => {
+        store().setStartStays(false);
         const revision = store().playheadRevision;
         seekTimeline(BEATS, 5, "press", paused);
         seekTimeline(BEATS, 5.2, "drag", paused);
@@ -48,13 +50,13 @@ describe("scrubbing while paused", () => {
         seekTimeline(BEATS, 6, "end", paused);
     });
 
-    it("keeps an unpinned start flag until the scrub ends, then moves it once", () => {
+    it("keeps the start flag until the scrub ends, then moves it once, in Basic", () => {
+        store().setStartStays(false);
         store().selectRange(1, 9);
         seekTimeline(BEATS, 9, "press", paused);
         seekTimeline(BEATS, 12, "drag", paused);
         seekTimeline(BEATS, 15, "drag", paused);
         expect(store().startBeat).toBe(1);
-        expect(store().startPinned).toBe(false);
         seekTimeline(BEATS, 15, "end", paused);
         expect(store().startBeat).toBe(9);
         expect(store().scrubbing).toBe(false);
@@ -117,20 +119,20 @@ describe("dragging a line by itself while paused (UI-21)", () => {
         expect(store().lineDrag).toBeNull();
     });
 
-    it("a click on the playhead only moves it", () => {
+    it("a click on the playhead behind the start flag swaps them (UI-26)", () => {
         store().selectRange(5, 12);
         seekTimeline(BEATS, 3, "end", playhead);
-        expect(store().startBeat).toBe(5);
-        expect(store().playheadBeat).toBe(3);
+        expect(store().startBeat).toBe(3);
+        expect(store().playheadBeat).toBe(5);
     });
 
-    it("a scrub started away from the playhead passes the start flag", () => {
+    it("a scrub started away from the playhead swaps with the start flag it passes (UI-26)", () => {
         store().selectRange(5, 12);
         seekTimeline(BEATS, 14, "press", paused);
         seekTimeline(BEATS, 3, "drag", paused);
         seekTimeline(BEATS, 3, "end", paused);
-        expect(store().playheadBeat).toBe(3);
-        expect(store().startBeat).toBe(5);
+        expect(store().startBeat).toBe(3);
+        expect(store().playheadBeat).toBe(5);
     });
 
     it("a start flag dragged past the playhead swaps with it; a cancel puts both back", () => {

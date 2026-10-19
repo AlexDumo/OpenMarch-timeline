@@ -9,6 +9,7 @@ import type { CountClock } from "@/timeline/countGrid";
 import {
     navigateTimeline,
     loopBounds,
+    playTimelineOn,
     playTimelinePage,
     seekTimeline,
     toggleTimelinePlayback,
@@ -18,6 +19,7 @@ import {
     playbackStartInfoRef,
 } from "./audio/AudioPlayer";
 import type { TimelinePlayback } from "./Timeline";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
 
 interface PlaybackState {
     readonly countGrid: CountClock;
@@ -31,7 +33,11 @@ const playbackCommands = (latest: {
     readonly current: PlaybackState;
 }): Pick<
     TimelinePlayback,
-    "onSeek" | "onNavigate" | "onPlayingChange" | "onPlayFromPlayhead"
+    | "onSeek"
+    | "onNavigate"
+    | "onPlayingChange"
+    | "onPlayFromPlayhead"
+    | "onPlayOn"
 > => ({
     // UI-12: while playing, a click or page button jumps playback there, and a scrub suspends it
     // until it ends (`seekTimeline`), which says where a scrub's seek landed
@@ -57,6 +63,11 @@ const playbackCommands = (latest: {
         const { isPlaying, setIsPlaying } = latest.current;
         playTimelinePage({ isPlaying, setIsPlaying });
     },
+    // Alt+click on Play, as Alt+Space (UI-26)
+    onPlayOn: () => {
+        const { isPlaying, setIsPlaying } = latest.current;
+        playTimelineOn({ isPlaying, setIsPlaying });
+    },
 });
 
 /**
@@ -74,8 +85,9 @@ const playbackCommands = (latest: {
  *   flag and selects that page (`navigateTimelinePages`). While playing, both jump playback
  *   instead and leave the playhead alone (UI-12, `jumpTimelinePlayback`); a scrub suspends
  *   playback until it ends, then plays on from there once (`seekTimeline`, UI-12 review).
- * - Play (`toggleTimelinePlayback`, UI-17) loops the loop region while looping is on, wherever the
- *   playhead is; otherwise it plays on from the start flag. Stop goes back to where Play was
+ * - Play (`toggleTimelinePlayback`, UI-17) loops the loop region while looping is on; otherwise
+ *   Expert plays the window once, start flag to playhead, and Alt plays on (UI-26), and Basic plays
+ *   on from the start flag. Stop goes back to where Play was
  *   pressed, and Shift+Space pauses where it is instead (UI-24).
  */
 export function useTimelinePlayback({
@@ -127,6 +139,8 @@ export function useTimelinePlayback({
     const latest = useRef(state);
     latest.current = state;
     const commands = useMemo(() => playbackCommands(latest), []);
+    // UI-26: Alt+click plays on in Expert; Basic's Play already does
+    const basic = useIsBasicMode();
 
     return useMemo<TimelinePlayback>(
         () => ({
@@ -137,8 +151,10 @@ export function useTimelinePlayback({
             returnBeat: isPlaying ? restingBeat : undefined,
             playLoops,
             ...commands,
+            onPlayOn: basic ? undefined : commands.onPlayOn,
         }),
         [
+            basic,
             commands,
             isPlaying,
             liveBeat,
