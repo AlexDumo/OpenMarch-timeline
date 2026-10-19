@@ -85,6 +85,7 @@
             "pause": "Pause",
             "play": "Play",
             "playPage": "Play from playhead / pause",
+            "playOn": "Play on from the start flag",
             "playPause": "Play / stop",
             "holdFaster": "Double speed while held",
             "holdSlower": "Half speed while held",

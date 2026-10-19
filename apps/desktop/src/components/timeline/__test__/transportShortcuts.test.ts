@@ -34,8 +34,10 @@ describe("transport shortcuts (UI-17)", () => {
             nextBeat: "Shift + E",
             play: "Space",
             playPage: "Shift + Space",
+            playOn: "Alt + Space",
             loop: "C",
         });
+        expect(TRANSPORT_SHORTCUTS.playOn).toBe(shown("playOn"));
         expect(TRANSPORT_SHORTCUTS.playPage).toBe(shown("playPage"));
         expect(TRANSPORT_SHORTCUTS.play).toBe(shown("playPause"));
         expect(TRANSPORT_SHORTCUTS.previousPage).toBe(shown("previousPage"));
@@ -58,6 +60,11 @@ describe("app menu actions (docs/adr/0003-menu-actions-ipc.md)", () => {
                 action: "playPage",
                 label: "Play from Playhead / Pause",
                 accelerator: "Shift+Space",
+            },
+            {
+                action: "playOn",
+                label: "Play On from Start Flag",
+                accelerator: "Alt+Space",
             },
             {
                 action: "toggleLoop",
@@ -102,6 +109,7 @@ describe("the shortcuts list (UI-17 follow-up)", () => {
         expect(playback).toEqual([
             "Space",
             "Shift + Space",
+            "Alt + Space",
             "C",
             "]",
             "[",

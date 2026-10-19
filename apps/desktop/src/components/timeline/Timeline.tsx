@@ -126,6 +126,8 @@ export interface TimelinePlayback {
     readonly playLoops?: boolean;
     /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     readonly onPlayFromPlayhead?: () => void;
+    /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
+    readonly onPlayOn?: () => void;
     /** Page navigation from the transport; without it, the transport seeks to page starts */
     readonly onNavigate?: (direction: TimelineNavigation) => void;
 }
@@ -181,8 +183,6 @@ export interface TimelineProps {
     ) => TimelineRangeCommitResult;
     /** Resizing a clip by its edges (resize-move), in spec beats */
     readonly clipResize?: TimelineClipResizeCommands;
-    /** Unpins the start flag (UI-12), from its pin */
-    readonly onUnpinStart?: () => void;
     /** The loop (UI-17), spec beats; `null` or absent when looping is off */
     readonly loop?: TimelineBeatRange | null;
     /** A loop end dragged or stepped (UI-17), spec beats */
@@ -351,7 +351,6 @@ export const selectionToView = (
                         ),
                     }
                   : {}),
-              ...(selection.startPinned ? { startPinned: true } : {}),
           }
         : selection;
 
@@ -796,6 +795,7 @@ export function Timeline(props: TimelineProps) {
         onPlayingChange: useLatestCallback(playback.onPlayingChange),
         playLoops: playback.playLoops,
         onPlayFromPlayhead: useLatestCallback(playback.onPlayFromPlayhead),
+        onPlayOn: useLatestCallback(playback.onPlayOn),
         onNavigate: useLatestCallback(playback.onNavigate),
         onPixelsPerBeatChange: useLatestCallback(setPixelsPerBeat),
         zoomFitted: props.zoomFitted,
@@ -811,7 +811,6 @@ export function Timeline(props: TimelineProps) {
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
-        onUnpinStart: useLatestCallback(props.onUnpinStart),
         loop: viewLoop,
         onLoopChange: changeLoop,
         transportSecondary: props.transportSecondary,
