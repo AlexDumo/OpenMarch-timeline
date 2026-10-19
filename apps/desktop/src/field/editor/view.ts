@@ -125,6 +125,30 @@ export function centerAtBase(
     );
 }
 
+/**
+ * The view `t` of the way from `from` to `to` (0 to 1), as if the element's
+ * visible part of the field slid and resized in a straight line from one to
+ * the other. Clicking the zoom percentage glides along this.
+ */
+export function viewBetween(
+    from: FieldView,
+    to: FieldView,
+    t: number,
+): FieldView {
+    const left = (v: FieldView) => -v.panX / v.zoom;
+    const right = (v: FieldView) => (v.width - v.panX) / v.zoom;
+    const top = (v: FieldView) => -v.panY / v.zoom;
+    const lerp = (a: number, b: number) => a + (b - a) * t;
+    const shownLeft = lerp(left(from), left(to));
+    const zoom = to.width / (lerp(right(from), right(to)) - shownLeft);
+    return {
+        ...to,
+        zoom,
+        panX: -shownLeft * zoom,
+        panY: -lerp(top(from), top(to)) * zoom,
+    };
+}
+
 /** The share of the fullscreen field's container the field fills. */
 const FULLSCREEN_FILL = 0.87;
 

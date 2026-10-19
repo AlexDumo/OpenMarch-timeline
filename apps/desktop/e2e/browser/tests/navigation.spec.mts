@@ -212,6 +212,115 @@ test("Reset fits the whole field into the pane the timeline leaves", async ({
     );
 });
 
+/**
+ * Clicks Reset in the page and reads the zoom every frame for `ms`. With
+ * `wheelAfter`, scrolls the field that many frames after the click.
+ */
+const zoomsAfterReset = (page: Page, ms: number, wheelAfter?: number) =>
+    page.evaluate(
+        async ({ ms, wheelAfter }) => {
+            const reset = document.querySelector<HTMLElement>(
+                '[title="Reset Zoom and Center"]',
+            )!;
+            const surface = document.querySelector<HTMLElement>(
+                '[data-testid="threeField"]',
+            )!;
+            const zooms: number[] = [];
+            reset.click();
+            const start = performance.now();
+            while (performance.now() - start < ms) {
+                await new Promise(requestAnimationFrame);
+                if (zooms.length === wheelAfter) {
+                    const box = surface.getBoundingClientRect();
+                    surface.dispatchEvent(
+                        new WheelEvent("wheel", {
+                            deltaX: 40,
+                            clientX: box.left + box.width / 2,
+                            clientY: box.top + box.height / 2,
+                            bubbles: true,
+                            cancelable: true,
+                        }),
+                    );
+                }
+                zooms.push(window.fieldTest!.viewport().zoom);
+            }
+            return zooms;
+        },
+        { ms, wheelAfter },
+    );
+
+const fieldQualityMode = (page: Page) =>
+    page.evaluate(() => window.fieldTest!.quality!().mode);
+
+test.describe("at full quality", () => {
+    // The machines here draw WebGL in software, which puts the field in its
+    // low-quality mode: name a GPU instead
+    test.use({
+        initScript: `{
+            for (const gl of [WebGLRenderingContext, WebGL2RenderingContext]) {
+                const getParameter = gl.prototype.getParameter;
+                gl.prototype.getParameter = function (name) {
+                    // UNMASKED_RENDERER_WEBGL and RENDERER
+                    if (name === 0x9246 || name === 0x1f01) return "Test GPU";
+                    return getParameter.call(this, name);
+                };
+            }
+        }`,
+    });
+    test.skip(
+        ({ target }) => target !== "browser",
+        "Names a GPU with an init script",
+    );
+
+    test("Reset glides to the fit, and the wheel stops the glide", async ({
+        show,
+    }) => {
+        const { page } = show;
+        expect(await fieldQualityMode(page)).toBe("full");
+        const opened = await openedView(show);
+        for (let i = 0; i < 4; i++) await page.getByTitle("Zoom In").click();
+        const zoomedIn = (await settledView(page)).zoom;
+
+        // It zooms out over several frames, never past the fit, and lands on it
+        const zooms = await zoomsAfterReset(page, 1500);
+        const gliding = zooms.filter(
+            (zoom) => zoom < zoomedIn - 0.01 && zoom > opened.zoom + 0.01,
+        );
+        expect(gliding.length).toBeGreaterThan(3);
+        zooms.slice(1).forEach((zoom, i) => {
+            expect(zoom).toBeLessThanOrEqual(zooms[i] + 1e-9);
+            expect(zoom).toBeGreaterThanOrEqual(opened.zoom - 1e-9);
+        });
+        expectNear(zooms.at(-1)!, opened.zoom, 0.005);
+        await expect(page.getByTitle("Reset Zoom and Center")).toHaveText(
+            "100%",
+        );
+
+        // A scroll mid-glide stops it where it is
+        for (let i = 0; i < 4; i++) await page.getByTitle("Zoom In").click();
+        await settledView(page);
+        const stopped = await zoomsAfterReset(page, 800, 3);
+        const after = stopped.slice(4);
+        expect(after.every((zoom) => zoom === after[0])).toBe(true);
+        expect(after[0]).toBeGreaterThan(opened.zoom + 0.01);
+    });
+});
+
+test.describe("in Performance mode", () => {
+    test.use({ uiSettings: { fieldPerformanceMode: true } });
+
+    test("Reset jumps to the fit", async ({ show }) => {
+        const { page } = show;
+        expect(await fieldQualityMode(page)).toBe("low");
+        const opened = await openedView(show);
+        for (let i = 0; i < 4; i++) await page.getByTitle("Zoom In").click();
+        await settledView(page);
+
+        const zooms = await zoomsAfterReset(page, 300);
+        zooms.forEach((zoom) => expectNear(zoom, opened.zoom, 0.005));
+    });
+});
+
 test("in a narrow window, Reset fits the field's width", async ({ show }) => {
     const { page } = show;
     await openedView(show);

@@ -8,6 +8,7 @@ import {
     MAX_ZOOM,
     MIN_ZOOM,
     pinchStep,
+    viewBetween,
     wheel,
     zoomAt,
     type FieldView,
@@ -126,6 +127,50 @@ describe("the opening view", () => {
         expect(opened.panY).toBeGreaterThanOrEqual(16 - 1e-9);
         expect(opened.panX + 1800 * zoom).toBeLessThanOrEqual(1000 - 16 + 1e-9);
         expect(opened.panY + 960 * zoom).toBeLessThanOrEqual(600 - 16 + 1e-9);
+    });
+});
+
+describe("viewBetween", () => {
+    const zoomedIn: FieldView = {
+        width: 1000,
+        height: 600,
+        zoom: 2,
+        panX: -900,
+        panY: -300,
+    };
+    const fitted = centerAtBase(1000, 600, field);
+    const shown = (v: FieldView) => ({
+        left: -v.panX / v.zoom,
+        right: (v.width - v.panX) / v.zoom,
+        top: -v.panY / v.zoom,
+    });
+
+    it("starts at the first view and ends at the second", () => {
+        const start = viewBetween(zoomedIn, fitted, 0);
+        expect(start.zoom).toBeCloseTo(zoomedIn.zoom);
+        expect(start.panX).toBeCloseTo(zoomedIn.panX);
+        expect(start.panY).toBeCloseTo(zoomedIn.panY);
+        const end = viewBetween(zoomedIn, fitted, 1);
+        expect(end.zoom).toBeCloseTo(fitted.zoom);
+        expect(end.panX).toBeCloseTo(fitted.panX);
+        expect(end.panY).toBeCloseTo(fitted.panY);
+    });
+
+    it("slides the shown part of the field in a straight line", () => {
+        const [a, b, half] = [
+            shown(zoomedIn),
+            shown(fitted),
+            shown(viewBetween(zoomedIn, fitted, 0.5)),
+        ];
+        expect(half.left).toBeCloseTo((a.left + b.left) / 2);
+        expect(half.right).toBeCloseTo((a.right + b.right) / 2);
+        expect(half.top).toBeCloseTo((a.top + b.top) / 2);
+    });
+
+    it("zooms between the two zooms", () => {
+        const half = viewBetween(zoomedIn, fitted, 0.5);
+        expect(half.zoom).toBeLessThan(zoomedIn.zoom);
+        expect(half.zoom).toBeGreaterThan(fitted.zoom);
     });
 });
 

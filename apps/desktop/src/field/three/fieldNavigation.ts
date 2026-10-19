@@ -7,15 +7,18 @@ import {
     isPanButton,
     panBy,
     pinchStep,
+    viewBetween,
     wheel,
     zoomAt,
     type ElementPoint,
     type FieldView,
     type NavigationSettings,
 } from "@/field/editor/view";
+import { SpringValue } from "@react-spring/web";
 import type { ZoomControlsCanvas } from "@/components/canvas/CanvasZoomControls";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { useFieldViewStore } from "./fieldView";
+import { currentQualitySettings } from "./useFieldQuality";
 
 /**
  * The new field's navigation input: turns wheel, pointer and touch events on
@@ -30,6 +33,8 @@ let navigated = false;
 
 /** Moves the view to `next` for the user. */
 function navigate(next: FieldView) {
+    // The user's own navigation stops a glide where it is
+    glide.stop();
     navigated = true;
     useFieldViewStore.setState(next);
 }
@@ -48,17 +53,67 @@ export function setView(next: FieldView) {
 }
 
 /**
- * Fits the whole field into the field's pane and centers it, as a show opens
- * and as the reset button (the zoom percentage) does. The pane's size is
- * measured now, so it counts the timeline's current height.
+ * Fits the whole field into the field's pane and centers it, at once, as a
+ * show opens and as leaving fullscreen does (the zoom percentage glides there,
+ * `glideToFit`). The pane's size is measured now, so it counts the timeline's
+ * current height.
  */
 export function resetView() {
     const { width, height, field } = view();
     if (width <= 0 || height <= 0) return;
+    glide.stop();
     navigated = false;
     useFieldViewStore.setState({
         ...centerAtBase(width, height, field),
         baseZoom: baseZoom(width, height, field),
+    });
+}
+
+/** How far along the zoom-percentage click's glide is: 0 where it began, 1 at the fit. */
+const glide = new SpringValue(0);
+
+/** Quick, and it settles on the fit without overshooting it. */
+const GLIDE_CONFIG = { tension: 280, friction: 30, clamp: true };
+
+const prefersReducedMotion = () =>
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+/**
+ * Glides from the current view to the fitted, centered one, as clicking the
+ * zoom percentage does. The fit is measured each frame, so it lands on the
+ * pane as it is. Any navigation along the way stops the glide where it is.
+ * With reduced motion, or in the field's low-quality mode (Performance mode,
+ * or a machine that draws WebGL in software), it jumps there.
+ */
+export function glideToFit() {
+    const current = view();
+    const { width, height, field } = current;
+    if (width <= 0 || height <= 0) return;
+    if (prefersReducedMotion() || !currentQualitySettings().animateView)
+        return resetView();
+    const from: FieldView = {
+        width,
+        height,
+        zoom: current.zoom,
+        panX: current.panX,
+        panY: current.panY,
+    };
+    glide.stop();
+    navigated = false;
+    // The readout counts down to 100% as the field glides
+    useFieldViewStore.setState({ baseZoom: baseZoom(width, height, field) });
+    glide.set(0);
+    void glide.start({
+        to: 1,
+        config: GLIDE_CONFIG,
+        onChange: () => {
+            const now = view();
+            const to = centerAtBase(now.width, now.height, now.field);
+            useFieldViewStore.setState(viewBetween(from, to, glide.get()));
+        },
+        onRest: ({ finished }) => {
+            if (finished) resetView();
+        },
     });
 }
 
@@ -72,6 +127,7 @@ export function settleView() {
 
 /** Fits the whole field into `container` (its fullscreen container, padding included). */
 export function fitFullscreen(container: { width: number; height: number }) {
+    glide.stop();
     const fit = fullscreenFit(view(), container, view().field);
     if (fit) useFieldViewStore.setState(fit);
 }
@@ -99,7 +155,7 @@ export const threeZoomControls: ZoomControlsCanvas = {
     setZoom: (zoom: number) => setView({ ...view(), zoom }),
     setViewportTransform: ([zoom, , , , panX, panY]: number[]) =>
         setView({ ...view(), zoom, panX, panY }),
-    centerAtBaseZoom: resetView,
+    centerAtBaseZoom: glideToFit,
     // The view store redraws the field itself
     requestRenderAll: () => {},
 };

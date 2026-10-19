@@ -169,7 +169,10 @@ they pass alone and in Electron.
   5% of a side), no longer the height alone capped at 1. Clicking the zoom
   percentage measures the pane as it is then, so it fits around whatever
   height the timeline has; opening a show and leaving fullscreen use the
-  same fit.
+  same fit. The click glides there (a react-spring spring, about a third of
+  a second, no overshoot); any navigation stops the glide where it is. It
+  jumps instead with reduced motion or in the field's low-quality mode
+  (`QUALITY_SETTINGS.animateView`), so Performance mode turns it off.
 - The view opens once the field and a page are loaded, and centers again on
   each resize until 250 ms later, as the panels around the field settle (Fabric
   centers once more at 250 ms). Unlike Fabric, none of that undoes a zoom or
