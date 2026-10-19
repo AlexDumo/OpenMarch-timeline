@@ -573,7 +573,7 @@ const STATIC_ACTIONS = {
         defaultBindings: ["$mod+Shift+V"],
         ignoreRepeat: true,
     },
-    // Preview: watch the show without editing it (the button at the title bar's right end)
+    // Preview: watch the show without editing it (the workspace switch's third mode)
     togglePreview: {
         labelKey: "actions.ui.togglePreview",
         keywordsKey: "actions.ui.togglePreviewKeywords",

@@ -84,7 +84,9 @@ export function navigateTimelinePages(
     if (target.range) {
         state.selectRange(target.range.start, target.range.end);
         // UI-17: going to a page takes the loop there (in Expert the loop follows the window anyway)
-        if (state.loop && !state.isolation)
+        // Not in Preview, which has no loop on screen: it stays for the Editor
+        // (`useBasicModeGuards`)
+        if (state.loop && !state.isolation && !isPreviewMode())
             state.setLoop({ start: target.range.start, end: target.range.end });
     } else state.selectHome();
     return true;

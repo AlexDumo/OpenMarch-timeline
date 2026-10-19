@@ -412,9 +412,14 @@ function ThreeFieldView() {
         setActiveFieldEditor(editor);
         return () => setActiveFieldEditor(null);
     }, [editor]);
-    // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1)
+    // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1). Preview
+    // edits nothing, and its field takes no input at all (below)
     const visuals = useIsVisualsView();
-    useEffect(() => editor.setReadOnly(visuals), [editor, visuals]);
+    const previewing = useIsPreviewMode();
+    useEffect(
+        () => editor.setReadOnly(visuals || previewing),
+        [editor, visuals, previewing],
+    );
     // A rotation typed into the inspector belongs to its selection and page:
     // when either changes before it's saved, it's dropped (#198)
     useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
@@ -513,6 +518,9 @@ function ThreeFieldView() {
             <div className="relative h-full w-full">
                 {fieldProperties && quality.reason !== "noWebGL" && (
                     <Canvas
+                        // R3F sets pointer-events back to auto on its own wrapper: Preview turns
+                        // them off there too, so no press, wheel or pinch reaches the field
+                        style={preview ? NO_POINTER_EVENTS : undefined}
                         resize={{ offsetSize: true }}
                         key={canvasKey}
                         // The field canvas, for the scenarios
@@ -677,6 +685,9 @@ function useFieldItems(
         [itemRows, showPropNames, propNameOverrides],
     );
 }
+
+/** The field canvas in Preview: no input */
+const NO_POINTER_EVENTS = { pointerEvents: "none" } as const;
 
 /** How long to wait for Preview's layout to settle. */
 const PREVIEW_SETTLE_MS = 250;
