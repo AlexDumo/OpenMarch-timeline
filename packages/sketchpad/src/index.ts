@@ -32,6 +32,7 @@ export * from "./drill/snap";
 export { mirrorAcross50, offsetCopy } from "./drill/mirror";
 export * from "./fills/omFills";
 export { countDots, hasDotFill } from "./fills/dotCount";
+export { dataUrlToBlob } from "./editor/scene";
 export { registerOmFillers } from "./fills/roughFiller";
 export {
     exportBounds,

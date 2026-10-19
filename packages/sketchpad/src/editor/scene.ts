@@ -16,6 +16,7 @@ import type { FieldProperties } from "@openmarch/core";
 import { fieldSceneBounds } from "../drill/coordinates";
 import { randomInteger } from "../ids";
 import type { SketchStore } from "../types";
+import { isImageDataUrl } from "../doc/sketchDoc";
 
 export type Api = ExcalidrawImperativeAPI;
 type Writable<T> = { -readonly [K in keyof T]: T[K] };
@@ -318,7 +319,13 @@ export const blobToDataUrl = (blob: Blob) =>
         reader.readAsDataURL(blob);
     });
 
+/**
+ * An image data URL as a blob. Anything else is refused: sketch files are untrusted, and a
+ * plain `fetch` would follow `https:` or `file:` URLs.
+ */
 export async function dataUrlToBlob(dataURL: string): Promise<Blob> {
+    if (!isImageDataUrl(dataURL))
+        throw new Error("A sketch image must be an image data URL");
     return (await fetch(dataURL)).blob();
 }
 

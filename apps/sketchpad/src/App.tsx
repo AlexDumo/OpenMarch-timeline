@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { FieldPropertiesTemplates } from "@openmarch/core";
 import {
+    dataUrlToBlob,
     downloadBlob,
     parseOmSketchFile,
     referencedFileIds,
@@ -94,7 +95,7 @@ export function App() {
         try {
             const parsed = parseOmSketchFile(await file.text());
             for (const { dataURL } of Object.values(parsed.files))
-                await store.putFile(await (await fetch(dataURL)).blob());
+                await store.putFile(await dataUrlToBlob(dataURL));
             await ref.current?.openDoc(parsed.sketch);
         } catch (error) {
             alert(`Couldn't open ${file.name}: ${(error as Error).message}`);

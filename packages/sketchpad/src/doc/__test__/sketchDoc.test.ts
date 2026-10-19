@@ -128,6 +128,30 @@ describe("SketchDoc", () => {
         ).toThrow(SketchDocError);
     });
 
+    it("drops files that aren't image data URLs", () => {
+        const doc = createSketchDoc({ name: "x", fieldProperties: hs });
+        const back = parseOmSketchFile(
+            JSON.stringify({
+                type: "openmarch-sketch",
+                sketch: doc,
+                files: {
+                    web: { mimeType: "image/png", dataURL: "https://x/y.png" },
+                    disk: {
+                        mimeType: "image/png",
+                        dataURL: "file:///etc/passwd",
+                    },
+                    html: {
+                        mimeType: "text/html",
+                        dataURL: "data:text/html;base64,AA==",
+                    },
+                    ok: { dataURL: "data:image/webp;base64,AA==" },
+                },
+            }),
+        );
+        expect(Object.keys(back.files)).toEqual(["ok"]);
+        expect(back.files.ok!.mimeType).toBe("image/webp");
+    });
+
     it("lists the image files live elements refer to", () => {
         const doc = createSketchDoc({ name: "x", fieldProperties: hs });
         doc.pages[0]!.elements = [

@@ -61,6 +61,14 @@ export function nextPageName(
     );
 }
 
+/** The image types a sketch may hold; SVG is drawn as an image, so its scripts never run */
+const IMAGE_DATA_URL =
+    /^data:image\/(png|jpeg|gif|webp|svg\+xml|avif|bmp);base64,/i;
+
+/** Whether a string is an image data URL, the only kind of URL a sketch file may carry */
+export const isImageDataUrl = (dataURL: unknown): dataURL is string =>
+    typeof dataURL === "string" && IMAGE_DATA_URL.test(dataURL);
+
 export class SketchDocError extends Error {}
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -134,8 +142,25 @@ export function parseOmSketchFile(text: string): OmSketchFile {
     return {
         type: "openmarch-sketch",
         sketch: parseSketchDoc(raw.sketch),
-        files: isRecord(raw.files) ? (raw.files as OmSketchFile["files"]) : {},
+        files: parseOmSketchFiles(raw.files),
     };
+}
+
+/** The image files of a `.omsketch` file, keeping only image data URLs */
+function parseOmSketchFiles(input: unknown): OmSketchFile["files"] {
+    const files: OmSketchFile["files"] = {};
+    if (!isRecord(input)) return files;
+    for (const [id, file] of Object.entries(input)) {
+        if (!isRecord(file) || !isImageDataUrl(file.dataURL)) continue;
+        files[id] = {
+            mimeType:
+                typeof file.mimeType === "string"
+                    ? file.mimeType
+                    : file.dataURL.slice(5, file.dataURL.indexOf(";")),
+            dataURL: file.dataURL,
+        };
+    }
+    return files;
 }
 
 /** The sha256 file ids a sketch's live image elements refer to */

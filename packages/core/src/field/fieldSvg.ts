@@ -28,10 +28,24 @@ export const escapeXml = (text: string) =>
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
 
-/** `rgb()` plus an opacity attribute, as SVG 1.1 and `svg-to-pdfkit` expect */
-export const svgPaint = (kind: "fill" | "stroke", color: RgbaColor) =>
-    `${kind}="rgb(${color.r},${color.g},${color.b})"` +
-    (color.a < 1 ? ` ${kind}-opacity="${svgNum(color.a)}"` : "");
+/** A number clamped to a range; anything that isn't a finite number becomes `min` */
+const clamp = (value: unknown, min: number, max: number) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
+};
+
+/**
+ * `rgb()` plus an opacity attribute, as SVG 1.1 and `svg-to-pdfkit` expect. Colors come from
+ * show and sketch files, so every channel is forced to a number before it reaches the markup.
+ */
+export const svgPaint = (kind: "fill" | "stroke", color: RgbaColor) => {
+    const channel = (v: unknown) => Math.round(clamp(v, 0, 255));
+    const alpha = clamp(color.a ?? 1, 0, 1);
+    return (
+        `${kind}="rgb(${channel(color.r)},${channel(color.g)},${channel(color.b)})"` +
+        (alpha < 1 ? ` ${kind}-opacity="${svgNum(alpha)}"` : "")
+    );
+};
 
 export const svgLine = (
     x1: number,
@@ -66,7 +80,7 @@ export const svgText = ({
     bold?: boolean;
     extra?: string;
 }) =>
-    `<text x="${svgNum(x)}" y="${svgNum(y)}" font-family="${fontFamily}" font-size="${svgNum(fontSize)}" font-weight="${bold ? "bold" : "normal"}" text-anchor="${anchor}" ${svgPaint("fill", color)}${extra} xml:space="preserve">${escapeXml(content)}</text>`;
+    `<text x="${svgNum(x)}" y="${svgNum(y)}" font-family="${escapeXml(fontFamily)}" font-size="${svgNum(fontSize)}" font-weight="${bold ? "bold" : "normal"}" text-anchor="${escapeXml(anchor)}" ${svgPaint("fill", color)}${extra} xml:space="preserve">${escapeXml(content)}</text>`;
 
 /** A field image to draw under the grid: its natural size (0 if unknown) and where to load it from. */
 export interface FieldSvgImage {
