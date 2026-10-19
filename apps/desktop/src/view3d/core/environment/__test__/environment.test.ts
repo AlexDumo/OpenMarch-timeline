@@ -111,11 +111,14 @@ describe("createEnvironment", () => {
         const env = createEnvironment();
         env.setLighting("night");
         expect(env.sun.castShadow).toBe(false);
+        expect(env.sun.visible).toBe(false);
         env.setLighting("house");
         expect(env.sky.mesh.visible).toBe(false);
+        expect(env.sun.visible).toBe(false);
         env.setLighting("day");
         expect(env.sky.mesh.visible).toBe(true);
         expect(env.sun.castShadow).toBe(true);
+        expect(env.sun.visible).toBe(true);
         env.dispose();
     });
 
@@ -142,11 +145,14 @@ describe("lightPole", () => {
             (c): c is SpotLight => c instanceof SpotLight,
         )!;
         expect(spot.intensity).toBe(0);
+        expect(spot.visible).toBe(false);
         pole.setOn(true, 0.5);
         expect(spot.intensity).toBeCloseTo(0.8);
+        expect(spot.visible).toBe(true);
         expect(spot.position.y).toBeCloseTo(27 + 4 * FT);
         pole.setOn(false);
         expect(spot.intensity).toBe(0);
+        expect(spot.visible).toBe(false);
         pole.dispose();
         shared.dispose();
     });

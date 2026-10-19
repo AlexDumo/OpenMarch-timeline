@@ -9,14 +9,30 @@
  * Storage keeps the columns consistent (the CHECKs in `schema.ts`); these functions keep what a
  * CHECK can't: a held change has at least one holder, only a placed change has crew, and holders
  * and crew are performers. Hand conflicts are allowed and never change data here.
+ *
+ * A write makes its change the newest on its beat (`beat_rank`), so of two items' changes on one
+ * count the one written last wins, as before a replace kept its old id.
+ *
+ * An item ripple (C3.7's "edit like a cue ripple") is one change per item, each with its own
+ * value (each flag to its own performer), spread from a start count over the ripple's span in the
+ * ripple's order. Its rows share a group id and the ripple, so it can be re-timed and its state
+ * edited together; a group edit changes the state, never who holds what.
  */
-import { and, asc, eq, inArray, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, notExists, sql } from "drizzle-orm";
 import type { Hand, Holder, PlacementChange } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 
 export type PlacementState = (typeof schema.PLACEMENT_STATES)[number];
+export type ItemRippleOrder = (typeof schema.ITEM_RIPPLE_ORDERS)[number];
+
+/** How an item ripple spreads its changes, as a cue ripple (`cues.ripple_json`). */
+export interface ItemRipple {
+    /** Counts the changes are spread over, inclusive: the first on the start count */
+    span: number;
+    order: ItemRippleOrder;
+}
 
 /** A Placement value, as written. */
 export type PlacementArgs =
@@ -34,8 +50,12 @@ export interface DatabaseItemPlacement {
     holders: Holder[];
     /** Placed: its crew, by marcher id. Empty otherwise. */
     crew: number[];
+    /** Of two changes on one beat, the higher rank is newer, then the higher id */
+    rank: number;
     /** The item ripple it is part of, or null */
     groupId: number | null;
+    /** That ripple's span and order, or null */
+    ripple: ItemRipple | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -81,6 +101,24 @@ const membersByPlacement = async (
     return members;
 };
 
+const parseRipple = (json: string | null): ItemRipple | null => {
+    if (json === null) return null;
+    const { span, order } = JSON.parse(json) as ItemRipple;
+    return { span, order };
+};
+
+const serializeRipple = (ripple: ItemRipple) => {
+    if (!Number.isInteger(ripple.span) || ripple.span < 1)
+        throw new Error("An item ripple spans at least one count");
+    if (!schema.ITEM_RIPPLE_ORDERS.includes(ripple.order))
+        throw new Error(`Unknown ripple order ${ripple.order}`);
+    return JSON.stringify({
+        version: 1,
+        span: ripple.span,
+        order: ripple.order,
+    });
+};
+
 const toDatabasePlacement = (
     row: RealPlacement,
     members: ReadonlyMap<number, Members>,
@@ -91,7 +129,9 @@ const toDatabasePlacement = (
     state: row.state as PlacementState,
     holders: members.get(row.id)?.holders ?? [],
     crew: members.get(row.id)?.crew ?? [],
+    rank: row.beat_rank,
     groupId: row.group_id,
+    ripple: parseRipple(row.ripple_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
 });
@@ -198,29 +238,53 @@ const placementById = async (
     return toDatabasePlacement(row, await membersByPlacement(db, [id]));
 };
 
+/** The rank that makes a change the newest on its beat: above every other change there. */
+const newestRankOn = async (
+    tx: DbTransaction,
+    beatId: number,
+    exceptId?: number,
+): Promise<number | null> => {
+    const row = await tx
+        .select({
+            max: sql<number | null>`max(${schema.item_placements.beat_rank})`,
+        })
+        .from(schema.item_placements)
+        .where(
+            and(
+                eq(schema.item_placements.beat_id, beatId),
+                exceptId !== undefined
+                    ? ne(schema.item_placements.id, exceptId)
+                    : undefined,
+            ),
+        )
+        .get();
+    return row?.max === null || row?.max === undefined ? null : row.max + 1;
+};
+
 /**
  * Sets an item's Placement from a beat on: adds a change on that beat, or replaces the one already
- * there in place. A visible trade of equipment between performers is one of these. `groupId`
- * puts the change in an item ripple; left out, a replaced change keeps its group.
+ * there in place, keeping its ripple. A visible trade of equipment between performers is one of
+ * these. The change becomes the newest on its beat.
  */
 export async function setItemPlacementInTransaction({
     tx,
     itemId,
     beatId,
     placement,
-    groupId,
 }: {
     tx: DbTransaction;
     itemId: number;
     beatId: number;
     placement: PlacementArgs;
-    groupId?: number | null;
 }): Promise<DatabaseItemPlacement> {
     const wanted = wantedMembers(placement);
     await assertPerformers(tx, [...wanted.keys()]);
 
     const existing = await tx
-        .select({ id: schema.item_placements.id })
+        .select({
+            id: schema.item_placements.id,
+            beat_rank: schema.item_placements.beat_rank,
+        })
         .from(schema.item_placements)
         .where(
             and(
@@ -229,15 +293,19 @@ export async function setItemPlacementInTransaction({
             ),
         )
         .get();
-    const values = {
-        state: placement.state,
-        ...(groupId !== undefined ? { group_id: groupId } : {}),
-    };
+    const rank = await newestRankOn(tx, beatId, existing?.id);
     const id = existing
         ? (
               await tx
                   .update(schema.item_placements)
-                  .set(values)
+                  .set({
+                      state: placement.state,
+                      // Only moves if another change on the beat is ranked at or above it
+                      beat_rank:
+                          rank === null
+                              ? existing.beat_rank
+                              : Math.max(existing.beat_rank, rank),
+                  })
                   .where(eq(schema.item_placements.id, existing.id))
                   .returning({ id: schema.item_placements.id })
                   .get()
@@ -245,7 +313,12 @@ export async function setItemPlacementInTransaction({
         : (
               await tx
                   .insert(schema.item_placements)
-                  .values({ item_id: itemId, beat_id: beatId, ...values })
+                  .values({
+                      item_id: itemId,
+                      beat_id: beatId,
+                      state: placement.state,
+                      beat_rank: rank ?? 0,
+                  })
                   .returning({ id: schema.item_placements.id })
                   .get()
           ).id;
@@ -261,7 +334,6 @@ export async function setItemPlacement({
     itemId: number;
     beatId: number;
     placement: PlacementArgs;
-    groupId?: number | null;
 }): Promise<DatabaseItemPlacement> {
     return transactionWithHistory(db, "setItemPlacement", (tx) =>
         setItemPlacementInTransaction({ tx, ...args }),
@@ -269,22 +341,85 @@ export async function setItemPlacement({
 }
 
 /**
- * An item ripple: one Placement change per item at its own (staggered) beat, all with the same
- * value and a new group id, so they edit and delete together. The caller picks the beats from a
- * ripple order (drill, left to right, right to left, down the form).
+ * The beats a ripple of `n` changes lands on from the beat at `start` in `beats` (in show order):
+ * the first on the start count, the rest spread evenly in time to the span's last count, each on
+ * the count whose click is nearest, as a cue ripple spreads its starts (core `compileCues`).
+ */
+export function rippleBeatIds(
+    beats: readonly { id: number; duration: number }[],
+    start: number,
+    span: number,
+    n: number,
+): number[] {
+    if (start < 0 || start >= beats.length)
+        throw new Error("An item ripple starts on a beat of the show");
+    const clicks: number[] = [];
+    let t = 0;
+    for (const b of beats) {
+        clicks.push(t);
+        t += b.duration;
+    }
+    const last = Math.min(start + Math.max(span, 1) - 1, beats.length - 1);
+    const from = clicks[start]!;
+    const to = clicks[last]!;
+    const nearest = (time: number) => {
+        let best = start;
+        for (let i = start; i <= last; i++)
+            if (Math.abs(clicks[i]! - time) < Math.abs(clicks[best]! - time))
+                best = i;
+        return best;
+    };
+    return Array.from({ length: n }, (_, i) =>
+        n === 1 || i === 0
+            ? beats[start]!.id
+            : beats[nearest(from + ((to - from) * i) / (n - 1))]!.id,
+    );
+}
+
+const beatsInShowOrder = (tx: DbTransaction) =>
+    tx
+        .select({ id: schema.beats.id, duration: schema.beats.duration })
+        .from(schema.beats)
+        .orderBy(asc(schema.beats.position), asc(schema.beats.id))
+        .all();
+
+/** The beats `n` ripple changes from `startBeatId` land on. */
+const rippleBeats = async (
+    tx: DbTransaction,
+    startBeatId: number,
+    ripple: ItemRipple,
+    n: number,
+) => {
+    const beats = await beatsInShowOrder(tx);
+    const start = beats.findIndex((b) => b.id === startBeatId);
+    if (start < 0) throw new Error(`Beat ${startBeatId} not found`);
+    return rippleBeatIds(beats, start, ripple.span, n);
+};
+
+/**
+ * An item ripple: one Placement change per item, each with its own value (each flag to its own
+ * performer), spread from `startBeatId` over the ripple's span. `rows` come in the ripple's
+ * order: the caller sorts them by drill order or by where the items stand (left to right, right
+ * to left, down the form), as a cue ripple's compile does. The rows get a new group id and the
+ * ripple, so they re-time and edit together. A row on a beat its item already has a change on
+ * replaces that change, which joins the ripple.
  */
 export async function createItemPlacementRippleInTransaction({
     tx,
+    startBeatId,
+    ripple,
     rows,
-    placement,
 }: {
     tx: DbTransaction;
-    rows: readonly { itemId: number; beatId: number }[];
-    placement: PlacementArgs;
+    startBeatId: number;
+    ripple: ItemRipple;
+    rows: readonly { itemId: number; placement: PlacementArgs }[];
 }): Promise<DatabaseItemPlacement[]> {
     if (rows.length === 0) return [];
     if (new Set(rows.map((r) => r.itemId)).size !== rows.length)
         throw new Error("An item ripple has one change per item");
+    const rippleJson = serializeRipple(ripple);
+    const beatIds = await rippleBeats(tx, startBeatId, ripple, rows.length);
     const { max } = (await tx
         .select({
             max: sql<number>`coalesce(max(${schema.item_placements.group_id}), 0)`,
@@ -293,16 +428,20 @@ export async function createItemPlacementRippleInTransaction({
         .get()) ?? { max: 0 };
     const groupId = max + 1;
     const created: DatabaseItemPlacement[] = [];
-    for (const { itemId, beatId } of rows)
-        created.push(
-            await setItemPlacementInTransaction({
-                tx,
-                itemId,
-                beatId,
-                placement,
-                groupId,
-            }),
-        );
+    for (const [i, { itemId, placement }] of rows.entries()) {
+        const change = await setItemPlacementInTransaction({
+            tx,
+            itemId,
+            beatId: beatIds[i]!,
+            placement,
+        });
+        await tx
+            .update(schema.item_placements)
+            .set({ group_id: groupId, ripple_json: rippleJson })
+            .where(eq(schema.item_placements.id, change.id))
+            .run();
+        created.push(await placementById(tx, change.id));
+    }
     return created;
 }
 
@@ -311,34 +450,172 @@ export async function createItemPlacementRipple({
     ...args
 }: {
     db: DbConnection;
-    rows: readonly { itemId: number; beatId: number }[];
-    placement: PlacementArgs;
+    startBeatId: number;
+    ripple: ItemRipple;
+    rows: readonly { itemId: number; placement: PlacementArgs }[];
 }): Promise<DatabaseItemPlacement[]> {
     return transactionWithHistory(db, "createItemPlacementRipple", (tx) =>
         createItemPlacementRippleInTransaction({ tx, ...args }),
     );
 }
 
+/** A group's rows in their ripple order: by count, then rank, then id. */
 const groupRows = (tx: DbTransaction, groupId: number) =>
     tx
-        .select()
+        .select({ placement: schema.item_placements })
         .from(schema.item_placements)
+        .innerJoin(
+            schema.beats,
+            eq(schema.item_placements.beat_id, schema.beats.id),
+        )
         .where(eq(schema.item_placements.group_id, groupId))
-        .orderBy(asc(schema.item_placements.id))
-        .all();
+        .orderBy(
+            asc(schema.beats.position),
+            asc(schema.item_placements.beat_rank),
+            asc(schema.item_placements.id),
+        )
+        .all()
+        .then((rows) => rows.map((r) => r.placement));
 
-/** Sets the value of every change in an item ripple, keeping their beats. */
-export async function setItemPlacementGroupInTransaction({
+/**
+ * Moves or re-times an item ripple: spreads its changes again from `startBeatId` (left out: the
+ * group's first count) over `ripple` (left out: its own), in `itemOrder` (the group's item ids,
+ * for a new order; left out: the order they're in). Each change keeps its value. Refused when an
+ * item already has another change on the count its change would land on.
+ */
+export async function moveItemPlacementGroupInTransaction({
     tx,
     groupId,
-    placement,
+    startBeatId,
+    ripple,
+    itemOrder,
 }: {
     tx: DbTransaction;
     groupId: number;
-    placement: PlacementArgs;
+    startBeatId?: number;
+    ripple?: ItemRipple;
+    itemOrder?: readonly number[];
 }): Promise<DatabaseItemPlacement[]> {
+    const current = await groupRows(tx, groupId);
+    if (current.length === 0)
+        throw new Error(`Item ripple ${groupId} not found`);
+    const byItem = new Map(current.map((r) => [r.item_id, r]));
+    let ordered = current;
+    if (itemOrder) {
+        if (
+            itemOrder.length !== current.length ||
+            new Set(itemOrder).size !== itemOrder.length ||
+            itemOrder.some((id) => !byItem.has(id))
+        )
+            throw new Error(
+                "A ripple's new order names each of its items once",
+            );
+        ordered = itemOrder.map((id) => byItem.get(id)!);
+    }
+    const nextRipple = ripple ?? parseRipple(current[0]!.ripple_json)!;
+    const rippleJson = serializeRipple(nextRipple);
+    const beatIds = await rippleBeats(
+        tx,
+        startBeatId ?? current[0]!.beat_id,
+        nextRipple,
+        ordered.length,
+    );
+    const ids = new Set(current.map((r) => r.id));
+    const others = await tx
+        .select({
+            id: schema.item_placements.id,
+            item_id: schema.item_placements.item_id,
+            beat_id: schema.item_placements.beat_id,
+        })
+        .from(schema.item_placements)
+        .where(inArray(schema.item_placements.item_id, [...byItem.keys()]))
+        .all();
+    for (const [i, row] of ordered.entries()) {
+        const clash = others.find(
+            (o) =>
+                !ids.has(o.id) &&
+                o.item_id === row.item_id &&
+                o.beat_id === beatIds[i],
+        );
+        if (clash)
+            throw new Error(
+                `Item ${row.item_id} already has a Placement change on that count`,
+            );
+    }
+    for (const [i, row] of ordered.entries()) {
+        const beatId = beatIds[i]!;
+        const moved = beatId !== row.beat_id;
+        const rank = moved ? await newestRankOn(tx, beatId, row.id) : null;
+        await tx
+            .update(schema.item_placements)
+            .set({
+                beat_id: beatId,
+                ripple_json: rippleJson,
+                ...(moved ? { beat_rank: rank ?? 0 } : {}),
+            })
+            .where(eq(schema.item_placements.id, row.id))
+            .run();
+    }
+    return Promise.all(current.map((r) => placementById(tx, r.id)));
+}
+
+export async function moveItemPlacementGroup({
+    db,
+    ...args
+}: {
+    db: DbConnection;
+    groupId: number;
+    startBeatId?: number;
+    ripple?: ItemRipple;
+    itemOrder?: readonly number[];
+}): Promise<DatabaseItemPlacement[]> {
+    return transactionWithHistory(db, "moveItemPlacementGroup", (tx) =>
+        moveItemPlacementGroupInTransaction({ tx, ...args }),
+    );
+}
+
+/**
+ * Sets the state of every change in an item ripple, keeping their beats and who holds what. A
+ * change already in `state` keeps its holders or crew; one coming to held needs its holders in
+ * `values` (by item id), and one coming to placed gets the crew there, or none. `values` can also
+ * give any change its own new value in the same state.
+ */
+export async function setItemPlacementGroupInTransaction({
+    tx,
+    groupId,
+    state,
+    values,
+}: {
+    tx: DbTransaction;
+    groupId: number;
+    state: PlacementState;
+    values?: ReadonlyMap<number, PlacementArgs>;
+}): Promise<DatabaseItemPlacement[]> {
+    const rows = await groupRows(tx, groupId);
+    const members = await membersByPlacement(
+        tx,
+        rows.map((r) => r.id),
+    );
     const updated: DatabaseItemPlacement[] = [];
-    for (const row of await groupRows(tx, groupId))
+    for (const row of rows) {
+        const given = values?.get(row.item_id);
+        if (given && given.state !== state)
+            throw new Error(
+                `Item ${row.item_id}'s value is ${given.state}, not ${state}`,
+            );
+        const own = members.get(row.id) ?? { holders: [], crew: [] };
+        const keep = row.state === state;
+        let placement: PlacementArgs;
+        if (given) placement = given;
+        else if (state === "held") {
+            if (!keep)
+                throw new Error(
+                    `Item ${row.item_id} needs its holders to be held`,
+                );
+            placement = { state, holders: own.holders };
+        } else if (state === "placed")
+            placement = { state, crew: keep ? own.crew : [] };
+        else placement = { state };
         updated.push(
             await setItemPlacementInTransaction({
                 tx,
@@ -347,6 +624,7 @@ export async function setItemPlacementGroupInTransaction({
                 placement,
             }),
         );
+    }
     return updated;
 }
 
@@ -356,7 +634,8 @@ export async function setItemPlacementGroup({
 }: {
     db: DbConnection;
     groupId: number;
-    placement: PlacementArgs;
+    state: PlacementState;
+    values?: ReadonlyMap<number, PlacementArgs>;
 }): Promise<DatabaseItemPlacement[]> {
     return transactionWithHistory(db, "setItemPlacementGroup", (tx) =>
         setItemPlacementGroupInTransaction({ tx, ...args }),
@@ -463,7 +742,7 @@ export async function deleteHeldPlacementsWithNoHolderInTransaction({
     return deleted.map((r) => r.id);
 }
 
-/** Every Placement change with its performers, by item and then beat order. */
+/** Every Placement change with its performers, by item, then beat order, then rank. */
 export async function getItemPlacements({
     db,
 }: {
@@ -476,7 +755,12 @@ export async function getItemPlacements({
             schema.beats,
             eq(schema.item_placements.beat_id, schema.beats.id),
         )
-        .orderBy(schema.item_placements.item_id, schema.beats.position)
+        .orderBy(
+            schema.item_placements.item_id,
+            schema.beats.position,
+            schema.item_placements.beat_rank,
+            schema.item_placements.id,
+        )
         .all();
     const members = await membersByPlacement(db);
     return rows.map((r) => toDatabasePlacement(r.placement, members));
@@ -497,6 +781,7 @@ export function toPlacementChanges(
         const change: PlacementChange = {
             id: p.id,
             beat,
+            rank: p.rank,
             state: p.state,
             holders: p.holders,
             crew: p.crew,

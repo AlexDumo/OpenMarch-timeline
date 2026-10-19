@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { XY } from "../../timeline/types";
 import {
+    carryHands,
     crewDistances,
     crewOutOfReach,
     handConflicts,
     handsAt,
     handsNeeded,
     placementAt,
+    shortHandedHolds,
+    type CarryChange,
     type Holder,
     type ItemPlacements,
     type PlacementChange,
@@ -56,15 +59,19 @@ const CREW_A = 3;
 const CREW_B = 4;
 
 /**
- * The fixture: a flag Alice starts the show with, put down on 8 and picked up by Bob on 16 (a
+ * The fixture: a flag Alice starts the show with (an explicit held change on beat 0, as a flag
+ * item gets), put down on 8 and picked up by Bob on 16 (a
  * visible trade); a rifle Alice takes in her right hand on 4 while still holding the flag; a
  * crewed riser taken off field on 24 and back on 32; a ripple of three cones off field on 12, 13
  * and 14.
  */
 const FLAG: ItemPlacements = {
     itemId: 10,
-    origin: { kind: "flag", marcherId: ALICE, hand: "both" },
-    changes: [placed(8), held(16, [{ marcherId: BOB, hand: "both" }])],
+    changes: [
+        held(0, [{ marcherId: ALICE, hand: "both" }]),
+        placed(8),
+        held(16, [{ marcherId: BOB, hand: "both" }]),
+    ],
 };
 const RIFLE: ItemPlacements = {
     itemId: 11,
@@ -76,21 +83,20 @@ const RISER: ItemPlacements = {
 };
 const CONES: ItemPlacements[] = [30, 31, 32].map((itemId, i) => ({
     itemId,
-    origin: { kind: "created" },
     changes: [offField(12 + i, 7)],
 }));
 const SHOW = [FLAG, RIFLE, RISER, ...CONES];
 
 describe("placementAt", () => {
-    it("reads a flag item as held by its original performer before its first row", () => {
-        expect(placementAt(FLAG.changes, 0, FLAG.origin)).toEqual({
+    it("reads a flag item as held by its original performer from its explicit first change", () => {
+        expect(placementAt(FLAG.changes, 0)).toEqual({
             state: "held",
             holders: [{ marcherId: ALICE, hand: "both" }],
-            changeId: null,
-            since: null,
+            changeId: FLAG.changes[0]!.id,
+            since: 0,
             groupId: null,
         });
-        expect(placementAt(FLAG.changes, 7.99, FLAG.origin).state).toBe("held");
+        expect(placementAt(FLAG.changes, 7.99).state).toBe("held");
     });
 
     it("reads a created item as placed, with no crew, before its first row", () => {
@@ -102,18 +108,16 @@ describe("placementAt", () => {
     });
 
     it("changes instantly on the click of its beat", () => {
-        expect(placementAt(FLAG.changes, 8, FLAG.origin)).toMatchObject({
+        expect(placementAt(FLAG.changes, 8)).toMatchObject({
             state: "placed",
             crew: [],
             since: 8,
         });
-        expect(placementAt(FLAG.changes, 15.5, FLAG.origin).state).toBe(
-            "placed",
-        );
+        expect(placementAt(FLAG.changes, 15.5).state).toBe("placed");
     });
 
     it("hands equipment from one performer to another with a Placement change", () => {
-        expect(placementAt(FLAG.changes, 16, FLAG.origin)).toMatchObject({
+        expect(placementAt(FLAG.changes, 16)).toMatchObject({
             state: "held",
             holders: [{ marcherId: BOB, hand: "both" }],
             since: 16,
@@ -137,7 +141,7 @@ describe("placementAt", () => {
     });
 
     it("staggers an item ripple, one row per item sharing a group id", () => {
-        const at13 = CONES.map((c) => placementAt(c.changes, 13, c.origin));
+        const at13 = CONES.map((c) => placementAt(c.changes, 13));
         expect(at13.map((p) => p.state)).toEqual([
             "off_field",
             "off_field",
@@ -153,6 +157,14 @@ describe("placementAt", () => {
             { ...offField(4), id: 100 },
         ];
         expect(placementAt(changes, 4).state).toBe("placed");
+    });
+
+    it("takes the higher rank of two changes on one beat before the higher id", () => {
+        const changes = [
+            { ...placed(4), id: 101, rank: -1 },
+            { ...offField(4), id: 100 },
+        ];
+        expect(placementAt(changes, 4).state).toBe("off_field");
     });
 });
 
@@ -257,13 +269,11 @@ describe("handConflicts", () => {
         const flags: ItemPlacements[] = [
             {
                 itemId: 70,
-                origin: { kind: "flag", marcherId: BOB, hand: "both" },
-                changes: [],
+                changes: [held(0, [{ marcherId: BOB, hand: "both" }])],
             },
             {
                 itemId: 71,
-                origin: { kind: "flag", marcherId: BOB, hand: "left" },
-                changes: [],
+                changes: [held(0, [{ marcherId: BOB, hand: "left" }])],
             },
         ];
         expect(handConflicts(flags)).toEqual([
@@ -272,8 +282,92 @@ describe("handConflicts", () => {
                 byItemId: 71,
                 marcherId: BOB,
                 side: "left",
-                from: null,
+                from: 0,
                 until: null,
+            },
+        ]);
+    });
+});
+
+describe("Carry takes hands", () => {
+    // Bob is given a rifle by a Carry cue on 10 and puts it away on 20
+    const CARRY: CarryChange[] = [
+        { marcherId: BOB, beat: 10, hands: carryHands("rifle") },
+        { marcherId: BOB, beat: 20, hands: carryHands("none") },
+    ];
+
+    it("gives the hands of what Carry gives", () => {
+        expect(carryHands("none")).toBe(null);
+        expect(carryHands("sabre")).toBe("right");
+        expect(carryHands("winds")).toBe("both");
+        expect(carryHands("flag")).toBe("both");
+    });
+
+    it("keeps a performer's Carry hands, so a held item there is a hand conflict", () => {
+        // Bob holds the flag from 16: Carry's rifle has his hands until 20
+        expect(handsAt([FLAG], 17, CARRY)).toEqual({
+            drawn: new Set(),
+            conflicts: [
+                {
+                    itemId: FLAG.itemId,
+                    byItemId: null,
+                    marcherId: BOB,
+                    side: "left",
+                },
+                {
+                    itemId: FLAG.itemId,
+                    byItemId: null,
+                    marcherId: BOB,
+                    side: "right",
+                },
+            ],
+        });
+        expect(handsAt([FLAG], 20, CARRY).drawn).toEqual(
+            new Set([FLAG.itemId]),
+        );
+        expect(handsAt([FLAG], 12, CARRY).conflicts).toEqual([]);
+    });
+
+    it("spans a Carry conflict from the later of the two to Carry's next cue", () => {
+        expect(
+            handConflicts([FLAG], CARRY).map(({ side, from, until }) => ({
+                side,
+                from,
+                until,
+            })),
+        ).toEqual([
+            { side: "left", from: 16, until: 20 },
+            { side: "right", from: 16, until: 20 },
+        ]);
+    });
+});
+
+describe("shortHandedHolds", () => {
+    it("names a two-hand item left with one holder's hand", () => {
+        const riser: ItemPlacements = {
+            itemId: 40,
+            changes: [
+                held(4, [
+                    { marcherId: ALICE, hand: "right" },
+                    { marcherId: BOB, hand: "left" },
+                ]),
+                held(12, [{ marcherId: BOB, hand: "left" }]),
+                placed(20),
+            ],
+        };
+        const flag: ItemPlacements = {
+            itemId: 41,
+            needs: "right",
+            changes: [held(4, [{ marcherId: ALICE, hand: "left" }])],
+        };
+        expect(shortHandedHolds([riser, flag])).toEqual([
+            {
+                itemId: 40,
+                changeId: riser.changes[1]!.id,
+                from: 12,
+                until: 20,
+                needed: 2,
+                held: 1,
             },
         ]);
     });

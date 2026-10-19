@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readView3dWindowParams } from "../View3dRoot";
+import { readView3dWindowParams, viewportFallback } from "../View3dRoot";
 
 describe("readView3dWindowParams", () => {
     it("reads the show name, theme and language main passes", () => {
@@ -25,5 +25,15 @@ describe("readView3dWindowParams", () => {
             theme: "dark",
             language: "en",
         });
+    });
+});
+
+describe("viewportFallback", () => {
+    it("draws the scene wherever there is WebGL, even in software", () => {
+        expect(viewportFallback("hardware")).toBeNull();
+        expect(viewportFallback("software")).toBeNull();
+        expect(viewportFallback("none")).toBe(
+            "view3d.window.graphicsUnavailable",
+        );
     });
 });

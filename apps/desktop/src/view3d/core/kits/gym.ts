@@ -17,6 +17,7 @@ import {
 import {
     createSharedMaterials,
     lightingValues,
+    setLightIntensity,
     type SharedMaterials,
 } from "../environment";
 import type {
@@ -328,8 +329,8 @@ export const buildGym: KitBuilder = ({ footprint, quality }) => {
         if (!lightingPresets.includes(preset)) return;
         const k = lightingValues(preset).kit;
         panelMat.emissiveIntensity = k.panelEmissive;
-        overhead.intensity = k.overheadIntensity;
-        showSpots.forEach((s) => (s.intensity = k.showSpotIntensity));
+        setLightIntensity(overhead, k.overheadIntensity);
+        showSpots.forEach((s) => setLightIntensity(s, k.showSpotIntensity));
     };
     setLighting("house");
 

@@ -1,7 +1,9 @@
 // @vitest-environment node
 /**
  * Migration 0025 adds item Placement (props-spec section 4, ADR 0002 D-10): the beat-keyed
- * `item_placements` and their holders and crew in `item_placement_marchers`. New tables only.
+ * `item_placements` and their holders and crew in `item_placement_marchers`. New tables only, each
+ * `IF NOT EXISTS` so the migration can run twice. A ripple's rows carry its definition, as a cue
+ * does (`ripple_json`), and `beat_rank` orders changes on one beat.
  * It comes after `0020_drop_page_era`, so a timeline file takes it on open and a page-era file
  * takes it in its conversion; it needs no `user_version` bump.
  */
@@ -29,6 +31,11 @@ import {
 } from "../../__test__/migrationRollback";
 
 const PLACEMENT_MIGRATION = migrationAt(25);
+/** `0024_demonic_scream`, the Shape tool's migration on lab builds of #181 */
+const SHAPE_LAB_MIGRATION_MS = 1792165936156;
+/** The date fork builds gave this migration before it was re-dated */
+const EARLIER_FORK_DATE = 1792168750467;
+const RIPPLE = '{"version":1,"span":4,"order":"left_right"}';
 
 type Row = Record<string, string | number | null>;
 
@@ -92,7 +99,7 @@ const insertPlacements = (db: DatabaseSync) => {
         INSERT INTO items (id, marcher_id, kind, surface_type) VALUES (2, 101, 'prop', 'obstacle');
         INSERT INTO item_placements (id, item_id, beat_id, state) VALUES (1, 1, 3, 'held');
         INSERT INTO item_placements (id, item_id, beat_id, state) VALUES (2, 1, 9, 'placed');
-        INSERT INTO item_placements (id, item_id, beat_id, state, group_id) VALUES (3, 2, 5, 'off_field', 1);
+        INSERT INTO item_placements (id, item_id, beat_id, state, group_id, ripple_json) VALUES (3, 2, 5, 'off_field', 1, '${RIPPLE}');
         INSERT INTO item_placement_marchers (id, placement_id, marcher_id, role, hand)
             VALUES (1, 1, 1, 'holder', 'both'), (2, 2, 2, 'crew', NULL), (3, 2, 3, 'crew', NULL);
     `);
@@ -167,6 +174,51 @@ describe(`Migration ${PLACEMENT_MIGRATION.tag}`, () => {
         });
     });
 
+    it("runs again on a file that took it under an earlier date, keeping its rows", async () => {
+        await open(showPath);
+        // A fork build gave this migration an earlier date, and the file has nothing newer
+        rollBackMigrationsFrom(showPath, PLACEMENT_MIGRATION.idx + 1);
+        withDb(showPath, (db) => {
+            insertPlacements(db);
+            db.prepare(
+                "UPDATE __drizzle_migrations SET created_at = ? WHERE created_at = ?",
+            ).run(EARLIER_FORK_DATE, PLACEMENT_MIGRATION.when);
+        });
+
+        await open(showPath);
+
+        withDb(showPath, (db) => {
+            expect(count(db, "item_placements")).toBe(3);
+            expect(count(db, "item_placement_marchers")).toBe(3);
+        });
+    });
+
+    it("comes to a file that took the Shape tool's lab migration (#181) first", async () => {
+        expect(PLACEMENT_MIGRATION.when).toBeGreaterThan(
+            SHAPE_LAB_MIGRATION_MS,
+        );
+        await open(showPath);
+        // A file from before the props migrations that a lab build of #181 opened
+        rollBackMigrationsFrom(showPath, PLACEMENT_MIGRATION.idx - 1);
+        withDb(showPath, (db) =>
+            db
+                .prepare(
+                    "INSERT INTO __drizzle_migrations (hash, created_at) VALUES ('0024_demonic_scream', ?)",
+                )
+                .run(SHAPE_LAB_MIGRATION_MS),
+        );
+
+        await open(showPath);
+
+        withDb(showPath, (db) => {
+            expect(tables(db)).toEqual([
+                "item_placement_marchers",
+                "item_placements",
+            ]);
+            insertPlacements(db);
+        });
+    });
+
     describe("constraints", () => {
         let db: DatabaseSync;
         beforeEach(async () => {
@@ -201,9 +253,35 @@ describe(`Migration ${PLACEMENT_MIGRATION.tag}`, () => {
         it.each<[string, Row]>([
             ["an unknown state", { state: "carried" }],
             ["no state", { state: null }],
-            ["a group id of 0", { group_id: 0 }],
-            ["a fractional group id", { group_id: 1.5 }],
-            ["a text group id", { group_id: "a" }],
+            ["a group id of 0", { group_id: 0, ripple_json: RIPPLE }],
+            ["a fractional group id", { group_id: 1.5, ripple_json: RIPPLE }],
+            ["a text group id", { group_id: "a", ripple_json: RIPPLE }],
+            ["a group with no ripple", { group_id: 1 }],
+            ["a ripple with no group", { ripple_json: RIPPLE }],
+            [
+                "a ripple of span 0",
+                {
+                    group_id: 1,
+                    ripple_json: '{"version":1,"span":0,"order":"drill"}',
+                },
+            ],
+            [
+                "a ripple in an unknown order",
+                {
+                    group_id: 1,
+                    ripple_json: '{"version":1,"span":2,"order":"random"}',
+                },
+            ],
+            [
+                "a ripple of another version",
+                {
+                    group_id: 1,
+                    ripple_json: '{"version":2,"span":2,"order":"drill"}',
+                },
+            ],
+            ["a ripple that isn't JSON", { group_id: 1, ripple_json: "{" }],
+            ["a fractional beat rank", { beat_rank: 0.5 }],
+            ["no beat rank", { beat_rank: null }],
             ["a second change on one beat", { beat_id: 5 }],
             ["a missing beat", { beat_id: 99999 }],
             ["a missing item", { item_id: 99 }],
@@ -215,7 +293,8 @@ describe(`Migration ${PLACEMENT_MIGRATION.tag}`, () => {
             ["placed", {}],
             ["held", { state: "held" }],
             ["off field", { state: "off_field" }],
-            ["in a ripple group", { group_id: 1 }],
+            ["in a ripple group", { group_id: 1, ripple_json: RIPPLE }],
+            ["ranked below others on its beat", { beat_rank: -2 }],
         ])("accepts a Placement change %s", (_, columns) => {
             expect(() => placement(columns)).not.toThrow();
         });

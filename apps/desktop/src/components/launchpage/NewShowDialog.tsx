@@ -329,6 +329,7 @@ export default function NewShowDialog({
                         isCustom: fieldTemplate.isCustom ?? false,
                     },
                     fieldImage,
+                    fieldFloor: result.fieldFloor ?? null,
                     performers,
                     coordinates: result.coordinates,
                     sectionAppearances: result.sectionAppearances.map(
