@@ -330,6 +330,7 @@ const STATIC_ACTIONS = {
     playOn: {
         labelKey: "actions.playback.playOn",
         category: "playback",
+        editsDrill: false,
         scope: "canvas",
         defaultBindings: ["Alt+Space"],
     },
