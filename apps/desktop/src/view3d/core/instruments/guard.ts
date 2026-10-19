@@ -29,8 +29,10 @@ import type {
     InstrumentModel,
     ModelOptions,
     GuardModelId,
+    SilkSpec,
 } from "./model";
 import { hold } from "./holds";
+import type { SilkCutId } from "./silkWave";
 
 /**
  * Default colors by part: chrome, black, a brass hilt, the white of a drill
@@ -52,9 +54,6 @@ interface SegmentCounts {
     lathe: number;
     /** Rings around small parts: caps, bolt, swivels. */
     small: number;
-    /** A silk's grid: cells out from the pole and along it. */
-    silkOut: number;
-    silkAlong: number;
     /** Rings along the sabre's blade, and ridges of wire on its grip. */
     blade: number;
     ridges: number;
@@ -66,8 +65,6 @@ const SEGMENTS: Record<Detail, SegmentCounts> = {
         tube: 32,
         lathe: 48,
         small: 16,
-        silkOut: 56,
-        silkAlong: 36,
         blade: 40,
         ridges: 24,
         loft: 6,
@@ -76,8 +73,6 @@ const SEGMENTS: Record<Detail, SegmentCounts> = {
         tube: 10,
         lathe: 12,
         small: 6,
-        silkOut: 6,
-        silkAlong: 4,
         blade: 10,
         ridges: 6,
         loft: 2,
@@ -395,70 +390,6 @@ function bendX(p: Piece, base: number, k: number): Piece {
     return out;
 }
 
-/**
- * How a silk hangs: `ripple` is the wave's height in +Y toward the fly
- * end and `waves` its count across the silk; `droop` lets the fly end fall
- * back down the pole (−Z), so a long silk held from one edge reads as cloth.
- */
-interface Drape {
-    ripple: number;
-    waves: number;
-    droop: number;
-}
-
-/**
- * A flag's silk: a grid of `out` by `along` cells in the XZ plane, from
- * `x0` out `width` toward +X and from `z0` up `height` along the pole,
- * hung by `drape`: still at the pole and moving more toward the fly end.
- * Shared vertices, smooth normals facing +Y (counterclockwise seen from +Y).
- */
-function silk(
-    width: number,
-    height: number,
-    drape: Drape,
-    out: number,
-    along: number,
-    x0: number,
-    z0: number,
-): Piece {
-    const p: Piece = {
-        part: PART_SILK,
-        positions: [],
-        normals: [],
-        indices: [],
-    };
-    const { ripple, waves, droop } = drape;
-    // u: 0 at the pole, 1 at the fly; v: 0 at the bottom, 1 at the top
-    const f = (u: number, v: number) =>
-        ripple *
-        Math.sin((Math.PI / 2) * Math.min(1, 3 * u)) *
-        Math.sin(2 * Math.PI * waves * u + 0.6 * Math.PI * v);
-    for (let j = 0; j <= along; j++)
-        for (let i = 0; i <= out; i++) {
-            const u = i / out;
-            const v = j / along;
-            // the fly end falls, its bottom corner further than its top, and
-            // pulls in toward the pole by about what it falls
-            const fall = droop * u * u * (1.15 - 0.3 * v);
-            p.positions.push(
-                x0 + u * width - 0.4 * fall * u,
-                f(u, v),
-                z0 + v * height - fall,
-            );
-        }
-    const row = out + 1;
-    for (let j = 0; j < along; j++)
-        for (let i = 0; i < out; i++) {
-            const a = j * row + i; // (x, z)
-            const b = (j + 1) * row + i; // (x, z + 1)
-            const c = (j + 1) * row + i + 1; // (x + 1, z + 1)
-            const d = j * row + i + 1; // (x + 1, z)
-            // +Z then +X from a: the cross product points +Y
-            p.indices.push(a, b, c, a, c, d);
-        }
-    return smoothNormals(p);
-}
-
 /** A capped chrome pole along Z from `from` to `to`. */
 const pole = (from: number, to: number, radius: number, s: SegmentCounts) =>
     smoothTube(
@@ -499,26 +430,40 @@ const tape = (z: number, radius: number, s: SegmentCounts) =>
     );
 
 /**
- * A pole from `butt` to `tip` with the silk hanging from its top `height`.
- * With `sleeve`, the silk's hem wraps the pole along its height, as a swing
- * flag's does.
+ * A silk's frame in the instrument frame: out to the fly along +X, up the
+ * pole along +Z, the face toward −Y (+X × +Z), so the frame is a rotation.
+ */
+const SILK_BASIS: SilkSpec["basis"] = [1, 0, 0, 0, 0, -1, 0, 1, 0];
+
+/** A silk's size, m: out to the fly, and along the pole; and its Cut. */
+interface SilkSize {
+    fly: number;
+    header: number;
+    cut?: SilkCutId;
+}
+
+/** The 6 ft flag's silk: 36 × 54 in. */
+export const FLAG6_SILK: SilkSize = { fly: 1.37, header: 0.9 };
+
+/**
+ * A pole from `butt` to `tip` with a silk of `silk`'s size hanging from its
+ * top. With `sleeve`, the silk's hem wraps the pole along its height, as a
+ * swing flag's does. The silk itself is a {@link SilkSpec}, drawn by the
+ * silk mesh; the hem is a piece, since it doesn't wave.
  */
 function flag(
     butt: number,
     tip: number,
     radius: number,
-    width: number,
-    height: number,
-    drape: Drape,
+    silk: SilkSize,
     s: SegmentCounts,
     sleeve = false,
-): Piece[] {
-    const bottom = tip - height;
+): { pieces: Piece[]; silks: SilkSpec[] } {
+    const bottom = tip - silk.header;
     const pieces = [
         pole(butt, tip, radius, s),
         endCap(butt, -1, radius, s),
         endCap(tip, 1, radius, s),
-        silk(width, height, drape, s.silkOut, s.silkAlong, radius, bottom),
         tape(bottom + 0.015, radius, s),
         tape(tip - 0.06, radius, s),
     ];
@@ -534,17 +479,39 @@ function flag(
                 PART_SILK,
             ),
         );
-    return pieces;
+    return {
+        pieces,
+        silks: [
+            {
+                fly: silk.fly,
+                header: silk.header,
+                ...(silk.cut ? { cut: silk.cut } : {}),
+                basis: [...SILK_BASIS],
+                origin: [radius, 0, tip],
+                mirror: 1,
+            },
+        ],
+    };
 }
 
-/** The 6 ft flag's silk: nearly flat, a low ripple across it. */
-const FLAG6_DRAPE: Drape = { ripple: 0.03, waves: 1.5, droop: 0 };
-
 /**
- * A swing flag's silk: long and light, rolling in a deep, slow wave. The
- * hold trails it back from the pole, so it doesn't droop along the pole.
+ * A silk mapped by `p' = M p + t` where M mirrors: the frame stays a
+ * rotation (M · basis · diag(1, 1, −1)) and the wave flips its face instead.
  */
-const SWING_DRAPE: Drape = { ripple: 0.12, waves: 1.4, droop: 0 };
+function mirrorSilk(silk: SilkSpec, m: Mat3, t: Vec3): SilkSpec {
+    const b = mul(m, silk.basis);
+    const o = silk.origin;
+    return {
+        ...silk,
+        basis: [b[0], b[1], -b[2], b[3], b[4], -b[5], b[6], b[7], -b[8]],
+        origin: [
+            m[0] * o[0] + m[1] * o[1] + m[2] * o[2] + t[0],
+            m[3] * o[0] + m[4] * o[1] + m[5] * o[2] + t[1],
+            m[6] * o[0] + m[7] * o[1] + m[8] * o[2] + t[2],
+        ],
+        mirror: silk.mirror === 1 ? -1 : 1,
+    };
+}
 
 /**
  * The second swing flag as the first one's mirror image through the body's
@@ -591,7 +558,7 @@ function leftSwingFlag(): { m: Mat3; t: Vec3 } {
 /** The 6 ft flag: a 1.83 m pole (butt below the hand) and a 36 by 54 in silk. */
 function flag6(s: SegmentCounts): Omit<InstrumentModel, "id"> {
     return {
-        pieces: flag(-0.6, 1.23, 0.012, 1.37, 0.9, FLAG6_DRAPE, s),
+        ...flag(-0.6, 1.23, 0.012, FLAG6_SILK, s),
         leftGrip: [0, 0, -0.25],
         mouthpiece: [0, 0, 0],
     };
@@ -616,23 +583,21 @@ export const SWING_FLAG = {
     butt: 0.06,
 } as const;
 
+/** The swing flag's silk: the 44 × 66 in swing Cut, flat-bottomed (Q41). */
+export const SWING_SILK: SilkSize = {
+    fly: SWING_FLAG.fly,
+    header: SWING_FLAG.header,
+    cut: "silk-swing-44x66",
+};
+
 /**
  * A swing flag: a 52 in pole held in one fist at its butt end, a bare tab
  * above the hand, and a 44 by 66 in silk sleeved along the rest of it.
  */
 function swingFlag(s: SegmentCounts): Omit<InstrumentModel, "id"> {
-    const { header, fly, pole, radius, butt } = SWING_FLAG;
+    const { pole, radius, butt } = SWING_FLAG;
     return {
-        pieces: flag(
-            -butt,
-            pole - butt,
-            radius,
-            fly,
-            header,
-            SWING_DRAPE,
-            s,
-            true,
-        ),
+        ...flag(-butt, pole - butt, radius, SWING_SILK, s, true),
         leftGrip: [0, 0, -0.2],
         mouthpiece: [0, 0, 0],
     };
@@ -640,13 +605,17 @@ function swingFlag(s: SegmentCounts): Omit<InstrumentModel, "id"> {
 
 /** Two swing flags: the second the first's mirror image, riding the left hand. */
 function doubleSwingFlag(s: SegmentCounts): Omit<InstrumentModel, "id"> {
-    const right = swingFlag(s).pieces;
+    const right = swingFlag(s);
     const { m, t } = leftSwingFlag();
-    const left = right.map(
+    const left = right.pieces.map(
         (p): Piece => ({ ...mapPiece(p, m, t), bone: "handL" }),
     );
+    const leftSilks = (right.silks ?? []).map(
+        (silk): SilkSpec => ({ ...mirrorSilk(silk, m, t), bone: "handL" }),
+    );
     return {
-        pieces: [...right, ...left],
+        pieces: [...right.pieces, ...left],
+        silks: [...(right.silks ?? []), ...leftSilks],
         leftGrip: t,
         mouthpiece: [0, 0, 0],
     };

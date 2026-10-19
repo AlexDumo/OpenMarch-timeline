@@ -31,6 +31,8 @@ export interface DrillChartFieldImage {
     href: string;
     width: number;
     height: number;
+    /** The floor's physical size, centered on the field; null places it by fill or fit */
+    size?: { widthM: number; heightM: number } | null;
 }
 
 export interface DrillChartFieldOptions {

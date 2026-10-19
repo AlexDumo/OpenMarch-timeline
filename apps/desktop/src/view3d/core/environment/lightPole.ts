@@ -6,6 +6,7 @@ import {
     SpotLight,
     type Vector3Tuple,
 } from "three";
+import { setLightIntensity } from "./lighting";
 import type { SharedMaterials } from "./materials";
 import { ft } from "./units";
 
@@ -53,13 +54,14 @@ export function lightPole(
     const spot = new SpotLight(0xfff3e0, 0, 0, 0.62, 0.6, 0);
     spot.position.set(0, headY, 0);
     spot.target.position.set(...lookAt);
+    spot.visible = false;
     object.add(pole, head, spot, spot.target);
 
     return {
         object,
         setOn(on, k = 1) {
             headMat.emissiveIntensity = on ? 2.2 : 0;
-            spot.intensity = on ? 1.6 * k : 0;
+            setLightIntensity(spot, on ? 1.6 * k : 0);
         },
         dispose() {
             poleGeo.dispose();
