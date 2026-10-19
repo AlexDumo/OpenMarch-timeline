@@ -15,9 +15,7 @@ import { transactionWithHistory } from "./history";
 import { createMarchersInTransaction } from "./marcher";
 import { updateMarcherHomesInTransaction } from "./marcherHome";
 import { beatsAfterDeletion } from "./cues";
-import { hasItemTables } from "./itemLibraryKeeps";
-
-export { itemLibraryKeeps } from "./itemLibraryKeeps";
+import { hasTable } from "./libraryReferences";
 
 export type DatabaseItem = typeof schema.items.$inferSelect;
 export type DatabaseItemGeometry = typeof schema.item_geometry.$inferSelect;
@@ -353,7 +351,7 @@ export async function carryItemGeometryPastDeletedBeatsInTransaction({
     tx: DbTransaction;
     beatIds: ReadonlySet<number>;
 }): Promise<void> {
-    if (beatIds.size === 0 || !(await hasItemTables(tx))) return;
+    if (beatIds.size === 0 || !(await hasTable(tx, "item_geometry"))) return;
     const rows = await tx
         .select({
             id: schema.item_geometry.id,
