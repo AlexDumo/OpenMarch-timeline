@@ -253,6 +253,12 @@ export interface TimelineProps {
     readonly holdMarks?: LabeledHoldMarks;
     /** The chains on the page boxes (UI-18 keep later pages), by page id; none without a selection */
     readonly keepChains?: PageKeepChains;
+    /**
+     * The moves a page box stands for, so they have no clip (`timelinesOffPages`), by track id.
+     * One that gets a clip (its box was split, or a flag deleted) drops out of the page row
+     * (`useClipDrops`)
+     */
+    readonly pageMoves?: ReadonlySet<string | number>;
     /** The page box menu's **Keep selected marchers here** and **Let selected marchers follow again** */
     readonly keepHere?: TimelineKeepHereMenu;
     /** UI-19 Basic: the selected marchers' mid-page positions, spec beats */
@@ -430,6 +436,7 @@ const READ_ONLY_EDITS = {
     onUnpinStart: undefined,
     holdMarks: undefined,
     keepChains: undefined,
+    pageMoves: undefined,
     basicPoints: undefined,
     onRemoveBasicPoint: undefined,
     expertMarks: undefined,
@@ -941,6 +948,7 @@ export function Timeline(props: TimelineProps) {
         transportAccessories: props.transportAccessories,
         holdMarks: props.holdMarks,
         keepChains: props.keepChains,
+        pageMoves: props.pageMoves,
         basicPoints: viewBasicPoints,
         onRemoveBasicPoint: removeBasicPoint,
         expertMarks: props.expertMarks,
