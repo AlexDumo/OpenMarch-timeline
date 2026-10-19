@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { StoredTimelineMembership } from "@/stores/TimelineSelectionStore";
 import {
-    PAUSE_TO_SPLIT,
+    pauseToSplit,
     mergeDirection,
     mergeVerdict,
     moveMenuEntries,
@@ -75,7 +75,7 @@ describe("split and merge entries (UI-25)", () => {
             /Every marcher in Page 2 is selected/,
         );
         expect(splitEntryState(ctx([1], true), 3)!.disabledReason).toBe(
-            PAUSE_TO_SPLIT,
+            pauseToSplit(),
         );
     });
 
@@ -197,6 +197,6 @@ describe("the clip drag (UI-25)", () => {
         ).toBeNull();
         expect(
             mergeVerdict(ctx([], true), 7, { timelineId: 3 }, pageRangeOf),
-        ).toMatchObject({ refused: true, label: PAUSE_TO_SPLIT });
+        ).toMatchObject({ refused: true, label: pauseToSplit() });
     });
 });

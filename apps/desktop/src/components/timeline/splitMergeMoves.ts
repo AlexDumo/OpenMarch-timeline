@@ -35,7 +35,16 @@ import type {
  */
 
 /** Why a split or a merge waits (UI-14's "Pause to…" pattern). */
-export const PAUSE_TO_SPLIT = "Pause to split or merge moves.";
+export const pauseToSplit = () =>
+    tolgee.t("timeline.split.paused", "Pause to split or merge moves.");
+
+/** "Page 3", or "this page" / "This page" when it has no name. */
+const pageWords = (name: string | undefined, start: "lower" | "upper") =>
+    name !== undefined
+        ? tolgee.t("timeline.merge.page", "Page {name}", { name })
+        : start === "lower"
+          ? tolgee.t("timeline.merge.thisPage", "this page")
+          : tolgee.t("timeline.merge.thisPageStart", "This page");
 
 /** What the entries read: the store's stored timelines and page boxes, and who is selected. */
 export interface SplitMergeContext {
@@ -73,10 +82,10 @@ const isPage = (ctx: SplitMergeContext, t: StoredTimelineMembership) =>
 /** How the UI names a stored timeline: "Page 3" for a page's own, else its move label. */
 export function timelineLabel(ctx: SplitMergeContext, id: number): string {
     const t = stored(ctx, id);
-    if (!t) return "this move";
+    if (!t) return tolgee.t("timeline.merge.thisMove", "this move");
     if (isPage(ctx, t)) {
         const name = boxOf(ctx, t)?.name;
-        return name === undefined ? "this page" : `Page ${name}`;
+        return pageWords(name, "lower");
     }
     return (
         moveLabels(ctx.storedTimelines, ctx.pageBoxes).get(id) ??
@@ -108,7 +117,7 @@ export const selectedMembers = (
 /** Why splitting the selected marchers off `t` can't run, or `null` (the menus' and the drag's). */
 const splitBlocker = (ctx: SplitMergeContext, t: StoredTimelineMembership) =>
     ctx.isPlaying
-        ? PAUSE_TO_SPLIT
+        ? pauseToSplit()
         : splitMembershipBlocker(
               t.marcherIds,
               ctx.selectedMarcherIds,
@@ -143,16 +152,20 @@ export function mergeBlocker(
     sourceId: number,
     targetId: number,
 ): string | null {
-    if (ctx.isPlaying) return PAUSE_TO_SPLIT;
+    if (ctx.isPlaying) return pauseToSplit();
     const source = stored(ctx, sourceId);
     const target = stored(ctx, targetId);
     if (!source || !target || source.id === target.id)
-        return "Pick two moves to merge.";
+        return tolgee.t("timeline.merge.pickTwo", "Pick two moves to merge.");
     const both = [...source.marcherIds].filter((id) =>
         target.marcherIds.has(id),
     );
     if (both.length > 0)
-        return `${both.length === 1 ? "A marcher is" : `${both.length} marchers are`} in both moves, so merging would give them two moves at once.`;
+        return tolgee.t(
+            "timeline.merge.inBoth",
+            "{count, plural, one {A marcher is} other {# marchers are}} in both moves, so merging would give them two moves at once.",
+            { count: both.length },
+        );
     return null;
 }
 
@@ -308,8 +321,10 @@ export function pageMenuEntries(
                           "timeline.split.menuNone",
                           "Split selected into new move",
                       ),
-                      disabledReason:
+                      disabledReason: tolgee.t(
+                          "timeline.split.nothingOnPage",
                           "Nothing moves on this page yet, so there is nothing to split.",
+                      ),
                       onSelect: () => {},
                   },
               ];
@@ -359,7 +374,11 @@ export function dropTargetTimeline(
     if (page) return { id: page.id };
     const name = range ? boxOf(ctx, range)?.name : undefined;
     return {
-        missing: `${name === undefined ? "This page" : `Page ${name}`} has no move of its own to merge into.`,
+        missing: tolgee.t(
+            "timeline.merge.noPageMove",
+            "{page} has no move of its own to merge into.",
+            { page: pageWords(name, "upper") },
+        ),
     };
 }
 
@@ -413,7 +432,7 @@ function toastWithUndo(message: string, undo: () => void): void {
     let unsubscribe = () => {};
     const id = toast.success(message, {
         duration: TOAST_MS,
-        action: { label: "Undo", onClick: undo },
+        action: { label: tolgee.t("actions.edit.undo", "Undo"), onClick: undo },
         onDismiss: () => unsubscribe(),
         onAutoClose: () => unsubscribe(),
     });
