@@ -25,15 +25,12 @@ import {
     useWorkspaceViewStore,
 } from "@/stores/WorkspaceViewStore";
 import { useEditorModeStore } from "@/stores/EditorModeStore";
-import type { StartFlagOverlay } from "@/field/startFlagOverlay";
 import { FieldDimming } from "./fieldDimming";
-import { useStartFlagOverlay } from "./useStartFlagOverlay";
 
 /**
  * Everything the timeline draws on the field (fork #201): the selected page's
  * next pathways, midpoints, endpoints and step-size warnings
- * (`useTimelinePathSamples`), start flag positions over the edit window
- * (`useStartFlagOverlay`, fork #331), an isolated move's focus scene
+ * (`useTimelinePathSamples`), an isolated move's focus scene
  * (`useTimelineFocusScene`, which also publishes the isolation plan the
  * playhead driver draws members at), collision markers (`useCollisionStore`),
  * and who's dimmed. Plans change on page changes, edits and setting changes,
@@ -46,20 +43,15 @@ export function useTimelineVisuals({
     selectedPage,
     pages,
     marcherIds,
-    selectedIds,
     fieldProperties,
 }: {
     isPlaying: boolean;
     selectedPage: Page | null;
     pages: readonly Page[];
     marcherIds: readonly number[] | undefined;
-    /** The selected marchers, for start flag positions' Selected level */
-    selectedIds: readonly number[];
     fieldProperties: FieldProperties | undefined;
 }): {
     paths: OverlayPlan | null;
-    /** Start flag positions: dots in field units, paths in screen units */
-    startFlag: StartFlagOverlay | null;
     focus: OverlayPlan | null;
     collisions: OverlayPlan | null;
     dimming: FieldDimming;
@@ -110,14 +102,6 @@ export function useTimelineVisuals({
         ],
     );
 
-    const startFlag = useStartFlagOverlay({
-        enabled: ready,
-        isPlaying,
-        marcherIds,
-        selectedIds,
-        fieldProperties,
-    });
-
     const { scene, emphasis } = useTimelineFocusScene({
         database: db,
         enabled: ready,
@@ -145,7 +129,7 @@ export function useTimelineVisuals({
     );
 
     const dimming = useFieldDimming(ready);
-    return { paths, startFlag, focus, collisions, dimming, ready };
+    return { paths, focus, collisions, dimming, ready };
 }
 
 /**

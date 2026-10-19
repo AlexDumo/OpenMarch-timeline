@@ -108,6 +108,7 @@ beforeEach(() => {
         held: false,
         latched: false,
         pressedAt: null,
+        drawn: false,
     });
     useWorkspaceViewStore.setState({ view: "editor" });
     useEditorModeStore.setState({ mode: "expert" });
@@ -335,6 +336,34 @@ describe("useStartFlagOverlay", () => {
         expect(result.current).toEqual(
             expected(r, { dots: "all", paths: "all" }, [], true),
         );
+    });
+
+    it("publishes whether the field draws anything, which playback and N while playing don't change", () => {
+        ready();
+        const drawn = () => useStartFlagKeyStore.getState().drawn;
+        const { rerender, unmount } = renderHook(
+            (p: Props) => useStartFlagOverlay(p),
+            { initialProps: props() },
+        );
+        expect(drawn()).toBe(true);
+        // Selected levels with a selection that draws nothing (no marcher in the plan)
+        setLevels({
+            always: { dots: "selected", paths: "selected" },
+            hold: { dots: "all", paths: "all" },
+        });
+        rerender(props({ selectedIds: [99] }));
+        expect(drawn()).toBe(false);
+        // Playing keeps what was drawn at Play: N then changes nothing on the field, nor here
+        rerender(props({ selectedIds: [99], isPlaying: true }));
+        act(() => {
+            useStartFlagKeyStore.getState().toggleLatched();
+        });
+        expect(drawn()).toBe(false);
+        // Stopped, the Hold N state draws everyone
+        rerender(props({ selectedIds: [99] }));
+        expect(drawn()).toBe(true);
+        unmount();
+        expect(drawn()).toBe(false);
     });
 
     it("keeps the plans from before Play while playing, and doesn't sample", () => {

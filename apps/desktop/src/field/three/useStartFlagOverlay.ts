@@ -1,6 +1,9 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { FieldProperties } from "@openmarch/core";
-import { useStartFlagLevelsInEffect } from "@/stores/StartFlagKeyStore";
+import {
+    useStartFlagKeyStore,
+    useStartFlagLevelsInEffect,
+} from "@/stores/StartFlagKeyStore";
 import {
     displayedBeat,
     useTimelineSelectionStore,
@@ -106,6 +109,9 @@ function useStartFlagWindow() {
  * playhead) is dragged, only dots are drawn, so no route is sampled per step; the paths come back
  * on release. Nothing is sampled while playing: the last plans stay, at the start flag, as
  * marchers leave it.
+ *
+ * Publishes whether anything is drawn (`useStartFlagKeyStore`'s `drawn`), so the transport's
+ * button lights exactly when the field shows something.
  */
 export function useStartFlagOverlay({
     enabled,
@@ -179,12 +185,22 @@ export function useStartFlagOverlay({
             fieldProperties,
         ],
     );
-    if (!shown) {
-        last.current = null;
-        return null;
-    }
+    let drawnPlan: StartFlagOverlay | null;
+    if (!shown) drawnPlan = last.current = null;
     // While playing the plans from before Play stay, wherever playback put the cursor
-    if (isPlaying) return last.current;
-    last.current = plan;
-    return plan;
+    else if (isPlaying) drawnPlan = last.current;
+    else drawnPlan = last.current = plan;
+    usePublishDrawn(drawnPlan);
+    return drawnPlan;
+}
+
+/** Tells the transport's button whether the field draws anything (`useStartFlagKeyStore`). */
+function usePublishDrawn(plans: StartFlagOverlay | null) {
+    const drawn =
+        plans !== null &&
+        (plans.dots.dots.length > 0 || plans.paths.strokes.length > 0);
+    useEffect(() => {
+        useStartFlagKeyStore.getState().setDrawn(drawn);
+    }, [drawn]);
+    useEffect(() => () => useStartFlagKeyStore.getState().setDrawn(false), []);
 }

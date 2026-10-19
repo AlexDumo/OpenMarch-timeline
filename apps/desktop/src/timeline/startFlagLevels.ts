@@ -61,18 +61,6 @@ export function setStartFlagPaths(
 export const startFlagLevelsDrawAnything = (levels: StartFlagLevels): boolean =>
     clampStartFlagLevels(levels).dots !== "off";
 
-/**
- * Whether these levels draw a dot for anyone: dots at All, or at Selected with a marcher
- * selected.
- */
-export const startFlagLevelsDrawFor = (
-    levels: StartFlagLevels,
-    anySelected: boolean,
-): boolean => {
-    const { dots } = clampStartFlagLevels(levels);
-    return dots === "all" || (dots === "selected" && anySelected);
-};
-
 /** What a new user gets: a gentle hint for the selection, and everything while N is held. */
 export const DEFAULT_START_FLAG_POSITIONS: StartFlagPositionsSettings = {
     always: { dots: "selected", paths: "off" },

@@ -17,6 +17,9 @@ export interface StartFlagKeyState {
 }
 
 interface StartFlagKeyStore extends StartFlagKeyState {
+    /** Whether the field draws any start flag position right now, as the field publishes it */
+    drawn: boolean;
+    setDrawn: (drawn: boolean) => void;
     /** When N went down (`Date.now()`), while held */
     pressedAt: number | null;
     /** N went down; a repeat while held changes nothing */
@@ -45,6 +48,10 @@ export const useStartFlagKeyStore = create<StartFlagKeyStore>((set, get) => ({
     held: false,
     latched: false,
     pressedAt: null,
+    drawn: false,
+    setDrawn: (drawn) => {
+        if (get().drawn !== drawn) set({ drawn });
+    },
     press: () => {
         if (get().held) return;
         set({ held: true, pressedAt: Date.now() });
