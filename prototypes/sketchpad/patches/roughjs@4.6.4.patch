@@ -1,0 +1,13 @@
+diff --git a/bin/fillers/filler.js b/bin/fillers/filler.js
+--- a/bin/fillers/filler.js
++++ b/bin/fillers/filler.js
+@@ -5,7 +5,10 @@ import { DotFiller } from './dot-filler';
+ import { DashedFiller } from './dashed-filler';
+ import { ZigZagLineFiller } from './zigzag-line-filler';
++import { getOmFiller } from '@openmarch/sketch-fills';
+ const fillers = {};
+ export function getFiller(o, helper) {
++    const om = getOmFiller(o, helper);
++    if (om) return om;
+     let fillerName = o.fillStyle || 'hachure';
+     if (!fillers[fillerName]) {
