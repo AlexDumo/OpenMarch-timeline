@@ -247,9 +247,14 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
   Artwork, is refused. Slot assignments are in `BEAT_KEYED_ITEM_TABLES`, so
   tempo edits and MusicXML import keep them. 0026 regenerated, dated after
   #181's lab migration and safe to run twice.
-- **Left:** #286's Library delete and Replace with… don't see the item
-  tables yet (whichever merges second adds them). A file a fork build gave
-  the old 0026 keeps the dash-refusing CHECK.
+- **Library references:** the show Library's one registry
+  (`libraryReferences`, from #286) reads `items` and `item_artwork_slots`,
+  so the prune keeps what they name, dormant assignments included, and
+  deleting a Library item a prop or slot uses is refused (Replace with…
+  rewrites cues only, so it refuses too). The props stack's own copy
+  (`itemLibraryKeeps`) is gone.
+- **Left:** a file a fork build gave the old 0026 keeps the dash-refusing
+  CHECK.
 
 ### 2026-10-18 · review fixes (3d/c2-placement-v2) · C2.3
 

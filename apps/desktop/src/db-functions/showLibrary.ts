@@ -9,10 +9,10 @@
  * The editor is the show's only writer (D-4): it reads a Version's parts from the local Library
  * over `library:read-parts` and embeds them here. Nothing here touches the local Library.
  */
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-// The schema module itself, not the renderer's database: the main process embeds a floor on
-// open (D-23) and prunes the show Library on close
+// The main process embeds a floor on open (D-23) and prunes on close, so no renderer database
+// module or history here: deleting lives in `showLibraryDelete.ts`
 import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
 import {
@@ -23,7 +23,11 @@ import {
     type LibraryItemKind,
 } from "@om-electron/main/library/types";
 import { hashParts, versionHashOf } from "@/view3d/library/showHash";
-import { libraryKeepsFromFloor } from "./fieldFloor";
+import {
+    keepsOf,
+    libraryReferences,
+    LIBRARY_REFERENCE_SOURCES,
+} from "./libraryReferences";
 import {
     planLibraryPrune,
     type LibraryKeep,
@@ -43,7 +47,7 @@ export const ShowLibraryMetadataSchema = z
     .extend(LicenseFieldsSchema.shape);
 export type ShowLibraryMetadata = z.infer<typeof ShowLibraryMetadataSchema>;
 
-const LibraryRefSchema = z.object({
+export const LibraryRefSchema = z.object({
     itemId: LibraryItemIdSchema,
     versionHash: VersionHashSchema,
 });
@@ -82,7 +86,7 @@ export interface ShowLibraryItem {
 const SIDECAR_ROLE = "sidecar";
 
 /** Matches the `library_items` row of one Version. */
-const isLibraryVersion = (ref: LibraryRef) =>
+export const isLibraryVersion = (ref: LibraryRef) =>
     and(
         eq(schema.library_items.item_id, ref.itemId),
         eq(schema.library_items.version_hash, ref.versionHash),
@@ -315,61 +319,42 @@ export async function readEmbeddedVersion({
  * Library items an undo or redo row names. History lives in the show file and outlives the
  * session, so an item a past edit used must survive a prune: undoing that edit brings the use
  * back. Matching on the item id anywhere in the row's SQL is coarse, and keeps every Version of
- * the item, which errs toward keeping.
+ * the item, which errs toward keeping. One source of `libraryReferences`.
  */
 export async function libraryKeepsFromHistory({
     db,
 }: {
     db: DbConnection | DbTransaction;
 }): Promise<LibraryKeep[]> {
-    const rows = await db
-        .selectDistinct({ item_id: schema.library_items.item_id })
-        .from(schema.library_items)
-        .where(
-            sql`EXISTS (SELECT 1 FROM history_undo WHERE instr(history_undo.sql, ${schema.library_items.item_id}) > 0)
-             OR EXISTS (SELECT 1 FROM history_redo WHERE instr(history_redo.sql, ${schema.library_items.item_id}) > 0)`,
-        )
-        .orderBy(schema.library_items.item_id)
-        .all();
-    return rows.map((r) => ({ itemId: r.item_id }));
+    return keepsOf(await LIBRARY_REFERENCE_SOURCES.history.read(db));
 }
 
-/** A cue value naming a Library item: `library:<item id>@<version hash>` (ADR 0004). */
-const LIBRARY_CUE_VALUE = /^library:([^@]+)@(.+)$/;
+export const libraryCueValue = (ref: LibraryRef) =>
+    `library:${ref.itemId}@${ref.versionHash}`;
 
 /**
- * Library Versions the show's cues name (Carry, Silk and Uniform values). Save never prunes a
- * Library item a cue names (ADR 0004 amendment of 2026-10-11, and of 2026-10-15). A page-era file
- * that hasn't converted has no cue table, and keeps nothing for cues.
+ * Library Versions the show's cues name (Carry, Silk and Uniform values), each once. Save never
+ * prunes a Library item a cue names (ADR 0004 amendment of 2026-10-11, and of 2026-10-15). One
+ * source of `libraryReferences`.
  */
 export async function libraryKeepsFromCues({
     db,
 }: {
     db: DbConnection | DbTransaction;
 }): Promise<LibraryKeep[]> {
-    const hasCues = await db
-        .select({ n: sql<number>`count(*)` })
-        .from(sql`sqlite_schema`)
-        .where(sql`type = 'table' AND name = 'cues'`)
-        .get();
-    if (!hasCues?.n) return [];
-    const rows = await db
-        .selectDistinct({ value: schema.cues.value })
-        .from(schema.cues)
-        .where(sql`${schema.cues.value} LIKE 'library:%'`)
-        .all();
-    const keeps: LibraryKeep[] = [];
-    for (const { value } of rows) {
-        const match = LIBRARY_CUE_VALUE.exec(value);
-        if (match) keeps.push({ itemId: match[1]!, versionHash: match[2]! });
-    }
-    return keeps;
+    const keeps = new Map<string, LibraryKeep>();
+    for (const ref of await LIBRARY_REFERENCE_SOURCES.cues.read(db))
+        keeps.set(`${ref.itemId}@${ref.versionHash}`, {
+            itemId: ref.itemId,
+            versionHash: ref.versionHash!,
+        });
+    return [...keeps.values()];
 }
 
 /**
  * Removes the Versions nothing keeps, then the blobs no remaining Version names (props-spec.md
- * section 2). `keep` is what the show's other tables use (Item tables); the Versions cues,
- * history and the show's floor (D-23) name are added here.
+ * section 2). Everything the show names is kept (`libraryReferences`: cues, the floor, the Item
+ * tables and history); `keep` adds more.
  */
 export async function pruneShowLibraryInTransaction({
     tx,
@@ -417,12 +402,7 @@ export async function pruneShowLibraryInTransaction({
     const plan = planLibraryPrune({
         items,
         blobHashes,
-        keep: [
-            ...keep,
-            ...(await libraryKeepsFromCues({ db: tx })),
-            ...(await libraryKeepsFromHistory({ db: tx })),
-            ...(await libraryKeepsFromFloor({ db: tx })),
-        ],
+        keep: [...keep, ...keepsOf(await libraryReferences({ db: tx }))],
     });
     if (unreadable.length > 0) plan.blobs = [];
 
@@ -440,7 +420,7 @@ export async function pruneShowLibraryInTransaction({
     return plan;
 }
 
-function safeJson(text: string): unknown {
+export function safeJson(text: string): unknown {
     try {
         return JSON.parse(text);
     } catch {

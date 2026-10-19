@@ -19,8 +19,6 @@ import {
     type PlacementArgs,
 } from "./itemPlacements";
 
-export { itemLibraryKeeps } from "./itemLibraryKeeps";
-
 export type DatabaseItem = typeof schema.items.$inferSelect;
 export type DatabaseItemGeometry = typeof schema.item_geometry.$inferSelect;
 export type ItemKind = (typeof schema.ITEM_KINDS)[number];
