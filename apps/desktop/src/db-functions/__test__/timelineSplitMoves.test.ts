@@ -20,8 +20,8 @@ import { createTimelineShape } from "../timelineShapes";
 import { markAssignmentsKeptInTransaction } from "../timelineKeptMarkers";
 import { TimelineWriteError } from "../timelineErrors";
 import {
+    mergeFits,
     mergeMoves,
-    mergeRangeBlocker,
     splitMarchersIntoNewMove,
     splitMembershipBlocker,
 } from "../timelineSplitMoves";
@@ -548,7 +548,7 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
             ).toEqual(all.slice(0, 4));
         });
 
-        it("is refused for different counts, a page's own timeline as the source, itself, and a marcher in both", async ({
+        it("is refused for a page's own timeline as the source, itself, and a marcher in both", async ({
             db,
             marchersAndPages,
         }) => {
@@ -570,7 +570,8 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
                         sourceId: split.timeline.id,
                         targetId: other.id,
                     }),
-                /same counts/,
+                // Page 3's move holds the split marchers too
+                /in both Move 1 and Page 3/,
             );
             await expectRefused(
                 db,
@@ -631,6 +632,77 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
                         targetId: split.timeline.id,
                     }),
                 /in both Move 2 and Move 1/,
+            );
+        });
+
+        it("fits a stretched split move back to its page's counts: the page's counts win, one undo step", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            const pages = await setUp(db);
+            const range = pageRange(pages, 2);
+            const next = pageRange(pages, 3);
+            const page = await timelineOf(db, range);
+            const all = ids(marchersAndPages);
+            const positionsBefore = await everyBeat(pages);
+            const split = await splitMarchersIntoNewMove({
+                db,
+                timelineId: page.id,
+                marcherIds: all.slice(0, 2),
+            });
+            const mid = next.start + Math.floor((next.end - next.start) / 2);
+            await resizeTimeline({
+                db,
+                timelineId: split.timeline.id,
+                start: range.start + 1,
+                end: mid,
+            });
+            const before = await snapshot(db);
+
+            await mergeMoves({
+                db,
+                sourceId: split.timeline.id,
+                targetId: page.id,
+            });
+
+            const page2 = await membersOf(db, page.id);
+            expect(page2.map((m) => m.marcher)).toEqual(all);
+            for (const m of page2)
+                expect([m.start, m.end]).toEqual([range.start, range.end]);
+            expect(await violations(db)).toEqual([]);
+            // Back where they were before the split: the page's set by the page's end
+            expectSamePositions(positionsBefore, await everyBeat(pages));
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("refuses a fit that would run a marcher into another of its moves on the same layer", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            const pages = await setUp(db);
+            const page2 = await timelineOf(db, pageRange(pages, 2));
+            const page3 = await timelineOf(db, pageRange(pages, 3));
+            const [a, b] = ids(marchersAndPages);
+            const fromTwo = await splitMarchersIntoNewMove({
+                db,
+                timelineId: page2.id,
+                marcherIds: [a!],
+            });
+            const fromThree = await splitMarchersIntoNewMove({
+                db,
+                timelineId: page3.id,
+                marcherIds: [b!],
+            });
+            // Fitted to Page 3's counts, a's row would overlap a's own Page 3 row
+            await expectRefused(
+                db,
+                () =>
+                    mergeMoves({
+                        db,
+                        sourceId: fromTwo.timeline.id,
+                        targetId: fromThree.timeline.id,
+                    }),
+                /Fitting Move 1 to Move 2's counts would run .* into Page 3/,
             );
         });
     });
@@ -766,6 +838,50 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
             expect(await violations(db)).toEqual([]);
         });
 
+        it("a split move can be resized back onto its page's exact counts, which share no marcher", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            const pages = await setUp(db);
+            const range = pageRange(pages, 2);
+            const page = await timelineOf(db, range);
+            const all = ids(marchersAndPages);
+            const split = await splitMarchersIntoNewMove({
+                db,
+                timelineId: page.id,
+                marcherIds: all.slice(0, 2),
+            });
+            await resizeTimeline({
+                db,
+                timelineId: split.timeline.id,
+                start: range.start,
+                end: range.end - 1,
+            });
+            const limits = (await readTimelineResizeLimits(
+                db,
+                split.timeline.id,
+            ))!;
+            expect(limits.taken.map((t) => t.timelineId)).not.toContain(
+                page.id,
+            );
+            await resizeTimeline({
+                db,
+                timelineId: split.timeline.id,
+                start: range.start,
+                end: range.end,
+            });
+            const back = await db
+                .select()
+                .from(schema.timelines)
+                .where(eq(schema.timelines.id, split.timeline.id))
+                .get();
+            expect([back!.start_beat, back!.end_beat]).toEqual([
+                range.start,
+                range.end,
+            ]);
+            expect(await violations(db)).toEqual([]);
+        });
+
         it("emptying the page's own timeline keeps it, so a move split off it doesn't become the page's", async ({
             db,
             marchersAndPages,
@@ -844,12 +960,12 @@ describeDbTests("splitting and merging moves (UI-25)", (it) => {
             expect(
                 splitMembershipBlocker(members, [1, 2, 3, 4], "Page 2"),
             ).toMatch(/Every marcher in Page 2/);
-            expect(
-                mergeRangeBlocker({ start: 1, end: 5 }, { start: 1, end: 5 }),
-            ).toBeNull();
-            expect(
-                mergeRangeBlocker({ start: 1, end: 5 }, { start: 1, end: 6 }),
-            ).toMatch(/same counts/);
+            expect(mergeFits({ start: 1, end: 5 }, { start: 1, end: 5 })).toBe(
+                false,
+            );
+            expect(mergeFits({ start: 1, end: 5 }, { start: 1, end: 6 })).toBe(
+                true,
+            );
         });
     });
 });

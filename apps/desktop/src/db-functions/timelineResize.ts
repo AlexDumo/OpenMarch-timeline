@@ -58,7 +58,11 @@ export interface TimelineResizeLimits {
         readonly min: TimelineResizeBound;
         readonly max: TimelineResizeBound;
     };
-    /** Other stored timelines' ranges; a resize can't land on one (C-12, resize-move E8) */
+    /**
+     * The ranges of other stored timelines that share a marcher with this one; a resize can't land
+     * on one (resize-move E8; spec §6.2 L-4: one marcher can't have two moves over the same
+     * counts). A move with none of the same marchers may share a range (UI-25, owner 2026-10-18)
+     */
     readonly taken: readonly {
         readonly timelineId: number;
         readonly start: number;
@@ -97,7 +101,7 @@ const tighter = (
 
 /**
  * The limits for resizing the timeline `[start, end)` whose assignment rows are `own`, given the
- * same marchers' rows in other timelines (`others`) and every other timeline's range (`taken`).
+ * same marchers' rows in other timelines (`others`) and those timelines' ranges (`taken`).
  * Pure; `readTimelineResizeLimits` reads its inputs.
  *
  * - **Start edge.** It stays before the end (one beat minimum) and can't pass a row that starts
@@ -308,7 +312,10 @@ async function readResizeInputs(
         others: others.map((o) =>
             pages.has(o.timelineId) ? { ...o, pageMove: true } : o,
         ),
-        taken,
+        // Only moves with one of the same marchers: the rest may share the range (L-4)
+        taken: taken.filter((t) =>
+            others.some((o) => o.timelineId === t.timelineId),
+        ),
     };
 }
 
@@ -388,7 +395,7 @@ export function timelineResizeRefusal(
     }
     const same = limits.taken.find((t) => t.start === start && t.end === end);
     if (same)
-        return "Another move or page already covers exactly these counts; two can't share the same counts.";
+        return "Another move with some of the same marchers already covers exactly these counts.";
     return null;
 }
 
@@ -401,7 +408,8 @@ export interface ResizeTimelineResult {
 /**
  * Changes a timeline's range to `[start, end)` (resize-move): every transition it owns and every
  * row anchored at a moved edge follow (R-E1). Refused (`E-ARGS`, nothing written) when the range
- * is outside `timelineResizeLimits`, or is another timeline's range (C-12).
+ * is outside `timelineResizeLimits`, or is the range of another timeline with one of the same
+ * marchers (L-4).
  */
 export async function resizeTimelineInTransaction({
     tx,

@@ -18,7 +18,7 @@ import {
     dropTargetTimeline,
     mergeDirection,
     mergeBlocker,
-    pageTimelineOver,
+    overlappedPageTimelines,
     selectedMembers,
     splitEntryState,
     type SplitMergeCommands,
@@ -150,7 +150,7 @@ export function useSplitMergeMoves({
 /**
  * UI-25 in the command palette (⌘K): **Split selected marchers into a new move** off the window's
  * move (the isolated one, a selected clip, or a page box's own timeline), and **Merge this move
- * into its page** for a move split off its page. Registered only outside Basic mode, so Basic
+ * into its page** for a move over a page (the page it starts on, fitted to its counts). Registered only outside Basic mode, so Basic
  * doesn't list them; greyed out where the menus would disable them.
  */
 export function useSplitMergeActions(
@@ -173,7 +173,8 @@ export function useSplitMergeActions(
         );
         const split = splitEntryState(ctx, windowId);
         const t = ctx.storedTimelines.find((x) => x.id === windowId);
-        const page = t ? pageTimelineOver(ctx, t) : null;
+        // The page the move starts on: merging fits it to that page's counts
+        const page = t ? (overlappedPageTimelines(ctx, t)[0] ?? null) : null;
         return {
             split:
                 split && split.disabledReason === null

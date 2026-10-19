@@ -79,7 +79,7 @@ describe("split and merge entries (UI-25)", () => {
         );
     });
 
-    it("a split move's menu offers Merge into its page; a move off the boxes doesn't", () => {
+    it("a move's menu offers Merge into each page it overlaps, fitting it to other counts", () => {
         const c = commands();
         const entries = moveMenuEntries(ctx([4]), 7, null, 7, c);
         expect(entries.map((e) => [e.id, e.label, e.disabledReason])).toEqual([
@@ -90,9 +90,27 @@ describe("split and merge entries (UI-25)", () => {
         expect(c.merge).toHaveBeenCalledWith(7, 3);
         entries[0]!.onSelect();
         expect(c.split).toHaveBeenCalledWith(7, [4]);
+        // Move 1 sits inside page 3: merging fits it to the page's counts (owner, 2026-10-18)
         expect(
-            moveMenuEntries(ctx([6]), 5, null, 5, c).map((e) => e.id),
-        ).toEqual(["split"]);
+            moveMenuEntries(ctx([6]), 5, null, 5, c).map((e) => [
+                e.id,
+                e.label,
+                e.disabledReason,
+            ]),
+        ).toEqual([
+            ["split", "Split 1 selected into new move", expect.any(String)],
+            ["merge-into-page", "Merge into Page 3 · fit to its counts", null],
+        ]);
+        // Across a flag, one entry per page
+        const across = [...TIMELINES, timeline(9, 13, 21, [7], "Move 4")];
+        expect(
+            moveMenuEntries(ctx([], false, across), 9, null, 9, c)
+                .filter((e) => e.id.startsWith("merge-into-page"))
+                .map((e) => e.label),
+        ).toEqual([
+            "Merge into Page 2 · fit to its counts",
+            "Merge into Page 3 · fit to its counts",
+        ]);
     });
 
     it("with a second move selected, offers Merge moves into the right-clicked one, or into the page's", () => {
@@ -102,11 +120,11 @@ describe("split and merge entries (UI-25)", () => {
             label: "Merge Move 2 into Move 3",
             disabledReason: null,
         });
-        // Different counts can't merge (v1)
+        // Different counts: the source fits to the target's
         const far = moveMenuEntries(ctx([]), 5, 7, 5, commands());
         expect(far.find((e) => e.id === "merge-pair")).toMatchObject({
-            label: "Merge Move 2 into Move 1",
-            disabledReason: "Moves must have the same counts to merge.",
+            label: "Merge Move 2 into Move 1 · fit to its counts",
+            disabledReason: null,
         });
         expect(mergeDirection(ctx([]), 3, 7)).toEqual({
             sourceId: 7,
@@ -165,11 +183,8 @@ describe("the clip drag (UI-25)", () => {
         expect(mergeVerdict(ctx([]), 7, { pageId: 2 }, pageRangeOf)).toEqual({
             label: "Merge into Page 2",
         });
-        expect(
-            mergeVerdict(ctx([]), 7, { pageId: 3 }, pageRangeOf),
-        ).toMatchObject({
-            refused: true,
-            label: "Moves must have the same counts to merge.",
+        expect(mergeVerdict(ctx([]), 7, { pageId: 3 }, pageRangeOf)).toEqual({
+            label: "Merge into Page 3 · fit to its counts",
         });
         expect(
             mergeVerdict(ctx([]), 7, { pageId: 1 }, pageRangeOf),

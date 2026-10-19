@@ -1229,17 +1229,24 @@ from it. The spec still wins on the model; this file decides presentation.
     keep the menu entry only.
   - **Merge** (owner). Dragging a move's clip onto another move's clip, or onto the page box of a
     page's timeline, outlines the target with "Merge into Page 3" while the pointer is over it, and
-    releasing merges; a refused drop is outlined red with the reason, and releasing there only says
-    it again. Shift+click on a second clip selects it beside the window's move (Cmd/Ctrl+click
-    already draws a range), and right-clicking either offers **Merge Move 7 into Move 6**
-    (_lead default_, V-286). A split move's own menu also offers **Merge into Page N** when its
-    counts are that page's. The merge moves every transition into the target and deletes the
-    emptied move, as one undoable edit with no motion change (`mergeMoves`). The target is the
-    page's timeline whenever one of the two is it, so the page box keeps standing for it; otherwise
-    the clip dropped on, or the one right-clicked (_lead default_, V-283). Afterwards the target is
-    selected: its page box, or its clip (_lead default_, V-285). v1 merges only moves with the same
-    counts ("Moves must have the same counts to merge.", owner) and refuses a merge that would give
-    a marcher two transitions in one move.
+    releasing merges; a refused drop is outlined red with the reason, and releasing there only says it
+    again. Shift+click on a second clip selects it beside the window's move (Cmd/Ctrl+click already
+    draws a range), and right-clicking either offers **Merge Move 7 into Move 6** (_lead default_,
+    V-286). A move's own menu also offers **Merge into Page N** for each page it overlaps that has its
+    own timeline. The merge moves every transition into the target and deletes the emptied move, as
+    one undoable edit (`mergeMoves`). The target is the page's timeline whenever one of the two is it,
+    so the page box keeps standing for it; otherwise the clip dropped on, or the one right-clicked
+    (_lead default_, V-283). Afterwards the target is selected: its page box, or its clip (_lead
+    default_, V-285). It refuses a merge that would give a marcher two transitions in one move.
+  - **Merging moves with different counts** (owner, 2026-10-18). The target's counts win: the merged
+    move is fitted to them first, as a resize would (R-E1), so its marchers keep their destinations
+    and paths and get there by the target's end. Never the other way round: stretching a page's move
+    would re-time everyone in it. The drop label and the menu entries say so ("Merge into Page 3 · fit
+    to its counts"), and ⌘K's **Merge this move into its page** fits a move to the page it starts on.
+    It is refused, naming the marchers, when one joins or leaves the move partway at a count outside
+    the target's, or when a fitted row would run into another of the marcher's moves on its layer;
+    resizing the move to the target's counts first gets there. With the same counts nothing moves on
+    the field.
   - **Toasts.** "Split 8 marchers into Move 6" and "Merged Move 6 into Page 3", each with **Undo**,
     which runs the app's undo and closes on the next edit, undo or redo (UI-14's delete toast).
   - **Growing past the page** (owner, 2026-10-16, V-290). A split move is not a page's own move,
@@ -1251,20 +1258,20 @@ from it. The spec still wins on the model; this file decides presentation.
     it still stops at other moves (V-121), and at a page's moves when the marcher has another
     move above it inside this one, which the raise would override; §6.2 drops the stop at other
     moves when it lands (ADR 0001, 2026-10-16 amendment).
-  - **What still goes by range** (_lead default_, V-288, V-289). Resizing a move or moving a clip onto
-    exactly another move's counts is still refused (UI-15, V-127): only Split makes a shared range.
-    Deleting a page's own timeline (Delete page and its moves) leaves a split move as the oldest over
-    the box, so the box stands for it from then on and its clip goes. Once the stored page-move mark
-    lands this changes (owner, 2026-10-18): the split move stays a clip, and the page box has no move
-    until marchers are added to it. An edit that only empties the page's timeline (dragging its last
-    marcher back, set to previous page) keeps it, empty, while a move split off it shares its range
+  - **What still goes by range** (V-288, V-289). Resizing a move onto exactly another move's counts is
+    refused only when the two share a marcher (spec §6.2 L-4, owner 2026-10-18; it was refused for
+    every move, so a split move stretched away from its page could never get back to merge). Deleting
+    a page's own timeline (Delete page and its moves) leaves a split move as the oldest over the box,
+    so the box stands for it from then on and its clip goes. Once the stored page-move mark lands this
+    changes (owner, 2026-10-18): the split move stays a clip, and the page box has no move until
+    marchers are added to it. An edit that only empties the page's timeline (dragging its last marcher
+    back, set to previous page) keeps it, empty, while a move split off it shares its range
     (`oldestOnSharedRange`), so the split move stays a clip. Some refusal messages still name a split
     move by its range ("Page 2's move", `moveName`).
-  - Open, for the owner: merging moves with different counts (whose counts win, or stretch); a
-    drag-out from a page box; whether a split should leave the new move isolated or only selected;
-    and Basic's writes over a page whose marchers were split (Basic writes the page's own
-    timeline, so a Basic edit of a split-off marcher moves its row back into the page's timeline,
-    with the same motion).
+  - Open, for the owner: a drag-out from a page box; whether a split should leave the new move
+    isolated or only selected; and Basic's writes over a page whose marchers were split (Basic writes
+    the page's own timeline, so a Basic edit of a split-off marcher moves its row back into the page's
+    timeline, with the same motion).
 
 ## Mapping the spec onto the view model
 

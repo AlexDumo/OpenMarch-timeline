@@ -211,8 +211,10 @@ some marchers out of a move (a page's timeline, say) into a move of their own, e
 merge it back. So the first rule above is relaxed:
 
 - Several stored timelines may have the same range. Only **Split** (`splitMarchersIntoNewMove`)
-  makes one, and only by sharing the range of the move it splits; every other write still refuses
-  a new shared range (`createTimelinesInTransaction`, resize, clip moves).
+  makes one, by sharing the range of the move it splits. A resize or a clip move may also land on
+  another move's exact counts when the two share no marcher (project owner, 2026-10-18; L-4
+  refuses only one marcher's two moves over the same counts). Creating a timeline still refuses a
+  shared range (`createTimelinesInTransaction`).
 - A page box stands for the **oldest** timeline (lowest id) with exactly its range, as
   `findTimelineByRange` already returned (the next amendment replaces this inference with a
   stored mark). Every other timeline over it is a move: it has a name
@@ -222,7 +224,9 @@ merge it back. So the first rule above is relaxed:
 - A marcher is still in at most one of the timelines over one range: split and merge move whole
   transitions (or peel a slot of a shared shapeless one into its own one-slot transition), and
   merge refuses a marcher in both.
-- Neither edit changes motion: a timeline has no effect on resolution (R-1). There is no schema,
+- Neither edit changes motion: a timeline has no effect on resolution (R-1). The exception is a
+  merge of moves with different counts, which first fits the merged move to the target's counts
+  (project owner, 2026-10-18), re-timing it as a resize would. There is no schema,
   file-format or change-log change; the rows that move are `timeline_transitions.timeline_id`,
   plus, for a peeled slot, an assignment and a one-slot transition with the slot's destination.
   Under the layer amendment below, a split move is not a page's move, so it ranks above page

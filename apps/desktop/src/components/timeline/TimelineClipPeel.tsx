@@ -12,7 +12,7 @@ import type { TimelineTrackId } from "./TimelineViewModel";
  *   move**). A ghost clip under the pointer says "Split 8 marchers".
  * - **Drag to merge:** dragging a clip onto another move's clip, or onto the page box of its page
  *   timeline, merges it there. The target is outlined while the pointer is over it, red with the
- *   reason when the merge is refused ("Moves must have the same counts to merge.").
+ *   reason when the merge is refused ("A marcher is in both moves, …").
  *
  * The drag locks to one axis once it moves: `PEEL_START_PX` up or down and at least twice as far
  * as sideways is this gesture; the sideways drag threshold with more sideways than half the

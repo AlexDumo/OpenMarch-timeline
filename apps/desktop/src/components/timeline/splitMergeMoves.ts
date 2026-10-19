@@ -3,8 +3,8 @@ import tolgee from "@/global/singletons/Tolgee";
 import type { DbConnection } from "@/db-functions/types";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import {
+    mergeFits,
     mergeMoves,
-    mergeRangeBlocker,
     splitMarchersIntoNewMove,
     splitMembershipBlocker,
 } from "@/db-functions/timelineSplitMoves";
@@ -148,8 +148,6 @@ export function mergeBlocker(
     const target = stored(ctx, targetId);
     if (!source || !target || source.id === target.id)
         return "Pick two moves to merge.";
-    const counts = mergeRangeBlocker(source, target);
-    if (counts) return counts;
     const both = [...source.marcherIds].filter((id) =>
         target.marcherIds.has(id),
     );
@@ -173,21 +171,59 @@ export function mergeDirection(
         : { sourceId: a, targetId: preferredTarget };
 }
 
-/** "Merge Move 6 into Page 3", or "Merge into Page 3" for the move's own menu. */
+/**
+ * "Merge Move 6 into Page 3", or "Merge into Page 3" for the move's own menu and the drop; with
+ * "· fit to its counts" when the source's counts are fitted to the target's (owner, 2026-10-18).
+ */
 const mergeLabel = (
     ctx: SplitMergeContext,
     sourceId: number,
     targetId: number,
     withSource: boolean,
-) =>
-    withSource
-        ? tolgee.t("timeline.merge.menuPair", "Merge {source} into {target}", {
-              source: timelineLabel(ctx, sourceId),
-              target: timelineLabel(ctx, targetId),
-          })
-        : tolgee.t("timeline.merge.menuInto", "Merge into {target}", {
-              target: timelineLabel(ctx, targetId),
-          });
+) => {
+    const source = stored(ctx, sourceId);
+    const target = stored(ctx, targetId);
+    const fits = !!source && !!target && mergeFits(source, target);
+    const names = {
+        source: timelineLabel(ctx, sourceId),
+        target: timelineLabel(ctx, targetId),
+    };
+    if (withSource)
+        return fits
+            ? tolgee.t(
+                  "timeline.merge.menuPairFit",
+                  "Merge {source} into {target} · fit to its counts",
+                  names,
+              )
+            : tolgee.t(
+                  "timeline.merge.menuPair",
+                  "Merge {source} into {target}",
+                  names,
+              );
+    return fits
+        ? tolgee.t(
+              "timeline.merge.menuIntoFit",
+              "Merge into {target} · fit to its counts",
+              names,
+          )
+        : tolgee.t("timeline.merge.menuInto", "Merge into {target}", names);
+};
+
+/**
+ * The page timelines of the page boxes `t` overlaps, in page order, `t` itself left out: the
+ * pages its menu offers to merge into (fitting it to the page's counts when they differ).
+ */
+export const overlappedPageTimelines = (
+    ctx: SplitMergeContext,
+    t: StoredTimelineMembership,
+): StoredTimelineMembership[] =>
+    [...ctx.pageBoxes]
+        .filter((b) => b.start < t.end && t.start < b.end)
+        .sort((a, b) => a.start - b.start)
+        .flatMap((b) => {
+            const page = pageTimelineOver(ctx, b);
+            return page && page.id !== t.id ? [page] : [];
+        });
 
 /** The commands the entries and the drag run (`createSplitMergeCommands`). */
 export interface SplitMergeCommands {
@@ -197,7 +233,8 @@ export interface SplitMergeCommands {
 
 /**
  * A clip's split and merge entries (UI-25): **Split N selected into new move**; **Merge into Page
- * N** when the move has its page's counts and the page has its own timeline; and, with a second
+ * N** for each page the move overlaps that has its own timeline (fitted to the page's counts when
+ * they differ, owner 2026-10-18); and, with a second
  * move selected beside it (Shift+click), **Merge Move 7 into Move 6** (into the clip right-clicked,
  * or into the page's timeline when that is one of them).
  */
@@ -219,10 +256,10 @@ export function moveMenuEntries(
             ...split,
             onSelect: () => commands.split(timelineId, chosenIn(ctx, t)),
         });
-    const page = isPage(ctx, t) ? null : pageTimelineOver(ctx, t);
-    if (page)
+    const pages = isPage(ctx, t) ? [] : overlappedPageTimelines(ctx, t);
+    for (const [i, page] of pages.entries())
         entries.push({
-            id: "merge-into-page",
+            id: i === 0 ? "merge-into-page" : `merge-into-page-${page.id}`,
             icon: "merge",
             label: mergeLabel(ctx, timelineId, page.id, false),
             disabledReason: mergeBlocker(ctx, timelineId, page.id),
@@ -235,7 +272,11 @@ export function moveMenuEntries(
             : pairedTimelineId === timelineId
               ? windowTimelineId
               : pairedTimelineId;
-    if (other !== null && other !== timelineId && other !== page?.id) {
+    if (
+        other !== null &&
+        other !== timelineId &&
+        !pages.some((p) => p.id === other)
+    ) {
         const { sourceId, targetId } = mergeDirection(ctx, other, timelineId);
         entries.push({
             id: "merge-pair",

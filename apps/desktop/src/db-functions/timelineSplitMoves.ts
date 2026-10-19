@@ -4,6 +4,7 @@ import { moveLabels, pageTimelineIds } from "@/timeline/timelineViewModel";
 import { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { mapDbErrors, refuse } from "./timelineErrors";
+import { setTimelineRangeInTransaction } from "./timelineTransitionsInTransaction";
 import {
     createTimelinesInTransaction,
     deleteTimelinesInTransaction,
@@ -27,8 +28,9 @@ import type { TimelinePathParams } from "./timelineTransitionsInTransaction";
  * marchers out into a new move over the same range, which UI-25 allows ("One timeline per range" is
  * relaxed): each chosen marcher's transition (its destination, path and layer) moves to the new
  * timeline as it is, so nothing moves on the field (a timeline has no effect on resolution, R-1).
- * **Merge** moves every transition of one move into another with the same range and deletes the
- * emptied one. Each is one undoable edit, and every refusal is decided before the first write.
+ * **Merge** moves every transition of one move into another and deletes the emptied one; a move
+ * with other counts is fitted to the target's first (owner, 2026-10-18). Each is one undoable
+ * edit, and every refusal is decided before the first write.
  *
  * - A transition whose marchers are all being split moves whole (its row changes timeline), so
  *   its assignments, destinations, shape and any kept marker stay the same rows.
@@ -370,24 +372,28 @@ export interface MergeMovesResult {
     marcherIds: number[];
 }
 
-/** Why two moves can't merge (UI-25), or `null`: v1 merges only moves with the same counts. */
-export function mergeRangeBlocker(
-    a: { readonly start: number; readonly end: number },
-    b: { readonly start: number; readonly end: number },
-): string | null {
-    return a.start === b.start && a.end === b.end
-        ? null
-        : "Moves must have the same counts to merge.";
-}
+/**
+ * Whether merging a move with range `source` into one with range `target` fits it to the
+ * target's counts first (UI-25, owner 2026-10-18): the target's counts always win.
+ */
+export const mergeFits = (
+    source: { readonly start: number; readonly end: number },
+    target: { readonly start: number; readonly end: number },
+): boolean => source.start !== target.start || source.end !== target.end;
 
 /**
- * **Merge** (UI-25): every transition of timeline `sourceId` moves, as it is, into `targetId`, and
- * the emptied source is deleted, so nothing moves on the field. The target keeps its name.
+ * **Merge** (UI-25): every transition of timeline `sourceId` moves into `targetId`, and the
+ * emptied source is deleted. The target keeps its name and its counts. A source with other counts
+ * is first fitted to the target's (owner, 2026-10-18), as a resize would (R-E1): a marcher's row
+ * from the source's start starts at the target's start, one to its end ends at the target's end,
+ * and destinations and paths stay, so its marchers get there by the target's end instead. With
+ * the same counts nothing moves on the field.
  *
- * Refused (E-ARGS) before anything is written: a missing timeline, a move merged with itself,
- * moves with different counts (v1), a marcher in both (it would have two transitions in one
- * move), and a page's own timeline as the source (the page box stands for it: merge the other
- * move into the page instead).
+ * Refused (E-ARGS) before anything is written: a missing timeline, a move merged with itself, a
+ * marcher in both (it would have two transitions in one move), a page's own timeline as the
+ * source (the page box stands for it: merge the other move into the page instead), and, when
+ * fitting, a marcher who joins or leaves the source partway at a count outside the target's, or
+ * whose fitted row would overlap another of its moves on the same layer (E-A3).
  */
 export const mergeMovesInTransaction = async ({
     tx,
@@ -403,11 +409,6 @@ export const mergeMovesInTransaction = async ({
     if (!source) refuse(`timeline ${sourceId} does not exist`);
     const target = await readTimeline(tx, targetId);
     if (!target) refuse(`timeline ${targetId} does not exist`);
-    const ranges = mergeRangeBlocker(
-        { start: source.start_beat, end: source.end_beat },
-        { start: target.start_beat, end: target.end_beat },
-    );
-    if (ranges) refuse(ranges);
     const { nameOf, pageTimelineIds } = await timelineWords(tx);
     if (pageTimelineIds.has(sourceId))
         refuse(
@@ -432,6 +433,20 @@ export const mergeMovesInTransaction = async ({
                 both.length === 1 ? "it" : "them"
             } two moves at once.`,
         );
+    if (
+        mergeFits(
+            { start: source.start_beat, end: source.end_beat },
+            { start: target.start_beat, end: target.end_beat },
+        )
+    ) {
+        await refuseBadFit(tx, source, target, sourceRows, nameOf);
+        await setTimelineRangeInTransaction({
+            tx,
+            timelineId: sourceId,
+            start: target.start_beat,
+            end: target.end_beat,
+        });
+    }
     const transitions = await tx
         .select({ id: schema.timeline_transitions.id })
         .from(schema.timeline_transitions)
@@ -454,6 +469,85 @@ export const mergeMovesInTransaction = async ({
         ].sort((a, b) => a - b),
     };
 };
+
+/**
+ * Refuses (E-ARGS) fitting `source` to `target`'s counts when the range procedure would fail
+ * (`setTimelineRangeInTransaction`), with a message that names the marchers: a row that doesn't
+ * reach an edge stays where it is, so it must lie inside the target's counts, and every fitted row
+ * must stay clear of the same marcher's rows on its layer in other moves.
+ */
+async function refuseBadFit(
+    tx: DbTransaction,
+    source: DatabaseTimeline,
+    target: DatabaseTimeline,
+    sourceRows: readonly MemberRow[],
+    nameOf: (timelineId: number) => string,
+): Promise<void> {
+    const fitted = sourceRows.map(({ assignment: a }) => ({
+        row: a,
+        start:
+            a.start_beat === source.start_beat
+                ? target.start_beat
+                : a.start_beat,
+        end: a.end_beat === source.end_beat ? target.end_beat : a.end_beat,
+    }));
+    const partway = fitted.filter(
+        (f) =>
+            f.start >= f.end ||
+            f.start < target.start_beat ||
+            f.end > target.end_beat,
+    );
+    if (partway.length > 0) {
+        const ids = [...new Set(partway.map((f) => f.row.marcher_id))];
+        refuse(
+            `${labelList(await marcherLabels(tx, ids), ids)} ${
+                ids.length === 1 ? "joins or leaves" : "join or leave"
+            } ${nameOf(source.id)} partway, outside ${nameOf(target.id)}'s counts. Resize ${nameOf(
+                source.id,
+            )} to ${nameOf(target.id)}'s counts first.`,
+        );
+    }
+    const marcherIds = [...new Set(fitted.map((f) => f.row.marcher_id))];
+    if (marcherIds.length === 0) return;
+    const A = schema.timeline_assignments;
+    const T = schema.timeline_transitions;
+    const others = await tx
+        .select({
+            marcherId: A.marcher_id,
+            start: A.start_beat,
+            end: A.end_beat,
+            layer: A.layer,
+            timelineId: T.timeline_id,
+        })
+        .from(A)
+        .innerJoin(T, eq(A.transition_id, T.id))
+        .where(inArray(A.marcher_id, marcherIds))
+        .all();
+    const hits = fitted.flatMap((f) => {
+        const hit = others.find(
+            (o) =>
+                o.timelineId !== source.id &&
+                o.marcherId === f.row.marcher_id &&
+                o.layer === f.row.layer &&
+                o.start < f.end &&
+                f.start < o.end,
+        );
+        return hit
+            ? [{ marcherId: f.row.marcher_id, timelineId: hit.timelineId }]
+            : [];
+    });
+    if (hits.length > 0) {
+        const ids = [...new Set(hits.map((h) => h.marcherId))];
+        refuse(
+            `Fitting ${nameOf(source.id)} to ${nameOf(target.id)}'s counts would run ${labelList(
+                await marcherLabels(tx, ids),
+                ids,
+            )} into ${nameOf(hits[0]!.timelineId)}. Resize ${nameOf(source.id)} to ${nameOf(
+                target.id,
+            )}'s counts first.`,
+        );
+    }
+}
 
 /** `mergeMovesInTransaction` as one undoable edit. */
 export const mergeMoves = async ({

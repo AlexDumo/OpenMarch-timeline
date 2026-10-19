@@ -12,7 +12,7 @@ import {
 vi.mock("@/db-functions/timelineSplitMoves", () => ({
     splitMarchersIntoNewMove: vi.fn(),
     mergeMoves: vi.fn(),
-    mergeRangeBlocker: vi.fn(),
+    mergeFits: vi.fn(),
     splitMembershipBlocker: vi.fn(),
 }));
 vi.mock("@/timeline/timelineErrorMessages", () => ({
