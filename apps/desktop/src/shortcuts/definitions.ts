@@ -467,6 +467,15 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["Alt+C"],
     },
+    // #315: the field's right-click menu, from the keyboard, at the selection. Enabled only with
+    // a selection
+    openFieldMenu: {
+        labelKey: "actions.ui.openFieldMenu",
+        category: "ui",
+        scope: "canvas",
+        defaultBindings: ["ContextMenu", "Shift+F10"],
+        hiddenFromPalette: true,
+    },
     focusTimeline: {
         labelKey: "actions.ui.focusTimeline",
         category: "ui",

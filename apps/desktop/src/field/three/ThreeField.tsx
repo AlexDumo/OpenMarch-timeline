@@ -57,6 +57,7 @@ import { planFieldImage } from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import { FieldMarchers } from "./fieldMarchers";
 import FieldOverlay from "./FieldOverlay";
+import FieldContextMenu, { useFieldMenu } from "./FieldContextMenu";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
@@ -307,6 +308,10 @@ function ThreeFieldView() {
         moveMarchers,
         fieldProperties,
     };
+    // #315: where a right-click opens the field's menu (`useFieldMenu`, below
+    // the editor), and whether it's open: a press that closes it does nothing more
+    const openMenuAt = useRef((_at: { x: number; y: number }) => {});
+    const menuShown = useRef(false);
 
     const editor = useMemo(
         () =>
@@ -336,7 +341,7 @@ function ThreeFieldView() {
                             useTimelineSelectionStore.getState(),
                             id,
                         ),
-                    takePress: takeFieldPress,
+                    takePress: () => menuShown.current || takeFieldPress(),
                     selectionBoxPadding: () =>
                         selectionBoxPadding(useFieldViewStore.getState().zoom),
                     showPositions: (positions) =>
@@ -350,6 +355,8 @@ function ThreeFieldView() {
                     // #203: the line tool's previews are the alignment event's, which Shift+Enter applies
                     lineFinished: publishLinePreviews,
                     stepGrid: () => latest.current.fieldProperties ?? null,
+                    // #315: a right-click opens the field's menu there
+                    openMenu: (at) => openMenuAt.current(at.screen),
                 },
                 {
                     isMac: isMacPlatform(),
@@ -378,6 +385,14 @@ function ThreeFieldView() {
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
     useFieldLineTool(editor);
+    const menu = useFieldMenu({
+        marchers,
+        editor,
+        hasSelection: selectedIds.length > 0,
+    });
+    openMenuAt.current = menu.openAt;
+    menuShown.current = menu.at !== null;
+    const timelineMode = useTimelineResolverStore((s) => s.resolver !== null);
     // A finished line follows its marchers to another page
     useEffect(
         () => marchers.subscribe(() => editor.refreshLineTool()),
@@ -573,6 +588,12 @@ function ThreeFieldView() {
                 <KeptMarksOverlay
                     marks={keptMarks}
                     elements={keptMarkElements}
+                />
+                <FieldContextMenu
+                    at={menu.at}
+                    onClose={menu.close}
+                    selectedCount={selectedIds.length}
+                    timelineMode={timelineMode}
                 />
             </div>
             <KeptMarkTooltipView tooltip={keptMarkTooltip} />

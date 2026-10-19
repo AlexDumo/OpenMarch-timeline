@@ -51,14 +51,6 @@ export function attachFieldPointerInput(
         if (event.pointerType === "touch") return;
         editor.pointerUp(pointer(event));
     };
-    // Navigation captures right presses on the field's root, so their release
-    // doesn't reach the canvas: the editor hears it here (a right-click
-    // clears the line tool's line, #203)
-    const rightUp = (event: PointerEvent) => {
-        if (event.pointerType === "touch" || event.button !== 2) return;
-        if (event.target === element) return;
-        editor.pointerUp(pointer(event));
-    };
     const cancel = (event: PointerEvent) => {
         if (event.pointerId !== captured) return;
         captured = null;
@@ -78,7 +70,7 @@ export function attachFieldPointerInput(
     // After a release, too, when the editor has nothing left to cancel
     element.addEventListener("lostpointercapture", cancel);
     element.addEventListener("pointerleave", leave);
-    document.addEventListener("pointerup", rightUp, true);
+    const detachRight = listenForCapturedRightPresses(element, editor, pointer);
     const unsubscribe = editor.subscribe(showCursor);
     showCursor();
     return () => {
@@ -88,9 +80,38 @@ export function attachFieldPointerInput(
         element.removeEventListener("pointercancel", cancel);
         element.removeEventListener("lostpointercapture", cancel);
         element.removeEventListener("pointerleave", leave);
-        document.removeEventListener("pointerup", rightUp, true);
+        detachRight();
         unsubscribe();
         editor.pointerCancel();
         element.style.cursor = "";
+    };
+}
+
+/**
+ * Navigation captures right presses on the field's root, so their moves and
+ * release don't reach the canvas: the editor hears them here (a right-click
+ * clears the line tool's line, #203, or opens the menu, #315; a right-drag
+ * that panned does neither). Returns the detach.
+ */
+function listenForCapturedRightPresses(
+    element: HTMLElement,
+    editor: FieldEditor,
+    pointer: (event: PointerEvent) => FieldPointer,
+): () => void {
+    const move = (event: PointerEvent) => {
+        if (event.pointerType === "touch" || !(event.buttons & 2)) return;
+        if (event.target === element) return;
+        editor.pointerMove(pointer(event));
+    };
+    const up = (event: PointerEvent) => {
+        if (event.pointerType === "touch" || event.button !== 2) return;
+        if (event.target === element) return;
+        editor.pointerUp(pointer(event));
+    };
+    document.addEventListener("pointermove", move, true);
+    document.addEventListener("pointerup", up, true);
+    return () => {
+        document.removeEventListener("pointermove", move, true);
+        document.removeEventListener("pointerup", up, true);
     };
 }
