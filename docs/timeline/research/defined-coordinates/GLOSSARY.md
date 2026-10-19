@@ -22,8 +22,9 @@ Terms used throughout:
   real motion; on the first page every marcher is Set. Every other marcher is **Following**: it
   holds from an earlier count, is partway through a move, or stands on a stay move that ends where
   it began (Only Page N, unlink, a kept spot). While paused or scrubbing, the field draws a Following
-  marcher with a dashed edge at full strength (its outline, or its fill's color for a shape without
-  one) round its fill at 60%; an X dashes its own lines. The dashes keep the shape's contrast and
+  marcher with a dashed edge at full strength: a shape with an outline dashes the outline round its
+  fill at 60%, one without dashes its edge in its fill's color with nothing inside, and an X dashes
+  its own lines. The dashes keep the shape's contrast and
   read by shape, not only by lightness, and the label stays solid. Too small on screen for dashes, a
   Following marcher shows the 60% fill alone. Following marchers stay selectable and draggable, and
   dragging one on the count makes it Set. Playback draws everyone solid, and isolation's dim wins

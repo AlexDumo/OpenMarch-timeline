@@ -177,16 +177,20 @@ void main() {
             // An X dashes its own lines, at full strength
             fillA *= dashes > 0.0 ? on : mix(1.0, FOLLOWING_FILL, amount);
         } else {
-            fillA *= mix(1.0, FOLLOWING_FILL, amount);
             if (vOutline.a >= 0.1) {
-                // The outline, widened inward and dashed
+                // The outline, widened inward and dashed, round the fill at 60%
+                fillA *= mix(1.0, FOLLOWING_FILL, amount);
                 float band = 1.0 - smoothstep(0.5 * width - aa, 0.5 * width + aa, abs(d - 0.5 + 0.5 * width));
                 strokeA = vOutline.a * band * on;
             } else if (dashes > 0.0) {
-                // No outline: the edge dashed in the fill's color
+                // No outline: only the edge, dashed in the fill's color, with nothing inside
+                fillA *= 1.0 - amount;
                 float band = 1.0 - smoothstep(0.5 * width - aa, 0.5 * width + aa, abs(d + 0.5 * width));
                 strokeRgb = vFill.rgb;
                 strokeA = vFill.a * band * on;
+            } else {
+                // Too small for dashes: the fill at 60% alone
+                fillA *= mix(1.0, FOLLOWING_FILL, amount);
             }
         }
     }

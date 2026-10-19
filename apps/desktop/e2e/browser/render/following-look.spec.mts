@@ -8,11 +8,12 @@ import { isolate } from "../timeline.mjs";
 
 /**
  * Set vs Following's look on the field (#300, #301): a Following marcher's
- * edge is dashed at full strength round its fill at 60%, and an X dashes its
+ * edge is dashed at full strength: an outline round its fill at 60%, a shape
+ * without one with nothing inside. An X dashes its
  * own lines. The field test API's `following` says what the field means to
  * draw; this checks the pixels.
  *
- * - The test on white asserts the dashes and the 60% fill for every shape.
+ * - The test on white asserts the dashes and the fill for every shape.
  * - The contact sheet captures every shape and style, Set beside Following,
  *   on white, a dark theme and turf (with `TURF_IMAGE` naming a field image;
  *   skipped without), at the opening zoom and at 3×, plus an isolated move.
@@ -198,7 +199,7 @@ async function capture(page: Page, name: string, margin = 30) {
 test.describe("following look", () => {
     test.use({ seedSql: SHOW_SQL });
 
-    test("a Following edge is dashed at full strength round a 60% fill", async ({
+    test("a Following edge is dashed at full strength, round a 60% fill only inside an outline", async ({
         show,
     }) => {
         const { page } = show;
@@ -220,27 +221,30 @@ test.describe("following look", () => {
                 y: (screen.y - box.y) * scale,
             };
         };
-        const filled = sections.filter((s) => s.style.name === "filled");
+        const checked = sections.filter((s) => s.style.name !== "outline");
         const profiles = await edgeProfiles(
             page,
             png,
-            filled.map((s) => ({
+            checked.map((s) => ({
                 shape: s.shape,
                 set: at(s.set),
                 following: at(s.following),
             })),
         );
-        for (const [i, s] of filled.entries()) {
+        for (const [i, s] of checked.entries()) {
             const profile = profiles[i]!;
             // Every dash at the Set shape's full contrast, with a gap between each
             const least = s.shape === "triangle" ? 6 : 8;
-            expect(profile.gaps, `${s.shape} gaps`).toBeGreaterThanOrEqual(
+            expect(profile.gaps, `${s.name} gaps`).toBeGreaterThanOrEqual(
                 least,
             );
-            expect(profile.dash, `${s.shape} dash`).toBeGreaterThan(0.9);
-            // The fill at 60% (an X has none: its lines are its dashes)
-            if (s.shape !== "x")
-                expect(profile.fill, `${s.shape} fill`).toBeCloseTo(0.6, 1);
+            expect(profile.dash, `${s.name} dash`).toBeGreaterThan(0.9);
+            // An X's lines are its dashes; it has no fill
+            if (s.shape === "x") continue;
+            // Inside a dashed outline the fill is at 60%; without an outline, nothing
+            if (s.style.name === "both")
+                expect(profile.fill, `${s.name} fill`).toBeCloseTo(0.6, 1);
+            else expect(profile.fill, `${s.name} fill`).toBeLessThan(0.1);
         }
     });
 

@@ -43,14 +43,15 @@ export class FieldFollowing {
 
 /**
  * How a Following marcher is drawn (owner 2026-10-19): its edge dashed at
- * full strength, in its outline's color, or its fill's for a shape without an
- * outline, round its fill at 60%. An X dashes its own lines. Dashes keep the
+ * full strength. A shape with an outline dashes the outline round its fill at
+ * 60%; one without dashes its edge in its fill's color, with nothing inside.
+ * An X dashes its own lines. Dashes keep the
  * shape's contrast and read by shape, not only by lightness; the label stays
  * solid. The marchers layer takes how far along the look is as one 0–1 value
  * per marcher (`aFollowing`), so an ease can open the gaps from solid.
  */
 export const FOLLOWING_LOOK = {
-    /** How opaque the fill is, at full strength. */
+    /** How opaque the fill is inside a dashed outline, and when too small for dashes. */
     fillOpacity: 0.6,
     /** The dashed edge's width, in field units; never under `minEdgePx`. */
     edgeWidth: 1.75,
