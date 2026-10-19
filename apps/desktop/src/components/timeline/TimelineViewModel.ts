@@ -334,6 +334,12 @@ export interface TimelineCommonProps
     readonly holdMarks?: LabeledHoldMarks;
     /** The chains on the page boxes (UI-18 keep later pages); none without a selection */
     readonly keepChains?: PageKeepChains;
+    /**
+     * The moves a page box stands for, so they have no clip (`timelinesOffPages`), by track id.
+     * One that gets a clip (its box was split, or a flag deleted) drops out of the page row
+     * (`useClipDrops`)
+     */
+    readonly pageMoves?: ReadonlySet<string | number>;
     /** UI-19 Basic: the selected marchers' mid-page positions, view beats */
     readonly basicPoints?: readonly TimelineBasicPoint[];
     /** UI-19 Basic: **Remove this count's position**, by its view beat */

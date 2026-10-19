@@ -258,15 +258,26 @@ export default function TimelineModePanel() {
     // screen readers in counts, and saying why it is dashed where it is (`describeMoveClips`)
     const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
     const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    const clipTimelines = useMemo(
+        () => timelinesOffPages(timelines, clipBoxPages),
+        [timelines, clipBoxPages],
+    );
+    // The others: one that gets a clip (its box split, or a flag deleted) drops out of the page row
+    const pageMoves = useMemo(() => {
+        const clipped = new Set(clipTimelines);
+        return new Set(
+            timelines.flatMap((t) => (clipped.has(t) ? [] : [t.id])),
+        );
+    }, [timelines, clipTimelines]);
     const { clips: offPage, overridden } = useMemo(
         () =>
             describeMoveClips({
-                clips: timelinesOffPages(timelines, clipBoxPages),
+                clips: clipTimelines,
                 storedTimelines: storedTimelines ?? [],
                 pageBoxes,
                 pages,
             }),
-        [timelines, clipBoxPages, pages, storedTimelines, pageBoxes],
+        [clipTimelines, pages, storedTimelines, pageBoxes],
     );
     // The Move card says it too
     useEffect(() => {
@@ -444,6 +455,7 @@ export default function TimelineModePanel() {
                     pages={pages}
                     measures={measures}
                     timelines={basic ? NO_CLIPS : offPage}
+                    pageMoves={pageMoves}
                     transportAccessories={basic ? SPEED_BUTTON : LOOP_BUTTONS}
                     transportSecondary={SOUND_BUTTON}
                     transportViewControls={basic ? undefined : COMPACT_BUTTON}

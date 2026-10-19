@@ -6,6 +6,7 @@ import {
     HouseIcon,
 } from "@phosphor-icons/react";
 import clsx from "clsx";
+import { animated, useSpring } from "@react-spring/web";
 import { flushSync } from "react-dom";
 import {
     isLayoutResizing,
@@ -13,6 +14,7 @@ import {
 } from "@/global/layoutResize";
 import { START_INK } from "./startFlagInk";
 import { isMac } from "./platform";
+import { prefersReducedMotion } from "./reducedMotion";
 import {
     TransportButton,
     TransportNavigationButton,
@@ -1354,6 +1356,48 @@ export function TimelineMoveNameField({
     );
 }
 
+/** The drop's spring: about a third of a second, no overshoot (a clip can't bounce into its row) */
+const CLIP_DROP_SPRING = { tension: 260, friction: 30, clamp: true };
+
+/**
+ * A clip dropping out of a page box (`useClipDrops`): its top springs from `dropFrom` (the page
+ * row, where the pinned header hides it) to `top`, so it slides out from under the page bar into
+ * its row. `dropping` is true until it lands: only then does the clip read the spring, which
+ * reaches the DOM a frame after a change, so a clip at rest draws where it is, the frame it is.
+ * A new `top` mid-way (the rows repacked) ends the drop. With reduced motion there is no drop.
+ */
+function useClipDropSpring(top: number, dropFrom: number | undefined) {
+    const dropped = dropFrom !== undefined && !prefersReducedMotion();
+    // The top the clip is dropping to; null once it lands or its top moves on
+    const [droppingTo, setDroppingTo] = useState<number | null>(
+        dropped ? top : null,
+    );
+    const [spring, api] = useSpring(() => ({
+        // The first paint is already up in the page row
+        y: dropped ? dropFrom : top,
+        config: CLIP_DROP_SPRING,
+    }));
+    useEffect(() => {
+        if (!dropped) return;
+        setDroppingTo(top);
+        void api.start({
+            from: { y: dropFrom },
+            to: { y: top },
+            onRest: () => setDroppingTo(null),
+        });
+        // The top is read when the drop starts; a later change ends the drop instead
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, dropped, dropFrom]);
+    const dropping = droppingTo !== null && droppingTo === top;
+    useEffect(() => {
+        if (droppingTo !== null && !dropping) {
+            api.stop();
+            setDroppingTo(null);
+        }
+    }, [api, dropping, droppingTo]);
+    return { y: dropping ? spring.y : top, dropping };
+}
+
 export const TimelineTrackClip = memo(function TimelineTrackClip({
     track,
     pixelsPerBeat,
@@ -1374,12 +1418,21 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
     onRenameStart,
     onRenameEnd,
     resize,
+    dropFrom,
+    onDropEnd,
 }: {
     track: TimelineTrack;
     pixelsPerBeat: number;
     top: number;
     height: number;
     selected: boolean;
+    /**
+     * The clip dropped out of a page box (`useClipDrops`): the top it slides down from, the page
+     * row, to `top`
+     */
+    dropFrom?: number;
+    /** The drop landed (or there was none to make): the clip is in its row */
+    onDropEnd?: (trackId: TimelineTrackId) => void;
     /** Another clip of the same spec timeline is selected; this one moves with it */
     linked?: boolean;
     onSelect?: (trackId: TimelineTrackId) => void;
@@ -1530,6 +1583,11 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
         setMoving(false);
         backToStart(from);
     });
+    const drop = useClipDropSpring(top, dropFrom);
+    const dropEnded = useLatestCallback(() => onDropEnd?.(track.id))!;
+    useEffect(() => {
+        if (dropFrom !== undefined && !drop.dropping) dropEnded();
+    }, [drop.dropping, dropEnded, dropFrom]);
     const edgeResize = useClipEdgeResize({
         trackId: track.id,
         label: track.label,
@@ -1596,7 +1654,8 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
 
     return (
         <>
-            <button
+            <animated.button
+                data-dropping={drop.dropping || undefined}
                 type="button"
                 data-timeline-interactive="true"
                 data-testid="timeline-clip"
@@ -1777,7 +1836,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                 )}
                 style={{
                     left,
-                    top,
+                    top: drop.y,
                     width,
                     height,
                     boxShadow: selected
@@ -1874,7 +1933,7 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                         {track.label}
                     </span>
                 )}
-            </button>
+            </animated.button>
             {menuShown && moveMenu && (
                 <DropdownMenu.Root
                     open={menuOpen}
