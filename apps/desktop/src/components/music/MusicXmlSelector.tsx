@@ -3,7 +3,11 @@ import { toast } from "sonner";
 import { Button } from "@openmarch/ui";
 import { T, useTolgee } from "@tolgee/react";
 import { useTimingObjects } from "@/hooks";
-import { useImportMusicXml } from "./MusicXmlImport";
+import { useImportMusicXml, type ImportResult } from "./MusicXmlImport";
+import { useMusicXmlChecksStore } from "@/stores/MusicXmlChecksStore";
+
+/** The toast that offers an import's checks; a new import replaces it. */
+const CHECKS_TOAST_ID = "musicxml-import-checks";
 
 export default function MusicXmlSelector() {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -17,24 +21,51 @@ export default function MusicXmlSelector() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (!allPages || !allBeats) {
-            toast.error("Failed to fetch required data");
+        try {
+            if (!allPages || !allBeats) {
+                toast.error("Failed to fetch required data");
+                return;
+            }
+            const result = await importMusicXmlMutation.mutateAsync({
+                file,
+                allPages,
+                measures,
+                allBeats,
+            });
+            if (result.success) showResult(file.name, result);
+        } catch {
+            // The mutation's onError already logged the error and showed a toast
+        } finally {
+            // Clear the file input, so picking the same file again imports it again
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
+
+    const showResult = (fileName: string, result: ImportResult) => {
+        const { checks } = result;
+        // One checks toast at a time: a new import's result replaces the last one's
+        if (checks.length === 0) {
+            toast.dismiss(CHECKS_TOAST_ID);
+            toast.success(result.message);
             return;
         }
-
-        const result = await importMusicXmlMutation.mutateAsync({
-            file,
-            allPages,
-            measures,
-            allBeats,
+        // Kept until dismissed: the list says what to check in the score. The same id updates
+        // an open checks toast in place (dismissing it first would remove the new one too)
+        toast.warning(result.message, {
+            id: CHECKS_TOAST_ID,
+            description: t("music.importChecksCount", {
+                count: checks.length,
+            }),
+            duration: Infinity,
+            action: {
+                label: t("music.importChecksShow"),
+                // This import's checks, whatever was imported since
+                onClick: () =>
+                    useMusicXmlChecksStore
+                        .getState()
+                        .showChecks(fileName, checks),
+            },
         });
-
-        if (result.success) {
-            toast.success(result.message);
-        }
-
-        // Clear the file input
-        if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
     return (
