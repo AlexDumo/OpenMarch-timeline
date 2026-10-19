@@ -69,6 +69,8 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     // Placement changes after their item and beat, holders and crew after their change
     "item_placements",
     "item_placement_marchers",
+    // Artwork slot assignments after their item and beat
+    "item_artwork_slots",
 ];
 
 /**

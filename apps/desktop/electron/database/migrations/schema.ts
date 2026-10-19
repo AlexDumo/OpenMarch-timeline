@@ -12,6 +12,10 @@ import {
     primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
+import {
+    ARTWORK_SLOT_ID_BAD_GLOB,
+    ARTWORK_SLOT_ID_MAX_LENGTH,
+} from "./artworkSlotId";
 
 /*************** COMMON COLUMNS ***************/
 
@@ -1032,6 +1036,78 @@ export const item_placement_marchers = sqliteTable(
             sql.raw(
                 `(role = 'holder' AND hand IS NOT NULL AND hand IN (${sqlList(HANDS)})) OR (role = 'crew' AND hand IS NULL)`,
             ),
+        ),
+    ],
+);
+
+export const ARTWORK_FITS = ["fill", "fit"] as const;
+
+/**
+ * Which Artwork sits on an item slot from a beat on (ADR 0002 D-10, props-spec section 4). Latest
+ * wins per (item, slot), a hard cut on its beat's click. Both Library columns null leave the slot
+ * bare from that beat. The slot is an id, not a foreign key: an item's slots come from its model's
+ * declarations or its Outline, so a row whose slot an update drops stays stored but dormant and is
+ * live again on revert. Fill or fit, pan and pad color sit on the row, so one Artwork can sit
+ * differently on two slots.
+ */
+export const item_artwork_slots = sqliteTable(
+    "item_artwork_slots",
+    {
+        id: integer().primaryKey(),
+        item_id: integer()
+            .notNull()
+            .references(() => items.id, { onDelete: "cascade" }),
+        beat_id: integer()
+            .notNull()
+            .references(() => beats.id, { onDelete: "cascade" }),
+        /**
+         * The slot id: `top`, `front` or `back` with no model, else one the model declares; 1 to
+         * 64 letters, digits, underscores or dashes (`artworkSlotId.ts`)
+         */
+        slot: text().notNull(),
+        /**
+         * The Artwork and the Version it pins, or both null for a bare slot. No foreign key, as on
+         * `items`: the show's Library is pruned separately and keeps what this names (D-12).
+         */
+        library_item_id: text(),
+        library_version_hash: text(),
+        /** fill (crop to cover, centered unless panned) or fit (pad) */
+        fit: text().notNull().default("fill"),
+        /** A filled crop's offset from center, -1 to 1 of the overflow on each axis */
+        pan_x: real().notNull().default(0),
+        pan_y: real().notNull().default(0),
+        /** `#rrggbb` padding for fit, or null: transparent where the surface allows, else its base color */
+        pad_color: text(),
+        ...timestamps,
+    },
+    (table) => [
+        unique("item_artwork_slots_item_slot_beat_unique").on(
+            table.item_id,
+            table.slot,
+            table.beat_id,
+        ),
+        index("item_artwork_slots_beat_id_idx").on(table.beat_id),
+        check(
+            "item_artwork_slots_slot_check",
+            sql.raw(
+                `slot IS NOT NULL AND length(slot) BETWEEN 1 AND ${ARTWORK_SLOT_ID_MAX_LENGTH} AND slot NOT GLOB '${ARTWORK_SLOT_ID_BAD_GLOB}'`,
+            ),
+        ),
+        check(
+            "item_artwork_slots_library_check",
+            sql`(library_item_id IS NULL AND library_version_hash IS NULL) OR (library_item_id IS NOT NULL AND library_version_hash IS NOT NULL AND length(library_item_id) = 36 AND length(library_version_hash) = 64)`,
+        ),
+        check(
+            "item_artwork_slots_fit_check",
+            sql.raw(`fit IS NOT NULL AND fit IN (${sqlList(ARTWORK_FITS)})`),
+        ),
+        check(
+            "item_artwork_slots_pan_check",
+            sql`pan_x IS NOT NULL AND pan_y IS NOT NULL AND typeof(pan_x) IN ('real', 'integer') AND typeof(pan_y) IN ('real', 'integer') AND pan_x BETWEEN -1 AND 1 AND pan_y BETWEEN -1 AND 1`,
+        ),
+        check(
+            "item_artwork_slots_pad_color_check",
+            sql`pad_color IS NULL OR (length(pad_color) = 7 AND pad_color GLOB '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]')`,
         ),
     ],
 );
