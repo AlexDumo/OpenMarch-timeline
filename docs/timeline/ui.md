@@ -1273,7 +1273,10 @@ from it. The spec still wins on the model; this file decides presentation.
     touch (`canRiseOverPageMoves`).
   - **What still goes by range** (V-338, V-339). Resizing a move onto exactly another move's counts is
     refused only when the two share a marcher (spec §6.2 L-4, owner 2026-10-18; it was refused for
-    every move, so a split move stretched away from its page could never get back to merge). Deleting
+    every move, so a split move stretched away from its page could never get back to merge). One
+    exception: a move older than a page's own move can't land on exactly that page's counts, by
+    resize or clip move, since the box would then stand for it and the page's real move would turn
+    into a clip ("…merge into it instead", `pageMoveTakenOver`, until the page-move mark). Deleting
     a page's own timeline (Delete page and its moves) leaves a split move as the oldest over the box,
     so the box stands for it from then on and its clip goes. Once the stored page-move mark lands this
     changes (owner, 2026-10-18): the split move stays a clip, and the page box has no move until

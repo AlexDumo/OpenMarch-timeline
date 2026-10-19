@@ -5,7 +5,7 @@ import { transactionWithHistory } from "./history";
 import { refuse } from "./timelineErrors";
 import { setTimelineRangeInTransaction } from "./timelineTransitionsInTransaction";
 import { updateTimelineAssignmentsInTransaction } from "./timelineAssignments";
-import { readPageBoxes } from "./timelineMoveNames";
+import { PAGE_TAKEOVER_REFUSAL, readPageBoxes } from "./timelineMoveNames";
 import { pageTimelineIds } from "@/timeline/timelineViewModel";
 import { ensureCountsInTransaction } from "./endlessCounts";
 
@@ -62,12 +62,15 @@ export interface TimelineResizeLimits {
     /**
      * The ranges of other stored timelines that share a marcher with this one; a resize can't land
      * on one (resize-move E8; spec §6.2 L-4: one marcher can't have two moves over the same
-     * counts). A move with none of the same marchers may share a range (UI-25, owner 2026-10-18)
+     * counts). A move with none of the same marchers may share a range (UI-25, owner 2026-10-18),
+     * except a page's own move this one would take over (`pageTakeover`, `pageMoveTakenOver`)
      */
     readonly taken: readonly {
         readonly timelineId: number;
         readonly start: number;
         readonly end: number;
+        /** Landing here would make this move the page's own move (`pageMoveTakenOver`) */
+        readonly pageTakeover?: boolean;
     }[];
 }
 
@@ -308,7 +311,7 @@ async function readResizeInputs(
                 end: timeline.end_beat,
             },
         ],
-        others.length === 0 ? [] : await readPageBoxes(db),
+        await readPageBoxes(db),
     );
     return {
         timelineId,
@@ -324,9 +327,14 @@ async function readResizeInputs(
         others: others.map((o) =>
             pages.has(o.timelineId) ? { ...o, pageMove: true } : o,
         ),
-        // Only moves with one of the same marchers: the rest may share the range (L-4)
-        taken: taken.filter((t) =>
-            others.some((o) => o.timelineId === t.timelineId),
+        // Only moves with one of the same marchers: the rest may share the range (L-4). But not a
+        // newer page's own move, which landing on its counts would take over (UI-25)
+        taken: taken.flatMap((t) =>
+            others.some((o) => o.timelineId === t.timelineId)
+                ? [t]
+                : pages.has(t.timelineId) && timelineId < t.timelineId
+                  ? [{ ...t, pageTakeover: true }]
+                  : [],
         ),
     };
 }
@@ -409,7 +417,9 @@ export function timelineResizeRefusal(
     }
     const same = limits.taken.find((t) => t.start === start && t.end === end);
     if (same)
-        return "Another move with some of the same marchers already covers exactly these counts.";
+        return same.pageTakeover
+            ? PAGE_TAKEOVER_REFUSAL
+            : "Another move with some of the same marchers already covers exactly these counts.";
     return null;
 }
 

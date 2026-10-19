@@ -213,7 +213,9 @@ merge it back. So the first rule above is relaxed:
 - Several stored timelines may have the same range. **Split** (`splitMarchersIntoNewMove`) makes
   one, by sharing the range of the move it splits. A resize or a clip move may also land on
   another move's exact counts when the two share no marcher (project owner, 2026-10-18; L-4
-  refuses only one marcher's two moves over the same counts). Creating a timeline still refuses a
+  refuses only one marcher's two moves over the same counts), unless it is older than the page's
+  own move there, which it would take over as the oldest (`pageMoveTakenOver`; the stored mark
+  below removes the case). Creating a timeline still refuses a
   shared range (`createTimelinesInTransaction`).
 - A page box stands for the **oldest** timeline (lowest id) with exactly its range, as
   `findTimelineByRange` already returned (the next amendment replaces this inference with a

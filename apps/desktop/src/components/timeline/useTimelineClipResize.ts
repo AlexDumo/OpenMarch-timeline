@@ -114,7 +114,9 @@ export function useTimelineClipResize({
                     taken: limits.taken.map((t) => ({
                         startBeatIndex: t.start,
                         endBeatIndex: t.end,
-                        reason: `${nameOf(t, t.timelineId)} already has these counts`,
+                        reason: t.pageTakeover
+                            ? `${nameOf(t, t.timelineId)} already has these counts; merge into it instead`
+                            : `${nameOf(t, t.timelineId)} already has these counts`,
                     })),
                 };
                 return result;

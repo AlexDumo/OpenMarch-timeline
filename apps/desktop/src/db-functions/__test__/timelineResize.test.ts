@@ -22,6 +22,8 @@ import {
     timelineResizeRefusal,
 } from "../timelineResize";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
+import { readPageBoxes } from "../timelineMoveNames";
+import { shiftTimeline } from "../timelineCommands";
 
 /**
  * Resizing a move (docs/timeline/research/resize-move): dragging a clip's start or end edge
@@ -613,6 +615,64 @@ describeDbTests("resizing a timeline", (it) => {
             }),
         );
         expect(error.message).toMatch(/already covers exactly these counts/);
+    });
+
+    it("refuses landing an older move on a newer page move's exact counts, by resize or clip move (UI-25)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await converted(db);
+        const [m1, m2, m3] = (
+            await db.select().from(schema.marchers).all()
+        ).map((m) => m.id);
+        const box = (await readPageBoxes(db))[1]!;
+        // The older move shares no marcher with the page's move, so L-4 alone would let it land
+        const older = await addTimeline(db, {
+            marcherId: m1!,
+            start: box.start - 2,
+            end: box.end - 2,
+            layer: 1,
+        });
+        const page = await addTimeline(db, {
+            marcherId: m2!,
+            start: box.start,
+            end: box.end,
+            layer: 1,
+        });
+        expect(older).toBeLessThan(page);
+        const limits = (await readTimelineResizeLimits(db, older))!;
+        expect(limits.taken).toContainEqual({
+            timelineId: page,
+            start: box.start,
+            end: box.end,
+            pageTakeover: true,
+        });
+        const resized = await expectRefused(db, () =>
+            resizeTimeline({
+                db,
+                timelineId: older,
+                start: box.start,
+                end: box.end,
+            }),
+        );
+        expect(resized.message).toMatch(/make this move the page's own move/);
+        const moved = await expectRefused(db, () =>
+            shiftTimeline({ db, timelineId: older, delta: 2 }),
+        );
+        expect(moved.message).toMatch(/make this move the page's own move/);
+        // A newer move may still land on the page's counts (L-4): it stays a clip
+        const newer = await addTimeline(db, {
+            marcherId: m3!,
+            start: box.end,
+            end: box.end + box.end - box.start,
+            layer: 1,
+        });
+        await shiftTimeline({
+            db,
+            timelineId: newer,
+            delta: box.start - box.end,
+        });
+        expect(await rangeOf(db, newer)).toEqual([box.start, box.end]);
     });
 
     it("writes nothing for an unchanged range (an edge dropped where it started)", async ({
