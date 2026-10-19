@@ -6,6 +6,8 @@
  *   colors, and the end-zone lettering. Every change goes to the editor,
  *   which saves it with undo.
  * - Graphics, saved on this computer: render quality.
+ * - Preview only, never saved: horns, guard equipment and the step-off foot,
+ *   overriding the cues in this window alone.
  * - The keyboard and mouse controls, so they can be found.
  *
  * It floats at the right and doesn't block the scene, so the viewer can
@@ -94,6 +96,13 @@ export function SettingsPanel({
                 >
                     <QualityRow />
                     <PowerRows />
+                </Section>
+                {/* Its own section: window state only, never saved (performer-behavior.md 7.5) */}
+                <Section
+                    title={t("view3d.settings.previewSection")}
+                    hint={t("view3d.settings.previewHint")}
+                    testId="view3d-preview-section"
+                >
                     <HornStateRow />
                     <GuardEquipmentRow />
                     <StepOffFootRow />
@@ -109,14 +118,16 @@ export function SettingsPanel({
 function Section({
     title,
     hint,
+    testId,
     children,
 }: {
     title: string;
     hint?: string;
+    testId?: string;
     children: ReactNode;
 }) {
     return (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-8" data-testid={testId}>
             <div className="flex flex-col gap-2">
                 <h3 className="text-sub text-text/60 font-mono tracking-wide uppercase">
                     {title}
@@ -380,32 +391,17 @@ function PowerRows() {
 
 /** Which hold the brass plays: a test control until per-page horn states exist. */
 function HornStateRow() {
-    // Every carrier in one hold, to check the poses; "Follow cues", the Horn cues decide.
-    // The first of the preview rows, so it heads them
-    const { t } = useTranslate();
+    // Every carrier in one hold, to check the poses; "Follow cues", the Horn cues decide
     const state = useView3dSceneStore((s) => s.hornState);
     const setState = useView3dSceneStore((s) => s.setHornState);
     return (
-        <>
-            <div
-                className="border-stroke flex flex-col gap-2 border-t pt-8"
-                data-testid="view3d-preview-section"
-            >
-                <h3 className="text-sub text-text/60 font-mono tracking-wide uppercase">
-                    {t("view3d.settings.previewSection")}
-                </h3>
-                <p className="text-sub text-text/60">
-                    {t("view3d.settings.previewHint")}
-                </p>
-            </div>
-            <PreviewRow
-                name="hornState"
-                value={state}
-                values={HOLD_STATES}
-                onChange={setState}
-                testId="view3d-horn-state-picker"
-            />
-        </>
+        <PreviewRow
+            name="hornState"
+            value={state}
+            values={HOLD_STATES}
+            onChange={setState}
+            testId="view3d-horn-state-picker"
+        />
     );
 }
 

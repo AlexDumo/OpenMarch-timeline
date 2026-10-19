@@ -16,7 +16,7 @@ import {
  * - Read-only ({@link setReadOnly}): clicks, the marquee and the lasso still
  *   select, as the selection is who a cue is for, but no drag, scale, rotation
  *   or typed rotation moves a marcher: nothing is drawn moved and nothing
- *   drops.
+ *   drops, and no field mode (a shape tool) is on.
  */
 export class VisualsFieldEditor extends FieldEditor {
     private readOnly = false;
@@ -46,6 +46,27 @@ export class VisualsFieldEditor extends FieldEditor {
             options,
         );
         self.editor = this;
+        this.holdModesWhileReadOnly();
+    }
+
+    /**
+     * A field mode (the shape tool, a selected placed box) takes edit presses
+     * before the editor's own rules, on editors that have them (`setMode`).
+     * While read-only none is on: one asked for then waits, and comes back
+     * when read-only ends.
+     */
+    private wantedMode: unknown = null;
+    private setModeNow: ((mode: unknown) => void) | null = null;
+
+    private holdModesWhileReadOnly(): void {
+        const editor = this as { setMode?(mode: unknown): void };
+        const setMode = editor.setMode?.bind(this);
+        if (!setMode) return;
+        this.setModeNow = setMode;
+        editor.setMode = (mode) => {
+            this.wantedMode = mode;
+            setMode(this.readOnly ? null : mode);
+        };
     }
 
     override pointerDown(pointer: FieldPointer): boolean {
@@ -68,8 +89,11 @@ export class VisualsFieldEditor extends FieldEditor {
             this.cancelRotation();
             // The line tool, where the editor still has one
             (this as { setLineTool?(ids: null): void }).setLineTool?.(null);
+            // Any field mode, kept to come back after
+            this.setModeNow?.(null);
         }
         this.readOnly = readOnly;
+        if (!readOnly) this.setModeNow?.(this.wantedMode);
     }
 
     /** Whether presses only select ({@link setReadOnly}). */

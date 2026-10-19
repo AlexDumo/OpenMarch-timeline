@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type {
-    DropResult,
-    FieldEditorPorts,
-    FieldPoint,
-    FieldPointer,
+import {
+    FieldEditor,
+    type DropResult,
+    type FieldEditorPorts,
+    type FieldPoint,
+    type FieldPointer,
 } from "../fieldEditor";
 import type { MarcherPosition } from "../moveGesture";
 import { VisualsFieldEditor } from "../visualsFieldEditor";
@@ -201,5 +202,36 @@ describe("VisualsFieldEditor picking a field point", () => {
         click(editor, 100, 100);
         expect(takePress).toHaveBeenCalledOnce();
         expect(state.selected).toEqual([]);
+    });
+});
+
+// Field modes (the shape tool, a selected placed box) come with #181's `FieldEditor.setMode`;
+// stood in for here, so the hold works whichever lands first
+describe("VisualsFieldEditor and field modes", () => {
+    const proto = FieldEditor.prototype as { setMode?(mode: unknown): void };
+    afterEach(() => {
+        delete proto.setMode;
+    });
+
+    it("turns a mode off while read-only, and back on after", () => {
+        const applied: unknown[] = [];
+        proto.setMode = function (mode: unknown) {
+            applied.push(mode);
+        };
+        const { editor } = setup();
+        const modes = editor as unknown as { setMode(mode: unknown): void };
+        const tool = { name: "shape tool" };
+        modes.setMode(tool);
+        expect(applied).toEqual([tool]);
+
+        editor.setReadOnly(true);
+        expect(applied.at(-1)).toBeNull();
+        // one asked for while read-only waits
+        const box = { name: "placed box" };
+        modes.setMode(box);
+        expect(applied.at(-1)).toBeNull();
+
+        editor.setReadOnly(false);
+        expect(applied.at(-1)).toBe(box);
     });
 });
