@@ -1,5 +1,9 @@
 import { withTimelinePageRipple } from "@/db-functions/timelineRipple";
-import { FIRST_BEAT_ID, transactionWithHistory } from "@/db-functions";
+import {
+    FIRST_BEAT_ID,
+    remapItemChangesOntoReplacementBeatsInTransaction,
+    transactionWithHistory,
+} from "@/db-functions";
 import {
     createBeatsInTransaction,
     deleteBeatsInTransaction,
@@ -10,7 +14,8 @@ import {
 } from "@/db-functions";
 import { updatePagesInTransaction } from "@/db-functions";
 import { db } from "@/global/database/db";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { itemGeometryKeys } from "@/hooks/queries/useItems";
 import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import {
@@ -165,10 +170,14 @@ export const _importMusicXmlFile = async ({
                     (b) => !newBeatIds.has(b.id) && b.id !== FIRST_BEAT_ID,
                 );
                 if (unusedBeats.length > 0) {
-                    await deleteBeatsInTransaction({
+                    const beatIds = new Set(unusedBeats.map((b) => b.id));
+                    // Item changes move to the new beat at their time instead of going with
+                    // the old beats
+                    await remapItemChangesOntoReplacementBeatsInTransaction({
                         tx,
-                        beatIds: new Set(unusedBeats.map((b) => b.id)),
+                        beatIds,
                     });
+                    await deleteBeatsInTransaction({ tx, beatIds });
                 }
 
                 return {
@@ -193,9 +202,14 @@ const useMusicXmlMutation = <TArgs>(
     successKey?: string,
 ) => {
     const { fetchTimingObjects } = useTimingObjects();
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn,
         onSuccess: async () => {
+            // Item Outline changes moved to the new beats
+            void queryClient.invalidateQueries({
+                queryKey: itemGeometryKeys.all(),
+            });
             // This happens twice to bypass the errors. There's likely a better solution
             await fetchTimingObjects();
             await fetchTimingObjects();
