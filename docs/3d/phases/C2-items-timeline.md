@@ -71,15 +71,15 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 
 ### C2.3: Item Placement
 
-- Owner: none
-- Status: open
-- PR: none
+- Owner: trevor (3d/c2-placement-v2)
+- Status: in-review
+- PR: #281
 - Parallel: yes
 - Depends on: C2.1
 
 **Goal:** where each item is, count by count.
 
-**Scope:** the beat-keyed Placement table: held by one or more performers, each with a hand (left, right, both; hands needed from the model's `OM_grip_*`, else both); placed at the item's own position with an optional Crew; Off field (instant at its count). Item ripples as one row per item at staggered counts with a shared group id. Pure lookups: Placement at a count, hand conflicts (newest takes over at its count; the displaced item is not drawn), crew distance. An item that came from a flag reads as held by its original performer before its first row. Show setting "Warn when a prop moves without a crew", default off, stored in the show file. A visible trade of equipment between performers is a Placement change. Writes through `transactionWithHistory`; the table joins history and repair like the cue tables.
+**Scope:** the beat-keyed Placement table: held by one or more performers, each with a hand (left, right, both; hands needed from the model's `OM_grip_*`, else both); placed at the item's own position with an optional Crew; Off field (instant at its count). Item ripples as one row per item at staggered counts with a shared group id, each with its own value, storing the ripple's span and order like a cue ripple. Pure lookups: Placement at a count, hand conflicts (newest takes over at its count; the displaced item is not drawn; Carry's equipment takes hands too), crew distance, short-handed holds. An item that came from a flag gets an explicit held change at its first count. Show setting "Warn when a prop moves without a crew", default off, stored in the show file. A visible trade of equipment between performers is a Placement change. Writes through `transactionWithHistory`; the table joins history and repair like the cue tables.
 
 **Tickets:** 07, 21, 24, 26.12, 26.15, 26.19.
 
@@ -204,6 +204,48 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
   belong to the cue code; check them when items get cues (C3.7).
 - **Checks:** desktop vitest (full suite); type-check, lint, format,
   spellcheck.
+
+### 2026-10-16 · trevor (3d/c2-placement-v2) · C2.3
+
+- **Done:** migration 0025 (timeline-only): `item_placements` (held,
+  placed, off_field; beat-keyed; optional ripple `group_id`) and
+  `item_placement_marchers` (holders with a hand, crew with none), in
+  history and repair. Core lookups `placementAt`, `handsAt`,
+  `handConflicts` (newest wins), `crewDistances`, `crewOutOfReach`,
+  `handsNeeded`. Writes: set, replace and delete a change, and item
+  ripples by group, each one undo step; deleting a holder deletes a held
+  change left with none. Placement changes on deleted beats carry forward.
+  Show setting `warnPropMovesWithoutCrew`, off by default.
+- **Calls:** whether an item came from a flag isn't stored; the lookup
+  takes it as `origin`. A created item reads as placed before its first
+  row. Holders and crew must be performers.
+- **Left:** no UI yet; the Items tab (C3.7) and put-down (C2.5) use these.
+- **Checks:** desktop and core vitest (full suites); migration tests;
+  type-check, lint, format, spellcheck.
+
+### 2026-10-18 · review fixes (3d/c2-placement-v2) · C2.3
+
+- **Done (owner decisions of 2026-10-18):** a ripple carries a value per
+  item (each flag to its own performer). Its rows store the ripple as a cue
+  does (`ripple_json`, `{ version: 1, span, order }`, set exactly with
+  `group_id`); `createItemPlacementRipple` spreads the rows from a start
+  count over the span in time, `moveItemPlacementGroup` moves, re-times or
+  re-orders the group, and `setItemPlacementGroup` changes the state and
+  keeps who holds what. `ItemOrigin` is gone: an item from a flag gets an
+  explicit held change on its first beat (`createItems`' `placement`), and
+  Off field before creation is the Outline's alone. `handsAt` and
+  `handConflicts` take Carry's equipment (`CarryChange`, `carryHands`) as
+  hands in use; a held item there conflicts with `byItemId: null`.
+  `shortHandedHolds` gives the notes list a two-hand item left with one
+  holder's hand. `beat_rank` orders changes on one count: a write is the
+  newest there, and a carried or re-mapped change ranks below the ones
+  already there, so deleting a count keeps who holds what (review probe P3).
+  Placement changes are in `BEAT_KEYED_ITEM_TABLES`, so tempo edits and
+  MusicXML import keep them; the carry on deleting beats uses the same
+  registry. 0025 regenerated and dated after #181's lab migration, safe to
+  run twice.
+- **Left:** a file a fork build gave the old 0025 (dev builds only; never on
+  lab) keeps that table shape and needs a fresh copy.
 
 ### 2026-10-18 · review fixes (3d/c2-items-out-of-loops-v2) · C2.2
 
