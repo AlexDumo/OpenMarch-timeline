@@ -1,0 +1,18 @@
+// The Sketchpad static site on Cloudflare: one static-asset Worker on
+// workers.dev, for lab builds only until the owner says otherwise (owner
+// decision Q7). Not deployed yet. Build, then deploy:
+//
+//   pnpm --filter @openmarch/sketchpad-site build
+//   wrangler deploy -c apps/sketchpad/wrangler.jsonc           # main
+//   wrangler versions upload -c apps/sketchpad/wrangler.jsonc  # other branches
+{
+    "$schema": "../../node_modules/wrangler/config-schema.json",
+    "name": "openmarch-sketchpad-lab",
+    "compatibility_date": "2026-05-01",
+    "assets": {
+        "directory": "./dist",
+        "not_found_handling": "single-page-application",
+    },
+    "workers_dev": true,
+    "preview_urls": true,
+}

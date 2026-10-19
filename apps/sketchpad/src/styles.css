@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@import "@openmarch/ui/src/tailwind.css";
+@import "@openmarch/sketchpad/index.css";
+
+@source "../../../packages/ui/src/components";
+@source "../../../packages/sketchpad/src";
+
+@import "@fontsource/dm-sans/400.css";
+@import "@fontsource/dm-sans/500.css";
+
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background: var(--color-bg-1);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+}
