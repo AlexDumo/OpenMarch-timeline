@@ -22,7 +22,7 @@ import { pickMarchers } from "../camera/inputMath";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { FieldProperties, RgbaColor } from "@openmarch/core";
+import type { CueSection, FieldProperties, RgbaColor } from "@openmarch/core";
 import {
     Color,
     CylinderGeometry,
@@ -38,6 +38,13 @@ import {
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
+import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
+import { showLibraryItemsQueryOptions } from "@/hooks/queries/useShowLibrary";
+import { cueLibraryItemsOf, cueSectionsOf } from "@/view3d/library/cueAspects";
+import {
+    guardUniformPresetOf,
+    uniformPresetOf,
+} from "@/view3d/core/marchers/uniformPresets";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { marcherHeading } from "@/view3d/core/marchers/facing";
 import {
@@ -46,10 +53,6 @@ import {
     msAtCount,
 } from "@/view3d/core/marchers/countClock";
 import { plannedClips, eventRows } from "@/view3d/core/marchers/planner";
-import {
-    performerCarryOf,
-    planHornChannel,
-} from "@/view3d/core/marchers/hornChannel";
 import {
     defaultPerformerBody,
     bassOptions,
@@ -90,7 +93,14 @@ import {
 import { clipsToLoad } from "./marchers/marcherBodies";
 import { hornRowsOf } from "./marchers/hornRows";
 import { useShowPerformerDefaults, useStoredCues } from "./useStoredCues";
+import { sectionCueCarry } from "@/view3d/core/marchers/hornChannel";
+import {
+    windowHornEvents,
+    windowLookHold,
+    windowStepOffFoot,
+} from "./previewOverrides";
 import { dotModesPerCount } from "@/view3d/core/marchers/dotModes";
+import { SilkMotion } from "./marchers/silkMotion";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
@@ -104,12 +114,16 @@ interface PerformersProps {
 export default function Performers({ fieldProperties }: PerformersProps) {
     const queryClient = useQueryClient();
     const quality = useView3dSceneStore((s) => s.quality);
-    const hornState = useView3dSceneStore((s) => s.hornState);
-    const guardEquipment = useView3dSceneStore((s) => s.guardEquipment);
+    // The window's preview overrides: null (the start) follows the show.
+    const hornOverride = useView3dSceneStore((s) => s.hornState);
+    const guardOverride = useView3dSceneStore((s) => s.guardEquipment);
     const footOverride = useView3dSceneStore((s) => s.stepOffFoot);
     const showDefaults = useShowPerformerDefaults();
-    // The show's saved default, unless the window previews the other foot
-    const stepOffFoot = footOverride ?? showDefaults.stepOffFoot;
+    const stepOffFoot = windowStepOffFoot(
+        footOverride,
+        showDefaults.stepOffFoot,
+    );
+    const lookHold = windowLookHold(hornOverride);
     const stored = useStoredCues();
     const selectedPageId = useView3dSyncStore(
         (s) => s.selection.selectedPageId,
@@ -123,6 +137,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     });
 
     const marcherIdsKey = useMemo(
+        // Performers (the marchers query has no items): items get no figure
         () => (marchers ?? []).map((m) => m.id).join(","),
         [marchers],
     );
@@ -136,14 +151,19 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     );
     const count = slots.ids.length;
 
+    // the show's band and guard uniform presets, from its venue settings
+    // (ADR 0002 D-18)
+    const { data: venue } = useVenueSettings();
+    const uniformPreset = uniformPresetOf(venue?.uniforms);
+    const guardUniformPreset = guardUniformPresetOf(venue?.guardUniforms);
     // om-pose marchers (ADR 0002 D-7); the cylinders stand in until they load.
     const { data: sectionAppearances } = useQuery(
         allSectionAppearancesQueryOptions(),
     );
     // Keyed on what a look depends on (marcher IDs, sections, section fills),
     // not on the positions: a drill edit must not rebuild every mesh. The
-    // uniform ignores the fill (Band or Guard default); only what a section
-    // carries, its drum shells and flag silks, takes the fill.
+    // uniform ignores the fill (it comes from the show's preset); only what a
+    // section carries, its drum shells and flag silks, takes the fill.
     const looksKey = useMemo(() => {
         if (!marchers || !sectionAppearances) return null;
         const sectionById = new Map(marchers.map((m) => [m.id, m.section]));
@@ -173,13 +193,24 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             body: defaultPerformerBody(id, { varyHeight: quality === "high" }),
             uniform: sectionUniform(
                 section,
-                hornState,
+                lookHold,
                 options[i],
                 fill ? fillToNumber(fill) : undefined,
-                guardEquipment === "section" ? undefined : guardEquipment,
+                guardOverride ?? undefined,
+                uniformPreset,
+                guardUniformPreset,
             ),
+            // no Silk cues yet: the silks take the uniform's carry (the
+            // section's 2D fill, else the preset's color and pattern)
         }));
-    }, [looksKey, quality, hornState, guardEquipment]);
+    }, [
+        looksKey,
+        quality,
+        lookHold,
+        guardOverride,
+        uniformPreset,
+        guardUniformPreset,
+    ]);
     const heightClasses = useMemo(
         () => [...new Set((marcherLooks ?? []).map((l) => l.body.heightClass))],
         [marcherLooks],
@@ -188,22 +219,39 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     // The count clock and every marcher's clip plan for the whole show.
     const { beats, pages } = useTimingObjects();
     const clock = useMemo(() => buildCountClock(beats), [beats]);
-    // What each marcher carries, for the cues that fit them; keyed on the
-    // carry alone, so a horn-state or quality change doesn't recompile.
+    // What each marcher carries, for the cues that fit them: their section's
+    // usual equipment, as in the editor, whatever the guard preview shows.
+    // Keyed on the carry alone, so a preview or quality change doesn't
+    // recompile.
     const carriesKey = useMemo(
         () =>
-            marcherLooks
+            marchers
                 ? JSON.stringify(
-                      slots.ids.map((id, i) => [
-                          id,
-                          performerCarryOf(
-                              marcherLooks[i]?.uniform.options.carry?.family ??
-                                  null,
-                          ),
-                      ]),
+                      marchers.map((m) => [m.id, sectionCueCarry(m.section)]),
                   )
                 : null,
-        [marcherLooks, slots.ids],
+        [marchers],
+    );
+    // Each flag section's usual flag, with its Cut's aspect, for the Silk
+    // aspect note; keyed on the sections' flags alone, like the carries.
+    const cueSectionsKey = useMemo(() => {
+        if (!marchers || !marcherLooks) return null;
+        const sectionById = new Map(marchers.map((m) => [m.id, m.section]));
+        return JSON.stringify(
+            cueSectionsOf(
+                slots.ids.map((id, i) => ({
+                    section: sectionById.get(id) ?? "",
+                    family:
+                        marcherLooks[i]?.uniform.options.carry?.family ?? null,
+                })),
+            ),
+        );
+    }, [marchers, marcherLooks, slots.ids]);
+    // The show's Silk Artwork Versions, with their aspects
+    const { data: showLibrary } = useQuery(showLibraryItemsQueryOptions());
+    const cueLibraryItems = useMemo(
+        () => cueLibraryItemsOf(showLibrary ?? []),
+        [showLibrary],
     );
     // Positional ripple orders read where marchers stand. Only those need the
     // drill, so a drill edit doesn't recompile the cues and replan everyone.
@@ -216,15 +264,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     );
     const cuePositions = rippleNeedsPositions ? slots.positions : null;
     // The show's stored cues compiled for every marcher (stand on holds, face
-    // the front and keep the look's horn hold where none apply), with the
-    // show's step-off foot or the window's unsaved preview of the other one.
+    // the front and hold horns up where none apply), with the
+    // show's step-off foot or the window's unsaved preview of it.
     // `carries` decides which Horn/Equipment cues fit each marcher.
     const cues = useMemo(() => {
-        if (!marchers || !stored || !carriesKey) return null;
+        if (!marchers || !stored || !carriesKey || !cueSectionsKey) return null;
         const carries = new Map(
             JSON.parse(carriesKey) as [
                 number,
-                ReturnType<typeof performerCarryOf>,
+                ReturnType<typeof sectionCueCarry>,
             ][],
         );
         return compileWindowCues(
@@ -245,6 +293,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                           return p ? { x: p.x, y: p.z } : { x: 0, y: 0 };
                       }
                     : undefined,
+                libraryItems: cueLibraryItems,
+                sections: JSON.parse(cueSectionsKey) as CueSection[],
             },
             (id) => carries.get(id) ?? "none",
         );
@@ -254,6 +304,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         stepOffFoot,
         stored,
         carriesKey,
+        cueSectionsKey,
+        cueLibraryItems,
         cuePositions,
         clock,
         fieldProperties,
@@ -327,8 +379,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         });
         return [...out];
     }, [marcherLooks, showPlans]);
-    // Each carrier's Horn/Equipment channel over the show: its look's hold
-    // (the window's horn state), then whatever the cues say.
+    // Each carrier's Horn/Equipment channel over the show: horns up, then
+    // whatever the cues say; the window's horn preview, when set, instead.
     const hornSlots = useMemo<(HornSlot | null)[] | null>(() => {
         if (!marcherLooks || !cues) return null;
         const secondsPerCount = (k: number) =>
@@ -338,16 +390,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             if (!carry) return null;
             return {
                 family: carry.family,
-                events: planHornChannel(
+                events: windowHornEvents(
                     cues.segments(slots.ids[i], "horn_equipment"),
-                    {
-                        defaultState: look.uniform.options.hold,
-                        secondsPerCount,
-                    },
+                    hornOverride,
+                    { secondsPerCount },
                 ),
             };
         });
-    }, [marcherLooks, cues, clock, slots.ids]);
+    }, [marcherLooks, cues, clock, slots.ids, hornOverride]);
     const hornRows = useMemo(() => {
         const out = new Set<string>();
         for (const h of hornSlots ?? [])
@@ -376,6 +426,13 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                   )
                 : null,
         [marcherBodies, showPlans, marcherAssets, hornSlots],
+    );
+    const silkMotion = useMemo(
+        () =>
+            marcherBodies && showPlans && marcherBodies.silkSlots.length > 0
+                ? new SilkMotion(showPlans, clock, marcherBodies.silkSlots)
+                : null,
+        [marcherBodies, showPlans, clock],
     );
     const headings = useMemo(
         () => new Float32Array(count).fill(marcherHeading()),
@@ -493,7 +550,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const dirtyRef = useRef(true);
     useEffect(() => {
         dirtyRef.current = true;
-    }, [meshes, slots, fieldProperties, appearances, marcherBodies, motion]);
+    }, [
+        meshes,
+        slots,
+        fieldProperties,
+        appearances,
+        marcherBodies,
+        motion,
+        silkMotion,
+    ]);
 
     // Colors and visibility, only when the looks change.
     useEffect(() => {
@@ -584,7 +649,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             if (marcherBodies) {
                 countRef.current = c;
                 motion?.update(c, xz, placed, headings);
-                marcherBodies.writeFrame(xz, headings, placed, c, cam);
+                marcherBodies.writeFrame(
+                    xz,
+                    headings,
+                    placed,
+                    c,
+                    cam,
+                    silkMotion?.update(c) ?? null,
+                );
                 marcherBodies.compose(state.gl);
                 lod[0] = cam[0];
                 lod[1] = cam[1];

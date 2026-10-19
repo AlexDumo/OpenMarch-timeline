@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import {
+    GUARD_UNIFORM_PRESET_IDS,
+    UNIFORM_PRESET_IDS,
+} from "../marchers/uniformPresets";
 import FootballTemplates from "@/global/classes/fieldTemplates/Football";
 import GridFieldTemplates from "@/global/classes/fieldTemplates/GridFields";
 import {
@@ -41,6 +45,19 @@ describe("venueSettingsSchema", () => {
         }
     });
 
+    it("accepts every uniform preset, and settings without one", () => {
+        for (const uniforms of UNIFORM_PRESET_IDS)
+            expect(
+                venueSettingsSchema.safeParse({ ...valid, uniforms }).success,
+            ).toBe(true);
+        for (const guardUniforms of GUARD_UNIFORM_PRESET_IDS)
+            expect(
+                venueSettingsSchema.safeParse({ ...valid, guardUniforms })
+                    .success,
+            ).toBe(true);
+        expect(venueSettingsSchema.safeParse(valid).success).toBe(true);
+    });
+
     it("accepts an empty end-zone text", () => {
         const settings = {
             ...valid,
@@ -55,6 +72,11 @@ describe("venueSettingsSchema", () => {
         ["an unknown kit", { ...valid, kit: "arena" }],
         ["an unknown lighting preset", { ...valid, lighting: "noon" }],
         ["a non-boolean crowd", { ...valid, crowd: "yes" }],
+        ["an unknown uniform preset", { ...valid, uniforms: "plaid" }],
+        [
+            "a band-only preset for the guard",
+            { ...valid, guardUniforms: "westPoint" },
+        ],
         ["missing params", { ...valid, params: undefined }],
         [
             "a short hex color",

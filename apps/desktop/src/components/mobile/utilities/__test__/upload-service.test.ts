@@ -70,7 +70,12 @@ function fakeDb({
 }: {
     workspaceFindFirst: () => Promise<{ json_data: string } | null>;
     marchersFindMany: () => Promise<
-        { section: string | null; drill_prefix: string; drill_order: number }[]
+        {
+            section: string | null;
+            drill_prefix: string;
+            drill_order: number;
+            type?: string;
+        }[]
     >;
     fieldPropertiesFindFirst?: () => Promise<{ json_data: string } | null>;
 }) {
@@ -175,6 +180,44 @@ describe("upload-service", () => {
                         T: "Trumpet",
                         C: "Clarinet",
                     }),
+                }),
+            );
+        });
+
+        it("leaves items out of the labels and prefix map", async () => {
+            const db = fakeDb({
+                workspaceFindFirst: async () => ({
+                    json_data: workspaceJson(123),
+                }),
+                marchersFindMany: async () => [
+                    {
+                        section: "Trumpet",
+                        drill_prefix: "T",
+                        drill_order: 1,
+                        type: "marcher",
+                    },
+                    {
+                        section: "Prop",
+                        drill_prefix: "PROP",
+                        drill_order: 1,
+                        type: "item",
+                    },
+                    {
+                        section: "Equipment",
+                        drill_prefix: "EQUIP",
+                        drill_order: 1,
+                        type: "item",
+                    },
+                ],
+            });
+
+            await uploadDatabaseToServer(db);
+
+            expect(mockCreateRevision).toHaveBeenCalledWith(
+                123,
+                expect.objectContaining({
+                    labels: JSON.stringify(["T1"]),
+                    prefix_map: JSON.stringify({ T: "Trumpet" }),
                 }),
             );
         });

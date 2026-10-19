@@ -89,7 +89,7 @@ export type CanvasEditPlan =
 export function planCanvasEdit(
     state: Pick<TimelineSelectionState, "selection" | "isolation"> &
         Partial<
-            Pick<TimelineSelectionState, "pageBoxes">
+            Pick<TimelineSelectionState, "pageBoxes" | "windowTimelineId">
         > = useTimelineSelectionStore.getState(),
     basic: boolean = isBasicMode(),
 ): CanvasEditPlan {
@@ -141,6 +141,10 @@ export function planCanvasEdit(
                 kind: "range",
                 start: selection.start,
                 end: selection.end,
+                // UI-25: a selected move split off the page's timeline takes added marchers
+                ...(state.windowTimelineId != null
+                    ? { timelineId: state.windowTimelineId }
+                    : {}),
             },
             beat: selection.end,
         };

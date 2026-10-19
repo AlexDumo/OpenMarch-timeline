@@ -18,6 +18,7 @@ export const mockMarchers: Marcher[] = [
         updated_at: "other_time",
         home_x: 0,
         home_y: 0,
+        type: "marcher",
     },
     {
         id: 2,
@@ -32,6 +33,7 @@ export const mockMarchers: Marcher[] = [
         updated_at: "other_time",
         home_x: 0,
         home_y: 0,
+        type: "marcher",
     },
     {
         id: 3,
@@ -46,6 +48,7 @@ export const mockMarchers: Marcher[] = [
         updated_at: "other_time",
         home_x: 0,
         home_y: 0,
+        type: "marcher",
     },
     {
         id: 4,
@@ -60,6 +63,7 @@ export const mockMarchers: Marcher[] = [
         updated_at: "other_time",
         home_x: 0,
         home_y: 0,
+        type: "marcher",
     },
 ] as const;
 

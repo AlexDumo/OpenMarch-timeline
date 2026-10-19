@@ -14,7 +14,6 @@ import { composedGeometry, writeInstance } from "@/view3d/render/composer";
 import { instrumentModel, type Detail } from "@/view3d/core/instruments";
 import { hold as holdFor } from "@/view3d/core/instruments/holds";
 import {
-    DEFAULT_PRIMARY,
     uniformKey,
     type BodyType,
     type UniformLook,
@@ -28,6 +27,23 @@ import type { MarcherQuality, MarcherSlotLook } from "./marcherBodies";
 export const HORN_NEAR_M = 28;
 /** ...and farther than this it switches back to low detail. */
 export const HORN_FAR_M = 34;
+
+/**
+ * Whether a carrier at (`x`, `z`) draws at full detail, from its distance
+ * to the camera at chest height and whether it did last frame (`was`): the
+ * gap between {@link HORN_NEAR_M} and {@link HORN_FAR_M} keeps one that
+ * stands at the edge from flickering between tiers.
+ */
+export function isNearCarrier(
+    x: number,
+    z: number,
+    camera: readonly [number, number, number],
+    was: boolean | undefined,
+): boolean {
+    const d = Math.hypot(x - camera[0], camera[1] - 1.4, z - camera[2]);
+    if (was === undefined) return d < (HORN_NEAR_M + HORN_FAR_M) / 2;
+    return was ? d < HORN_FAR_M : d < HORN_NEAR_M;
+}
 
 interface Tier {
     mesh: THREE.InstancedMesh;
@@ -84,7 +100,7 @@ export class HornSet {
                     h,
                     model,
                     look.options.finish,
-                    look.options.carryColor ?? DEFAULT_PRIMARY,
+                    look.options.carryColor ?? undefined,
                 );
                 const mesh = new THREE.InstancedMesh(
                     composedGeometry(source, slots.length),
@@ -128,18 +144,12 @@ export class HornSet {
                 if (!placed[slot]) continue;
                 let tier = 0;
                 if (g.tiers.length > 1 && camera) {
-                    const d = Math.hypot(
-                        xz[slot * 2] - camera[0],
-                        camera[1] - 1.4,
-                        xz[slot * 2 + 1] - camera[2],
+                    const near = isNearCarrier(
+                        xz[slot * 2],
+                        xz[slot * 2 + 1],
+                        camera,
+                        g.near.get(slot),
                     );
-                    const was = g.near.get(slot);
-                    const near =
-                        was === undefined
-                            ? d < (HORN_NEAR_M + HORN_FAR_M) / 2
-                            : was
-                              ? d < HORN_FAR_M
-                              : d < HORN_NEAR_M;
                     g.near.set(slot, near);
                     tier = near ? 0 : 1;
                 }

@@ -148,6 +148,13 @@
     color: var(--color-text-subtitle);
     font-size: 12px;
 }
+/* Why a greyed-out row can't run (Visuals mode's drill edits) */
+.palette-item-reason {
+    flex-shrink: 0;
+    color: var(--color-text-subtitle);
+    font-size: 12px;
+    font-style: italic;
+}
 .palette-item[aria-disabled="true"] {
     cursor: default;
     opacity: 0.45;

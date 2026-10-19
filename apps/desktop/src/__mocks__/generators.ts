@@ -1,4 +1,5 @@
 import Marcher from "@/global/classes/Marcher";
+import { createCountGrid } from "@/timeline/countGrid";
 import { SECTIONS } from "@/global/classes/Sections";
 import { DatabaseBeat } from "@/db-functions/beat";
 import { DatabaseMeasure } from "@/db-functions/measures";
@@ -57,6 +58,7 @@ export const generateMarchers = ({
             updated_at: faker.date.recent().toISOString(),
             home_x: 0,
             home_y: 0,
+            type: "marcher",
         });
     }
 
@@ -293,6 +295,10 @@ export const generateTimingObjects = ({
         beats: processedBeats,
         measures: processedMeasures,
         pages: processedPages,
+        countGrid: createCountGrid({
+            beats: processedBeats,
+            measureStarts: processedMeasures.map((m) => m.startBeat.index),
+        }),
         utility: {
             last_page_counts: 0,
             default_beat_duration: 0.5,

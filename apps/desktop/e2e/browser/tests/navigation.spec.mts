@@ -4,7 +4,7 @@ import { readField, waitForIdle } from "../app.mjs";
 import type { Show } from "../fixtures.mjs";
 
 // Navigation on the field (fork #194): wheel, trackpad, pinch, pan drags,
-// limits, the zoom controls, fullscreen and touch, with the two decided
+// limits, the zoom controls, Preview and touch, with the two decided
 // changes in #189's rules table ("Panning" and "Alt"). The view is read only
 // through the field test API.
 
@@ -81,11 +81,18 @@ const waitForView = (
         .poll(async () => Math.abs(read(await view(page)) - expected))
         .toBeLessThanOrEqual(within);
 
-/** The view a show opens at: the field centered, its height fitted but never above 100%. */
+/**
+ * The view a show opens at, and Reset returns to: the whole field fitted into
+ * the field's pane with a 16 px margin (at most 5% of a side), and centered.
+ */
 async function openingView(show: Show): Promise<View> {
     const field = await fieldSize(show);
     const box = await fieldBox(show.page);
-    const zoom = Math.min(1, box.height / field.height);
+    const room = (size: number) => size - 2 * Math.min(16, size * 0.05);
+    const zoom = Math.min(
+        room(box.width) / field.width,
+        room(box.height) / field.height,
+    );
     return {
         zoom,
         pan: {
@@ -166,6 +173,286 @@ test("opens with the field centered at its base zoom, and Reset returns there", 
     await page.getByTitle("Reset Zoom and Center").click();
     await openedView(show);
     await expect(page.getByTitle("Reset Zoom and Center")).toHaveText("100%");
+});
+
+test("Reset fits the whole field into the pane the timeline leaves", async ({
+    show,
+}) => {
+    const { page } = show;
+    const opened = await openedView(show);
+    const before = await fieldBox(page);
+
+    // A taller timeline leaves a shorter pane; the zoom stays until Reset
+    const splitter = page.getByTestId("timeline-splitter");
+    await splitter.focus();
+    for (let i = 0; i < 4; i++) await splitter.press("Shift+ArrowUp");
+    await expect
+        .poll(async () => (await fieldBox(page)).height)
+        .toBeLessThan(before.height - 50);
+    expect((await settledView(page)).zoom).toBe(opened.zoom);
+
+    await page.getByTitle("Reset Zoom and Center").click();
+    const expected = await openingView(show);
+    await waitForView(page, (v) => v.zoom, expected.zoom, 0.005);
+    await waitForView(page, (v) => v.pan.x, expected.pan.x, 1.5);
+    await waitForView(page, (v) => v.pan.y, expected.pan.y, 1.5);
+    await expect(page.getByTitle("Reset Zoom and Center")).toHaveText("100%");
+
+    // The whole field is on screen
+    const field = await fieldSize(show);
+    const box = await fieldBox(page);
+    const fitted = await view(page);
+    expect(fitted.pan.x).toBeGreaterThanOrEqual(0);
+    expect(fitted.pan.y).toBeGreaterThanOrEqual(0);
+    expect(fitted.pan.x + field.width * fitted.zoom).toBeLessThanOrEqual(
+        box.width,
+    );
+    expect(fitted.pan.y + field.height * fitted.zoom).toBeLessThanOrEqual(
+        box.height,
+    );
+});
+
+/**
+ * Clicks `selector` (Reset, unless given) in the page and reads the zoom
+ * every frame for `ms`. With `interrupt`, scrolls or presses the field that
+ * many frames after the click.
+ */
+const zoomsAfterClick = (
+    page: Page,
+    ms: number,
+    interrupt?: { after: number; by: "wheel" | "press" },
+    selector = '[title="Reset Zoom and Center"]',
+) =>
+    page.evaluate(
+        async ({ ms, interrupt, selector }) => {
+            const reset = document.querySelector<HTMLElement>(selector)!;
+            const surface = document.querySelector<HTMLElement>(
+                '[data-testid="threeField"]',
+            )!;
+            const zooms: number[] = [];
+            reset.click();
+            const start = performance.now();
+            while (performance.now() - start < ms) {
+                await new Promise(requestAnimationFrame);
+                if (zooms.length === interrupt?.after) {
+                    const box = surface.getBoundingClientRect();
+                    const at = {
+                        clientX: box.left + box.width / 2,
+                        clientY: box.top + box.height / 2,
+                        bubbles: true,
+                        cancelable: true,
+                    };
+                    if (interrupt.by === "wheel")
+                        surface.dispatchEvent(
+                            new WheelEvent("wheel", { ...at, deltaX: 40 }),
+                        );
+                    else {
+                        surface.dispatchEvent(
+                            new PointerEvent("pointerdown", at),
+                        );
+                        surface.dispatchEvent(
+                            new PointerEvent("pointerup", at),
+                        );
+                    }
+                }
+                zooms.push(window.fieldTest!.viewport().zoom);
+            }
+            return zooms;
+        },
+        { ms, interrupt, selector },
+    );
+
+/** Preview's fit: 87% of the pane, centered across, a tenth of the spare height down. */
+async function previewFitView(
+    page: Page,
+    field: { width: number; height: number },
+): Promise<View> {
+    const box = await fieldBox(page);
+    const zoom =
+        Math.min(box.width / field.width, box.height / field.height) * 0.87;
+    return {
+        zoom,
+        pan: {
+            x: (box.width - field.width * zoom) / 2,
+            y: (box.height - field.height * zoom) / 10,
+        },
+    };
+}
+
+/** Waits for the view to settle, and checks it's `expected`. */
+async function landsOnView(page: Page, expected: () => Promise<View>) {
+    const fit = await settledView(page);
+    const want = await expected();
+    expectNear(fit.zoom, want.zoom, 0.005);
+    expectNear(fit.pan.x, want.pan.x);
+    expectNear(fit.pan.y, want.pan.y);
+}
+
+/**
+ * Several frames strictly between where the zoom began and where it landed,
+ * and every frame on the way there: it never heads off toward another fit
+ * first.
+ */
+function glided(zooms: number[], from: number) {
+    const to = zooms.at(-1)!;
+    const [low, high] = from < to ? [from, to] : [to, from];
+    const between = zooms.filter(
+        (zoom) => zoom > low + 0.005 && zoom < high - 0.005,
+    );
+    expect(between.length).toBeGreaterThanOrEqual(3);
+    const direction = Math.sign(to - from);
+    zooms.slice(1).forEach((zoom, i) => {
+        expect((zoom - zooms[i]) * direction).toBeGreaterThanOrEqual(-1e-9);
+    });
+}
+
+/** Names a GPU to the field, which otherwise sees the software WebGL here. */
+const NAME_A_GPU = `{
+    for (const gl of [WebGLRenderingContext, WebGL2RenderingContext]) {
+        const getParameter = gl.prototype.getParameter;
+        gl.prototype.getParameter = function (name) {
+            // UNMASKED_RENDERER_WEBGL and RENDERER
+            if (name === 0x9246 || name === 0x1f01) return "Test GPU";
+            return getParameter.call(this, name);
+        };
+    }
+}`;
+
+const fieldQualityMode = (page: Page) =>
+    page.evaluate(() => window.fieldTest!.quality!().mode);
+
+test.describe("at full quality", () => {
+    // The machines here draw WebGL in software, which puts the field in its
+    // low-quality mode: name a GPU instead
+    test.use({
+        initScript: NAME_A_GPU,
+    });
+    test.skip(
+        ({ target }) => target !== "browser",
+        "Names a GPU with an init script",
+    );
+
+    test("Reset glides to the fit, and a scroll or a press stops the glide", async ({
+        show,
+    }) => {
+        const { page } = show;
+        expect(await fieldQualityMode(page)).toBe("full");
+        const opened = await openedView(show);
+        for (let i = 0; i < 4; i++) await page.getByTitle("Zoom In").click();
+        const zoomedIn = (await settledView(page)).zoom;
+
+        // It zooms out over several frames, never past the fit, and lands on it
+        const zooms = await zoomsAfterClick(page, 1500);
+        const gliding = zooms.filter(
+            (zoom) => zoom < zoomedIn - 0.01 && zoom > opened.zoom + 0.01,
+        );
+        // Slow software frames can leave only a few in between
+        expect(gliding.length).toBeGreaterThanOrEqual(3);
+        zooms.slice(1).forEach((zoom, i) => {
+            expect(zoom).toBeLessThanOrEqual(zooms[i] + 1e-9);
+            expect(zoom).toBeGreaterThanOrEqual(opened.zoom - 1e-9);
+        });
+        expectNear(zooms.at(-1)!, opened.zoom, 0.005);
+        await expect(page.getByTitle("Reset Zoom and Center")).toHaveText(
+            "100%",
+        );
+
+        // A scroll or a press mid-glide stops it where it is
+        for (let i = 0; i < 4; i++) await page.getByTitle("Zoom In").click();
+        await settledView(page);
+        for (const by of ["wheel", "press"] as const) {
+            const stopped = await zoomsAfterClick(page, 800, { after: 3, by });
+            const after = stopped.slice(4);
+            expect(after.every((zoom) => zoom === after[0])).toBe(true);
+            expect(after[0]).toBeGreaterThan(opened.zoom + 0.01);
+            await page.getByTitle("Zoom In").click();
+            await settledView(page);
+        }
+    });
+
+    test("switching Preview glides to its own fit, which Reset returns to", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const field = await fieldSize(show);
+        const opened = await openedView(show);
+        const reset = page.getByTitle("Reset Zoom and Center");
+        const previewView = () => previewFitView(page, field);
+        const landsOn = (expected: () => Promise<View>) =>
+            landsOnView(page, expected);
+
+        // Entering Preview glides there, and its fit is 100%
+        const entering = await zoomsAfterClick(
+            page,
+            1500,
+            undefined,
+            '[data-testid="workspace-view-preview"]',
+        );
+        glided(entering, opened.zoom);
+        await landsOn(previewView);
+        await expect(reset).toHaveText("100%");
+
+        // Reset in Preview comes back to Preview's fit
+        await page.getByTitle("Zoom In").click();
+        await expect(reset).toHaveText("120%");
+        await reset.click();
+        await landsOn(previewView);
+        await expect(reset).toHaveText("100%");
+
+        // Leaving Preview glides back to the editor's fit
+        const inPreview = (await settledView(page)).zoom;
+        const leaving = await zoomsAfterClick(
+            page,
+            1500,
+            undefined,
+            '[data-testid="workspace-view-editor"]',
+        );
+        glided(leaving, inPreview);
+        await landsOn(() => openingView(show));
+        await expect(reset).toHaveText("100%");
+    });
+});
+
+test.describe("in Performance mode", () => {
+    test.use({ uiSettings: { fieldPerformanceMode: true } });
+
+    test("Reset jumps to the fit", async ({ show }) => {
+        const { page } = show;
+        expect(await fieldQualityMode(page)).toBe("low");
+        const opened = await openedView(show);
+        for (let i = 0; i < 4; i++) await page.getByTitle("Zoom In").click();
+        await settledView(page);
+
+        const zooms = await zoomsAfterClick(page, 300);
+        zooms.forEach((zoom) => expectNear(zoom, opened.zoom, 0.005));
+    });
+});
+
+test("in a narrow window, Reset fits the field's width", async ({
+    show,
+    target,
+}) => {
+    test.skip(target !== "browser", "Resizes the page's viewport");
+    const { page } = show;
+    await openedView(show);
+    // The sidebar and the inspector leave a pane narrower than the field is wide
+    await page.setViewportSize({ width: 1100, height: 1000 });
+    const field = await fieldSize(show);
+    await expect
+        .poll(async () => {
+            const box = await fieldBox(page);
+            return box.width / box.height < field.width / field.height;
+        })
+        .toBe(true);
+
+    await page.getByTitle("Reset Zoom and Center").click();
+    const expected = await openingView(show);
+    await waitForView(page, (v) => v.zoom, expected.zoom, 0.005);
+    await waitForView(page, (v) => v.pan.x, expected.pan.x, 1.5);
+    const box = await fieldBox(page);
+    const fitted = await view(page);
+    expect(fitted.pan.x).toBeGreaterThan(0);
+    expect(fitted.pan.x + field.width * fitted.zoom).toBeLessThan(box.width);
 });
 
 test.describe("trackpad mode (the default)", () => {
@@ -337,22 +624,18 @@ test("the zoom buttons zoom by a fifth at the center", async ({ show }) => {
     await expect(page.getByTitle("Reset Zoom and Center")).toHaveText("83%");
 });
 
-test("fullscreen fits the whole field, and leaving it centers the field again", async ({
+test("Preview fits the whole field, and leaving it centers the field again", async ({
     show,
 }) => {
     const { page } = show;
     const field = await fieldSize(show);
     const before = await openedView(show);
 
-    await page
-        .getByRole("button", { name: "Toggle timeline fullscreen" })
-        .click();
+    await page.getByTestId("workspace-view-preview").click();
     await expect
         .poll(async () => (await view(page)).zoom)
         .not.toBe(before.zoom);
     // Centered across at 87% of the room, a tenth of the spare height down.
-    // Today's fit measures the room with the 128 px left above the field, so
-    // when the height limits it the field's back edge can run off the bottom.
     // The canvas can take a moment to grow into the room: read both afresh.
     const offCenter = async () => {
         const v = await view(page);
@@ -367,9 +650,7 @@ test("fullscreen fits the whole field, and leaving it centers the field again", 
         (box.width / field.width) * 0.87 + 1e-6,
     );
 
-    await page
-        .getByRole("button", { name: "Toggle timeline fullscreen" })
-        .click();
+    await page.getByTestId("workspace-view-editor").click();
     await openedView(show);
 });
 
@@ -433,42 +714,4 @@ test.describe("touch", () => {
         expectNear(drawn.x, mid.x, 0.5);
         expectNear(drawn.y, mid.y, 0.5);
     });
-});
-
-test("fullscreen's perspective tilts the field, and leaving fullscreen flattens it", async ({
-    show,
-}) => {
-    const { page } = show;
-    const perspective = page.getByTestId("field-perspective");
-    // Only in fullscreen
-    await expect(perspective).toBeDisabled();
-    await page
-        .getByRole("button", { name: "Toggle timeline fullscreen" })
-        .click();
-    await expect(perspective).toBeEnabled();
-    const tilt = page.getByTestId("fieldTilt");
-    const flat = (await tilt.boundingBox())!;
-
-    await perspective.click();
-    const slider = page.getByRole("slider", { name: "Perspective" });
-    await slider.focus();
-    for (let i = 0; i < 40; i++) await page.keyboard.press("ArrowRight");
-    await expect(perspective).toHaveAccessibleName("Perspective, 40°");
-    // Leaning back, the field looks shorter on screen
-    await expect
-        .poll(async () => (await tilt.boundingBox())!.height)
-        .toBeLessThan(flat.height * 0.9);
-    await page.keyboard.press("Escape");
-
-    await page
-        .getByRole("button", { name: "Toggle timeline fullscreen" })
-        .click();
-    await expect(perspective).toHaveAccessibleName("Perspective, 0°");
-    await expect
-        .poll(async () => {
-            const box = (await tilt.boundingBox())!;
-            const inner = await tilt.evaluate((el) => el.clientHeight);
-            return Math.abs(box.height - inner);
-        })
-        .toBeLessThanOrEqual(1);
 });

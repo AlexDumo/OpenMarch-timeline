@@ -1,9 +1,10 @@
 import { useMemo } from "react";
+import { isPlaywrightSession } from "@/utilities/playwrightSession";
 import { create } from "zustand";
 import type {
     Beat,
-    Diagnostic,
     Explanation,
+    PutDownItem,
     Resolver,
     SpanInfo,
     XY,
@@ -93,6 +94,24 @@ let session: Session | null = null;
 let focusBeat = 1;
 
 let warmScheduler: WarmScheduler | null = null;
+
+/**
+ * The items and their Placement the resolver puts down (`withPutDowns`, ADR 0002 D-9). Placement
+ * isn't in the timeline change log: `useTimelinePutDownFeed` sets it from its queries.
+ */
+let putDownItems: readonly PutDownItem[] = [];
+
+/**
+ * Replaces the items the resolver puts down, and bumps the version so every view reads their
+ * positions again. Kept for the next cold build too.
+ */
+export function setTimelinePutDownItems(items: readonly PutDownItem[]): void {
+    putDownItems = items;
+    const host = session?.host;
+    if (!host) return;
+    host.resolver.setPutDownItems(items);
+    bumpVersion();
+}
 
 /** Replaces the idle-warming scheduler (null restores the default), for tests. */
 export function setTimelineWarmSchedulerForTesting(
@@ -227,7 +246,7 @@ async function runColdBuild(s: Session, build: number): Promise<void> {
         const host = await withTimelineWriteLock(async () => {
             const tables = await readTimelineTables(s.db);
             if (session !== s || build !== s.build) return null;
-            const built = createTimelineHost(tables);
+            const built = createTimelineHost(tables, putDownItems);
             // Installed before the lock is released, so no batch falls between the read and
             // the host that must apply it
             s.host = built;
@@ -321,18 +340,6 @@ export function useExplain(marcherId: number, beat: Beat): Explanation | null {
     }, [resolver, version, marcherId, beat]);
 }
 
-const noDiagnostics: Diagnostic[] = [];
-
-/** The show's current diagnostics; empty when no resolver is ready. */
-export function useDiagnostics(): Diagnostic[] {
-    const resolver = useTimelineResolverStore((s) => s.resolver);
-    const version = useTimelineResolverStore((s) => s.version);
-    return useMemo(() => {
-        void version;
-        return resolver ? resolver.diagnostics() : noDiagnostics;
-    }, [resolver, version]);
-}
-
 /**
  * A marcher's resolver spans (spec R-2, R-3), sorted, from the leading hold to the trailing one,
  * from `Resolver.spanInfos` (ADR 0001 §4 amendment): the cached spans only, no positions. For the
@@ -345,3 +352,33 @@ export function resolverSpans(
 ): SpanInfo[] {
     return hasMarcher(resolver, marcherId) ? resolver.spanInfos(marcherId) : [];
 }
+
+declare global {
+    interface Window {
+        /** Scenario reads, in Playwright sessions only; see below. */
+        openmarchResolver?: {
+            positionsAt(beats: readonly number[]): Record<number, number[][]>;
+            version(): number;
+        };
+    }
+}
+
+/**
+ * Scenario reads (UI-25 parity checks): every marcher's resolved position at each of `beats`, from
+ * the resolver the app draws with, so a scenario can compare a show before and after an edit at
+ * every beat without seeking the playhead to each one. `version` is the resolver store's version.
+ */
+if (typeof window !== "undefined" && isPlaywrightSession())
+    window.openmarchResolver = {
+        positionsAt: (beats) => {
+            const resolver = useTimelineResolverStore.getState().resolver;
+            const out: Record<number, number[][]> = {};
+            if (!resolver) return out;
+            for (const id of resolver.marcherIds())
+                out[id] = beats.map((beat) => [
+                    ...resolver.positionAt(id, beat),
+                ]);
+            return out;
+        },
+        version: () => useTimelineResolverStore.getState().version,
+    };

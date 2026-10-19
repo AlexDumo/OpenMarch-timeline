@@ -6,14 +6,18 @@ import type {
     FieldTestGesture,
     FieldTestHandle,
     FieldTestImage,
+    FieldTestItem,
     FieldTestLook,
+    FieldTestPropTool,
     FieldTestMarcher,
     FieldTestPlacedBox,
     FieldTestShapeOverlay,
     ScreenPoint,
 } from "@/field/fieldTestApi";
 import { canvasPixelRatio, useFieldQualityStore } from "@/field/fieldQuality";
+import type { PropToolShape } from "@/field/editor/propTool";
 import type { FieldMarchers } from "./fieldMarchers";
+import type { FieldItems } from "./fieldItems";
 import { fieldToElement, type FieldViewState } from "./fieldView";
 import type { CurrentFieldQuality } from "./useFieldQuality";
 
@@ -42,6 +46,10 @@ export type ThreeFieldState = {
     modeDrawing(): FieldModeDrawing | null;
     /** The placed boxes outlined on the field (#204). */
     placedBoxes(): readonly FieldTestPlacedBox[];
+    /** The items drawn (C2.1). */
+    items: FieldItems;
+    /** The editor's prop tool, or null when it's off (C2.1). */
+    propTool(): PropToolShape | null;
 };
 
 /**
@@ -110,6 +118,8 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                 label,
                 rect: { ...rect },
             })),
+        items: () => itemsOnScreen(field),
+        propTool: () => propToolOf(field),
     };
 }
 
@@ -164,6 +174,43 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         const { x, y } = fieldToElement(view, at.x, at.y);
         return { x: rect.x + x, y: rect.y + y };
     }
+}
+
+/** The prop tool as the field shows it, or null when it's off. */
+function propToolOf(field: ThreeFieldState): FieldTestPropTool | null {
+    const tool = field.propTool();
+    if (!tool) return null;
+    return {
+        outlineType: tool.outlineType,
+        preview: tool.preview && {
+            points: tool.preview.points.map((p) => ({ ...p })),
+            closed: tool.preview.closed,
+        },
+    };
+}
+
+/** The items drawn, by ascending marcher id, with their centers in viewport CSS px. */
+function itemsOnScreen(field: ThreeFieldState): FieldTestItem[] {
+    const element = field.element();
+    if (!element) return [];
+    const rect = element.getBoundingClientRect();
+    const view = field.view();
+    return field.items
+        .outlines()
+        .map(({ id, center, geometry }): FieldTestItem => {
+            const at = fieldToElement(view, center.x, center.y);
+            return {
+                id,
+                outlineType: geometry.outlineType,
+                width: geometry.width,
+                depth: geometry.depth,
+                rotation: geometry.rotation,
+                x: center.x,
+                y: center.y,
+                screen: { x: rect.x + at.x, y: rect.y + at.y },
+            };
+        })
+        .sort((a, b) => a.id - b.id);
 }
 
 /** The selection box's handles as drawn, in viewport CSS px, or null with none. */

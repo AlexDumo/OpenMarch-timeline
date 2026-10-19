@@ -14,7 +14,7 @@ const CONTROL_KEYS = new Set(["Tab", "Enter", "F2"]);
 
 /** Controls whose keys act on them natively, so a key they get is always working them */
 const KEYED_WIDGETS =
-    'input, select, textarea, [contenteditable], [role="slider"], [role="switch"], [role="checkbox"], [role="radio"], [role="tab"], [role="option"], [role="menuitem"], [role="spinbutton"]';
+    'input, select, textarea, [contenteditable], [role="slider"], [role="switch"], [role="checkbox"], [role="tab"], [role="option"], [role="menuitem"], [role="spinbutton"]';
 
 export const installClickFocusMarker = (win: Window = window) => {
     const doc = win.document;

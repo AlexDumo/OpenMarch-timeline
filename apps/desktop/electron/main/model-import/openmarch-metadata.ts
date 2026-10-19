@@ -6,7 +6,8 @@
  *   pole or bell), `OM_grip_L`, and other attach points. Names use only
  *   `[A-Za-z0-9_]`.
  * - `extras.openmarch.artworkSlot {id, widthM, heightM}` on materials or
- *   meshes.
+ *   meshes. The id follows the one slot-id rule the show file keeps
+ *   (`artworkSlotId.ts`): 1 to 64 letters, digits, underscores or dashes.
  * - Model-level `extras.openmarch`: `stretch {x, y, z}` (a 3D 9-slice, each
  *   axis `[a, b]` in meters or null), and the Starter kit stamps `itemId`,
  *   `kind` and `kitVersion`. Read from the default scene, its root nodes and
@@ -22,6 +23,10 @@
 import type { RawGltf } from "./container";
 import type { NoteRow, StretchZones } from "./types";
 import { LicenseIdSchema } from "../library/types";
+import {
+    ARTWORK_SLOT_ID_RULE,
+    isArtworkSlotId,
+} from "../../database/migrations/artworkSlotId";
 
 const OM_NAME = /^OM_[A-Za-z0-9_]+$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -225,6 +230,14 @@ function readSlots(json: RawGltf, notes: NoteRow[]): RawSlot[] {
                 code: "invalidOpenMarchData",
                 where,
                 reason: "artworkSlot must be {id, widthM > 0, heightM > 0}",
+            });
+            return;
+        }
+        if (!isArtworkSlotId(s.id)) {
+            notes.push({
+                code: "invalidOpenMarchData",
+                where,
+                reason: `artworkSlot id ${JSON.stringify(s.id)} must be ${ARTWORK_SLOT_ID_RULE}`,
             });
             return;
         }

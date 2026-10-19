@@ -32,6 +32,7 @@ const expectedMarchers = Array.from({ length: numberOfMarchers }, (_, i) => {
         notes: null,
         home_x: 0,
         home_y: 0,
+        type: "marcher",
     };
 });
 

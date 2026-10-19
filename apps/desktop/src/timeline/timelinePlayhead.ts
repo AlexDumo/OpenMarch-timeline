@@ -128,23 +128,23 @@ export function previewBounds(
     return { from: selection.start, to: selection.end };
 }
 
-/** Whether playing on can start from `beat`: there is time after it. */
-export function canPlayOn(beat: number, showEndBeat: number): boolean {
-    return beat < showEndBeat;
-}
-
 /**
  * What playback does at a live beat (UI-11, UI-17):
  *
  * - A preview, the pinned window's loop, goes back to its start at its end.
- * - Playing on stops at the end of the show (`"stop"`, which goes back to where Play was pressed,
- *   UI-24). An isolated timeline loops instead.
+ * - Playing on stops where it crosses `stopBeat` (`"stop"`, which goes back to where Play was
+ *   pressed, UI-24): the latest of the show's end, the music's end and the last move's end
+ *   (docs/timeline/endless-counts.md rule 6). Started (or jumped) at or past it, `previousBeat` is
+ *   past it too, and it plays on in silence until stopped. An isolated timeline loops instead.
+ *
+ * @param previousBeat the live beat a frame ago, or where playback started
  */
 export function playbackStep(
     run: TimelinePlaybackRun,
     liveBeat: number,
-    showEndBeat: number,
+    stopBeat: number,
     isolated: { readonly start: number; readonly end: number } | null,
+    previousBeat = -Infinity,
 ): { readonly loopTo: number } | "stop" | null {
     if (run.kind === "preview")
         return liveBeat < run.to
@@ -153,6 +153,6 @@ export function playbackStep(
               ? "stop"
               : { loopTo: run.from };
     if (isolated && liveBeat >= isolated.end) return { loopTo: isolated.start };
-    if (liveBeat >= showEndBeat) return "stop";
+    if (previousBeat < stopBeat && liveBeat >= stopBeat) return "stop";
     return null;
 }

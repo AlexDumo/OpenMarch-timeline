@@ -142,7 +142,8 @@ timeline); selecting a timeline replaces selecting a page, and nothing reads a
 selected page. Rules on stored data, enforced by the write functions
 (`E-ARGS`), not by the database:
 
-- At most one timeline has a given range.
+- At most one timeline has a given range. (Relaxed on 2026-10-16: a move split off another keeps
+  its range; see the amendment below.)
 - A marcher has at most one transition in a timeline when UI-9 makes it; a
   marcher added to a timeline gets its own one-slot shapeless `direct`
   transition spanning it.
@@ -205,7 +206,82 @@ file and be told apart from a move that happens to go nowhere, so it is stored:
 
 The study is `docs/timeline/research/defined-coordinates/10-keep-later-pages-study.md`.
 
-Beat editing can still make two timelines share a range; that is in the
+**Amendment (2026-10-16, project owner): a range may hold several moves.** A designer can pull
+some marchers out of a move (a page's timeline, say) into a move of their own, edit it apart, and
+merge it back. So the first rule above is relaxed:
+
+- Several stored timelines may have the same range. **Split** (`splitMarchersIntoNewMove`) makes
+  one, by sharing the range of the move it splits. A resize or a clip move may also land on
+  another move's exact counts when the two share no marcher (project owner, 2026-10-18; L-4
+  refuses only one marcher's two moves over the same counts), unless it is older than the page's
+  own move there, which it would take over as the oldest (`pageMoveTakenOver`; the stored mark
+  below removes the case). Creating a timeline still refuses a
+  shared range (`createTimelinesInTransaction`).
+- A page box stands for the **oldest** timeline (lowest id) with exactly its range, as
+  `findTimelineByRange` already returned (the next amendment replaces this inference with a
+  stored mark). Every other timeline over it is a move: it has a name
+  ("Move N") and a clip. A page flag drag moves timelines that already shared a range together.
+  An edit that empties the page's timeline keeps its row while another timeline shares its range,
+  so a split move never becomes the page's by accident.
+- A marcher is still in at most one of the timelines over one range: split and merge move whole
+  transitions (or peel a slot of a shared shapeless one into its own one-slot transition), and
+  merge refuses a marcher in both.
+- Neither edit changes motion: a timeline has no effect on resolution (R-1). The exception is a
+  merge of moves with different counts, which first fits the merged move to the target's counts
+  (project owner, 2026-10-18), re-timing it as a resize would. There is no schema,
+  file-format or change-log change; the rows that move are `timeline_transitions.timeline_id`,
+  plus, for a peeled slot, an assignment and a one-slot transition with the slot's destination.
+  Under the layer amendment below, a split move is not a page's move, so it ranks above page
+  moves (spec §6.2, L-1). Where a marcher's split-off row also overlaps a move of theirs that
+  started earlier and isn't a page's, the derived ranking can then change who plays there. The
+  project owner accepted that (2026-10-18): a split move ranks like any other move, and the split
+  toast names the marchers whose motion changes and from which count. Once pages carry the stored
+  mark, deleting a page's move leaves a split move over its counts a move (a clip), and the page
+  has no move of its own until marchers are added to it (owner, 2026-10-18).
+
+The interaction is UI-25 in `docs/timeline/ui.md`.
+
+**Amendment (2026-10-16, project owner): layers are derived, and a page's move is marked.** Each
+edit used to choose layers its own way, and the inspector let a designer type one. Now:
+
+- **Who wins comes from the timeline.** A page's own moves are underneath. Between other moves,
+  the later start wins, and on the same start the shorter one wins. The app derives every
+  `layer` from that (spec §6.2, D-18) at the end of each edit that writes assignments. No other
+  code chooses a layer, and the inspector's layer field (P8.4) is removed. The resolver, the
+  triggers and `ref/` are unchanged, since the stored integer stays (D-6).
+- **A page's move is stored as such.** Which timeline a page's box stands for was inferred from
+  its range (the oldest timeline over exactly the box), and the page delete used a different test
+  (layer 0, shapeless, rows covering the box). Both are replaced by a stored mark, kept apart from
+  the motion tables the way kept spots are: a `timeline_page_moves` table with one row per page
+  move, naming its timeline and its page. Proposed details, settled in the implementing change: the
+  timeline id is the key and cascades on delete; a flag delete that merges pages re-points the
+  marks to the merged page in the same edit; **Delete page and its moves** deletes the marked
+  timelines; every path that creates a page's move writes its mark (the converter, a drag onto a
+  page box, kept spots, Split page, the simple defaults, and Basic point moves, which split a
+  page's move into sub-range timelines). The table is in
+  `tablesWithHistory`, has no change-log triggers, and the resolver never reads it.
+- **Existing files.** The migration marks existing page moves once, then derives every marcher's
+  layers. Timeline mode is unreleased, so only development files change, and only where two
+  non-page moves overlap for one marcher. Open for the implementing change: which timelines count
+  (today there are two guesses: the oldest timeline over exactly a page's box, and the page
+  delete's shapeless layer-0 moves inside a box, which also catches Basic's sub-range moves), and
+  what the migration does with old files that already hold two same-kind rows with one range
+  (re-rank or merge rather than refuse the file).
+- **Rules this replaces.** An edge drag no longer stops at another move on the same marchers
+  (`ui.md` V-121), a clip move no longer fails with `E-A3`, and adding marchers to a timeline that
+  partly overlaps, or strictly contains, one of theirs is no longer refused (C-12). A canvas drag
+  over a window no longer overrides every move inside it (UI-10, 2026-10-04): a move that starts
+  inside the window wins from its start, and if it runs past the window's end the toast says so
+  (project owner, 2026-10-16). Two same-kind moves of one marcher over exactly the same counts are
+  refused instead (L-4), and edge drags, flag drags and beat deletes that would make them stop
+  short of it.
+- **Follow the leader.** Founders depend on layers, so an edit that changes a marcher's ranking can
+  change an FTL move's founders and targets (spec §6.2); the migration can too.
+
+Cases, a simulator and animations: `docs/timeline/research/layer-priority/README.md`.
+
+Beat editing can still make two timelines share a range (and, since the 2026-10-16 amendment, would
+be refused where it makes two of one marcher's rows identical, L-4); that is in the
 `ui.md` backlog. The interaction is UI-9 in `docs/timeline/ui.md`.
 
 **Coordinates and beats.** Resolver coordinates are the same units as
@@ -500,6 +576,8 @@ new record supersedes the affected section.
   say which version is the minimum for converted shows.
 - Conversion does not carry over the editable curve of an SVG page shape (C-8);
   marcher positions and motion are unchanged.
+- Layers are never chosen by hand (2026-10-16 amendment). A designer who wants a longer move to
+  win over one that starts inside it shortens or deletes the inner move; there is no override.
 
 ## Verification
 
@@ -529,3 +607,6 @@ file under `docs/timeline/phases/`.
 - File format: opening a version-8 file in an app that supports only 7 is
   refused with a clear message; a real-file corpus of older `.dots` files opens
   and converts (Phase 9).
+- Layer priority (2026-10-16 amendment): spec QA-LP-1 to -10 pass, and a test after every
+  timeline command checks that stored layers equal the derived ones (I-L1). The only function that
+  writes assignment rows takes a layer type that only the layer module can produce.

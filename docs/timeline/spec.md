@@ -1,6 +1,6 @@
 # OpenMarch Timeline Resolution Model: Specification
 
-**Version:** 0.7 (revised after four structural reviews, one design change and one implementation review. Appendices B to E map each review finding to its fix and evidence. Appendix F covers the design change: shapes are optional. Appendix G covers compatibility with the app's undo and redo.)
+**Version:** 0.8 (revised after four structural reviews, two design changes and one implementation review. Appendices B to E map each review finding to its fix and evidence. Appendix F covers the design change: shapes are optional. Appendix G covers compatibility with the app's undo and redo. Appendix H covers how the app chooses layers.)
 **Date:** 2026-09-29
 **Scope:** The data model and resolution engine behind timelines, shapes, transitions and assignments. It does not cover the editor UI.
 
@@ -18,6 +18,7 @@ This spec is written to be **checked**. Every rule, invariant and test has an ID
 | `R-n` | Normative resolution rule (§8). Together, these define the reference oracle. |
 | `W-n` | Invalidation rule (§9) |
 | `U-n` | Undo-safety rule for the schema (§6.1) |
+| `L-n` | Layer priority rule for the app's write path (§6.2) |
 | `P-n` | Property that must hold for every valid dataset (§12.5) |
 | `D-XXXX` (caps) | Runtime diagnostic, a warning or info message that is not an error (§8.9) |
 | `QA-…` | Test case (§12) |
@@ -59,12 +60,13 @@ The design replaces the current model, which stores one coordinate per (marcher,
 | **Range** | A half-open interval `[start, end)` of beats. |
 | **Marcher** | A real performer. It has a *home* position, which is where it stands before its first assignment. |
 | **Shape** | A formation drawn in absolute field coordinates, such as a line, freehand curve, circle, box or block. It has no knowledge of time or of marchers. **Optional**: a transition can place its slots individually instead (D-16). |
-| **Timeline** | A container with a range: a track in the UI. It has **no effect on resolution** (R-1). *App restriction (implementation-plan.md C-11): it is the container for start and stop, and every transition in it spans its whole range. App restriction (C-12): at most one timeline has a given range, and a page's box in the UI is the timeline ending at its flag.* |
+| **Timeline** | A container with a range: a track in the UI. It has **no effect on resolution** (R-1). *App restriction (implementation-plan.md C-11): it is the container for start and stop, and every transition in it spans its whole range. App restriction (C-12): at most one timeline has a given range, and a page's box in the UI is the timeline ending at its flag; relaxed by UI-25 (2026-10-16): a move split off another keeps its range, and the page box is the oldest timeline over it.* |
 | **Transition** | Motion over a range, in a given path style, into slot destinations. The destinations come from a shape or are placed individually. It owns `slot_count` **anonymous slots**. It does **not** store where marchers start. |
 | **Slot** | An anonymous position within a transition, numbered `0…slot_count-1`. Its destination is sampled from the transition's shape, or is an individually placed point (R-13). |
 | **Individual destination** | A point placed by hand for one slot of a transition that has no shape (`slot_destinations`, D-16). "Move marcher 7 here" means setting the point of marcher 7's slot. |
 | **Assignment** | A stored row saying *marcher m occupies slot k of transition T over range [s, e), at layer L*. This is the only link between real marchers and slots. |
-| **Layer** | An integer precedence. Where a marcher's assignments overlap in time, the higher layer wins. |
+| **Layer** | An integer precedence. Where a marcher's assignments overlap in time, the higher layer wins. The resolver reads it as stored. The app derives it from the ranges (§6.2, D-18) and never asks the designer for it. |
+| **Base row** | An assignment in a page's own move: the timeline a page's box stands for, stored as such by the app (ADR 0001). Base rows are underneath every other row (L-1). |
 | **Span** | A derived, non-overlapping piece of one marcher's timeline, produced by flattening that marcher's assignments across layers (R-2). A span is either a **hold** (no assignment) or covers part of exactly one assignment. |
 | **Origin** | Where a marcher actually is at the start of a span (R-4). Derived, never stored. |
 | **Founding span** | A span that starts exactly at its transition's `start_beat` (R-3). |
@@ -114,7 +116,7 @@ The four concepts are strictly separated. Merging any two of them is the failure
 | D-3 | **Cache at the boundaries, not the interior.** The cached state is where marchers are when each span starts, plus FTL trails. Nothing between boundaries is cached. | Decided | A start state is fixed once the authored data is fixed. Caching it removes the recursive walk up the chain from the per-frame path (§9.6). |
 | D-4 | **Slots are separate from marchers.** Transitions own anonymous slots, and assignments put marchers into them. | Decided | Lets a designer author "a 16-person circle" before deciding who is in it. |
 | D-5 | **Shapes are absolute.** No shape or path is positioned relative to upstream geometry. | Decided | An upstream edit makes the drill *look worse*: marchers take a longer approach and move faster. It never makes the drill *invalid*, so there are no cascading conflicts to resolve. §8.11 makes this hold numerically too. |
-| D-6 | **Precedence is an explicit integer `layer`.** It is not inferred from "narrowest range" or "most recent". | Decided | Stays predictable when steals are stacked. Cost: the UI eventually has to show layers. |
+| D-6 | **Precedence is an explicit integer `layer`.** The resolver reads it as stored and never infers precedence itself. | Decided | Stays predictable when steals are stacked. Cost: the UI eventually has to show layers. *Amended by D-18 (2026-10-16): the stored integer stays, but the app derives it from the ranges (base rows lowest, then the later start, then the shorter on a shared start). That ranking is a fixed function of what the timeline shows, so it stays predictable when steals stack, which was D-6's concern with inference by "most recent". The UI shows stacking order and overridden counts instead of numbers.* |
 | D-7 | **Progress is measured against the transition's natural end** (`T.end_beat`), not against the end of the span after clipping. | Decided | This is what makes steals correct. A marcher stolen halfway through is halfway there, not at the destination. |
 | D-8 | **Invalidation pushes, recompute pulls.** An edit marks dependents dirty straight away. Nothing is recomputed until something reads it. | Decided | Work scales with what the playhead needs, not with the length of the show. |
 | D-9 | **Order is a runtime input that only order-sensitive styles read.** It is not glue that users maintain everywhere. | Decided | Avoids Pyware's gluing model, which forces an ordering onto shapes (such as boxes) that don't need one. |
@@ -126,6 +128,7 @@ The four concepts are strictly separated. Merging any two of them is the failure
 | D-15 | **Arcs are minor arcs only: `\|bulge\| ≤ ½`.** | Proposed (v0.4) | A major arc can carry a stolen marcher farther from its target than where it started. Chained steals then make positions grow geometrically, all the way to NaN (Appendix D). A minor arc never increases the distance to its target, which gives the provable bound in §8.11. The alternative was a runtime guard that clamps or flags out-of-range positions, and that would break D-5. **This is a product restriction.** The nearest remaining tool, FTL with waypoints, is not an exact substitute. It changes the path geometry, and it changes group motion: members follow one another instead of each sweeping its own arc. QA-SC-14 judges the restriction explicitly. |
 | D-16 | **Shapes are optional. A transition's slot destinations come from a shape *or* from individually placed points, never both.** | Proposed (v0.6) | Designers need to move marchers individually as well as by shape. The resolver only ever needed one destination point per slot; a shape is just one way to produce those points. So individual placement is a second *source* of slot destinations, and assignments, layers, steals, FTL ordering, invalidation and the derived-range bound (§8.11) are unchanged. Points are keyed by slot, not by marcher, which keeps D-4. Follow-the-leader still needs a shape, because it follows a path (I-T5). Mixing the two in one transition (a shape with a few slots nudged) is Q-14. |
 | D-17 | **Triggers check; they never rewrite.** A change that touches several rows, such as the anchored range edit (R-E1), is an app procedure made of explicit statements, ordered so that every intermediate state is valid. | Proposed (v0.7) | The app's undo replays each edit's row changes in reverse. That only works if every step of the edit landed on a valid state, and if replaying a statement has no side effects. A trigger that rewrites rows breaks both (§6.1, Appendix G). |
+| D-18 | **The app derives every layer from the ranges: base rows lowest, then the later start, then the earlier end (§6.2).** Nobody types or picks a layer, and no code chooses one outside the layer module. | Decided (project owner, 2026-10-16) | Keeps D-6's stored integer, so the resolver, triggers and `ref/` are unchanged. "Last edited on top" made playback depend on edit history the timeline doesn't show: a page-flag drag hid a breakaway, a one-count nudge flipped a path, and two identical timelines played differently. Start, then end, ranks a marcher's overlapping rows straight off the timeline. Cases and animations: [research/layer-priority](research/layer-priority/README.md). |
 
 ---
 
@@ -492,6 +495,24 @@ That argument needs four things. The schema in §5.1 meets all four, and they ar
 - **A rejected edit leaves no history.** The rollback removes its history rows too (QA-UNDO-5).
 - **Pruning drops whole groups, oldest first.** Undo only ever replays the newest group, so dropping old groups just shortens the stack (QA-UNDO-8). Dropping part of a group would corrupt it.
 - The reference triggers identify rows by `rowid`, so tracked tables must not be `WITHOUT ROWID`. Keying by primary key works equally well.
+
+### 6.2 Layer priority [Decided, project owner 2026-10-16]
+
+The resolver only reads `layer` (R-2). This section says how the app's write path chooses it, so that who wins depends only on what the timeline shows, never on the order of edits. Cases, a simulator and animations: [research/layer-priority](research/layer-priority/README.md).
+
+- **L-1: base rows are underneath.** A base row loses to every non-base row of the same marcher where they overlap. One marcher's base rows can overlap each other (a flag inserted inside a page leaves the old move marked while a new one is made on the new page; a flag delete leaves two marked moves in the merged page); among themselves they rank by L-2 and L-3, still below every non-base row.
+- **L-2: the later start wins.** Of two overlapping rows of one marcher of the same kind (both base or both non-base), the one with the later `start_beat` wins. The row's own `start_beat` counts, so a marcher who joins a move partway ranks by the beat they join.
+- **L-3: on the same start, the shorter wins.** If they start on the same beat, the one with the earlier `end_beat` wins, and the longer one resumes after it (R-5, D-12). Put together: at any beat the marcher follows the row that started most recently among those still running (the shortest on a tie). A move inside another nests like brackets and hands the marcher back when it ends; a move that only partly overlaps an earlier one cuts it off, and the earlier one never resumes.
+- **L-4: identical ranges are refused.** Two rows of one marcher of the same kind with the same start and end can't be ranked, so a write that would make them is refused (`E-ARGS`, naming the marcher and the move it already has there). Range edits that would land there (an edge drag, a flag drag that moves an end attached to the flag, a beat delete that shrinks a row) stop short of it, like other walls.
+- **L-5: the number.** `layer(r)` is 0 if `r` beats no row it overlaps. Otherwise it is one more than the highest layer among the overlapping rows it beats. A base row is 0 unless it overlaps another base row it beats. A row that would need a layer above 1000 (I-N2) is refused (`E-A3`).
+- **L-6: one writer.** Every edit that writes, moves or deletes assignments, or adds, moves or removes a page's mark, ends by setting the layers of the marchers it touched from L-1 to L-5, in the same transaction. No other code chooses a layer, and no UI edits one. So that every intermediate state stays valid in both directions (§6.1), the edit first moves every row it will move, and every row of a touched marcher whose derived layer will change, to a distinct negative temporary layer in `[−1000, −1]`. Then it makes its changes, then writes the derived layers. Derived layers are never negative, so the final writes can't collide with a temporary one in any order, and undo replays through the same valid states. Statement-ordering tricks that kept same-layer rows apart during an edit are no longer needed.
+
+| ID | Invariant | Enforced by | Error |
+|---|---|---|---|
+| I-L1 | Every stored layer equals L-5's | The layer module on every write; a test after every command | test failure |
+| I-L2 | No two rows of one marcher of the same kind share the same range | Write path (L-4) | `E-ARGS` |
+
+Steals are unchanged: an overridden row keeps running hypothetically, and a row that picks a marcher back up rebases (D-12). **Follow-the-leader founders depend on layers** (R-9, QA-REG-4): a row that a higher layer overrides at an FTL transition's start makes that marcher a joiner. So an edit that changes a marcher's ranking, such as moving the end of one of two rows that start together, can change who founds an FTL move and shift every member's target, even though the edited row isn't in that move. The FTL diagnostics report it. One non-base row can never hide another entirely, since hiding it would need the same start and a later end. Several shorter rows inside a longer one can still cover all of it; that's the designer's choice, shown by the longer row's faded counts.
 
 ---
 
@@ -1426,7 +1447,7 @@ Results at the time of writing, using each script's default seeds:
 | Q-5 | Should vacant FTL points be kept as gaps (current), or should members close up the spacing? | Gaps at the entrance end. |
 | Q-6 | Sub-beat authoring (half counts): should beats be `REAL`, or should there be a subdivision column? | `INTEGER` bounds. |
 | Q-7 | FTL spacing. When upstream spacing differs from destination spacing, members move at different speeds. Should all members share one speed? | Each member has its own constant speed. |
-| Q-8 | How and when to show `layer` in the UI. | Not specified. |
+| Q-8 | How and when to show `layer` in the UI. | Resolved by D-18 (2026-10-16): never as a number. Clips stack by who wins, and overridden counts are drawn faded. |
 | Q-9 | Tempo map: the interface for converting a timestamp to a beat position. | Out of scope. |
 | Q-10 | Should an explicit "hold" be authorable, rather than implied by a gap? | Gaps imply holds. |
 | Q-11 | Physical feasibility: should the engine flag speeds a marcher can't sustain, abrupt direction changes, or collisions between marchers? | Out of scope for v0.2 (§14). Candidate future diagnostics: `D-SPEED`, `D-TURN`, `D-COLLIDE`. |
@@ -1592,3 +1613,36 @@ The reviewer accepted the core design and found no new structural contradiction.
 - **Foreign-key cascades are side effects too, but they are safe.** SQLite logs each child's inverse before its parent's, so undo re-inserts the parent first. The inverse of a delete is an insert, which cascades nothing. QA-UNDO-3 pins the order, two levels deep, and names the fallback if a future SQLite changes it (U-4).
 - **The rest of the schema already met the rules.** Every other trigger in §5.1 either checks a condition on the resulting state or writes only to `change_log` (U-1, U-2). Every immediate invariant was already checked from both sides except I-A1, where the removed trigger had been doing that job (U-3). Without a replacement check, an edit could pass through a stranded state and then fail to undo (QA-UNDO-1b).
 - **The resolver needed no change.** Undo and redo produce ordinary change-log batches.
+
+## Appendix H: Design change: the app derives layers (v0.7 → v0.8)
+
+**Change (project owner, 2026-10-16):** the app never asks for a layer. It derives every layer from the ranges with L-1 to L-6 (§6.2, D-18), so who wins depends only on the timeline.
+
+**Why:** each edit had its own layer rule (one above whatever it overlaps, keep the old layer, rise over page moves only, copy a neighbour's, or a number typed in the inspector). A whole-move drag kept its layer and was refused with `E-A3` where an edge drag over the same counts was allowed. "Last edited on top" was considered and rejected: it makes playback depend on edit history that nothing on screen shows. [research/layer-priority](research/layer-priority/README.md) has ten simulated cases comparing the two.
+
+| Section | Change |
+|---|---|
+| §2 | **Layer** says it's derived; new term **base row** |
+| §4 | D-6 amended; new D-18 |
+| §6.2 | New: L-1 to L-6, I-L1, I-L2, and a note on FTL founders |
+| §13 | Q-8 resolved |
+
+**Unchanged:** the schema, the triggers (I-A3 still guards every write), R-2 and every other resolution rule, `ref/`, and the QA catalogue. The app stores which timeline is a page's own (ADR 0001), which is an app table, not part of §5.
+
+**New tests for the app (QA-LP):**
+
+| ID | Setup | Expected |
+|---|---|---|
+| QA-LP-1 | A base row and a non-base row overlap | Base row 0, other row 1 |
+| QA-LP-2 | Two non-base rows `[4,12)` and `[8,16)` | `[8,16)` wins from 8 to 12 |
+| QA-LP-3 | Same start: `[8,10)` and `[8,16)` | `[8,10)` wins; `[8,16)` resumes at 10 |
+| QA-LP-4 | A write that would give one marcher two non-base rows `[8,16)` | Refused, `E-ARGS` |
+| QA-LP-5 | Three deep: base `[0,16)`, `[4,14)`, `[6,10)` | Layers 0, 1, 2 |
+| QA-LP-6 | Lengthen a base row around a non-base row inside it | Winners unchanged |
+| QA-LP-7 | The same rows written in two different orders | Identical layers |
+| QA-LP-8 | A row that would need layer 1001 | Refused, `E-A3` |
+| QA-LP-9 | Undo and redo of an edit that changed layers | Layers restored exactly; every intermediate state valid |
+| QA-LP-10 | Property: random rows for one marcher | I-L1 holds, and R-2's winner matches L-1 to L-3 at every beat |
+| QA-LP-11 | Two base rows `[0,16)` (old page move, marked) and `[0,8)` (new page after a flag insert) | `[0,8)` wins on 0 to 8; layers 0 and 1 |
+| QA-LP-12 | An FTL transition whose founder also has a same-start row elsewhere; shorten that row so it wins at the FTL start | The marcher becomes a joiner; founders and targets update; diagnostic raised |
+| QA-LP-13 | A flag drag that would give one marcher two non-base rows with the same range | The drag stops one beat short |

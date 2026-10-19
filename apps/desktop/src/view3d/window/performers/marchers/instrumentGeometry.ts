@@ -71,29 +71,32 @@ const BONE_NAMES: Record<InstrumentBone, string> = {
 
 const linear = (hex: number) => new THREE.Color(hex); // Color converts sRGB hex to linear
 
-export function instrumentGeometry(
+/** Where a bone's pieces go: the bone's index, and the matrix to its bind pose. */
+export interface InstrumentFrame {
+    index: number;
+    /** Takes instrument-frame points to the bind pose of a vertex on this bone. */
+    toBind: THREE.Matrix4;
+}
+
+/**
+ * Per bone, how instrument-frame points skin to it under `hold`: right-hand
+ * pieces ride the prop bone (after the skeleton's bones), which is the
+ * right hand times the hold's grip (`gripMatrix`), baked into every Horn
+ * row, so they stay in the instrument's own frame and follow any hold or
+ * transition the channel plays; left-hand pieces move with the hold's left
+ * hand; chest pieces stay at bind.
+ */
+export function instrumentFrames(
     skeleton: THREE.Skeleton,
     pose: ArmPose,
     hold: Hold,
-    model: InstrumentModel,
-    finish: Finish = "brass",
-    /** sRGB: the section's color, for drum shells and flag silks. */
-    sectionColor = 0xffffff,
-): THREE.BufferGeometry {
+): (bone: InstrumentBone) => InstrumentFrame {
     const place = placement(hold);
-    /** Per bone: its index and the matrix taking placed body-frame points to the bind pose. */
-    const frames = new Map<
-        InstrumentBone,
-        { index: number; toBind: THREE.Matrix4 }
-    >();
-    const frameOf = (bone: InstrumentBone) => {
+    const frames = new Map<InstrumentBone, InstrumentFrame>();
+    return (bone) => {
         let f = frames.get(bone);
         if (f) return f;
         if (bone === "handR") {
-            // the prop bone (after the skeleton's bones) is the right hand
-            // times the hold's grip (`gripMatrix`), baked into every Horn
-            // row: the piece stays in the instrument's own frame, and the
-            // same geometry follows any hold or transition the channel plays
             f = { index: skeleton.bones.length, toBind: new THREE.Matrix4() };
             frames.set(bone, f);
             return f;
@@ -104,7 +107,6 @@ export function instrumentGeometry(
         if (index < 0)
             throw new Error(`instrumentGeometry: no ${BONE_NAMES[bone]} bone`);
         const bind = skeleton.boneInverses[index].clone().invert();
-        // the left hand moves with the hold; the chest stays at bind
         const posed = bone === "handL" ? pose.handL : bind;
         const toBind = bind
             .clone()
@@ -114,6 +116,18 @@ export function instrumentGeometry(
         frames.set(bone, f);
         return f;
     };
+}
+
+export function instrumentGeometry(
+    skeleton: THREE.Skeleton,
+    pose: ArmPose,
+    hold: Hold,
+    model: InstrumentModel,
+    finish: Finish = "brass",
+    /** sRGB: the section's color, for drum shells and flag silks. */
+    sectionColor = 0xffffff,
+): THREE.BufferGeometry {
+    const frameOf = instrumentFrames(skeleton, pose, hold);
     const metal = linear(FINISH_COLORS[finish]);
     const section = linear(sectionColor);
     const pos: number[] = [];

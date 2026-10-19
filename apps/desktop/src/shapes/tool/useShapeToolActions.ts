@@ -82,20 +82,20 @@ export function useApplyShape(): () => Promise<void> {
     }, [queryClient]);
 }
 
-/** Opens the box tool on the selected marchers */
+/** Opens the box tool on the selected performers: a selected prop takes no spot (C2.2) */
 export function useOpenBoxTool(): () => void {
-    const { selectedMarchers } = useEditorReadiness();
+    const { selectedPerformers } = useEditorReadiness();
     return useCallback(() => {
         const field = currentShapeField();
-        if (!field || selectedMarchers.length === 0) return;
-        const ids = selectedMarchers.map((m) => m.id);
+        if (!field || selectedPerformers.length === 0) return;
+        const ids = selectedPerformers.map((m) => m.id);
         openShapeTool(openTool(boxTool, marchersOnField(field, ids)));
-    }, [selectedMarchers]);
+    }, [selectedPerformers]);
 }
 
 /** Opens and places the shape tool from shortcuts, buttons and the command palette */
 export function useShapeToolActions(): void {
-    const { ready, selectedMarchers } = useEditorReadiness();
+    const { ready, selectedPerformers } = useEditorReadiness();
     const placeable = useShapeToolStore(
         (s) => s.tool !== null && s.tool.params !== null && !s.tool.gesture,
     );
@@ -103,7 +103,7 @@ export function useShapeToolActions(): void {
     const openBox = useOpenBoxTool();
 
     useActionHandler("shapeBlock", openBox, {
-        enabled: ready && selectedMarchers.length > 0,
+        enabled: ready && selectedPerformers.length > 0,
     });
     useActionHandler(
         "applyShape",

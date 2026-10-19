@@ -37,6 +37,15 @@ const commonProps = {
     pixelsPerBeat: 16,
 };
 
+/** A guide row's words, a space between each piece (marks and keycaps split them) */
+const rowWords = (node: Node): string =>
+    (node.nodeType === Node.TEXT_NODE
+        ? node.textContent!
+        : [...node.childNodes].map(rowWords).join(" ")
+    )
+        .replace(/\s+/g, " ")
+        .trim();
+
 describe("timeline views", () => {
     it("renders expanded packed tracks over canvas layers", () => {
         const onSelectionChange = vi.fn();
@@ -279,7 +288,7 @@ describe("timeline views", () => {
             />,
         );
         const play = screen.getByRole("button", {
-            name: "Play from the start flag",
+            name: "Play from start flag and continue",
         });
         expect(screen.getAllByTestId("timeline-play")).toHaveLength(1);
         fireEvent.click(play, { shiftKey: true });
@@ -303,7 +312,9 @@ describe("timeline views", () => {
         );
 
         fireEvent.click(
-            screen.getByRole("button", { name: "Play from the start flag" }),
+            screen.getByRole("button", {
+                name: "Play from start flag and continue",
+            }),
         );
         expect(onPlayingChange).toHaveBeenCalledWith(true);
         rerender(
@@ -1597,36 +1608,6 @@ describe("a calmer timeline (UI-12)", () => {
         );
     });
 
-    it("draws a pin on a pinned start flag, which unpins it", () => {
-        const onUnpinStart = vi.fn();
-        const { rerender } = render(
-            <ExpandedTimeline
-                {...commonProps}
-                showTransport={false}
-                selection={{
-                    kind: "range",
-                    range: { startBeatIndex: 5, endBeatIndex: 11 },
-                }}
-                onUnpinStart={onUnpinStart}
-            />,
-        );
-        expect(screen.queryByTestId("timeline-start-pin")).toBeNull();
-        rerender(
-            <ExpandedTimeline
-                {...commonProps}
-                showTransport={false}
-                selection={{
-                    kind: "range",
-                    range: { startBeatIndex: 5, endBeatIndex: 11 },
-                    startPinned: true,
-                }}
-                onUnpinStart={onUnpinStart}
-            />,
-        );
-        fireEvent.click(screen.getByTestId("timeline-start-pin"));
-        expect(onUnpinStart).toHaveBeenCalledTimes(1);
-    });
-
     it("keeps a steady height: one clip row kept without clips, no waveform without peaks", () => {
         const { container } = render(
             <ExpandedTimeline
@@ -1757,17 +1738,57 @@ describe("a calmer timeline (UI-12)", () => {
             )!;
         const rows = () =>
             [...guide().children].map((row) => ({
-                text: row.textContent,
+                text: rowWords(row),
                 active: row.hasAttribute("data-active"),
             }));
         expect(rows()).toEqual([
-            { text: "Next pageE", active: true },
-            { text: "Next beatShift+E", active: false },
-            { text: "End of the showAlt+E", active: false },
+            { text: "Next page E", active: true },
+            { text: "Next beat Shift + E", active: false },
+            { text: "End of the show Alt + E", active: false },
         ]);
         fireEvent.keyDown(window, { key: "Alt", altKey: true });
         expect(rows().map((row) => row.active)).toEqual([false, false, true]);
         expect(next).toHaveAttribute("aria-keyshortcuts", "Alt+E");
+    });
+
+    it("in Expert guides Play, Alt+Play and Shift+Play with the lines' marks, and swaps to Alt's while Alt is held (UI-26)", async () => {
+        const onPlayOn = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport
+                onPlayingChange={vi.fn()}
+                onPlayFromPlayhead={vi.fn()}
+                onPlayOn={onPlayOn}
+            />,
+        );
+        const play = screen.getByTestId("timeline-play");
+        act(() => play.focus());
+        await screen.findByRole("tooltip");
+        const guide = document.querySelector(
+            '[data-testid="timeline-play-guide"]',
+        )!;
+        expect([...guide.children].map(rowWords)).toEqual([
+            "Play from start flag and stop at playhead Space",
+            "Play from start flag and continue Alt + Space",
+            "Play from playhead and continue Shift + Space",
+        ]);
+        // Each row carries the marks of the lines it names
+        expect(
+            [...guide.children].map((row) =>
+                [...row.querySelectorAll("[data-mark]")].map((mark) =>
+                    mark.getAttribute("data-mark"),
+                ),
+            ),
+        ).toEqual([["start-flag", "playhead"], ["start-flag"], ["playhead"]]);
+        expect(play).toHaveAccessibleName(
+            "Play from start flag and stop at playhead",
+        );
+        fireEvent.keyDown(window, { key: "Alt", altKey: true });
+        expect(play).toHaveAccessibleName("Play from start flag and continue");
+        fireEvent.click(play, { altKey: true });
+        expect(onPlayOn).toHaveBeenCalledTimes(1);
+        fireEvent.keyUp(window, { key: "Alt" });
     });
 
     it("guides Play and Shift+Play in its tooltip, and swaps its name while Shift is held", async () => {
@@ -1788,19 +1809,22 @@ describe("a calmer timeline (UI-12)", () => {
                     '[data-testid="timeline-play-guide"]',
                 )!.children,
             ].map((row) => ({
-                text: row.textContent,
+                text: rowWords(row),
                 active: row.hasAttribute("data-active"),
             }));
         expect(rows()).toEqual([
-            { text: "Play from the start flagSpace", active: true },
-            { text: "Play from the playheadShift+Space", active: false },
+            { text: "Play from start flag and continue Space", active: true },
+            {
+                text: "Play from playhead and continue Shift + Space",
+                active: false,
+            },
         ]);
         fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
-        expect(play).toHaveAccessibleName("Play from the playhead");
+        expect(play).toHaveAccessibleName("Play from playhead and continue");
         expect(play).toHaveAttribute("aria-keyshortcuts", "Shift+Space");
         expect(rows().map((row) => row.active)).toEqual([false, true]);
         fireEvent.keyUp(window, { key: "Shift" });
-        expect(play).toHaveAccessibleName("Play from the start flag");
+        expect(play).toHaveAccessibleName("Play from start flag and continue");
     });
 
     it("guides Stop and Pause while playing, and swaps to Pause while Shift is held (UI-24)", async () => {
@@ -1824,12 +1848,12 @@ describe("a calmer timeline (UI-12)", () => {
                     '[data-testid="timeline-stop-guide"]',
                 )!.children,
             ].map((row) => ({
-                text: row.textContent,
+                text: rowWords(row),
                 active: row.hasAttribute("data-active"),
             }));
         expect(rows()).toEqual([
-            { text: "Stop and go backSpace", active: true },
-            { text: "Pause hereShift+Space", active: false },
+            { text: "Stop and go back Space", active: true },
+            { text: "Pause here Shift + Space", active: false },
         ]);
         fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
         expect(stop).toHaveAccessibleName("Pause here");

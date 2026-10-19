@@ -14,6 +14,7 @@
  */
 // cspell:words gltf
 import { z } from "zod";
+import { ARTWORK_SLOT_ID } from "@om-electron/database/migrations/artworkSlotId";
 import { ARTWORK_SURFACES, type ArtworkSurface } from "@/view3d/core/sizes";
 import type { ModelKind } from "@/view3d/core/sizes";
 import {
@@ -228,7 +229,7 @@ export const ModelImportChoicesSchema = z.strictObject({
         .array(
             z.strictObject({
                 material: z.number().int().nonnegative(),
-                id: z.string().regex(/^[A-Za-z0-9_]{1,64}$/),
+                id: z.string().regex(ARTWORK_SLOT_ID),
                 widthM: finitePositive,
                 heightM: finitePositive,
             }),
@@ -284,6 +285,12 @@ export const PickContextSchema = z.strictObject({
     surface: ArtworkSurfaceSchema.optional(),
     /** The slot's size: the picker pre-fills kind, slot and size. */
     size: ArtworkSizeChoiceSchema.optional(),
+    /**
+     * How an image of another shape takes `size`, keeping its own shape: inside it ("fit") or
+     * covering it ("fill"), as the field image is placed. Without it, only an image of the
+     * slot's shape takes the slot's size.
+     */
+    fit: z.enum(["fill", "fit"]).optional(),
 });
 export type PickContext = z.infer<typeof PickContextSchema>;
 

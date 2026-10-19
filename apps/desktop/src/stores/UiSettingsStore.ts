@@ -83,6 +83,12 @@ export interface UiSettings {
      * shape is being drawn (`drawing`) (docs/timeline/research/shapes/08-shape-system-ux.md)
      */
     shapeFocus?: ShapeFocus;
+    /** Whether props show their names on the canvas, unless `propNameOverrides` says otherwise */
+    showPropNames: boolean;
+    /** Per prop: whether its name shows. Key is the item id. */
+    propNameOverrides: Record<string, boolean>;
+    /** Per prop: true hides it on the canvas wherever the timeline has it. Key is the item id. */
+    hiddenPropIds: Record<string, boolean>;
     /** Whether to enable Tolgee In-Context Translating */
     tolgeeDevTools?: boolean;
     /** Tolgee API Key for In-Context Translating */
@@ -137,6 +143,9 @@ export const defaultSettings: UiSettings = {
     marcherLabels: "auto",
     shapes: "selected",
     shapeFocus: "rest",
+    showPropNames: false,
+    propNameOverrides: {},
+    hiddenPropIds: {},
     tolgeeDevTools: false,
 };
 

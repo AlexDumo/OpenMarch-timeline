@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+    cleanup,
+    fireEvent,
+    render,
+    renderHook,
+    screen,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
@@ -9,6 +15,7 @@ import {
     selectionAfterDeleteWithMoves,
     selectionAfterFlagDelete,
     timelinesOffPages,
+    useHeldWhileStale,
 } from "../TimelineModePanel";
 
 /**
@@ -307,6 +314,42 @@ describe("clips only for timelines off the page boxes (UI-10)", () => {
             ),
         ).toEqual([t(9, 13), t(5, 9), t(1, 17)]);
         expect(timelinesOffPages([t(1, 9)], [])).toEqual([t(1, 9)]);
+    });
+
+    it("keeps the clip of a move split off a page's timeline: the box stands for the oldest (UI-25)", () => {
+        const t = (
+            linkId: number,
+            startBeatIndex: number,
+            endBeatIndex: number,
+        ) => ({
+            linkId,
+            startBeatIndex,
+            endBeatIndex,
+        });
+        expect(
+            timelinesOffPages(
+                [t(7, 9, 17), t(3, 9, 17), t(9, 9, 17), t(4, 1, 9)],
+                PAGES,
+            ),
+        ).toEqual([t(7, 9, 17), t(9, 9, 17)]);
+    });
+});
+
+describe("the page boxes the clips are matched against", () => {
+    it("stay the ones the tracks were built with until the tracks catch up", () => {
+        const { result, rerender } = renderHook(
+            ({ pages, current }) => useHeldWhileStale(pages, current),
+            { initialProps: { pages: "old", current: true } },
+        );
+        expect(result.current).toBe("old");
+        // The tracks are reloading after a flag move; the new pages came first
+        rerender({ pages: "new", current: false });
+        expect(result.current).toBe("old");
+        rerender({ pages: "new", current: true });
+        expect(result.current).toBe("new");
+        // An edit that leaves the tracks current (+, Delete flag) shows at once
+        rerender({ pages: "newer", current: true });
+        expect(result.current).toBe("newer");
     });
 });
 
