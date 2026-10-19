@@ -11,7 +11,6 @@ export type ActionCategory =
     | "ui"
     | "cursor"
     | "select"
-    | "shape"
     | "timeline";
 export type ActionArgs = Readonly<Record<string, string | number | boolean>>;
 
@@ -552,14 +551,6 @@ const STATIC_ACTIONS = {
         category: "select",
         scope: "canvas",
         defaultBindings: ["$mod+A", "Control+A"],
-    },
-
-    // Shapes
-    createCircle: {
-        labelKey: "actions.shape.createCircle",
-        category: "shape",
-        scope: "canvas",
-        defaultBindings: ["O"],
     },
 
     // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it

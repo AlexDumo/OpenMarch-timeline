@@ -81,7 +81,6 @@
         "shape": {
             "applyQuick": "Ajustar à forma",
             "create": "Criar forma",
-            "createCircle": "Criar círculo",
             "delete": "Exclui as formas selecionadas atualmente",
             "noMarchersSelected": "Nenhum marchador selecionado"
         },
@@ -1127,7 +1126,6 @@
         "shortcuts.category.navigation": "Navegação",
         "shortcuts.category.playback": "Reprodução",
         "shortcuts.category.select": "Seleção",
-        "shortcuts.category.shape": "Formas",
         "shortcuts.category.timeline": "Linha do tempo",
         "shortcuts.category.ui": "Interface",
         "shortcuts.conflict": "{binding} já é usado por {actions}.",

@@ -8,7 +8,6 @@ import {
     FileIcon,
     PlayIcon,
     SelectionAllIcon,
-    ShapesIcon,
     SidebarSimpleIcon,
     StackIcon,
     WaveformIcon,
@@ -34,7 +33,6 @@ const CATEGORY_ICONS: Record<ActionCategory, Icon> = {
     batchEdit: StackIcon,
     select: SelectionAllIcon,
     cursor: CursorIcon,
-    shape: ShapesIcon,
     ui: SidebarSimpleIcon,
     timeline: WaveformIcon,
 };
@@ -42,7 +40,6 @@ const CATEGORY_ICONS: Record<ActionCategory, Icon> = {
 /** Drill-writing tools first; file, playback and app settings after. */
 const PALETTE_CATEGORY_ORDER: readonly ActionCategory[] = [
     "cursor",
-    "shape",
     "alignment",
     "select",
     "batchEdit",
@@ -58,7 +55,6 @@ const PALETTE_CATEGORY_ORDER: readonly ActionCategory[] = [
 /** The most common drill-writing actions, shown in "Suggested" until usage history takes over. */
 const SUGGESTED_ACTIONS: readonly ActionId[] = [
     "alignmentEventLine",
-    "createCircle",
     "openExportDialog",
     "alignHorizontally",
     "alignVertically",

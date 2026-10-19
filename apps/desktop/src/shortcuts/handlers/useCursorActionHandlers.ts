@@ -1,6 +1,4 @@
-import { createCircle } from "@openmarch/core";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { useUpdateSelectedMarchersOnSelectedPage } from "@/hooks/queries";
 import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import { activeFieldEditor } from "@/field/editor/activeFieldEditor";
 import { useActionHandler } from "../useActionHandler";
@@ -25,8 +23,6 @@ export function useCursorActionHandlers() {
         alignmentEventStore?.alignmentEventNewMarcherPages ?? [];
     const alignmentEventMarchers =
         alignmentEventStore?.alignmentEventMarchers ?? [];
-    const { mutate: updateSelectedMarchers } =
-        useUpdateSelectedMarchersOnSelectedPage();
 
     // Not gated on `ready`: resetting the alignment event is what clears a half-drawn line
     // (via the listener swap in Canvas), and that must work even while page data is loading.
@@ -88,32 +84,5 @@ export function useCursorActionHandlers() {
             activeFieldEditor()?.selectAll();
         },
         { enabled: ready },
-    );
-
-    useActionHandler(
-        "createCircle",
-        () => {
-            updateSelectedMarchers(({ currentCoordinates }) => {
-                const updatedCoordinates = createCircle(
-                    currentCoordinates.map((mp) => ({
-                        id: mp.marcher_id,
-                        x: mp.x,
-                        y: mp.y,
-                    })),
-                    {
-                        centerX: 0,
-                        centerY: 0,
-                        radius: 10,
-                    },
-                );
-
-                return updatedCoordinates.map((coordinate) => ({
-                    marcher_id: coordinate.id,
-                    x: coordinate.x,
-                    y: coordinate.y,
-                }));
-            });
-        },
-        { enabled: ready && selectedMarchers.length > 0 },
     );
 }

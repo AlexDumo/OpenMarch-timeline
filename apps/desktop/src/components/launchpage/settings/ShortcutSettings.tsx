@@ -46,7 +46,6 @@ const DISPLAY_GROUPS: readonly {
     { id: "batchEdit", categories: ["batchEdit"] },
     { id: "select", categories: ["select"] },
     { id: "cursor", categories: ["cursor"] },
-    { id: "shape", categories: ["shape"] },
     { id: "ui", categories: ["ui"] },
 ];
 

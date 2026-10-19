@@ -81,7 +81,6 @@
         "shape": {
             "applyQuick": "図形にスナップ",
             "create": "図形を作成",
-            "createCircle": "円を作成",
             "delete": "選択されている形状を削除",
             "noMarchersSelected": "行進者が選択されていません"
         },
@@ -1127,7 +1126,6 @@
         "shortcuts.category.navigation": "ナビゲーション",
         "shortcuts.category.playback": "再生",
         "shortcuts.category.select": "選択",
-        "shortcuts.category.shape": "図形",
         "shortcuts.category.timeline": "タイムライン",
         "shortcuts.category.ui": "インターフェース",
         "shortcuts.conflict": "{binding}は既に{actions}で使用されています。",
