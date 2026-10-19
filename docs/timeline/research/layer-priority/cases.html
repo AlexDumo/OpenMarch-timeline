@@ -1,0 +1,1931 @@
+<!doctype html>
+<!-- cspell:ignore Hyperlegible lede yardnum ticknum NROWS -->
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+    </head>
+    <body>
+        <title>Move Priority Cases</title>
+        <meta name="claude:viewport-fit-sides" content="cover" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+        />
+        <style>
+            /* Layout: one reading column; each scene is a framed figure (field above, timeline below); today/proposed pairs sit side by side on wide screens */
+            :root {
+                --bg: #f2f4ef;
+                --surface: #ffffff;
+                --ink: #1c221d;
+                --muted: #586259;
+                --line: #d3d9d1;
+                --lane: #e7ebe4;
+                --page: #c6cdc3;
+                --turf: #5b8c57;
+                --turf-line: rgba(255, 255, 255, 0.78);
+                --blue: #2c69b0;
+                --orange: #dc6519;
+                --bad: #c0352b;
+                --good: #2b8a55;
+                --accent: #1e5a88;
+                --display:
+                    "Barlow Condensed", "Arial Narrow", "Helvetica Neue",
+                    sans-serif;
+                --body:
+                    "Atkinson Hyperlegible", system-ui, -apple-system,
+                    "Segoe UI", sans-serif;
+                --mono:
+                    "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo,
+                    monospace;
+            }
+            @media (prefers-color-scheme: dark) {
+                :root:not([data-theme="light"]) {
+                    --bg: #131714;
+                    --surface: #1b201c;
+                    --ink: #e6ebe4;
+                    --muted: #9ba59c;
+                    --line: #313932;
+                    --lane: #232924;
+                    --page: #3b443c;
+                    --turf: #2d5631;
+                    --turf-line: rgba(255, 255, 255, 0.5);
+                    --blue: #6aa2e6;
+                    --orange: #f08b45;
+                    --bad: #ef6a5e;
+                    --good: #5cc08a;
+                    --accent: #80b6df;
+                    color-scheme: dark;
+                }
+            }
+            :root[data-theme="dark"] {
+                --bg: #131714;
+                --surface: #1b201c;
+                --ink: #e6ebe4;
+                --muted: #9ba59c;
+                --line: #313932;
+                --lane: #232924;
+                --page: #3b443c;
+                --turf: #2d5631;
+                --turf-line: rgba(255, 255, 255, 0.5);
+                --blue: #6aa2e6;
+                --orange: #f08b45;
+                --bad: #ef6a5e;
+                --good: #5cc08a;
+                --accent: #80b6df;
+                color-scheme: dark;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                background: var(--bg);
+                color: var(--ink);
+                font-family: var(--body);
+                font-size: 16px;
+                line-height: 1.55;
+                padding-left: max(16px, env(safe-area-inset-left, 0px));
+                padding-right: max(16px, env(safe-area-inset-right, 0px));
+                padding-block: 28px 56px;
+            }
+            main {
+                max-width: 1040px;
+                margin: 0 auto;
+                display: grid;
+                gap: 44px;
+            }
+            .prose {
+                max-width: 66ch;
+            }
+            h1,
+            h2,
+            h3 {
+                font-family: var(--display);
+                font-weight: 700;
+                letter-spacing: 0.01em;
+                text-wrap: balance;
+                margin: 0;
+                line-height: 1.1;
+            }
+            h1 {
+                font-size: clamp(2.1rem, 6vw, 3rem);
+            }
+            h2 {
+                font-size: clamp(1.55rem, 4.4vw, 2rem);
+            }
+            h3 {
+                font-size: 1.25rem;
+                font-weight: 600;
+            }
+            p {
+                margin: 0;
+            }
+            section {
+                display: grid;
+                gap: 16px;
+            }
+            .lede {
+                display: grid;
+                gap: 12px;
+            }
+            .lede p {
+                color: var(--muted);
+            }
+            .eyebrow {
+                font-family: var(--mono);
+                font-size: 0.74rem;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+            .legend {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px 20px;
+                font-size: 0.92rem;
+                color: var(--muted);
+            }
+            .legend span {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .dot {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                display: inline-block;
+                border: 2px solid var(--surface);
+                box-shadow: 0 0 0 1px var(--line);
+            }
+            .dot.blue {
+                background: var(--blue);
+            }
+            .dot.orange {
+                background: var(--orange);
+            }
+            .pair {
+                display: grid;
+                gap: 20px;
+                grid-template-columns: 1fr;
+            }
+            @media (min-width: 900px) {
+                .pair {
+                    grid-template-columns: 1fr 1fr;
+                }
+            }
+            figure {
+                margin: 0;
+                background: var(--surface);
+                border: 1px solid var(--line);
+                border-radius: 10px;
+                padding: 14px;
+                display: grid;
+                gap: 10px;
+                min-width: 0;
+                align-content: start;
+            }
+            figcaption {
+                display: flex;
+                align-items: baseline;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+            .tag {
+                font-family: var(--mono);
+                font-size: 0.72rem;
+                font-weight: 600;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                padding: 2px 8px;
+                border-radius: 4px;
+            }
+            .tag.now {
+                background: color-mix(in srgb, var(--bad) 14%, transparent);
+                color: var(--bad);
+            }
+            .tag.works {
+                background: color-mix(in srgb, var(--good) 16%, transparent);
+                color: var(--good);
+            }
+            .tag.prop {
+                background: color-mix(in srgb, var(--accent) 16%, transparent);
+                color: var(--accent);
+            }
+            svg.scene {
+                width: 100%;
+                height: auto;
+                display: block;
+                max-width: 100%;
+            }
+            .controls {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .controls button {
+                font: 600 0.85rem var(--body);
+                color: var(--surface);
+                background: var(--ink);
+                border: 0;
+                border-radius: 6px;
+                padding: 7px 14px;
+                cursor: pointer;
+                min-width: 78px;
+            }
+            .controls button:focus-visible,
+            .controls input:focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: 2px;
+            }
+            .controls input[type="range"] {
+                flex: 1;
+                min-width: 0;
+                accent-color: var(--ink);
+            }
+            .controls .count {
+                font-family: var(--mono);
+                font-size: 0.8rem;
+                color: var(--muted);
+                font-variant-numeric: tabular-nums;
+                min-width: 6.5ch;
+                text-align: right;
+            }
+            .caption {
+                min-height: 4.7em;
+                font-size: 0.97rem;
+            }
+            .caption b {
+                font-weight: 700;
+            }
+
+            /* Who picks the layer */
+            .edits {
+                display: grid;
+                gap: 10px;
+            }
+            .edit-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) 92px;
+                gap: 4px 10px;
+                align-items: center;
+            }
+            .edit-name {
+                font-weight: 700;
+                font-size: 0.93rem;
+                line-height: 1.3;
+            }
+            .edit-rule {
+                font-family: var(--mono);
+                font-size: 0.74rem;
+                color: var(--muted);
+                grid-column: 1 / -1;
+                line-height: 1.4;
+            }
+            .track {
+                position: relative;
+                height: 14px;
+                grid-column: 1 / 2;
+            }
+            .track::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                right: 0;
+                top: 6px;
+                height: 2px;
+                background: var(--line);
+            }
+            .track .gate {
+                position: absolute;
+                left: 50%;
+                top: -3px;
+                bottom: -3px;
+                width: 4px;
+                margin-left: -2px;
+                background: var(--accent);
+                border-radius: 2px;
+            }
+            .track .pip {
+                position: absolute;
+                top: 1px;
+                width: 12px;
+                height: 12px;
+                margin-left: -6px;
+                border-radius: 50%;
+                background: var(--ink);
+                left: 0%;
+                transition: background 0.2s;
+            }
+            .track .pip.bad {
+                background: var(--bad);
+            }
+            .track .pip.good {
+                background: var(--good);
+            }
+            .result {
+                grid-column: 2;
+                grid-row: 1 / span 2;
+                justify-self: end;
+                font-family: var(--mono);
+                font-size: 0.72rem;
+                font-weight: 600;
+                text-align: center;
+                padding: 4px 6px;
+                border-radius: 4px;
+                border: 1px solid var(--line);
+                color: var(--muted);
+                opacity: 0.35;
+                width: 92px;
+                line-height: 1.3;
+            }
+            .result.on {
+                opacity: 1;
+                color: var(--ink);
+            }
+            .result.on.bad {
+                color: var(--bad);
+                border-color: var(--bad);
+            }
+            .result.on.warn {
+                color: var(--orange);
+                border-color: var(--orange);
+            }
+            .result.on.pending {
+                border-style: dashed;
+            }
+            .gate-label {
+                font-family: var(--mono);
+                font-size: 0.74rem;
+                color: var(--accent);
+            }
+
+            .rules {
+                display: grid;
+                gap: 10px;
+                margin: 0;
+                padding: 0;
+                list-style: none;
+            }
+            .rules li {
+                display: grid;
+                grid-template-columns: 3.2em minmax(0, 1fr);
+                gap: 10px;
+                align-items: baseline;
+            }
+            .rules .id {
+                font-family: var(--mono);
+                font-weight: 600;
+                font-size: 0.85rem;
+                color: var(--accent);
+            }
+            .rules .q {
+                font-family: var(--mono);
+                font-size: 0.78rem;
+                color: var(--orange);
+            }
+
+            .check {
+                display: grid;
+                gap: 10px;
+            }
+            .ask {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 4px 12px;
+                align-items: center;
+                padding: 10px 12px;
+                border-radius: 8px;
+                background: var(--lane);
+            }
+            .ask .who {
+                font-weight: 700;
+                font-size: 0.93rem;
+            }
+            .ask .q {
+                font-size: 0.86rem;
+                color: var(--muted);
+                grid-column: 1;
+            }
+            .ask .ans {
+                grid-column: 2;
+                grid-row: 1 / span 2;
+                font-family: var(--display);
+                font-size: 1.35rem;
+                font-weight: 700;
+            }
+            .ans.yes {
+                color: var(--good);
+            }
+            .ans.no {
+                color: var(--bad);
+            }
+            .note {
+                font-size: 0.86rem;
+                color: var(--muted);
+            }
+            .decide {
+                display: grid;
+                gap: 12px;
+            }
+            .decide div {
+                display: grid;
+                gap: 4px;
+            }
+            .decide b {
+                font-family: var(--mono);
+                color: var(--orange);
+                font-size: 0.85rem;
+            }
+
+            /* SVG classes */
+            .turf {
+                fill: var(--turf);
+            }
+            .yard {
+                stroke: var(--turf-line);
+                stroke-width: 1;
+            }
+            .hash {
+                stroke: var(--turf-line);
+                stroke-width: 1;
+            }
+            .yardnum {
+                fill: var(--turf-line);
+                font: 600 9px var(--mono);
+                text-anchor: middle;
+            }
+            .m-blue {
+                fill: var(--blue);
+                stroke: #fff;
+                stroke-width: 1.5;
+            }
+            .m-orange {
+                fill: var(--orange);
+                stroke: #fff;
+                stroke-width: 1.5;
+            }
+            .ghost {
+                fill: none;
+                stroke: #fff;
+                stroke-width: 1.4;
+                stroke-dasharray: 2.5 2;
+                opacity: 0.9;
+            }
+            .ghost-path {
+                stroke: #fff;
+                stroke-width: 1;
+                stroke-dasharray: 3 3;
+                opacity: 0.7;
+                fill: none;
+            }
+            .lane {
+                fill: var(--lane);
+            }
+            .lane-label {
+                fill: var(--muted);
+                font: 600 10px var(--mono);
+            }
+            .tick {
+                stroke: var(--muted);
+                stroke-width: 1;
+            }
+            .ticknum {
+                fill: var(--muted);
+                font: 9px var(--mono);
+                text-anchor: middle;
+            }
+            .flag {
+                fill: var(--ink);
+            }
+            .flag-label {
+                fill: var(--ink);
+                font: 700 11px var(--body);
+            }
+            .clip-page {
+                fill: var(--page);
+            }
+            .clip-label {
+                fill: var(--ink);
+                font: 700 10px var(--body);
+            }
+            .clip-split {
+                fill: var(--orange);
+            }
+            .clip-split-label {
+                fill: #fff;
+                font: 700 10px var(--body);
+            }
+            .strip-blue {
+                fill: var(--blue);
+            }
+            .strip-orange {
+                fill: var(--orange);
+            }
+            .overlap-bad {
+                fill: var(--bad);
+                fill-opacity: 0.35;
+                stroke: var(--bad);
+                stroke-width: 2;
+            }
+            .overlap-ok {
+                fill: none;
+                stroke: var(--accent);
+                stroke-width: 1.5;
+                stroke-dasharray: 3 2;
+            }
+            .handle {
+                fill: var(--ink);
+            }
+            .handle-label {
+                fill: var(--ink);
+                font: 700 10px var(--body);
+                text-anchor: middle;
+            }
+            .playhead {
+                stroke: var(--ink);
+                stroke-width: 1.5;
+            }
+            .playhead-cap {
+                fill: var(--ink);
+            }
+            .toast-bg {
+                fill: var(--ink);
+            }
+            .toast-text {
+                fill: var(--surface);
+                font: 11px var(--body);
+            }
+            .toast-icon {
+                fill: var(--bad);
+            }
+            .rise-label {
+                fill: var(--accent);
+                font: 700 10px var(--body);
+            }
+            @media (prefers-reduced-motion: reduce) {
+                .track .pip {
+                    transition: none;
+                }
+            }
+        </style>
+        <style>
+            .models {
+                display: grid;
+                gap: 14px;
+                grid-template-columns: 1fr;
+            }
+            @media (min-width: 760px) {
+                .models {
+                    grid-template-columns: 1fr 1fr;
+                }
+            }
+            .model {
+                display: grid;
+                gap: 6px;
+                padding: 14px;
+                border-radius: 10px;
+                border: 1px solid var(--line);
+                background: var(--surface);
+            }
+            .model h3 {
+                display: flex;
+                gap: 8px;
+                align-items: baseline;
+            }
+            .model .key {
+                font-family: var(--mono);
+                font-size: 0.8rem;
+                color: var(--accent);
+            }
+            .model p {
+                font-size: 0.95rem;
+            }
+            .table-wrap {
+                overflow-x: auto;
+                border: 1px solid var(--line);
+                border-radius: 10px;
+                background: var(--surface);
+            }
+            table {
+                border-collapse: collapse;
+                width: 100%;
+                min-width: 520px;
+                font-size: 0.9rem;
+            }
+            th,
+            td {
+                text-align: left;
+                padding: 8px 12px;
+                border-bottom: 1px solid var(--line);
+                vertical-align: top;
+            }
+            th {
+                font-family: var(--mono);
+                font-size: 0.72rem;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: var(--muted);
+                font-weight: 600;
+            }
+            tr:last-child td {
+                border-bottom: 0;
+            }
+            td a {
+                color: var(--ink);
+            }
+            .v {
+                font-weight: 700;
+                white-space: nowrap;
+            }
+            .v.ok {
+                color: var(--good);
+            }
+            .v.warn {
+                color: var(--bad);
+            }
+            .v.meh {
+                color: var(--orange);
+            }
+            .case {
+                display: grid;
+                gap: 12px;
+                scroll-margin-top: 16px;
+            }
+            .case-head {
+                display: grid;
+                gap: 6px;
+                max-width: 66ch;
+            }
+            .case-head .num {
+                font-family: var(--mono);
+                font-size: 0.78rem;
+                color: var(--muted);
+            }
+            .seg {
+                display: inline-flex;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                overflow: hidden;
+                background: var(--surface);
+                max-width: 100%;
+            }
+            .seg button {
+                font: 600 0.85rem var(--body);
+                border: 0;
+                background: transparent;
+                color: var(--muted);
+                padding: 8px 12px;
+                cursor: pointer;
+            }
+            .seg button[aria-pressed="true"] {
+                background: var(--ink);
+                color: var(--surface);
+            }
+            .seg button:focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: -2px;
+            }
+            .variants {
+                display: grid;
+                gap: 16px;
+                grid-template-columns: 1fr;
+            }
+            @media (min-width: 900px) {
+                .variants.two {
+                    grid-template-columns: 1fr 1fr;
+                }
+            }
+            .verdict {
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr);
+                gap: 4px 10px;
+                padding: 10px 12px;
+                border-radius: 8px;
+                background: var(--lane);
+                font-size: 0.93rem;
+                align-items: baseline;
+            }
+            .verdict .v {
+                font-family: var(--mono);
+                font-size: 0.78rem;
+            }
+            .sprint {
+                fill: none;
+                stroke: var(--bad);
+                stroke-width: 2.5;
+            }
+            .row-label {
+                fill: var(--muted);
+                font: 600 9px var(--mono);
+            }
+            .clip-user {
+                fill: var(--orange);
+            }
+            .clip-user-label {
+                fill: #fff;
+                font: 700 10px var(--body);
+            }
+            .clip-hidden {
+                opacity: 0.38;
+            }
+            .variant-title {
+                font-family: var(--mono);
+                font-size: 0.78rem;
+                color: var(--muted);
+            }
+        </style>
+        <main>
+            <header class="lede prose">
+                <p class="eyebrow">PR #266 · split moves · layer priority</p>
+                <h1>Move priority cases</h1>
+                <p>
+                    When two moves overlap for the same marcher, one has to win.
+                    Below are two ways to decide, and ten cases that try to
+                    break them. Each animation is computed by a small simulator
+                    using the spec's rules: the winning move controls the
+                    marcher, and when a move picks a marcher back up it starts
+                    from where they are and finishes on time.
+                </p>
+                <div class="legend">
+                    <span><i class="dot blue"></i>Blue marchers</span>
+                    <span><i class="dot orange"></i>Orange marchers</span>
+                    <span>Faded clip parts: overridden, not playing</span>
+                    <span style="color: var(--bad)"
+                        >Red ring: sprinting to catch up</span
+                    >
+                </div>
+            </header>
+
+            <section>
+                <h2>Two ways to decide who wins</h2>
+                <div class="models">
+                    <div class="model">
+                        <h3><span class="key">A</span>Last edited on top</h3>
+                        <p>
+                            Every time you make, drag or resize a move, it goes
+                            on top of whatever it overlaps. Who wins depends on
+                            the order you did things in, which the timeline
+                            doesn't show.
+                        </p>
+                    </div>
+                    <div class="model">
+                        <h3><span class="key">B</span>Later start on top</h3>
+                        <p>
+                            A page's own moves are always underneath. Between
+                            your moves,
+                            <b>the one that starts later takes over</b>, so a
+                            marcher follows a move until the next one picks them
+                            up. If two start on the same count, the shorter one
+                            wins, so moves nest like brackets. Who wins depends
+                            only on what's on the timeline.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2>Scorecard</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Case</th>
+                                <th>A · last edited</th>
+                                <th>B · later start</th>
+                            </tr>
+                        </thead>
+                        <tbody id="score"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div id="cases" style="display: grid; gap: 48px"></div>
+
+            <section>
+                <div class="prose" style="display: grid; gap: 10px">
+                    <h2>What the cases say</h2>
+                    <p>
+                        <b>A</b> surprises whenever edit history matters. That
+                        covers nudging a move, moving a page flag, making moves
+                        in a different order, and two moves starting together.
+                        In those cases a move can end up fully hidden: it's
+                        still on the timeline but never plays.
+                    </p>
+                    <p>
+                        <b>B</b> never lets one of your moves hide another. To
+                        hide a move, another would need the same start and a
+                        later end, and then it would be the longer one, so it
+                        loses. Several shorter moves inside a long one can still
+                        cover all of it, and the faded counts show that. Who
+                        wins changes only when starts visibly swap on the
+                        timeline. Case 6 is the closest to a surprise: making a
+                        long move over a short one keeps the short one as a
+                        breakaway. That's intended; the designer decides whether
+                        to keep the inner move.
+                    </p>
+                    <p>
+                        <b>Both</b> can make marchers sprint when a move hands
+                        them back to a page's move with little time left (case
+                        7). That isn't a layer problem; it needs a warning.
+                    </p>
+                    <p>
+                        With B, nobody picks a layer, including the app's code.
+                        The layer module works layers out from the timeline, and
+                        a check confirms the stored layers always match. That's
+                        the "enforced" part.
+                    </p>
+                </div>
+            </section>
+        </main>
+
+        <script>
+            (() => {
+                const NS = "http://www.w3.org/2000/svg";
+                const reduce =
+                    window.matchMedia &&
+                    window.matchMedia("(prefers-reduced-motion: reduce)")
+                        .matches;
+                const S = (tag, attrs, parent, text) => {
+                    const el = document.createElementNS(NS, tag);
+                    for (const k in attrs) el.setAttribute(k, attrs[k]);
+                    if (text != null) el.textContent = text;
+                    if (parent) parent.appendChild(el);
+                    return el;
+                };
+                const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+                const lerp = (a, b, p) => a + (b - a) * p;
+                const ease = (p) =>
+                    p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+                const seg = (t, a, b) => ease(clamp((t - a) / (b - a)));
+                const lp = (p, q, f) => [
+                    lerp(p[0], q[0], f),
+                    lerp(p[1], q[1], f),
+                ];
+
+                // ---- Field: 100 × 50 units in x 8..392, y 8..148
+                const fx = (x) => 8 + x * 3.84;
+                const fy = (y) => 8 + y * 2.8;
+                const HOME = [
+                    [22, 42],
+                    [32, 42],
+                    [42, 42],
+                    [58, 42],
+                    [68, 42],
+                    [78, 42],
+                ];
+                const F = {
+                    B: [
+                        [28, 27],
+                        [36, 27],
+                        [44, 27],
+                        [56, 27],
+                        [64, 27],
+                        [72, 27],
+                    ],
+                    C: [
+                        [16, 10],
+                        [26, 10],
+                        [36, 10],
+                        [46, 13],
+                        [54, 13],
+                        [62, 13],
+                    ],
+                    D: [
+                        [18, 34],
+                        [28, 34],
+                        [38, 34],
+                        [50, 36],
+                        [58, 36],
+                        [66, 36],
+                    ],
+                    X: [null, null, null, [72, 9], [81, 5], [90, 9]],
+                    Y: [null, null, null, [62, 44], [72, 46], [82, 44]],
+                    W: [null, null, null, [86, 22], [92, 28], [86, 34]],
+                    N: [null, null, null, [52, 35], [62, 37], null],
+                    M: [null, null, null, [44, 20], [56, 19], null],
+                };
+                const ALL = [0, 1, 2, 3, 4, 5],
+                    BLUE = [0, 1, 2],
+                    ORANGE = [3, 4, 5];
+                const isOrange = (i) => i >= 3;
+
+                // ---- Priority models: higher key wins
+                const keyA = (m, order) => [order.indexOf(m.id)];
+                const keyB = (m, order) => [
+                    m.kind === "user" ? 1 : 0,
+                    m.c0,
+                    -(m.c1 - m.c0),
+                    order.indexOf(m.id),
+                ];
+                const cmp = (a, b) => {
+                    for (let k = 0; k < a.length; k++)
+                        if (a[k] !== b[k]) return a[k] - b[k];
+                    return 0;
+                };
+                function winnerAt(moves, order, model, i, c) {
+                    let best = null,
+                        bk = null;
+                    for (const m of moves) {
+                        if (
+                            !m.members.includes(i) ||
+                            c < m.c0 ||
+                            c >= m.c1 ||
+                            (m.opacity ?? 1) < 0.5
+                        )
+                            continue;
+                        const k = (model === "A" ? keyA : keyB)(m, order);
+                        if (!best || cmp(k, bk) > 0) {
+                            best = m;
+                            bk = k;
+                        }
+                    }
+                    return best;
+                }
+                // Simulate one marcher: the winner controls them; a new winner starts from where they are and finishes at its end (spec R-5 rebase)
+                const DT = 0.05;
+                function simulate(moves, order, model) {
+                    const N = Math.round(20 / DT);
+                    return ALL.map((i) => {
+                        const pts = [HOME[i]],
+                            speed = [0],
+                            who = [];
+                        let pos = HOME[i],
+                            cur = null,
+                            s = 0,
+                            origin = pos;
+                        for (let k = 0; k < N; k++) {
+                            const c = k * DT;
+                            const w = winnerAt(
+                                moves,
+                                order,
+                                model,
+                                i,
+                                c + DT / 2,
+                            );
+                            if (w !== cur) {
+                                cur = w;
+                                s = c;
+                                origin = pos;
+                            }
+                            who.push(
+                                w
+                                    ? {
+                                          id: w.id,
+                                          label: w.label,
+                                          rebased: Math.abs(s - w.c0) > 1e-6,
+                                      }
+                                    : null,
+                            );
+                            let next = pos;
+                            if (w)
+                                next = lp(
+                                    origin,
+                                    F[w.dest][i],
+                                    clamp((c + DT - s) / (w.c1 - s)),
+                                );
+                            speed.push(
+                                Math.hypot(next[0] - pos[0], next[1] - pos[1]) /
+                                    DT,
+                            );
+                            pos = next;
+                            pts.push(pos);
+                        }
+                        return { pts, speed, who };
+                    });
+                }
+                const at = (sim, i, c) => {
+                    const f = clamp(c, 0, 20) / DT,
+                        k = Math.floor(f),
+                        r = f - k;
+                    const p = sim[i].pts,
+                        a = p[Math.min(k, p.length - 1)],
+                        b = p[Math.min(k + 1, p.length - 1)];
+                    return lp(a, b, r);
+                };
+                const SPRINT = 8;
+
+                // ---- Cases
+                const p1 = (members = ALL) => ({
+                    id: "p1",
+                    kind: "page",
+                    label: "Page 1's move",
+                    c0: 0,
+                    c1: 8,
+                    members,
+                    dest: "B",
+                });
+                const p2 = (members = ALL, c1 = 16) => ({
+                    id: "p2",
+                    kind: "page",
+                    label: "Page 2's move",
+                    c0: 8,
+                    c1,
+                    members,
+                    dest: "C",
+                });
+                const p3 = (c0 = 16) => ({
+                    id: "p3",
+                    kind: "page",
+                    label: "Page 3's move",
+                    c0,
+                    c1: 24,
+                    members: ALL,
+                    dest: "D",
+                });
+                const user = (id, label, c0, c1, dest, extra = {}) => ({
+                    id,
+                    kind: "user",
+                    label,
+                    c0,
+                    c1,
+                    members: ORANGE,
+                    dest,
+                    ...extra,
+                });
+                const pages = (p3start = 16) => [
+                    [0, "Page 1"],
+                    [8, "Page 2"],
+                    [p3start, "Page 3"],
+                ];
+
+                const CASES = [
+                    {
+                        id: "c1",
+                        title: "Drag a split move back into Page 1",
+                        ask: "Your example. The orange marchers' split move is dragged 3 counts earlier.",
+                        moves: [
+                            p1(),
+                            p2(BLUE),
+                            p3(),
+                            user("s", "Split move", 8, 16, "X"),
+                        ],
+                        order: ["p1", "p2", "p3", "s"],
+                        edit: {
+                            id: "s",
+                            to: { c0: 5, c1: 13 },
+                            caption: "Drag the whole split move back 3 counts.",
+                        },
+                        focus: 6.5,
+                        A: [
+                            "ok",
+                            "Works",
+                            "It was edited last, so it goes on top and takes over at count 5.",
+                        ],
+                        B: [
+                            "ok",
+                            "Works",
+                            "It's your move and page moves are underneath, so it takes over at count 5.",
+                        ],
+                    },
+                    {
+                        id: "c2",
+                        title: "Grow a move past the next page",
+                        ask: "Drag the split move's end from 16 to 18, past Page 3's flag (your V-290 decision).",
+                        moves: [
+                            p1(),
+                            p2(BLUE),
+                            p3(),
+                            user("s", "Split move", 8, 16, "X"),
+                        ],
+                        order: ["p1", "p2", "p3", "s"],
+                        edit: {
+                            id: "s",
+                            to: { c0: 8, c1: 18 },
+                            caption:
+                                "Drag the split move's end edge to count 18.",
+                        },
+                        focus: 17,
+                        A: [
+                            "ok",
+                            "Works",
+                            "The split move wins counts 16 to 18, then Page 3's move picks them up and catches up.",
+                        ],
+                        B: [
+                            "ok",
+                            "Works",
+                            "Same: page moves are underneath, so the split move wins until 18.",
+                        ],
+                    },
+                    {
+                        id: "c3",
+                        title: "Move a page flag around a breakaway",
+                        ask: "Move 3 is a breakaway for orange inside Page 2. Then you drag Page 3's flag 2 counts later, which lengthens Page 2's move.",
+                        moves: [
+                            p1(),
+                            p2(),
+                            p3(),
+                            user("m3", "Move 3", 10, 14, "X"),
+                        ],
+                        order: ["p1", "p2", "p3", "m3"],
+                        edit: {
+                            ids: ["p2", "p3"],
+                            to: {
+                                p2: { c0: 8, c1: 18 },
+                                p3: { c0: 18, c1: 24 },
+                            },
+                            flagTo: 18,
+                            caption: "Drag Page 3's flag from count 16 to 18.",
+                        },
+                        focus: 12,
+                        A: [
+                            "warn",
+                            "Breakaway vanishes",
+                            "Page 2's move was just edited, so it goes on top of Move 3. Move 3 still shows but never plays.",
+                        ],
+                        B: [
+                            "ok",
+                            "Works",
+                            "Move 3 is yours and page moves are underneath, so the breakaway still happens.",
+                        ],
+                    },
+                    {
+                        id: "c4",
+                        title: "Nudge a move by one count",
+                        ask: "Move 3 (counts 4 to 12) and Move 4 (8 to 16) overlap. Move 4 was made later. You stretch Move 3's end by one count.",
+                        moves: [
+                            p1(),
+                            p2(),
+                            user("m3", "Move 3", 4, 12, "Y"),
+                            user("m4", "Move 4", 8, 16, "X"),
+                        ],
+                        order: ["p1", "p2", "m3", "m4"],
+                        edit: {
+                            id: "m3",
+                            to: { c0: 4, c1: 13 },
+                            caption: "Drag Move 3's end from 12 to 13.",
+                        },
+                        focus: 10,
+                        A: [
+                            "warn",
+                            "Whole path flips",
+                            "A one-count nudge puts Move 3 on top, so orange follow Move 3 until 13 instead of Move 4 from 8, then rush to catch up with Move 4.",
+                        ],
+                        B: [
+                            "ok",
+                            "Nothing jumps",
+                            "Move 4 starts later, so it still takes over at 8. The extra count is faded, so you can see it doesn't play.",
+                        ],
+                    },
+                    {
+                        id: "c5",
+                        title: "Same timeline, built in a different order",
+                        ask: "Two shows with exactly the same moves on the timeline. In one, Move 3 was made first; in the other, Move 4 was.",
+                        moves: [
+                            p1(),
+                            p2(),
+                            user("m3", "Move 3", 4, 12, "Y"),
+                            user("m4", "Move 4", 8, 16, "X"),
+                        ],
+                        variants: [
+                            {
+                                title: "Made Move 3, then Move 4",
+                                order: ["p1", "p2", "m3", "m4"],
+                            },
+                            {
+                                title: "Made Move 4, then Move 3",
+                                order: ["p1", "p2", "m4", "m3"],
+                            },
+                        ],
+                        focus: 10,
+                        A: [
+                            "warn",
+                            "Plays differently",
+                            "The timelines look identical, but they play differently. Nothing on screen tells you why.",
+                        ],
+                        B: [
+                            "ok",
+                            "Plays the same",
+                            "Who wins comes from the timeline itself, so both play the same.",
+                        ],
+                    },
+                    {
+                        id: "c6",
+                        title: "Make a long move over a short one",
+                        ask: "Move 3 (counts 10 to 14) exists. You make Move 4 for the same marchers over counts 4 to 16.",
+                        moves: [
+                            p1(),
+                            p2(),
+                            user("m3", "Move 3", 10, 14, "X"),
+                            user("m4", "Move 4", 4, 16, "Y", { opacity: 0 }),
+                        ],
+                        order: ["p1", "p2", "m3", "m4"],
+                        edit: {
+                            make: "m4",
+                            caption:
+                                "Make Move 4 for the orange marchers, counts 4 to 16.",
+                        },
+                        focus: 12,
+                        A: [
+                            "warn",
+                            "Move 3 hidden",
+                            "Move 4 goes on top, so Move 3 never plays. It stays on the timeline doing nothing, and comes back if you delete Move 4.",
+                        ],
+                        B: [
+                            "ok",
+                            "Keeps Move 3 (intended)",
+                            "Move 3 starts later, so it still breaks away from Move 4. Decided 2026-10-16: that is the system working; the designer shortens or deletes Move 3 if they don't want it. Move 4 then has 2 counts left, so they rush (see case 7).",
+                        ],
+                    },
+                    {
+                        id: "c7",
+                        title: "A breakaway hands back late",
+                        ask: "Move 3 takes orange far away inside Page 2. You stretch its end from 12 to 15, leaving Page 2's move 1 count to bring them back.",
+                        moves: [
+                            p1(),
+                            p2(),
+                            p3(),
+                            user("m3", "Move 3", 8, 12, "W"),
+                        ],
+                        order: ["p1", "p2", "p3", "m3"],
+                        edit: {
+                            id: "m3",
+                            to: { c0: 8, c1: 15 },
+                            caption: "Drag Move 3's end from 12 to 15.",
+                        },
+                        focus: 15.5,
+                        A: [
+                            "warn",
+                            "Sprint",
+                            "Page 2's move picks them up at 15 and has 1 count to reach its set.",
+                        ],
+                        B: [
+                            "warn",
+                            "Sprint",
+                            "The same. This isn't about layers: the app should warn when a catch-up is too fast.",
+                        ],
+                    },
+                    {
+                        id: "c8",
+                        title: "Two moves start on the same count",
+                        ask: "Move 3 (counts 8 to 12) and Move 4 (8 to 16) both start at 8 for the orange marchers. Move 4 was made last.",
+                        moves: [
+                            p1(),
+                            p2(),
+                            user("m3", "Move 3", 8, 12, "W"),
+                            user("m4", "Move 4", 8, 16, "X"),
+                        ],
+                        order: ["p1", "p2", "m3", "m4"],
+                        focus: 11,
+                        A: [
+                            "warn",
+                            "Move 3 hidden",
+                            "Move 4 was made last and covers all of Move 3, so Move 3 never plays.",
+                        ],
+                        B: [
+                            "ok",
+                            "Nests",
+                            "Same start, so the shorter one wins: Move 3 plays 8 to 12, then Move 4 picks them up.",
+                        ],
+                    },
+                    {
+                        id: "c9",
+                        title: "Drag a move past another's start",
+                        ask: "Move 3 (counts 4 to 12) and Move 4 (8 to 16). You drag Move 3 later, to 10 to 18, so it now starts after Move 4.",
+                        moves: [
+                            p1(),
+                            p2(),
+                            p3(),
+                            user("m3", "Move 3", 4, 12, "Y"),
+                            user("m4", "Move 4", 8, 16, "X"),
+                        ],
+                        order: ["p1", "p2", "p3", "m3", "m4"],
+                        edit: {
+                            id: "m3",
+                            to: { c0: 10, c1: 18 },
+                            caption: "Drag Move 3 to counts 10 to 18.",
+                        },
+                        focus: 12,
+                        A: [
+                            "ok",
+                            "Takes over",
+                            "Move 3 was edited last, so it takes over at 10.",
+                        ],
+                        B: [
+                            "ok",
+                            "Takes over",
+                            "Move 3 now starts later, so it takes over at 10. Who wins changes only when starts visibly swap.",
+                        ],
+                    },
+                    {
+                        id: "c10",
+                        title: "Micro moves inside a long move",
+                        ask: "Move 3 takes all six marchers from count 8 to 16. Inside it, two orange marchers get micro moves: Move 4 starts on the same count as Move 3 (8 to 10), and Move 5 sits in the middle (12 to 14).",
+                        moves: [
+                            p1(),
+                            {
+                                id: "m3",
+                                kind: "user",
+                                label: "Move 3",
+                                c0: 8,
+                                c1: 16,
+                                members: ALL,
+                                dest: "C",
+                            },
+                            user("m4", "Move 4", 8, 10, "N", {
+                                members: [3, 4],
+                            }),
+                            user("m5", "Move 5", 12, 14, "M", {
+                                members: [3, 4],
+                            }),
+                        ],
+                        order: ["p1", "m4", "m5", "m3"],
+                        focus: 9,
+                        A: [
+                            "warn",
+                            "Micro moves hidden",
+                            "Move 3 was made (or last nudged) after the micro moves, so it covers them and they never play.",
+                        ],
+                        B: [
+                            "ok",
+                            "Micro moves play",
+                            "Move 4 starts with Move 3 but is shorter, so it wins 8 to 10. Move 5 starts later, so it wins 12 to 14. Move 3 picks the two marchers back up after each one.",
+                        ],
+                    },
+                ];
+
+                // Apply the edit at progress e (0..1) to a case's moves and order
+                function stateAt(cs, model, e, baseOrder) {
+                    const moves = cs.moves.map((m) => ({ ...m }));
+                    let order = [...baseOrder];
+                    let flags = pages();
+                    const ed = cs.edit;
+                    if (ed && e > 0) {
+                        const ids = ed.ids || (ed.id ? [ed.id] : [ed.make]);
+                        for (const m of moves) {
+                            if (!ids.includes(m.id)) continue;
+                            const to = ed.ids ? ed.to[m.id] : ed.to;
+                            if (to) {
+                                m.c0 = lerp(m.c0, to.c0, e);
+                                m.c1 = lerp(m.c1, to.c1, e);
+                            }
+                            if (ed.make) m.opacity = e;
+                        }
+                        if (ed.flagTo) flags = pages(lerp(16, ed.flagTo, e));
+                        if (e >= 0.5)
+                            order = [
+                                ...order.filter((x) => !ids.includes(x)),
+                                ...ids,
+                            ];
+                    }
+                    return { moves, order, flags };
+                }
+
+                // ---- Scene
+                const X0 = 64,
+                    X1 = 388,
+                    ROWS_TOP = 200,
+                    ROW_H = 26,
+                    NROWS = 4;
+                const xc = (c) => X0 + (clamp(c, 0, 20) / 20) * (X1 - X0);
+                let uid = 0;
+
+                function rowsFor(moves, order, model) {
+                    const sorted = moves
+                        .filter((m) => (m.opacity ?? 1) > 0.02)
+                        .sort((a, b) =>
+                            cmp(
+                                (model === "A" ? keyA : keyB)(a, order),
+                                (model === "A" ? keyA : keyB)(b, order),
+                            ),
+                        );
+                    const row = new Map();
+                    for (const m of sorted) {
+                        let r = 0;
+                        for (const [o, ro] of row)
+                            if (o.c0 < m.c1 && m.c0 < o.c1)
+                                r = Math.max(r, ro + 1);
+                        row.set(m, Math.min(r, NROWS - 1));
+                    }
+                    return row;
+                }
+
+                function mountScene(host, cs, getModel, order0, title) {
+                    const fig = document.createElement("figure");
+                    if (title) {
+                        const t = document.createElement("p");
+                        t.className = "variant-title";
+                        t.textContent = title;
+                        fig.appendChild(t);
+                    }
+                    host.appendChild(fig);
+                    const H = ROWS_TOP + NROWS * ROW_H + 8;
+                    const svg = S("svg", {
+                        viewBox: `0 0 400 ${H}`,
+                        class: "scene",
+                        role: "img",
+                        "aria-label": cs.title,
+                    });
+                    fig.appendChild(svg);
+                    const hid = "p" + uid++;
+                    const pat = S(
+                        "pattern",
+                        {
+                            id: hid,
+                            width: 5,
+                            height: 5,
+                            patternUnits: "userSpaceOnUse",
+                            patternTransform: "rotate(45)",
+                        },
+                        S("defs", {}, svg),
+                    );
+                    S(
+                        "rect",
+                        { width: 2, height: 5, fill: "rgba(255,255,255,0.55)" },
+                        pat,
+                    );
+                    S(
+                        "rect",
+                        {
+                            x: 8,
+                            y: 8,
+                            width: 384,
+                            height: 140,
+                            rx: 4,
+                            class: "turf",
+                        },
+                        svg,
+                    );
+                    [
+                        "10",
+                        "20",
+                        "30",
+                        "40",
+                        "50",
+                        "40",
+                        "30",
+                        "20",
+                        "10",
+                    ].forEach((n, k) => {
+                        S(
+                            "line",
+                            {
+                                x1: fx((k + 1) * 10),
+                                x2: fx((k + 1) * 10),
+                                y1: 8,
+                                y2: 148,
+                                class: "yard",
+                            },
+                            svg,
+                        );
+                        S(
+                            "text",
+                            { x: fx((k + 1) * 10), y: 143, class: "yardnum" },
+                            svg,
+                            n,
+                        );
+                    });
+                    for (let x = 2; x < 100; x += 2) {
+                        if (x % 10 === 0) continue;
+                        S(
+                            "line",
+                            {
+                                x1: fx(x),
+                                x2: fx(x),
+                                y1: fy(16.5),
+                                y2: fy(17.5),
+                                class: "hash",
+                            },
+                            svg,
+                        );
+                        S(
+                            "line",
+                            {
+                                x1: fx(x),
+                                x2: fx(x),
+                                y1: fy(32.5),
+                                y2: fy(33.5),
+                                class: "hash",
+                            },
+                            svg,
+                        );
+                    }
+                    for (let c = 0; c <= 20; c++) {
+                        S(
+                            "line",
+                            {
+                                x1: xc(c),
+                                x2: xc(c),
+                                y1: 180,
+                                y2: c % 4 === 0 ? 186 : 183,
+                                class: "tick",
+                            },
+                            svg,
+                        );
+                        if (c % 4 === 0)
+                            S(
+                                "text",
+                                { x: xc(c), y: 195, class: "ticknum" },
+                                svg,
+                                c,
+                            );
+                    }
+                    for (let r = 0; r < NROWS; r++)
+                        S(
+                            "rect",
+                            {
+                                x: X0,
+                                y: ROWS_TOP + r * ROW_H,
+                                width: X1 - X0,
+                                height: ROW_H - 2,
+                                class: "lane",
+                            },
+                            svg,
+                        );
+                    S(
+                        "text",
+                        { x: 4, y: ROWS_TOP + 14, class: "row-label" },
+                        svg,
+                        "wins ↑",
+                    );
+                    S(
+                        "text",
+                        {
+                            x: 4,
+                            y: ROWS_TOP + (NROWS - 1) * ROW_H + 14,
+                            class: "row-label",
+                        },
+                        svg,
+                        "under",
+                    );
+                    const dyn = S("g", {}, svg);
+
+                    const controls = document.createElement("div");
+                    controls.className = "controls";
+                    const sid = `${cs.id}-${uid}`;
+                    controls.innerHTML = `<button type="button" id="${sid}-play">Play</button><input type="range" id="${sid}-scrub" min="0" max="1000" value="0" aria-label="Step through the case"><span class="count"></span>`;
+                    fig.appendChild(controls);
+                    const cap = document.createElement("p");
+                    cap.className = "caption";
+                    cap.setAttribute("aria-live", "polite");
+                    fig.appendChild(cap);
+                    const btn = controls.querySelector("button"),
+                        range = controls.querySelector("input"),
+                        countEl = controls.querySelector(".count");
+
+                    const hasEdit = !!cs.edit;
+                    const E0 = 1.0,
+                        E1 = hasEdit ? 2.8 : 1.0,
+                        P0 = hasEdit ? 3.4 : 1.2,
+                        T = P0 + 8.4;
+                    const keyT = P0 + (cs.focus / 20) * 8;
+                    let simCache = { k: "", sim: null };
+                    const simFor = (st, model) => {
+                        const k =
+                            model +
+                            JSON.stringify(
+                                st.moves.map((m) => [
+                                    m.id,
+                                    +m.c0.toFixed(2),
+                                    +m.c1.toFixed(2),
+                                    (m.opacity ?? 1) >= 0.5,
+                                ]),
+                            ) +
+                            st.order.join();
+                        if (simCache.k !== k)
+                            simCache = {
+                                k,
+                                sim: simulate(st.moves, st.order, model),
+                            };
+                        return simCache.sim;
+                    };
+
+                    const describe = (sim, c) => {
+                        const k = Math.min(
+                            Math.floor(clamp(c, 0, 19.99) / DT),
+                            sim[0].who.length - 1,
+                        );
+                        const part = (ids, name) => {
+                            const seen = new Map();
+                            for (const i of ids) {
+                                const w = sim[i].who[k];
+                                const txt = w
+                                    ? `<b>${w.label}</b>${w.rebased ? " (picked up partway)" : ""}`
+                                    : "hold";
+                                seen.set(txt, (seen.get(txt) || 0) + 1);
+                            }
+                            if (seen.size === 1) {
+                                const [txt] = seen.keys();
+                                return txt === "hold"
+                                    ? `${name} hold`
+                                    : `${name} follow ${txt}`;
+                            }
+                            return (
+                                `${name}: ` +
+                                [...seen]
+                                    .map(
+                                        ([txt, n]) =>
+                                            `${n} ${txt === "hold" ? "hold" : "follow " + txt}`,
+                                    )
+                                    .join(", ")
+                            );
+                        };
+                        return `Count ${Math.floor(c)}: ${part(BLUE, "blue")} · ${part(ORANGE, "orange")}.`;
+                    };
+
+                    const render = (t) => {
+                        const model = getModel();
+                        const e = hasEdit ? seg(t, E0, E1) : 0;
+                        const st = stateAt(cs, model, e, order0);
+                        const sim = simFor(st, model);
+                        const playing = t >= P0;
+                        const c = playing ? clamp((t - P0) / 8) * 20 : cs.focus;
+                        dyn.textContent = "";
+                        // marchers
+                        for (let i = 0; i < 6; i++) {
+                            const p = at(sim, i, c);
+                            const k = Math.min(
+                                Math.floor(c / DT) + 1,
+                                sim[i].speed.length - 1,
+                            );
+                            if (sim[i].speed[k] > SPRINT)
+                                S(
+                                    "circle",
+                                    {
+                                        cx: fx(p[0]),
+                                        cy: fy(p[1]),
+                                        r: 9.5,
+                                        class: "sprint",
+                                    },
+                                    dyn,
+                                );
+                            S(
+                                "circle",
+                                {
+                                    cx: fx(p[0]),
+                                    cy: fy(p[1]),
+                                    r: 5.5,
+                                    class: isOrange(i) ? "m-orange" : "m-blue",
+                                },
+                                dyn,
+                            );
+                        }
+                        // flags
+                        st.flags.forEach(([fc, label]) => {
+                            const f = S(
+                                "path",
+                                {
+                                    d: `M${xc(fc)} 162 v14 M${xc(fc)} 162 h9 l-3 3 l3 3 h-9`,
+                                    class: "flag",
+                                },
+                                dyn,
+                            );
+                            f.style.stroke = "var(--ink)";
+                            S(
+                                "text",
+                                {
+                                    x: xc(fc) > 340 ? xc(fc) - 4 : xc(fc) + 12,
+                                    y: 170,
+                                    class: "flag-label",
+                                    "text-anchor":
+                                        xc(fc) > 340 ? "end" : "start",
+                                },
+                                dyn,
+                                label,
+                            );
+                        });
+                        // clips, by who wins
+                        const rows = rowsFor(st.moves, st.order, model);
+                        for (const [m, r] of rows) {
+                            const y = ROWS_TOP + (NROWS - 1 - r) * ROW_H + 1;
+                            const g = S("g", { opacity: m.opacity ?? 1 }, dyn);
+                            const user = m.kind === "user";
+                            // per count: does this move control any of its members?
+                            for (
+                                let cc = Math.floor(m.c0);
+                                cc < Math.ceil(m.c1);
+                                cc++
+                            ) {
+                                const a = Math.max(cc, m.c0),
+                                    b = Math.min(cc + 1, m.c1);
+                                if (b <= a) continue;
+                                const mid = (a + b) / 2;
+                                const live = m.members.some(
+                                    (i) =>
+                                        winnerAt(
+                                            st.moves,
+                                            st.order,
+                                            model,
+                                            i,
+                                            mid,
+                                        ) === m,
+                                );
+                                const rect = S(
+                                    "rect",
+                                    {
+                                        x: xc(a),
+                                        y,
+                                        width: Math.max(0, xc(b) - xc(a)),
+                                        height: ROW_H - 4,
+                                        class: user ? "clip-user" : "clip-page",
+                                        "shape-rendering": "crispEdges",
+                                    },
+                                    g,
+                                );
+                                if (!live) {
+                                    rect.classList.add("clip-hidden");
+                                    S(
+                                        "rect",
+                                        {
+                                            x: xc(a),
+                                            y,
+                                            width: Math.max(0, xc(b) - xc(a)),
+                                            height: ROW_H - 4,
+                                            fill: `url(#${hid})`,
+                                        },
+                                        g,
+                                    );
+                                }
+                            }
+                            S(
+                                "rect",
+                                {
+                                    x: xc(m.c0),
+                                    y,
+                                    width: Math.max(0, xc(m.c1) - xc(m.c0)),
+                                    height: ROW_H - 4,
+                                    rx: 3,
+                                    fill: "none",
+                                    stroke: "var(--surface)",
+                                    "stroke-width": 1.5,
+                                },
+                                g,
+                            );
+                            if (xc(m.c1) - xc(m.c0) > 40)
+                                S(
+                                    "text",
+                                    {
+                                        x: xc(m.c0) + 5,
+                                        y: y + 14,
+                                        class: user
+                                            ? "clip-user-label"
+                                            : "clip-label",
+                                    },
+                                    g,
+                                    m.label,
+                                );
+                        }
+                        if (playing) {
+                            const x = xc(c);
+                            S(
+                                "line",
+                                {
+                                    x1: x,
+                                    x2: x,
+                                    y1: 178,
+                                    y2: ROWS_TOP + NROWS * ROW_H,
+                                    class: "playhead",
+                                },
+                                dyn,
+                            );
+                            S(
+                                "path",
+                                {
+                                    d: `M${x - 5} 176 h10 l-5 6 z`,
+                                    class: "playhead-cap",
+                                },
+                                dyn,
+                            );
+                        }
+                        if (!playing && hasEdit && t >= E0 && t < P0)
+                            cap.innerHTML = cs.edit.caption;
+                        else
+                            cap.innerHTML =
+                                describe(sim, c) +
+                                (playing ? "" : " <i>(paused here)</i>");
+                        countEl.textContent = `count ${Math.floor(c)}`;
+                        range.value = String(Math.round((t / T) * 1000));
+                    };
+
+                    let t = keyT,
+                        playing = false,
+                        last = 0,
+                        raf = 0,
+                        started = false;
+                    const tick = (now) => {
+                        t += (now - last) / 1000;
+                        last = now;
+                        if (t >= T) {
+                            t = T;
+                            playing = false;
+                            btn.textContent = "Replay";
+                            render(t);
+                            return;
+                        }
+                        render(t);
+                        raf = requestAnimationFrame(tick);
+                    };
+                    const play = () => {
+                        if (!started || t >= T - 0.01) t = 0;
+                        started = true;
+                        playing = true;
+                        btn.textContent = "Pause";
+                        last = performance.now();
+                        cancelAnimationFrame(raf);
+                        raf = requestAnimationFrame(tick);
+                    };
+                    const pause = () => {
+                        playing = false;
+                        cancelAnimationFrame(raf);
+                        btn.textContent = "Play";
+                    };
+                    btn.addEventListener("click", () =>
+                        playing ? pause() : play(),
+                    );
+                    range.addEventListener("input", () => {
+                        started = true;
+                        pause();
+                        t = (Number(range.value) / 1000) * T;
+                        render(t);
+                    });
+                    render(t);
+                    return {
+                        fig,
+                        play,
+                        restart: () => {
+                            started = false;
+                            t = keyT;
+                            render(t);
+                            play();
+                        },
+                        get started() {
+                            return started;
+                        },
+                    };
+                }
+
+                // ---- Build cases
+                const score = document.getElementById("score");
+                const host = document.getElementById("cases");
+                const players = [];
+                CASES.forEach((cs, n) => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `<td><a href="#${cs.id}">${n + 1}. ${cs.title}</a></td><td><span class="v ${cs.A[0]}">${cs.A[0] === "ok" ? "✓" : "⚠"} ${cs.A[1]}</span></td><td><span class="v ${cs.B[0]}">${cs.B[0] === "ok" ? "✓" : "⚠"} ${cs.B[1]}</span></td>`;
+                    score.appendChild(tr);
+
+                    const art = document.createElement("section");
+                    art.className = "case";
+                    art.id = cs.id;
+                    art.innerHTML = `<div class="case-head"><span class="num">Case ${n + 1}</span><h2></h2><p></p></div>
+      <div class="seg" role="group" aria-label="Priority rule"><button type="button" aria-pressed="false" data-m="A">A · Last edited on top</button><button type="button" aria-pressed="true" data-m="B">B · Later start on top</button></div>
+      <div class="variants${cs.variants ? " two" : ""}"></div>
+      <div class="verdict"></div>`;
+                    art.querySelector("h2").textContent = cs.title;
+                    art.querySelector(".case-head p").textContent = cs.ask;
+                    host.appendChild(art);
+                    let model = "A";
+                    const vhost = art.querySelector(".variants");
+                    const verdict = art.querySelector(".verdict");
+                    const scenes = (cs.variants || [{ order: cs.order }]).map(
+                        (v) =>
+                            mountScene(
+                                vhost,
+                                cs,
+                                () => model,
+                                v.order,
+                                v.title,
+                            ),
+                    );
+                    const setModel = (m) => {
+                        model = m;
+                        art.querySelectorAll(".seg button").forEach((b) =>
+                            b.setAttribute(
+                                "aria-pressed",
+                                String(b.dataset.m === m),
+                            ),
+                        );
+                        const [k, short, long] = cs[m];
+                        verdict.innerHTML = `<span class="v ${k}">${k === "ok" ? "✓" : "⚠"} ${short}</span><span></span>`;
+                        verdict.lastChild.textContent = long;
+                    };
+                    art.querySelectorAll(".seg button").forEach((b) =>
+                        b.addEventListener("click", () => {
+                            setModel(b.dataset.m);
+                            scenes.forEach((s) => s.restart());
+                        }),
+                    );
+                    setModel("A");
+                    scenes.forEach((s) => players.push(s));
+                });
+
+                if (!reduce && "IntersectionObserver" in window) {
+                    const byFig = new Map(players.map((p) => [p.fig, p]));
+                    const io = new IntersectionObserver(
+                        (entries) => {
+                            entries.forEach((en) => {
+                                if (!en.isIntersecting) return;
+                                const p = byFig.get(en.target);
+                                io.unobserve(en.target);
+                                if (p && !p.started) p.play();
+                            });
+                        },
+                        { threshold: 0.6 },
+                    );
+                    players.forEach((p) => io.observe(p.fig));
+                }
+            })();
+        </script>
+    </body>
+</html>
