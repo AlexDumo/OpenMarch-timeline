@@ -665,12 +665,14 @@ const STATIC_ACTIONS = {
     splitSelectedIntoNewMove: {
         labelKey: "actions.timeline.splitSelectedIntoNewMove",
         category: "timeline",
+        editsDrill: true,
         scope: "global",
         defaultBindings: [],
     },
     mergeMoveIntoPage: {
         labelKey: "actions.timeline.mergeMoveIntoPage",
         category: "timeline",
+        editsDrill: true,
         scope: "global",
         defaultBindings: [],
     },
