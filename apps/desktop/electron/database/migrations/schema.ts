@@ -930,6 +930,112 @@ export const item_geometry = sqliteTable(
     ],
 );
 
+export const PLACEMENT_STATES = ["held", "placed", "off_field"] as const;
+export const HANDS = ["left", "right", "both"] as const;
+export const PLACEMENT_ROLES = ["holder", "crew"] as const;
+/** The orders an item ripple runs in, as a cue ripple's (`cues.ripple_json`) */
+export const ITEM_RIPPLE_ORDERS = [
+    "drill",
+    "left_right",
+    "right_left",
+    "down_form",
+] as const;
+
+/**
+ * Where an item is from a beat on (ADR 0002 D-10, props-spec section 4): held by performers
+ * (`item_placement_marchers`), placed at its own position with an optional crew, or Off field.
+ * Latest wins and the change is instant on its beat's click. Before an item's first change it is
+ * placed at its own position (Off field before its first Outline); an item that comes from a flag
+ * gets an explicit held change on its first beat, so nothing about an item's origin is stored.
+ *
+ * Of two items' changes on one beat, the higher `beat_rank`, then the higher `id`, is newer: a
+ * write makes its change the newest on its beat, and a beat deletion or replacement that lands
+ * changes on a beat ranks them below the ones already there, so who holds what stays put.
+ *
+ * The changes of an item ripple, one per item at staggered counts, each with its own value, share
+ * a `group_id` and the ripple they were spread by (`ripple_json`, `{ version: 1, span, order }`
+ * as on a cue), so the group can be shown, re-timed and edited together. A held change keeps at
+ * least one holder, and only a placed change has crew: the write path keeps both
+ * (`itemPlacements.ts`).
+ */
+export const item_placements = sqliteTable(
+    "item_placements",
+    {
+        id: integer().primaryKey(),
+        item_id: integer()
+            .notNull()
+            .references(() => items.id, { onDelete: "cascade" }),
+        beat_id: integer()
+            .notNull()
+            .references(() => beats.id, { onDelete: "cascade" }),
+        /** held, placed or off_field */
+        state: text().notNull(),
+        /** Ties between items' changes on one beat: the higher is newer, then the higher id */
+        beat_rank: integer().notNull().default(0),
+        /** The item ripple this row is part of, or null */
+        group_id: integer(),
+        /** The group's ripple, `{ version: 1, span, order }`: set exactly when `group_id` is */
+        ripple_json: text(),
+        ...timestamps,
+    },
+    (table) => [
+        unique("item_placements_item_beat_unique").on(
+            table.item_id,
+            table.beat_id,
+        ),
+        index("item_placements_beat_id_idx").on(table.beat_id),
+        index("item_placements_group_id_idx").on(table.group_id),
+        check(
+            "item_placements_state_check",
+            sql.raw(`state IN (${sqlList(PLACEMENT_STATES)})`),
+        ),
+        check(
+            "item_placements_beat_rank_check",
+            sql`typeof(beat_rank) = 'integer'`,
+        ),
+        check(
+            "item_placements_group_check",
+            sql.raw(
+                `(group_id IS NULL AND ripple_json IS NULL) OR (typeof(group_id) = 'integer' AND group_id >= 1 AND ripple_json IS NOT NULL AND json_valid(ripple_json) AND json_type(ripple_json) = 'object' AND json_extract(ripple_json, '$.version') = 1 AND json_type(ripple_json, '$.span') = 'integer' AND json_extract(ripple_json, '$.span') >= 1 AND json_extract(ripple_json, '$.order') IN (${sqlList(ITEM_RIPPLE_ORDERS)}))`,
+            ),
+        ),
+    ],
+);
+
+/**
+ * The performers on a Placement change: its holders, each with a hand, or its crew. A surrogate
+ * `id` unique on (placement, marcher), as `cue_marchers` has, so undo restores the same rowid.
+ */
+export const item_placement_marchers = sqliteTable(
+    "item_placement_marchers",
+    {
+        id: integer().primaryKey(),
+        placement_id: integer()
+            .notNull()
+            .references(() => item_placements.id, { onDelete: "cascade" }),
+        marcher_id: integer()
+            .notNull()
+            .references(() => marchers.id, { onDelete: "cascade" }),
+        /** holder or crew */
+        role: text().notNull(),
+        /** left, right or both: holders only */
+        hand: text(),
+    },
+    (table) => [
+        unique("item_placement_marchers_placement_marcher_unique").on(
+            table.placement_id,
+            table.marcher_id,
+        ),
+        index("item_placement_marchers_marcher_id_idx").on(table.marcher_id),
+        check(
+            "item_placement_marchers_role_check",
+            sql.raw(
+                `(role = 'holder' AND hand IS NOT NULL AND hand IN (${sqlList(HANDS)})) OR (role = 'crew' AND hand IS NULL)`,
+            ),
+        ),
+    ],
+);
+
 /* =========================== VIEWS =========================== */
 /**
  * An ordered list of the beats, pages, and measures in the app.

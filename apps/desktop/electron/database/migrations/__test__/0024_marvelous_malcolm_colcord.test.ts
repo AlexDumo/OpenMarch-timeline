@@ -188,7 +188,8 @@ describe(`Migration ${ITEMS_MIGRATION.tag}`, () => {
 
     it("runs again on a file that took it under an earlier date, keeping its items", async () => {
         await open(showPath);
-        // A fork build gave this migration an earlier date: the file's newest row is that one
+        // A fork build gave this migration an earlier date, and the file has nothing newer
+        rollBackMigrationsFrom(showPath, ITEMS_MIGRATION.idx + 1);
         withDb(showPath, (db) => {
             insertItems(db);
             db.prepare(

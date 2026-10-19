@@ -81,6 +81,8 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
             `, \`type\` text DEFAULT 'marcher' NOT NULL CONSTRAINT "marchers_type_check" CHECK(type IN ('marcher', 'item'))`,
         );
     },
+    // Item Placement (C2.3)
+    25: (db) => dropTables(db, ["item_placement_marchers", "item_placements"]),
 };
 
 /**

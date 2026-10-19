@@ -137,6 +137,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     });
 
     const marcherIdsKey = useMemo(
+        // Performers (the marchers query has no items): items get no figure
         () => (marchers ?? []).map((m) => m.id).join(","),
         [marchers],
     );

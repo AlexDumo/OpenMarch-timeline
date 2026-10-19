@@ -42,6 +42,9 @@ export const tablesWithHistory = [
     // Items and their Outline changes (ADR 0002 D-10)
     schema.items,
     schema.item_geometry,
+    // Where each item is (ADR 0002 D-10), its holders and crew after their change
+    schema.item_placements,
+    schema.item_placement_marchers,
 ];
 
 /**

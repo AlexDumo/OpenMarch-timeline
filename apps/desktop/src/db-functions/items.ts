@@ -14,8 +14,10 @@ import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
 import { createMarchersInTransaction } from "./marcher";
 import { updateMarcherHomesInTransaction } from "./marcherHome";
-import { beatsAfterDeletion } from "./cues";
-import { hasTable } from "./libraryReferences";
+import {
+    setItemPlacementInTransaction,
+    type PlacementArgs,
+} from "./itemPlacements";
 
 export type DatabaseItem = typeof schema.items.$inferSelect;
 export type DatabaseItemGeometry = typeof schema.item_geometry.$inferSelect;
@@ -52,6 +54,12 @@ export interface NewItemArgs {
     geometry: ItemGeometryArgs;
     /** A Library model and the Version it pins */
     library?: { itemId: string; versionHash: string };
+    /**
+     * Its Placement from its beat on, written as an explicit change there. An item that comes
+     * from a flag (C3.7) is held by its original performer from its first beat; left out, an item
+     * is placed at its own position. Nothing else records where an item came from.
+     */
+    placement?: PlacementArgs;
 }
 
 /** Each kind has its own section and drill prefix, apart from every performer's */
@@ -102,7 +110,7 @@ async function nextDrillOrders(
 
 /**
  * Creates items at home where they were drawn, on field from their beat: a marchers row, its
- * home, the item row and its first Outline change.
+ * home, the item row, its first Outline change and, if given, its first Placement change.
  */
 export async function createItemsInTransaction({
     tx,
@@ -156,6 +164,13 @@ export async function createItemsInTransaction({
                 ...geometryValues(newItem.geometry),
             })
             .run();
+        if (newItem.placement)
+            await setItemPlacementInTransaction({
+                tx,
+                itemId: item.id,
+                beatId: newItem.beatId,
+                placement: newItem.placement,
+            });
         items.push(item);
     }
     return items;
@@ -332,68 +347,4 @@ export async function updateItems({
     await transactionWithHistory(db, "updateItems", (tx) =>
         updateItemsInTransaction({ tx, modifiedItems }),
     );
-}
-
-/**
- * Carries the Outline changes on beats about to be deleted forward, as cues are carried (ADR
- * 0004 amendment of 2026-10-15). Call it in the deletion's transaction, before the beats go, so
- * one undo restores both. Per item, of the changes on a run of deleted beats only the last is
- * kept: it moves to the first surviving beat after the run, unless the item already has a change
- * there, which wins. With no beat after the run, the changes go with their beats, unless that
- * would leave the item no Outline at all: then its last change moves to the last surviving beat
- * before the run. Without this, deleting the count a prop was made on would leave it Off field
- * for good.
- */
-export async function carryItemGeometryPastDeletedBeatsInTransaction({
-    tx,
-    beatIds,
-}: {
-    tx: DbTransaction;
-    beatIds: ReadonlySet<number>;
-}): Promise<void> {
-    if (beatIds.size === 0 || !(await hasTable(tx, "item_geometry"))) return;
-    const rows = await tx
-        .select({
-            id: schema.item_geometry.id,
-            item_id: schema.item_geometry.item_id,
-            beat_id: schema.item_geometry.beat_id,
-        })
-        .from(schema.item_geometry)
-        .all();
-    if (!rows.some((row) => beatIds.has(row.beat_id))) return;
-    const { order, nextBeat } = await beatsAfterDeletion(tx, beatIds);
-    const keepsAnOutline = new Set(
-        rows.filter((row) => !beatIds.has(row.beat_id)).map((r) => r.item_id),
-    );
-    const survivorsInOrder = [...order.entries()]
-        .filter(([id]) => !beatIds.has(id))
-        .sort((a, b) => a[1] - b[1]);
-    const lastSurvivorBefore = (at: number) =>
-        survivorsInOrder.findLast(([, i]) => i < at)?.[0] ?? null;
-
-    // The last change per item and destination; the rest go with their beats
-    const kept = new Map<string, { id: number; to: number; at: number }>();
-    for (const row of rows) {
-        if (!beatIds.has(row.beat_id)) continue;
-        const at = order.get(row.beat_id)!;
-        const to =
-            nextBeat.get(row.beat_id) ??
-            (keepsAnOutline.has(row.item_id) ? null : lastSurvivorBefore(at));
-        if (to === null) continue;
-        const key = `${row.item_id}|${to}`;
-        const current = kept.get(key);
-        if (!current || at > current.at) kept.set(key, { id: row.id, to, at });
-    }
-    const taken = new Set(
-        rows
-            .filter((row) => !beatIds.has(row.beat_id))
-            .map((row) => `${row.item_id}|${row.beat_id}`),
-    );
-    const moving = [...kept.entries()].filter(([key]) => !taken.has(key));
-    for (const [, { id, to }] of moving)
-        await tx
-            .update(schema.item_geometry)
-            .set({ beat_id: to })
-            .where(eq(schema.item_geometry.id, id))
-            .run();
 }

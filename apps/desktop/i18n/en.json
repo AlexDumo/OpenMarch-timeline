@@ -748,6 +748,7 @@
             "createLine": "Create Line",
             "drillNumber": "Drill Number",
             "errorLoadingCoords": "Error loading coordinates",
+            "itemsSelected": "{count, plural, one {# prop selected. Edit it in the Props panel.} other {# props selected. Edit them in the Props panel.}}",
             "loading": "Loading marcher",
             "playing": "Playing. Pause to see and edit the selected marchers.",
             "maxStepSize": "Largest step size",
