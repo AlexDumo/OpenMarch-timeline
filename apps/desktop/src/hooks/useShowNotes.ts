@@ -22,14 +22,14 @@ import type {
     Resolver,
     XY,
 } from "@openmarch/core";
-import { db } from "@/global/database/db";
+import { db, schema } from "@/global/database/db";
 import {
     getItemPlacements,
     snapItemToHolder,
     toPlacementChanges,
     type DatabaseItemPlacement,
 } from "@/db-functions";
-import { readPageGrid, type PageGrid } from "@/db-functions/timelineRipple";
+import { asc } from "drizzle-orm";
 import type Marcher from "@/global/classes/Marcher";
 import {
     warnPropMovesWithoutCrewOf,
@@ -62,7 +62,7 @@ type ItemRow = Awaited<
 /** Under the tables' own keys, so their edits and undo invalidate these (`queries/utils.ts`) */
 export const showNotesKeys = {
     placements: () => ["item_placements", "notes"] as const,
-    pageGrid: () => ["beats", "notes_page_grid"] as const,
+    beatOrder: () => ["beats", "notes_beat_order"] as const,
 };
 
 const placementsQueryOptions = () =>
@@ -71,17 +71,28 @@ const placementsQueryOptions = () =>
         queryFn: () => getItemPlacements({ db }),
     });
 
-const pageGridQueryOptions = () =>
+/** The beats in position order: a beat's ordinal is its index. A plain read, no transaction. */
+type BeatOrder = { beatIds: number[] };
+
+const beatOrderQueryOptions = () =>
     queryOptions({
-        queryKey: showNotesKeys.pageGrid(),
-        queryFn: () => db.transaction((tx) => readPageGrid(tx)),
+        queryKey: showNotesKeys.beatOrder(),
+        queryFn: async (): Promise<BeatOrder> => ({
+            beatIds: (
+                await db
+                    .select({ id: schema.beats.id })
+                    .from(schema.beats)
+                    .orderBy(asc(schema.beats.position), asc(schema.beats.id))
+                    .all()
+            ).map((b) => b.id),
+        }),
     });
 
 /** What the checks read from the database. */
 export interface ShowNotesData {
     items: readonly ItemRow[];
     placements: readonly DatabaseItemPlacement[];
-    grid: PageGrid;
+    grid: BeatOrder;
     marchers: readonly Marcher[];
     settings: WorkspaceSettings | undefined;
     fieldProperties: FieldProperties | undefined;
@@ -97,7 +108,7 @@ export const _combineShowNotesQueries = (
     results: [
         UseQueryResult<ItemRow[]>,
         UseQueryResult<DatabaseItemPlacement[]>,
-        UseQueryResult<PageGrid>,
+        UseQueryResult<BeatOrder>,
         UseQueryResult<Marcher[]>,
         UseQueryResult<WorkspaceSettings>,
         UseQueryResult<FieldProperties>,
@@ -246,7 +257,7 @@ export function useShowNotesWith(
         queries: [
             allItemsQueryOptions(),
             placementsQueryOptions(),
-            pageGridQueryOptions(),
+            beatOrderQueryOptions(),
             allMarchersQueryOptions(),
             workspaceSettingsQueryOptions(),
             fieldPropertiesQueryOptions(),

@@ -3,12 +3,14 @@
  * (`carry_mismatch`, `silk_aspect`) and what Carry cues give performers, as hands in use for hand
  * conflicts. The show is compiled as the 3D View compiles it (`compileWindowCues`), with the
  * show's Silk Artwork Versions and each flag section's Cut (`view3d/library/cueAspects`), so the
- * notes match the window's.
+ * notes match the window's. It calls `compileCues` itself, as `compileWindowCues` does, since the
+ * window's module pulls three.js into the editor's first chunk.
  */
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
     carryHands,
+    compileCues,
     cueValueLookup,
     type CarryChange,
     type CompiledCues,
@@ -17,7 +19,6 @@ import {
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { showLibraryItemsQueryOptions } from "@/hooks/queries/useShowLibrary";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
-import { compileWindowCues } from "@/view3d/window/performers/marchers/marcherMotion";
 import {
     useShowPerformerDefaults,
     useStoredCues,
@@ -80,25 +81,26 @@ export function useShowCueChecks(): ShowCueChecks | null {
                 family: carryForSection(m.section)?.family ?? null,
             })),
         );
-        const sectionOf = new Map(marchers.map((m) => [m.id, m.section]));
-        const compiled = compileWindowCues(
-            marchers,
-            beats,
-            defaults.stepOffFoot,
-            {
-                cues: stored.cues,
-                tagIds: stored.tagIds,
-                phraseAssets: stored.phraseAssets,
-                libraryItems,
-                sections,
-            },
-            (id) => sectionCueCarry(sectionOf.get(id) ?? ""),
-        );
         // The compile's counts are the timed beats in order
-        const countBeatIds = beats
+        const timed = beats
             .filter((b) => b.duration > 0)
-            .sort((a, b) => a.timestamp - b.timestamp)
-            .map((b) => b.id);
+            .sort((a, b) => a.timestamp - b.timestamp);
+        const countBeatIds = timed.map((b) => b.id);
+        const compiled = compileCues({
+            beats: timed.map((b) => ({ id: b.id, duration: b.duration })),
+            marchers: marchers.map((m, i) => ({
+                id: m.id,
+                section: m.section,
+                tagIds: [...(stored.tagIds.get(m.id) ?? [])],
+                drillOrder: i,
+                carries: sectionCueCarry(m.section),
+            })),
+            cues: stored.cues,
+            phraseAssets: stored.phraseAssets,
+            libraryItems,
+            sections,
+            showDefaults: { stepOffFoot: defaults.stepOffFoot },
+        });
         const lookup = cueValueLookup(
             stored.phraseAssets,
             { stepOffFoot: defaults.stepOffFoot },
