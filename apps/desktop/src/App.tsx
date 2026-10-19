@@ -360,13 +360,11 @@ function App() {
                                                             <Suspense>
                                                                 <ThreeField />
                                                             </Suspense>
-                                                            {!preview && (
-                                                                <CanvasZoomControls
-                                                                    canvas={
-                                                                        threeZoomControls
-                                                                    }
-                                                                />
-                                                            )}
+                                                            <CanvasZoomControls
+                                                                canvas={
+                                                                    threeZoomControls
+                                                                }
+                                                            />
                                                         </div>
                                                         {focussedComponent ===
                                                         "timeline" ? (
