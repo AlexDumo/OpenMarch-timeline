@@ -51,15 +51,19 @@ export function beatsThrough(
 /**
  * The counts the metronome clicks (EC-6): the stored ones and endless ones up to the stop point
  * `stopBeat`, which is a count boundary. The count starting at the stop point is left out, so no
- * click lands where playing on stops; with only stored counts it is the stored beats, as before
- * endless counts.
+ * click lands where playing on stops, and past it the metronome is silent, stored counts there
+ * included (an older file's counts after its last page). With the stored counts ending at the
+ * stop point it is the stored beats, as before endless counts.
  */
 export function metronomeBeats(
     grid: CountGrid,
     beats: readonly Beat[],
     stopBeat: number,
 ): readonly Beat[] {
-    return beatsThrough(grid, beats, stopBeat);
+    const counted = beatsThrough(grid, beats, stopBeat);
+    return stopBeat > 0 && stopBeat < counted.length
+        ? counted.slice(0, stopBeat)
+        : counted;
 }
 
 /**

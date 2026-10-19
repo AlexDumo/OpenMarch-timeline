@@ -64,6 +64,10 @@ describe("endless counts on the timeline", () => {
         expect(clicks.every((b) => b.timestamp < grid.timeAtBeat(stop))).toBe(
             true,
         );
+        // Stored counts past the stop point (an older file's, after its last page) aren't clicked
+        expect(metronomeBeats(grid, beats, 5).map((b) => b.index)).toEqual([
+            0, 1, 2, 3, 4,
+        ]);
     });
 
     it("numbers endless measures on, on the meter's downbeats", () => {

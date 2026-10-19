@@ -187,7 +187,8 @@ V-302.
 ### EC-8 "END +n" in the readout
 
 The readout past the show's end is "END +5"; screen readers hear "5 counts past the end of the
-show". At the end itself it names the last page's last count. Move names in refusals and tooltips
+show". At the end itself it names the last page's last count. The 3D View's readout says "END +5" in place of
+its page and count too. Move names in refusals and tooltips
 still say "after Page 12, counts 1–4". V-303.
 
 ### EC-9 How far the timeline scrolls (owner, 2026-10-16)

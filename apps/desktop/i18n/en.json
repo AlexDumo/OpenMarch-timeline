@@ -2136,6 +2136,7 @@
             "count": "Count {count} of {total}",
             "noPages": "No pages",
             "page": "Page {page}",
+            "pastEnd": "END +{count}",
             "showTime": "Show time"
         },
         "unit": {

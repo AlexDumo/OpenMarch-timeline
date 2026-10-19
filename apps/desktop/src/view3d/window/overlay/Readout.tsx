@@ -27,6 +27,7 @@ import type { CountClock } from "@/timeline/countGrid";
 import { useCameraStore } from "../camera/cameraStore";
 import {
     formatLength,
+    countsPastEnd,
     pageCountAt,
     pausedPageCount,
     type PageCount,
@@ -42,14 +43,20 @@ export function formatShowTime(showMs: number): string {
     return `${minutes}:${String(seconds).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
 }
 
-const samePageCount = (a: PageCount | null, b: PageCount | null) =>
+/** The page and count at the show time, or past the show's end how far (END +n, EC-8) */
+type ReadoutCount = PageCount | { pastEnd: number };
+
+const samePageCount = (a: ReadoutCount | null, b: ReadoutCount | null) =>
     a === b ||
     (!!a &&
         !!b &&
-        a.pageId === b.pageId &&
-        a.pageName === b.pageName &&
-        a.count === b.count &&
-        a.total === b.total);
+        ("pastEnd" in a
+            ? "pastEnd" in b && a.pastEnd === b.pastEnd
+            : !("pastEnd" in b) &&
+              a.pageId === b.pageId &&
+              a.pageName === b.pageName &&
+              a.count === b.count &&
+              a.total === b.total));
 
 /**
  * The page and count at the show time, re-rendering only when they change,
@@ -60,8 +67,8 @@ function useLivePageCount(
     pages: readonly ReadoutPage[],
     timeRef: React.RefObject<HTMLSpanElement | null>,
     checks: { notes: readonly ShowNote[]; clock: CountClock },
-): { current: PageCount | null; checkCount: number } {
-    const [live, setLive] = useState<PageCount | null>(null);
+): { current: ReadoutCount | null; checkCount: number } {
+    const [live, setLive] = useState<ReadoutCount | null>(null);
     const [checkCount, setCheckCount] = useState(0);
     const pagesRef = useRef(pages);
     pagesRef.current = pages;
@@ -78,7 +85,11 @@ function useLivePageCount(
                 el.textContent = formatShowTime(showMs);
                 el.dataset.showMs = String(Math.round(showMs));
             }
-            const next =
+            const { notes, clock } = checksRef.current;
+            // Past the show's end the counts belong to no page (endless counts, EC-8)
+            const pastEnd = countsPastEnd(pagesRef.current, showMs, clock);
+            const next: ReadoutCount | null =
+                (pastEnd !== null && { pastEnd }) ||
                 (!sync.clock?.playing &&
                     pausedPageCount(
                         pagesRef.current,
@@ -87,7 +98,6 @@ function useLivePageCount(
                     )) ||
                 pageCountAt(pagesRef.current, showMs);
             setLive((prev) => (samePageCount(prev, next) ? prev : next));
-            const { notes, clock } = checksRef.current;
             setCheckCount(
                 notes.length === 0
                     ? 0
@@ -154,13 +164,21 @@ export function Readout({ large }: { large: boolean }) {
                 <span
                     className="text-text font-medium"
                     data-testid="view3d-selected-page"
-                    data-page-id={current?.pageId ?? ""}
+                    data-page-id={
+                        current && !("pastEnd" in current) ? current.pageId : ""
+                    }
                 >
-                    {current
-                        ? t("view3d.readout.page", { page: current.pageName })
-                        : t("view3d.readout.noPages")}
+                    {!current
+                        ? t("view3d.readout.noPages")
+                        : "pastEnd" in current
+                          ? t("view3d.readout.pastEnd", {
+                                count: current.pastEnd,
+                            })
+                          : t("view3d.readout.page", {
+                                page: current.pageName,
+                            })}
                 </span>
-                {current && (
+                {current && !("pastEnd" in current) && (
                     <span data-testid="view3d-count">
                         {t("view3d.readout.count", {
                             count: current.count,

@@ -164,7 +164,11 @@ export default function AudioPlayer() {
         [countGrid, storedBeats, stopBeat],
     );
     const measures = useMemo(
-        () => measuresThrough(countGrid, storedMeasures, beats).slice(),
+        () =>
+            // Only the measures the clicks reach: none past the stop point (EC-6)
+            measuresThrough(countGrid, storedMeasures, beats).filter(
+                (measure) => measure.startBeat.index < beats.length,
+            ),
         [beats, countGrid, storedMeasures],
     );
     const { data: workspaceSettings } = useQuery(
