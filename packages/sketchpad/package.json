@@ -54,7 +54,7 @@
         "@openmarch/config": "workspace:*",
         "@types/react": "^19.2.9",
         "@types/react-dom": "^19.2.3",
-        "jsdom": "^30.1.3",
+        "jsdom": "26.1.0",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
         "tsup": "^8.5.1",
