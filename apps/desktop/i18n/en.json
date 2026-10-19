@@ -113,7 +113,9 @@
             "playPause": "Play / pause audio",
             "previousPage": "Previous page (timeline)",
             "tapBeats": "Add {count} temporary beats",
-            "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again"
+            "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again",
+            "unsetHere": "Unset here",
+            "unsetHereKeywords": "set following remove take back coordinate position delete"
         },
         "ui": {
             "exitTimelineFocus": "Done editing timeline",
@@ -728,7 +730,11 @@
                 "pagesFollowSome": "Pages {first}–{last} follow some of these marchers",
                 "someHoldHere": "Some of these marchers hold here",
                 "someKeptOnThisPage": "Some of these marchers are kept on this page",
-                "theseMarchers": "these marchers"
+                "theseMarchers": "these marchers",
+                "unsetHere": "Unset here",
+                "unsetHereHint": "Take back their coordinate on this count, so they follow from earlier. Later pages keep their spots",
+                "unsetHereHintSome": "Take back the coordinate of the {count} of the {total} selected that are Set on this count, so they follow from earlier. Later pages keep their spots",
+                "unsetHereNone": "None of the selected marchers is Set on this count"
             },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}"

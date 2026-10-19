@@ -572,6 +572,16 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // Set vs Following (#304): the selected marchers Set on the count shown lose that
+    // coordinate and follow from earlier; later pages keep their spots. Unbound
+    timelineUnsetHere: {
+        labelKey: "actions.timeline.unsetHere",
+        keywordsKey: "actions.timeline.unsetHereKeywords",
+        category: "timeline",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+
     // Opens the transport's go-to box: type a page, a measure ("m23") or a rehearsal mark
     timelineGoTo: {
         labelKey: "actions.timeline.goTo",
