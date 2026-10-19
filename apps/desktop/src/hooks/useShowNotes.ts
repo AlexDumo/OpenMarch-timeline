@@ -1,7 +1,10 @@
 /**
- * The show's notes, live (C2.6): items, their Placement and the page grid from the database, and
- * positions from the timeline resolver store, through the pure `collectShowNotes`. Recomputes on
- * every resolver version, so a drill edit raises or clears a put-down or crew note at once.
+ * The show's checks, live (ADR 0002 D-22, C2.6): items and their Placement from the database,
+ * positions and put-downs from the timeline resolver store, the cue compiler's notes and Carry
+ * hands (`useShowCueChecks`), and the resolver's diagnostics, through the pure producers in
+ * `notes/showNotes.ts`. Recomputes on every resolver version, so a drill edit raises or clears a
+ * note at once. The crew checks look only at motion breaks (moves' ends, put-downs), so a long
+ * show with many props stays cheap (see the benchmark in `showNotes.test.ts`).
  */
 import { useMemo } from "react";
 import {
@@ -10,11 +13,18 @@ import {
     useQueries,
     type UseQueryResult,
 } from "@tanstack/react-query";
-import type { FieldProperties, XY } from "@openmarch/core";
+import type {
+    CarryChange,
+    CueNote,
+    Diagnostic,
+    FieldProperties,
+    PutDownResolver,
+    Resolver,
+    XY,
+} from "@openmarch/core";
 import { db } from "@/global/database/db";
 import {
     getItemPlacements,
-    getItems,
     snapItemToHolder,
     toPlacementChanges,
     type DatabaseItemPlacement,
@@ -25,33 +35,35 @@ import {
     warnPropMovesWithoutCrewOf,
     type WorkspaceSettings,
 } from "@/settings/workspaceSettings";
-import { useTimelineResolverStore } from "@/timeline/timelineStore";
+import {
+    getTimelineHost,
+    useTimelineResolverStore,
+} from "@/timeline/timelineStore";
 import { conToastError } from "@/utilities/utils";
 import {
-    collectShowNotes,
+    cueNotes,
     CREW_REACH_STEPS,
+    itemNotes,
+    sortShowNotes,
+    timelineNotes,
     type NoteItem,
-    type NotePage,
     type ShowNote,
 } from "@/notes/showNotes";
 import { allMarchersQueryOptions } from "./queries/useMarchers";
+import { allItemsQueryOptions } from "./queries/useItems";
 import { workspaceSettingsQueryOptions } from "./queries/useWorkspaceSettings";
 import { fieldPropertiesQueryOptions } from "./queries/useFieldProperties";
+import { useShowCueChecks, type ShowCueChecks } from "./useShowCueChecks";
 
-type ItemRow = Awaited<ReturnType<typeof getItems>>[number];
+type ItemRow = Awaited<
+    ReturnType<NonNullable<ReturnType<typeof allItemsQueryOptions>["queryFn"]>>
+>[number];
 
 /** Under the tables' own keys, so their edits and undo invalidate these (`queries/utils.ts`) */
 export const showNotesKeys = {
-    items: () => ["items", "notes"] as const,
     placements: () => ["item_placements", "notes"] as const,
     pageGrid: () => ["beats", "notes_page_grid"] as const,
 };
-
-const itemsQueryOptions = () =>
-    queryOptions({
-        queryKey: showNotesKeys.items(),
-        queryFn: () => getItems({ db }),
-    });
 
 const placementsQueryOptions = () =>
     queryOptions({
@@ -65,12 +77,12 @@ const pageGridQueryOptions = () =>
         queryFn: () => db.transaction((tx) => readPageGrid(tx)),
     });
 
-/** What the notes read, short of positions. */
+/** What the checks read from the database. */
 export interface ShowNotesData {
-    items: ItemRow[];
-    placements: DatabaseItemPlacement[];
+    items: readonly ItemRow[];
+    placements: readonly DatabaseItemPlacement[];
     grid: PageGrid;
-    marchers: Marcher[];
+    marchers: readonly Marcher[];
     settings: WorkspaceSettings | undefined;
     fieldProperties: FieldProperties | undefined;
 }
@@ -112,58 +124,127 @@ export const _combineShowNotesQueries = (
 
 export interface ShowNotes {
     notes: ShowNote[];
-    /** The pages, to name each note's count (`noteCountAt`) */
-    pages: NotePage[];
     /** An item's name, as the list shows it */
     itemName: (itemId: number) => string;
+    /** An item's `marchers` row, which the field selects */
+    itemMarcherId: (itemId: number) => number | undefined;
     /** A performer's name or drill number */
     marcherName: (marcherId: number) => string;
     isLoading: boolean;
 }
 
+/**
+ * What the checks read from the resolver: positions with put-downs, and without (`base`). A
+ * resolver without put-downs (`createResolver`) has none.
+ */
+export type ShowNotesResolver = Pick<
+    Resolver,
+    "positionAt" | "spanInfos" | "marcherIds"
+> &
+    Partial<Pick<PutDownResolver, "putDownAnchors" | "base">>;
+
+/** What the checks read besides the database and positions. */
+export interface ShowNotesExtras {
+    cues?: ShowCueChecks | null;
+    diagnostics?: readonly Diagnostic[];
+    /** A move's end beat, for the timeline's diagnostics */
+    transitionEnd?: (transitionId: number) => number | null;
+}
+
 const label = (m: Pick<Marcher, "name" | "drill_number"> | undefined) =>
     m ? m.name || m.drill_number : "";
 
-/** The notes from the data and a resolver's positions. */
+/** The checks from the data, a resolver and the extras. */
 export function showNotesFrom(
     data: ShowNotesData,
-    positionAt: (marcherId: number, beat: number) => XY | null,
+    resolver: ShowNotesResolver,
+    extras: ShowNotesExtras = {},
 ): Omit<ShowNotes, "isLoading"> {
     const ordinal = new Map(data.grid.beatIds.map((id, i) => [id, i]));
+    const ids = new Set(resolver.marcherIds());
+    const base = resolver.base ?? resolver;
+    const anchorsOf = (id: number) =>
+        ids.has(id) ? (resolver.putDownAnchors?.(id) ?? []) : [];
+    const known =
+        (read: (id: number, beat: number) => XY) =>
+        (id: number, beat: number): XY | null =>
+            ids.has(id) ? read(id, beat) : null;
     const items: NoteItem[] = data.items.map((i) => ({
         id: i.id,
         marcherId: i.marcher_id,
         kind: i.kind as NoteItem["kind"],
     }));
-    const notes = collectShowNotes({
-        items,
-        changesByItem: toPlacementChanges(data.placements, ordinal),
-        beatCount: data.grid.beatIds.length,
-        positionAt,
-        crewReach:
-            CREW_REACH_STEPS * (data.fieldProperties?.pixelsPerStep ?? 12),
-        warnPropMovesWithoutCrew: warnPropMovesWithoutCrewOf(data.settings),
+    const breaks = new Map<number, number[]>();
+    const breaksOf = (id: number) => {
+        let list = breaks.get(id);
+        if (list) return list;
+        list = [];
+        if (ids.has(id)) {
+            for (const s of resolver.spanInfos(id))
+                if (s.kind !== "hold") list.push(s.start, s.end);
+            for (const a of anchorsOf(id)) list.push(a.beat);
+        }
+        breaks.set(id, list);
+        return list;
+    };
+    const carries: CarryChange[] = (extras.cues?.carries ?? []).flatMap((c) => {
+        const beat = ordinal.get(c.beatId);
+        return beat === undefined
+            ? []
+            : [{ marcherId: c.marcherId, beat, hands: c.hands }];
     });
+    const cueBeat = (cueId: number) => {
+        const beatId = extras.cues?.cueBeatId.get(cueId);
+        return beatId === undefined ? null : (ordinal.get(beatId) ?? null);
+    };
+    const notes = sortShowNotes([
+        ...itemNotes({
+            items,
+            changesByItem: toPlacementChanges(data.placements, ordinal),
+            beatCount: data.grid.beatIds.length,
+            positionAt: known((id, beat) => resolver.positionAt(id, beat)),
+            basePositionAt: known((id, beat) => base.positionAt(id, beat)),
+            breaksOf,
+            putDownsOf: anchorsOf,
+            carries,
+            crewReach:
+                CREW_REACH_STEPS * (data.fieldProperties?.pixelsPerStep ?? 12),
+            warnPropMovesWithoutCrew: warnPropMovesWithoutCrewOf(data.settings),
+        }),
+        ...cueNotes(extras.cues?.notes ?? ([] as CueNote[]), cueBeat),
+        ...timelineNotes(
+            extras.diagnostics ?? [],
+            extras.transitionEnd ?? (() => null),
+        ),
+    ]);
     const marchers = new Map(data.marchers.map((m) => [m.id, m]));
-    const itemMarcher = new Map(data.items.map((i) => [i.id, i.marcher]));
+    const itemRows = new Map(data.items.map((i) => [i.id, i]));
     return {
         notes,
-        pages: data.grid.pages,
         itemName: (itemId) => {
-            const m = itemMarcher.get(itemId);
+            const m = itemRows.get(itemId)?.marcher;
             return m ? m.name || `${m.drill_prefix}${m.drill_order}` : "";
         },
+        itemMarcherId: (itemId) => itemRows.get(itemId)?.marcher_id,
         marcherName: (marcherId) => label(marchers.get(marcherId)),
     };
 }
 
 const noNotes: ShowNote[] = [];
 
-/** The show's notes. Empty until the data and the resolver are ready. */
-export function useShowNotes(): ShowNotes {
+/**
+ * The show's checks over `resolver`, recomputed when `version` changes. Empty until the data and
+ * the resolver are ready. `transitionEnd` places the timeline's diagnostics; without it they are
+ * placed on their marcher's move (`spanInfos`).
+ */
+export function useShowNotesWith(
+    resolver: (ShowNotesResolver & Pick<Resolver, "diagnostics">) | null,
+    version: unknown,
+    transitionEnd?: (transitionId: number) => number | null,
+): ShowNotes {
     const queries = useQueries({
         queries: [
-            itemsQueryOptions(),
+            allItemsQueryOptions(),
             placementsQueryOptions(),
             pageGridQueryOptions(),
             allMarchersQueryOptions(),
@@ -172,28 +253,57 @@ export function useShowNotes(): ShowNotes {
         ],
         combine: _combineShowNotesQueries,
     });
-    const resolver = useTimelineResolverStore((s) => s.resolver);
-    const version = useTimelineResolverStore((s) => s.version);
+    const cues = useShowCueChecks();
     return useMemo(() => {
         void version; // a new version means new positions
         if (!queries.data || !resolver)
             return {
                 notes: noNotes,
-                pages: [],
                 itemName: () => "",
+                itemMarcherId: () => undefined,
                 marcherName: () => "",
                 isLoading: queries.isLoading,
             };
-        const ids = new Set(resolver.marcherIds());
+        const diagnostics = resolver.diagnostics();
+        const known = new Set(resolver.marcherIds());
+        const fromSpans = (transitionId: number) => {
+            const d = diagnostics.find(
+                (x) => x.transitionId === transitionId && x.marcherId !== null,
+            );
+            if (!d || d.marcherId === null || !known.has(d.marcherId))
+                return null;
+            return (
+                resolver
+                    .spanInfos(d.marcherId)
+                    .find((s) => s.transitionId === transitionId)?.end ?? null
+            );
+        };
         return {
-            ...showNotesFrom(queries.data, (marcherId, beat) =>
-                ids.has(marcherId)
-                    ? resolver.positionAt(marcherId, beat)
-                    : null,
-            ),
+            ...showNotesFrom(queries.data, resolver, {
+                cues,
+                diagnostics,
+                transitionEnd: transitionEnd ?? fromSpans,
+            }),
             isLoading: queries.isLoading,
         };
-    }, [queries.data, queries.isLoading, resolver, version]);
+    }, [
+        queries.data,
+        queries.isLoading,
+        resolver,
+        version,
+        cues,
+        transitionEnd,
+    ]);
+}
+
+const hostTransitionEnd = (id: number) =>
+    getTimelineHost()?.snapshot.transitions[id]?.end ?? null;
+
+/** The show's checks over the editor's resolver store. */
+export function useShowNotes(): ShowNotes {
+    const resolver = useTimelineResolverStore((s) => s.resolver);
+    const version = useTimelineResolverStore((s) => s.version);
+    return useShowNotesWith(resolver, version, hostTransitionEnd);
 }
 
 /** Snap to holder, the put-down drift note's one-click fix: one undoable edit. */

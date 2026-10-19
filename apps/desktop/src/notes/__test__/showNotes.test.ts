@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
-import type { PlacementChange, XY } from "@openmarch/core";
+import type {
+    Diagnostic,
+    PlacementChange,
+    PutDownAnchor,
+    XY,
+} from "@openmarch/core";
 import {
-    collectShowNotes,
-    noteCountAt,
+    cueNotes,
+    itemNotes,
     notesAt,
     notesForItem,
+    sortShowNotes,
+    timelineNotes,
+    type ItemNotesInput,
     type NoteItem,
-    type ShowNotesInput,
 } from "../showNotes";
 
 // Performers
@@ -35,10 +42,11 @@ const change = (
 });
 
 /**
- * Alice holds the flag from 2 and takes the rifle in her right hand on 4 without putting the
- * flag down until 8, where it is put down; her drill then put her elsewhere at 8, so the flag sits
- * away from her. The riser has a crew that walks off from 14. The cart moves on 18 with no crew.
+ * Alice holds the flag in both hands from 2 and takes the rifle in her right hand on 4 without
+ * putting the flag down until 8, where its own move puts it away from her. The riser has a crew
+ * that walks off from 14. The cart moves on 18 with no crew.
  */
+const flagPutDown = change(8, {});
 const changesByItem = new Map<number, PlacementChange[]>([
     [
         FLAG.id,
@@ -47,7 +55,7 @@ const changesByItem = new Map<number, PlacementChange[]>([
                 state: "held",
                 holders: [{ marcherId: ALICE, hand: "both" }],
             }),
-            change(8, {}),
+            flagPutDown,
         ],
     ],
     [
@@ -70,95 +78,140 @@ const positionAt = (marcherId: number, beat: number): XY | null => {
         case BOB:
             return [0, 0];
         case CREW:
-            return beat < 14 ? [100, 0] : [200, 0];
+            // walks off over [12, 16]
+            return beat <= 12
+                ? [100, 0]
+                : beat >= 16
+                  ? [200, 0]
+                  : [100 + 25 * (beat - 12), 0];
         case FLAG.marcherId:
             return [0, 0];
         case RISER.marcherId:
             return [100, 0];
         case CART.marcherId:
-            return beat < 18 ? [0, 50] : [10, 50];
+            return beat <= 17 ? [0, 50] : beat >= 20 ? [30, 50] : [10, 50];
         default:
             return null;
     }
 };
 
-const input = (patch: Partial<ShowNotesInput> = {}): ShowNotesInput => ({
+const BREAKS: Record<number, number[]> = {
+    [CREW]: [12, 16],
+    [CART.marcherId]: [17, 20],
+    [FLAG.marcherId]: [4, 8],
+};
+
+const FLAG_ANCHORS: PutDownAnchor[] = [
+    {
+        kind: "own_move",
+        changeId: flagPutDown.id,
+        beat: 8,
+        holders: [{ marcherId: ALICE, hand: "both" }],
+        spot: [50, 0],
+        move: { start: 4, end: 8 },
+    },
+];
+
+const input = (patch: Partial<ItemNotesInput> = {}): ItemNotesInput => ({
     items: [FLAG, RIFLE, RISER, CART],
     changesByItem,
     beatCount: 32,
     positionAt,
+    basePositionAt: positionAt,
+    breaksOf: (id) => BREAKS[id] ?? [],
+    putDownsOf: (id) => (id === FLAG.marcherId ? FLAG_ANCHORS : []),
     crewReach: 16,
     warnPropMovesWithoutCrew: false,
     ...patch,
 });
 
-describe("collectShowNotes", () => {
-    it("names each first producer at its count, in count order", () => {
-        expect(collectShowNotes(input())).toEqual([
+describe("itemNotes", () => {
+    it("names each producer at its count, in count order", () => {
+        expect(sortShowNotes(itemNotes(input()))).toEqual([
             {
-                id: `hand_conflict:${FLAG.id}:${RIFLE.id}:${ALICE}:right:4`,
+                id: `hand_conflict:${FLAG.id}:${ALICE}:4`,
                 kind: "hand_conflict",
-                itemId: FLAG.id,
+                source: "items",
                 beat: 4,
                 until: 8,
-                otherItemId: RIFLE.id,
-                marcherIds: [ALICE],
-            },
-            {
-                id: `put_down_drift:${FLAG.id}:${changesByItem.get(FLAG.id)![1]!.id}`,
-                kind: "put_down_drift",
-                itemId: FLAG.id,
-                beat: 8,
-                until: null,
-                marcherIds: [ALICE],
-                action: {
-                    kind: "snap_to_holder",
-                    placementId: changesByItem.get(FLAG.id)![1]!.id,
+                what: {
+                    itemIds: [FLAG.id, RIFLE.id],
+                    marcherIds: [ALICE],
+                    cueIds: [],
+                    transitionId: null,
                 },
+                detail: { hand: "right" },
             },
             {
+                // The rifle takes both hands (no model grips say otherwise)
+                id: `short_handed_hold:${RIFLE.id}:${changesByItem.get(RIFLE.id)![0]!.id}`,
+                kind: "short_handed_hold",
+                source: "items",
+                beat: 4,
+                until: null,
+                what: {
+                    itemIds: [RIFLE.id],
+                    marcherIds: [ALICE],
+                    cueIds: [],
+                    transitionId: null,
+                },
+                detail: { needed: 2, held: 1 },
+            },
+            {
+                id: `put_down_drift:${FLAG.id}:${flagPutDown.id}`,
+                kind: "put_down_drift",
+                source: "items",
+                beat: 8,
+                until: 9,
+                what: {
+                    itemIds: [FLAG.id],
+                    marcherIds: [ALICE],
+                    cueIds: [],
+                    transitionId: null,
+                },
+                action: { kind: "snap_to_holder", placementId: flagPutDown.id },
+            },
+            {
+                // The crew leaves reach on 13, between the breaks at 12 and 16
                 id: `crew_distance:${RISER.id}:10`,
                 kind: "crew_distance",
-                itemId: RISER.id,
-                beat: 14,
-                until: null,
-                marcherIds: [CREW],
+                source: "items",
+                beat: 13,
+                until: 32,
+                what: {
+                    itemIds: [RISER.id],
+                    marcherIds: [CREW],
+                    cueIds: [],
+                    transitionId: null,
+                },
             },
         ]);
     });
 
     it("warns of a prop moving without a crew only when the show setting is on", () => {
-        const notes = collectShowNotes(
-            input({ warnPropMovesWithoutCrew: true }),
-        );
-        expect(notes.filter((n) => n.kind === "crewless_move")).toEqual([
-            {
-                id: `crewless_move:${CART.id}:0`,
-                kind: "crewless_move",
-                itemId: CART.id,
-                beat: 18,
-                until: null,
-                marcherIds: [],
-            },
+        const notes = itemNotes(input({ warnPropMovesWithoutCrew: true }));
+        expect(notes.filter((n) => n.kind === "crewless_move")).toMatchObject([
+            { id: `crewless_move:${CART.id}:0`, beat: 18 },
         ]);
     });
 
     it("never warns of equipment moving without a crew", () => {
-        const notes = collectShowNotes(
-            input({
-                items: [{ ...CART, kind: "equipment" }],
-                warnPropMovesWithoutCrew: true,
-            }),
-        );
-        expect(notes).toEqual([]);
+        expect(
+            itemNotes(
+                input({
+                    items: [{ ...CART, kind: "equipment" }],
+                    warnPropMovesWithoutCrew: true,
+                }),
+            ),
+        ).toEqual([]);
     });
 
-    it("is quiet for a crew in reach and a put-down at its holder", () => {
-        const notes = collectShowNotes(
+    it("is quiet for a crew in reach and a put-down the item's own move puts at its holder", () => {
+        const notes = itemNotes(
             input({
                 items: [FLAG, RISER],
                 crewReach: 1000,
-                positionAt: (id, beat) =>
+                basePositionAt: (id, beat) =>
                     id === FLAG.marcherId ? [50, 0] : positionAt(id, beat),
             }),
         );
@@ -166,48 +219,188 @@ describe("collectShowNotes", () => {
     });
 });
 
+describe("hand conflicts", () => {
+    const items = [0, 1, 2, 3].map(
+        (i): NoteItem => ({
+            id: 30 + i,
+            marcherId: 130 + i,
+            kind: "equipment",
+        }),
+    );
+    it("is one note per item not drawn, sides merged, however many items take the hand after it", () => {
+        // A 4-item ripple into Alice's two hands, a count apart
+        const changes = new Map(
+            items.map((item, i) => [
+                item.id,
+                [
+                    change(9 + i, {
+                        state: "held",
+                        holders: [{ marcherId: ALICE, hand: "both" }],
+                    }),
+                ],
+            ]),
+        );
+        const notes = itemNotes(
+            input({ items, changesByItem: changes, putDownsOf: () => [] }),
+        );
+        expect(
+            notes.map((n) => [n.what.itemIds[0], n.beat, n.detail?.hand]),
+        ).toEqual([
+            [30, 10, "both"],
+            [31, 11, "both"],
+            [32, 12, "both"],
+        ]);
+        expect(notes[0]!.what.itemIds).toEqual([30, 31, 32, 33]);
+    });
+
+    it("names a Carry cue that has the hand", () => {
+        const notes = itemNotes(
+            input({
+                items: [FLAG],
+                carries: [{ marcherId: ALICE, beat: 5, hands: "both" }],
+                putDownsOf: () => [],
+            }),
+        );
+        expect(notes).toMatchObject([
+            {
+                kind: "hand_conflict",
+                beat: 5,
+                until: 8,
+                detail: { hand: "both", byCarry: true },
+            },
+        ]);
+    });
+
+    it("notes a two-hand item left with one holder's hand", () => {
+        const notes = itemNotes(
+            input({
+                items: [RIFLE],
+                putDownsOf: () => [],
+            }),
+        );
+        expect(notes).toMatchObject([
+            {
+                kind: "short_handed_hold",
+                beat: 4,
+                what: { itemIds: [RIFLE.id], marcherIds: [ALICE] },
+                detail: { needed: 2, held: 1 },
+            },
+        ]);
+    });
+});
+
+describe("cue and timeline notes", () => {
+    it("places the cue compiler's notes on their cue's count", () => {
+        expect(
+            cueNotes(
+                [
+                    { kind: "silk_aspect", cueIds: [7], marcherIds: [ALICE] },
+                    { kind: "carry_mismatch", cueIds: [9], marcherIds: [BOB] },
+                ],
+                (id) => (id === 7 ? 12 : null),
+            ),
+        ).toMatchObject([
+            {
+                kind: "silk_aspect",
+                source: "cues",
+                beat: 12,
+                what: { cueIds: [7], marcherIds: [ALICE] },
+            },
+            { kind: "carry_mismatch", beat: null },
+        ]);
+    });
+
+    it("places the timeline's diagnostics on their move's flag", () => {
+        const d: Diagnostic = {
+            code: "D-REBASE",
+            level: "info",
+            transitionId: 4,
+            marcherId: BOB,
+            slot: null,
+            message: "",
+        };
+        expect(timelineNotes([d], () => 16)).toMatchObject([
+            {
+                kind: "timeline",
+                source: "timeline",
+                beat: 16,
+                what: { marcherIds: [BOB], transitionId: 4 },
+                detail: { code: "D-REBASE" },
+            },
+        ]);
+    });
+});
+
 describe("note lookups", () => {
-    const notes = collectShowNotes(input());
+    const notes = sortShowNotes(itemNotes(input()));
 
     it("shows each note on its item", () => {
         expect(notesForItem(notes, FLAG.id).map((n) => n.kind)).toEqual([
             "hand_conflict",
             "put_down_drift",
         ]);
-        expect(notesForItem(notes, RIFLE.id)).toEqual([]);
+        expect(notesForItem(notes, RIFLE.id).map((n) => n.kind)).toEqual([
+            "short_handed_hold",
+        ]);
     });
 
     it("counts the notes that apply at a moment", () => {
-        expect(notesAt(notes, 3)).toEqual([]);
-        expect(notesAt(notes, 5).map((n) => n.kind)).toEqual(["hand_conflict"]);
-        expect(notesAt(notes, 8).map((n) => n.kind)).toEqual([
-            "put_down_drift",
-        ]);
-        expect(notesAt(notes, 20)).toHaveLength(2);
+        const flagNotes = notesForItem(notes, FLAG.id);
+        expect(notesAt(flagNotes, 3)).toBe(0);
+        expect(notesAt(flagNotes, 5)).toBe(1);
+        expect(notesAt(flagNotes, 8)).toBe(1);
+        expect(notesAt(flagNotes, 20)).toBe(0);
     });
 });
 
-describe("noteCountAt", () => {
-    // Page 1 at home, then 8-count pages: page 2's box is [1, 9) and its flag is at 9
-    const pages = [
-        { start: 0, end: 1, name: "1" },
-        { start: 1, end: 9, name: "2" },
-        { start: 9, end: 17, name: "3" },
-    ];
-
-    it("counts from 1 after the previous flag to N on the page's own flag", () => {
-        expect(noteCountAt(pages, 2)).toEqual({ page: "2", count: 1 });
-        expect(noteCountAt(pages, 9)).toEqual({ page: "2", count: 8 });
-        expect(noteCountAt(pages, 10)).toEqual({ page: "3", count: 1 });
-    });
-
-    it("is the first page's count 0 at home, and past the last flag counts after it", () => {
-        expect(noteCountAt(pages, 0)).toEqual({ page: "1", count: 0 });
-        expect(noteCountAt(pages, 1)).toEqual({ page: "1", count: 0 });
-        expect(noteCountAt(pages, 20)).toEqual({
-            page: "3",
-            count: 3,
-            after: true,
+describe("cost", () => {
+    it("checks 100 props over 6000 beats well under 50 ms", () => {
+        const BEATS = 6000;
+        const props: NoteItem[] = [];
+        const changes = new Map<number, PlacementChange[]>();
+        const breaks = new Map<number, number[]>();
+        const walk = (id: number, beat: number): XY => {
+            // Every marcher walks a 16-count move every 64 counts
+            const leg = Math.floor(beat / 64);
+            const into = Math.min(16, beat - leg * 64) / 16;
+            const x = (leg + into) * 4 + (id % 7);
+            return [x, id % 11];
+        };
+        for (let i = 0; i < 100; i++) {
+            const item: NoteItem = {
+                id: 1000 + i,
+                marcherId: 2000 + i,
+                kind: "prop",
+            };
+            props.push(item);
+            const crew = [3000 + 2 * i, 3001 + 2 * i];
+            changes.set(item.id, [change(0, { crew })]);
+            for (const id of [item.marcherId, ...crew]) {
+                const list: number[] = [];
+                for (let b = 0; b < BEATS; b += 64) list.push(b, b + 16);
+                breaks.set(id, list);
+            }
+        }
+        let calls = 0;
+        const bench = input({
+            items: props,
+            changesByItem: changes,
+            beatCount: BEATS,
+            positionAt: (id, beat) => {
+                calls++;
+                return walk(id, beat);
+            },
+            breaksOf: (id) => breaks.get(id) ?? [],
+            putDownsOf: () => [],
+            crewReach: 1000,
+            warnPropMovesWithoutCrew: true,
         });
+        const start = performance.now();
+        const notes = itemNotes(bench);
+        const ms = performance.now() - start;
+        expect(notes).toEqual([]);
+        expect(ms).toBeLessThan(50);
+        // Breaks, not beats: about 190 checks per prop instead of 6000
+        expect(calls).toBeLessThan(100 * 3 * 200);
     });
 });

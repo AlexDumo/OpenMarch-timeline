@@ -26,7 +26,7 @@ import {
     UnitInput,
 } from "@openmarch/ui";
 import { SidebarModalLauncher } from "@/components/sidebar/SidebarModal";
-import ShowNotesList, { ItemNotes } from "@/components/notes/ShowNotesList";
+import { ItemNotes } from "@/components/notes/ShowNotesList";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useItemDrawingStore } from "@/stores/ItemDrawingStore";
@@ -129,9 +129,6 @@ export function PropListContents() {
             <ModalHeader title={<T keyName="props.title" />} />
             <div className="flex w-[28rem] grow flex-col gap-16 overflow-y-auto">
                 <PropToolSelector />
-                <div className="border-stroke border-t pt-12">
-                    <ShowNotesList />
-                </div>
                 <div className="border-stroke border-t pt-12">
                     <PropList
                         onEdit={(item) =>

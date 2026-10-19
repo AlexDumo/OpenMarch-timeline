@@ -1,8 +1,10 @@
 import {
     createResolver,
+    withPutDowns,
     type ChangeBatch,
     type InvalidationReport,
-    type Resolver,
+    type PutDownItem,
+    type PutDownResolver,
     type TimelineSnapshot,
     type XY,
 } from "@openmarch/core";
@@ -33,11 +35,18 @@ export interface TimelineHost {
     readonly destinations: SlotDestinationIndex;
     /** Marcher homes by id, behind `snapshot.marchers` */
     readonly homes: Map<number, XY>;
-    readonly resolver: Resolver;
+    /**
+     * The resolver, with items put down where their holders release them (`withPutDowns`, ADR
+     * 0002 D-9): what every view reads. Batches go through it to the base resolver.
+     */
+    readonly resolver: PutDownResolver;
 }
 
-/** Cold build: the resolver over a freshly read state. */
-export function createTimelineHost(tables: TimelineTables): TimelineHost {
+/** Cold build: the resolver over a freshly read state, putting down `items`. */
+export function createTimelineHost(
+    tables: TimelineTables,
+    items: readonly PutDownItem[] = [],
+): TimelineHost {
     const { snapshot, destinations } = tables;
     const homes = new Map<number, XY>(
         snapshot.marchers.map((m) => [m.id, m.home]),
@@ -46,7 +55,7 @@ export function createTimelineHost(tables: TimelineTables): TimelineHost {
         snapshot,
         destinations,
         homes,
-        resolver: createResolver(snapshot),
+        resolver: withPutDowns(createResolver(snapshot), items),
     };
 }
 

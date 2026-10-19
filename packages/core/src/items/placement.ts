@@ -441,38 +441,3 @@ export function putDownSpot(
     );
     return [sum[0] / points.length, sum[1] / points.length];
 }
-
-/** A put-down item no longer where its holder was: the holder's drill changed after it. */
-export interface PutDownDrift extends PutDown {
-    /** Where the holder (or the holders' midpoint) is now at the put-down */
-    spot: XY;
-    /** Where the item is at the put-down */
-    at: XY;
-    distance: number;
-}
-
-/**
- * The put-downs where the item isn't at its holder's position at that count, by more than
- * `tolerance` (canvas units). `positionAt` reads the resolver; null for a marcher it doesn't have.
- */
-export function putDownDrifts(
-    changes: readonly PlacementChange[],
-    itemMarcherId: number,
-    positionAt: (marcherId: number, beat: number) => XY | null,
-    tolerance = 1e-3,
-): PutDownDrift[] {
-    const out: PutDownDrift[] = [];
-    for (const putDown of putDowns(changes)) {
-        const positions = new Map<number, XY>();
-        for (const h of putDown.holders) {
-            const p = positionAt(h.marcherId, putDown.beat);
-            if (p) positions.set(h.marcherId, p);
-        }
-        const spot = putDownSpot(putDown.holders, positions);
-        const at = positionAt(itemMarcherId, putDown.beat);
-        if (!spot || !at) continue;
-        const distance = Math.hypot(at[0] - spot[0], at[1] - spot[1]);
-        if (distance > tolerance) out.push({ ...putDown, spot, at, distance });
-    }
-    return out;
-}

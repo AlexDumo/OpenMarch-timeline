@@ -39,7 +39,6 @@ import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { TIMELINE_INSPECTOR_STRINGS } from "../timelineInspectorStrings";
 import {
     MarcherInspectionView,
-    ShowDiagnosticsList,
     TimelineInspectorSection,
     type InspectorTranslate,
 } from "../TimelineInspectorSection";
@@ -253,25 +252,6 @@ describe("MarcherInspectionView: diagnostics", () => {
     });
 });
 
-describe("ShowDiagnosticsList", () => {
-    it("lists every diagnostic of the show, grouped by transition", () => {
-        const diagnostics = createResolver(golden("G9")).diagnostics();
-        render(<ShowDiagnosticsList diagnostics={diagnostics} t={t} />);
-        const list = screen.getByTestId("timeline-show-diagnostics");
-        expect(
-            within(list).getAllByTestId(/^timeline-diagnostic-/),
-        ).toHaveLength(diagnostics.length);
-        expect(list.textContent).toContain("Transition 2");
-    });
-
-    it("says so when there are none", () => {
-        render(<ShowDiagnosticsList diagnostics={[]} t={t} />);
-        expect(
-            screen.getByTestId("timeline-show-diagnostics").textContent,
-        ).toBe("No diagnostics for the whole show.");
-    });
-});
-
 const renderSection = () =>
     render(
         <QueryClientProvider client={new QueryClient()}>
@@ -284,17 +264,14 @@ const renderSection = () =>
     );
 
 describe("TimelineInspectorSection", () => {
-    it("shows the selected marchers' inspections and the show's diagnostics", () => {
+    it("shows the selected marchers' inspections; the show's diagnostics are in Show checks", () => {
         mocks.selectedMarchers = [{ id: 2, drill_number: "T2" }];
         mocks.inspections = [inspect(golden("G9"), 2, 8)];
         mocks.diagnostics = createResolver(golden("G9")).diagnostics();
         renderSection();
         expect(screen.getByText("Timeline")).toBeTruthy();
         expect(screen.getByTestId("timeline-inspection-2")).toBeTruthy();
-        expect(
-            screen.getByText(`Show diagnostics (${mocks.diagnostics.length})`),
-        ).toBeTruthy();
-        expect(screen.getByTestId("timeline-show-diagnostics")).toBeTruthy();
+        expect(screen.queryByTestId("timeline-show-diagnostics")).toBeNull();
     });
 
     it("says a marcher isn't in the timeline only when the hook reports it unknown", () => {

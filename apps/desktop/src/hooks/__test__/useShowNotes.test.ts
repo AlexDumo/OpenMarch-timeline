@@ -1,7 +1,7 @@
 import { expect } from "vitest";
-import { createResolver, type XY } from "@openmarch/core";
+import type { XY } from "@openmarch/core";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
-import { readTimelineTables } from "@/timeline/timelineRows";
+import { acquireExportResolver } from "@/timeline/timelineExport";
 import {
     createItems,
     getItemPlacements,
@@ -25,10 +25,9 @@ import { showNotesFrom } from "../useShowNotes";
 const ALICE = 1;
 const CREW = 3;
 
-/** What the hook's queries read, read the same way, and positions from a fresh resolver. */
+/** What the hook's queries read, read the same way, over the app's resolver (with put-downs). */
 const notesOf = async (db: DbConnection) => {
-    const resolver = createResolver((await readTimelineTables(db)).snapshot);
-    const ids = new Set(resolver.marcherIds());
+    const resolver = await acquireExportResolver(db);
     return showNotesFrom(
         {
             items: await getItems({ db }),
@@ -38,8 +37,8 @@ const notesOf = async (db: DbConnection) => {
             settings: await getWorkspaceSettingsParsed({ db }),
             fieldProperties: undefined,
         },
-        (marcherId, beat): XY | null =>
-            ids.has(marcherId) ? resolver.positionAt(marcherId, beat) : null,
+        resolver,
+        { diagnostics: resolver.diagnostics() },
     );
 };
 
@@ -111,7 +110,7 @@ describeDbTests("useShowNotes", (it) => {
                 holders: [{ marcherId: ALICE, hand: "right" }],
             },
         });
-        // She puts the flag down on 12, then her drill changes there
+        // She puts the flag down on 12, then her drill changes there: the flag follows her
         const putDown = await setItemPlacement({
             db,
             itemId: flag!.id,
@@ -129,14 +128,19 @@ describeDbTests("useShowNotes", (it) => {
         // The cart moves on its own
         await move(db, cart!.marcher_id, { start: 16, end: 20 }, [40, 0]);
 
+        const kinds = (n: Awaited<ReturnType<typeof notesOf>>) =>
+            n.notes
+                .filter((x) => x.source === "items")
+                .map((x) => [x.kind, n.itemName(x.what.itemIds[0]!), x.beat]);
         const quiet = await notesOf(db);
-        expect(
-            quiet.notes.map((n) => [n.kind, quiet.itemName(n.itemId)]),
-        ).toEqual([
-            ["crew_distance", "Riser"],
-            ["hand_conflict", "Flag"],
-            ["put_down_drift", "Flag"],
+        expect(kinds(quiet)).toEqual([
+            ["crew_distance", "Riser", 4],
+            ["hand_conflict", "Flag", 11],
+            ["short_handed_hold", "Rifle", 11],
         ]);
+
+        // The designer moves the flag on the page box ending on the put-down: a drift note
+        await move(db, flag!.marcher_id, { start: 8, end: 12 }, [20, 20]);
 
         // The show setting turns on the crew-less move note
         const settings = await getWorkspaceSettingsParsed({ db });
@@ -144,10 +148,12 @@ describeDbTests("useShowNotes", (it) => {
             db,
             settings: { ...settings, warnPropMovesWithoutCrew: true },
         });
-        const { notes, itemName, marcherName } = await notesOf(db);
-        expect(notes.map((n) => [n.kind, itemName(n.itemId), n.beat])).toEqual([
+        const all = await notesOf(db);
+        const { notes, marcherName } = all;
+        expect(kinds(all)).toEqual([
             ["crew_distance", "Riser", 4],
             ["hand_conflict", "Flag", 11],
+            ["short_handed_hold", "Rifle", 11],
             ["put_down_drift", "Flag", 12],
             ["crewless_move", "Cart", 17],
         ]);
@@ -160,7 +166,7 @@ describeDbTests("useShowNotes", (it) => {
             kind: "snap_to_holder",
             placementId: putDown.id,
         });
-        expect(drift.marcherIds.map(marcherName)).toEqual(["T1"]);
+        expect(drift.what.marcherIds.map(marcherName)).toEqual(["T1"]);
 
         // Snap to holder clears the drift note
         await snapItemToHolder({ db, placementId: putDown.id });

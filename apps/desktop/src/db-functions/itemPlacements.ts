@@ -23,7 +23,6 @@ import type { Hand, Holder, PlacementChange } from "@openmarch/core";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
 import { transactionWithHistory } from "./history";
-import { putDownAroundChangeInTransaction } from "./itemPutDown";
 
 export type PlacementState = (typeof schema.PLACEMENT_STATES)[number];
 export type ItemRippleOrder = (typeof schema.ITEM_RIPPLE_ORDERS)[number];
@@ -272,17 +271,11 @@ export async function setItemPlacementInTransaction({
     itemId,
     beatId,
     placement,
-    putDown = true,
 }: {
     tx: DbTransaction;
     itemId: number;
     beatId: number;
     placement: PlacementArgs;
-    /**
-     * Put the item down at its holder when this makes a held → placed change (`itemPutDown.ts`).
-     * On by default.
-     */
-    putDown?: boolean;
 }): Promise<DatabaseItemPlacement> {
     const wanted = wantedMembers(placement);
     await assertPerformers(tx, [...wanted.keys()]);
@@ -330,9 +323,6 @@ export async function setItemPlacementInTransaction({
                   .get()
           ).id;
     await syncMembers(tx, id, wanted);
-    // A held → placed change lands the item at its holder (C2.5)
-    if (putDown)
-        await putDownAroundChangeInTransaction({ tx, placementId: id });
     return placementById(tx, id);
 }
 
@@ -344,7 +334,6 @@ export async function setItemPlacement({
     itemId: number;
     beatId: number;
     placement: PlacementArgs;
-    putDown?: boolean;
 }): Promise<DatabaseItemPlacement> {
     return transactionWithHistory(db, "setItemPlacement", (tx) =>
         setItemPlacementInTransaction({ tx, ...args }),

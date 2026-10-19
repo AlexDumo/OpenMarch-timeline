@@ -882,8 +882,6 @@
                 "dVacant": "Slot {slot} has no marcher assigned, so nobody goes to that place.",
                 "info": "Info",
                 "none": "No diagnostics.",
-                "showNone": "No diagnostics for the whole show.",
-                "showTitle": "Show diagnostics ({count})",
                 "title": "Diagnostics",
                 "transition": "Transition {id}",
                 "warning": "Warning"
@@ -1800,22 +1798,6 @@
         "undoWithCtrlZ": "This action is undoable with Ctrl + Z",
         "volume": "Volume"
     },
-    "notes": {
-        "title": "Notes",
-        "empty": "No notes",
-        "count": "{count, plural, one {# note} other {# notes}}",
-        "where": "count {count} of page {page}",
-        "whereAfter": "{count, plural, one {# count} other {# counts}} after page {page}",
-        "whereStart": "at the start",
-        "handConflict": "{item} not put down, {where}",
-        "handConflictDetail": "{other} takes {who}'s hand",
-        "putDownDrift": "{item} put down away from its holder, {where}",
-        "putDownDriftDetail": "{who} is somewhere else now",
-        "crewDistance": "{item}'s crew is away from it, {where}",
-        "crewDistanceDetail": "Out of reach: {who}",
-        "crewlessMove": "{item} moves without a crew, {where}",
-        "snapToHolder": "Snap to holder"
-    },
     "pages": {
         "createFailed": "Failed to create page - {error}",
         "createLastPageFailed": "Failed to create last page - {error}",
@@ -2069,6 +2051,33 @@
         "square": "Square",
         "triangle": "Triangle",
         "x": "X"
+    },
+    "showChecks": {
+        "carryCue": "a Carry cue",
+        "carryMismatch": "A Horn/Equipment cue doesn't fit what they carry",
+        "crewDistance": "{item}'s crew is away from it",
+        "crewDistanceDetail": "Out of reach: {who}",
+        "crewlessMove": "{item} moves without a crew",
+        "empty": "Nothing to check.",
+        "forWho": "For {who}",
+        "hand": {
+            "both": "hands",
+            "left": "left hand",
+            "right": "right hand"
+        },
+        "handConflict": "{item} isn't drawn",
+        "handConflictDetail": "{other} takes {who}'s {hand}",
+        "performers": "{count, plural, one {# performer} other {# performers}}",
+        "pick": "Go to this count and select what it names",
+        "putDownDrift": "{item} put down away from its holder",
+        "putDownDriftDetail": "Its own move puts it there, not at {who}",
+        "shortHanded": "{item} is held with too few hands",
+        "shortHandedDetail": "{who}: {held} of {needed} hands",
+        "silkAspect": "A Silk cue's Artwork is fitted to a flag of another shape",
+        "snapToHolder": "Snap to holder",
+        "title": "Show checks",
+        "titleCount": "Show checks ({count})",
+        "whereStart": "at the start"
     },
     "tags": {
         "deleteRemovesCues": "{count, plural, one {# cue targets this tag and will be removed} other {# cues target this tag and will be removed}}",
@@ -2326,6 +2335,7 @@
         },
         "readout": {
             "camera": "Eye {eye} up · {distance} to center",
+            "checks": "{count, plural, one {# check} other {# checks}}",
             "count": "Count {count} of {total}",
             "noPages": "No pages",
             "page": "Page {page}",
@@ -2548,7 +2558,9 @@
             "counts": "counts",
             "seconds": "seconds"
         },
-        "unsavedChanges": "You have unsaved changes"
+        "unsavedChanges": "You have unsaved changes",
+        "warnPropMovesWithoutCrew": "Warn when a prop moves without a crew",
+        "warnPropMovesWithoutCrewHelp": "Show checks names a placed prop that moves with nobody on its crew."
     },
     "visuals": {
         "workspace": {

@@ -19,6 +19,7 @@ import { getSectionObjectByName } from "@/global/classes/Sections";
 import { useVisualsStore } from "@/stores/VisualsStore";
 import VisualsCuePanel from "./VisualsCuePanel";
 import VisualsWhyReadout from "./VisualsWhyReadout";
+import { ShowChecksSection } from "@/components/notes/ShowNotesList";
 import {
     sameWho,
     whoEntries,
@@ -174,6 +175,10 @@ export default function VisualsInspector() {
                 ))}
                 <VisualsCuePanel />
                 <VisualsWhyReadout />
+                {/* ADR 0002 D-22: the same Show checks as the Editor's inspector */}
+                <div className="mt-24">
+                    <ShowChecksSection />
+                </div>
             </div>
         </div>
     );

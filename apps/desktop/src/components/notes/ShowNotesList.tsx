@@ -1,75 +1,132 @@
 /**
- * The show's notes list and an item's note readout (C2.6, ADR 0002 D-22): quiet, never a modal
- * or a block. Each note names its item and count, and offers its one-click fix when it has one.
+ * "Show checks" (ADR 0002 D-22, C2.6): the show's one quiet list, in the inspector in the Editor
+ * and in Visuals, and an item's own checks in its editor. Never a modal or a block. Each row names
+ * what and where ("Page 1 count 7", as the transport says it); clicking it moves the playhead
+ * there and selects what it names, and a row offers its one-click fix when it has one.
  *
- * Cross-phase note for C3.3: the list belongs in Visuals mode, which isn't on this branch; mount
- * `ShowNotesList` there, and `ItemNotes` on the Items tab beside an item. The 3D View's note count
- * for the moment viewed is `notesAt(notes, beat).length`.
+ * Named "checks" so it doesn't sit beside the page's and the cue's free-text "Notes".
  */
-import { useMutation } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTolgee } from "@tolgee/react";
 import { Button } from "@openmarch/ui";
-import { InfoIcon } from "@phosphor-icons/react";
-import {
-    noteCountAt,
-    notesForItem,
-    type NotePage,
-    type ShowNote,
-} from "@/notes/showNotes";
+import { InfoIcon, WarningIcon } from "@phosphor-icons/react";
+import { notesForItem, type ShowNote } from "@/notes/showNotes";
 import {
     snapItemToHolderMutationOptions,
     useShowNotes,
 } from "@/hooks/useShowNotes";
+import { allMarcherRowsQueryOptions } from "@/hooks/queries/useMarchers";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    beatWhere,
+    joinList,
+    type NamedPageBox,
+} from "@/timeline/timelineRangeWords";
+import { DIAGNOSTIC_STRING_KEYS } from "@/components/inspector/timelineInspectorStrings";
+import { InspectorCollapsible } from "@/components/inspector/InspectorCollapsible";
 
 export interface NotesViewProps {
     notes: readonly ShowNote[];
-    pages: readonly NotePage[];
+    /** The page boxes, to say each note's count as the transport does */
+    pageBoxes: readonly NamedPageBox[];
     itemName: (itemId: number) => string;
     marcherName: (marcherId: number) => string;
     /** Snap to holder, for a put-down drift note */
     onSnap: (placementId: number) => void;
     /** A fix in flight: its button waits */
     snapping?: number | null;
+    /** Clicking a note: seek to its count and select what it names */
+    onPick?: (note: ShowNote) => void;
 }
 
 type Translate = ReturnType<typeof useTolgee>["t"];
+
+/** Names, up to three, then a count. */
+const names = (t: Translate, list: readonly string[]) =>
+    list.length > 3
+        ? t("showChecks.performers", { count: list.length })
+        : joinList(list);
 
 /** A note's line and its detail, in the designer's words. */
 export function noteText(
     t: Translate,
     note: ShowNote,
-    { pages, itemName, marcherName }: Omit<NotesViewProps, "notes" | "onSnap">,
+    {
+        pageBoxes,
+        itemName,
+        marcherName,
+    }: Pick<NotesViewProps, "pageBoxes" | "itemName" | "marcherName">,
 ): { text: string; detail?: string } {
-    const at = noteCountAt(pages, note.beat);
     const where =
-        at.count === 0
-            ? t("notes.whereStart")
-            : at.after
-              ? t("notes.whereAfter", { count: at.count, page: at.page })
-              : t("notes.where", { count: at.count, page: at.page });
-    const item = itemName(note.itemId);
-    const who = note.marcherIds.map(marcherName).join(", ");
+        note.beat === null
+            ? null
+            : (beatWhere(note.beat, pageBoxes) ?? t("showChecks.whereStart"));
+    const withWhere = (text: string) => (where ? `${text}, ${where}` : text);
+    const [itemId, ...others] = note.what.itemIds;
+    const item = itemId === undefined ? "" : itemName(itemId);
+    const who = names(t, note.what.marcherIds.map(marcherName));
     switch (note.kind) {
-        case "hand_conflict":
+        case "hand_conflict": {
+            const hand = t(`showChecks.hand.${note.detail?.hand ?? "both"}`);
+            const takers = [
+                ...others.map(itemName),
+                ...(note.detail?.byCarry ? [t("showChecks.carryCue")] : []),
+            ];
             return {
-                text: t("notes.handConflict", { item, where }),
-                detail: t("notes.handConflictDetail", {
-                    other: itemName(note.otherItemId ?? -1),
+                text: withWhere(t("showChecks.handConflict", { item })),
+                detail: t("showChecks.handConflictDetail", {
+                    other: joinList(takers),
                     who,
+                    hand,
+                }),
+            };
+        }
+        case "short_handed_hold":
+            return {
+                text: withWhere(t("showChecks.shortHanded", { item })),
+                detail: t("showChecks.shortHandedDetail", {
+                    who,
+                    held: note.detail?.held ?? 0,
+                    needed: note.detail?.needed ?? 2,
                 }),
             };
         case "put_down_drift":
             return {
-                text: t("notes.putDownDrift", { item, where }),
-                detail: t("notes.putDownDriftDetail", { who }),
+                text: withWhere(t("showChecks.putDownDrift", { item })),
+                detail: t("showChecks.putDownDriftDetail", { who }),
             };
         case "crew_distance":
             return {
-                text: t("notes.crewDistance", { item, where }),
-                detail: t("notes.crewDistanceDetail", { who }),
+                text: withWhere(t("showChecks.crewDistance", { item })),
+                detail: t("showChecks.crewDistanceDetail", { who }),
             };
         case "crewless_move":
-            return { text: t("notes.crewlessMove", { item, where }) };
+            return { text: withWhere(t("showChecks.crewlessMove", { item })) };
+        case "carry_mismatch":
+            return {
+                text: withWhere(t("showChecks.carryMismatch")),
+                detail: who ? t("showChecks.forWho", { who }) : undefined,
+            };
+        case "silk_aspect":
+            return {
+                text: withWhere(t("showChecks.silkAspect")),
+                detail: who ? t("showChecks.forWho", { who }) : undefined,
+            };
+        case "timeline": {
+            const code = note.detail?.code;
+            const text = code
+                ? t(DIAGNOSTIC_STRING_KEYS[code], {
+                      slot: note.detail?.slot ?? "",
+                      transition: note.what.transitionId ?? "",
+                  })
+                : "";
+            return {
+                text: withWhere(code ?? ""),
+                detail: who ? `${who}: ${text}` : text,
+            };
+        }
     }
 }
 
@@ -80,37 +137,49 @@ function NoteRow({
     const { t } = useTolgee();
     const { text, detail } = noteText(t, note, props);
     const action = note.action;
+    const warning = note.detail?.level === "warning";
+    const Icon = warning ? WarningIcon : InfoIcon;
     return (
         <li
-            className="flex items-start justify-between gap-8 py-4"
+            className="flex items-start justify-between gap-8"
             data-testid="show-note"
             data-note-kind={note.kind}
+            data-note-beat={note.beat ?? ""}
         >
-            <div className="flex min-w-0 items-start gap-6">
-                <InfoIcon
+            <button
+                type="button"
+                className="hover:bg-fg-2 rounded-6 flex min-w-0 flex-1 items-start gap-6 px-4 py-4 text-left"
+                onClick={() => props.onPick?.(note)}
+                title={t("showChecks.pick")}
+            >
+                <Icon
                     size={16}
-                    className="text-text-subtitle mt-2 shrink-0"
+                    className={
+                        warning
+                            ? "text-yellow mt-2 shrink-0"
+                            : "text-text-subtitle mt-2 shrink-0"
+                    }
                     aria-hidden
                 />
-                <div className="flex min-w-0 flex-col">
+                <span className="flex min-w-0 flex-col">
                     <span className="text-body text-text">{text}</span>
                     {detail && (
                         <span className="text-sub text-text-subtitle">
                             {detail}
                         </span>
                     )}
-                </div>
-            </div>
+                </span>
+            </button>
             {action?.kind === "snap_to_holder" && (
                 <Button
                     type="button"
                     size="compact"
                     variant="secondary"
-                    className="shrink-0"
+                    className="mt-4 shrink-0"
                     disabled={props.snapping === action.placementId}
                     onClick={() => props.onSnap(action.placementId)}
                 >
-                    {t("notes.snapToHolder")}
+                    {t("showChecks.snapToHolder")}
                 </Button>
             )}
         </li>
@@ -123,16 +192,12 @@ export function ShowNotesListView({ notes, ...props }: NotesViewProps) {
     return (
         <section
             className="flex flex-col gap-4"
-            aria-label={t("notes.title")}
+            aria-label={t("showChecks.title")}
             data-testid="show-notes"
         >
-            <header className="text-text-subtitle text-sub flex justify-between">
-                <span>{t("notes.title")}</span>
-                <span>{t("notes.count", { count: notes.length })}</span>
-            </header>
             {notes.length === 0 ? (
                 <p className="text-sub text-text-subtitle">
-                    {t("notes.empty")}
+                    {t("showChecks.empty")}
                 </p>
             ) : (
                 <ul className="flex flex-col">
@@ -145,7 +210,7 @@ export function ShowNotesListView({ notes, ...props }: NotesViewProps) {
     );
 }
 
-/** One item's notes, for its readout; nothing when it has none. */
+/** One item's checks, for its readout; nothing when it has none. */
 export function ItemNotesView({
     itemId,
     notes,
@@ -162,37 +227,68 @@ export function ItemNotesView({
     );
 }
 
-const useSnap = () => useMutation(snapItemToHolderMutationOptions());
+/** The live checks with their actions: Snap to holder, and click to seek and select. */
+function useLiveNotes(): NotesViewProps & { notes: ShowNote[] } {
+    const { notes, itemName, itemMarcherId, marcherName } = useShowNotes();
+    const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    const snap = useMutation(snapItemToHolderMutationOptions());
+    const { data: rows } = useQuery(allMarcherRowsQueryOptions());
+    const { setSelectedMarchers } = useSelectedMarchers()!;
+    const byId = useMemo(
+        () => new Map((rows ?? []).map((m) => [m.id, m])),
+        [rows],
+    );
+    return {
+        notes,
+        pageBoxes,
+        itemName,
+        marcherName,
+        onSnap: (id) => snap.mutate(id),
+        snapping: snap.isPending ? (snap.variables ?? null) : null,
+        onPick: (note) => {
+            if (note.beat !== null)
+                useTimelineSelectionStore.getState().seek(note.beat);
+            const ids = [
+                ...note.what.itemIds.flatMap((id) => {
+                    const m = itemMarcherId(id);
+                    return m === undefined ? [] : [m];
+                }),
+                ...note.what.marcherIds,
+            ];
+            const picked = [...new Set(ids)].flatMap((id) => {
+                const m = byId.get(id);
+                return m ? [m] : [];
+            });
+            if (picked.length > 0) setSelectedMarchers(picked);
+        },
+    };
+}
 
-/** The show's notes list, live. */
+/** The show's checks list, live. */
 export default function ShowNotesList() {
-    const { notes, pages, itemName, marcherName } = useShowNotes();
-    const snap = useSnap();
+    return <ShowNotesListView {...useLiveNotes()} />;
+}
+
+/** The inspector's "Show checks (N)" section, in the Editor and in Visuals. */
+export function ShowChecksSection() {
+    const live = useLiveNotes();
     return (
-        <ShowNotesListView
-            notes={notes}
-            pages={pages}
-            itemName={itemName}
-            marcherName={marcherName}
-            onSnap={(id) => snap.mutate(id)}
-            snapping={snap.isPending ? (snap.variables ?? null) : null}
-        />
+        <div data-testid="show-checks">
+            <InspectorCollapsible
+                defaultOpen
+                translatableTitle={{
+                    keyName: "showChecks.titleCount",
+                    parameters: { count: live.notes.length },
+                }}
+                className="mt-12 flex flex-col gap-8"
+            >
+                <ShowNotesListView {...live} />
+            </InspectorCollapsible>
+        </div>
     );
 }
 
-/** An item's notes, live. */
+/** An item's checks, live. */
 export function ItemNotes({ itemId }: { itemId: number }) {
-    const { notes, pages, itemName, marcherName } = useShowNotes();
-    const snap = useSnap();
-    return (
-        <ItemNotesView
-            itemId={itemId}
-            notes={notes}
-            pages={pages}
-            itemName={itemName}
-            marcherName={marcherName}
-            onSnap={(id) => snap.mutate(id)}
-            snapping={snap.isPending ? (snap.variables ?? null) : null}
-        />
-    );
+    return <ItemNotesView itemId={itemId} {...useLiveNotes()} />;
 }

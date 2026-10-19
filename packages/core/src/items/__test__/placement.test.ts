@@ -9,7 +9,6 @@ import {
     handsNeeded,
     placementAt,
     putDowns,
-    putDownDrifts,
     putDownSpot,
     shortHandedHolds,
     type CarryChange,
@@ -458,29 +457,5 @@ describe("put-down", () => {
         expect(
             putDownSpot([{ marcherId: 99, hand: "both" }], positions),
         ).toBeNull();
-    });
-});
-
-describe("putDownDrifts", () => {
-    const ITEM_MARCHER = 100;
-    const changes = [held(2, [{ marcherId: ALICE, hand: "both" }]), placed(6)];
-
-    it("is quiet while the item is where its holder was", () => {
-        const at = () => [3, 4] as XY;
-        expect(putDownDrifts(changes, ITEM_MARCHER, at)).toEqual([]);
-    });
-
-    it("names a put-down once the holder's drill moved", () => {
-        const at = (id: number): XY => (id === ALICE ? [6, 8] : [3, 4]);
-        expect(putDownDrifts(changes, ITEM_MARCHER, at)).toEqual([
-            {
-                changeId: changes[1]!.id,
-                beat: 6,
-                holders: [{ marcherId: ALICE, hand: "both" }],
-                spot: [6, 8],
-                at: [3, 4],
-                distance: 5,
-            },
-        ]);
     });
 });
