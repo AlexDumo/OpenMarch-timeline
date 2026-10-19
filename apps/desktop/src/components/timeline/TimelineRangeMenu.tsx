@@ -10,6 +10,7 @@ import {
     PencilSimpleIcon,
     TrashIcon,
     UserPlusIcon,
+    ScissorsIcon,
 } from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
 import type { TimelineBeatRange } from "./TimelineViewModel";
@@ -121,6 +122,10 @@ export interface TimelineMoveMenuActions {
     readonly onEdit: () => void;
     readonly onRename: () => void;
     readonly onDelete: () => void;
+    /** **Split at playhead** (UI-27); without it the entry isn't offered */
+    readonly onSplit?: () => void;
+    /** Why **Split at playhead** is unavailable now (read when the menu renders), or null */
+    readonly splitDisabledReason?: () => string | null;
     /** Why **Edit move** and **Delete move** are unavailable (while playing), or null */
     readonly disabledReason?: string | null;
     /** UI-25: split and merge entries, after **Rename move…** */
@@ -136,6 +141,10 @@ export interface TimelineMoveCommands<Id = number> {
     readonly onEdit: (id: Id) => void;
     readonly onRename: (id: Id, name: string) => void;
     readonly onDelete: (id: Id) => void;
+    /** **Split at playhead** (UI-27); without it the entry isn't offered */
+    readonly onSplit?: (id: Id) => void;
+    /** Why **Split at playhead** is unavailable for the move now, or null */
+    readonly splitDisabledReason?: (id: Id) => string | null;
     /** Why **Edit move** and **Delete move** are unavailable (while playing), or null */
     readonly disabledReason?: string | null;
     /** UI-25: the move's split and merge entries, read when its menu opens */
@@ -153,6 +162,11 @@ export function TimelineMoveMenuItems({
     actions: TimelineMoveMenuActions;
 }) {
     const reason = actions.disabledReason ?? null;
+    // Read as the menu renders: the playhead may have moved since the clip's actions were made.
+    // Its own reason first, so playing says "Pause to split a move."
+    const splitReason = actions.onSplit
+        ? (actions.splitDisabledReason?.() ?? reason)
+        : null;
     const extra = actions.extra?.() ?? [];
     return (
         <>
@@ -173,6 +187,17 @@ export function TimelineMoveMenuItems({
                 <CursorTextIcon size={14} />
                 Rename move…
             </DropdownMenu.Item>
+            {actions.onSplit && (
+                <DropdownMenu.Item
+                    data-testid="timeline-move-menu-split"
+                    disabled={splitReason !== null}
+                    onSelect={actions.onSplit}
+                    className={ITEM_CLASS}
+                >
+                    <ScissorsIcon size={14} />
+                    Split at playhead
+                </DropdownMenu.Item>
+            )}
             {extra.length > 0 && (
                 <>
                     <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
@@ -189,6 +214,14 @@ export function TimelineMoveMenuItems({
                 <TrashIcon size={14} />
                 Delete move
             </DropdownMenu.Item>
+            {reason === null && splitReason !== null && (
+                <p
+                    data-testid="timeline-move-menu-split-reason"
+                    className="text-text-subtitle px-8 pb-4 text-[11px]"
+                >
+                    {splitReason}
+                </p>
+            )}
             {reason !== null && (
                 <p
                     data-testid="timeline-move-menu-reason"

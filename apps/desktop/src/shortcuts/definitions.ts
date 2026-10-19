@@ -670,6 +670,14 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // UI-27: the move the playhead is inside becomes two that meet there (Expert); unbound
+    timelineSplitMoveAtPlayhead: {
+        labelKey: "actions.timeline.splitMoveAtPlayhead",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: [],
+    },
     // UI-25: split the selected marchers off the window's move, or merge a split move back into
     // its page (Expert timeline mode; not registered in Basic, so hidden there)
     splitSelectedIntoNewMove: {

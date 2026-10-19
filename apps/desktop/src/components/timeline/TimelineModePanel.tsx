@@ -79,8 +79,11 @@ import {
     moveCommandBlocker,
     useMoveCommands,
     useTimelineCommands,
+    moveAtPlayhead,
+    splitMoveBlocker,
 } from "./useTimelineCommands";
 import { useTimelineClipResize } from "./useTimelineClipResize";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useSplitMergeActions, useSplitMergeMoves } from "./useSplitMergeMoves";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
@@ -327,8 +330,34 @@ export default function TimelineModePanel() {
             onDelete: (id: number) => {
                 if (!isPlaying) void moves.deleteMove(id);
             },
+            // UI-27: two moves that meet at the playhead
+            onSplit: (id: number) =>
+                void moves.splitMoveAtPlayhead(id, isPlaying),
+            splitDisabledReason: (id: number) => {
+                const s = useTimelineSelectionStore.getState();
+                return splitMoveBlocker(
+                    s.storedTimelines?.find((t) => t.id === id),
+                    s.playheadBeat,
+                    isPlaying,
+                );
+            },
         }),
         [isPlaying, moves, splitMerge],
+    );
+    // UI-27: ⌘K's Split at playhead acts on the move the playhead is inside (Expert only: Basic
+    // has no moves to split, its + splits the page's moves at a new flag). Greyed out while
+    // playing, as the menus' entry is
+    useActionHandler(
+        "timelineSplitMoveAtPlayhead",
+        () => {
+            const target = moveAtPlayhead(useTimelineSelectionStore.getState());
+            if (typeof target === "string") {
+                toast.error(target, { id: "timeline-split-move" });
+                return;
+            }
+            void moves.splitMoveAtPlayhead(target.id, isPlaying);
+        },
+        { enabled: !basic && !isPlaying },
     );
     const clipResize = useTimelineClipResize({ database: db, timelines });
     const queryClient = useQueryClient();

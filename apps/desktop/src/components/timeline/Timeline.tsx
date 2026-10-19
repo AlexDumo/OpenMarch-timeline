@@ -792,6 +792,25 @@ export function Timeline(props: TimelineProps) {
               }
             : undefined,
     );
+    // UI-27: Split at playhead, by stored id too; its reason is read as the menu opens
+    const splitMove = useLatestCallback(
+        moveCommands?.onSplit
+            ? (trackId: string | number) => {
+                  const id = storedIdOf(trackId);
+                  if (id !== null) moveCommands.onSplit!(id);
+              }
+            : undefined,
+    );
+    const splitMoveReason = useLatestCallback(
+        moveCommands?.splitDisabledReason
+            ? (trackId: string | number): string | null => {
+                  const id = storedIdOf(trackId);
+                  return id === null
+                      ? null
+                      : moveCommands.splitDisabledReason!(id);
+              }
+            : undefined,
+    );
     const moveDisabledReason = moveCommands?.disabledReason;
     const moveExtraFor = useLatestCallback(
         moveCommands?.extraFor
@@ -810,10 +829,22 @@ export function Timeline(props: TimelineProps) {
                       onEdit: editMove,
                       onDelete: deleteMove,
                       onRename: renameMove,
+                      ...(splitMove ? { onSplit: splitMove } : {}),
+                      ...(splitMoveReason
+                          ? { splitDisabledReason: splitMoveReason }
+                          : {}),
                       ...(moveExtraFor ? { extraFor: moveExtraFor } : {}),
                   }
                 : undefined,
-        [deleteMove, editMove, moveDisabledReason, renameMove, moveExtraFor],
+        [
+            deleteMove,
+            editMove,
+            moveDisabledReason,
+            renameMove,
+            splitMove,
+            splitMoveReason,
+            moveExtraFor,
+        ],
     );
     // UI-25: the drag-out and drag-to-merge gesture, from track ids to stored ones
     const { clipPeel } = props;

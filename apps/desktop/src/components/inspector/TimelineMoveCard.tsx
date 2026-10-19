@@ -8,6 +8,7 @@ import {
 import {
     ArrowLineRightIcon,
     ArrowsSplitIcon,
+    ScissorsIcon,
     TrashIcon,
     UsersThreeIcon,
 } from "@phosphor-icons/react";
@@ -135,6 +136,15 @@ export function TimelineMoveCard({
     // Only whether P is at the move's end, so the card doesn't render on every beat played
     const atEnd = useTimelineSelectionStore(
         (s) => s.playheadBeat === timeline.end,
+    );
+    // Split at playhead is on the card only while this move is isolated (UI-27): otherwise the
+    // window ends at the playhead, so the playhead is never inside the move the card is about
+    const isolated = useTimelineSelectionStore(
+        (s) => s.isolation?.timelineId === timeline.id,
+    );
+    // Likewise only whether P is strictly inside the move: the split needs that
+    const playheadInside = useTimelineSelectionStore(
+        (s) => timeline.start < s.playheadBeat && s.playheadBeat < timeline.end,
     );
     // The name last sent, until the stored name changes: Enter, the blur and the card going can
     // each send the same rename before it lands, and a refused one would say so each time
@@ -339,6 +349,29 @@ export function TimelineMoveCard({
                         <Help testId="timeline-move-card-split-reason">
                             {split.disabledReason}
                         </Help>
+                    )}
+                </div>
+            )}
+            {isolated && (
+                <div className="flex flex-col gap-6">
+                    <Button
+                        size="compact"
+                        variant="secondary"
+                        className={clsx("w-fit", FOCUS_RING)}
+                        data-testid="timeline-move-card-split-at-playhead"
+                        disabled={isPlaying || !playheadInside}
+                        onClick={() =>
+                            void moves.splitMoveAtPlayhead(
+                                timeline.id,
+                                isPlaying,
+                            )
+                        }
+                    >
+                        <ScissorsIcon size={16} />
+                        {t("inspector.timeline.move.split")}
+                    </Button>
+                    {!isPlaying && !playheadInside && (
+                        <Help>{t("inspector.timeline.move.splitHelp")}</Help>
                     )}
                 </div>
             )}
