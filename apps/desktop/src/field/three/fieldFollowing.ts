@@ -115,13 +115,20 @@ const browserClock: FadeClock = {
  * full strength. A shape with an outline dashes the outline round its fill at
  * 60%; one without dashes its edge in its fill's color, with nothing inside.
  * An X dashes its own lines. Dashes keep the
- * shape's contrast and read by shape, not only by lightness; the label is a
- * little fainter. The marchers layer takes how far along the look is as one 0–1 value
- * per marcher (`aFollowing`), so an ease can open the gaps from solid.
+ * shape's contrast and read by shape, not only by lightness. The label is
+ * drawn lighter in weight at full opacity (#324), so it keeps its contrast
+ * too. The marchers layer takes how far along the look is as one 0–1 value
+ * per marcher (`aFollowing`), and the labels layer thins by the same amount,
+ * so an ease can open the gaps and thin the label from solid.
  */
 export const FOLLOWING_LOOK = {
-    /** How opaque the label is: a little fainter than Set, still well-contrasted text. */
-    labelOpacity: 0.75,
+    /**
+     * How much lighter the label's strokes are than a Set label's bold, in em
+     * off each side (`TextLabel.weight`): clearly lighter, with bold Courier
+     * New's curves still whole; more broke them up (#324's contact sheet).
+     * Small on screen it's less, so the strokes stay whole.
+     */
+    labelThinning: 0.02,
     /** How opaque the fill is inside a dashed outline. */
     fillOpacity: 0.6,
     /** The dashed edge's width, in field units; never under `minEdgePx`. */
@@ -163,13 +170,18 @@ export const drawnFollowing = (
     id: number,
 ): boolean => !dimming.isDimmed(id) && following.isFollowing(id);
 
-/** How opaque a marcher's label is drawn: dimmed, a little fainter when Following, or solid. */
-export function labelOpacity(
+/** How opaque a marcher's label is drawn: isolation's dim, or solid (Following too). */
+export const labelOpacity = (dimming: FieldDimming, id: number): number =>
+    dimming.isDimmed(id) ? DIMMED_OPACITY : 1;
+
+/**
+ * How much lighter a marcher's label is drawn (`TextLabel.weight`): 0 (bold)
+ * when Set or dimmed, `FOLLOWING_LOOK.labelThinning` when Following, and
+ * partway while the look eases in on Stop.
+ */
+export const labelWeight = (
     dimming: FieldDimming,
     following: FieldFollowing,
     id: number,
-): number {
-    if (dimming.isDimmed(id)) return DIMMED_OPACITY;
-    if (!following.isFollowing(id)) return 1;
-    return 1 - (1 - FOLLOWING_LOOK.labelOpacity) * following.strength();
-}
+): number =>
+    FOLLOWING_LOOK.labelThinning * followingAmount(dimming, following, id);

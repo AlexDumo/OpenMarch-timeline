@@ -14,15 +14,25 @@ const stubAtlas = () =>
 const BLACK = [0, 0, 0, 1] as const;
 const FAINT = [0, 0, 0, 0.75] as const;
 
-const label = (text: string, color: TextLabel["color"]): TextLabel => ({
+const label = (
+    text: string,
+    color: TextLabel["color"],
+    weight?: number,
+): TextLabel => ({
     text,
     size: 14,
     color,
+    weight,
 });
 
 const colors = (batch: TextBatch) =>
     Array.from(
         batch.mesh.geometry.getAttribute("aColor").array as Float32Array,
+    );
+
+const weights = (batch: TextBatch) =>
+    Array.from(
+        batch.mesh.geometry.getAttribute("aWeight").array as Float32Array,
     );
 
 describe("TextBatch.setColors", () => {
@@ -50,5 +60,56 @@ describe("TextBatch.setColors", () => {
     it("does nothing before any labels are laid out", () => {
         const batch = new TextBatch(stubAtlas());
         expect(() => batch.setColors(() => FAINT)).not.toThrow();
+    });
+});
+
+describe("TextBatch.setWeights", () => {
+    it("draws every label as the font draws it unless it says otherwise", () => {
+        const batch = new TextBatch(stubAtlas());
+        batch.setLabels([label("T1", BLACK), label("B", BLACK, 0.02)]);
+        expect(weights(batch)).toEqual([0, 0, Math.fround(0.02)]);
+    });
+
+    it("thins each label's glyphs without laying the text out again or recoloring", () => {
+        const batch = new TextBatch(stubAtlas());
+        batch.setLabels([
+            label("T1", BLACK),
+            label("", BLACK),
+            label("M12", BLACK),
+        ]);
+        const geometry = batch.mesh.geometry;
+        const others = ["aGlyph", "aUv", "aScaleRot", "aColor", "aAnchor"].map(
+            (name) => {
+                const attr = geometry.getAttribute(name);
+                return { name, attr, version: attr.version };
+            },
+        );
+        const weight = geometry.getAttribute("aWeight");
+        const version = weight.version;
+
+        batch.setWeights((i) => (i === 2 ? 0.03 : 0));
+
+        // Only the weight buffer is rewritten and uploaded
+        expect(geometry.getAttribute("aWeight")).toBe(weight);
+        expect(weight.version).toBeGreaterThan(version);
+        for (const { name, attr, version } of others) {
+            expect(geometry.getAttribute(name), name).toBe(attr);
+            expect(attr.version, name).toBe(version);
+        }
+        // T1's two glyphs as drawn; M12's three thinner
+        const thin = Math.fround(0.03);
+        expect(weights(batch)).toEqual([0, 0, thin, thin, thin]);
+        expect(colors(batch)).toEqual([
+            ...BLACK,
+            ...BLACK,
+            ...BLACK,
+            ...BLACK,
+            ...BLACK,
+        ]);
+    });
+
+    it("does nothing before any labels are laid out", () => {
+        const batch = new TextBatch(stubAtlas());
+        expect(() => batch.setWeights(() => 0.03)).not.toThrow();
     });
 });
