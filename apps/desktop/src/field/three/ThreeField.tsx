@@ -33,7 +33,7 @@ import TimelineIsolationBar, {
     TimelineFromStartBadge,
 } from "@/components/timeline/TimelineIsolationBar";
 import {
-    displayedBeat,
+    fieldBeat,
     isMarcherDimmed,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
@@ -766,10 +766,11 @@ function PlayheadDriver({
         const draw = (beat: number) => {
             if (marchers.fill(beat, isolationPlan)) invalidate();
         };
-        let drawn = displayedBeat(useTimelineSelectionStore.getState());
+        // UI-26: a dragged start flag shows where its movers leave from
+        let drawn = fieldBeat(useTimelineSelectionStore.getState());
         draw(drawn);
         return useTimelineSelectionStore.subscribe((state) => {
-            const at = displayedBeat(state);
+            const at = fieldBeat(state);
             if (at === drawn) return;
             drawn = at;
             // Called inside the store's write: a failed draw mustn't stop its other listeners

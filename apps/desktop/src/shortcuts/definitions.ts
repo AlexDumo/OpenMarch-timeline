@@ -296,6 +296,14 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Shift+Space"],
     },
+    // UI-26: Alt+Space plays on from the start flag past the playhead (Expert timeline); Space
+    // plays the window once
+    playOn: {
+        labelKey: "actions.playback.playOn",
+        category: "playback",
+        scope: "canvas",
+        defaultBindings: ["Alt+Space"],
+    },
     // UI-17: C turns looping on over the page being edited, or off (timeline mode)
     toggleLoop: {
         labelKey: "actions.playback.toggleLoop",

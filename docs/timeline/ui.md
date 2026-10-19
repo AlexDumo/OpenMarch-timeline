@@ -327,7 +327,8 @@ from it. The spec still wins on the model; this file decides presentation.
   - **Arrivals off a flag.** P may rest between flags. A drag there creates a
     timeline ending at P, not a page (project owner, 2026-10-03). Pages stay
     cosmetic flags; **+** still adds one.
-  - **The start flag follows navigation** (_lead default_). Unless pinned, S is
+  - **The start flag follows navigation** (_lead default_; in Expert UI-26 keeps it put, and only
+    Basic follows). Unless pinned, S is
     the start of the page box holding P (the previous flag), recomputed when P
     is moved by navigation: clicking the ruler, page boxes, page navigation,
     **+**. Since the UI-12 review it follows when the gesture ends, not during
@@ -337,7 +338,7 @@ from it. The spec still wins on the model; this file decides presentation.
     up). Play and Stop never move S; pausing a play-on run moves P, and an
     unpinned S follows it (UI-12 review), so the window doesn't silently span
     pages.
-  - **Pinning** (_lead default_). Dragging the start handle, or dragging a
+  - **Pinning** (_lead default_; removed by UI-26). Dragging the start handle, or dragging a
     range on empty timeline space, pins S where it is dropped (before P;
     past P it swaps with P, UI-21). A
     pinned S stays through navigation until P moves to or before it, which
@@ -511,7 +512,7 @@ from it. The spec still wins on the model; this file decides presentation.
     move that makes it, not after React renders the new beat, so the line never lags the pointer.
     Where the playhead can't follow (isolation holds it inside the isolated range), the line stays
     on it.
-  - **A pinned start flag stays pinned until unpinned** (supersedes UI-10's "until P moves to or
+  - **A pinned start flag stays pinned until unpinned** (pins removed by UI-26) (supersedes UI-10's "until P moves to or
     before it"): scrubbing is now the commonest gesture, so moving the playhead never unpins it.
     With P on or before a pinned S the window falls back to the page box holding P, as after Stop.
     Only the pin, **Unpin** on the field line, a page box or home unpin it. A pinned flag has a pin
@@ -817,7 +818,7 @@ from it. The spec still wins on the model; this file decides presentation.
     Stop and Pause, and holding Shift makes it Pause.)
   - **A click, scrub or page jump while looping**: inside the loop it jumps and keeps looping;
     outside it, playback plays on from there and the stop stays (UI-11, UI-12).
-  - **The loop is its own region** (project owner, 2026-10-09, after trying the follow model by
+  - **The loop is its own region** (superseded in Expert by UI-26: the loop is the edit window) (project owner, 2026-10-09, after trying the follow model by
     hand: moving the playhead to look at another count shouldn't change what loops), drawn as a
     yellow bar along the ruler's top edge (in the headroom strip since UI-20), as Logic draws its cycle region. It is apart from the
     start flag and the edit window, which go back to UI-12's editing roles (owner, 2026-10-09, after trying
@@ -845,7 +846,8 @@ from it. The spec still wins on the model; this file decides presentation.
     locator's loop end was the playhead, so navigating stretched it). The separate loop region keeps
     both lessons: it covers whole pages and follows page navigation, and the playhead never resizes
     it.
-  - **Space plays on from the start flag; Shift+Space plays on from the playhead** (project owner,
+  - **Space plays on from the start flag; Shift+Space plays on from the playhead** (in Expert UI-26
+    plays the window once on Space and on with Alt+Space) (project owner,
     2026-10-13, after the lab test playback-start at lab.openmarch.com: version B, with one Play
     button: Shift+click on it is Shift+Space; the lab's second button was dropped). With looping
     on, Space loops and Shift+Space plays the loop once and goes back. A stop within the first beat from the start flag changes nothing: the flag is the page
@@ -1076,7 +1078,7 @@ from it. The spec still wins on the model; this file decides presentation.
     move, a page whose box was clicked) is resized after moving the line off it. A press on a clip
     under a line takes the line too. A click on the timeline, a click on the playhead,
     and a scrub started anywhere else move only the playhead, and pass the start flag as before
-    (owner).
+    (owner). In Expert UI-26 changes this: behind the start flag they swap.
   - **The swap.** Drag the start flag past the playhead and the line being dragged becomes the
     playhead, while the old playhead becomes the start flag. Drag the playhead behind the start
     flag and the line being dragged becomes the start flag, while the old start flag becomes the
@@ -1169,6 +1171,47 @@ from it. The spec still wins on the model; this file decides presentation.
     Stop (Space) and Pause (Shift + Space); holding Shift swaps it to Pause ("Pause here"), as Shift
     swaps Play to Play from the playhead. The field line's note for a stop on another page now reads
     "Paused on page 4". The 3D window's Space stops.
+
+- **UI-26: in Expert the start flag stays put, and Play plays to the playhead (project owner,
+  2026-10-18, after a grilling session).** It changes UI-10's following start flag and pin, UI-17's
+  loop region and Play, and UI-21's rule that only a drag on a line swaps. Basic is unchanged
+  (UI-19). Items marked _lead default_ were filled in by the lead.
+  - **The start flag stays.** A click, a scrub, a beat step (Shift+Q/E), the go-to box with a count
+    and Pause (Shift+Space) move only the playhead, past page flags too. Only going to a page (a page
+    box, Q/E, ⏮ ⏭, **+**, a clip, the go-to box with a page), home and the flag's own drag move it.
+  - **Behind the start flag, they swap.** A click or a scrub behind the start flag makes that beat
+    the start flag and the old start flag the playhead, even pages back (the field line says
+    "through set N"). A scrub swaps live and swaps back if it comes forward again, as a drag on the
+    playhead's line does (UI-21). A pause that lands behind it swaps the same way; a pause within
+    Play's first beat still changes nothing (V-192). A click on the start flag's own beat makes the
+    beat after it the window (V-285). _Lead default:_ a beat step back onto the start flag pushes it
+    a beat back, so stepping back walks a one-beat window back; beat 0 is home (V-288).
+  - **No pin.** The pin mark and the field line's **Unpin** are gone: there is nothing to pin when
+    the flag never follows. The field line still turns prominent for a partial or multi-page window.
+  - **The loop is the window.** While Loop is on, it loops the edit window, start flag to playhead,
+    and follows every change to it; the bar draws it, and dragging the bar's ends, Ctrl+drag and
+    Shift+click on pages all set the window. Playing never moves the playhead (UI-24), so a click
+    while looping moves only playback and the loop stays the window it was when Play was pressed; a
+    click outside it plays on (UI-17). An isolated move still loops its own range.
+  - **Play (Space) plays the window once**, from the start flag to the playhead, and stops back where
+    it was pressed, with the canvas on the playhead (the arrival). With no window (home, or both lines
+    on one beat) it plays on. **Alt+Space**, or Alt+click on Play, plays on from the start flag past
+    the playhead to the end of the show (owner: a key, not a setting). Shift+Space still plays on from
+    the playhead. Holding Alt shows the start flag's bar then ▶ on Play, named "Play on from the start
+    flag", and the tooltip guide gets a third row; Space's row reads "Play to the playhead". While
+    playing, Alt+Space stops as Space does. A click past the playhead while playing to it plays on to
+    the end of the show; a click inside the window keeps stopping at the playhead (V-287).
+  - **The canvas shows the dragged flag.** While the start flag is dragged, the field shows its beat,
+    where movers leave from, and the playhead again on release; once a dragged line swaps it shows the
+    line under the pointer. An arrow key on the start flag shows it until the steps settle (300 ms
+    after the last, V-283). _Lead default:_ an Expert scrub that swaps behind the start flag shows the
+    beat under the pointer the same way (V-286).
+  - **Windows and Linux** may take Alt+Space for the window's system menu; Alt+click on Play works
+    everywhere. Over Play, a held Alt is kept from the menu bar, as over Previous and Next.
+  - **How.** The store's `startStays` (set from the editor mode by `useBasicModeGuards`) picks the
+    rule: `seek` swaps behind the start flag, `beginScrub` makes an Expert scrub a playhead line drag,
+    the store keeps `loop` equal to the window, and `fieldBeat` is the beat the field draws.
+    `playTimelineOn` is Alt+Space.
 
 ## Mapping the spec onto the view model
 

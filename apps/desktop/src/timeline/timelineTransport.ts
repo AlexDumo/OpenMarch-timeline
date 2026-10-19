@@ -63,14 +63,26 @@ export function navigateTimelinePages(
     // From the beat the timeline shows: a held preview frame, or the playhead (UI-11)
     const from = displayedBeat(state);
     if (direction === "previous-beat" || direction === "next-beat") {
-        state.seek(beatStep(Math.round(from), direction));
+        const target = beatStep(Math.round(from), direction);
+        // UI-26, Expert: a step back onto the start flag pushes it a beat back, as dragging the
+        // playhead onto it does, so stepping back walks a one-beat window back (a click on the
+        // flag's beat makes the beat after it the window instead)
+        if (
+            state.startStays &&
+            !state.isolation &&
+            direction === "previous-beat" &&
+            target === state.startBeat &&
+            target > 1
+        )
+            state.selectRange(target - 1, target);
+        else state.seek(target);
         return displayedBeat(useTimelineSelectionStore.getState()) !== from;
     }
     const target = navigationTarget(pages, from, direction);
     if (!target) return false;
     if (target.range) {
         state.selectRange(target.range.start, target.range.end);
-        // UI-17: going to a page takes the loop there
+        // UI-17: going to a page takes the loop there (in Expert the loop follows the window anyway)
         if (state.loop && !state.isolation)
             state.setLoop({ start: target.range.start, end: target.range.end });
     } else state.selectHome();
@@ -244,17 +256,42 @@ function dragTimelineLine(
     state.dragLine(beat);
     if (gesture === undefined || gesture === "end") {
         state.endLineDrag();
+        // UI-26: an arrow key on the start flag (a drag in one step) shows it on the field until
+        // the steps settle
+        if (!dragging && line === "start") peekStartFlag();
         return null;
     }
     return displayedBeat(useTimelineSelectionStore.getState());
+}
+
+/** How long the field shows the start flag after an arrow key moved it (UI-26, V-283) */
+export const START_PEEK_MS = 300;
+
+let startPeekTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * The field shows the start flag for `START_PEEK_MS` after the last arrow-key step (UI-26, as
+ * UI-10's keys settle), then the playhead again. Expert only: Basic's flag isn't moved by keys.
+ */
+function peekStartFlag(): void {
+    const state = useTimelineSelectionStore.getState();
+    if (!state.startStays) return;
+    state.peekStart(true);
+    if (startPeekTimer !== null) clearTimeout(startPeekTimer);
+    startPeekTimer = setTimeout(() => {
+        startPeekTimer = null;
+        useTimelineSelectionStore.getState().peekStart(false);
+    }, START_PEEK_MS);
 }
 
 /**
  * A seek from the timeline (UI-12 and its review). `gesture` is where it sits in a scrub
  * (`TimelineSeekGesture`); without one it is a single action.
  *
- * - Paused, it moves the playhead (`seek`). A scrub sends one seek per whole beat it passes, and
- *   an unpinned start flag stays put until it ends, then follows once (`beginScrub`, `endScrub`).
+ * - Paused, it moves the playhead (`seek`). A scrub sends one seek per whole beat it passes. In
+ *   Basic the start flag stays put until it ends, then follows once (`beginScrub`, `endScrub`); in
+ *   Expert the scrub drags the playhead as its line does, swapping with the start flag behind it
+ *   (UI-26).
  * - Playing, a click (a press that ends without moving off its beat), or a seek without a gesture,
  *   jumps playback there and plays on (`jumpTimelinePlayback`). A drag suspends playback
  *   (`suspendTimelinePlayback`) and the canvas follows the pointer; when it ends, playback resumes
@@ -367,10 +404,13 @@ export function startTimelinePlayOn(
 
 /**
  * **Play / Stop** (UI-17, Space), the one play action. With looping on (or a move isolated) it
- * loops the loop's region wherever the playhead is, as Logic's cycle does. Otherwise it plays on
- * from the yellow start flag (project owner, 2026-10-13, lab test playback-start: version B won;
- * Shift+Space plays on from the playhead, `playTimelinePage`). Playing, it stops and goes back to
- * where Play was pressed (UI-24, `stopTimelinePlayback`); Shift+Space pauses where it is instead.
+ * loops the loop's region, as Logic's cycle does. Otherwise, in Expert, it plays the edit window
+ * once, from the start flag to the playhead, and stops back where it was pressed (UI-26); with no
+ * window (home, or both lines on one beat) it plays on. In Basic it plays on from the start flag
+ * (project owner, 2026-10-13, lab test playback-start: version B won). Alt+Space plays on from the
+ * start flag (`playTimelineOn`) and Shift+Space from the playhead (`playTimelinePage`). Playing,
+ * it stops and goes back to where Play was pressed (UI-24, `stopTimelinePlayback`); Shift+Space
+ * pauses where it is instead.
  */
 export function toggleTimelinePlayback({
     isPlaying,
@@ -387,13 +427,57 @@ export function toggleTimelinePlayback({
     }
     const state = useTimelineSelectionStore.getState();
     const bounds = loopBounds(state);
-    if (!bounds) {
+    if (bounds) {
+        state.cue(bounds.from);
+        state.setPlayback({ kind: "preview", ...bounds });
+        setIsPlaying(true);
+        return;
+    }
+    const once = state.startStays ? windowBounds(state) : null;
+    if (!once) {
         startTimelinePlayOn(showEndBeat, setIsPlaying, state.startBeat);
         return;
     }
-    state.cue(bounds.from);
-    state.setPlayback({ kind: "preview", ...bounds });
+    state.cue(once.from);
+    state.setPlayback({ kind: "preview", ...once, once: true });
     setIsPlaying(true);
+}
+
+/** The edit window Expert's Play plays once (UI-26): `[S, P)`, or `null` with none to play. */
+const windowBounds = (
+    state: Pick<
+        ReturnType<typeof useTimelineSelectionStore.getState>,
+        "startBeat" | "playheadBeat"
+    >,
+): { readonly from: number; readonly to: number } | null =>
+    state.playheadBeat > state.startBeat && state.playheadBeat > 0
+        ? { from: state.startBeat, to: state.playheadBeat }
+        : null;
+
+/**
+ * **Play on** (UI-26, Alt+Space, or Alt+click on Play): plays from the start flag on past the
+ * playhead to the end of the show, whether or not looping is on. An isolated move loops, as Space
+ * does. Playing, it stops and goes back, as Space does.
+ */
+export function playTimelineOn({
+    isPlaying,
+    showEndBeat,
+    setIsPlaying,
+}: {
+    isPlaying: boolean;
+    showEndBeat: number;
+    setIsPlaying: (isPlaying: boolean) => void;
+}): void {
+    if (isPlaying) {
+        stopTimelinePlayback(setIsPlaying);
+        return;
+    }
+    const state = useTimelineSelectionStore.getState();
+    if (state.isolation) {
+        toggleTimelinePlayback({ isPlaying, showEndBeat, setIsPlaying });
+        return;
+    }
+    startTimelinePlayOn(showEndBeat, setIsPlaying, state.startBeat);
 }
 
 /**

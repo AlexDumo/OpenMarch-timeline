@@ -881,6 +881,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         onPlayingChange={props.onPlayingChange}
                         playLoops={props.playLoops}
                         onPlayFromPlayhead={props.onPlayFromPlayhead}
+                        onPlayOn={props.onPlayOn}
                         onNavigate={onNavigate}
                         onFit={
                             props.onPixelsPerBeatChange ? zoom.fit : undefined
@@ -1195,16 +1196,6 @@ const TimelineSurface = memo(function TimelineSurface({
                                         ? selection.startFlagBeatIndex
                                         : undefined
                                 }
-                                startPinned={
-                                    selection?.kind === "range" &&
-                                    selection.startPinned === true
-                                }
-                                onUnpin={props.onUnpinStart}
-                                pinTop={
-                                    TIMELINE_PAGE_ROW_BOTTOM +
-                                    (expanded ? 1 : 0)
-                                }
-                                pinSize={expanded ? 18 : 14}
                                 beatCount={model.beatCount}
                                 pixelsPerBeat={pixelsPerBeat}
                                 height={pinnedHeight}

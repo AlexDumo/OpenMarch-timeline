@@ -96,7 +96,7 @@ export default function TimelineResolverHost() {
     useTimelinePlaybackDriver(true);
     // UI-10: the start flag follows the page boxes (both modes: Basic edits inside them, UI-19)
     useTimelinePageBoxes(true);
-    // UI-19: no pinned start flag, loop or isolation in Basic
+    // UI-26: Expert's start flag stays put; UI-19: Basic's follows, with no loop or isolation
     useBasicModeGuards(true);
     // UI-19: the marchers Basic can't edit, per page
     useBasicLocksHost(true);

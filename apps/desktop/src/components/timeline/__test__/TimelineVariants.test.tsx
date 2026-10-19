@@ -1597,36 +1597,6 @@ describe("a calmer timeline (UI-12)", () => {
         );
     });
 
-    it("draws a pin on a pinned start flag, which unpins it", () => {
-        const onUnpinStart = vi.fn();
-        const { rerender } = render(
-            <ExpandedTimeline
-                {...commonProps}
-                showTransport={false}
-                selection={{
-                    kind: "range",
-                    range: { startBeatIndex: 5, endBeatIndex: 11 },
-                }}
-                onUnpinStart={onUnpinStart}
-            />,
-        );
-        expect(screen.queryByTestId("timeline-start-pin")).toBeNull();
-        rerender(
-            <ExpandedTimeline
-                {...commonProps}
-                showTransport={false}
-                selection={{
-                    kind: "range",
-                    range: { startBeatIndex: 5, endBeatIndex: 11 },
-                    startPinned: true,
-                }}
-                onUnpinStart={onUnpinStart}
-            />,
-        );
-        fireEvent.click(screen.getByTestId("timeline-start-pin"));
-        expect(onUnpinStart).toHaveBeenCalledTimes(1);
-    });
-
     it("keeps a steady height: one clip row kept without clips, no waveform without peaks", () => {
         const { container } = render(
             <ExpandedTimeline

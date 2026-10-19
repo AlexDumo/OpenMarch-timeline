@@ -137,7 +137,6 @@ describe("the field line past the last flag in Basic (UI-19)", () => {
                 selection: { kind: "range", start, end },
                 isolation: null,
                 pageBoxes: BOXES,
-                startPinned: false,
             },
             basic,
             false,
