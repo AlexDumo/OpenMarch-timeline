@@ -18,7 +18,8 @@ with `packages/ui` components, not with the demo's CSS.
 
 Everything floats over a full-window canvas. The scene gets the space: only
 the controls used while watching stay on screen, and choices made once per
-show or per computer live in the settings panel (UI-7). Revised 2026-10-05,
+show live in the settings panel (UI-7), and graphics choices per computer
+in the app's Settings window (UI-9). Revised 2026-10-05,
 replacing the first layout's venue and lighting bars and the wide camera bar.
 
 - **Top left: camera.** One menu button (`VideoCamera` icon) names the
@@ -33,6 +34,8 @@ replacing the first layout's venue and lighting bars and the wide camera bar.
   - The readout: set (page) name and count, from the selection and clock. A
     second line shows eye height and distance to the field center, in the
     field's measurement system (feet or meters).
+- **Bottom right:** a notice, only when the view went to low quality on
+  its own (UI-9).
 - **Styling:**
   - Floating panels use the existing overlay pattern (`border-stroke`,
     `bg-modal`, `backdrop-blur-32`, `rounded-6`, `shadow-modal`).
@@ -135,11 +138,11 @@ X, the button again or Esc close it. It has three sections:
     (`params.endZoneText`, `endZoneColor`). The text saves on Enter or when
     focus leaves, and each color when its picker closes, so one edit is one
     undo step. Empty text means no lettering.
-- **This computer**: graphics, saved in the window's local storage, never
-  in the show. Quality is Automatic (default), Low or High. Automatic starts on
-  High and drops to Low once when frames are slow (P5.1); a hint then says
-  so. Low and High are fixed. The fidelity brief's later Graphics work
-  (Medium, Advanced rows) extends this section.
+- **This computer**: never saved in the show. Preview controls for the horn
+  state, guard equipment and step-off foot. The graphics choices live in the
+  app's Settings window (UI-9); where there is no Settings window (the 3D
+  View web preview), Quality and Resolution are here too, with the same
+  hints.
 - **Keyboard and mouse**: every key and pointer gesture the window knows.
 
 ## UI-8 Opening with the show
@@ -148,6 +151,34 @@ The editor's Settings > General has "Open 3D View when a show opens" (app
 setting `view3dAutoOpen`, off by default). When it's on, the editor opens the
 window each time it loads a show, including at app launch, without taking
 focus from the editor.
+
+## UI-9 Graphics in Settings
+
+The app's Settings window has a **3D View** section for how the window draws
+on this computer. Each choice is saved in local storage, which the 3D window
+shares, so an open 3D View applies a change as it is saved:
+
+- **Quality**: Automatic (default), Low or High. Automatic starts on High
+  and drops to Low once when frames are slow (P5.1). Low and High are fixed.
+  The fidelity brief's later Graphics work (Medium, Advanced rows) extends
+  this row.
+- **Resolution**: the most device pixels drawn per screen pixel: Sharp (2x,
+  default), Balanced (1.5x) or Fast (1x). Low quality and battery saving
+  draw at 1x whatever this says.
+- **Pause drawing when nothing moves** and **Save power on battery**
+  (`drawPolicy.ts`), both on by default.
+
+The 3D window says when it went to Low on its own, in a card at the bottom
+right that stays until the viewer clicks Got it:
+
+- when Automatic dropped to Low because the view was stuttering, each time,
+  saying to choose High in Settings, 3D View (in the web preview: under
+  Quality in View settings) to keep full quality;
+- when WebGL draws in software (SwiftShader, llvmpipe, Microsoft Basic
+  Render), once per computer. The view then always draws at Low, whatever
+  Quality says, like the 2D field's low-quality mode, and the card says it
+  will still be slow and how to get the GPU back. Only no WebGL at all
+  replaces the scene with a message.
 
 ## Not in the MVP
 
