@@ -104,6 +104,23 @@ describe("FieldEditor with items", () => {
         expect(state.selected).toEqual([1, 3]);
     });
 
+    it("marquees the performers over an item, and not the item", () => {
+        const { editor, state } = setup();
+        editor.pointerDown(at(50, 50));
+        editor.pointerMove(at(400, 150));
+        editor.pointerUp(at(400, 150));
+        expect(state.selected).toEqual([1, 3]);
+    });
+
+    it("marquees an item when no performer is inside", () => {
+        // Marcher 3 stands on the item; dimmed, it can't be selected
+        const { editor, state } = setup({ dimmed: [3] });
+        editor.pointerDown(at(200, 50));
+        editor.pointerMove(at(400, 150));
+        editor.pointerUp(at(400, 150));
+        expect(state.selected).toEqual([2]);
+    });
+
     it("passes over a dimmed item", () => {
         const { editor, state } = setup({ dimmed: [2] });
         click(editor, 340, 115);
