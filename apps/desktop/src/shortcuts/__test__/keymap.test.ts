@@ -126,6 +126,23 @@ describe("customizing", () => {
         ).toEqual({ previousPage: ["K"] });
     });
 
+    it("normalizeOverrides moves a saved Previous paths binding to start flag positions", () => {
+        // Previous paths' action became start flag positions (fork #331)
+        expect(
+            normalizeOverrides({ togglePreviousPagePaths: ["Shift+N"] }),
+        ).toEqual({ toggleStartFlagPositions: ["Shift+N"] });
+        expect(normalizeOverrides({ togglePreviousPagePaths: [] })).toEqual({
+            toggleStartFlagPositions: [],
+        });
+        // A binding saved for the new action wins
+        expect(
+            normalizeOverrides({
+                togglePreviousPagePaths: ["Shift+N"],
+                toggleStartFlagPositions: ["J"],
+            }),
+        ).toEqual({ toggleStartFlagPositions: ["J"] });
+    });
+
     it("adds, removes and reassigns bindings", () => {
         let overrides = withBinding({}, "nextPage", "K", false);
         expect(overrides).toEqual({ nextPage: ["E", "K"] });
