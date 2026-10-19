@@ -1214,6 +1214,8 @@ These belong in the inspector (P8.5), not the timeline:
   diagnostics in the inspector or Show checks; they are engine internals a
   designer can't act on. The resolver still reports them for tests.
 
+**Removed 2026-10-19** (owner, #319): the inspector's Timeline section, its transition, slot and shape editors included, is gone; the paragraphs below are history.
+
 **Where they are (P8.5).** The inspector's Timeline section
 (`TimelineInspectorSection`, timeline mode only) explains each selected marcher
 (up to 10) at the selected page's end beat from `explain`: span kind with a
@@ -1283,7 +1285,7 @@ toasts. After an edit, the controls stay disabled until the inspector shows a
 target built from a newer store version than the edit was planned from; a
 target rebuilt from the same rows (scrubbing, playback) doesn't count.
 
-**Shapes (P8.2).** Below the transitions, `TimelineShapesEditor` draws and
+**Shapes (P8.2), removed 2026-10-19 (#319).** Below the transitions, `TimelineShapesEditor` draws and
 edits the show's spec shapes (`line`, `freehand`, `circle`, `box`, `block`,
 spec 5.2) in absolute field coordinates (D-5). It shows whether a page is
 selected or not.

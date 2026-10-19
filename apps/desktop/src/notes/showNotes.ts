@@ -4,12 +4,13 @@
  * modal, never a block: a note names what and where, and at most offers a one-click fix. Nothing
  * here changes data.
  *
- * One shape, `ShowNote`, from three producers:
+ * One shape, `ShowNote`, from two producers:
  * - items: hand conflicts (Carry's equipment included), short-handed holds, crew distance,
  *   crew-less moves (when the show's "Warn when a prop moves without a crew" is on) and put-down
  *   drift;
- * - cues: the cue compiler's notes (`CompiledCues.notes`: `carry_mismatch`, `silk_aspect`);
- * - timeline: the resolver's diagnostics (D-VACANT, D-REBASE and the rest).
+ * - cues: the cue compiler's notes (`CompiledCues.notes`: `carry_mismatch`, `silk_aspect`).
+ *
+ * The timeline resolver's diagnostics are not shown here (owner, 2026-10-19, ADR 0002 D-22).
  *
  * Beats are ordinals, as the timeline resolver counts them. The words come at display time
  * (`ShowNotesList`), with counts as the transport says them ("Page 1 count 7").

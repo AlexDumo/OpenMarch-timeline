@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import type {
     Beat,
-    Diagnostic,
     Explanation,
     PutDownItem,
     Resolver,
@@ -338,18 +337,6 @@ export function useExplain(marcherId: number, beat: Beat): Explanation | null {
         if (!resolver || !hasMarcher(resolver, marcherId)) return null;
         return resolver.explain(marcherId, beat);
     }, [resolver, version, marcherId, beat]);
-}
-
-const noDiagnostics: Diagnostic[] = [];
-
-/** The show's current diagnostics; empty when no resolver is ready. */
-export function useDiagnostics(): Diagnostic[] {
-    const resolver = useTimelineResolverStore((s) => s.resolver);
-    const version = useTimelineResolverStore((s) => s.version);
-    return useMemo(() => {
-        void version;
-        return resolver ? resolver.diagnostics() : noDiagnostics;
-    }, [resolver, version]);
 }
 
 /**
