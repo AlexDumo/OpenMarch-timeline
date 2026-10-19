@@ -21,7 +21,12 @@ import {
 } from "../definitions";
 import type { ShortcutOverrides } from "../keymap";
 import { getActionLabel, getActionShortcutKeys } from "../labels";
-import { hasActionHandler, isActionEnabled, runAction } from "../registry";
+import {
+    actionLabelNow,
+    hasActionHandler,
+    isActionEnabled,
+    runAction,
+} from "../registry";
 import type { PaletteContext, PaletteItem } from "./sources";
 
 const CATEGORY_ICONS: Record<ActionCategory, Icon> = {
@@ -85,7 +90,7 @@ export function getActionPaletteItems(
             const CategoryIcon = CATEGORY_ICONS[def.category];
             return {
                 id: `action:${id}`,
-                label: getActionLabel(id, t),
+                label: actionLabelNow(id) ?? getActionLabel(id, t),
                 group: t(`settings.shortcuts.category.${def.category}`),
                 icon: <CategoryIcon size={18} />,
                 keywords: def.keywordsKey

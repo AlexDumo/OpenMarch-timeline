@@ -109,7 +109,7 @@ async function unsetFromPalette(page: Page) {
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByPlaceholder("Search commands…").fill("Unset here");
     await expect(
-        page.getByRole("option", { name: "Unset here" }),
+        page.getByRole("option", { name: "Unset here Timeline", exact: true }),
     ).not.toHaveAttribute("aria-disabled", "true");
     await page.keyboard.press("Enter");
 }
@@ -173,7 +173,7 @@ test("Unset here is disabled when no selected marcher is Set on the count", asyn
     await page.keyboard.press("ControlOrMeta+k");
     await page.getByPlaceholder("Search commands…").fill("Unset here");
     await expect(
-        page.getByRole("option", { name: "Unset here" }),
+        page.getByRole("option", { name: "Unset here Timeline", exact: true }),
     ).toHaveAttribute("aria-disabled", "true");
     await page.keyboard.press("Escape");
 

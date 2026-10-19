@@ -582,6 +582,16 @@ const STATIC_ACTIONS = {
         defaultBindings: [],
     },
 
+    // Set vs Following (#305): as Unset here, but the later pages that followed the spot follow
+    // back to the earlier one. Its handler names the pages ("Unset here and on Pages 3–5"). Unbound
+    timelineUnsetHereAndFollowing: {
+        labelKey: "actions.timeline.unsetHereAndFollowing",
+        keywordsKey: "actions.timeline.unsetHereKeywords",
+        category: "timeline",
+        scope: "canvas",
+        defaultBindings: [],
+    },
+
     // Opens the transport's go-to box: type a page, a measure ("m23") or a rehearsal mark
     timelineGoTo: {
         labelKey: "actions.timeline.goTo",

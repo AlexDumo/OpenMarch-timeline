@@ -1,5 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { getActionPaletteItems } from "../palette/actionSource";
 import {
     actionIgnoresRepeat,
     hasActionHandler,
@@ -113,6 +114,23 @@ describe("useActionHandler", () => {
         expect(actionIgnoresRepeat("performUndo")).toBe(false);
         busy = true;
         expect(actionIgnoresRepeat("performUndo")).toBe(true);
+        unmount();
+    });
+
+    it("shows a handler's label in the palette while it gives one, the definition's otherwise", () => {
+        const t = (key: string) => key;
+        const labelOf = () =>
+            getActionPaletteItems({ t }, {}).find(
+                (item) => item.id === "action:lockX",
+            )?.label;
+        const { rerender, unmount } = renderHook(
+            ({ label }: { label?: string }) =>
+                useActionHandler("lockX", () => {}, { label }),
+            { initialProps: { label: "Lock X on Page 3" } },
+        );
+        expect(labelOf()).toBe("Lock X on Page 3");
+        rerender({ label: undefined });
+        expect(labelOf()).toBe("actions.alignment.lockX");
         unmount();
     });
 });

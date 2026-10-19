@@ -115,6 +115,9 @@
             "tapBeats": "Add {count} temporary beats",
             "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again",
             "unsetHere": "Unset here",
+            "unsetHereAndFollowing": "Unset here and on the pages that follow",
+            "unsetHereAndPage": "Unset here and on Page {page}",
+            "unsetHereAndPages": "Unset here and on Pages {first}–{last}",
             "unsetHereKeywords": "set following remove take back coordinate position delete"
         },
         "ui": {
@@ -732,6 +735,8 @@
                 "someKeptOnThisPage": "Some of these marchers are kept on this page",
                 "theseMarchers": "these marchers",
                 "unsetHere": "Unset here",
+                "unsetHereAndFollowingHint": "Take back their coordinate on this count, and {pages} follow back to the earlier spot",
+                "unsetHereAndFollowingHintSome": "Take back the coordinate of the {count} of the {total} selected that are Set on this count, and {pages} follow back to the earlier spot",
                 "unsetHereHint": "Take back their coordinate on this count, so they follow from earlier. Later pages keep their spots",
                 "unsetHereHintSome": "Take back the coordinate of the {count} of the {total} selected that are Set on this count, so they follow from earlier. Later pages keep their spots",
                 "unsetHereNone": "None of the selected marchers is Set on this count"
