@@ -153,9 +153,8 @@ export function viewBetween(
 const PREVIEW_FILL = 0.87;
 
 /**
- * The view on entering Preview: the whole field at 87% of its container,
- * centered across and a tenth of the spare height down. `container` is the
- * field's container including its padding.
+ * The view in Preview (100% there): the whole field at 87% of `container`,
+ * the field's pane, centered across and a tenth of the spare height down.
  */
 export function previewFit(
     view: FieldView,

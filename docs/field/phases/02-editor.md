@@ -168,10 +168,13 @@ they pass alone and in Electron.
   field, across and down, into the field's pane with a 16 px margin (at most
   5% of a side), no longer the height alone capped at 1. Clicking the zoom
   percentage measures the pane as it is then, so it fits around whatever
-  height the timeline has; opening a show and leaving Preview use the
-  same fit. The click glides there (a react-spring spring, about a third of
-  a second, no overshoot); any navigation stops the glide where it is. It
-  jumps instead with reduced motion or in the field's low-quality mode
+  height the timeline has; opening a show uses the same fit. In Preview the
+  fit is Preview's own (87%, a tenth of the spare height down), and that is
+  100% there. The click glides to the fit for the mode (a react-spring
+  spring, about a third of a second, no overshoot), and so does switching
+  Preview on or off; a switch's glide starts once the canvas has its new
+  size. Any navigation or press on the field stops the glide where it is.
+  It jumps instead with reduced motion or in the field's low-quality mode
   (`QUALITY_SETTINGS.animateView`), so Performance mode turns it off.
 - The view opens once the field and a page are loaded, and centers again on
   each resize until 250 ms later, as the panels around the field settle (Fabric

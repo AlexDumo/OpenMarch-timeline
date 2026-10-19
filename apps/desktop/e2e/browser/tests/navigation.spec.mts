@@ -213,19 +213,19 @@ test("Reset fits the whole field into the pane the timeline leaves", async ({
 });
 
 /**
- * Clicks Reset in the page and reads the zoom every frame for `ms`. With
- * `interrupt`, scrolls or presses the field that many frames after the click.
+ * Clicks `selector` (Reset, unless given) in the page and reads the zoom
+ * every frame for `ms`. With `interrupt`, scrolls or presses the field that
+ * many frames after the click.
  */
 const zoomsAfterReset = (
     page: Page,
     ms: number,
     interrupt?: { after: number; by: "wheel" | "press" },
+    selector = '[title="Reset Zoom and Center"]',
 ) =>
     page.evaluate(
-        async ({ ms, interrupt }) => {
-            const reset = document.querySelector<HTMLElement>(
-                '[title="Reset Zoom and Center"]',
-            )!;
+        async ({ ms, interrupt, selector }) => {
+            const reset = document.querySelector<HTMLElement>(selector)!;
             const surface = document.querySelector<HTMLElement>(
                 '[data-testid="threeField"]',
             )!;
@@ -259,8 +259,56 @@ const zoomsAfterReset = (
             }
             return zooms;
         },
-        { ms, interrupt },
+        { ms, interrupt, selector },
     );
+
+/** Preview's fit: 87% of the pane, centered across, a tenth of the spare height down. */
+async function previewFitView(
+    page: Page,
+    field: { width: number; height: number },
+): Promise<View> {
+    const box = await fieldBox(page);
+    const zoom =
+        Math.min(box.width / field.width, box.height / field.height) * 0.87;
+    return {
+        zoom,
+        pan: {
+            x: (box.width - field.width * zoom) / 2,
+            y: (box.height - field.height * zoom) / 10,
+        },
+    };
+}
+
+/** Waits for the view to settle, and checks it's `expected`. */
+async function landsOnView(page: Page, expected: () => Promise<View>) {
+    const fit = await settledView(page);
+    const want = await expected();
+    expectNear(fit.zoom, want.zoom, 0.005);
+    expectNear(fit.pan.x, want.pan.x);
+    expectNear(fit.pan.y, want.pan.y);
+}
+
+/** Several frames strictly between where the zoom began and where it landed. */
+function glided(zooms: number[], from: number) {
+    const to = zooms.at(-1)!;
+    const [low, high] = from < to ? [from, to] : [to, from];
+    const between = zooms.filter(
+        (zoom) => zoom > low + 0.005 && zoom < high - 0.005,
+    );
+    expect(between.length).toBeGreaterThanOrEqual(3);
+}
+
+/** Names a GPU to the field, which otherwise sees the software WebGL here. */
+const NAME_A_GPU = `{
+    for (const gl of [WebGLRenderingContext, WebGL2RenderingContext]) {
+        const getParameter = gl.prototype.getParameter;
+        gl.prototype.getParameter = function (name) {
+            // UNMASKED_RENDERER_WEBGL and RENDERER
+            if (name === 0x9246 || name === 0x1f01) return "Test GPU";
+            return getParameter.call(this, name);
+        };
+    }
+}`;
 
 const fieldQualityMode = (page: Page) =>
     page.evaluate(() => window.fieldTest!.quality!().mode);
@@ -269,16 +317,7 @@ test.describe("at full quality", () => {
     // The machines here draw WebGL in software, which puts the field in its
     // low-quality mode: name a GPU instead
     test.use({
-        initScript: `{
-            for (const gl of [WebGLRenderingContext, WebGL2RenderingContext]) {
-                const getParameter = gl.prototype.getParameter;
-                gl.prototype.getParameter = function (name) {
-                    // UNMASKED_RENDERER_WEBGL and RENDERER
-                    if (name === 0x9246 || name === 0x1f01) return "Test GPU";
-                    return getParameter.call(this, name);
-                };
-            }
-        }`,
+        initScript: NAME_A_GPU,
     });
     test.skip(
         ({ target }) => target !== "browser",
@@ -321,6 +360,48 @@ test.describe("at full quality", () => {
             await page.getByTitle("Zoom In").click();
             await settledView(page);
         }
+    });
+
+    test("switching Preview glides to its own fit, which Reset returns to", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const field = await fieldSize(show);
+        const opened = await openedView(show);
+        const reset = page.getByTitle("Reset Zoom and Center");
+        const previewView = () => previewFitView(page, field);
+        const landsOn = (expected: () => Promise<View>) =>
+            landsOnView(page, expected);
+
+        // Entering Preview glides there, and its fit is 100%
+        const entering = await zoomsAfterReset(
+            page,
+            1500,
+            undefined,
+            '[data-testid="workspace-view-preview"]',
+        );
+        glided(entering, opened.zoom);
+        await landsOn(previewView);
+        await expect(reset).toHaveText("100%");
+
+        // Reset in Preview comes back to Preview's fit
+        await page.getByTitle("Zoom In").click();
+        await expect(reset).toHaveText("120%");
+        await reset.click();
+        await landsOn(previewView);
+        await expect(reset).toHaveText("100%");
+
+        // Leaving Preview glides back to the editor's fit
+        const inPreview = (await settledView(page)).zoom;
+        const leaving = await zoomsAfterReset(
+            page,
+            1500,
+            undefined,
+            '[data-testid="workspace-view-editor"]',
+        );
+        glided(leaving, inPreview);
+        await landsOn(() => openingView(show));
+        await expect(reset).toHaveText("100%");
     });
 });
 

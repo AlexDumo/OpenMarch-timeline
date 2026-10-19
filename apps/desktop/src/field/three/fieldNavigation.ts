@@ -1,6 +1,5 @@
 import { isPreviewMode } from "@/stores/PreviewModeStore";
 import {
-    baseZoom,
     centerAtBase,
     clampPan,
     clampZoom,
@@ -54,90 +53,159 @@ export function setView(next: FieldView) {
 }
 
 /**
- * Fits the whole field into the field's pane and centers it, at once, as a
- * show opens and as leaving Preview does (the zoom percentage glides there,
- * `glideToFit`). The pane's size is measured now, so it counts the timeline's
- * current height.
+ * The field fitted for the mode the app is in, in the field's pane as it is
+ * now: in Preview, Preview's own fit; otherwise the whole field centered with
+ * a margin. Either is 100% in the zoom controls. Null before the pane has a
+ * size.
  */
-export function resetView() {
+function fittedView(): FieldView | null {
     const { width, height, field } = view();
-    if (width <= 0 || height <= 0) return;
-    stopGlide();
-    navigated = false;
-    useFieldViewStore.setState({
-        ...centerAtBase(width, height, field),
-        baseZoom: baseZoom(width, height, field),
-    });
+    if (width <= 0 || height <= 0) return null;
+    if (isPreviewMode())
+        return previewFit(
+            { width, height, zoom: 1, panX: 0, panY: 0 },
+            { width, height },
+            field,
+        );
+    return centerAtBase(width, height, field);
 }
 
-/** How far along the zoom-percentage click's glide is: 0 where it began, 1 at the fit. */
+/**
+ * Fits the field at once, as a show opens (the zoom percentage and switching
+ * Preview glide there instead, `glideToFit`). The pane is measured now, so the
+ * fit counts the timeline's current height.
+ */
+export function resetView() {
+    const fit = fittedView();
+    if (!fit) return;
+    stopGlide();
+    navigated = false;
+    useFieldViewStore.setState({ ...fit, baseZoom: fit.zoom });
+}
+
+/** How far along the glide to the fit is: 0 where it began, 1 at the fit. */
 const glide = new SpringValue(0);
 
 /** Quick, and it settles on the fit without overshooting it. */
 const GLIDE_CONFIG = { tension: 280, friction: 30, clamp: true };
 
-/** Stops the glide where it is, if one is running. */
+/**
+ * The glide under way, if any, by number: a stopped glide's late callbacks
+ * see a different number and do nothing.
+ */
+let gliding: number | null = null;
+let glides = 0;
+
+/** A glide waiting for the pane's new size (`glideToFitAfterResize`). */
+let pendingGlide: ReturnType<typeof setTimeout> | null = null;
+
+/** Stops the glide where it is, or one waiting to start. */
 const stopGlide = () => {
-    if (glide.isAnimating) glide.stop();
+    if (pendingGlide !== null) {
+        clearTimeout(pendingGlide);
+        pendingGlide = null;
+    }
+    if (gliding === null) return;
+    gliding = null;
+    glide.stop();
 };
 
 const prefersReducedMotion = () =>
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 /**
- * Glides from the current view to the fitted, centered one, as clicking the
- * zoom percentage does. The fit is measured each frame, so it lands on the
- * pane as it is. Any navigation along the way stops the glide where it is.
- * With reduced motion, or in the field's low-quality mode (Performance mode,
- * or a machine that draws WebGL in software), it jumps there.
+ * Glides from the current view to the fit for the mode the app is in, as
+ * clicking the zoom percentage and switching Preview on or off do. The fit is
+ * measured each frame, so it follows the pane as panels come and go, and
+ * lands on the pane as it is. Any navigation along the way stops the glide
+ * where it is. With reduced motion, or in the field's low-quality mode
+ * (Performance mode, or a machine that draws WebGL in software), it jumps
+ * there.
  */
 export function glideToFit() {
     const current = view();
-    const { width, height, field } = current;
-    if (width <= 0 || height <= 0) return;
+    const fit = fittedView();
+    if (!fit) return;
     if (prefersReducedMotion() || !currentQualitySettings().animateView)
         return resetView();
     const from: FieldView = {
-        width,
-        height,
+        width: current.width,
+        height: current.height,
         zoom: current.zoom,
         panX: current.panX,
         panY: current.panY,
     };
     stopGlide();
+    const id = ++glides;
+    gliding = id;
     navigated = false;
     // The readout counts down to 100% as the field glides
-    useFieldViewStore.setState({ baseZoom: baseZoom(width, height, field) });
+    useFieldViewStore.setState({ baseZoom: fit.zoom });
     glide.set(0);
     void glide.start({
         to: 1,
         config: GLIDE_CONFIG,
         onChange: () => {
-            const now = view();
             // A pane squeezed to nothing has no fit: wait for it to come back
-            if (now.width <= 0 || now.height <= 0) return;
-            const to = centerAtBase(now.width, now.height, now.field);
-            useFieldViewStore.setState(viewBetween(from, to, glide.get()));
+            const to = gliding === id ? fittedView() : null;
+            if (!to) return;
+            // A resize keeps where the glide began (its zoom and top-left)
+            const start = { ...from, width: to.width, height: to.height };
+            useFieldViewStore.setState({
+                ...viewBetween(start, to, glide.get()),
+                baseZoom: to.zoom,
+            });
         },
         onRest: ({ finished }) => {
+            if (gliding !== id) return;
+            gliding = null;
             if (finished) resetView();
         },
     });
 }
 
+/** How long a switch's glide waits for the pane's new size before going anyway. */
+const RESIZE_WAIT_MS = 100;
+
 /**
- * Centers the field again while the show is opening and its panels settle,
- * unless the user has already moved the view.
+ * Glides to the fit once the pane has its new size: switching Preview adds or
+ * takes away the panels around the field, and the canvas learns its new size
+ * a few frames later. Gliding at once would aim at the old pane's fit first.
  */
-export function settleView() {
-    if (!navigated) resetView();
+export function glideToFitAfterResize() {
+    stopGlide();
+    pendingGlide = setTimeout(() => {
+        pendingGlide = null;
+        glideToFit();
+    }, RESIZE_WAIT_MS);
 }
 
-/** Fits the whole field into `container` (its container in Preview). */
-export function fitPreview(container: { width: number; height: number }) {
-    stopGlide();
-    const fit = previewFit(view(), container, view().field);
-    if (fit) useFieldViewStore.setState(fit);
+/**
+ * The pane was resized: starts a glide waiting for it. Whether one started.
+ */
+export function startGlideAfterResize(): boolean {
+    if (pendingGlide === null) return false;
+    clearTimeout(pendingGlide);
+    pendingGlide = null;
+    glideToFit();
+    return true;
+}
+
+/**
+ * Fits the field again while the panels around it settle, as the show opens
+ * or Preview switches, unless the user has already moved the view. A glide
+ * under way follows the pane already.
+ */
+export function settleView() {
+    if (!navigated && gliding === null && pendingGlide === null) resetView();
+}
+
+/**
+ * Fits the field again after the pane is resized in Preview, which keeps the
+ * field fitted. A glide under way follows the pane already.
+ */
+export function refitPreview() {
+    if (gliding === null && pendingGlide === null) resetView();
 }
 
 /**

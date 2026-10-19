@@ -77,9 +77,11 @@ import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
     attachFieldNavigation,
-    fitPreview,
+    glideToFitAfterResize,
+    refitPreview,
     resetView,
     settleView,
+    startGlideAfterResize,
 } from "./fieldNavigation";
 import { GlyphAtlas } from "./sdfText";
 import { selectionBoxPadding } from "./selectionRing";
@@ -482,7 +484,7 @@ function ThreeFieldView() {
     // Here, not in the camera: a canvas started over after a lost context
     // keeps the view
     const opened = useRef(false);
-    usePreviewFit(root, preview, ready, settled);
+    usePreviewFit(preview, ready, settled);
 
     return (
         <div
@@ -551,7 +553,6 @@ function ThreeFieldView() {
                         <ContextLossGuard onGiveUp={startOver} />
                         <FieldCamera
                             fieldProperties={fieldProperties}
-                            root={root}
                             ready={ready}
                             opened={opened}
                             settled={settled}
@@ -688,13 +689,13 @@ function useFieldItems(
 const PREVIEW_SETTLE_MS = 250;
 
 /**
- * Entering Preview fits the whole field and clears the selection, and
- * leaving it centers the field at the base zoom again, once the layout has
- * settled. The field also centers again that long after it's `ready`, as the
- * app's panels finish laying out around it, and marks the view `settled`.
+ * Switching Preview on or off glides the field to that mode's fit, as
+ * clicking the zoom percentage does; entering Preview also clears the
+ * selection. As the show opens, and for `PREVIEW_SETTLE_MS` after a switch,
+ * the view isn't `settled`: the panels are still laying out around the field,
+ * so a resize fits it again (the glide follows them by itself).
  */
 function usePreviewFit(
-    root: RefObject<HTMLDivElement | null>,
     preview: boolean,
     ready: boolean,
     settled: RefObject<boolean>,
@@ -706,49 +707,44 @@ function usePreviewFit(
     const opening = useRef(true);
     useEffect(() => {
         if (!ready) return;
-        // Until it has run once, it's the show opening; then Preview changes
-        const first = opening.current;
+        // Once the show has opened, a run is Preview switching
+        const switching = !opening.current;
+        if (switching) {
+            settled.current = false;
+            glideToFitAfterResize();
+            if (preview) clearSelection.current();
+        }
         let frame = 0;
         const timeout = setTimeout(() => {
             frame = requestAnimationFrame(() => {
                 opening.current = false;
                 settled.current = true;
-                if (!preview) {
-                    if (first) settleView();
-                    else resetView();
-                    return;
-                }
-                if (root.current)
-                    fitPreview({
-                        width: root.current.clientWidth,
-                        height: root.current.clientHeight,
-                    });
-                clearSelection.current();
+                if (switching) return;
+                settleView();
+                if (preview) clearSelection.current();
             });
         }, PREVIEW_SETTLE_MS);
         return () => {
             clearTimeout(timeout);
             cancelAnimationFrame(frame);
         };
-    }, [preview, ready, root, settled]);
+    }, [preview, ready, settled]);
 }
 
 /**
  * Keeps the view store's size and field in step with the canvas, opens the
- * show centered at the base zoom once it's `ready`, and points the camera at
- * the store's view. Until the view has `settled`, a resize centers it again.
- * After that a resize keeps the zoom and where the field sits from the
- * top-left; in Preview it fits the field again.
+ * show fitted once it's `ready`, and points the camera at the store's view.
+ * Until the view has `settled`, a resize fits it again. After that a resize
+ * keeps the zoom and where the field sits from the top-left; in Preview it
+ * fits the field again, unless a glide is following the pane.
  */
 function FieldCamera({
     fieldProperties,
-    root,
     ready,
     opened,
     settled,
 }: {
     fieldProperties: FieldProperties;
-    root: RefObject<HTMLDivElement | null>;
     ready: boolean;
     opened: RefObject<boolean>;
     settled: RefObject<boolean>;
@@ -768,15 +764,14 @@ function FieldCamera({
         if (!opened.current) {
             opened.current = true;
             resetView();
-        } else if (isPreviewMode() && root.current) {
-            fitPreview({
-                width: root.current.clientWidth,
-                height: root.current.clientHeight,
-            });
+        } else if (startGlideAfterResize()) {
+            // A Preview switch's glide, now that the pane has its new size
+        } else if (isPreviewMode()) {
+            refitPreview();
         } else if (!settled.current) {
             settleView();
         }
-    }, [width, height, fieldProperties, root, ready, opened, settled]);
+    }, [width, height, fieldProperties, ready, opened, settled]);
 
     useLayoutEffect(() => {
         const apply = () => {
