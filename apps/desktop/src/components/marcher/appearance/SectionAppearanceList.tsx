@@ -12,7 +12,7 @@ import {
     createSectionAppearancesMutationOptions,
     deleteSectionAppearancesMutationOptions,
     updateSectionAppearancesMutationOptions,
-    performersQueryOptions,
+    allMarchersQueryOptions,
 } from "@/hooks/queries";
 import { AppearanceEditor } from "@/components/marcher/appearance/AppearanceEditor";
 import { useMemo } from "react";
@@ -49,7 +49,7 @@ export default function SectionAppearanceList() {
         deleteSectionAppearancesMutationOptions(queryClient),
     );
     // Performers' sections only: items are in sections of their own ("Prop", "Equipment")
-    const { data: allMarchers } = useQuery(performersQueryOptions());
+    const { data: allMarchers } = useQuery(allMarchersQueryOptions());
     const allSectionsInShow = useMemo(() => {
         const allSections = allMarchers?.map((marcher) =>
             getSectionObjectByName(marcher.section),

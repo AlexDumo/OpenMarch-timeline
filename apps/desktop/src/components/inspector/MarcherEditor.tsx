@@ -20,6 +20,7 @@ import {
 import MarcherRotationInput from "./marcher/MarcherRotationInput";
 import StepSizeWarningBadge from "./StepSizeWarningBadge";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { performersOnly } from "@/global/classes/Marcher";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
 import { clsx } from "clsx";
@@ -415,7 +416,14 @@ const NO_MARCHERS: readonly number[] = [];
 
 // eslint-disable-next-line max-lines-per-function
 function MarcherEditor() {
-    const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
+    const { selectedMarchers: selection, setSelectedMarchers } =
+        useSelectedMarchers()!;
+    // Performers: items (props and equipment) are edited in the Props panel, not as marchers
+    const selectedMarchers = useMemo(
+        () => performersOnly(selection),
+        [selection],
+    );
+    const selectedItemCount = selection.length - selectedMarchers.length;
     const { selectedPage } = useSelectedPage()!;
     /**
      * Playback (UI-19 review): the section keeps its place and shows a note instead of the
@@ -554,6 +562,17 @@ function MarcherEditor() {
 
     return (
         <>
+            {selectedItemCount > 0 && (
+                <p
+                    className="text-sub text-text/60 px-6"
+                    data-testid="inspector-items-selected"
+                >
+                    <T
+                        keyName="inspector.marcher.itemsSelected"
+                        params={{ count: selectedItemCount }}
+                    />
+                </p>
+            )}
             {selectedMarchers.length > 0 && fieldProperties && (
                 <div>
                     {selectedMarchers.length > 1 ? (

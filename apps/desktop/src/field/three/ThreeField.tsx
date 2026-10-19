@@ -21,7 +21,7 @@ import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     allItemsQueryOptions,
-    allMarchersQueryOptions,
+    allMarcherRowsQueryOptions,
     fieldPropertiesQueryOptions,
     itemGeometryQueryOptions,
     moveMarchersInTargetMutationOptions,
@@ -176,7 +176,8 @@ function ThreeFieldView() {
     const { data: fieldProperties } = useQuery(
         fieldPropertiesQueryOptions(databaseReady),
     );
-    const { data: marcherRows } = useQuery(allMarchersQueryOptions());
+    // Items too: the field draws and selects props and equipment
+    const { data: marcherRows } = useQuery(allMarcherRowsQueryOptions());
     const { selectedPage } = useSelectedPage()!;
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const { isPlaying } = useIsPlaying()!;

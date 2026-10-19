@@ -6,7 +6,7 @@ import {
     SectionFamily,
 } from "@/global/classes/Sections";
 import {
-    performersQueryOptions,
+    allMarchersQueryOptions,
     allTagsQueryOptions,
     marcherIdsForAllTagIdsQueryOptions,
 } from "@/hooks/queries";
@@ -290,9 +290,9 @@ function FamilySelector({ marchers }: { marchers: Marcher[] }) {
 const SELECT_BY_STORAGE_KEY = "openmarch-select-tab-mode";
 
 function SelectTabContents() {
-    // Performers only: props and equipment aren't selected by section, tag or prefix
+    // Performers: props and equipment aren't selected by section, tag or prefix
     const { data: marchers, isSuccess: marchersLoaded } = useQuery(
-        performersQueryOptions(),
+        allMarchersQueryOptions(),
     );
     const [selectByOption, setSelectByOption] = useState<SelectByOption>(() => {
         const stored = localStorage.getItem(SELECT_BY_STORAGE_KEY);

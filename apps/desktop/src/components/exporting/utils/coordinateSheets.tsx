@@ -2,7 +2,6 @@
 import ReactDOMServer from "react-dom/server";
 import type { FieldProperties } from "@openmarch/core";
 import type Marcher from "@/global/classes/Marcher";
-import { performersOnly } from "@/global/classes/Marcher";
 import type Page from "@/global/classes/Page";
 import type tolgee from "@/global/singletons/Tolgee";
 import {
@@ -45,14 +44,14 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 }
 
 /**
- * The marchers that get coordinate sheets, named and sorted for the export: performers only, as
- * items (props and equipment) have no sheet. An unnamed marcher is called by its section and the
+ * The marchers that get coordinate sheets, named and sorted for the export: performers, from the
+ * marchers query, as items (props and equipment) have no sheet. An unnamed marcher is called by its section and the
  * number in its drill number; sorted by section, then drill number.
  */
 export function coordinateSheetMarchers(
     marchers: readonly Marcher[],
 ): (Marcher & { name: string })[] {
-    return performersOnly(marchers)
+    return marchers
         .map((marcher) => ({
             ...marcher,
             // Use raw DB section with the numeric part of drill_number as fallback display name

@@ -52,7 +52,6 @@ import { ShareNoteExportLine } from "@/components/assets/ShowCredits";
 import tolgee from "@/global/singletons/Tolgee";
 import { useQuery } from "@tanstack/react-query";
 import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
-import { isPerformer } from "@/global/classes/Marcher";
 import { assert } from "@/utilities/utils";
 import {
     generateDrillChartExportSVGs,
@@ -724,9 +723,6 @@ function DrillChartExport() {
 
             // Generate PDFs for each marcher or MAIN if individual charts are not selected
             for (let marcher = 0; marcher < svgPages.length; marcher++) {
-                // Items (props and equipment) are on every chart but get no chart of their own
-                if (individualCharts && !isPerformer(marchers[marcher]!))
-                    continue;
                 // Index i is always marchers[i]. A marcher missing a position on some page
                 // has no pages here: skip its PDF rather than draw an incomplete one
                 if (individualCharts && svgPages[marcher].length === 0) {
