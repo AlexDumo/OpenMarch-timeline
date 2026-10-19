@@ -65,7 +65,8 @@ export type FieldTestHandle =
 
 /**
  * What the user is doing on the field right now. `line` covers the whole line
- * tool, from choosing it until it applies or cancels.
+ * tool, from choosing it until it applies or cancels, and `prop` the prop
+ * tool, from the Props panel's Draw until it's turned off.
  */
 export type FieldTestGesture =
     | "marquee"
@@ -74,7 +75,8 @@ export type FieldTestGesture =
     | "scale"
     | "rotate"
     | "pan"
-    | "line";
+    | "line"
+    | "prop";
 
 /** How the field draws on this machine (the new field only, #205). */
 export type FieldTestQuality = {
@@ -119,7 +121,38 @@ export interface FieldTestApi {
     fieldImage(): FieldTestImage | null;
     /** The line tool (L) while it's on, or null when it's off (#203). */
     lineTool?(): FieldTestLineTool | null;
+    /**
+     * The props and equipment drawn (C2.1), by ascending marcher id. Items Off
+     * field at the beat shown, or hidden by the user, are left out.
+     */
+    items?(): FieldTestItem[];
+    /** The prop tool while it's on, or null when it's off (C2.1). */
+    propTool?(): FieldTestPropTool | null;
 }
+
+/** The prop tool as the field shows it. */
+export type FieldTestPropTool = {
+    outlineType: string;
+    /** The Outline being drawn, in field units, or null before there's enough of it */
+    preview: { points: { x: number; y: number }[]; closed: boolean } | null;
+};
+
+/** An item's Outline as the field draws it. */
+export type FieldTestItem = {
+    /** The item's marcher id */
+    id: number;
+    outlineType: string;
+    /** In meters, with any size being dragged */
+    width: number;
+    depth: number;
+    /** In degrees, clockwise on screen */
+    rotation: number;
+    /** Where the timeline (or a drag) has it, in field units */
+    x: number;
+    y: number;
+    /** Its center in the viewport */
+    screen: ScreenPoint;
+};
 
 /** The line tool as the field shows it. Positions are in field units. */
 export type FieldTestLineTool = {

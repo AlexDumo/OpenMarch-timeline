@@ -819,6 +819,8 @@ describeDbTests("showLibrary", (it) => {
                 sql.raw(`CREATE TABLE IF NOT EXISTS items (
                     id INTEGER PRIMARY KEY,
                     marcher_id INTEGER NOT NULL,
+                    kind TEXT NOT NULL,
+                    surface_type TEXT,
                     library_item_id TEXT,
                     library_version_hash TEXT)`),
             );
@@ -842,7 +844,7 @@ describeDbTests("showLibrary", (it) => {
                 sql`INSERT INTO marchers (id, name, section, drill_prefix, drill_order) VALUES (${id}, ${name}, 'Prop', 'P', ${id})`,
             );
             await db.run(
-                sql`INSERT INTO items (id, marcher_id, library_item_id, library_version_hash) VALUES (${id}, ${id}, ${model?.itemId ?? null}, ${model?.versionHash ?? null})`,
+                sql`INSERT INTO items (id, marcher_id, kind, surface_type, library_item_id, library_version_hash) VALUES (${id}, ${id}, 'prop', 'obstacle', ${model?.itemId ?? null}, ${model?.versionHash ?? null})`,
             );
         };
 

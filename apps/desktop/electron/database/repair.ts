@@ -63,6 +63,9 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     "cues",
     "cue_marchers",
     "page_performer_settings",
+    // Items after the marchers that back them, Outline changes after their item (ADR 0002 D-10)
+    "items",
+    "item_geometry",
 ];
 
 /**

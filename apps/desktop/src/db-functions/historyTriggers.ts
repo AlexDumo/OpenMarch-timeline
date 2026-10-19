@@ -39,6 +39,9 @@ export const tablesWithHistory = [
     schema.cues,
     schema.cue_marchers,
     schema.page_performer_settings,
+    // Items and their Outline changes (ADR 0002 D-10)
+    schema.items,
+    schema.item_geometry,
 ];
 
 /**

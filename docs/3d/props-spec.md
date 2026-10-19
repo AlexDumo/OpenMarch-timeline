@@ -338,9 +338,9 @@ aliases, never shown as labels [owner, 2026-10-12, Q39–Q41, Q44].
   the show, so it has its own drill and Placement. Every prop is an Item.
   Equipment a performer carries by default becomes an Item only when it is
   put down, handed off, or is an extra, and stays one after that (`CONTEXT.md`).
-- Props and row-backed equipment are `marchers` rows (`type = "prop"` or
-  `"equipment"`): positions come from the timeline resolver; motion and undo
-  are inherited.
+- Props and row-backed equipment are `marchers` rows (`type = "item"`; prop
+  or equipment is the item's `kind`) [owner, 2026-10-12, C2.1]: positions
+  come from the timeline resolver; motion and undo are inherited.
 - One table, **`items`** (PR 1013's `props`, renamed), `kind` = `prop` |
   `equipment`. `surface_type` applies to props only. `props.image` is dropped
   for Artwork slots; `image_opacity` becomes a 2D display preference. An
