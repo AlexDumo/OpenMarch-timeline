@@ -217,3 +217,21 @@ Each field is on its own line so that concurrent claims merge cleanly. Edit only
 - **Left:** no UI yet; the Items tab (C3.7) and put-down (C2.5) use these.
 - **Checks:** desktop and core vitest (full suites); migration tests;
   type-check, lint, format, spellcheck.
+
+### 2026-10-18 · review fixes (3d/c2-items-out-of-loops-v2) · C2.2
+
+- **Done:** performers are the default (owner-approved). `getMarchers` and
+  `allMarchersQueryOptions` leave items out; code that draws, selects or
+  writes items asks for `getMarcherRowsIncludingItems` /
+  `allMarcherRowsQueryOptions` by name: the field, the selection, undo's
+  reselect, move-member selection and the drill-number check.
+  `performersQueryOptions` is gone. Drill-chart PDFs, video export and
+  launch-page previews no longer draw props as dots. Marquee and lasso
+  leave items out when performers are inside (`areaPicks`); align,
+  distribute, swap, Create Line and Create Circle use the selected
+  performers; "set all marchers to the previous/next page" sets the
+  performers; the inspector shows performers and a note for selected props;
+  the previous-show import skips the source's items.
+- **Kept on rows:** timeline label lookups, the resolver snapshot and
+  casting take ids from the selection; props may fill formation slots
+  (props-spec section 4).

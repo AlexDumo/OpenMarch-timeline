@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    areaPicks,
     LASSO_CLOSE_DISTANCE,
     lassoCloses,
     marchersInPolygon,
@@ -147,5 +148,21 @@ describe("selectionAfterArea", () => {
         expect(selectionAfterArea([1, 2], [2, 3], true)).toEqual([1, 2, 3]);
         const current = [1, 2];
         expect(selectionAfterArea(current, [2], true)).toBe(current);
+    });
+});
+
+describe("areaPicks", () => {
+    const isItem = (id: number) => id >= 100;
+
+    it("leaves out items when performers are inside too, as select-all does", () => {
+        expect(areaPicks([1, 100, 2, 101], isItem)).toEqual([1, 2]);
+    });
+
+    it("takes the items when nothing else is inside", () => {
+        expect(areaPicks([100, 101], isItem)).toEqual([100, 101]);
+    });
+
+    it("takes nothing from nothing", () => {
+        expect(areaPicks([], isItem)).toEqual([]);
     });
 });

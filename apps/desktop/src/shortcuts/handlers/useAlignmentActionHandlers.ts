@@ -13,12 +13,16 @@ export function useAlignmentActionHandlers() {
         fieldProperties,
         ready,
         getSelectedMarcherPages,
+        getSelectedPerformerPages,
         selectedMarchers,
+        selectedPerformers,
     } = useEditorReadiness();
     // Read when an action runs, so a settings change (such as a timeline zoom save) doesn't
     // re-render the handlers
     const setUiSettings = useUiSettingsStore((s) => s.setUiSettings);
     const hasSelection = ready && selectedMarchers.length > 0;
+    // Align, distribute and swap line performers up: a selected prop isn't one more dot (C2.2)
+    const hasPerformers = ready && selectedPerformers.length > 0;
     const updateCoordinates = useUpdateCoordinates();
 
     useActionHandler(
@@ -63,22 +67,22 @@ export function useAlignmentActionHandlers() {
         "alignVertically",
         () => {
             const alignedCoords = CoordinateActions.alignVertically({
-                marcherPages: getSelectedMarcherPages(),
+                marcherPages: getSelectedPerformerPages(),
             });
             updateCoordinates(alignedCoords);
         },
-        { enabled: hasSelection },
+        { enabled: hasPerformers },
     );
 
     useActionHandler(
         "alignHorizontally",
         () => {
             const alignedCoords = CoordinateActions.alignHorizontally({
-                marcherPages: getSelectedMarcherPages(),
+                marcherPages: getSelectedPerformerPages(),
             });
             updateCoordinates(alignedCoords);
         },
-        { enabled: hasSelection },
+        { enabled: hasPerformers },
     );
 
     useActionHandler(
@@ -87,12 +91,12 @@ export function useAlignmentActionHandlers() {
             if (!fieldProperties) return;
             const distributedCoords =
                 CoordinateActions.evenlyDistributeVertically({
-                    marcherPages: getSelectedMarcherPages(),
+                    marcherPages: getSelectedPerformerPages(),
                     fieldProperties,
                 });
             updateCoordinates(distributedCoords);
         },
-        { enabled: hasSelection },
+        { enabled: hasPerformers },
     );
 
     useActionHandler(
@@ -101,12 +105,12 @@ export function useAlignmentActionHandlers() {
             if (!fieldProperties) return;
             const distributedCoords =
                 CoordinateActions.evenlyDistributeHorizontally({
-                    marcherPages: getSelectedMarcherPages(),
+                    marcherPages: getSelectedPerformerPages(),
                     fieldProperties,
                 });
             updateCoordinates(distributedCoords);
         },
-        { enabled: hasSelection },
+        { enabled: hasPerformers },
     );
 
     useActionHandler(
@@ -134,16 +138,16 @@ export function useAlignmentActionHandlers() {
     useActionHandler(
         "swapMarchers",
         () => {
-            if (selectedMarchers.length !== 2) {
+            if (selectedPerformers.length !== 2) {
                 console.error(
                     "Can only swap 2 marchers. Selected marchers:",
-                    selectedMarchers,
+                    selectedPerformers,
                 );
                 toast.error(t("actions.swap.mustSelectTwo"));
                 return;
             }
             // Each marcher takes the other's position where the selection edits
-            const pair = getSelectedMarcherPages();
+            const pair = getSelectedPerformerPages();
             if (pair.length !== 2) {
                 // Refused by the selection: say why, as the other tools do
                 updateCoordinates([]);
@@ -154,6 +158,6 @@ export function useAlignmentActionHandlers() {
                 { ...pair[1], x: pair[0].x, y: pair[0].y },
             ]);
         },
-        { enabled: ready && selectedMarchers.length === 2 },
+        { enabled: ready && selectedPerformers.length === 2 },
     );
 }

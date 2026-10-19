@@ -20,13 +20,10 @@ const collision = (marcher1Id: number, marcher2Id: number) =>
     }) as unknown as CollisionData;
 
 describe("_combineCollisions", () => {
-    it("leaves out a collision with an item: a performer on a platform isn't colliding", () => {
+    it("leaves out a collision with an item, which the marchers query doesn't have: a performer on a platform isn't colliding", () => {
         const { collisions } = _combineCollisions([
-            result([
-                marcher(1, "T1", "marcher"),
-                marcher(2, "T2", "marcher"),
-                marcher(3, "PROP1", "item"),
-            ]),
+            // The performers; item 3 (PROP1) is only in the collision results
+            result([marcher(1, "T1", "marcher"), marcher(2, "T2", "marcher")]),
             result([collision(1, 2), collision(1, 3)]),
         ]);
         expect(collisions?.map((c) => c.label)).toEqual(["T1, T2"]);

@@ -242,6 +242,7 @@ export class FieldEditor {
             marchers: () => ports.marchers(),
             zoom: () => ports.zoom(),
             canSelect: (id) => ports.canSelect(id),
+            isItem: (id) => ports.isItem?.(id) ?? false,
             selection: () => ports.selection.get(),
             select: (ids) => this.write(ids),
             changed: () => this.emit(),

@@ -19,7 +19,6 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import type { PositionSource } from "@/timeline/positionBuffer";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { allMarchersQueryOptions } from "./queries";
-import { performersOnly } from "@/global/classes/Marcher";
 import { useTimingObjects } from "./useTimingObjects";
 
 /**
@@ -118,8 +117,9 @@ export const _combineCollisions = (
         marchers.data.map((m) => [m.id, m.drill_number]),
     );
     const label = (id: number) => drillNumbers.get(id) ?? String(id);
-    // Performers only: a performer on a prop (a platform, a floor) isn't colliding with it
-    const performers = new Set(performersOnly(marchers.data).map((m) => m.id));
+    // Performers only (the marchers query has no items): a performer on a prop (a platform, a
+    // floor) isn't colliding with it
+    const performers = new Set(marchers.data.map((m) => m.id));
     return {
         collisions: found.data
             .filter(

@@ -19,3 +19,4 @@ export * from "./phraseAssets";
 export * from "./pagePerformerSettings";
 export * from "./items";
 export * from "./itemPlacements";
+export * from "./itemBeatRemap";
