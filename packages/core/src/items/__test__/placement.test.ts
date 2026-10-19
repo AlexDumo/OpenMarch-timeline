@@ -8,6 +8,8 @@ import {
     handsAt,
     handsNeeded,
     placementAt,
+    putDowns,
+    putDownSpot,
     shortHandedHolds,
     type CarryChange,
     type Holder,
@@ -401,5 +403,59 @@ describe("handsNeeded", () => {
         expect(handsNeeded({ left: true, right: true })).toBe("both");
         expect(handsNeeded({ left: false, right: true })).toBe("right");
         expect(handsNeeded({ left: true, right: false })).toBe("left");
+    });
+});
+
+describe("put-down", () => {
+    it("finds each held → placed change with the holders just before it", () => {
+        const changes = [
+            held(2, [{ marcherId: ALICE, hand: "both" }]),
+            placed(6),
+            offField(8),
+            held(10, [
+                { marcherId: ALICE, hand: "left" },
+                { marcherId: BOB, hand: "right" },
+            ]),
+            placed(12, [CREW_A]),
+            placed(14),
+        ];
+        expect(
+            putDowns(changes).map((p) => [p.beat, p.holders.length]),
+        ).toEqual([
+            [6, 1],
+            [12, 2],
+        ]);
+    });
+
+    it("puts down a flag item's first placed change, from its original performer's explicit held change", () => {
+        expect(putDowns(FLAG.changes)).toEqual([
+            {
+                changeId: FLAG.changes[1]!.id,
+                beat: 8,
+                holders: [{ marcherId: ALICE, hand: "both" }],
+            },
+        ]);
+    });
+
+    it("lands at the holder, or the midpoint of several", () => {
+        const positions = new Map<number, XY>([
+            [ALICE, [0, 0]],
+            [BOB, [4, 2]],
+        ]);
+        expect(
+            putDownSpot([{ marcherId: ALICE, hand: "both" }], positions),
+        ).toEqual([0, 0]);
+        expect(
+            putDownSpot(
+                [
+                    { marcherId: ALICE, hand: "left" },
+                    { marcherId: BOB, hand: "right" },
+                ],
+                positions,
+            ),
+        ).toEqual([2, 1]);
+        expect(
+            putDownSpot([{ marcherId: 99, hand: "both" }], positions),
+        ).toBeNull();
     });
 });

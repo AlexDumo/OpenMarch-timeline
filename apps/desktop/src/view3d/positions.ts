@@ -22,6 +22,7 @@ import { useTimingObjects } from "@/hooks/useTimingObjects";
 import type { BeatTiming } from "@/timeline/timeMap";
 import { PositionBuffer, playbackBeat } from "@/timeline/positionBuffer";
 import { acquireExportResolver } from "@/timeline/timelineExport";
+import { putDownItemsQueryOptions } from "@/hooks/queries/usePutDownItems";
 import { VIEW3D_TIMELINE_QUERY_KEY } from "@/view3d/sync/protocol";
 
 /** As in `@openmarch/core` `world.ts`. */
@@ -145,12 +146,15 @@ export function useShowPositions(): ShowPositionsReturn {
         isLoading: resolverLoading,
         isError: resolverError,
     } = useQuery(view3dResolverQueryOptions());
+    // Placement edits put items down elsewhere without a timeline change (ADR 0002 D-9)
+    const { data: putDownItems } = useQuery(putDownItemsQueryOptions());
 
     return useMemo(() => {
         const isLoading = timingLoading || resolverLoading;
         const hasError = timingError || resolverError;
         if (isLoading || hasError || !resolver)
             return { positions: null, isLoading, hasError };
+        if (putDownItems) resolver.setPutDownItems(putDownItems);
         return {
             positions: new ShowPositions(resolver, beats),
             isLoading: false,
@@ -159,6 +163,7 @@ export function useShowPositions(): ShowPositionsReturn {
     }, [
         beats,
         resolver,
+        putDownItems,
         timingLoading,
         timingError,
         resolverLoading,

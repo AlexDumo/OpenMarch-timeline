@@ -20,4 +20,5 @@ export * from "./pagePerformerSettings";
 export * from "./items";
 export * from "./itemPlacements";
 export * from "./itemArtworkSlots";
+export * from "./itemPutDown";
 export * from "./itemBeatRemap";

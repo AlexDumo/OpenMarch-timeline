@@ -397,3 +397,47 @@ export function crewOutOfReach(
         (d) => d.distance > reach,
     );
 }
+
+/** A held → placed change: where the item is put down, and who held it until then. */
+export interface PutDown {
+    changeId: number;
+    /** The position of the placed change */
+    beat: number;
+    /** Who held it just before */
+    holders: readonly Holder[];
+}
+
+/**
+ * Every put-down in an item's changes, in beat order: a placed change right after a held one. An
+ * item from a flag has an explicit held change first, so its first put-down is one too.
+ */
+export function putDowns(changes: readonly PlacementChange[]): PutDown[] {
+    const sorted = [...changes].sort((a, b) => compareNewest(b, a));
+    const out: PutDown[] = [];
+    let before = BEFORE_FIRST_CHANGE;
+    for (const c of sorted) {
+        if (c.state === "placed" && before.state === "held")
+            out.push({ changeId: c.id, beat: c.beat, holders: before.holders });
+        before = fromChange(c);
+    }
+    return out;
+}
+
+/**
+ * Where a put-down item lands: its holder's position, or the midpoint of its holders' for
+ * several. Null when no holder has a position.
+ */
+export function putDownSpot(
+    holders: readonly Holder[],
+    positions: ReadonlyMap<number, XY>,
+): XY | null {
+    const points = holders
+        .map((h) => positions.get(h.marcherId))
+        .filter((p): p is XY => p !== undefined);
+    if (points.length === 0) return null;
+    const sum = points.reduce<[number, number]>(
+        (acc, p) => [acc[0] + p[0], acc[1] + p[1]],
+        [0, 0],
+    );
+    return [sum[0] / points.length, sum[1] / points.length];
+}
