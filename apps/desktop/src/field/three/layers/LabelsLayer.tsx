@@ -3,8 +3,12 @@ import { useFrame, useThree } from "@react-three/fiber";
 import type { FieldTheme } from "@openmarch/core";
 import { rgba01 } from "../fieldGeometry";
 import type { FieldMarchers } from "../fieldMarchers";
-import type { FieldDimming } from "../fieldDimming";
-import { labelOpacity, type FieldFollowing } from "../fieldFollowing";
+import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
+import {
+    labelOpacity,
+    labelWeight,
+    type FieldFollowing,
+} from "../fieldFollowing";
 import { useFieldDraw } from "../fieldDrawContext";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
@@ -19,9 +23,9 @@ const CENTER_BASELINE = 0.35;
  * Every marcher's label (drill number) in one instanced draw of SDF glyphs,
  * in the theme's label color. A marcher whose
  * appearance hides its label has no glyphs. The text is laid out again only
- * when the marchers, their labels or which labels show change; dimming and
- * the Following look only rewrite the colors, and a frame only rewrites the
- * anchors.
+ * when the marchers, their labels or which labels show change; dimming only
+ * rewrites the colors, the Following look only the weights, and a frame only
+ * the anchors.
  */
 export default function LabelsLayer({
     marchers,
@@ -34,7 +38,7 @@ export default function LabelsLayer({
     marchers: FieldMarchers;
     /** Marchers whose labels are drawn dimmed (#201). */
     dimming: FieldDimming;
-    /** Marchers whose labels are drawn a little fainter as Following (#300); dimming wins. */
+    /** Marchers whose labels are drawn lighter in weight as Following (#300, #324); dimming wins. */
     following: FieldFollowing;
     /** Each marcher's drill number, by id. */
     labels: ReadonlyMap<number, string>;
@@ -103,23 +107,24 @@ export default function LabelsLayer({
             labels !== last.labels ||
             theme !== last.theme ||
             shown !== last.shown;
-        // Dimming and the Following look (and each frame of its ease on Stop) only recolor
-        const recolor =
-            dimming.version !== last.dimVersion ||
-            following.version !== last.followingVersion;
-        if (newLayout || recolor) {
+        // Dimming recolors; the Following look (and each frame of its ease on
+        // Stop) only changes the weights. Dimming changes the weights too,
+        // since a dimmed label is never drawn lighter
+        const dimmed = dimming.version !== last.dimVersion;
+        const weightsChanged =
+            dimmed || following.version !== last.followingVersion;
+        if (newLayout || dimmed || weightsChanged) {
             const color = rgba01(theme.defaultMarcher.label);
-            const faded = new Map<number, typeof color>();
-            const colorOf = (id: number): typeof color => {
-                const opacity = labelOpacity(dimming, following, id);
-                if (opacity === 1) return color;
-                let c = faded.get(opacity);
-                if (!c) {
-                    c = [color[0], color[1], color[2], color[3] * opacity];
-                    faded.set(opacity, c);
-                }
-                return c;
-            };
+            const faded: typeof color = [
+                color[0],
+                color[1],
+                color[2],
+                color[3] * DIMMED_OPACITY,
+            ];
+            const colorOf = (id: number) =>
+                labelOpacity(dimming, id) === 1 ? color : faded;
+            const weightOf = (id: number) =>
+                labelWeight(dimming, following, id);
             if (newLayout)
                 text.setLabels(
                     marchers.ids.map((id, i) => ({
@@ -127,9 +132,14 @@ export default function LabelsLayer({
                         size: LABEL_SIZE,
                         baseline: CENTER_BASELINE,
                         color: colorOf(id),
+                        weight: weightOf(id),
                     })),
                 );
-            else text.setColors((i) => colorOf(marchers.ids[i]!));
+            else {
+                if (dimmed) text.setColors((i) => colorOf(marchers.ids[i]!));
+                if (weightsChanged)
+                    text.setWeights((i) => weightOf(marchers.ids[i]!));
+            }
         }
         if (newLayout || marchers.version !== last.version)
             text.setAnchors(marchers.positions);

@@ -15,6 +15,8 @@ import { isolate } from "../timeline.mjs";
  *
  * - The tests on white assert the dashes (at the opening zoom and 3×) and
  *   the fill (3×) for every shape and style.
+ * - A Following label is checked to be lighter in weight than a Set one,
+ *   not fainter (#324).
  * - The contact sheet captures every shape and style, Set beside Following,
  *   on white, a dark theme and turf (with `TURF_IMAGE` naming a field image;
  *   skipped without), at the opening zoom and at 3×, plus an isolated move.
@@ -365,6 +367,128 @@ test.describe("following look, isolated", () => {
         await capture(page, "following-isolated-mid-move-3x", 60);
     });
 });
+
+// #324: a Following label is lighter in weight than a Set one, at full
+// opacity. S12 moves over page 1 (Set), F12 stays (Following); their "12"s
+// are the same glyphs at the same size, so the thinner one has less ink but
+// the same darkest stroke
+test.describe("following label weight", () => {
+    test.use({
+        seedSql: seedShowSql({
+            beats: 16,
+            measureStarts: [1, 5, 9, 13],
+            pageStarts: [1],
+            marchers: [
+                { id: 1, section: "Trumpet", prefix: "S", order: 12 },
+                { id: 2, section: "Trumpet", prefix: "F", order: 12 },
+            ],
+            positions: [
+                [
+                    [1, 400, 284],
+                    [2, 460, 300],
+                ],
+                [
+                    [1, 400, 300],
+                    [2, 460, 300],
+                ],
+            ],
+        }),
+    });
+
+    test("a Following label is drawn thinner than a Set one, as dark", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await page.setViewportSize({ width: 2000, height: 1400 });
+        await page.waitForFunction(
+            () => window.fieldTest?.marchers().length === 2,
+        );
+        await page.keyboard.press("e");
+        await expect
+            .poll(() =>
+                page.evaluate(() =>
+                    window.fieldTest!.marchers().map((m) => m.following),
+                ),
+            )
+            .toEqual([false, true]);
+        await zoomBy(page, 3);
+        const [set, following] = await labelInk(page, [1, 2]);
+        // Less ink: the strokes are thinner
+        expect(following!.ink / set!.ink).toBeLessThan(0.85);
+        expect(following!.ink / set!.ink).toBeGreaterThan(0.4);
+        // Full opacity: the strokes' middles are as dark as a Set label's
+        expect(following!.peak).toBeGreaterThan(set!.peak * 0.9);
+    });
+});
+
+/**
+ * How much ink the last two characters of each marcher's three-character
+ * label have in a field capture on white (the sum of each device pixel's
+ * contrast, 0 to 1), and the darkest pixel's contrast.
+ */
+async function labelInk(page: Page, ids: readonly number[]) {
+    const png = await field(page).screenshot();
+    const box = (await field(page).boundingBox())!;
+    const scale = png.readUInt32BE(16) / box.width;
+    const zoom = await zoomOf(page);
+    const drawn = await page.evaluate(() =>
+        window.fieldTest!.marchers().map((m) => ({
+            id: m.id,
+            screen: m.screen,
+        })),
+    );
+    // LabelsLayer: 14 units per em, centered 11 units above the dot; a
+    // monospace advance is 0.6 em
+    const em = 14 * zoom * scale;
+    const advance = 0.6 * em;
+    const rects = ids.map((id) => {
+        const { screen } = drawn.find((m) => m.id === id)!;
+        const x = (screen.x - box.x) * scale;
+        const y = (screen.y - box.y) * scale - 11 * zoom * scale;
+        return {
+            x0: Math.round(x - 0.45 * advance),
+            x1: Math.round(x + 1.45 * advance),
+            // Clear of the dot below
+            y0: Math.round(y - 0.5 * em),
+            y1: Math.round(y + 0.35 * em),
+        };
+    });
+    return page.evaluate(
+        async ({ base64, rects }) => {
+            const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+            const bitmap = await createImageBitmap(
+                new Blob([bytes], { type: "image/png" }),
+            );
+            const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+            const context = canvas.getContext("2d")!;
+            context.drawImage(bitmap, 0, 0);
+            const { data, width } = context.getImageData(
+                0,
+                0,
+                bitmap.width,
+                bitmap.height,
+            );
+            return rects.map(({ x0, x1, y0, y1 }) => {
+                let ink = 0;
+                let peak = 0;
+                for (let y = y0; y < y1; y++)
+                    for (let x = x0; x < x1; x++) {
+                        const p = (y * width + x) * 4;
+                        const c =
+                            Math.max(
+                                255 - data[p]!,
+                                255 - data[p + 1]!,
+                                255 - data[p + 2]!,
+                            ) / 255;
+                        ink += c;
+                        peak = Math.max(peak, c);
+                    }
+                return { ink, peak };
+            });
+        },
+        { base64: png.toString("base64"), rects },
+    );
+}
 
 type ShapeName = (typeof SHAPES)[number];
 
