@@ -114,6 +114,8 @@ export interface CueEquipment {
     label?: string;
     /** What holding it counts as, which decides the Horn/Equipment cues that fit. */
     holds: PerformerCarry;
+    /** A flag: its Cut's width ÷ height as the silk template lays it out. */
+    aspect?: number;
 }
 
 /** A Library item a Carry, Silk or Uniform cue names, with what compile needs of it. */
@@ -126,6 +128,11 @@ export interface CueLibraryItem {
     label?: string;
     /** Carry items: what holding it counts as. Unknown, the section's usual equipment counts. */
     holds?: PerformerCarry;
+    /**
+     * Width ÷ height as the silk template lays it out: a Silk item's Artwork,
+     * or a flag Carry item's Cut. Unknown, no aspect note.
+     */
+    aspect?: number;
 }
 
 /** What compile needs of a section for the Carry and Silk defaults. */
@@ -258,7 +265,9 @@ export interface CueTrace {
 
 export type CueNoteKind =
     /** A Horn/Equipment cue that doesn't match what Carry gives, ignored for those performers. */
-    "carry_mismatch";
+    | "carry_mismatch"
+    /** A Silk cue whose Artwork is fitted to a flag Cut of another aspect. */
+    | "silk_aspect";
 
 /** Something compile did quietly that the editor may show, not a problem to fix. */
 export interface CueNote {

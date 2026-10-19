@@ -17,6 +17,8 @@ interface ImportMetaEnv {
     readonly VITE_PUBLIC_WEB_CHANNEL?: string;
     /** JSON list of the example shows a preview web build offers. */
     readonly VITE_PUBLIC_WEB_EXAMPLES?: string;
+    /** "true" in the 3D View web preview, which has no Settings window. */
+    readonly VITE_VIEW3D_NO_SETTINGS_WINDOW?: string;
     /** The app's version, in the web build's worker. */
     readonly VITE_PUBLIC_APP_VERSION?: string;
 }

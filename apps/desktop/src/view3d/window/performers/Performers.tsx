@@ -22,7 +22,7 @@ import { pickMarchers } from "../camera/inputMath";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { FieldProperties, RgbaColor } from "@openmarch/core";
+import type { CueSection, FieldProperties, RgbaColor } from "@openmarch/core";
 import {
     Color,
     CylinderGeometry,
@@ -39,6 +39,8 @@ import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
 import { marcherAppearancesQueryOptions } from "@/hooks/queries/useMarcherAppearances";
 import { allSectionAppearancesQueryOptions } from "@/hooks/queries/useSectionAppearances";
 import { useVenueSettings } from "@/hooks/queries/useVenueSettings";
+import { showLibraryItemsQueryOptions } from "@/hooks/queries/useShowLibrary";
+import { cueLibraryItemsOf, cueSectionsOf } from "@/view3d/library/cueAspects";
 import {
     guardUniformPresetOf,
     uniformPresetOf,
@@ -96,6 +98,7 @@ import { clipsToLoad } from "./marchers/marcherBodies";
 import { hornRowsOf } from "./marchers/hornRows";
 import { useShowPerformerDefaults, useStoredCues } from "./useStoredCues";
 import { dotModesPerCount } from "@/view3d/core/marchers/dotModes";
+import { SilkMotion } from "./marchers/silkMotion";
 
 const CYLINDER_SEGMENTS = 20;
 const RING_SEGMENTS = 32;
@@ -190,6 +193,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 uniformPreset,
                 guardUniformPreset,
             ),
+            // no Silk cues yet: the silks take the uniform's carry (the
+            // section's 2D fill, else the preset's color and pattern)
         }));
     }, [
         looksKey,
@@ -224,6 +229,27 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 : null,
         [marcherLooks, slots.ids],
     );
+    // Each flag section's usual flag, with its Cut's aspect, for the Silk
+    // aspect note; keyed on the sections' flags alone, like the carries.
+    const cueSectionsKey = useMemo(() => {
+        if (!marchers || !marcherLooks) return null;
+        const sectionById = new Map(marchers.map((m) => [m.id, m.section]));
+        return JSON.stringify(
+            cueSectionsOf(
+                slots.ids.map((id, i) => ({
+                    section: sectionById.get(id) ?? "",
+                    family:
+                        marcherLooks[i]?.uniform.options.carry?.family ?? null,
+                })),
+            ),
+        );
+    }, [marchers, marcherLooks, slots.ids]);
+    // The show's Silk Artwork Versions, with their aspects
+    const { data: showLibrary } = useQuery(showLibraryItemsQueryOptions());
+    const cueLibraryItems = useMemo(
+        () => cueLibraryItemsOf(showLibrary ?? []),
+        [showLibrary],
+    );
     // Positional ripple orders read where marchers stand. Only those need the
     // drill, so a drill edit doesn't recompile the cues and replan everyone.
     const rippleNeedsPositions = useMemo(
@@ -239,7 +265,7 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     // show's step-off foot or the window's unsaved preview of the other one.
     // `carries` decides which Horn/Equipment cues fit each marcher.
     const cues = useMemo(() => {
-        if (!marchers || !stored || !carriesKey) return null;
+        if (!marchers || !stored || !carriesKey || !cueSectionsKey) return null;
         const carries = new Map(
             JSON.parse(carriesKey) as [
                 number,
@@ -264,6 +290,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                           return p ? { x: p.x, y: p.z } : { x: 0, y: 0 };
                       }
                     : undefined,
+                libraryItems: cueLibraryItems,
+                sections: JSON.parse(cueSectionsKey) as CueSection[],
             },
             (id) => carries.get(id) ?? "none",
         );
@@ -273,6 +301,8 @@ export default function Performers({ fieldProperties }: PerformersProps) {
         stepOffFoot,
         stored,
         carriesKey,
+        cueSectionsKey,
+        cueLibraryItems,
         cuePositions,
         clock,
         fieldProperties,
@@ -396,6 +426,13 @@ export default function Performers({ fieldProperties }: PerformersProps) {
                 : null,
         [marcherBodies, showPlans, marcherAssets, hornSlots],
     );
+    const silkMotion = useMemo(
+        () =>
+            marcherBodies && showPlans && marcherBodies.silkSlots.length > 0
+                ? new SilkMotion(showPlans, clock, marcherBodies.silkSlots)
+                : null,
+        [marcherBodies, showPlans, clock],
+    );
     const headings = useMemo(
         () => new Float32Array(count).fill(marcherHeading()),
         [count],
@@ -512,7 +549,15 @@ export default function Performers({ fieldProperties }: PerformersProps) {
     const dirtyRef = useRef(true);
     useEffect(() => {
         dirtyRef.current = true;
-    }, [meshes, slots, fieldProperties, appearances, marcherBodies, motion]);
+    }, [
+        meshes,
+        slots,
+        fieldProperties,
+        appearances,
+        marcherBodies,
+        motion,
+        silkMotion,
+    ]);
 
     // Colors and visibility, only when the looks change.
     useEffect(() => {
@@ -603,7 +648,14 @@ export default function Performers({ fieldProperties }: PerformersProps) {
             if (marcherBodies) {
                 countRef.current = c;
                 motion?.update(c, xz, placed, headings);
-                marcherBodies.writeFrame(xz, headings, placed, c, cam);
+                marcherBodies.writeFrame(
+                    xz,
+                    headings,
+                    placed,
+                    c,
+                    cam,
+                    silkMotion?.update(c) ?? null,
+                );
                 marcherBodies.compose(state.gl);
                 lod[0] = cam[0];
                 lod[1] = cam[1];
