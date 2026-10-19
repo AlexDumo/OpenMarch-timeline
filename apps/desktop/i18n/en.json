@@ -125,7 +125,6 @@
             "focusCanvas": "Focus canvas",
             "focusTimeline": "Edit timeline",
             "hideNextPaths": "Hide next page paths",
-            "hidePreviousPaths": "Hide previous page paths",
             "openCommandPalette": "Command palette",
             "openSettings": "Settings…",
             "openView3d": "Open 3D View",
@@ -133,12 +132,14 @@
             "runFieldBenchmark": "Run field benchmark",
             "runFieldBenchmarkKeywords": "performance fps speed test frame rate",
             "showShortcuts": "Keyboard shortcuts",
+            "hideStartFlagPositions": "Hide start flag positions",
+            "showStartFlagPositions": "Show start flag positions",
+            "toggleStartFlagPositions": "Toggle start flag positions",
+            "toggleStartFlagPositionsKeywords": "previous paths dots where marchers were came from hold peek latch",
             "toggleWorkspace": "Switch workspace (Editor or Visuals)",
             "toggleWorkspaceKeywords": "visuals editor workspace cues mode",
             "showNextPaths": "Show next page paths",
-            "showPreviousPaths": "Show previous page paths",
-            "toggleNextPaths": "Toggle next page paths",
-            "togglePreviousPaths": "Toggle previous page paths"
+            "toggleNextPaths": "Toggle next page paths"
         }
     },
     "analyticsOptIn": {

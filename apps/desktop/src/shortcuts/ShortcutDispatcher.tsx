@@ -14,7 +14,12 @@ import {
     type ShortcutOverrides,
 } from "./keymap";
 import { NUDGE_ACTION_IDS, type ActionId } from "./definitions";
-import { actionIgnoresRepeat, isActionEnabled, pressAction } from "./registry";
+import {
+    actionIgnoresRepeat,
+    isActionEnabled,
+    pressAction,
+    type ReleaseReason,
+} from "./registry";
 
 const NUDGE_IDS: ReadonlySet<ActionId> = new Set(NUDGE_ACTION_IDS);
 
@@ -33,17 +38,17 @@ export default function ShortcutDispatcher({
 
     useEffect(() => {
         // Actions that last while their key is held (the playback speed keys), by physical key
-        const held = new Map<string, () => void>();
+        const held = new Map<string, (reason: ReleaseReason) => void>();
         const releaseAll = () => {
             const releases = [...held.values()];
             held.clear();
-            releases.forEach((release) => release());
+            releases.forEach((release) => release("lost"));
         };
         const onKeyUp = (event: KeyboardEvent) => {
             const release = held.get(event.code);
             if (!release) return;
             held.delete(event.code);
-            release();
+            release("keyup");
         };
         const onKeyDown = (event: KeyboardEvent) => {
             if (
@@ -79,7 +84,7 @@ export default function ShortcutDispatcher({
             )
                 return;
             // A second press of a held key (no keyup seen) lets go of the first
-            held.get(event.code)?.();
+            held.get(event.code)?.("lost");
             held.delete(event.code);
             const release = pressAction(entry.id);
             if (release) held.set(event.code, release);

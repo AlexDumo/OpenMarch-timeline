@@ -100,13 +100,10 @@
             "focusCanvas": "キャンバスにフォーカス",
             "focusTimeline": "タイムラインを編集",
             "hideNextPaths": "次のページの経路を隠す",
-            "hidePreviousPaths": "前のページの経路を隠す",
             "openCommandPalette": "コマンドパレット",
             "openSettings": "設定…",
             "showNextPaths": "次のページの経路を表示",
-            "showPreviousPaths": "前のページの経路を表示",
-            "toggleNextPaths": "次のページの経路を切り替え",
-            "togglePreviousPaths": "前のページの経路を切り替え"
+            "toggleNextPaths": "次のページの経路を切り替え"
         }
     },
     "analyticsOptIn": {
