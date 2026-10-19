@@ -81,11 +81,18 @@ const waitForView = (
         .poll(async () => Math.abs(read(await view(page)) - expected))
         .toBeLessThanOrEqual(within);
 
-/** The view a show opens at: the field centered, its height fitted but never above 100%. */
+/**
+ * The view a show opens at, and Reset returns to: the whole field fitted into
+ * the field's pane with a 16 px margin (at most 5% of a side), and centered.
+ */
 async function openingView(show: Show): Promise<View> {
     const field = await fieldSize(show);
     const box = await fieldBox(show.page);
-    const zoom = Math.min(1, box.height / field.height);
+    const room = (size: number) => size - 2 * Math.min(16, size * 0.05);
+    const zoom = Math.min(
+        room(box.width) / field.width,
+        room(box.height) / field.height,
+    );
     return {
         zoom,
         pan: {
@@ -166,6 +173,66 @@ test("opens with the field centered at its base zoom, and Reset returns there", 
     await page.getByTitle("Reset Zoom and Center").click();
     await openedView(show);
     await expect(page.getByTitle("Reset Zoom and Center")).toHaveText("100%");
+});
+
+test("Reset fits the whole field into the pane the timeline leaves", async ({
+    show,
+}) => {
+    const { page } = show;
+    const opened = await openedView(show);
+    const before = await fieldBox(page);
+
+    // A taller timeline leaves a shorter pane; the zoom stays until Reset
+    const splitter = page.getByTestId("timeline-splitter");
+    await splitter.focus();
+    for (let i = 0; i < 4; i++) await splitter.press("Shift+ArrowUp");
+    await expect
+        .poll(async () => (await fieldBox(page)).height)
+        .toBeLessThan(before.height - 50);
+    expect((await settledView(page)).zoom).toBe(opened.zoom);
+
+    await page.getByTitle("Reset Zoom and Center").click();
+    const expected = await openingView(show);
+    await waitForView(page, (v) => v.zoom, expected.zoom, 0.005);
+    await waitForView(page, (v) => v.pan.x, expected.pan.x, 1.5);
+    await waitForView(page, (v) => v.pan.y, expected.pan.y, 1.5);
+    await expect(page.getByTitle("Reset Zoom and Center")).toHaveText("100%");
+
+    // The whole field is on screen
+    const field = await fieldSize(show);
+    const box = await fieldBox(page);
+    const fitted = await view(page);
+    expect(fitted.pan.x).toBeGreaterThanOrEqual(0);
+    expect(fitted.pan.y).toBeGreaterThanOrEqual(0);
+    expect(fitted.pan.x + field.width * fitted.zoom).toBeLessThanOrEqual(
+        box.width,
+    );
+    expect(fitted.pan.y + field.height * fitted.zoom).toBeLessThanOrEqual(
+        box.height,
+    );
+});
+
+test("in a narrow window, Reset fits the field's width", async ({ show }) => {
+    const { page } = show;
+    await openedView(show);
+    // The sidebar and the inspector leave a pane narrower than the field is wide
+    await page.setViewportSize({ width: 1100, height: 1000 });
+    const field = await fieldSize(show);
+    await expect
+        .poll(async () => {
+            const box = await fieldBox(page);
+            return box.width / box.height < field.width / field.height;
+        })
+        .toBe(true);
+
+    await page.getByTitle("Reset Zoom and Center").click();
+    const expected = await openingView(show);
+    await waitForView(page, (v) => v.zoom, expected.zoom, 0.005);
+    await waitForView(page, (v) => v.pan.x, expected.pan.x, 1.5);
+    const box = await fieldBox(page);
+    const fitted = await view(page);
+    expect(fitted.pan.x).toBeGreaterThan(0);
+    expect(fitted.pan.x + field.width * fitted.zoom).toBeLessThan(box.width);
 });
 
 test.describe("trackpad mode (the default)", () => {

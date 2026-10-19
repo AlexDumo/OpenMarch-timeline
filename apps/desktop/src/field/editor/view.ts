@@ -80,25 +80,39 @@ export function clampPan(view: FieldView, field: FieldSize): FieldView {
     };
 }
 
+/** The room kept around the fitted field on each side, in CSS pixels. */
+const FIT_MARGIN = 16;
+
 /**
- * The base zoom (100% in the zoom controls): the zoom at which the field's
- * height fits the element, but never above 1.
+ * The base zoom (100% in the zoom controls): the zoom at which the whole
+ * field fits the element, across and down, with a small margin on each side.
+ * The element is the field's pane, so the fit follows the pane as the
+ * timeline below it grows or shrinks.
  */
-export function baseZoom(height: number, field: FieldSize): number {
-    if (field.height <= 0 || height <= 0) return 1;
-    return Math.min(1, height / field.height);
+export function baseZoom(
+    width: number,
+    height: number,
+    field: FieldSize,
+): number {
+    if (field.width <= 0 || field.height <= 0) return 1;
+    if (width <= 0 || height <= 0) return 1;
+    // A small pane keeps most of its room for the field
+    const room = (size: number) => size - 2 * Math.min(FIT_MARGIN, size * 0.05);
+    return clampZoom(
+        Math.min(room(width) / field.width, room(height) / field.height),
+    );
 }
 
 /**
- * The view a show opens at, and that the reset button returns to: the field
- * centered at the base zoom.
+ * The view a show opens at, and that the reset button returns to: the whole
+ * field fitted and centered, at the base zoom.
  */
 export function centerAtBase(
     width: number,
     height: number,
     field: FieldSize,
 ): FieldView {
-    const zoom = baseZoom(height, field);
+    const zoom = baseZoom(width, height, field);
     return clampPan(
         {
             width,

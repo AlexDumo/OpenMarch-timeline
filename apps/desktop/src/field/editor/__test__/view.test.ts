@@ -85,17 +85,47 @@ describe("clampPan", () => {
 });
 
 describe("the opening view", () => {
-    it("fits the field's height, never above 100%", () => {
-        expect(baseZoom(600, field)).toBeCloseTo(600 / 960);
-        expect(baseZoom(2000, field)).toBe(1);
+    it("fits the field's height when the pane is wide, with a margin", () => {
+        // 1800 x 960 in a 2000 x 600 pane: the height is the limit
+        expect(baseZoom(2000, 600, field)).toBeCloseTo((600 - 32) / 960);
     });
 
-    it("centers the field at the base zoom", () => {
+    it("fits the field's width when the pane is narrow, with a margin", () => {
+        // A short timeline under a narrow pane: the width is the limit
+        expect(baseZoom(1000, 900, field)).toBeCloseTo((1000 - 32) / 1800);
+    });
+
+    it("fills a big pane, above 1", () => {
+        expect(baseZoom(4000, 2000, field)).toBeCloseTo((2000 - 32) / 960);
+    });
+
+    it("keeps most of a small pane for the field", () => {
+        // The margin is at most 5% of a side
+        expect(baseZoom(2000, 300, field)).toBeCloseTo((300 - 30) / 960);
+    });
+
+    it("follows the pane's height as the timeline grows", () => {
+        expect(baseZoom(2000, 400, field)).toBeLessThan(
+            baseZoom(2000, 600, field),
+        );
+    });
+
+    it("is 1 before the pane or the field has a size", () => {
+        expect(baseZoom(0, 0, field)).toBe(1);
+        expect(baseZoom(1000, 600, { width: 0, height: 0 })).toBe(1);
+    });
+
+    it("centers the whole field at the base zoom", () => {
         const opened = centerAtBase(1000, 600, field);
-        const zoom = 600 / 960;
+        const zoom = Math.min((1000 - 32) / 1800, (600 - 32) / 960);
         expect(opened.zoom).toBeCloseTo(zoom);
         expect(opened.panX).toBeCloseTo((1000 - 1800 * zoom) / 2);
-        expect(opened.panY).toBeCloseTo(0);
+        expect(opened.panY).toBeCloseTo((600 - 960 * zoom) / 2);
+        // Every edge of the field is inside the pane
+        expect(opened.panX).toBeGreaterThanOrEqual(16 - 1e-9);
+        expect(opened.panY).toBeGreaterThanOrEqual(16 - 1e-9);
+        expect(opened.panX + 1800 * zoom).toBeLessThanOrEqual(1000 - 16 + 1e-9);
+        expect(opened.panY + 960 * zoom).toBeLessThanOrEqual(600 - 16 + 1e-9);
     });
 });
 

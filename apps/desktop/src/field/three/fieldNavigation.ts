@@ -47,14 +47,18 @@ export function setView(next: FieldView) {
     navigate({ width, height, zoom, panX, panY });
 }
 
-/** Centers the field at the base zoom, as a show opens and as the reset button does. */
+/**
+ * Fits the whole field into the field's pane and centers it, as a show opens
+ * and as the reset button (the zoom percentage) does. The pane's size is
+ * measured now, so it counts the timeline's current height.
+ */
 export function resetView() {
     const { width, height, field } = view();
     if (width <= 0 || height <= 0) return;
     navigated = false;
     useFieldViewStore.setState({
         ...centerAtBase(width, height, field),
-        baseZoom: baseZoom(height, field),
+        baseZoom: baseZoom(width, height, field),
     });
 }
 

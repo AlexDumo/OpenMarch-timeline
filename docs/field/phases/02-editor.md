@@ -164,6 +164,12 @@ they pass alone and in Electron.
 
 **Behavior notes.**
 
+- **Changed (hands-on feedback, 2026-10-19):** the base zoom fits the whole
+  field, across and down, into the field's pane with a 16 px margin (at most
+  5% of a side), no longer the height alone capped at 1. Clicking the zoom
+  percentage measures the pane as it is then, so it fits around whatever
+  height the timeline has; opening a show and leaving fullscreen use the
+  same fit.
 - The view opens once the field and a page are loaded, and centers again on
   each resize until 250 ms later, as the panels around the field settle (Fabric
   centers once more at 250 ms). Unlike Fabric, none of that undoes a zoom or
