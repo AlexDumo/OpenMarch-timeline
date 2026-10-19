@@ -56,33 +56,66 @@ export type StartFlagOverlayInput = {
     readonly fieldProperties: FieldProperties;
 };
 
-/** Dots are in field units (they scale with the zoom), paths in screen pixels. */
+/**
+ * Two plans, as a plan has one unit system. `dots` is in field units (it scales with the zoom):
+ * the red dashed step-size warning stretches, drawn under the dots, with the same width and dash
+ * as the next paths' warnings. `paths` is in screen pixels: the calm 1 px gray routes.
+ */
 export type StartFlagOverlay = {
     readonly dots: OverlayPlan;
     readonly paths: OverlayPlan;
 };
 
+/** The window and drawing inputs every marcher shares. */
+export type StartFlagWindow = Omit<
+    StartFlagOverlayInput,
+    "marcherIds" | "selectedIds" | "levels"
+>;
+
+/** One marcher's share of the overlay. */
+export type StartFlagMarcherPlan = {
+    /** Where it is at the start flag */
+    readonly dot: DotPlan;
+    /** Its route's calm stretches (screen units); empty when its path isn't drawn */
+    readonly paths: readonly StrokePlan[];
+    /** Its route's too-fast stretches (field units); empty when its path isn't drawn */
+    readonly warnings: readonly StrokePlan[];
+};
+
 /** Whether a level draws for this marcher. */
-const levelDraws = (
+export const levelDraws = (
     level: StartFlagLevel,
     marcherId: number,
     selectedIds: ReadonlySet<number>,
-) => level === "all" || (level === "selected" && selectedIds.has(marcherId));
+): boolean =>
+    level === "all" || (level === "selected" && selectedIds.has(marcherId));
 
 type OverlayResolver = StartFlagOverlayInput["resolver"];
 
+/** The resolver's marcher ids as a set, per id list (a new list each time marchers change). */
+const knownIdSets = new WeakMap<readonly number[], ReadonlySet<number>>();
+function knows(resolver: OverlayResolver, marcherId: number): boolean {
+    const ids = resolver.marcherIds();
+    let known = knownIdSets.get(ids);
+    if (!known) {
+        known = new Set(ids);
+        knownIdSets.set(ids, known);
+    }
+    return known.has(marcherId);
+}
+
 /**
- * Whether the marcher's position changes anywhere in `[fromBeat, toBeat]`. Cheap for the common
- * cases: different ends, or only holds in the window; a move that comes back to where it started
- * is sampled.
+ * Whether the marcher's position changes anywhere in `[fromBeat, toBeat]`, given where it is at
+ * `fromBeat`. Cheap for the common cases: different ends, or only holds in the window; a move
+ * that comes back to where it started is sampled.
  */
 function movesWithin(
     resolver: OverlayResolver,
     marcherId: number,
+    [x0, y0]: readonly [number, number],
     fromBeat: number,
     toBeat: number,
 ): boolean {
-    const [x0, y0] = resolver.positionAt(marcherId, fromBeat);
     const [x1, y1] = resolver.positionAt(marcherId, toBeat);
     if (x0 !== x1 || y0 !== y1) return true;
     const moving = resolver
@@ -115,16 +148,21 @@ const warningStroke = (points: StrokePlan["points"]): StrokePlan => ({
     round: false,
 });
 
+type Route = { paths: StrokePlan[]; warnings: StrokePlan[] };
+
 /** The marcher's route over the window as one gray stroke; none when it doesn't move. */
-function calmRoute(input: StartFlagOverlayInput, marcherId: number) {
+function calmRoute(window: StartFlagWindow, marcherId: number): Route {
     const path = sampleTimelinePath(
-        input.resolver,
+        window.resolver,
         marcherId,
-        input.fromBeat,
-        input.toBeat,
+        window.fromBeat,
+        window.toBeat,
         PATH_DRAW_TOLERANCE,
     );
-    return path && path.points.length > 1 ? [calmStroke(path.points)] : [];
+    return {
+        paths: path && path.points.length > 1 ? [calmStroke(path.points)] : [],
+        warnings: [],
+    };
 }
 
 /**
@@ -132,15 +170,12 @@ function calmRoute(input: StartFlagOverlayInput, marcherId: number) {
  * dashed and the rest gray; neighboring stretches of the same kind share a stroke. None when it
  * doesn't move.
  */
-function warnedRoute(
-    input: StartFlagOverlayInput,
-    marcherId: number,
-): StrokePlan[] {
+function warnedRoute(window: StartFlagWindow, marcherId: number): Route {
     const stretches = sampleTimelinePathStretches(
-        input.resolver,
+        window.resolver,
         marcherId,
-        input.fromBeat,
-        input.toBeat,
+        window.fromBeat,
+        window.toBeat,
         PATH_DRAW_TOLERANCE,
     );
     const runs: { warning: boolean; points: { x: number; y: number }[] }[] = [];
@@ -151,7 +186,7 @@ function warnedRoute(
             end: stretch.points[stretch.points.length - 1]!,
             distance: stretch.stride,
             counts: 1,
-            fieldProperties: input.fieldProperties,
+            fieldProperties: window.fieldProperties,
             pathEnabled: true,
             allowForceShow: false,
             warningsEnabled: true,
@@ -162,9 +197,69 @@ function warnedRoute(
             last.points.push(...stretch.points.slice(1));
         else runs.push({ warning, points: [...stretch.points] });
     }
-    return runs.map((run) =>
-        run.warning ? warningStroke(run.points) : calmStroke(run.points),
-    );
+    const route: Route = { paths: [], warnings: [] };
+    for (const run of runs)
+        if (run.warning) route.warnings.push(warningStroke(run.points));
+        else route.paths.push(calmStroke(run.points));
+    return route;
+}
+
+/** Home (beat 0) has no window, and neither does S at or past P. */
+const emptyWindow = ({ fromBeat, toBeat }: StartFlagWindow) =>
+    !(fromBeat < toBeat) || toBeat <= 0;
+
+/**
+ * One marcher's start flag position over the window: its dot where it is at the start flag and,
+ * with `withPath`, the route it walks to the playhead as the resolver samples it. `null` when it
+ * doesn't move across the window, the window is empty, or the resolver doesn't know it yet
+ * (marcher rows ahead of a resolver rebuild).
+ */
+export function planStartFlagMarcher(
+    window: StartFlagWindow,
+    marcherId: number,
+    withPath: boolean,
+): StartFlagMarcherPlan | null {
+    const { resolver, fromBeat, toBeat } = window;
+    if (emptyWindow(window) || !knows(resolver, marcherId)) return null;
+    const start = resolver.positionAt(marcherId, fromBeat);
+    let route: Route = { paths: [], warnings: [] };
+    if (withPath) {
+        route = window.stepSizeWarnings
+            ? warnedRoute(window, marcherId)
+            : calmRoute(window, marcherId);
+        if (route.paths.length === 0 && route.warnings.length === 0)
+            return null;
+    } else if (!movesWithin(resolver, marcherId, start, fromBeat, toBeat))
+        return null;
+    return {
+        dot: {
+            x: start[0],
+            y: start[1],
+            radius: START_FLAG_DOT_RADIUS,
+            fill: START_FLAG_DOT_COLOR,
+            stroke: null,
+            strokeWidth: 0,
+        },
+        ...route,
+    };
+}
+
+/** The overlay's two plans from each drawn marcher's share, in draw order. */
+export function startFlagOverlayOf(
+    marchers: Iterable<StartFlagMarcherPlan>,
+): StartFlagOverlay {
+    const dots: DotPlan[] = [];
+    const paths: StrokePlan[] = [];
+    const warnings: StrokePlan[] = [];
+    for (const marcher of marchers) {
+        dots.push(marcher.dot);
+        paths.push(...marcher.paths);
+        warnings.push(...marcher.warnings);
+    }
+    return {
+        dots: { units: "field", strokes: warnings, dots, labels: [] },
+        paths: { units: "screen", strokes: paths, dots: [], labels: [] },
+    };
 }
 
 /**
@@ -176,39 +271,18 @@ function warnedRoute(
 export function planStartFlagOverlay(
     input: StartFlagOverlayInput,
 ): StartFlagOverlay {
-    const { resolver, fromBeat, toBeat, selectedIds, levels } = input;
-    const dots: DotPlan[] = [];
-    // Home (beat 0) has no window, and neither does S at or past P
-    if (!(fromBeat < toBeat) || toBeat <= 0) return plans(dots);
-    const strokes: StrokePlan[] = [];
-    for (const marcherId of input.marcherIds) {
-        // A path only where its dot is drawn: paths never go wider than dots
-        if (!levelDraws(levels.dots, marcherId, selectedIds)) continue;
-        if (levelDraws(levels.paths, marcherId, selectedIds)) {
-            const route = input.stepSizeWarnings
-                ? warnedRoute(input, marcherId)
-                : calmRoute(input, marcherId);
-            if (route.length === 0) continue;
-            strokes.push(...route);
-        } else if (!movesWithin(resolver, marcherId, fromBeat, toBeat))
-            continue;
-        const [x, y] = resolver.positionAt(marcherId, fromBeat);
-        dots.push({
-            x,
-            y,
-            radius: START_FLAG_DOT_RADIUS,
-            fill: START_FLAG_DOT_COLOR,
-            stroke: null,
-            strokeWidth: 0,
-        });
-    }
-    return plans(dots, strokes);
+    const { selectedIds, levels } = input;
+    const marchers: StartFlagMarcherPlan[] = [];
+    if (!emptyWindow(input))
+        for (const marcherId of input.marcherIds) {
+            // A path only where its dot is drawn: paths never go wider than dots
+            if (!levelDraws(levels.dots, marcherId, selectedIds)) continue;
+            const marcher = planStartFlagMarcher(
+                input,
+                marcherId,
+                levelDraws(levels.paths, marcherId, selectedIds),
+            );
+            if (marcher) marchers.push(marcher);
+        }
+    return startFlagOverlayOf(marchers);
 }
-
-const plans = (
-    dots: readonly DotPlan[],
-    strokes: readonly StrokePlan[] = [],
-): StartFlagOverlay => ({
-    dots: { units: "field", strokes: [], dots, labels: [] },
-    paths: { units: "screen", strokes, dots: [], labels: [] },
-});

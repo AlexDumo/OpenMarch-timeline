@@ -59,6 +59,9 @@ const setWindow = (start: number, end: number) =>
         startBeat: start,
         playheadBeat: end,
         isolation: null,
+        cursorBeat: null,
+        scrubbing: false,
+        lineDrag: null,
     });
 
 const setLevels = (settings: StartFlagPositionsSettings) =>
@@ -240,6 +243,86 @@ describe("useStartFlagOverlay", () => {
         expect(result.current).toEqual(before);
     });
 
+    it("ends the window at the beat the canvas shows: the cursor when there is one", () => {
+        const r = ready();
+        const { result } = renderHook(() => useStartFlagOverlay(props()));
+        // A held preview frame or paused cursor at beat 8
+        act(() => {
+            useTimelineSelectionStore.setState({ cursorBeat: 8 });
+        });
+        expect(result.current).toEqual(
+            planStartFlagOverlay({
+                resolver: r,
+                marcherIds: MARCHERS,
+                selectedIds: new Set(),
+                fromBeat: 4,
+                toBeat: 8,
+                levels: { dots: "all", paths: "all" },
+                stepSizeWarnings: false,
+                fieldProperties,
+            }),
+        );
+        // A cursor on or before the start flag: nothing drawn
+        for (const cursorBeat of [4, 2]) {
+            act(() => {
+                useTimelineSelectionStore.setState({ cursorBeat });
+            });
+            expect(result.current).toBeNull();
+        }
+        act(() => {
+            useTimelineSelectionStore.setState({ cursorBeat: null });
+        });
+        expect(result.current).toEqual(
+            expected(r, { dots: "all", paths: "all" }),
+        );
+    });
+
+    it("draws dots only while the playhead is scrubbed or a line is dragged, and the paths again on release", () => {
+        const r = ready();
+        const { result } = renderHook(() => useStartFlagOverlay(props()));
+        const dotsOnly = (fromBeat: number) =>
+            planStartFlagOverlay({
+                resolver: r,
+                marcherIds: MARCHERS,
+                selectedIds: new Set(),
+                fromBeat,
+                toBeat: 12,
+                levels: { dots: "all", paths: "off" },
+                stepSizeWarnings: false,
+                fieldProperties,
+            });
+        act(() => {
+            useTimelineSelectionStore.setState({ scrubbing: true });
+        });
+        expect(result.current).toEqual(dotsOnly(4));
+        expect(result.current!.dots.dots).toHaveLength(4);
+        act(() => {
+            useTimelineSelectionStore.setState({ scrubbing: false });
+        });
+        expect(result.current).toEqual(
+            expected(r, { dots: "all", paths: "all" }),
+        );
+
+        // The start flag dragged to beat 6: the dots sit where the marchers are there
+        act(() => {
+            useTimelineSelectionStore.setState({
+                lineDrag: {
+                    line: "start",
+                    startBeat: 4,
+                    playheadBeat: 12,
+                    beat: 6,
+                },
+                startBeat: 6,
+                selection: { kind: "range", start: 6, end: 12 },
+            });
+        });
+        expect(result.current).toEqual(dotsOnly(6));
+        act(() => {
+            useTimelineSelectionStore.setState({ lineDrag: null });
+        });
+        expect(result.current!.paths.strokes.length).toBeGreaterThan(0);
+    });
+
     it("draws the step-size warnings only when they're on", () => {
         const r = ready();
         const { result } = renderHook(() => useStartFlagOverlay(props()));
@@ -265,6 +348,11 @@ describe("useStartFlagOverlay", () => {
         calls.count = 0;
         rerender(props({ isPlaying: true }));
         expect(result.current).toBe(before);
+        // Play from the start flag puts the cursor there; the plans from before Play stay
+        act(() => {
+            useTimelineSelectionStore.setState({ cursorBeat: 4 });
+        });
+        expect(result.current).toBe(before);
         // Selection and the N key change nothing drawn while playing
         rerender(props({ isPlaying: true, selectedIds: [1] }));
         act(() => {
@@ -275,6 +363,9 @@ describe("useStartFlagOverlay", () => {
         // Stopping where it was needs no sampling either
         act(() => {
             useStartFlagKeyStore.getState().toggleLatched();
+        });
+        act(() => {
+            useTimelineSelectionStore.setState({ cursorBeat: null });
         });
         rerender(props());
         expect(result.current).toEqual(before);

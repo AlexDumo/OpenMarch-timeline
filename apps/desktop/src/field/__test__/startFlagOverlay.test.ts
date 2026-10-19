@@ -8,6 +8,7 @@ import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates
 import { GOLDEN_FIXTURES } from "@/timeline/fixtures/goldenFixtures";
 import {
     STEP_SIZE_WARNING_COLOR,
+    STEP_SIZE_WARNING_STROKE_WIDTH,
     WARNING_PATHWAY_DASH,
 } from "@/timeline/stepSizeWarning";
 import type { StartFlagLevels } from "@/timeline/startFlagLevels";
@@ -164,6 +165,27 @@ describe("planStartFlagOverlay dots", () => {
                 planStartFlagOverlay(input(g4, { fromBeat: 8, toBeat: 16 })),
             ),
         ).toEqual([[8, 0]]);
+    });
+
+    it("skips a marcher the resolver doesn't know yet, without throwing", () => {
+        // Marcher rows can arrive before the resolver is rebuilt with them
+        const g6 = resolverFor("G6");
+        for (const paths of ["off", "all"] as const)
+            expect(
+                planStartFlagOverlay(
+                    input(g6, {
+                        marcherIds: [1, 99, 2],
+                        levels: levels("all", paths),
+                    }),
+                ),
+            ).toEqual(
+                planStartFlagOverlay(
+                    input(g6, {
+                        marcherIds: [1, 2],
+                        levels: levels("all", paths),
+                    }),
+                ),
+            );
     });
 });
 
@@ -355,24 +377,33 @@ describe("planStartFlagOverlay step-size warnings", () => {
             }),
         );
 
-    it("draws only the too-fast stretch red and dashed", () => {
-        const strokes = marcher2({ stepSizeWarnings: true }).paths.strokes;
-        expect(strokes).toHaveLength(2);
-        const [calm, fast] = strokes;
-        expect(calm!.color).toEqual(START_FLAG_PATH_COLOR);
-        expect(calm!.width).toBe(START_FLAG_PATH_WIDTH);
-        expect(calm!.dash).toBeNull();
-        expect(calm!.points[0]).toEqual({ x: 0, y: 0 });
-        expect(calm!.points.at(-1)!.x).toBeCloseTo(1, 9);
-        expect(calm!.points.at(-1)!.y).toBeCloseTo(8, 9);
-        expect(fast!.color).toEqual(red);
-        expect(fast!.dash).toEqual(WARNING_PATHWAY_DASH);
-        expect(fast!.points[0]).toEqual(calm!.points.at(-1));
-        expect(fast!.points.at(-1)).toEqual({ x: 20, y: 20 });
+    it("draws only the too-fast stretch red and dashed, in field units as next paths' warnings", () => {
+        const plan = marcher2({ stepSizeWarnings: true });
+        // The calm stretch stays a 1 px gray line on screen
+        expect(plan.paths.strokes).toHaveLength(1);
+        const calm = plan.paths.strokes[0]!;
+        expect(calm.color).toEqual(START_FLAG_PATH_COLOR);
+        expect(calm.width).toBe(START_FLAG_PATH_WIDTH);
+        expect(calm.dash).toBeNull();
+        expect(calm.points[0]).toEqual({ x: 0, y: 0 });
+        expect(calm.points.at(-1)!.x).toBeCloseTo(1, 9);
+        expect(calm.points.at(-1)!.y).toBeCloseTo(8, 9);
+        // The warning goes with the dots, in field units, drawn under them
+        expect(plan.dots.units).toBe("field");
+        expect(plan.dots.strokes).toHaveLength(1);
+        const fast = plan.dots.strokes[0]!;
+        expect(fast.color).toEqual(red);
+        expect(fast.width).toBe(STEP_SIZE_WARNING_STROKE_WIDTH);
+        expect(fast.dash).toEqual(WARNING_PATHWAY_DASH);
+        expect(fast.points[0]).toEqual(calm.points.at(-1));
+        expect(fast.points.at(-1)).toEqual({ x: 20, y: 20 });
+        expect(plan.dots.dots).toHaveLength(1);
     });
 
     it("draws no warning with warnings off", () => {
-        const strokes = marcher2({ stepSizeWarnings: false }).paths.strokes;
+        const plan = marcher2({ stepSizeWarnings: false });
+        expect(plan.dots.strokes).toEqual([]);
+        const strokes = plan.paths.strokes;
         expect(strokes).toHaveLength(1);
         expect(strokes[0]!.color).toEqual(START_FLAG_PATH_COLOR);
         expect(strokes[0]!.dash).toBeNull();
@@ -380,22 +411,23 @@ describe("planStartFlagOverlay step-size warnings", () => {
     });
 
     it("draws no warning on a path that isn't drawn", () => {
-        expect(
-            marcher2({ stepSizeWarnings: true, levels: levels("all", "off") })
-                .paths.strokes,
-        ).toEqual([]);
-        expect(
+        for (const plan of [
+            marcher2({ stepSizeWarnings: true, levels: levels("all", "off") }),
             marcher2({
                 stepSizeWarnings: true,
                 levels: levels("all", "selected"),
                 selectedIds: new Set([1]),
-            }).paths.strokes,
-        ).toEqual([]);
+            }),
+        ]) {
+            expect(plan.paths.strokes).toEqual([]);
+            expect(plan.dots.strokes).toEqual([]);
+        }
     });
 
     it("doesn't warn on a calm window", () => {
-        const strokes = marcher2({ stepSizeWarnings: true, toBeat: 12 }).paths
-            .strokes;
+        const plan = marcher2({ stepSizeWarnings: true, toBeat: 12 });
+        expect(plan.dots.strokes).toEqual([]);
+        const strokes = plan.paths.strokes;
         expect(strokes).toHaveLength(1);
         expect(strokes[0]!.dash).toBeNull();
     });

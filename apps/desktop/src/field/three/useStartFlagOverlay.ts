@@ -1,7 +1,10 @@
 import { useMemo, useRef } from "react";
-import type { FieldProperties, Resolver } from "@openmarch/core";
+import type { FieldProperties } from "@openmarch/core";
 import { useStartFlagLevelsInEffect } from "@/stores/StartFlagKeyStore";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    displayedBeat,
+    useTimelineSelectionStore,
+} from "@/stores/TimelineSelectionStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import {
@@ -10,32 +13,18 @@ import {
 } from "@/timeline/startFlagLevels";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import {
-    planStartFlagOverlay,
+    levelDraws,
+    planStartFlagMarcher,
+    startFlagOverlayOf,
+    type StartFlagMarcherPlan,
     type StartFlagOverlay,
+    type StartFlagWindow,
 } from "@/field/startFlagOverlay";
-import type { DotPlan, StrokePlan } from "@/field/timelineOverlays";
-
-/** One marcher's share of the overlay: its dot, and its route when its path is drawn. */
-type Piece = {
-    readonly dots: readonly DotPlan[];
-    readonly strokes: readonly StrokePlan[];
-};
-
-const NO_SELECTION: ReadonlySet<number> = new Set();
-const DOT_ONLY: StartFlagLevels = { dots: "all", paths: "off" };
-const DOT_AND_PATH: StartFlagLevels = { dots: "all", paths: "all" };
 
 const sameDeps = (a: readonly unknown[], b: readonly unknown[] | null) =>
     b !== null &&
     a.length === b.length &&
     a.every((d, i) => Object.is(d, b[i]));
-
-/** Whether a level draws for this marcher. */
-const draws = (
-    level: StartFlagLevels["dots"],
-    marcherId: number,
-    selected: ReadonlySet<number>,
-) => level === "all" || (level === "selected" && selected.has(marcherId));
 
 /**
  * Each marcher's dot (and route) kept per resolver version, window and warnings, so changing the
@@ -43,74 +32,80 @@ const draws = (
  */
 class StartFlagPieces {
     private context: readonly unknown[] | null = null;
-    private readonly pieces = new Map<string, Piece>();
+    private readonly pieces = new Map<string, StartFlagMarcherPlan | null>();
 
     plan(input: {
-        resolver: Resolver;
+        window: StartFlagWindow;
         version: number;
         marcherIds: readonly number[];
         selectedIds: ReadonlySet<number>;
-        fromBeat: number;
-        toBeat: number;
         levels: StartFlagLevels;
-        stepSizeWarnings: boolean;
-        fieldProperties: FieldProperties;
+        /** Dots only: no route is sampled (a scrub or a line drag) */
+        dotsOnly: boolean;
     }): StartFlagOverlay {
+        const { window, levels, selectedIds } = input;
         const context = [
-            input.resolver,
+            window.resolver,
             input.version,
-            input.fromBeat,
-            input.toBeat,
-            input.stepSizeWarnings,
-            input.fieldProperties,
+            window.fromBeat,
+            window.toBeat,
+            window.stepSizeWarnings,
+            window.fieldProperties,
         ];
         if (!sameDeps(context, this.context)) {
             this.pieces.clear();
             this.context = context;
         }
-        const dots: DotPlan[] = [];
-        const strokes: StrokePlan[] = [];
+        const marchers: StartFlagMarcherPlan[] = [];
         for (const marcherId of input.marcherIds) {
-            if (!draws(input.levels.dots, marcherId, input.selectedIds))
-                continue;
+            if (!levelDraws(levels.dots, marcherId, selectedIds)) continue;
             // Paths are never drawn wider than dots
-            const path = draws(
-                input.levels.paths,
-                marcherId,
-                input.selectedIds,
-            );
-            const key = `${path ? "path" : "dot"}:${marcherId}`;
+            const withPath =
+                !input.dotsOnly &&
+                levelDraws(levels.paths, marcherId, selectedIds);
+            const key = `${withPath ? "path" : "dot"}:${marcherId}`;
             let piece = this.pieces.get(key);
-            if (!piece) {
-                const plan = planStartFlagOverlay({
-                    ...input,
-                    marcherIds: [marcherId],
-                    selectedIds: NO_SELECTION,
-                    levels: path ? DOT_AND_PATH : DOT_ONLY,
-                });
-                piece = { dots: plan.dots.dots, strokes: plan.paths.strokes };
+            if (piece === undefined) {
+                piece = planStartFlagMarcher(window, marcherId, withPath);
                 this.pieces.set(key, piece);
             }
-            dots.push(...piece.dots);
-            strokes.push(...piece.strokes);
+            if (piece) marchers.push(piece);
         }
-        return {
-            dots: { units: "field", strokes: [], dots, labels: [] },
-            paths: { units: "screen", strokes, dots: [], labels: [] },
-        };
+        return startFlagOverlayOf(marchers);
     }
 }
 
 /**
- * Start flag positions on the field (fork #331): the dots and paths plans for the edit window
- * [S, P) at the levels in effect (`useStartFlagLevelsInEffect`), or `null` when nothing is drawn:
- * every level off, isolating (isolation draws its own route and ghosts), the Visuals workspace,
- * at home, or before the resolver is ready.
+ * The window from the start flag to the beat the canvas shows (the cursor, else the playhead),
+ * whether there is a range at all (not home), and whether a scrub or line drag is under way.
+ */
+function useStartFlagWindow() {
+    const inRange = useTimelineSelectionStore(
+        (s) => s.selection.kind === "range",
+    );
+    const fromBeat = useTimelineSelectionStore((s) => s.startBeat);
+    const toBeat = useTimelineSelectionStore(displayedBeat);
+    const gesture = useTimelineSelectionStore(
+        (s) => s.scrubbing || s.lineDrag !== null,
+    );
+    return { inRange, fromBeat, toBeat, gesture };
+}
+
+/**
+ * Start flag positions on the field (fork #331): the dots and paths plans for the edit window at
+ * the levels in effect (`useStartFlagLevelsInEffect`), or `null` when nothing is drawn: every
+ * level off, isolating (isolation draws its own route and ghosts), the Visuals workspace, at home,
+ * before the resolver is ready, or when the beat the canvas shows isn't after the start flag.
+ *
+ * The window runs from the start flag to the beat the canvas shows: the cursor (a held preview
+ * frame or a paused cursor) when there is one, otherwise the playhead.
  *
  * Cost: nothing is sampled while the levels are off. Each marcher's dot and route are kept per
  * resolver version, window and step-size warnings, so selection and level changes only sample
- * marchers not sampled yet. Nothing is sampled while playing: the last plans stay, at the start
- * flag, as marchers leave it.
+ * marchers not sampled yet. While the playhead is scrubbed or a line (the start flag or the
+ * playhead) is dragged, only dots are drawn, so no route is sampled per step; the paths come back
+ * on release. Nothing is sampled while playing: the last plans stay, at the start flag, as
+ * marchers leave it.
  */
 export function useStartFlagOverlay({
     enabled,
@@ -128,7 +123,7 @@ export function useStartFlagOverlay({
 }): StartFlagOverlay | null {
     const resolver = useTimelineResolverStore((s) => s.resolver);
     const version = useTimelineResolverStore((s) => s.version);
-    const selection = useTimelineSelectionStore((s) => s.selection);
+    const { inRange, fromBeat, toBeat, gesture } = useStartFlagWindow();
     const isolating = useTimelineSelectionStore((s) => s.isolation !== null);
     const visuals = useIsVisualsView();
     const levels = useStartFlagLevelsInEffect();
@@ -144,26 +139,28 @@ export function useStartFlagOverlay({
         !isolating &&
         !visuals &&
         startFlagLevelsDrawAnything(levels) &&
-        selection.kind === "range" &&
+        inRange &&
         resolver !== null &&
         marcherIds !== undefined &&
         fieldProperties !== undefined;
-    const fromBeat = selection.kind === "range" ? selection.start : 0;
-    const toBeat = selection.kind === "range" ? selection.end : 0;
 
     const plan = useMemo(
         () =>
-            shown && !isPlaying
+            // Nothing when the canvas shows a beat at or before the start flag
+            shown && !isPlaying && toBeat > fromBeat
                 ? pieces.plan({
-                      resolver: resolver!,
+                      window: {
+                          resolver: resolver!,
+                          fromBeat,
+                          toBeat,
+                          stepSizeWarnings,
+                          fieldProperties: fieldProperties!,
+                      },
                       version,
                       marcherIds: marcherIds!,
                       selectedIds: selected,
-                      fromBeat,
-                      toBeat,
                       levels,
-                      stepSizeWarnings,
-                      fieldProperties: fieldProperties!,
+                      dotsOnly: gesture,
                   })
                 : null,
         [
@@ -177,6 +174,7 @@ export function useStartFlagOverlay({
             fromBeat,
             toBeat,
             levels,
+            gesture,
             stepSizeWarnings,
             fieldProperties,
         ],
@@ -185,7 +183,7 @@ export function useStartFlagOverlay({
         last.current = null;
         return null;
     }
-    // While playing the plans from before Play stay
+    // While playing the plans from before Play stay, wherever playback put the cursor
     if (isPlaying) return last.current;
     last.current = plan;
     return plan;
