@@ -15,6 +15,8 @@ export interface PaletteItem {
     shortcut?: readonly string[];
     /** Shown greyed out and can't be run. */
     disabled?: boolean;
+    /** Why a disabled item can't run, shown in its row ("Edits the drill — switch to Editor"). */
+    disabledReason?: string;
     /** Curated position in "Suggested" before usage history exists (lower comes first). */
     suggestedRank?: number;
     run: () => void;
