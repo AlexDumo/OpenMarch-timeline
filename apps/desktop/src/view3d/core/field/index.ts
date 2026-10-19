@@ -62,6 +62,8 @@ export interface FieldSurfaceInput {
     endZoneStyle?: EndZoneStyle;
     /** The show's field background image, if it has one. */
     image?: FieldImage | null;
+    /** The floor's physical size; null or left out places the image by fill or fit. */
+    imageSizeM?: { widthM: number; heightM: number } | null;
     /** `renderer.capabilities.maxTextureSize`; 8192 px textures need >= 8192. */
     maxTextureSize?: number;
     /** `renderer.capabilities.getMaxAnisotropy()`; defaults to 16. */
@@ -94,7 +96,7 @@ export function imageSize(image: FieldImage): ImageSize {
 export function planField(input: FieldSurfaceInput): FieldPlan {
     const image =
         input.image && imageSize(input.image).width > 0
-            ? imageSize(input.image)
+            ? { ...imageSize(input.image), sizeM: input.imageSizeM ?? null }
             : null;
     const ctx = createPlanContext({
         fieldProperties: input.fieldProperties,

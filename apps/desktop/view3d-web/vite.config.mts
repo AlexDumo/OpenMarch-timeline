@@ -31,6 +31,12 @@ export default defineConfig({
             },
         ],
     },
+    // No Settings window here: the 3D View's own panel offers its graphics
+    // choices instead (`renderPrefs.ts`).
+    define: {
+        "import.meta.env.VITE_VIEW3D_NO_SETTINGS_WINDOW":
+            JSON.stringify("true"),
+    },
     plugins: [tailwindcss(), react()],
     server: { fs: { allow: [path.join(desktop, "..", "..")] } },
     build: {

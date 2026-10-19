@@ -9,7 +9,7 @@
  * `Scene.tsx` (P3.1) draws the venue, and `overlay/` (P3.3) floats the
  * venue, lighting and camera controls and the readout over it.
  */
-import { Component, type ReactNode, useEffect } from "react";
+import { Component, type ReactNode, useEffect, useState } from "react";
 import {
     QueryCache,
     QueryClient,
@@ -17,10 +17,23 @@ import {
 } from "@tanstack/react-query";
 import { T, TolgeeProvider, useTranslate } from "@tolgee/react";
 import TitleBar from "@/components/titlebar/TitleBar";
+import { probeWebGL, type GlKind } from "@/field/fieldQuality";
 import tolgee from "@/global/singletons/Tolgee";
 import { startView3dSync } from "@/view3d/sync/view3dSyncStore";
 import View3dOverlay from "./overlay/View3dOverlay";
+import { startPrefsSync, useView3dSceneStore } from "./sceneStore";
 import Scene from "./Scene";
+
+/**
+ * What the viewport shows instead of the scene, as a translation key, or null
+ * to draw the scene. Only no WebGL at all stops it. WebGL drawn in software
+ * runs the whole view on the CPU, so the scene draws at low quality there
+ * and says why (`sceneStore.ts` `softwareGl`, `overlay/QualityNotice.tsx`),
+ * like the 2D field.
+ */
+export function viewportFallback(kind: GlKind): string | null {
+    return kind === "none" ? "view3d.window.graphicsUnavailable" : null;
+}
 
 export interface View3dWindowParams {
     showName: string;
@@ -66,7 +79,13 @@ export default function View3dRoot() {
             void tolgee.changeLanguage(params.language);
         }
         // Listens to the editor, then says hello for a fresh clock and selection.
-        return startView3dSync(window.view3d, queryClient);
+        const stopSync = startView3dSync(window.view3d, queryClient);
+        // Graphics choices saved in the Settings window apply at once.
+        const stopPrefs = startPrefsSync();
+        return () => {
+            stopSync();
+            stopPrefs();
+        };
     }, []);
 
     return (
@@ -81,6 +100,15 @@ export default function View3dRoot() {
 function View3dWindow() {
     const { t } = useTranslate();
     const title = t("view3d.window.title", { showName: params.showName });
+    // Probed once, before the scene creates its own context, and recorded
+    // before the scene's first render so it builds at low quality from the
+    // start on software WebGL.
+    const [glKind] = useState(() => {
+        const kind = probeWebGL().kind;
+        useView3dSceneStore.getState()._setSoftwareGl(kind === "software");
+        return kind;
+    });
+    const fallback = viewportFallback(glKind);
 
     useEffect(() => {
         document.title = title;
@@ -93,18 +121,28 @@ function View3dWindow() {
                 className="relative min-h-0 flex-1"
                 data-testid="view3d-viewport"
             >
-                <ViewportErrorBoundary
-                    fallback={
-                        <p className="text-body text-text/60 p-24">
-                            <T keyName="view3d.window.graphicsUnavailable" />
-                        </p>
-                    }
-                >
-                    <Scene />
-                </ViewportErrorBoundary>
+                {fallback ? (
+                    <ViewportMessage keyName={fallback} />
+                ) : (
+                    <ViewportErrorBoundary
+                        fallback={
+                            <ViewportMessage keyName="view3d.window.graphicsUnavailable" />
+                        }
+                    >
+                        <Scene />
+                    </ViewportErrorBoundary>
+                )}
                 <View3dOverlay />
             </div>
         </main>
+    );
+}
+
+function ViewportMessage({ keyName }: { keyName: string }) {
+    return (
+        <p className="text-body text-text/60 p-24">
+            <T keyName={keyName} />
+        </p>
     );
 }
 

@@ -262,7 +262,10 @@ describe.each(KITS)("$id kit", ({ build: builder, ...expected }) => {
         for (const s of spots) expect(s.intensity).toBeCloseTo(1.6 * 0.6);
         kit.setLighting("day");
         for (const s of spots) expect(s.intensity).toBe(0);
+        // An unlit light leaves the scene, so shaders skip it.
+        for (const s of spots) expect(s.visible).toBe(false);
         kit.setLighting("night");
+        for (const s of spots) expect(s.visible).toBe(true);
         kit.setLighting("house");
         for (const s of spots) expect(s.intensity).toBeGreaterThan(0);
         kit.dispose();

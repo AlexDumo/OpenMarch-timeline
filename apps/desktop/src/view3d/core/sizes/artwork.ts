@@ -19,6 +19,7 @@ import {
     defaultCatalogEntry,
     type SourcedLength,
 } from "./catalog";
+import { ASPECT_TOLERANCE, sameAspect } from "@openmarch/core";
 import { lengthOf, METERS_PER_INCH, type Length } from "./units";
 
 /** The surface kinds an Artwork's display texture is sized for. */
@@ -129,17 +130,11 @@ export function effectiveDpi(native: Dpi, scale: number): Dpi {
     return native === "vector" ? "vector" : native / scale;
 }
 
-/** Default relative tolerance for "same aspect". */
-export const ASPECT_TOLERANCE = 0.005;
-
-/** Whether two width ÷ height ratios match within a relative tolerance. */
-export function sameAspect(
-    a: number,
-    b: number,
-    tolerance = ASPECT_TOLERANCE,
-): boolean {
-    return Math.abs(a - b) <= tolerance * Math.max(a, b);
-}
+/**
+ * "Same aspect" is one rule, shared with the cue compile's Silk aspect note,
+ * so it lives in `@openmarch/core`.
+ */
+export { ASPECT_TOLERANCE, sameAspect };
 
 /**
  * The tolerance for comparing a raster's pixel aspect with a physical size:
