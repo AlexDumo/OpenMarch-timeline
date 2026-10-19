@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type KeyboardEvent,
+} from "react";
 import {
     ArrowLineRightIcon,
+    ArrowsSplitIcon,
+    ScissorsIcon,
     TrashIcon,
     UsersThreeIcon,
 } from "@phosphor-icons/react";
@@ -16,6 +24,14 @@ import {
 } from "@/timeline/timelineViewModel";
 import { isolatedTimelineName } from "@/components/timeline/TimelineIsolationBar";
 import { useMoveCommands } from "@/components/timeline/useTimelineCommands";
+import { useSplitMergeCommands } from "@/components/timeline/useSplitMergeMoves";
+import {
+    selectedMembers,
+    splitEntryState,
+    splitMergeContext,
+} from "@/components/timeline/splitMergeMoves";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { spaceStaysPlay } from "@/components/timeline/timelineHotkeys";
 import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
@@ -66,6 +82,45 @@ export function TimelineMoveCard({
     const moves = useMoveCommands(db);
     const pages = useTimingObjects()?.pages ?? [];
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
+    // UI-25: **Split N selected into new move**, as in the clip's menu
+    const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
+    const selectedKey = (selectedMarchers ?? []).map((m) => m.id).join(",");
+    const selectedIds = useMemo(
+        () =>
+            new Set(
+                selectedKey === "" ? [] : selectedKey.split(",").map(Number),
+            ),
+        [selectedKey],
+    );
+    const splitMerge = useSplitMergeCommands({
+        database: db,
+        selectedMarcherIds: selectedIds,
+        isPlaying,
+    });
+    const basic = useIsBasicMode();
+    const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
+    const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    const split = useMemo(
+        () =>
+            basic
+                ? null
+                : splitEntryState(
+                      splitMergeContext(
+                          { storedTimelines, pageBoxes },
+                          selectedIds,
+                          isPlaying,
+                      ),
+                      timeline.id,
+                  ),
+        [
+            basic,
+            storedTimelines,
+            pageBoxes,
+            selectedIds,
+            isPlaying,
+            timeline.id,
+        ],
+    );
     const stored = timeline.name ?? "";
     const [name, setName] = useState(stored);
     // The stored name changed (a rename here or on the clip, an undo): show it
@@ -81,6 +136,15 @@ export function TimelineMoveCard({
     // Only whether P is at the move's end, so the card doesn't render on every beat played
     const atEnd = useTimelineSelectionStore(
         (s) => s.playheadBeat === timeline.end,
+    );
+    // Split at playhead is on the card only while this move is isolated (UI-27): otherwise the
+    // window ends at the playhead, so the playhead is never inside the move the card is about
+    const isolated = useTimelineSelectionStore(
+        (s) => s.isolation?.timelineId === timeline.id,
+    );
+    // Likewise only whether P is strictly inside the move: the split needs that
+    const playheadInside = useTimelineSelectionStore(
+        (s) => timeline.start < s.playheadBeat && s.playheadBeat < timeline.end,
     );
     // The name last sent, until the stored name changes: Enter, the blur and the card going can
     // each send the same rename before it lands, and a refused one would say so each time
@@ -218,7 +282,8 @@ export function TimelineMoveCard({
             </Field>
             <Field label={t("inspector.timeline.move.counts")}>
                 <p className="text-sub" data-testid="timeline-move-card-range">
-                    {isolatedTimelineName(timeline, pages)}
+                    {/* The card is only for moves, which may share a page box's range (UI-25) */}
+                    {isolatedTimelineName(timeline, pages, true)}
                 </p>
             </Field>
             <div className="flex flex-col gap-6">
@@ -259,6 +324,57 @@ export function TimelineMoveCard({
                     {t("inspector.timeline.move.selectMarchers")}
                 </Button>
             </div>
+            {split && (
+                <div className="flex flex-col gap-6">
+                    <Button
+                        size="compact"
+                        variant="secondary"
+                        className={clsx("w-fit whitespace-nowrap", FOCUS_RING)}
+                        data-testid="timeline-move-card-split"
+                        disabled={split.disabledReason !== null}
+                        onClick={() =>
+                            splitMerge.commands.split(
+                                timeline.id,
+                                selectedMembers(
+                                    splitMerge.context(),
+                                    timeline.id,
+                                ),
+                            )
+                        }
+                    >
+                        <ArrowsSplitIcon size={16} />
+                        {split.label}
+                    </Button>
+                    {split.disabledReason !== null && (
+                        <Help testId="timeline-move-card-split-reason">
+                            {split.disabledReason}
+                        </Help>
+                    )}
+                </div>
+            )}
+            {isolated && (
+                <div className="flex flex-col gap-6">
+                    <Button
+                        size="compact"
+                        variant="secondary"
+                        className={clsx("w-fit", FOCUS_RING)}
+                        data-testid="timeline-move-card-split-at-playhead"
+                        disabled={isPlaying || !playheadInside}
+                        onClick={() =>
+                            void moves.splitMoveAtPlayhead(
+                                timeline.id,
+                                isPlaying,
+                            )
+                        }
+                    >
+                        <ScissorsIcon size={16} />
+                        {t("inspector.timeline.move.split")}
+                    </Button>
+                    {!isPlaying && !playheadInside && (
+                        <Help>{t("inspector.timeline.move.splitHelp")}</Help>
+                    )}
+                </div>
+            )}
             <div className="flex flex-col gap-6">
                 <Button
                     size="compact"

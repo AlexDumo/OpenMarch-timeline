@@ -315,6 +315,24 @@ describe("clips only for timelines off the page boxes (UI-10)", () => {
         ).toEqual([t(9, 13), t(5, 9), t(1, 17)]);
         expect(timelinesOffPages([t(1, 9)], [])).toEqual([t(1, 9)]);
     });
+
+    it("keeps the clip of a move split off a page's timeline: the box stands for the oldest (UI-25)", () => {
+        const t = (
+            linkId: number,
+            startBeatIndex: number,
+            endBeatIndex: number,
+        ) => ({
+            linkId,
+            startBeatIndex,
+            endBeatIndex,
+        });
+        expect(
+            timelinesOffPages(
+                [t(7, 9, 17), t(3, 9, 17), t(9, 9, 17), t(4, 1, 9)],
+                PAGES,
+            ),
+        ).toEqual([t(7, 9, 17), t(9, 9, 17)]);
+    });
 });
 
 describe("the page boxes the clips are matched against", () => {

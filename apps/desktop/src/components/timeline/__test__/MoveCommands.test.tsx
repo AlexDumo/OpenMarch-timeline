@@ -13,7 +13,7 @@ import { renameTimeline } from "@/db-functions/timelineCommands";
 import { readStoredTimelineMemberships } from "@/timeline/useTimelineSelectionHost";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { pageFlags } from "@/timeline/timelinePlayhead";
-import { createMoveCommands } from "../useTimelineCommands";
+import { createMoveCommands, moveAtPlayhead } from "../useTimelineCommands";
 
 /**
  * UI-14 review: a move's commands on a real database. A repeated Delete deletes once and says
@@ -119,6 +119,61 @@ describeDbTests("a move's commands (UI-14 review)", (it) => {
         expect(await count(db, id)).toBe(0);
     });
 
+    it("Split at playhead makes the move two that meet at the playhead, and selects the new one (UI-27)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        render(<Toaster />);
+        const id = await makeMove(db);
+        const move = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.id, id))
+            .get())!;
+        const store = useTimelineSelectionStore.getState();
+        const timelineCount = async () =>
+            (await db.select().from(schema.timelines).all()).length;
+        const stored = await timelineCount();
+        // The playhead on the move's end: nothing to split off
+        store.selectRange(move.start_beat, move.end_beat);
+        await commands(db).splitMoveAtPlayhead(id);
+        expect(await timelineCount()).toBe(stored);
+        expect(
+            await screen.findByText(
+                "Put the playhead inside the move to split it there.",
+            ),
+        ).toBeTruthy();
+
+        // Inside it: two moves, the new one before the playhead is the window
+        store.selectRange(move.start_beat, move.start_beat + 1);
+        const undo = vi.fn();
+        await act(() => commands(db, undo).splitMoveAtPlayhead(id));
+        const timelines = await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.end_beat, move.end_beat))
+            .all();
+        expect(timelines).toMatchObject([
+            { id, start_beat: move.start_beat + 1 },
+        ]);
+        const before = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.end_beat, move.start_beat + 1))
+            .get())!;
+        expect(before.start_beat).toBe(move.start_beat);
+        expect(useTimelineSelectionStore.getState().selection).toEqual({
+            kind: "range",
+            start: move.start_beat,
+            end: move.start_beat + 1,
+        });
+        expect(await screen.findByText(/^Split Move 1 at /)).toBeTruthy();
+        const button = await screen.findByRole("button", { name: "Undo" });
+        act(() => button.click());
+        expect(undo).toHaveBeenCalledTimes(1);
+        expect(toastTimelineError).not.toHaveBeenCalled();
+    });
+
     it("the delete toast says what went, and its Undo runs the app's undo", async ({
         db,
         marchersAndPages: _,
@@ -150,5 +205,77 @@ describeDbTests("a move's commands (UI-14 review)", (it) => {
         await waitFor(() =>
             expect(screen.queryByText("Deleted Move 1")).toBeNull(),
         );
+    });
+    it("a repeated Split at playhead splits once, with no error for the repeat (UI-27)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const id = await makeMove(db);
+        const move = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.id, id))
+            .get())!;
+        useTimelineSelectionStore
+            .getState()
+            .selectRange(move.start_beat, move.start_beat + 1);
+        const timelineCount = async () =>
+            (await db.select().from(schema.timelines).all()).length;
+        const stored = await timelineCount();
+        const moves = commands(db);
+        await act(() =>
+            Promise.all([
+                moves.splitMoveAtPlayhead(id),
+                moves.splitMoveAtPlayhead(id),
+            ]),
+        );
+        expect(await timelineCount()).toBe(stored + 1);
+        expect(toastTimelineError).not.toHaveBeenCalled();
+    });
+
+    it("⌘K splits the isolated move, or the one move the playhead is inside (UI-27)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        const id = await makeMove(db);
+        const store = useTimelineSelectionStore.getState();
+        const move = store.storedTimelines!.find((t) => t.id === id)!;
+        // Not isolated: the one move (not a page's) the playhead is inside
+        store.selectRange(move.start, move.start + 1);
+        expect(
+            moveAtPlayhead(useTimelineSelectionStore.getState()),
+        ).toMatchObject({ id });
+        // On a page's flag inside no move: none
+        store.selectRange(0, 1);
+        expect(moveAtPlayhead(useTimelineSelectionStore.getState())).toMatch(
+            /^No move crosses /,
+        );
+        // Isolated with P on its end: refused, never another move under P
+        store.isolate(id);
+        store.seek(move.end);
+        expect(moveAtPlayhead(useTimelineSelectionStore.getState())).toBe(
+            "Put the playhead inside the move you're editing to split it.",
+        );
+        store.seek(move.start + 1);
+        expect(
+            moveAtPlayhead(useTimelineSelectionStore.getState()),
+        ).toMatchObject({ id });
+    });
+    it("⌘K splits a move split off a page's move, never the page's own (UI-25, UI-27)", () => {
+        const page = {
+            id: 1,
+            start: 9,
+            end: 17,
+            marcherIds: new Set<number>(),
+        };
+        const off = { ...page, id: 2 };
+        const state = {
+            selection: { kind: "none" },
+            storedTimelines: [page, off],
+            isolation: null,
+            pageBoxes: [{ start: 9, end: 17, label: "2" }],
+            playheadBeat: 13,
+        } as unknown as Parameters<typeof moveAtPlayhead>[0];
+        expect(moveAtPlayhead(state)).toMatchObject({ id: 2 });
     });
 });

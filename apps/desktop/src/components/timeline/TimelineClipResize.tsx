@@ -243,15 +243,25 @@ export function resizedRange({
     const clamped = clamp(snapped, min.beat, Math.max(min.beat, max.beat));
     const stoppedBy =
         snapped < clamped ? min.reason : snapped > clamped ? max.reason : null;
-    // The beats where this edge would give the move another's exact range (C-12)
+    // The beats where this edge would give the move another's exact range (C-12). Where the
+    // edge started never is: dropping it there changes nothing, though a move split off a
+    // page's timeline shares that range with it (UI-25)
+    const from = edge === "start" ? range.startBeatIndex : range.endBeatIndex;
     const forbidden = new Map<number, string>();
     for (const t of limits?.taken ?? []) {
-        if (edge === "start" && t.endBeatIndex === range.endBeatIndex)
+        if (
+            edge === "start" &&
+            t.endBeatIndex === range.endBeatIndex &&
+            t.startBeatIndex !== from
+        )
             forbidden.set(t.startBeatIndex, t.reason);
-        if (edge === "end" && t.startBeatIndex === range.startBeatIndex)
+        if (
+            edge === "end" &&
+            t.startBeatIndex === range.startBeatIndex &&
+            t.endBeatIndex !== from
+        )
             forbidden.set(t.endBeatIndex, t.reason);
     }
-    const from = edge === "start" ? range.startBeatIndex : range.endBeatIndex;
     const landed = stepOffForbidden(clamped, from, new Set(forbidden.keys()));
     return {
         ...(edge === "start"
@@ -652,7 +662,8 @@ export function useClipEdgeResize({
                 data-testid="timeline-clip-resize-tag"
                 role="status"
                 className={clsx(
-                    "rounded-4 bg-fg-2 border-stroke pointer-events-none absolute z-[60] border px-4 py-[1px] text-[11px] whitespace-nowrap shadow-sm",
+                    // Opaque: it often sits over the waveform
+                    "rounded-4 bg-bg-1 border-stroke pointer-events-none absolute z-[60] border px-4 py-[1px] text-[11px] whitespace-nowrap shadow-sm",
                     preview.blockedBy ? "text-red" : "text-text",
                     tagBeside
                         ? clsx(
