@@ -61,8 +61,10 @@ import {
  * `motionChanged` with the count their path changes from, for the toast.
  *
  * Refused (`E-ARGS`) before any write: a beat that isn't whole or strictly inside the move, a
- * move that already runs over either half (one timeline per range, C-12), and a move with no row
- * before or none after the beat (the halves would be empty).
+ * move that already runs over either half (one timeline per range, C-12: only a move split off
+ * by marchers shares one, UI-25; and a half landing on a page's box with a timeline would take
+ * over the page's move, `pageMoveTakenOver`), and a move with no row before or none after the
+ * beat (the halves would be empty).
  */
 
 export interface MotionChange {
@@ -301,7 +303,7 @@ async function refuseUnlessSplitAllowed(
     ]) {
         if (await findTimelineByRange(tx, half))
             refuse(
-                `${moveName(half, words.boxes, words.moves)} already runs over ${countsText(half, words.boxes)}; there is one move per range`,
+                `${moveName(half, words.boxes, words.moves)} already runs over ${countsText(half, words.boxes)}, so a half can't go there`,
             );
     }
 

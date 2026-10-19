@@ -28,6 +28,7 @@ import {
 } from "./timelines";
 import { createTimelineTransitionsInTransaction } from "./timelineTransitions";
 import { ensureCountsInTransaction } from "./endlessCounts";
+import { PAGE_TAKEOVER_REFUSAL, pageMoveTakenOver } from "./timelineMoveNames";
 import { createTimelineAssignmentsInTransaction } from "./timelineAssignments";
 import {
     updateTimelineTransitionsInTransaction,
@@ -128,6 +129,13 @@ export const shiftTimelineInTransaction = async ({
         );
     if (e + delta > MAX_BEAT)
         refuse(`the timeline can't move past beat ${MAX_BEAT}`);
+    if (
+        await pageMoveTakenOver(tx, timelineId, {
+            start: s + delta,
+            end: e + delta,
+        })
+    )
+        refuse(PAGE_TAKEOVER_REFUSAL);
     // Past the show's end, the counts it lands on are stored first (endless counts)
     await ensureCountsInTransaction({ tx, through: e + delta });
 

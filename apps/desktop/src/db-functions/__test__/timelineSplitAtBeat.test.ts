@@ -17,6 +17,7 @@ import {
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import { markAssignmentsKeptInTransaction } from "../timelineKeptMarkers";
 import { splitTimelineAtBeat } from "../timelineSplitAtBeat";
+import { splitMarchersIntoNewMove } from "../timelineSplitMoves";
 
 keepFixturesInPageMode("its tests convert the show themselves");
 
@@ -301,6 +302,67 @@ describeDbTests("Split at playhead (UI-27)", (it) => {
         });
         expect(result.motionChanged).toEqual([]);
         expectSamePositions(before, positions(await resolverOf(db), 48), 1e-9);
+    });
+
+    it("a move split off a page's move by marchers splits at the playhead, leaving the page's (UI-25)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const { timeline: page, transition } = await page2(db);
+        const rows = await rowsOf(db, transition.id);
+        const off = await splitMarchersIntoNewMove({
+            db,
+            timelineId: page.id,
+            marcherIds: rows.slice(0, 2).map((r) => r.marcher_id),
+        });
+        // The split-off shares the page's range; the page's own is the older one
+        expect(off.timeline).toMatchObject({ start_beat: 9, end_beat: 17 });
+        expect(off.timeline.id).toBeGreaterThan(page.id);
+        const before = positions(await resolverOf(db), 48);
+
+        const result = await splitTimelineAtBeat({
+            db,
+            timelineId: off.timeline.id,
+            beat: 13,
+        });
+        expect(result.after).toMatchObject({
+            id: off.timeline.id,
+            start_beat: 13,
+            end_beat: 17,
+        });
+        expect(result.before).toMatchObject({ start_beat: 9, end_beat: 13 });
+        expectSamePositions(before, positions(await resolverOf(db), 48), 1e-9);
+        // The page's move is untouched, still the page box's timeline
+        expect(
+            await db
+                .select()
+                .from(schema.timelines)
+                .where(eq(schema.timelines.id, page.id))
+                .get(),
+        ).toMatchObject({ start_beat: 9, end_beat: 17 });
+    });
+
+    it("refuses a half landing on a page's box that has its timeline: it would take over the page's move", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await convertPagesToTimeline(db);
+        const { transition } = await page2(db);
+        const [row] = await rowsOf(db, transition.id);
+        // A move from page 1's count 5 over page 2: split at page 2's flag, its second half
+        // would be exactly page 2's box
+        await overlay(db, row!.marcher_id, 5, 17, [10, 10]);
+        const move = (await db
+            .select()
+            .from(schema.timelines)
+            .where(eq(schema.timelines.start_beat, 5))
+            .get())!;
+        await expectRefused(
+            db,
+            () => splitTimelineAtBeat({ db, timelineId: move.id, beat: 9 }),
+            /already runs over/,
+        );
     });
 
     it("follow the leader goes straight before the beat and says who changed", async ({

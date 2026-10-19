@@ -261,4 +261,21 @@ describeDbTests("a move's commands (UI-14 review)", (it) => {
             moveAtPlayhead(useTimelineSelectionStore.getState()),
         ).toMatchObject({ id });
     });
+    it("⌘K splits a move split off a page's move, never the page's own (UI-25, UI-27)", () => {
+        const page = {
+            id: 1,
+            start: 9,
+            end: 17,
+            marcherIds: new Set<number>(),
+        };
+        const off = { ...page, id: 2 };
+        const state = {
+            selection: { kind: "none" },
+            storedTimelines: [page, off],
+            isolation: null,
+            pageBoxes: [{ start: 9, end: 17, label: "2" }],
+            playheadBeat: 13,
+        } as unknown as Parameters<typeof moveAtPlayhead>[0];
+        expect(moveAtPlayhead(state)).toMatchObject({ id: 2 });
+    });
 });

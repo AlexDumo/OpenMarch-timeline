@@ -200,13 +200,15 @@ describe("the Move card (UI-14)", () => {
         // Selected, the window ends at P: P is never inside, so the card doesn't offer it
         store.selectRange(9, 12);
         renderSection();
-        expect(screen.queryByTestId("timeline-move-card-split")).toBeNull();
+        expect(
+            screen.queryByTestId("timeline-move-card-split-at-playhead"),
+        ).toBeNull();
         cleanup();
         store.isolate(7);
         store.seek(10);
         renderSection();
         const split = screen.getByTestId(
-            "timeline-move-card-split",
+            "timeline-move-card-split-at-playhead",
         ) as HTMLButtonElement;
         expect(split.disabled).toBe(false);
         expect(

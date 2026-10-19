@@ -13,7 +13,11 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import { allMarcherRowsQueryOptions } from "@/hooks/queries/useMarchers";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
-import { moveLabel, moveLabels } from "@/timeline/timelineViewModel";
+import {
+    isPageTimeline,
+    moveLabel,
+    moveLabels,
+} from "@/timeline/timelineViewModel";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { timelineExists } from "@/db-functions/timelines";
 import { pageRunsLabel, type NamedPage } from "@/db-functions/pageDelete";
@@ -100,7 +104,11 @@ export function useTimelineCommands({
                     if (result)
                         useTimelineSelectionStore
                             .getState()
-                            .followTimelineShift(from, shift.delta);
+                            .followTimelineShift(
+                                from,
+                                shift.delta,
+                                shift.timelineId,
+                            );
                     return result !== null;
                 },
                 (error: unknown) => {
@@ -287,10 +295,11 @@ export function moveAtPlayhead(
     }
     const current = windowMove(state);
     if (current && inside(current)) return current;
-    const isPage = (t: { start: number; end: number }) =>
-        state.pageBoxes.some((b) => b.start === t.start && b.end === t.end);
-    const crossing = (state.storedTimelines ?? []).filter(
-        (t) => inside(t) && !isPage(t),
+    // A page's own timeline is the oldest over its box (UI-25): a move split off it shares the
+    // range and is still a move
+    const stored = state.storedTimelines ?? [];
+    const crossing = stored.filter(
+        (t) => inside(t) && !isPageTimeline(t, stored, state.pageBoxes),
     );
     if (crossing.length === 1) return crossing[0]!;
     const where = beatWhere(beat, state.pageBoxes) ?? "the playhead";

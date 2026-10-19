@@ -5,6 +5,8 @@ import {
     FlagIcon,
     LinkBreakIcon,
     LinkSimpleIcon,
+    ArrowsMergeIcon,
+    ArrowsSplitIcon,
     PencilSimpleIcon,
     TrashIcon,
     UserPlusIcon,
@@ -59,6 +61,60 @@ export const KEEP_MENU_EVENTS = {
 } as const;
 
 /**
+ * An extra entry for a clip's or a page box's menu (UI-25 **Split N selected into new move**,
+ * **Merge into Page N**, **Merge moves**), built by the app when the menu opens. A disabled entry
+ * says why under it.
+ */
+export interface TimelineMenuEntry {
+    /** For `data-testid`: `timeline-menu-<id>` */
+    readonly id: string;
+    readonly label: string;
+    readonly onSelect: () => void;
+    readonly disabledReason?: string | null;
+    readonly icon?: "split" | "merge";
+}
+
+/** Extra entries (`TimelineMenuEntry`), each with its reason under it when disabled. */
+export function TimelineMenuEntries({
+    entries,
+}: {
+    entries: readonly TimelineMenuEntry[];
+}) {
+    return (
+        <>
+            {entries.map((entry) => {
+                const reason = entry.disabledReason ?? null;
+                return (
+                    <div key={entry.id} className="contents">
+                        <DropdownMenu.Item
+                            data-testid={`timeline-menu-${entry.id}`}
+                            disabled={reason !== null}
+                            onSelect={entry.onSelect}
+                            className={ITEM_CLASS}
+                        >
+                            {entry.icon === "merge" ? (
+                                <ArrowsMergeIcon size={14} />
+                            ) : (
+                                <ArrowsSplitIcon size={14} />
+                            )}
+                            {entry.label}
+                        </DropdownMenu.Item>
+                        {reason !== null && (
+                            <p
+                                data-testid={`timeline-menu-${entry.id}-reason`}
+                                className="text-text-subtitle max-w-[260px] px-8 pb-4 text-[11px]"
+                            >
+                                {reason}
+                            </p>
+                        )}
+                    </div>
+                );
+            })}
+        </>
+    );
+}
+
+/**
  * What a move's entries do, for one clip (UI-14). Rename only asks for the inline name field; the
  * clip's owner commits it.
  */
@@ -72,6 +128,8 @@ export interface TimelineMoveMenuActions {
     readonly splitDisabledReason?: () => string | null;
     /** Why **Edit move** and **Delete move** are unavailable (while playing), or null */
     readonly disabledReason?: string | null;
+    /** UI-25: split and merge entries, after **Rename move…** */
+    readonly extra?: () => readonly TimelineMenuEntry[];
 }
 
 /**
@@ -89,6 +147,8 @@ export interface TimelineMoveCommands<Id = number> {
     readonly splitDisabledReason?: (id: Id) => string | null;
     /** Why **Edit move** and **Delete move** are unavailable (while playing), or null */
     readonly disabledReason?: string | null;
+    /** UI-25: the move's split and merge entries, read when its menu opens */
+    readonly extraFor?: (id: Id) => readonly TimelineMenuEntry[];
 }
 
 /**
@@ -107,6 +167,7 @@ export function TimelineMoveMenuItems({
     const splitReason = actions.onSplit
         ? (actions.splitDisabledReason?.() ?? reason)
         : null;
+    const extra = actions.extra?.() ?? [];
     return (
         <>
             <DropdownMenu.Item
@@ -136,6 +197,12 @@ export function TimelineMoveMenuItems({
                     <ScissorsIcon size={14} />
                     Split at playhead
                 </DropdownMenu.Item>
+            )}
+            {extra.length > 0 && (
+                <>
+                    <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                    <TimelineMenuEntries entries={extra} />
+                </>
             )}
             <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
             <DropdownMenu.Item
@@ -199,6 +266,10 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
         readonly isSubset: (pageId: string | number) => boolean;
         readonly onSet: (pageId: string | number, subset: boolean) => void;
     };
+    /** UI-25: a page box's split entries, read when its menu opens */
+    readonly extraFor?: (
+        pageId: string | number,
+    ) => readonly TimelineMenuEntry[];
 }
 
 /** The page box menu's keep entries (UI-18 keep later pages), by page id. */
@@ -310,7 +381,8 @@ export function useTimelineRangeMenu({
             (menu?.onDeleteFlag !== undefined ||
                 menu?.onDeleteWithMoves !== undefined ||
                 menu?.keepHere !== undefined ||
-                menu?.subset !== undefined) &&
+                menu?.subset !== undefined ||
+                menu?.extraFor !== undefined) &&
             target.pageId !== undefined;
         if (!menu?.onAdd && !canDelete && !movesOf(target)) return;
         event.preventDefault();
@@ -322,6 +394,10 @@ export function useTimelineRangeMenu({
         open && menu?.keepHere && open.target.pageId !== undefined
             ? menu.keepHere.stateFor(open.target.pageId)
             : null;
+    const pageExtra =
+        open && menu?.extraFor && open.target.pageId !== undefined
+            ? menu.extraFor(open.target.pageId)
+            : [];
     const element = open && (
         <DropdownMenu.Root
             open
@@ -364,6 +440,12 @@ export function useTimelineRangeMenu({
                         >
                             {disabledReason}
                         </p>
+                    )}
+                    {pageExtra.length > 0 && (
+                        <>
+                            <TimelineMenuEntries entries={pageExtra} />
+                            <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                        </>
                     )}
                     {keepState && (
                         <>

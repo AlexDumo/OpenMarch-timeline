@@ -2,6 +2,7 @@ import type { LabeledHoldMarks } from "./PageHoldMark";
 import type { TimelineBand } from "./TimelineBand";
 import type { PageKeepChains } from "./PageKeepChain";
 import type { TimelineClipResizeCommands } from "./TimelineClipResize";
+import type { TimelineClipPeel } from "./TimelineClipPeel";
 import type { ReactNode } from "react";
 import type {
     TimelineAddMarchersMenu,
@@ -189,6 +190,24 @@ export type TimelineSelection =
           readonly via?: "pages";
           /** The range was drawn by dragging on empty timeline space (Ctrl+drag) */
           readonly drawn?: boolean;
+          /**
+           * UI-25: the stored timeline the window stands for, when known (a clicked clip; the
+           * app's resolved one). Several moves may share a range since a move can be split off a
+           * page's timeline, so the range alone doesn't say which clip is selected
+           */
+          readonly timelineId?: number;
+          /**
+           * UI-25: the window is a move's clip, not a page box, though its range may be a page
+           * box's (a move split off it): the page box doesn't show selected
+           */
+          readonly onClip?: boolean;
+          /**
+           * UI-25: a second move selected beside the window's (Shift+click on its clip), for
+           * **Merge moves**; its clip shows selected too
+           */
+          readonly pairedTimelineId?: number;
+          /** From the timeline: a Shift+click on a clip, which adds it beside the selected one */
+          readonly extend?: boolean;
       }
     | null;
 
@@ -322,6 +341,8 @@ export interface TimelineCommonProps
     ) => TimelineRangeCommitResult;
     /** Resizing a clip by its edges (resize-move), in view beats; without it clips have no handles */
     readonly clipResize?: TimelineClipResizeCommands;
+    /** UI-25: dragging a clip down splits the selected marchers off; onto a move, merges */
+    readonly clipPeel?: TimelineClipPeel;
     /** The loop (UI-17), view beats; `null` or absent when looping is off */
     readonly loop?: TimelineBeatRange | null;
     /** A loop end dragged or stepped (UI-17), view beats */
@@ -334,6 +355,12 @@ export interface TimelineCommonProps
     readonly holdMarks?: LabeledHoldMarks;
     /** The chains on the page boxes (UI-18 keep later pages); none without a selection */
     readonly keepChains?: PageKeepChains;
+    /**
+     * The moves a page box stands for, so they have no clip (`timelinesOffPages`), by track id.
+     * One that gets a clip (its box was split, or a flag deleted) drops out of the page row
+     * (`useClipDrops`)
+     */
+    readonly pageMoves?: ReadonlySet<string | number>;
     /** UI-19 Basic: the selected marchers' mid-page positions, view beats */
     readonly basicPoints?: readonly TimelineBasicPoint[];
     /** UI-19 Basic: **Remove this count's position**, by its view beat */
