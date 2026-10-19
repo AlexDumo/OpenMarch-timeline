@@ -16,6 +16,19 @@ export const dbMarcherToMarcher = (
 };
 
 /**
+ * Whether a marchers row is a performer rather than an item (a prop or piece of equipment,
+ * props-spec section 4). Every all-marchers loop that means "performers" filters on it; a row
+ * read without its `type` counts as a performer.
+ */
+export const isPerformer = (marcher: { type?: string | null }): boolean =>
+    marcher.type !== "item";
+
+/** The performers among `marchers`, in their order (`isPerformer`). */
+export const performersOnly = <T extends { type?: string | null }>(
+    marchers: readonly T[],
+): T[] => marchers.filter(isPerformer);
+
+/**
  * Compares a marcher to another marcher based on their section and drill order.
  *
  * If the sections are different, the comparison is based on the section's compareTo method.

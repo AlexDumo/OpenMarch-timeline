@@ -4,14 +4,14 @@ import userEvent from "@testing-library/user-event";
 import { TolgeeProvider } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { allMarchersQueryOptions } from "@/hooks/queries";
+import { allMarcherRowsQueryOptions } from "@/hooks/queries";
 import MarcherForm from "../../MarcherForm";
 
-/** Marchers already in the show; the import waits for this query to load */
+/** Marchers (and items) already in the show; the import waits for this query to load */
 const renderImport = (loaded = true, disabledProp = false) => {
     const queryClient = new QueryClient();
     if (loaded)
-        queryClient.setQueryData(allMarchersQueryOptions().queryKey, []);
+        queryClient.setQueryData(allMarcherRowsQueryOptions().queryKey, []);
     return render(
         <QueryClientProvider client={queryClient}>
             <TolgeeProvider tolgee={tolgee} fallback="Loading...">

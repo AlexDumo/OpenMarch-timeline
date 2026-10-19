@@ -37,6 +37,11 @@ export interface SetMarchersToNeighborPageArgs {
     pages: Page[];
     selectedMarcherIds: readonly number[];
     /**
+     * The performers "all" sets: items (props and equipment, C2.2) stay put. Every marcher the
+     * resolver knows when omitted.
+     */
+    performerIds?: readonly number[];
+    /**
      * The write (`moveMarchersInTarget`'s `mutateAsync`). It rejects when the edit is
      * refused, after its own error handler has shown the reason.
      */
@@ -78,6 +83,7 @@ export async function setMarchersToNeighborPage({
     selectedPage,
     pages,
     selectedMarcherIds,
+    performerIds,
     writeTimeline,
     notify,
     t,
@@ -103,7 +109,7 @@ export async function setMarchersToNeighborPage({
         notify.error(t(messages.none));
         return null;
     }
-    const marcherIds = scope === "all" ? undefined : selectedMarcherIds;
+    const marcherIds = scope === "all" ? performerIds : selectedMarcherIds;
     if (marcherIds?.length === 0) return null;
     // A write still in flight (a nudge pressed just before) must reach the resolver first, or the
     // plan starts from stale positions

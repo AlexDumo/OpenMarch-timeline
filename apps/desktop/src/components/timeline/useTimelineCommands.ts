@@ -11,7 +11,7 @@ import { addMarchersToTimeline } from "@/db-functions/timelineMembership";
 import type { DbConnection } from "@/db-functions/types";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
-import { allMarchersQueryOptions } from "@/hooks/queries/useMarchers";
+import { allMarcherRowsQueryOptions } from "@/hooks/queries/useMarchers";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { moveLabel, moveLabels } from "@/timeline/timelineViewModel";
 import { subscribeHistoryChanges } from "@/db-functions/history";
@@ -248,8 +248,9 @@ export function useMoveCommands(database: DbConnection) {
                 selectMarchers: async (members) => {
                     if (!setSelectedMarchers) return;
                     try {
+                        // Items too: props can be in moves
                         const marchers = await queryClient.ensureQueryData(
-                            allMarchersQueryOptions(),
+                            allMarcherRowsQueryOptions(),
                         );
                         setSelectedMarchers(
                             marchers.filter((m) => members.has(m.id)),

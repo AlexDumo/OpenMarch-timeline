@@ -1,5 +1,11 @@
-import { createResolver, type Resolver } from "@openmarch/core";
+import {
+    createResolver,
+    withPutDowns,
+    type PutDownResolver,
+    type Resolver,
+} from "@openmarch/core";
 import { getBeats } from "@/db-functions/beat";
+import { readPutDownItems } from "@/db-functions/itemPutDown";
 import type { DbConnection } from "@/db-functions/types";
 import { calculateTimestamps, fromDatabaseBeat } from "@/global/classes/Beat";
 import { beatAtTime, type BeatTiming } from "./timeMap";
@@ -23,13 +29,14 @@ import {
  * during a long export would change later frames and stop matching the beats read at the start.
  * The private resolver is not subscribed to changes, so an export reads one moment. (The live
  * preview may use the store's resolver.) The tables are read as one snapshot, which needs no write
- * lock, so the 3D View window (another renderer) builds its resolver this way too (#224).
+ * lock, so the 3D View window (another renderer) builds its resolver this way too (#224). Items
+ * are put down where their holders release them, as in the store (`withPutDowns`, ADR 0002 D-9).
  */
 export async function acquireExportResolver(
     db: DbConnection,
-): Promise<Resolver> {
+): Promise<PutDownResolver> {
     const { snapshot } = await readTimelineTablesSnapshot(db);
-    return createResolver(snapshot);
+    return withPutDowns(createResolver(snapshot), await readPutDownItems(db));
 }
 
 /** The show's beats with cumulative timestamps, as the tempo map (`timeMap.ts`) reads them. */

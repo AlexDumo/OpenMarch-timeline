@@ -11,6 +11,7 @@
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import sqlWasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import journal from "../electron/database/migrations/meta/_journal.json";
+import { skipsExistingColumn } from "../electron/database/migrations/addColumnGuard";
 import {
     VIEW3D_CLOCK_CHANNEL,
     VIEW3D_INVALIDATE_CHANNEL,
@@ -60,8 +61,14 @@ function migrate(db: Database) {
         const sql =
             migrationSql[`../electron/database/migrations/${entry.tag}.sql`];
         if (!sql) throw new Error(`Missing migration ${entry.tag}`);
+        const columnsOf = (table: string) =>
+            (
+                db.exec(`SELECT name FROM pragma_table_info('${table}')`)[0]
+                    ?.values ?? []
+            ).map((row) => String(row[0]));
         for (const statement of sql.split("--> statement-breakpoint")) {
-            if (statement.trim()) db.run(statement);
+            if (statement.trim() && !skipsExistingColumn(statement, columnsOf))
+                db.run(statement);
         }
         db.run(
             "INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
@@ -133,6 +140,11 @@ class WebHost {
     readonly api: Window["view3d"] = {
         isMacOS: false,
         sqlRead: async (sql, params, method) => this.read(sql, params, method),
+        // One synchronous pass over one connection: already a snapshot, never busy
+        sqlReadBatch: async (queries) => ({
+            busy: false,
+            results: queries.map((q) => this.read(q.sql, q.params, q.method)),
+        }),
         hello: () => this.publish(),
         on: (channel, callback) => {
             const set = this.listeners.get(channel) ?? new Set();

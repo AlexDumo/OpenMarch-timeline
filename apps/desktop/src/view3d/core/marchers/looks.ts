@@ -306,3 +306,16 @@ export function partVisible(look: UniformLook, part: number): boolean {
 export function uniformKey(look: UniformLook): string {
     return JSON.stringify(look);
 }
+
+/**
+ * Identifies what a uniform draws on the body: looks that differ only in
+ * what they carry, how they hold it, its color or its finish draw alike,
+ * so their marchers share one body mesh and material. The options that
+ * don't reach the body are left out by name, so a new option splits
+ * meshes until it's listed here.
+ */
+export function bodyKey(look: UniformLook): string {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- left out of the key
+    const { carry, carryColor, silk, finish, hold, ...drawn } = look.options;
+    return JSON.stringify([look.style, look.colors, drawn]);
+}

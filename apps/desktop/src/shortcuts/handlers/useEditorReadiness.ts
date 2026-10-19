@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
+import Marcher, { performersOnly } from "@/global/classes/Marcher";
 import { useQuery } from "@tanstack/react-query";
 import { fieldPropertiesQueryOptions } from "@/hooks/queries";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -9,6 +10,22 @@ import {
     timelineCoordinateRecords,
 } from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+
+/** Where the selection edits, for `marchers` (see `getSelectedMarcherPages`). */
+const coordinateRecordsOf = (marchers: readonly Marcher[]) => {
+    if (marchers.length === 0) return [];
+    const plan = planCanvasEdit();
+    if (!plan.ok) return [];
+    try {
+        return timelineCoordinateRecords(
+            plan.beat,
+            marchers.map((marcher) => marcher.id),
+        );
+    } catch (e) {
+        toastTimelineError(e);
+        return [];
+    }
+};
 
 /**
  * Shared editor state that most editor action handlers depend on.
@@ -23,7 +40,19 @@ export function useEditorReadiness() {
         fieldPropertiesQueryOptions(databaseReady),
     );
     const selectedMarchersContext = useSelectedMarchers();
-    const selectedMarchers = selectedMarchersContext?.selectedMarchers ?? [];
+    const selectedMarchers = useMemo(
+        () => selectedMarchersContext?.selectedMarchers ?? [],
+        [selectedMarchersContext?.selectedMarchers],
+    );
+    /**
+     * The selected performers, for formation tools (align, distribute, swap, line, circle) that
+     * would otherwise treat a selected prop as one more dot (C2.2). Moves, nudges and flips take
+     * the whole selection.
+     */
+    const selectedPerformers = useMemo(
+        () => performersOnly(selectedMarchers),
+        [selectedMarchers],
+    );
 
     /**
      * The selected marchers' positions where the selection edits (UI-9 Editing, P8.15): the
@@ -31,20 +60,15 @@ export function useEditorReadiness() {
      * marcher. A refused selection gives nothing here; the write (`useUpdateCoordinates` or
      * `useUpdateSelectedMarchers`) says why, once.
      */
-    const getSelectedMarcherPages = useCallback(() => {
-        if (selectedMarchers.length === 0) return [];
-        const plan = planCanvasEdit();
-        if (!plan.ok) return [];
-        try {
-            return timelineCoordinateRecords(
-                plan.beat,
-                selectedMarchers.map((marcher) => marcher.id),
-            );
-        } catch (e) {
-            toastTimelineError(e);
-            return [];
-        }
-    }, [selectedMarchers]);
+    const getSelectedMarcherPages = useCallback(
+        () => coordinateRecordsOf(selectedMarchers),
+        [selectedMarchers],
+    );
+    /** `getSelectedMarcherPages` for the selected performers only */
+    const getSelectedPerformerPages = useCallback(
+        () => coordinateRecordsOf(selectedPerformers),
+        [selectedPerformers],
+    );
 
     const ready = !!selectedPage && !!fieldProperties;
 
@@ -53,6 +77,8 @@ export function useEditorReadiness() {
         fieldProperties,
         ready,
         getSelectedMarcherPages,
+        getSelectedPerformerPages,
         selectedMarchers,
+        selectedPerformers,
     };
 }

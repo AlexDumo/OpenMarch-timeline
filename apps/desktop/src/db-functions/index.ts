@@ -17,3 +17,8 @@ export * from "./timelineChanges";
 export * from "./cues";
 export * from "./phraseAssets";
 export * from "./pagePerformerSettings";
+export * from "./items";
+export * from "./itemPlacements";
+export * from "./itemArtworkSlots";
+export * from "./itemPutDown";
+export * from "./itemBeatRemap";

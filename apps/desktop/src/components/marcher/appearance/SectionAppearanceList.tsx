@@ -8,11 +8,11 @@ import { getTranslatedSectionName } from "@/global/classes/Sections";
 import { NewSectionAppearanceArgs } from "@/db-functions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    allMarchersQueryOptions,
     allSectionAppearancesQueryOptions,
     createSectionAppearancesMutationOptions,
     deleteSectionAppearancesMutationOptions,
     updateSectionAppearancesMutationOptions,
+    allMarchersQueryOptions,
 } from "@/hooks/queries";
 import { AppearanceEditor } from "@/components/marcher/appearance/AppearanceEditor";
 import { useMemo } from "react";
@@ -48,6 +48,7 @@ export default function SectionAppearanceList() {
     const { mutateAsync: deleteSectionAppearances } = useMutation(
         deleteSectionAppearancesMutationOptions(queryClient),
     );
+    // Performers' sections only: items are in sections of their own ("Prop", "Equipment")
     const { data: allMarchers } = useQuery(allMarchersQueryOptions());
     const allSectionsInShow = useMemo(() => {
         const allSections = allMarchers?.map((marcher) =>

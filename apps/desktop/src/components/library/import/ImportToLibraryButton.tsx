@@ -9,15 +9,9 @@
  */
 import { TrayArrowDownIcon } from "@phosphor-icons/react";
 import { T } from "@tolgee/react";
-import { createImportClient } from "@/view3d/library/importClient";
+import { editorImportClient } from "@/view3d/library/importClient";
 import { useAssetsStore } from "@/components/assets/assetsStore";
 import type { ImportReviewClient } from "./importReview";
-
-let editorClient: ImportReviewClient | undefined;
-function defaultClient(): ImportReviewClient {
-    editorClient ??= createImportClient();
-    return editorClient;
-}
 
 export default function ImportToLibraryButton({
     client,
@@ -31,7 +25,7 @@ export default function ImportToLibraryButton({
     return (
         <button
             type="button"
-            onClick={() => startImport(client ?? defaultClient())}
+            onClick={() => startImport(client ?? editorImportClient())}
             disabled={reviewing}
             data-testid="import-to-library"
             className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"

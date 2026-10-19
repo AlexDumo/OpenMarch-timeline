@@ -12,6 +12,7 @@ import {
     defaultPerformerBody,
     heightClassFor,
     PART,
+    bodyKey,
     partVisible,
     sectionUniform,
     uniformKey,
@@ -167,6 +168,22 @@ describe("section uniforms", () => {
         const a = uniformKey(sectionUniform("Trumpet", "up"));
         const b = uniformKey(sectionUniform("Trumpet", "carry"));
         expect(a).not.toBe(b);
+    });
+
+    it("keys what a look draws on the body, whatever it carries or holds", () => {
+        expect(bodyKey(sectionUniform("Trumpet", "up"))).toBe(
+            bodyKey(sectionUniform("Trumpet", "carry")),
+        );
+        // the carry and its fill color don't reach the body
+        expect(bodyKey(sectionUniform("Trumpet"))).toBe(
+            bodyKey(sectionUniform("Snare Drum", "up", undefined, 0xc8102e)),
+        );
+        expect(bodyKey(sectionUniform("Dancer"))).not.toBe(
+            bodyKey(sectionUniform("Drum Major")),
+        );
+        const red = sectionUniform("Trumpet");
+        red.colors.primary = 0xff0000;
+        expect(bodyKey(red)).not.toBe(bodyKey(sectionUniform("Trumpet")));
     });
 
     it("dresses band sections in the band preset's look, West Point by default", () => {
