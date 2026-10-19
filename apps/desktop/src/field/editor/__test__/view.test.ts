@@ -3,7 +3,7 @@ import {
     baseZoom,
     centerAtBase,
     clampPan,
-    fullscreenFit,
+    previewFit,
     isPanButton,
     MAX_ZOOM,
     MIN_ZOOM,
@@ -174,9 +174,9 @@ describe("viewBetween", () => {
     });
 });
 
-describe("fullscreenFit", () => {
+describe("previewFit", () => {
     it("fits the whole field at 87%, centered across and a tenth of the spare height down", () => {
-        const fit = fullscreenFit(view, { width: 1600, height: 1000 }, field)!;
+        const fit = previewFit(view, { width: 1600, height: 1000 }, field)!;
         const zoom = Math.min((1600 / 1800) * 0.87, (1000 / 960) * 0.87);
         expect(fit.zoom).toBeCloseTo(zoom);
         expect(fit.panX).toBeCloseTo((1600 - 1800 * zoom) / 2);
@@ -184,7 +184,7 @@ describe("fullscreenFit", () => {
     });
 
     it("does nothing before the container has a size", () => {
-        expect(fullscreenFit(view, { width: 0, height: 0 }, field)).toBeNull();
+        expect(previewFit(view, { width: 0, height: 0 }, field)).toBeNull();
     });
 });
 

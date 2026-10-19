@@ -213,7 +213,7 @@ describe("timeline geometry", () => {
                 page.id === "page-4" ? { ...page, endBeat: 28 } : page,
             ),
         };
-        expect(getPlayheadReadout(model, 30).page).toBe("After pg 4 · +2");
+        expect(getPlayheadReadout(model, 30).page).toBe("END +2");
     });
 
     it("accepts normalized activity partitions", () => {

@@ -168,7 +168,7 @@ they pass alone and in Electron.
   field, across and down, into the field's pane with a 16 px margin (at most
   5% of a side), no longer the height alone capped at 1. Clicking the zoom
   percentage measures the pane as it is then, so it fits around whatever
-  height the timeline has; opening a show and leaving fullscreen use the
+  height the timeline has; opening a show and leaving Preview use the
   same fit. The click glides there (a react-spring spring, about a third of
   a second, no overshoot); any navigation stops the glide where it is. It
   jumps instead with reduced motion or in the field's low-quality mode

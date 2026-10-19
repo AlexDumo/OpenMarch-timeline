@@ -121,8 +121,44 @@ export interface TimelineTrack {
 }
 
 export interface TimelineWaveform {
-    /** Normalized peak magnitudes (0..1), grouped by beat. */
+    /**
+     * Normalized peak magnitudes (0..1), grouped by beat. It may stop before the timeline's last
+     * beat (the music ends); the beats after it have none.
+     */
     readonly peaksByBeat: readonly (readonly number[])[];
+}
+
+/**
+ * **+ N counts** after the last page: always offered while paused, since nothing lies after
+ * the end of the show. The owner names it, since it adds counts.
+ */
+export interface TimelineAppendCounts {
+    /** The button's text, such as "+ 16 counts" */
+    readonly label: string;
+    /** Its tooltip and accessible name, such as "Add a page of 16 counts after the last page" */
+    readonly title: string;
+    readonly onAppend: () => void;
+    /** The page length it adds now; with `onCountsChange`, a right-click changes it */
+    readonly counts?: number;
+    /** Sets the file's default new page counts, from the pill's right-click menu */
+    readonly onCountsChange?: (counts: number) => void;
+    /**
+     * "Create pages every 16 counts to the end", when the music runs on past the last page (EC-10):
+     * an entry in the pill's right-click menu. Each takes the page length the menu shows: the one
+     * typed in its box, else `counts`; `onAppend` also saves that length as the default once the
+     * pages are in (the menu doesn't save it itself when this is picked).
+     */
+    readonly toEnd?: {
+        readonly label: (counts: number) => string;
+        readonly title: (counts: number) => string;
+        readonly onAppend: (counts: number) => void;
+    };
+}
+
+/** What the timeline's scroller shows, so its owner can leave room past the show (endless counts) */
+export interface TimelineViewportExtent {
+    /** The scroller's width in pixels; with the zoom, how many counts one screen holds */
+    readonly width: number;
 }
 
 export interface TimelineViewModel {
@@ -241,6 +277,12 @@ export interface TimelineInteractionProps {
      * The owner passes it only where flags can move (paused, not isolated).
      */
     readonly pageFlagMove?: TimelinePageFlagMove;
+    /** **+ N counts** after the last page's flag; without it, none */
+    readonly appendCounts?: TimelineAppendCounts;
+    /** The beats Fit fits (rule 7: where playback stops), in view beats; without it, every beat */
+    readonly fitBeatCount?: number;
+    /** The scroller's width (rule 7) */
+    readonly onViewportExtent?: (extent: TimelineViewportExtent) => void;
     /** Double-clicking a page box or clip opens (isolates) its range, in view beats here */
     readonly onOpenRange?: (target: TimelineMenuTarget) => void;
 }
