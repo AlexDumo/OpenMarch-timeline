@@ -877,6 +877,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         clock={props.transportClock}
                         accessories={props.transportAccessories}
                         secondary={props.transportSecondary}
+                        leadingViewControls={props.transportLeadingViewControls}
                         viewControls={props.transportViewControls}
                         onSeek={props.onSeek}
                         onSelectionChange={onSelectionChange}

@@ -130,11 +130,10 @@ describe("the start flag positions popover", () => {
         expect(button).toHaveAttribute("data-hold", "true");
     });
 
-    it("names the Hold block after its key, and says when no key is set", () => {
+    it("names the Hold block after its key, shown as a keycap, and says when no key is set", () => {
         open();
-        expect(
-            screen.getByRole("region", { name: "Hold N" }),
-        ).toBeInTheDocument();
+        const hold = screen.getByRole("region", { name: "Hold N" });
+        expect(hold.querySelector("h3 kbd")).toHaveTextContent("N");
         cleanup();
         useShortcutOverridesStore.setState({
             overrides: { toggleStartFlagPositions: [] },

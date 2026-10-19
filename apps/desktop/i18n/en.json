@@ -2241,6 +2241,7 @@
             "always": "Always",
             "dots": "Dots",
             "hold": "Hold {key}",
+            "holdHeading": "Hold",
             "holdNoKey": "Hold (no key set)",
             "label": "Start flag positions",
             "level": {

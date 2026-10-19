@@ -3,6 +3,7 @@ import { PathIcon } from "@phosphor-icons/react";
 import { SegmentedTextSwitch } from "@openmarch/ui";
 import { useTranslate } from "@tolgee/react";
 import clsx from "clsx";
+import type { ReactNode } from "react";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { getActionShortcutKeys } from "@/shortcuts/labels";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
@@ -25,7 +26,7 @@ import {
     type StartFlagLevels,
     type StartFlagPositionsSettings,
 } from "@/timeline/startFlagLevels";
-import { ShortcutTooltip } from "./ShortcutTooltip";
+import { Keycaps, ShortcutTooltip } from "./ShortcutTooltip";
 
 type State = keyof StartFlagPositionsSettings;
 type Part = keyof StartFlagLevels;
@@ -49,10 +50,14 @@ function setLevel(state: State, part: Part, level: StartFlagLevel) {
 function LevelsBlock({
     state,
     title,
+    heading = title,
     levels,
 }: {
     state: State;
+    /** The block's name as text, for screen readers */
     title: string;
+    /** What the block shows as its name, `title` by default */
+    heading?: ReactNode;
     levels: StartFlagLevels;
 }) {
     const { t } = useTranslate();
@@ -62,7 +67,9 @@ function LevelsBlock({
             className="flex flex-col gap-6"
             data-testid={`start-flag-${state}`}
         >
-            <h3 className="text-sub text-text-subtitle">{title}</h3>
+            <h3 className="text-sub text-text-subtitle flex items-center gap-4">
+                {heading}
+            </h3>
             {(["dots", "paths"] as const).map((part) => (
                 <div key={part} className="flex items-center gap-8">
                     <span className="text-body w-40 shrink-0">
@@ -165,6 +172,18 @@ export function StartFlagPositionsButton() {
                     <LevelsBlock
                         state="hold"
                         title={holdTitle}
+                        heading={
+                            key === undefined ? (
+                                holdTitle
+                            ) : (
+                                <>
+                                    {t(
+                                        "timeline.startFlagPositions.holdHeading",
+                                    )}
+                                    <Keycaps shortcut={key} plus />
+                                </>
+                            )
+                        }
                         levels={settings.hold}
                     />
                 </Popover.Content>
