@@ -1,0 +1,53 @@
+/*
+ * The Sketchpad's styles on top of Excalidraw's. Components use Tailwind classes from
+ * `@openmarch/ui/src/tailwind.css`; hosts add this package's sources to Tailwind with
+ * `@source` and import this file.
+ */
+
+/* Excalidraw draws over the field underlay, so its own background goes */
+.om-sketchpad .excalidraw,
+.om-sketchpad .excalidraw-container,
+.om-sketchpad .excalidraw .excalidraw__canvas {
+    background: transparent !important;
+}
+
+/* Our toolbar, properties panel, menus and footer replace Excalidraw's (ADR 0006 D-1) */
+.om-sketchpad .excalidraw .layer-ui__wrapper,
+.om-sketchpad .excalidraw .App-bottom-bar,
+.om-sketchpad .excalidraw .App-menu_top,
+.om-sketchpad .excalidraw .App-toolbar,
+.om-sketchpad .excalidraw .main-menu-trigger,
+.om-sketchpad .excalidraw .welcome-screen-center,
+.om-sketchpad .excalidraw .HintViewer {
+    display: none !important;
+}
+
+/* Excalidraw keeps its own font for the editor chrome it still shows (context menu, text box) */
+.om-sketchpad .excalidraw {
+    --ui-font: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+.om-sketchpad .om-snap-guide {
+    stroke: rgb(150, 126, 255);
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+}
+
+.om-sketchpad .om-snap-label {
+    background: rgb(100, 66, 255);
+    color: #fff;
+    font-size: 0.75rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.om-sketchpad .om-hint {
+    font-family: "Excalifont", "Comic Sans MS", cursive;
+    font-size: 1.05rem;
+    color: var(--color-text-subtitle);
+}
+
+.om-sketchpad .om-sticky-armed .excalidraw__canvas.interactive {
+    cursor: crosshair !important;
+}
