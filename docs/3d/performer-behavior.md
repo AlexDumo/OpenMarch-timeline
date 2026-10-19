@@ -417,6 +417,23 @@ Polish is for the build.
   transition, ripple, facing wheel, pick a point on the field). No popovers.
 - The field previews only the current tab.
 
+> **Owner note (2026-10-17): Visuals mode is its own workspace.** "All of
+> these needs to be behind a ui like lighting. Where it is a deeper editing
+> experience separate from the normal 2d editing of the timeline." This
+> replaces "below Alex's clip rows" above: the drill timeline stays exactly
+> as it is, and Visuals mode has a timeline of its own, as the Light Designer
+> prototype does. It keeps the drill timeline's ruler, page boxes, measures,
+> waveform, playhead, transport and zoom, read-only: page boxes and scrubs
+> go to a page or a count, but there are no drill clips, no page flag drags,
+> no **+**, no window and no drawn ranges. The cue lanes above are its main
+> lanes, always open (not collapsible), and scroll if tall. The field edits
+> no drill there either: clicks, the marquee and the lasso select (the
+> selection is a who), but nothing drags, scales, rotates or lines up, and
+> the drill edits' shortcuts (nudge, alignment, shapes, K) are off. Playback,
+> page navigation, the view and undo stay. A tint on the workspace says
+> which mode is on; the Editor/Visuals switch stays where it is, and Basic
+> still has no Visuals mode.
+
 ### 7.2 Gestures
 
 - Click empty lane space: add a state on that count. Drag: add a phrase of
