@@ -594,22 +594,6 @@ function PlayingTimeline({
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
     // Endless counts (rules 1 and 7): the timeline draws the counts on past the stored ones, with
     // some room past where playback stops; the scroll ends there
-    const endless = useEndlessCounts({
-        countGrid,
-        beats,
-        measures: props.measures,
-        stopBeat: props.fitBeat ?? 0,
-        playheadBeat: Math.max(playheadBeat, shownBeat, playback.positionBeat),
-    });
-    // Not while a paused preview holds a frame: + is drawn there, but would add at P (UI-11)
-    const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
-    const addPageFlag = useAddPageFlag({
-        pages,
-        beatCount: beats.length,
-        playheadBeat,
-        isPlaying: playback.isPlaying || holding,
-        onAdded: selectAddedPage,
-    });
     // The zoom changes every frame of a pinch: keep it here, and save it once the gesture settles
     const [pixelsPerBeat, setPixelsPerBeat] = useState(
         () => useUiSettingsStore.getState().uiSettings.timelinePixelsPerBeat,
@@ -624,6 +608,23 @@ function PlayingTimeline({
         );
         return () => clearTimeout(timeout);
     }, [pixelsPerBeat]);
+    const endless = useEndlessCounts({
+        countGrid,
+        beats,
+        measures: props.measures,
+        stopBeat: props.fitBeat ?? 0,
+        playheadBeat: Math.max(playheadBeat, shownBeat, playback.positionBeat),
+        pixelsPerBeat,
+    });
+    // Not while a paused preview holds a frame: + is drawn there, but would add at P (UI-11)
+    const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
+    const addPageFlag = useAddPageFlag({
+        pages,
+        beatCount: beats.length,
+        playheadBeat,
+        isPlaying: playback.isPlaying || holding,
+        onAdded: selectAddedPage,
+    });
     return (
         <Timeline
             {...props}
@@ -655,7 +656,9 @@ const MIN_PADDING_BEATS = 32;
  * end and the last move's end): half a screen, at least 32 counts (EC-9). The scroll ends there;
  * placing a page or move further moves it on. The playhead keeps the end where it is (playing on
  * past it, say) but adds no room, so clicking at the far right doesn't creep the end out. Rounded
- * up to 32 counts so that playing on redraws the lanes once in a while.
+ * up to 32 counts so that playing on redraws the lanes once in a while. A screen's counts come from
+ * the zoom as it renders (and the scroller's width, reported on resize), so a zoom that changes
+ * the room lands in its own commit.
  */
 function useEndlessCounts({
     countGrid,
@@ -663,6 +666,7 @@ function useEndlessCounts({
     measures,
     stopBeat,
     playheadBeat,
+    pixelsPerBeat,
 }: {
     countGrid: CountGrid;
     beats: TimelineProps["beats"];
@@ -670,22 +674,27 @@ function useEndlessCounts({
     stopBeat: number;
     /** The playhead, or the beat playing: the timeline reaches it, with no room past it */
     playheadBeat: number;
+    pixelsPerBeat: number;
 }) {
-    const [screenBeats, setScreenBeats] = useState(2 * MIN_PADDING_BEATS);
+    const [viewportWidth, setViewportWidth] = useState<number | null>(null);
+    // Whole powers of two (down), so a pinch redraws the counts a few times, not every frame
+    const screenBeats =
+        viewportWidth !== null && pixelsPerBeat > 0
+            ? Math.max(
+                  MIN_PADDING_BEATS,
+                  2 **
+                      Math.floor(
+                          Math.log2(Math.max(viewportWidth / pixelsPerBeat, 1)),
+                      ),
+              )
+            : 2 * MIN_PADDING_BEATS;
     const padding = Math.max(MIN_PADDING_BEATS, screenBeats / 2);
     const extent =
         Math.ceil(
             Math.max(stopBeat + padding, playheadBeat) / MIN_PADDING_BEATS,
         ) * MIN_PADDING_BEATS;
     const onViewportExtent = useCallback(
-        ({ screenBeats: next }: { screenBeats: number }) =>
-            // Whole powers of two (down), so a pinch redraws the counts a few times, not every frame
-            setScreenBeats(
-                Math.max(
-                    MIN_PADDING_BEATS,
-                    2 ** Math.floor(Math.log2(Math.max(next, 1))),
-                ),
-            ),
+        ({ width }: { width: number }) => setViewportWidth(width),
         [],
     );
     const drawnBeats = useMemo(

@@ -759,8 +759,8 @@ const TimelineSurface = memo(function TimelineSurface({
         loop: props.playLoops ? (props.loop ?? null) : null,
         selectionRange,
     });
-    // Endless counts rule 7: say how many counts a screen holds, for the room past the end
-    useViewportExtent(viewportRef, pixelsPerBeat, props.onViewportExtent);
+    // Endless counts rule 7: say how wide a screen is, for the room past the end
+    useViewportExtent(viewportRef, props.onViewportExtent);
     // **+ N counts** goes after the last page's flag; when **+** at the playhead would cover it,
     // it moves just past that one, so both stay clickable
     const showAddPageFlag = props.onAddPageFlag != null && !props.isPlaying;

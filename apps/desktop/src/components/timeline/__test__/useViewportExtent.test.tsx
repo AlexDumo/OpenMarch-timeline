@@ -2,7 +2,7 @@ import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useViewportExtent } from "../useViewportExtent";
 
-/** How many counts a screen holds (EC-9), against a viewport whose width the test sets */
+/** How wide a screen is (EC-9), against a viewport whose width the test sets */
 
 let observers: { callback: ResizeObserverCallback }[] = [];
 let created = 0;
@@ -22,6 +22,10 @@ let width = 1000;
 const viewport = document.createElement("div");
 Object.defineProperty(viewport, "clientWidth", { get: () => width });
 const viewportRef = { current: viewport };
+const resize = (next: number) => {
+    width = next;
+    observers[0]!.callback([], observers[0] as unknown as ResizeObserver);
+};
 
 beforeEach(() => {
     observers = [];
@@ -32,40 +36,26 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("useViewportExtent", () => {
-    it("adds up a zoom gesture's small frames and reports once they change the answer by a tenth", () => {
+    it("reports the width once, and re-renders don't report again or make observers", () => {
         const onExtent = vi.fn();
-        const { rerender } = renderHook(
-            ({ ppb }) => useViewportExtent(viewportRef, ppb, onExtent),
-            { initialProps: { ppb: 10 } },
+        const { rerender } = renderHook(() =>
+            useViewportExtent(viewportRef, onExtent),
         );
         expect(onExtent).toHaveBeenCalledTimes(1);
-        expect(onExtent).toHaveBeenLastCalledWith({ screenBeats: 100 });
-        // Each frame zooms in by 2%: under a tenth alone, but six of them add up past it
-        let ppb = 10;
-        for (let frame = 0; frame < 6; frame++) {
-            ppb *= 1.02;
-            rerender({ ppb });
-        }
-        expect(onExtent).toHaveBeenCalledTimes(2);
-        expect(onExtent.mock.lastCall![0].screenBeats).toBeCloseTo(1000 / ppb);
-        // The observer is made once, not on each zoom frame
+        expect(onExtent).toHaveBeenLastCalledWith({ width: 1000 });
+        for (let frame = 0; frame < 6; frame++) rerender();
+        expect(onExtent).toHaveBeenCalledTimes(1);
         expect(created).toBe(1);
     });
 
-    it("reports a resize at the current zoom", () => {
+    it("reports a resize by a tenth or more, not a smaller one", () => {
         const onExtent = vi.fn();
-        const { rerender } = renderHook(
-            ({ ppb }) => useViewportExtent(viewportRef, ppb, onExtent),
-            { initialProps: { ppb: 10 } },
-        );
-        rerender({ ppb: 20 });
-        expect(onExtent).toHaveBeenLastCalledWith({ screenBeats: 50 });
-        width = 2000;
-        observers[0]!.callback([], observers[0] as unknown as ResizeObserver);
-        expect(onExtent).toHaveBeenLastCalledWith({ screenBeats: 100 });
-        // A resize too small to matter isn't reported
-        width = 2050;
-        observers[0]!.callback([], observers[0] as unknown as ResizeObserver);
-        expect(onExtent).toHaveBeenCalledTimes(3);
+        renderHook(() => useViewportExtent(viewportRef, onExtent));
+        resize(2000);
+        expect(onExtent).toHaveBeenLastCalledWith({ width: 2000 });
+        resize(2050);
+        expect(onExtent).toHaveBeenCalledTimes(2);
+        resize(1500);
+        expect(onExtent).toHaveBeenLastCalledWith({ width: 1500 });
     });
 });
