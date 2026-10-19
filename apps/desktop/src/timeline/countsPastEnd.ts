@@ -110,11 +110,16 @@ export function continuedCounts(
 /**
  * Where the music ends on the show's clock: the end of the last envelope slot that the waveform
  * lane would draw (louder than `floorDb` below the loudest moment). Trailing digital silence, such
- * as the padding the audio player adds to cover a longer show, is not music. `null` with no audio
- * or only silence.
+ * as the padding the audio player adds to cover a longer show, is not music. Never past the audio's
+ * end (`seconds`): the last slot is usually partial, so music that ends on a count line stays on
+ * it. `null` with no audio or only silence.
  */
 export function musicEndSeconds(
-    envelope: { readonly peaks: ArrayLike<number>; readonly rate: number },
+    envelope: {
+        readonly peaks: ArrayLike<number>;
+        readonly rate: number;
+        readonly seconds?: number;
+    },
     floorDb: number,
 ): number | null {
     let loudest = 0;
@@ -123,7 +128,11 @@ export function musicEndSeconds(
     if (loudest <= 0 || !(envelope.rate > 0)) return null;
     const quietest = loudest * 10 ** (-floorDb / 20);
     for (let i = envelope.peaks.length - 1; i >= 0; i--)
-        if (envelope.peaks[i]! > quietest) return (i + 1) / envelope.rate;
+        if (envelope.peaks[i]! > quietest)
+            return Math.min(
+                (i + 1) / envelope.rate,
+                envelope.seconds ?? Infinity,
+            );
     return null;
 }
 

@@ -111,6 +111,22 @@ describe("where the music ends", () => {
         expect(musicEndSeconds(envelope(0, 0), 42)).toBeNull();
         expect(musicEndSeconds(envelope(), 42)).toBeNull();
     });
+
+    it("never runs past the audio's end, where the last slot is partial", () => {
+        // 60 s at 44.1 kHz: 221-sample slots, so the last one ends a hair after 60 s
+        const rate = 44100 / 221;
+        const slots = Math.ceil((60 * 44100) / 221);
+        const peaks = new Float32Array(slots).fill(0.5);
+        expect(slots / rate).toBeGreaterThan(60);
+        expect(musicEndSeconds({ peaks, rate, seconds: 60 }, 42)).toBe(60);
+        const grid = { storedCount: 9, beatAtTime: (s: number) => s * 2 };
+        expect(
+            musicEndBeat(
+                grid,
+                musicEndSeconds({ peaks, rate, seconds: 60 }, 42)!,
+            ),
+        ).toBe(120);
+    });
 });
 
 describe("musicEndBeat", () => {
