@@ -8,9 +8,9 @@ import { Timeline, type TimelineInput } from "../Timeline";
 import { TIMELINE_PAGE_ROW_TOP } from "../TimelineGeometry";
 
 /**
- * A page's move that stops fitting its box drops out of the page row (UI-9 **+**, `useClipDrops`):
- * its clip is first drawn up in the page row, under the pinned header, and springs down into its
- * track row. A clip shown for any other reason draws in its row at once.
+ * A page's move that stops fitting its box drops out of the page row (UI-9 **+** and deleting a
+ * flag, `useClipDrops`): its clip is first drawn up in the page row, over the pinned header, and
+ * springs down into its track row. A clip shown for any other reason draws in its row at once.
  */
 
 afterEach(() => {
@@ -85,13 +85,19 @@ const clip = (id: string, start: number, end: number): TimelineInput => ({
     activitySpans: [{ startBeatIndex: start, endBeatIndex: end, active: true }],
 });
 
-const show = (pages: Page[], timelines: TimelineInput[]) => (
+/** `pageMoves`: the moves a page box stands for, so they have no clip (`timelinesOffPages`) */
+const show = (
+    pages: Page[],
+    timelines: TimelineInput[],
+    pageMoves: string[] = [],
+) => (
     <Timeline
         mode="expanded"
         beats={BEATS}
         pages={pages}
         measures={[]}
         timelines={timelines}
+        pageMoves={new Set(pageMoves)}
         showTransport={false}
         playback={{ positionBeat: 5, isPlaying: false }}
         selection={null}
@@ -99,28 +105,37 @@ const show = (pages: Page[], timelines: TimelineInput[]) => (
     />
 );
 
+const MOVE = "Page 1's move";
 const clipTop = (el: HTMLElement) => parseFloat(el.style.top);
 const theClip = (label: string) =>
     screen.getByRole("button", { name: new RegExp(`^${label}\\b`) });
+/** The layer the clip draws in: the drops' over the pinned header, or the tracks' under it */
+const layerOf = (el: HTMLElement) =>
+    el.closest<HTMLElement>("[data-testid]:not([data-testid='timeline-clip'])")
+        ?.dataset.testid;
 /** The spring reaches the DOM on the next frame */
 const nextFrame = () =>
     act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
 
 describe("a page's move drops out of its split box (UI-9)", () => {
-    it("is first drawn up in the page row, then slides down into its row", async () => {
+    it("is first drawn up in the page row, over the header, then slides down into its row", async () => {
         // Page 1's own move: not a clip while its box stands for it
-        const { rerender } = render(show(PAGES, []));
+        const { rerender } = render(show(PAGES, [], [MOVE]));
         expect(screen.queryByTestId("timeline-clip")).toBeNull();
-        rerender(show(PAGES_SPLIT, [clip("Page 1's move", 1, 9)]));
-        const dropped = theClip("Page 1's move");
+        rerender(show(PAGES_SPLIT, [clip(MOVE, 1, 9)]));
+        const dropped = theClip(MOVE);
         expect(dropped.dataset.dropping).toBe("true");
         expect(clipTop(dropped)).toBe(TIMELINE_PAGE_ROW_TOP);
-        // Over the pinned header while it drops, so it is seen leaving the page box
+        // Only the dropping clip is over the pinned header, and it takes no clicks
+        expect(layerOf(dropped)).toBe("timeline-clip-drops");
+        expect(screen.getByTestId("timeline-clip-drops").className).toContain(
+            "pointer-events-none",
+        );
         expect(screen.getByTestId("timeline-tracks").className).toContain(
-            "z-[3]",
+            "z-[1]",
         );
         await nextFrame();
-        expect(clipTop(dropped)).toBeGreaterThan(TIMELINE_PAGE_ROW_TOP);
+        expect(clipTop(theClip(MOVE))).toBeGreaterThan(TIMELINE_PAGE_ROW_TOP);
     });
 
     it("lands in its row, like a clip that was always there", async () => {
@@ -131,54 +146,98 @@ describe("a page's move drops out of its split box (UI-9)", () => {
         expect(restingTop).toBeGreaterThan(TIMELINE_PAGE_ROW_TOP);
         always.unmount();
 
-        const { rerender } = render(show(PAGES, []));
-        rerender(show(PAGES_SPLIT, [clip("Page 1's move", 1, 9)]));
+        const { rerender } = render(show(PAGES, [], [MOVE]));
+        rerender(show(PAGES_SPLIT, [clip(MOVE, 1, 9)]));
         await nextFrame();
-        const dropped = theClip("Page 1's move");
-        expect(clipTop(dropped)).toBe(restingTop);
-        expect(dropped.dataset.dropping).toBeUndefined();
-        expect(screen.getByTestId("timeline-tracks").className).toContain(
-            "z-[1]",
-        );
+        const landed = theClip(MOVE);
+        expect(clipTop(landed)).toBe(restingTop);
+        expect(landed.dataset.dropping).toBeUndefined();
+        expect(layerOf(landed)).toBe("timeline-tracks");
+        expect(screen.queryByTestId("timeline-clip-drops")).toBeNull();
+    });
+
+    it("starts from the page row where the pane is scrolled to", () => {
+        const { rerender } = render(show(PAGES, [], [MOVE]));
+        const viewport = screen.getByTestId("timeline-viewport");
+        Object.defineProperty(viewport, "scrollTop", { value: 40 });
+        rerender(show(PAGES_SPLIT, [clip(MOVE, 1, 9)]));
+        expect(clipTop(theClip(MOVE))).toBe(40 + TIMELINE_PAGE_ROW_TOP);
     });
 
     it("a move that was never a page's draws in its row at once", () => {
-        const { rerender } = render(show(PAGES, []));
-        rerender(show(PAGES, [clip("Window", 3, 7)]));
+        const { rerender } = render(show(PAGES, [], [MOVE]));
+        rerender(show(PAGES, [clip("Window", 3, 7)], [MOVE]));
         const shown = theClip("Window");
         expect(shown.dataset.dropping).toBeUndefined();
         expect(clipTop(shown)).toBeGreaterThan(TIMELINE_PAGE_ROW_TOP);
     });
 
-    it("keeps dropping over the header while the data settles", async () => {
-        Globals.assign({ skipAnimation: false });
+    it("a move made later on a split page's old range draws at once", () => {
+        // + on a page with no move of its own, then a move made across both halves
         const { rerender } = render(show(PAGES, []));
-        rerender(show(PAGES_SPLIT, [clip("Page 1's move", 1, 9)]));
+        rerender(show(PAGES_SPLIT, []));
+        rerender(show(PAGES_SPLIT, [clip("New move", 1, 9)]));
+        expect(theClip("New move").dataset.dropping).toBeUndefined();
+    });
+
+    it("keeps dropping over the header while the data settles", () => {
+        const { rerender } = render(show(PAGES, [], [MOVE]));
+        rerender(show(PAGES_SPLIT, [clip(MOVE, 1, 9)]));
         // A query settling mid-drop: the same pages and moves, new arrays
-        rerender(show([...PAGES_SPLIT], [clip("Page 1's move", 1, 9)]));
-        expect(theClip("Page 1's move").dataset.dropping).toBe("true");
-        expect(screen.getByTestId("timeline-tracks").className).toContain(
-            "z-[3]",
-        );
+        rerender(show([...PAGES_SPLIT], [clip(MOVE, 1, 9)]));
+        expect(theClip(MOVE).dataset.dropping).toBe("true");
+        expect(layerOf(theClip(MOVE))).toBe("timeline-clip-drops");
     });
 
     it("drops when the new pages arrive before the move", () => {
-        const { rerender } = render(show(PAGES, []));
-        rerender(show(PAGES_SPLIT, []));
-        rerender(show(PAGES_SPLIT, [clip("Page 1's move", 1, 9)]));
-        const dropped = theClip("Page 1's move");
-        expect(dropped.dataset.dropping).toBe("true");
-        expect(clipTop(dropped)).toBe(TIMELINE_PAGE_ROW_TOP);
+        const { rerender } = render(show(PAGES, [], [MOVE]));
+        // The panel holds its page boxes until the tracks catch up, so the move stays a page's
+        rerender(show(PAGES_SPLIT, [], [MOVE]));
+        rerender(show(PAGES_SPLIT, [clip(MOVE, 1, 9)]));
+        expect(theClip(MOVE).dataset.dropping).toBe("true");
+        expect(clipTop(theClip(MOVE))).toBe(TIMELINE_PAGE_ROW_TOP);
     });
 
     it("deleting a flag but not its moves drops both moves", () => {
         // Pages 1 and 2 each stand for their move; deleting the flag between them merges the boxes
-        const { rerender } = render(show(PAGES_SPLIT, []));
-        rerender(show(PAGES, []));
+        const { rerender } = render(show(PAGES_SPLIT, [], ["First", "Second"]));
         rerender(show(PAGES, [clip("First", 1, 5), clip("Second", 5, 9)]));
         for (const label of ["First", "Second"]) {
             expect(theClip(label).dataset.dropping).toBe("true");
             expect(clipTop(theClip(label))).toBe(TIMELINE_PAGE_ROW_TOP);
+        }
+    });
+
+    it("undo mid-drop takes the clip away and the drops' layer with it", () => {
+        const { rerender } = render(show(PAGES, [], [MOVE]));
+        rerender(show(PAGES_SPLIT, [clip(MOVE, 1, 9)]));
+        rerender(show(PAGES, [], [MOVE]));
+        expect(screen.queryByTestId("timeline-clip")).toBeNull();
+        expect(screen.queryByTestId("timeline-clip-drops")).toBeNull();
+    });
+
+    it("with reduced motion, draws in its row at once", () => {
+        const matchMedia = window.matchMedia;
+        window.matchMedia = vi.fn(
+            (query: string) =>
+                ({
+                    matches: query.includes("reduce"),
+                    media: query,
+                    addEventListener: vi.fn(),
+                    removeEventListener: vi.fn(),
+                    addListener: vi.fn(),
+                    removeListener: vi.fn(),
+                }) as unknown as MediaQueryList,
+        );
+        try {
+            const { rerender } = render(show(PAGES, [], [MOVE]));
+            rerender(show(PAGES_SPLIT, [clip(MOVE, 1, 9)]));
+            const shown = theClip(MOVE);
+            expect(shown.dataset.dropping).toBeUndefined();
+            expect(clipTop(shown)).toBeGreaterThan(TIMELINE_PAGE_ROW_TOP);
+            expect(layerOf(shown)).toBe("timeline-tracks");
+        } finally {
+            window.matchMedia = matchMedia;
         }
     });
 });

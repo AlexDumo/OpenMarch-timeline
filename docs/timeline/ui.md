@@ -201,9 +201,10 @@ from it. The spec still wins on the model; this file decides presentation.
     the clip slides down from the page row, drawn over the page bar, in about a third of a
     second, so it reads as coming out of the page. **Deleting a flag** but not its moves is the
     same (owner, 2026-10-19): the merged box fits neither page's move, so both drop out of it.
-    Found from the view model alone (a clip new to the rows whose range was a page box's range,
-    `useClipDrops`), so the inspector's **Split page** and redo drop the same way, and a move made
-    on purpose (a window, **Add selected marchers**) just appears. The page boxes themselves don't
+    Found by identity (a move a page box stood for that now has a clip, `useClipDrops`), so the
+    inspector's **Split page** and redo drop the same way, and a move made on purpose (a window,
+    **Add selected marchers**) just appears, whatever its range. Only the dropping clip draws
+    over the page bar; it takes no clicks until it lands. The page boxes themselves don't
     animate (owner). With reduced motion nothing moves. V-289.
   - **Subset pages (2026-10-13).** Right-clicking **+** opens a menu with
     **Add page** (the same as clicking **+**) and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a

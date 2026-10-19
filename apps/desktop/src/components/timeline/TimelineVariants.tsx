@@ -71,6 +71,7 @@ import type {
     TimelineCommonProps,
     TimelineNavigation,
     TimelineTarget,
+    TimelineTrack,
     TimelineTrackId,
 } from "./TimelineViewModel";
 import {
@@ -646,14 +647,21 @@ const TimelineSurface = memo(function TimelineSurface({
         [basic, model.tracks],
     );
     // A move that stopped fitting a page box (the box was split, or a flag deleted) drops out of
-    // the page row. While one drops, the tracks draw over the pinned header, so it is seen leaving
-    // the page box, not sliding out from under the bar
+    // the page row. A dropping clip draws in its own layer over the pinned header, so it is seen
+    // leaving the page box, not sliding out from under the bar; the other clips stay under it
     const { drops: clipDrops, land: endDrop } = useClipDrops(
         model.tracks,
-        model.pages,
-        model.beatCount,
+        props.pageMoves,
     );
-    const dropsInFlight = clipDrops.size > 0;
+    // The page row where the drops start, in the tracks' coordinates: the pane may be scrolled
+    // down. Read once for the drops, so scrolling mid-drop doesn't restart them
+    const dropFrom = useMemo(
+        () =>
+            clipDrops.size === 0
+                ? 0
+                : (viewportRef.current?.scrollTop ?? 0) + TIMELINE_PAGE_ROW_TOP,
+        [clipDrops],
+    );
     const snapBeats = useMemo(
         () =>
             getPageSnapBeats({
@@ -866,6 +874,39 @@ const TimelineSurface = memo(function TimelineSurface({
         },
     });
 
+    /** A clip in row `rowIndex`, in the tracks or, while it drops, in the drops' layer */
+    const renderClip = (track: TimelineTrack, rowIndex: number) => (
+        <TimelineTrackClip
+            key={track.id}
+            track={track}
+            pixelsPerBeat={pixelsPerBeat}
+            top={
+                trackTop +
+                rowIndex * rowPitch -
+                (clipHitHeight - trackHeight) / 2
+            }
+            height={clipHitHeight}
+            barHeight={expanded ? undefined : trackHeight}
+            // A clip is its timeline: it shows selected when its range is
+            // the selection, and clicking it selects that range (UI-12)
+            selected={sameRange(getTrackRange(track), selectionRange)}
+            onSelect={selectTrack}
+            onRangeCommit={props.onTimelineRangeCommit}
+            resize={props.clipResize}
+            downbeats={seekSnapBeats}
+            snapPlayhead={playheadAt}
+            beatCount={model.beatCount}
+            snapBeats={snapBeats}
+            micro={!expanded}
+            moveCommands={moveCommands}
+            renaming={renaming === String(track.id)}
+            onRenameStart={startRename}
+            onRenameEnd={endRename}
+            dropFrom={clipDrops.has(track.id) ? dropFrom : undefined}
+            onDropEnd={endDrop}
+        />
+    );
+
     return (
         <TimelineShell
             viewportRef={viewportRef}
@@ -962,10 +1003,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         vertically, under the pinned ruler */}
                     <div
                         data-testid="timeline-tracks"
-                        className={clsx(
-                            "absolute inset-x-0 top-0",
-                            dropsInFlight ? "z-[3]" : "z-[1]",
-                        )}
+                        className="absolute inset-x-0 top-0 z-[1]"
                         style={{ height: surfaceHeight }}
                     >
                         {/* The waveform first, so a clip's resize tag above the first row paints
@@ -989,46 +1027,11 @@ const TimelineSurface = memo(function TimelineSurface({
                             />
                         )}
                         {rows.flatMap((row, rowIndex) =>
-                            row.map((track) => (
-                                <TimelineTrackClip
-                                    key={track.id}
-                                    track={track}
-                                    pixelsPerBeat={pixelsPerBeat}
-                                    top={
-                                        trackTop +
-                                        rowIndex * rowPitch -
-                                        (clipHitHeight - trackHeight) / 2
-                                    }
-                                    height={clipHitHeight}
-                                    barHeight={
-                                        expanded ? undefined : trackHeight
-                                    }
-                                    // A clip is its timeline: it shows selected when its range is
-                                    // the selection, and clicking it selects that range (UI-12)
-                                    selected={sameRange(
-                                        getTrackRange(track),
-                                        selectionRange,
-                                    )}
-                                    onSelect={selectTrack}
-                                    onRangeCommit={props.onTimelineRangeCommit}
-                                    resize={props.clipResize}
-                                    downbeats={seekSnapBeats}
-                                    snapPlayhead={playheadAt}
-                                    beatCount={model.beatCount}
-                                    snapBeats={snapBeats}
-                                    micro={!expanded}
-                                    moveCommands={moveCommands}
-                                    renaming={renaming === String(track.id)}
-                                    onRenameStart={startRename}
-                                    onRenameEnd={endRename}
-                                    dropFrom={
-                                        clipDrops.has(track.id)
-                                            ? TIMELINE_PAGE_ROW_TOP
-                                            : undefined
-                                    }
-                                    onDropEnd={endDrop}
-                                />
-                            )),
+                            row.flatMap((track) =>
+                                clipDrops.has(track.id)
+                                    ? []
+                                    : [renderClip(track, rowIndex)],
+                            ),
                         )}
                         {band?.render({
                             top: trackTop,
@@ -1038,6 +1041,23 @@ const TimelineSurface = memo(function TimelineSurface({
                             snapBeats: seekSnapBeats,
                         })}
                     </div>
+                    {/* The clips dropping out of a page box (`useClipDrops`), over the pinned
+                        header so they are seen leaving it. They take no clicks while they drop */}
+                    {clipDrops.size > 0 && (
+                        <div
+                            data-testid="timeline-clip-drops"
+                            className="pointer-events-none absolute inset-x-0 top-0 z-[3]"
+                            style={{ height: surfaceHeight }}
+                        >
+                            {rows.flatMap((row, rowIndex) =>
+                                row.flatMap((track) =>
+                                    clipDrops.has(track.id)
+                                        ? [renderClip(track, rowIndex)]
+                                        : [],
+                                ),
+                            )}
+                        </div>
+                    )}
                     {/* Pinned to the viewport's top, over the tracks: the ruler and the measure
                         row, which hide the tracks scrolled under them, and the layers that span
                         the pane (playhead, flags, the window and the loop) */}
