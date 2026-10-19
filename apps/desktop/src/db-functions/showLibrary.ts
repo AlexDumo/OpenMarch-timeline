@@ -11,7 +11,8 @@
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { schema } from "@/global/database/db";
+// The main process embeds a floor on open (D-23), so no renderer database module here
+import * as schema from "@om-electron/database/migrations/schema";
 import type { DbConnection, DbTransaction } from "./types";
 import {
     DerivedFromSchema,
@@ -21,6 +22,7 @@ import {
     type LibraryItemKind,
 } from "@om-electron/main/library/types";
 import { hashParts, versionHashOf } from "@/view3d/library/showHash";
+import { libraryKeepsFromFloor } from "./fieldFloor";
 import {
     planLibraryPrune,
     type LibraryKeep,
@@ -271,6 +273,44 @@ export async function readLibraryBlob({
 }
 
 /**
+ * One embedded Version with its parts' bytes, ready to embed in another show as it is: same
+ * item, Version, name, license and pins. Undefined when the show doesn't hold it whole.
+ */
+export async function readEmbeddedVersion({
+    db,
+    ref,
+}: {
+    db: DbConnection | DbTransaction;
+    ref: LibraryRef;
+}): Promise<EmbedLibraryVersion | undefined> {
+    const row = await db
+        .select()
+        .from(schema.library_items)
+        .where(isLibraryVersion(ref))
+        .get();
+    if (!row) return undefined;
+    const parsed = ShowLibraryRowSchema.safeParse(row);
+    if (!parsed.success) return undefined;
+    const r = parsed.data;
+    const parts: Record<string, Uint8Array> = {};
+    for (const [role, hash] of Object.entries(r.parts)) {
+        const bytes = await readLibraryBlob({ db, hash });
+        if (!bytes) return undefined;
+        parts[role] = new Uint8Array(bytes);
+    }
+    return {
+        itemId: r.item_id,
+        versionHash: r.version_hash,
+        kind: r.kind,
+        name: r.name,
+        builtIn: r.built_in === 1,
+        metadata: r.metadata,
+        pins: r.pins,
+        parts,
+    };
+}
+
+/**
  * Library items an undo or redo row names. History lives in the show file and outlives the
  * session, so an item a past edit used must survive a prune: undoing that edit brings the use
  * back. Matching on the item id anywhere in the row's SQL is coarse, and keeps every Version of
@@ -327,8 +367,8 @@ export async function libraryKeepsFromCues({
 
 /**
  * Removes the Versions nothing keeps, then the blobs no remaining Version names (props-spec.md
- * section 2). `keep` is what the show's other tables use (Item tables); the Versions cues name
- * and history are added here.
+ * section 2). `keep` is what the show's other tables use (Item tables); the Versions cues,
+ * history and the show's floor (D-23) name are added here.
  */
 export async function pruneShowLibraryInTransaction({
     tx,
@@ -380,6 +420,7 @@ export async function pruneShowLibraryInTransaction({
             ...keep,
             ...(await libraryKeepsFromCues({ db: tx })),
             ...(await libraryKeepsFromHistory({ db: tx })),
+            ...(await libraryKeepsFromFloor({ db: tx })),
         ],
     });
     if (unreadable.length > 0) plan.blobs = [];

@@ -169,7 +169,7 @@ function ThreeFieldView() {
     useEffect(() => {
         if (!isFullscreen) setPerspective(0);
     }, [isFullscreen, setPerspective]);
-    const { image: fieldImage } = useFieldImage();
+    const { image: fieldImage, size: fieldImageSize } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
         () =>
@@ -179,10 +179,11 @@ function ThreeFieldView() {
                       fieldImage && {
                           width: fieldImage.width,
                           height: fieldImage.height,
+                          size: fieldImageSize,
                       },
                   )
                 : null,
-        [fieldProperties, fieldImage],
+        [fieldProperties, fieldImage, fieldImageSize],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const { mutateAsync: moveMarchers } = useMutation(
