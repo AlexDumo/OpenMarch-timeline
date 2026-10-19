@@ -11,10 +11,8 @@ import { TolgeeProvider } from "@tolgee/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
 import tolgee from "@/global/singletons/Tolgee";
-import type {
-    LibraryItemUses,
-    ShowLibraryItem,
-} from "@/db-functions/showLibrary";
+import type { ShowLibraryItem } from "@/db-functions/showLibrary";
+import type { LibraryItemUses } from "@/db-functions/showLibraryDelete";
 import type { DatabaseCue } from "@/db-functions/cues";
 import type { LibraryItemSummary } from "@/view3d/library/protocol";
 import {

@@ -17,11 +17,11 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
+import { readLibraryBlob } from "@/db-functions/showLibrary";
 import {
     deleteShowLibraryItem,
     libraryItemUses,
-    readLibraryBlob,
-} from "@/db-functions/showLibrary";
+} from "@/db-functions/showLibraryDelete";
 import {
     showLibraryKeys,
     useShowLibrary,

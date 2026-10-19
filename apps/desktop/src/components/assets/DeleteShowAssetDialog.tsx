@@ -27,7 +27,7 @@ import {
     type DeleteShowLibraryItemResult,
     type LibraryCueUse,
     type LibraryItemUses,
-} from "@/db-functions/showLibrary";
+} from "@/db-functions/showLibraryDelete";
 import type { LibraryRef } from "@/view3d/library/showLibraryPrune";
 import type { ShowAssetItem } from "./showAssetGroups";
 

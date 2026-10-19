@@ -5,10 +5,8 @@
  * my Library"; a newer Version or changed details in the Library are noted,
  * never applied silently (props-spec.md section 2).
  */
-import {
-    libraryRoleOf,
-    type ShowLibraryItem,
-} from "@/db-functions/showLibrary";
+import type { ShowLibraryItem } from "@/db-functions/showLibrary";
+import { libraryRoleOf } from "@/db-functions/showLibraryDelete";
 import type { LibraryItemSummary } from "@/view3d/library/protocol";
 import {
     findLibraryUpdates,

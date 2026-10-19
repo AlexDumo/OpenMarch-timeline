@@ -15,12 +15,11 @@ import {
     getShowLibraryItems,
     libraryKeepsFromCues,
     libraryKeepsFromHistory,
-    deleteShowLibraryItem,
-    libraryItemUses,
     pruneShowLibraryInTransaction,
     readLibraryBlob,
     type EmbedLibraryVersion,
 } from "../showLibrary";
+import { deleteShowLibraryItem, libraryItemUses } from "../showLibraryDelete";
 import { hashParts, versionHashOf } from "@/view3d/library/showHash";
 import { createCuesInTransaction, getCues, type NewCueArgs } from "../cues";
 import {
