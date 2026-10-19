@@ -4,7 +4,11 @@ import type { FieldTheme } from "@openmarch/core";
 import { rgba01 } from "../fieldGeometry";
 import type { FieldMarchers } from "../fieldMarchers";
 import type { FieldDimming } from "../fieldDimming";
-import { marcherOpacity, type FieldFollowing } from "../fieldFollowing";
+import {
+    followingLook,
+    marcherOpacity,
+    type FieldFollowing,
+} from "../fieldFollowing";
 import { useFieldDraw } from "../fieldDrawContext";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
@@ -33,7 +37,7 @@ export default function LabelsLayer({
     marchers: FieldMarchers;
     /** Marchers whose labels are drawn dimmed (#201). */
     dimming: FieldDimming;
-    /** Marchers whose labels are drawn faded as Following (#300); dimming wins. */
+    /** Marchers whose labels are drawn faded as Following (#300; full strength in the hollow look, #308); dimming wins. */
     following: FieldFollowing;
     /** Each marcher's drill number, by id. */
     labels: ReadonlyMap<number, string>;
@@ -57,6 +61,7 @@ export default function LabelsLayer({
         appearanceVersion: -1,
         dimVersion: -1,
         followingVersion: -1,
+        look: followingLook(),
         labels,
         theme,
         shown: new Uint8Array(0) as Uint8Array,
@@ -97,13 +102,15 @@ export default function LabelsLayer({
             const now = labelsShown(marchers.stacks, theme);
             if (!sameBytes(now, shown)) shown = now;
         }
+        const look = followingLook();
         const newLayout =
             marchers.idsVersion !== last.idsVersion ||
             labels !== last.labels ||
             theme !== last.theme ||
             shown !== last.shown ||
             dimming.version !== last.dimVersion ||
-            following.version !== last.followingVersion;
+            following.version !== last.followingVersion ||
+            look !== last.look;
         if (newLayout) {
             const color = rgba01(theme.defaultMarcher.label);
             const faded = new Map<number, typeof color>();
@@ -121,7 +128,9 @@ export default function LabelsLayer({
                     text: shown[i] ? (labels.get(id) ?? "") : "",
                     size: LABEL_SIZE,
                     baseline: CENTER_BASELINE,
-                    color: colorOf(marcherOpacity(dimming, following, id)),
+                    color: colorOf(
+                        marcherOpacity(dimming, following, id, look),
+                    ),
                 })),
             );
         }
@@ -133,6 +142,7 @@ export default function LabelsLayer({
             appearanceVersion: marchers.appearanceVersion,
             dimVersion: dimming.version,
             followingVersion: following.version,
+            look,
             labels,
             theme,
             shown,

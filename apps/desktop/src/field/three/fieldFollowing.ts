@@ -119,13 +119,52 @@ export const drawnFollowing = (
     id: number,
 ): boolean => !dimming.isDimmed(id) && following.isFollowing(id);
 
+/**
+ * How the field draws Following marchers (study variant, #308): `fade`
+ * draws them at {@link FOLLOWING_OPACITY}; `hollow` draws them as a ring in
+ * their own color with no fill, at full opacity. Set marchers are filled in
+ * both, and labels stay at full strength in `hollow`.
+ *
+ * `fade` by default; `localStorage["openmarch.followingLook"] = "hollow"`
+ * switches it (read on every redraw, so a study can switch it live).
+ */
+export type FollowingLook = "fade" | "hollow";
+export const FOLLOWING_LOOK_KEY = "openmarch.followingLook";
+
+/** The Following look the study flag asks for. */
+export function followingLook(): FollowingLook {
+    try {
+        return globalThis.localStorage?.getItem(FOLLOWING_LOOK_KEY) === "hollow"
+            ? "hollow"
+            : "fade";
+    } catch {
+        return "fade";
+    }
+}
+
 /** How opaque a marcher's dot and label are drawn. */
 export function marcherOpacity(
     dimming: FieldDimming,
     following: FieldFollowing,
     id: number,
+    look: FollowingLook = "fade",
 ): number {
     if (dimming.isDimmed(id)) return DIMMED_OPACITY;
-    if (!following.isFollowing(id)) return 1;
+    if (look === "hollow" || !following.isFollowing(id)) return 1;
     return 1 - (1 - FOLLOWING_OPACITY) * following.strength();
+}
+
+/**
+ * How hollow a marcher's dot is drawn, 0 (filled) to 1 (a ring, no fill):
+ * only Following marchers in the `hollow` look. On Stop the fill eases out
+ * as the fade eases in.
+ */
+export function marcherHollow(
+    dimming: FieldDimming,
+    following: FieldFollowing,
+    id: number,
+    look: FollowingLook,
+): number {
+    if (look !== "hollow" || !drawnFollowing(dimming, following, id)) return 0;
+    return following.strength();
 }

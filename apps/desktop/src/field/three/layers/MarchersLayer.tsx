@@ -12,7 +12,14 @@ import {
 import type { FieldTheme } from "@openmarch/core";
 import type { FieldMarchers } from "../fieldMarchers";
 import type { FieldDimming } from "../fieldDimming";
-import { marcherOpacity, type FieldFollowing } from "../fieldFollowing";
+import {
+    FOLLOWING_OPACITY,
+    followingLook,
+    marcherHollow,
+    marcherOpacity,
+    type FieldFollowing,
+    type FollowingLook,
+} from "../fieldFollowing";
 import { useFieldDraw } from "../fieldDrawContext";
 import { writeMarcherLooks } from "../marcherLooks";
 import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
@@ -31,6 +38,10 @@ import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
  *
  * A selected marcher (#193) gets a ring a little outside its shape's edge, in
  * the same draw.
+ *
+ * In the hollow Following look (#308) a Following marcher's fill is cut out
+ * inside a band along its edge, so it reads as a ring in its own color. An X
+ * has no fill to cut, so it fades instead.
  */
 const VERTEX = /* glsl */ `
 attribute vec2 aPos;
@@ -38,6 +49,7 @@ attribute vec4 aFill;
 attribute vec4 aOutline;
 attribute float aShape;
 attribute float aOpacity;
+attribute float aHollow;
 attribute float aSelected;
 uniform float uScale;
 uniform float uMargin;
@@ -47,9 +59,11 @@ varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
 varying float vOpacity;
+varying float vHollow;
 varying float vSelected;
 void main() {
     vSelected = aSelected;
+    vHollow = aHollow;
     vFill = aFill;
     vOutline = aOutline;
     vOpacity = aOpacity;
@@ -66,12 +80,16 @@ void main() {
 
 const FRAGMENT = /* glsl */ `
 #define DOT_R 5.0
+#define HOLLOW_RING 1.6
+#define FOLLOWING_OPACITY ${FOLLOWING_OPACITY.toFixed(3)}
 varying vec2 vLocal;
 varying vec4 vFill;
 varying vec4 vOutline;
 varying float vShape;
 varying float vOpacity;
+varying float vHollow;
 varying float vSelected;
+uniform float uMargin;
 uniform vec4 uRing;
 uniform float uRingInner;
 uniform float uRingOuter;
@@ -104,8 +122,13 @@ void main() {
     else d = xMark(vLocal);
     float aa = 0.5 * fwidth(d);
     float fill = 1.0 - smoothstep(-aa, aa, d);
+    bool cross = vShape > 2.5;
+    // A hollow Following marcher (#308): no fill inside a band along the edge, at least 1.5 CSS px wide
+    float band = max(HOLLOW_RING, 1.5 * uMargin);
+    float hollow = cross ? 0.0 : vHollow;
+    fill *= 1.0 - hollow * (1.0 - smoothstep(-band - aa, -band + aa, d));
     // An X is its lines only; the others are a fill with the outline drawn over it
-    float stroke = vShape > 2.5 ? 0.0 : 1.0 - smoothstep(0.5 - aa, 0.5 + aa, abs(d));
+    float stroke = cross ? 0.0 : 1.0 - smoothstep(0.5 - aa, 0.5 + aa, abs(d));
     float fillA = vFill.a * fill;
     float strokeA = vOutline.a * stroke;
     float dotA = strokeA + fillA * (1.0 - strokeA);
@@ -115,8 +138,9 @@ void main() {
         * (smoothstep(uRingInner - aa, uRingInner + aa, d)
             - smoothstep(uRingOuter - aa, uRingOuter + aa, d));
     // A dimmed (#201) or Following (#300) marcher's dot fades; its ring stays full strength
-    dotA *= vOpacity;
-    dotRgb *= vOpacity;
+    float opacity = cross ? vOpacity * (1.0 - (1.0 - FOLLOWING_OPACITY) * vHollow) : vOpacity;
+    dotA *= opacity;
+    dotRgb *= opacity;
     float a = dotA + ringA * (1.0 - dotA);
     if (a < 0.004) discard;
     vec3 rgb = dotRgb + uRing.rgb * ringA * (1.0 - dotA);
@@ -129,6 +153,7 @@ type Drawn = {
     appearanceVersion: number;
     dimVersion: number;
     followingVersion: number;
+    look: FollowingLook | null;
     selectionVersion: number;
     theme: FieldTheme | null;
 };
@@ -155,6 +180,7 @@ export default function MarchersLayer({
         appearanceVersion: -1,
         dimVersion: -1,
         followingVersion: -1,
+        look: null,
         selectionVersion: -1,
         theme: null,
     });
@@ -224,10 +250,12 @@ export default function MarchersLayer({
             resized ||
             marchers.appearanceVersion !== last.appearanceVersion ||
             theme !== last.theme;
+        const look = followingLook();
         const dimChanged =
             resized ||
             dimming.version !== last.dimVersion ||
-            following.version !== last.followingVersion;
+            following.version !== last.followingVersion ||
+            look !== last.look;
         const reselected =
             resized || marchers.selectionVersion !== last.selectionVersion;
         if (
@@ -256,6 +284,7 @@ export default function MarchersLayer({
             );
             geometry.setAttribute("aShape", dynamic(new Float32Array(n), 1));
             geometry.setAttribute("aOpacity", dynamic(new Float32Array(n), 1));
+            geometry.setAttribute("aHollow", dynamic(new Float32Array(n), 1));
             geometry.setAttribute("aSelected", dynamic(new Float32Array(n), 1));
             geometry.instanceCount = n;
         }
@@ -277,10 +306,14 @@ export default function MarchersLayer({
         if (dimChanged) {
             const opacity = instanced("aOpacity");
             const array = opacity.array as Float32Array;
+            const hollow = instanced("aHollow");
+            const hollows = hollow.array as Float32Array;
             marchers.ids.forEach((id, i) => {
-                array[i] = marcherOpacity(dimming, following, id);
+                array[i] = marcherOpacity(dimming, following, id, look);
+                hollows[i] = marcherHollow(dimming, following, id, look);
             });
             opacity.needsUpdate = true;
+            hollow.needsUpdate = true;
         }
         if (reselected) {
             const selected = instanced("aSelected");
@@ -296,6 +329,7 @@ export default function MarchersLayer({
             appearanceVersion: marchers.appearanceVersion,
             dimVersion: dimming.version,
             followingVersion: following.version,
+            look,
             selectionVersion: marchers.selectionVersion,
             theme,
         };

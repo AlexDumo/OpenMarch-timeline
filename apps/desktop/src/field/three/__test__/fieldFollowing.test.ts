@@ -1,11 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FieldDimming } from "../fieldDimming";
 import {
     FieldFollowing,
     FOLLOWING_EASE_MS,
+    FOLLOWING_LOOK_KEY,
     FOLLOWING_OPACITY,
     type FadeClock,
     drawnFollowing,
+    followingLook,
+    marcherHollow,
     marcherOpacity,
 } from "../fieldFollowing";
 import { DIMMED_OPACITY } from "../fieldDimming";
@@ -130,5 +133,58 @@ describe("a marcher's drawn opacity", () => {
         following.set(new Set([2]));
         expect(marcherOpacity(dimming, following, 1)).toBe(1);
         expect(FOLLOWING_OPACITY).toBeGreaterThan(DIMMED_OPACITY);
+    });
+});
+
+describe("the hollow look (#308)", () => {
+    afterEach(() => localStorage.removeItem(FOLLOWING_LOOK_KEY));
+
+    it("is off by default, and read live from the study flag", () => {
+        expect(followingLook()).toBe("fade");
+        localStorage.setItem(FOLLOWING_LOOK_KEY, "hollow");
+        expect(followingLook()).toBe("hollow");
+        localStorage.setItem(FOLLOWING_LOOK_KEY, "something else");
+        expect(followingLook()).toBe("fade");
+    });
+
+    it("draws Following marchers hollow at full opacity, and Set ones filled", () => {
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing();
+        following.set(new Set([1]));
+        expect(marcherOpacity(dimming, following, 1, "hollow")).toBe(1);
+        expect(marcherHollow(dimming, following, 1, "hollow")).toBe(1);
+        expect(marcherHollow(dimming, following, 2, "hollow")).toBe(0);
+        // The fade look never hollows a dot
+        expect(marcherHollow(dimming, following, 1, "fade")).toBe(0);
+        expect(marcherOpacity(dimming, following, 1, "fade")).toBe(
+            FOLLOWING_OPACITY,
+        );
+    });
+
+    it("lets isolation's dim win: a dimmed marcher stays filled, at the dim", () => {
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing();
+        dimming.set(new Set([1]));
+        following.set(new Set([2]));
+        expect(marcherHollow(dimming, following, 2, "hollow")).toBe(0);
+        expect(marcherOpacity(dimming, following, 2, "hollow")).toBe(
+            DIMMED_OPACITY,
+        );
+        expect(drawnFollowing(dimming, following, 2)).toBe(false);
+    });
+
+    it("eases the fill out on Stop instead of the opacity", () => {
+        const time = manualClock();
+        const dimming = new FieldDimming();
+        const following = new FieldFollowing(time.clock);
+        following.set(new Set([1]), { ease: true });
+        expect(marcherHollow(dimming, following, 1, "hollow")).toBe(0);
+        time.frame(FOLLOWING_EASE_MS / 2);
+        const halfway = marcherHollow(dimming, following, 1, "hollow");
+        expect(halfway).toBeGreaterThan(0);
+        expect(halfway).toBeLessThan(1);
+        expect(marcherOpacity(dimming, following, 1, "hollow")).toBe(1);
+        time.frame(FOLLOWING_EASE_MS);
+        expect(marcherHollow(dimming, following, 1, "hollow")).toBe(1);
     });
 });

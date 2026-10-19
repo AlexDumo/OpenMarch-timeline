@@ -235,6 +235,29 @@ for (const c of CASES) {
     });
 }
 
+/** Over page 1, T1 moves and T2 stays where it began: on page 1's flag T1 is Set and T2 Following. */
+const SET_AND_FOLLOWING = seedShowSql({
+    beats: 16,
+    measureStarts: [1, 5, 9, 13],
+    pageStarts: [1],
+    marchers: [1, 2].map((id) => ({
+        id,
+        section: "Trumpet",
+        prefix: "T",
+        order: id,
+    })),
+    positions: [
+        [
+            [1, 400, 300],
+            [2, 480, 300],
+        ],
+        [
+            [1, 400, 340],
+            [2, 480, 300],
+        ],
+    ],
+});
+
 /**
  * Set vs Following (#301): the one pixel check that a Following marcher is
  * drawn faded next to a Set one (the field test API's `following` says what
@@ -243,27 +266,7 @@ for (const c of CASES) {
  */
 test.describe("following-fade", () => {
     test.use({
-        seedSql: seedShowSql({
-            beats: 16,
-            measureStarts: [1, 5, 9, 13],
-            pageStarts: [1],
-            marchers: [1, 2].map((id) => ({
-                id,
-                section: "Trumpet",
-                prefix: "T",
-                order: id,
-            })),
-            positions: [
-                [
-                    [1, 400, 300],
-                    [2, 480, 300],
-                ],
-                [
-                    [1, 400, 340],
-                    [2, 480, 300],
-                ],
-            ],
-        }),
+        seedSql: SET_AND_FOLLOWING,
     });
 
     test("a Following dot is fainter than a Set one", async ({ show }) => {
@@ -311,6 +314,85 @@ test.describe("following-fade", () => {
         );
         expect(Math.abs(setAfter - set)).toBeLessThan(8);
         expect(Math.abs(followingAfter - following)).toBeLessThan(8);
+    });
+});
+
+/**
+ * The hollow Following look (#308, behind `openmarch.followingLook`): the same
+ * show, with T2 Following drawn as a ring in its own color and no fill, and T1
+ * Set drawn filled.
+ */
+test.describe("following-hollow", () => {
+    test.use({
+        seedSql: SET_AND_FOLLOWING,
+        initScript: `localStorage.setItem("openmarch.followingLook", "hollow")`,
+    });
+
+    test("a Following dot is a ring in its own color with an empty center", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await page.waitForFunction(
+            () => window.fieldTest?.marchers().length === 2,
+        );
+        await page.keyboard.press("e");
+        await expect
+            .poll(() =>
+                page.evaluate(() =>
+                    window.fieldTest!.marchers().map((m) => m.following),
+                ),
+            )
+            .toEqual([false, true]);
+        await settle(page);
+        await page.waitForTimeout(300);
+        const png = await field(page).screenshot();
+        await saveCapture(page, "following-hollow", png, ["following-hollow"]);
+        const box = (await field(page).boundingBox())!;
+        const toDevice = (c: { x: number; y: number }) => ({
+            x: (c.x - box.x) * (png.readUInt32BE(16) / box.width),
+            y: (c.y - box.y) * (png.readUInt32BE(20) / box.height),
+        });
+        const [set, following] = await page.evaluate(() =>
+            window.fieldTest!.marchers().map((m) => m.screen),
+        );
+        const a = toDevice(set!);
+        const b = toDevice(following!);
+        // They stand 80 and 40 field units apart: device px per field unit
+        const unit = Math.hypot(b.x - a.x, b.y - a.y) / Math.hypot(80, 40);
+        // Points around the Following dot inside its 5-unit edge, along the ring band
+        const around = [3.6, 4.0, 4.4].flatMap((r) =>
+            [0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({
+                x: b.x + r * unit * Math.cos((k * Math.PI) / 4),
+                y: b.y + r * unit * Math.sin((k * Math.PI) / 4),
+            })),
+        );
+        // The field near the Following dot in a few places, as its center may sit on a grid line
+        const nearby = [-40, 40].flatMap((d) => [
+            { x: b.x + d, y: b.y },
+            { x: b.x, y: b.y + d },
+        ]);
+        const shades = await pixelShades(page, png, [
+            a,
+            b,
+            ...nearby,
+            ...around,
+        ]);
+        const [setDot, center] = shades;
+        const fields = shades.slice(2, 2 + nearby.length);
+        const ring = shades.slice(2 + nearby.length);
+        const distance = (p: number[], q: number[]) =>
+            Math.max(...p.map((v, i) => Math.abs(v - q[i]!)));
+        // The Set dot is filled, the Following one's center is the field
+        expect(
+            Math.min(...fields.map((shade) => distance(setDot!, shade))),
+        ).toBeGreaterThan(40);
+        expect(
+            Math.min(...fields.map((shade) => distance(center!, shade))),
+        ).toBeLessThan(10);
+        // Its ring is the marcher's own color, at full strength
+        expect(
+            Math.min(...ring.map((shade) => distance(shade, setDot!))),
+        ).toBeLessThan(30);
     });
 });
 
@@ -370,6 +452,34 @@ const dotContrasts = (
                 return Math.max(
                     ...dot.map((value, i) => Math.abs(value - around[i]!)),
                 );
+            });
+        },
+        { base64: png.toString("base64"), points },
+    );
+
+/** Each device-pixel point's RGB, 0 to 255, in a field capture. */
+const pixelShades = (
+    page: Page,
+    png: Buffer,
+    points: readonly { x: number; y: number }[],
+) =>
+    page.evaluate(
+        async ({ base64, points }) => {
+            const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+            const bitmap = await createImageBitmap(
+                new Blob([bytes], { type: "image/png" }),
+            );
+            const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+            const context = canvas.getContext("2d")!;
+            context.drawImage(bitmap, 0, 0);
+            return points.map(({ x, y }) => {
+                const d = context.getImageData(
+                    Math.round(x),
+                    Math.round(y),
+                    1,
+                    1,
+                ).data;
+                return [d[0]!, d[1]!, d[2]!];
             });
         },
         { base64: png.toString("base64"), points },
