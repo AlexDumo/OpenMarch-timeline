@@ -85,4 +85,9 @@ describe("start flag positions settings", () => {
             hold: { dots: "all", paths: "all" },
         });
     });
+
+    it("ignore the old Previous paths setting when loading", async () => {
+        const store = await loadStore({ previousPaths: true });
+        expect(store.getState().uiSettings).not.toHaveProperty("previousPaths");
+    });
 });

@@ -25,12 +25,15 @@ import {
     useWorkspaceViewStore,
 } from "@/stores/WorkspaceViewStore";
 import { useEditorModeStore } from "@/stores/EditorModeStore";
+import type { StartFlagOverlay } from "@/field/startFlagOverlay";
 import { FieldDimming } from "./fieldDimming";
+import { useStartFlagOverlay } from "./useStartFlagOverlay";
 
 /**
  * Everything the timeline draws on the field (fork #201): the selected page's
- * pathways, midpoints, endpoints and step-size warnings
- * (`useTimelinePathSamples`), an isolated move's focus scene
+ * next pathways, midpoints, endpoints and step-size warnings
+ * (`useTimelinePathSamples`), start flag positions over the edit window
+ * (`useStartFlagOverlay`, fork #331), an isolated move's focus scene
  * (`useTimelineFocusScene`, which also publishes the isolation plan the
  * playhead driver draws members at), collision markers (`useCollisionStore`),
  * and who's dimmed. Plans change on page changes, edits and setting changes,
@@ -43,15 +46,20 @@ export function useTimelineVisuals({
     selectedPage,
     pages,
     marcherIds,
+    selectedIds,
     fieldProperties,
 }: {
     isPlaying: boolean;
     selectedPage: Page | null;
     pages: readonly Page[];
     marcherIds: readonly number[] | undefined;
+    /** The selected marchers, for start flag positions' Selected level */
+    selectedIds: readonly number[];
     fieldProperties: FieldProperties | undefined;
 }): {
     paths: OverlayPlan | null;
+    /** Start flag positions: dots in field units, paths in screen units */
+    startFlag: StartFlagOverlay | null;
     focus: OverlayPlan | null;
     collisions: OverlayPlan | null;
     dimming: FieldDimming;
@@ -62,7 +70,6 @@ export function useTimelineVisuals({
     const ready = useTimelineResolverStore((s) => s.status === "ready");
     const settings = useUiSettingsStore(
         useShallow((s) => ({
-            previousPaths: s.uiSettings.previousPaths,
             nextPaths: s.uiSettings.nextPaths,
             stepSizeWarnings: s.uiSettings.stepSizeWarnings,
             showCollisions: s.uiSettings.showCollisions,
@@ -70,17 +77,15 @@ export function useTimelineVisuals({
     );
     // Isolation's own paths and ghosts replace the page's paths
     const isolating = useTimelineSelectionStore((s) => s.isolation !== null);
-    const previousPathsEnabled = settings.previousPaths && !isolating;
     const nextPathsEnabled = settings.nextPaths && !isolating;
     const stepSizeWarningsEnabled = settings.stepSizeWarnings && !isolating;
 
-    const { previousPaths, nextPaths } = useTimelinePathSamples({
+    const { nextPaths } = useTimelinePathSamples({
         enabled: ready,
         isPlaying,
         selectedPage,
         pages,
         marcherIds,
-        previousPathsEnabled,
         nextPathsEnabled,
         stepSizeWarningsEnabled,
     });
@@ -89,9 +94,7 @@ export function useTimelineVisuals({
             ready && marcherIds && fieldProperties
                 ? planPathOverlay({
                       marcherIds,
-                      previousPaths,
                       nextPaths,
-                      previousPathsEnabled,
                       nextPathsEnabled,
                       stepSizeWarningsEnabled,
                       fieldProperties,
@@ -100,14 +103,20 @@ export function useTimelineVisuals({
         [
             ready,
             marcherIds,
-            previousPaths,
             nextPaths,
-            previousPathsEnabled,
             nextPathsEnabled,
             stepSizeWarningsEnabled,
             fieldProperties,
         ],
     );
+
+    const startFlag = useStartFlagOverlay({
+        enabled: ready,
+        isPlaying,
+        marcherIds,
+        selectedIds,
+        fieldProperties,
+    });
 
     const { scene, emphasis } = useTimelineFocusScene({
         database: db,
@@ -136,7 +145,7 @@ export function useTimelineVisuals({
     );
 
     const dimming = useFieldDimming(ready);
-    return { paths, focus, collisions, dimming, ready };
+    return { paths, startFlag, focus, collisions, dimming, ready };
 }
 
 /**

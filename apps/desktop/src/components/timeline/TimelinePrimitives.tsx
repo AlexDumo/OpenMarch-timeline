@@ -363,7 +363,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                                 <button
                                     type="button"
                                     aria-label="More controls"
-                                    title="More: sound, the clock, Fit and Compact"
+                                    title="More: sound, the clock, Fit and the view controls"
                                     className="rounded-4 text-text enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden focus-visible:ring-2"
                                 >
                                     <DotsThreeIcon size={18} weight="bold" />

@@ -1,3 +1,4 @@
+import { StartFlagPositionsButton } from "./StartFlagPositionsButton";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -126,7 +127,14 @@ const LOOP_BUTTONS = (
     </>
 );
 const SPEED_BUTTON = <TimelineSpeedButton />;
-const COMPACT_BUTTON = <TimelineCompactButton />;
+/** By Fit in both modes: start flag positions (fork #331), then Compact in Expert */
+const BASIC_VIEW_CONTROLS = <StartFlagPositionsButton />;
+const EXPERT_VIEW_CONTROLS = (
+    <>
+        <StartFlagPositionsButton />
+        <TimelineCompactButton />
+    </>
+);
 
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
 export const toTimelineSelection = (
@@ -413,7 +421,9 @@ export default function TimelineModePanel() {
                     timelines={basic ? NO_CLIPS : offPage}
                     transportAccessories={basic ? SPEED_BUTTON : LOOP_BUTTONS}
                     transportSecondary={SOUND_BUTTON}
-                    transportViewControls={basic ? undefined : COMPACT_BUTTON}
+                    transportViewControls={
+                        basic ? BASIC_VIEW_CONTROLS : EXPERT_VIEW_CONTROLS
+                    }
                     holdMarks={holdMarks}
                     keepChains={keepChains}
                     keepHere={keepHere}

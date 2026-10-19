@@ -128,6 +128,13 @@ const FOCUS_ORDER = 1.4;
 /** Props and equipment lie on the field, under everything the timeline draws (C2.1). */
 const ITEMS_ORDER = 1.3;
 const PATHS_ORDER = 1.5;
+/**
+ * Start flag positions (fork #331): the routes, then the dots on them, over the page's pathways
+ * and under the labels and marchers, so a marcher who hasn't left its start flag spot covers its
+ * dot.
+ */
+const START_FLAG_PATHS_ORDER = 1.6;
+const START_FLAG_DOTS_ORDER = 1.7;
 const COLLISIONS_ORDER = 4;
 
 /**
@@ -282,6 +289,7 @@ function ThreeFieldView() {
         selectedPage,
         pages,
         marcherIds,
+        selectedIds,
         fieldProperties,
     });
     const { dimming } = timeline;
@@ -596,6 +604,14 @@ function ThreeFieldView() {
                         <OverlayLayer
                             plan={timeline.paths}
                             renderOrder={PATHS_ORDER}
+                        />
+                        <OverlayLayer
+                            plan={timeline.startFlag?.paths ?? null}
+                            renderOrder={START_FLAG_PATHS_ORDER}
+                        />
+                        <OverlayLayer
+                            plan={timeline.startFlag?.dots ?? null}
+                            renderOrder={START_FLAG_DOTS_ORDER}
                         />
                         <MarchersLayer
                             marchers={marchers}

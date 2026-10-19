@@ -19,8 +19,6 @@ export interface UiSettings {
     isPlaying: boolean;
     /** Whether to show the full database path in the title bar */
     showFullDatabasePath: boolean;
-    /** Boolean to view previous page's paths/dots */
-    previousPaths: boolean;
     /** Boolean to view next page's paths/dots */
     nextPaths: boolean;
     /** Start flag positions (#331): what the field draws normally, and while N is held */
@@ -90,7 +88,6 @@ export const defaultSettings: UiSettings = {
     lockX: false,
     lockY: false,
     showFullDatabasePath: false,
-    previousPaths: false,
     nextPaths: false,
     startFlagPositions: DEFAULT_START_FLAG_POSITIONS,
     stepSizeWarnings: false,
@@ -132,7 +129,10 @@ const clampZoomSensitivity = (value: number): number =>
 // Helper function to parse settings from a JSON string
 // Throws on bad JSON or invalid structure
 const parseSettings = (raw: string): UiSettings => {
-    const parsed = JSON.parse(raw) as UiSettings;
+    // `previousPaths` (Previous paths) gave way to start flag positions (#331): dropped
+    const { previousPaths: _previousPaths, ...parsed } = JSON.parse(
+        raw,
+    ) as UiSettings & { previousPaths?: unknown };
     const mergedMouseSettings = {
         ...defaultSettings.mouseSettings,
         ...parsed.mouseSettings,

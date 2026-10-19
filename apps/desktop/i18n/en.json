@@ -2236,6 +2236,19 @@
             "deleteWithMoves": "Delete page and its moves",
             "followAgain": "Let selected marchers follow again",
             "keepHere": "Keep selected marchers here"
+        },
+        "startFlagPositions": {
+            "always": "Always",
+            "dots": "Dots",
+            "hold": "Hold {key}",
+            "label": "Start flag positions",
+            "level": {
+                "all": "All",
+                "off": "Off",
+                "selected": "Selected"
+            },
+            "paths": "Paths",
+            "stateLine": "{state} · Dots: {dots} · Paths: {paths}"
         }
     },
     "titlebar": {
@@ -2274,7 +2287,6 @@
             "gridLines": "Grid lines",
             "halfLines": "Half lines",
             "nextPaths": "Next paths",
-            "previousPaths": "Previous paths",
             "stepSizeWarnings": "Step size warnings",
             "uiSettingsToolbar": "Ui Settings Toolbar"
         }
