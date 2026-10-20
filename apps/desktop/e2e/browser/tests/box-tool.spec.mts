@@ -763,6 +763,7 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
     await expect(box).toBeEnabled();
     await expect(page.getByTestId("shapes-tab-reason")).toBeHidden();
     await expect(box).toHaveAttribute("aria-pressed", "false");
+    await expect(box).toHaveAttribute("title", /Box.*\bB\b/);
 
     // Picking it arms the box: the field draws it on the next drag
     await box.click();
