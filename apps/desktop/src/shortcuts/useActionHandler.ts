@@ -1,6 +1,10 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ActionArgs, ActionId } from "./definitions";
-import { notifyActionHandlersChanged, registerActionHandler } from "./registry";
+import {
+    notifyActionHandlersChanged,
+    registerActionHandler,
+    type ReleaseReason,
+} from "./registry";
 
 interface HandlerOptions {
     /** When false the action is skipped by shortcuts and greyed out in the palette. Default true. */
@@ -11,8 +15,13 @@ interface HandlerOptions {
      * read at each repeat, for state kept outside React (an undo still running). Default false.
      */
     ignoreRepeat?: boolean | (() => boolean);
-    /** Runs when the key that ran the action is let go (or the window loses focus while held) */
-    onRelease?: () => void;
+    /**
+     * Runs instead of `run` when a key press runs the action; the palette and buttons still call
+     * `run`. For held actions whose key works differently (hold N to peek, the palette latches).
+     */
+    onPress?: (args: ActionArgs | undefined) => void;
+    /** Runs when the key that ran the action is let go (or lost: the window lost focus while held) */
+    onRelease?: (reason: ReleaseReason) => void;
 }
 
 export function useActionHandler(
@@ -43,11 +52,14 @@ export function useActionHandlerGroup(
     const ignoreRepeatRef = useRef<boolean | (() => boolean)>(
         options.ignoreRepeat ?? false,
     );
+    const pressRef = useRef(options.onPress);
+    const hasPress = options.onPress !== undefined;
     const releaseRef = useRef(options.onRelease);
     const hasRelease = options.onRelease !== undefined;
     useLayoutEffect(() => {
         runRef.current = run;
         ignoreRepeatRef.current = options.ignoreRepeat ?? false;
+        pressRef.current = options.onPress;
         releaseRef.current = options.onRelease;
     });
     useLayoutEffect(() => {
@@ -69,9 +81,14 @@ export function useActionHandlerGroup(
                     const ignore = ignoreRepeatRef.current;
                     return typeof ignore === "function" ? ignore() : ignore;
                 },
-                release: hasRelease ? () => releaseRef.current?.() : undefined,
+                press: hasPress
+                    ? (args) => pressRef.current?.(args)
+                    : undefined,
+                release: hasRelease
+                    ? (reason) => releaseRef.current?.(reason)
+                    : undefined,
             }),
         );
         return () => unregister.forEach((off) => off());
-    }, [idsKey, hasRelease]);
+    }, [idsKey, hasPress, hasRelease]);
 }

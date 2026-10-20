@@ -347,6 +347,8 @@ export interface TimelineCommonProps
     readonly onLoopChange?: (loop: TimelineBeatRange) => void;
     /** Transport controls that fold into "⋯" on a narrow panel, such as Sound (UI-12) */
     readonly transportSecondary?: ReactNode;
+    /** View controls first in the transport's right group, before Fit (fork #331); they fold too */
+    readonly transportLeadingViewControls?: ReactNode;
     /** View controls at the transport's end, such as Compact (UI-12); they fold too */
     readonly transportViewControls?: ReactNode;
     /** Where the selected marchers hold, on the page boxes (UI-18); none without a selection */
