@@ -109,6 +109,8 @@
             "swap": "Swap two marchers"
         },
         "timeline": {
+            "createPageAtPlayhead": "Create page at playhead",
+            "createSubsetAtPlayhead": "Create subset at playhead",
             "goTo": "Go to a page, measure or rehearsal mark",
             "nextPage": "Next page (timeline)",
             "playPause": "Play / pause audio",
@@ -124,7 +126,6 @@
             "focusCanvas": "Focus canvas",
             "focusTimeline": "Edit timeline",
             "hideNextPaths": "Hide next page paths",
-            "hidePreviousPaths": "Hide previous page paths",
             "openCommandPalette": "Command palette",
             "openSettings": "Settings…",
             "openView3d": "Open 3D View",
@@ -132,12 +133,14 @@
             "runFieldBenchmark": "Run field benchmark",
             "runFieldBenchmarkKeywords": "performance fps speed test frame rate",
             "showShortcuts": "Keyboard shortcuts",
+            "hideStartFlagPositions": "Hide start flag positions",
+            "showStartFlagPositions": "Show start flag positions",
+            "toggleStartFlagPositions": "Toggle start flag positions",
+            "toggleStartFlagPositionsKeywords": "previous paths dots where marchers were came from hold peek latch",
             "toggleWorkspace": "Switch workspace (Editor or Visuals)",
             "toggleWorkspaceKeywords": "visuals editor workspace cues mode",
             "showNextPaths": "Show next page paths",
-            "showPreviousPaths": "Show previous page paths",
             "toggleNextPaths": "Toggle next page paths",
-            "togglePreviousPaths": "Toggle previous page paths",
             "togglePreview": "Preview the show",
             "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play"
         }
@@ -2143,6 +2146,21 @@
             "followAgain": "Let selected marchers follow again",
             "keepHere": "Keep selected marchers here"
         },
+        "startFlagPositions": {
+            "always": "Always",
+            "dots": "Dots",
+            "hold": "Hold {key}",
+            "holdHeading": "Hold",
+            "holdNoKey": "Hold (no key set)",
+            "label": "Start flag positions",
+            "level": {
+                "all": "All",
+                "off": "Off",
+                "selected": "Selected"
+            },
+            "paths": "Paths",
+            "stateLine": "{state} · Dots: {dots} · Paths: {paths}"
+        },
         "split": {
             "menu": "Split {count} selected into new move",
             "menuNone": "Split selected into new move",
@@ -2166,11 +2184,13 @@
             "noPageMove": "{page} has no move of its own to merge into."
         },
         "appendCounts": {
-            "label": "{counts, plural, one {# count} other {# counts}}",
-            "title": "{counts, plural, one {Add a page of # count after the last page. Right-click to change how many.} other {Add a page of # counts after the last page. Right-click to change how many.}}",
-            "pagesAdded": "{pages, plural, one {Added # page to the end of the show.} other {Added # pages to the end of the show.}}",
-            "pagesToEnd": "{counts, plural, one {Create pages every count to the end} other {Create pages every # counts to the end}}",
-            "pagesToEndTitle": "{counts, plural, one {Add pages every count to the end of the music} other {Add pages every # counts to the end of the music}}"
+            "pagesAdded": "{pages, plural, one {Added # page to the end of the show.} other {Added # pages to the end of the show.}}"
+        },
+        "appendAtPlayhead": {
+            "label": "Add {counts}-Count Page",
+            "title": "{counts, plural, one {Add a page of # count, from the last page to the playhead} other {Add a page of # counts, from the last page to the playhead}}",
+            "subsetLabel": "Add {counts}-Count Subset",
+            "subsetTitle": "{counts, plural, one {Add a subset page of # count, from the last page to the playhead} other {Add a subset page of # counts, from the last page to the playhead}}"
         }
     },
     "titlebar": {
@@ -2221,7 +2241,6 @@
             "labelsNumbers": "Numbers only",
             "labelsOff": "Off",
             "nextPaths": "Next paths",
-            "previousPaths": "Previous paths",
             "shapes": "Shapes",
             "shapesAlways": "Always",
             "shapesOff": "Off",

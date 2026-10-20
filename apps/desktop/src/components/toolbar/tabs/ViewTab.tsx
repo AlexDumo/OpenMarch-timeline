@@ -46,7 +46,6 @@ function UiSettingsToolbar() {
     // Only the fields shown here; a change writes over the latest settings at that moment
     const uiSettings = useUiSettingsStore(
         useShallow((s) => ({
-            previousPaths: s.uiSettings.previousPaths,
             nextPaths: s.uiSettings.nextPaths,
             stepSizeWarnings: s.uiSettings.stepSizeWarnings,
             gridLines: s.uiSettings.gridLines,
@@ -62,22 +61,6 @@ function UiSettingsToolbar() {
     return (
         <>
             <ToolbarSection aria-label={t("toolbar.view.uiSettingsToolbar")}>
-                <button
-                    onClick={() => {
-                        setUiSettings({
-                            ...useUiSettingsStore.getState().uiSettings,
-                            previousPaths: !uiSettings.previousPaths,
-                        });
-                    }}
-                    className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
-                >
-                    <T keyName="toolbar.view.previousPaths" />
-                    {uiSettings.previousPaths ? (
-                        <EyeIcon className="text-accent" size={24} />
-                    ) : (
-                        <EyeSlashIcon size={24} />
-                    )}
-                </button>
                 <button
                     onClick={() => {
                         setUiSettings({

@@ -93,13 +93,10 @@
             "focusCanvas": "Activer le canevas",
             "focusTimeline": "Modifier la chronologie",
             "hideNextPaths": "Masquer les trajectoires de la page suivante",
-            "hidePreviousPaths": "Masquer les trajectoires de la page précédente",
             "openCommandPalette": "Palette de commandes",
             "openSettings": "Paramètres…",
             "showNextPaths": "Afficher les trajectoires de la page suivante",
-            "showPreviousPaths": "Afficher les trajectoires de la page précédente",
-            "toggleNextPaths": "Basculer les trajectoires de la page suivante",
-            "togglePreviousPaths": "Basculer les trajectoires de la page précédente"
+            "toggleNextPaths": "Basculer les trajectoires de la page suivante"
         }
     },
     "analyticsOptIn": {
@@ -1205,7 +1202,6 @@
             "gridLines": "Lignes de grille",
             "halfLines": "Demi-lignes",
             "nextPaths": "Prochains chemins",
-            "previousPaths": "Chemins précédents",
             "uiSettingsToolbar": "Barre d'outils des paramètres de l'interface utilisateur"
         }
     },

@@ -44,33 +44,22 @@ function path(
 
 const base = {
     marcherIds: [1, 2],
-    previousPaths: new Map<number, TimelinePath>(),
     nextPaths: new Map<number, TimelinePath>(),
-    previousPathsEnabled: true,
     nextPathsEnabled: true,
     stepSizeWarningsEnabled: true,
     fieldProperties,
 };
 
 describe("planPathOverlay", () => {
-    const into = path({ x: 0, y: 0 }, { x: 80, y: 0 }, eightToFive);
     const out = path({ x: 80, y: 0 }, { x: 80, y: 40 }, eightToFive);
 
-    it("draws each side in its theme color, with a white midpoint and a filled endpoint", () => {
+    it("draws the next path in its theme color, with a white midpoint and a filled endpoint", () => {
         const plan = planPathOverlay({
             ...base,
-            previousPaths: new Map([[1, into]]),
             nextPaths: new Map([[1, out]]),
         });
         expect(plan.units).toBe("field");
         expect(plan.strokes).toEqual([
-            {
-                points: into.points,
-                color: rgbaOf(theme.previousPath),
-                width: PATHWAY_WIDTH,
-                dash: null,
-                round: false,
-            },
             {
                 points: out.points,
                 color: rgbaOf(theme.nextPath),
@@ -80,23 +69,6 @@ describe("planPathOverlay", () => {
             },
         ]);
         expect(plan.dots).toEqual([
-            {
-                x: 40,
-                y: 0,
-                radius: MIDPOINT_RADIUS,
-                fill: [1, 1, 1, 1],
-                stroke: rgbaOf(theme.previousPath),
-                strokeWidth: 2,
-            },
-            // The move into the page: its endpoint is where it starts
-            {
-                x: 0,
-                y: 0,
-                radius: ENDPOINT_RADIUS,
-                fill: rgbaOf(theme.previousPath),
-                stroke: null,
-                strokeWidth: 0,
-            },
             {
                 x: 80,
                 y: 20,
@@ -133,13 +105,11 @@ describe("planPathOverlay", () => {
         expect(plan.dots[1]!.fill).toEqual(rgbaOf(theme.nextPath));
     });
 
-    it("shows a next path over the threshold with its toggle off, but never a previous one", () => {
+    it("shows a next path over the threshold with its toggle off", () => {
         const fast = path({ x: 0, y: 0 }, { x: 160, y: 0 }, eightToFive * 4);
         const plan = planPathOverlay({
             ...base,
-            previousPathsEnabled: false,
             nextPathsEnabled: false,
-            previousPaths: new Map([[1, fast]]),
             nextPaths: new Map([[2, fast]]),
         });
         expect(plan.strokes).toHaveLength(1);
@@ -149,9 +119,7 @@ describe("planPathOverlay", () => {
     it("draws nothing for a side whose toggle is off and isn't over the threshold", () => {
         const plan = planPathOverlay({
             ...base,
-            previousPathsEnabled: false,
             nextPathsEnabled: false,
-            previousPaths: new Map([[1, into]]),
             nextPaths: new Map([[1, out]]),
         });
         expect(plan.strokes).toEqual([]);

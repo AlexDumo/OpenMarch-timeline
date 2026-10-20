@@ -73,6 +73,7 @@ import {
     type TimelineMoveMenuActions,
 } from "./TimelineRangeMenu";
 import { MOVE_NAME_MAX_LENGTH } from "@/timeline/timelineViewModel";
+import { AddPageFlagMenu } from "./AddPageFlagMenu";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import {
     previewPagesForFlag,
@@ -178,6 +179,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     fitted = false,
     accessories,
     secondary,
+    leadingViewControls,
     viewControls,
     onSeek,
     onSelectionChange,
@@ -203,6 +205,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     accessories?: ReactNode;
     /** Controls after those that fold into "⋯" on a narrow panel, such as Sound */
     secondary?: ReactNode;
+    /** View controls first in the row's right group, before Fit; they fold too */
+    leadingViewControls?: ReactNode;
     /** View controls at the row's end, such as Compact; they fold too */
     viewControls?: ReactNode;
     /** The go-to box seeks to a measure or rehearsal mark (view beats) */
@@ -369,7 +373,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                                 <button
                                     type="button"
                                     aria-label="More controls"
-                                    title="More: sound, the clock, Fit and Compact"
+                                    title="More: sound, the clock, Fit and the view controls"
                                     className="rounded-4 text-text enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden focus-visible:ring-2"
                                 >
                                     <DotsThreeIcon size={18} weight="bold" />
@@ -384,6 +388,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                                 >
                                     {clock}
                                     {secondary}
+                                    {leadingViewControls}
                                     {fit}
                                     {viewControls}
                                 </Popover.Content>
@@ -391,6 +396,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                         </Popover.Root>
                     ) : (
                         <>
+                            {leadingViewControls}
                             {fit}
                             {viewControls}
                         </>
@@ -2781,6 +2787,9 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     onSeek,
     isPlaying = false,
     scrubLine,
+    onAddPage,
+    onAddSubsetPage,
+    addPageNames,
 }: {
     model: TimelineViewModel;
     positionBeat: BeatPosition;
@@ -2801,6 +2810,12 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
      * follows the pointer by a transform, without re-rendering (`useScrubFollow`)
      */
     scrubLine?: TimelineLiveValue<number | null>;
+    /** The right-click menu's **Create page at playhead** at the playhead (`AddPageFlagMenu`); no menu without it */
+    onAddPage?: () => void;
+    /** The menu's **Create subset at playhead** */
+    onAddSubsetPage?: () => void;
+    /** The new page's names, after the menu's entries */
+    addPageNames?: { page: string; subset: string };
 }) {
     const keySteps = useArrowKeySteps(onSeek);
     // Whole pixels at rest, like the start flag, so the head and the line land on the same pixels
@@ -2853,58 +2868,68 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
     });
 
     return (
-        <button
-            ref={anchorRef}
-            type="button"
-            data-testid="timeline-playhead"
-            data-timeline-scrub="true"
-            aria-label={`Playback position: ${getPlayheadReadout(model, positionBeat).spoken}`}
-            onPointerDown={(event) => event.preventDefault()}
-            onKeyDown={(event) => {
-                const delta =
-                    event.key === "ArrowLeft"
-                        ? -1
-                        : event.key === "ArrowRight"
-                          ? 1
-                          : 0;
-                if (delta === 0 || !onSeek) return;
-                event.preventDefault();
-                if (isPlaying) {
-                    onSeek(
-                        clamp(Math.round(positionBeat) + delta, 0, beatCount),
-                    );
-                    return;
-                }
-                keySteps.step(
-                    (from) => clamp(from + delta, 0, beatCount),
-                    Math.round(positionBeat),
-                    event.repeat,
-                );
-            }}
-            onKeyUp={(event) => {
-                if (event.key === "ArrowLeft" || event.key === "ArrowRight")
-                    keySteps.release();
-            }}
-            onBlur={keySteps.end}
-            className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize! touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
-            style={{ left, height }}
+        <AddPageFlagMenu
+            onAddPage={onAddPage}
+            onAddSubsetPage={onAddSubsetPage}
+            names={addPageNames}
         >
-            {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
-                the line, so its tip runs into the line */}
-            <span
-                className="bg-accent pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2"
-                style={{ height }}
-            />
-            <svg
-                width="12"
-                height="11"
-                viewBox="0 0 12 11"
-                aria-hidden="true"
-                className="text-accent pointer-events-none absolute top-0 left-[calc(50%-6px)]"
+            <button
+                ref={anchorRef}
+                type="button"
+                data-testid="timeline-playhead"
+                data-timeline-scrub="true"
+                aria-label={`Playback position: ${getPlayheadReadout(model, positionBeat).spoken}`}
+                onPointerDown={(event) => event.preventDefault()}
+                onKeyDown={(event) => {
+                    const delta =
+                        event.key === "ArrowLeft"
+                            ? -1
+                            : event.key === "ArrowRight"
+                              ? 1
+                              : 0;
+                    if (delta === 0 || !onSeek) return;
+                    event.preventDefault();
+                    if (isPlaying) {
+                        onSeek(
+                            clamp(
+                                Math.round(positionBeat) + delta,
+                                0,
+                                beatCount,
+                            ),
+                        );
+                        return;
+                    }
+                    keySteps.step(
+                        (from) => clamp(from + delta, 0, beatCount),
+                        Math.round(positionBeat),
+                        event.repeat,
+                    );
+                }}
+                onKeyUp={(event) => {
+                    if (event.key === "ArrowLeft" || event.key === "ArrowRight")
+                        keySteps.release();
+                }}
+                onBlur={keySteps.end}
+                className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-50 w-12 -translate-x-1/2 cursor-ew-resize! touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
+                style={{ left, height }}
             >
-                <path d="M0 0 H12 V6 L6 11 L0 6 Z" fill="currentColor" />
-            </svg>
-        </button>
+                {/* UI-20: a 2px line from the headroom strip down, and a head in the strip, centered on
+                the line, so its tip runs into the line */}
+                <span
+                    className="bg-accent pointer-events-none absolute top-0 left-1/2 w-[2px] -translate-x-1/2"
+                    style={{ height }}
+                />
+                <svg
+                    width="12"
+                    height="11"
+                    viewBox="0 0 12 11"
+                    aria-hidden="true"
+                    className="text-accent pointer-events-none absolute top-0 left-[calc(50%-6px)]"
+                >
+                    <path d="M0 0 H12 V6 L6 11 L0 6 Z" fill="currentColor" />
+                </svg>
+            </button>
+        </AddPageFlagMenu>
     );
 });
 
@@ -3082,7 +3107,7 @@ export const useTimelinePointer = ({
         ),
     );
     // Every move of a scrub writes where the line is drawn (`scrubLineBeat`, view beats): the
-    // playhead, **+**, the played waveform and the window's tint move themselves to it without a
+    // playhead, the played waveform and the window's tint move themselves to it without a
     // render (`useScrubFollow`, `useScrubStretch`). `null` when not scrubbing.
     const [scrubLine] = useState(() => createLiveValue<number | null>(null));
     const gesture = useRef<{

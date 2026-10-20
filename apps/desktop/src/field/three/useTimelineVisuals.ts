@@ -30,7 +30,7 @@ import { FieldDimming } from "./fieldDimming";
 
 /**
  * Everything the timeline draws on the field (fork #201): the selected page's
- * pathways, midpoints, endpoints and step-size warnings
+ * next pathways, midpoints, endpoints and step-size warnings
  * (`useTimelinePathSamples`), an isolated move's focus scene
  * (`useTimelineFocusScene`, which also publishes the isolation plan the
  * playhead driver draws members at), collision markers (`useCollisionStore`),
@@ -63,7 +63,6 @@ export function useTimelineVisuals({
     const ready = useTimelineResolverStore((s) => s.status === "ready");
     const settings = useUiSettingsStore(
         useShallow((s) => ({
-            previousPaths: s.uiSettings.previousPaths,
             nextPaths: s.uiSettings.nextPaths,
             stepSizeWarnings: s.uiSettings.stepSizeWarnings,
             showCollisions: s.uiSettings.showCollisions,
@@ -71,17 +70,15 @@ export function useTimelineVisuals({
     );
     // Isolation's own paths and ghosts replace the page's paths
     const isolating = useTimelineSelectionStore((s) => s.isolation !== null);
-    const previousPathsEnabled = settings.previousPaths && !isolating;
     const nextPathsEnabled = settings.nextPaths && !isolating;
     const stepSizeWarningsEnabled = settings.stepSizeWarnings && !isolating;
 
-    const { previousPaths, nextPaths } = useTimelinePathSamples({
+    const { nextPaths } = useTimelinePathSamples({
         enabled: ready,
         isPlaying,
         selectedPage,
         pages,
         marcherIds,
-        previousPathsEnabled,
         nextPathsEnabled,
         stepSizeWarningsEnabled,
     });
@@ -90,9 +87,7 @@ export function useTimelineVisuals({
             ready && marcherIds && fieldProperties
                 ? planPathOverlay({
                       marcherIds,
-                      previousPaths,
                       nextPaths,
-                      previousPathsEnabled,
                       nextPathsEnabled,
                       stepSizeWarningsEnabled,
                       fieldProperties,
@@ -101,9 +96,7 @@ export function useTimelineVisuals({
         [
             ready,
             marcherIds,
-            previousPaths,
             nextPaths,
-            previousPathsEnabled,
             nextPathsEnabled,
             stepSizeWarningsEnabled,
             fieldProperties,

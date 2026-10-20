@@ -45,7 +45,7 @@ import type {
 import type {
     TimelineActivitySpan,
     TimelineBasicPoint,
-    TimelineAppendCounts,
+    TimelineAppendAtPlayhead,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineNavigation,
@@ -173,6 +173,8 @@ export interface TimelineProps {
     readonly transportAccessories?: ReactNode;
     /** Transport controls that fold into "⋯" on a narrow panel, such as Sound */
     readonly transportSecondary?: ReactNode;
+    /** View controls first in the transport's right group, before Fit, such as start flag positions */
+    readonly transportLeadingViewControls?: ReactNode;
     /** View controls at the transport's end, such as Compact */
     readonly transportViewControls?: ReactNode;
     readonly showTransport?: boolean;
@@ -202,21 +204,21 @@ export interface TimelineProps {
      */
     readonly addSelectedMarchers?: TimelineAddMarchersMenu;
     /**
-     * UI-9 **+** at the paused playhead (P8.13's `useAddPageFlag`); omit it where **+** doesn't
-     * show (on a flag, at home, past the beats).
+     * UI-9 **Create page at playhead** on the paused playhead's right-click menu (P8.13's `useAddPageFlag`); omit
+     * it where no page can be added (on a flag, at home, past the beats).
      */
     readonly onAddPageFlag?: () => void;
-    /** **Add subset page** in **+**'s right-click menu: the same page, as a subset (UI-9) */
+    /** **Create subset at playhead** in the playhead's right-click menu: the same page, as a subset (UI-9) */
     readonly onAddSubsetPage?: () => void;
-    /** The names **+**'s menu shows, muted, after **Add page** and **Add subset page** */
+    /** The names the playhead's menu shows, muted, after **Create page at playhead** and **Create subset at playhead** */
     readonly addPageNames?: { readonly page: string; readonly subset: string };
     /**
      * The page box menu's **Change to subset** / **Change to normal page** (UI-9): sets page
      * `pageId` to a subset page, or back to a numbered one. Without it, the menu has no such entry.
      */
     readonly onSetPageSubset?: (pageId: number, subset: boolean) => void;
-    /** **+ N counts** after the last page, shown while paused */
-    readonly appendCounts?: TimelineAppendCounts;
+    /** **+ Add N-Count Page** at the paused playhead past the last page */
+    readonly appendAtPlayhead?: TimelineAppendAtPlayhead;
     /** The beats Fit fits (rule 7, where playback stops), in spec beats; without it, every beat */
     readonly fitBeat?: number;
     /** The scroller's width in counts, so the owner leaves room past where playback stops */
@@ -429,6 +431,7 @@ const READ_ONLY_EDITS = {
     onAddPageFlag: undefined,
     onAddSubsetPage: undefined,
     addPageNames: undefined,
+    appendAtPlayhead: undefined,
     pageFlagMove: undefined,
     onOpenRange: undefined,
     onTimelineRangeCommit: undefined,
@@ -961,7 +964,7 @@ export function Timeline(props: TimelineProps) {
         onAddSubsetPage: useLatestCallback(props.onAddSubsetPage),
         addPageNames: props.addPageNames,
         pageFlagMove,
-        appendCounts: props.appendCounts,
+        appendAtPlayhead: props.appendAtPlayhead,
         fitBeatCount:
             props.fitBeat === undefined
                 ? undefined
@@ -973,6 +976,7 @@ export function Timeline(props: TimelineProps) {
         loop: viewLoop,
         onLoopChange: changeLoop,
         transportSecondary: props.transportSecondary,
+        transportLeadingViewControls: props.transportLeadingViewControls,
         transportViewControls: props.transportViewControls,
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
@@ -1009,7 +1013,7 @@ export function Timeline(props: TimelineProps) {
 
 export type {
     TimelineActivitySpan,
-    TimelineAppendCounts,
+    TimelineAppendAtPlayhead,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineSeekGesture,

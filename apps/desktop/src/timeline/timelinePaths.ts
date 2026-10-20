@@ -100,6 +100,56 @@ export function sampleTimelinePath(
     };
 }
 
+/** One stretch of a path: a single span of the marcher's timeline, clipped to the range. */
+export interface TimelinePathStretch {
+    fromBeat: number;
+    toBeat: number;
+    /** From the position at `fromBeat` to the one at `toBeat`; one point while holding */
+    points: { x: number; y: number }[];
+    /** Field units per count over the stretch; 0 for a hold */
+    stride: number;
+}
+
+/**
+ * One marcher's path between two beats, cut where its spans start and end, so each stretch has
+ * one speed (start flag positions' step-size warnings, fork #331). Joined end to end, the
+ * stretches' points are the path `sampleTimelinePath` draws. Empty when the resolver doesn't know
+ * the marcher or the range is empty.
+ */
+export function sampleTimelinePathStretches(
+    resolver: PathResolver,
+    marcherId: number,
+    fromBeat: number,
+    toBeat: number,
+    tolerance = PATH_DRAW_TOLERANCE,
+): TimelinePathStretch[] {
+    if (!(fromBeat < toBeat) || !hasMarcher(resolver, marcherId)) return [];
+    const edges = new Set<number>([fromBeat, toBeat]);
+    for (const span of resolver.spanInfos(marcherId))
+        for (const edge of [span.start, span.end])
+            if (edge > fromBeat && edge < toBeat) edges.add(edge);
+    const sorted = [...edges].sort((a, b) => a - b);
+    const stretches: TimelinePathStretch[] = [];
+    for (let i = 1; i < sorted.length; i++) {
+        const from = sorted[i - 1]!;
+        const to = sorted[i]!;
+        const { points, stride } = sampleMarcherPath(
+            resolver,
+            marcherId,
+            from,
+            to,
+            { tolerance },
+        );
+        stretches.push({
+            fromBeat: from,
+            toBeat: to,
+            points: points.map(([x, y]) => ({ x, y })),
+            stride,
+        });
+    }
+    return stretches;
+}
+
 /**
  * The move into `page` from `previousPage`: the path between their end beats. Null when there is
  * no previous page (the first page) or the resolver doesn't know the marcher.
