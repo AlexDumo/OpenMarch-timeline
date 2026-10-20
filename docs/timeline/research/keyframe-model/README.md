@@ -127,6 +127,30 @@ deleted move's counts become a hold.
      even speed. That gives "smooth through", a third option Basic could use at flags.
    - Blender ships "Only Insert Needed" and "Clean Keyframes" because hold keys pile up in a
      key-only model. That is a warning for Q1.
+10. **Under K1, an own move that stops moving becomes an invisible pin.** This came from a review
+    of #332. Remove keyframe on Page 2 writes an ordinary, unkept stay on Page 3 that walks back to
+    the old spot (commit 272f83526, `db-functions/timelineUnset.ts:111-117`, `markKept: false`).
+    Suppose the designer later drags Page 2 back to that spot. The stay now goes nowhere:
+    - It draws Following and gets no diamond, so Remove keyframe can't reach it
+      (`timeline/timelineSetFollowing.ts:36`).
+    - Its keep-chain state is "own", not "kept", because it isn't marked
+      (`timeline/timelineKept.ts:48-59`). So **Follow again** isn't offered either.
+    - It still blocks carry-forward. If Page 2 changes again, Page 3 walks back to the pinned spot.
+      Nothing on Page 3 showed beforehand that it was pinned.
+    - The same applies to **any** own move that becomes zero-motion, for example after a
+      destination edit or Move them too. Under K1 the pin can't be seen or removed with the
+      keyframe tools; only Delete move or a drag reaches it.
+    - Under K2/K3 it is a hold keyframe: visible, and removable. This is Q1 seen from the other
+      side. K1 doesn't just hide deliberate holds, it hides **accidental** ones that still act.
+11. **Move them too now offers Remove keyframe's stays.** `laterOwnMoves` takes any later own move
+    ending on a flag (`timeline/timelineMoveThemToo.ts:112-157`). Only shape-backed and kept
+    transitions are filtered out (:207).
+    - Kept spots were never offered. Remove keyframe's stays are unmarked since 272f83526, so an
+      edit of Page 2 now offers to shift the very stay that Remove wrote to keep Page 3 where it
+      was.
+    - Whether that is right depends on what the stay means (owner question 13). If it is "the
+      designer's keyframe on Page 3" (K2/K3), offering it is consistent with every other own
+      move. If it is "keep Page 3 as it was", it should be marked kept, as Only Page N's moves are.
 
 ## Definitions
 
@@ -153,6 +177,8 @@ is kept, plus beat 0.
 - **Against:**
   - Coordinates stand in for intent.
   - A drag of a hold one step and back flips a keyframe on and off.
+  - An own move that stops moving becomes an invisible pin. It still blocks carry-forward, but
+    has no diamond and no remove (finding 10).
   - It shows diamonds that Remove can't act on.
   - Kept moves that walk are hidden.
 
@@ -366,3 +392,8 @@ hold is a keyframe: it would simply be **Remove keyframe** on a hold keyframe.
     editor, markers never move keys. Keep it this way?
 12. **Merge in time:** should Split at playhead get an inverse ("Join moves at playhead") that
     rejoins every member? Under Q2 that would be Remove keyframe with everyone selected.
+13. **Remove keyframe's stays:** are they the designer's keyframes on the next page (ordinary own
+    moves, as since 272f83526: shown, removable, offered by Move them too), or a "keep this page as
+    it was" (marked kept: never offered by Move them too, with Follow again)? Under K1 an unmarked
+    stay that stops moving becomes an invisible pin (finding 10). Is that acceptable until K1 is
+    replaced?

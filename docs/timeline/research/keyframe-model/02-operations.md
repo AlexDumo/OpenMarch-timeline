@@ -115,6 +115,25 @@ What rejoin has to deal with:
 - **Under K1** the hidden page move's cut is counted (finding 3 in the README), so a passed flag
   can still show a diamond at the window's start. Remove can't act on it.
 
+## Move them too
+
+- **What it does:** after an edit carries some marchers into a later page while others keep their
+  own move there, the toast offers to shift those own moves by the same amount
+  (`timeline/timelineMoveThemToo.ts:112-207` → `db-functions/timelineMoves.ts:1280`).
+- **Which moves it offers:** any later own move ending on a flag. It skips only kept and
+  shape-backed transitions (:207).
+- **The new case:** since 272f83526, Remove keyframe's stays are unmarked, so they are offered.
+  Shifting one undoes the reason it was written, which was to keep the next page where it was.
+  Kept spots never had this problem.
+- **K1:**
+  - It can offer a stay that has no diamond, because a zero-motion stay is Following.
+  - It can make a moving stay zero-motion, which turns it into an invisible pin (README
+    finding 10).
+- **K2/K3:** every own move it offers is a keyframe the designer can see. The open question is
+  only whether Remove's stays should be marked kept (README owner question 13).
+- **Rejoin interaction:** under Q2, Remove at a keyframe with a later keyframe writes no stay. So
+  this case remains only for "nothing follows" removals.
+
 ## Copy and paste
 
 - **Today:** none. There is no clipboard for marchers, moves or keyframes in `src/`. The nearest
