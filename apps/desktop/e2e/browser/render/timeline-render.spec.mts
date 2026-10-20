@@ -28,7 +28,6 @@ const desktop = path.resolve(
 const DEMO = path.join(desktop, "view3d-web/public/demos/part1-demo.dots");
 
 type Settings = {
-    previousPaths?: boolean;
     nextPaths?: boolean;
     stepSizeWarnings?: boolean;
     showCollisions?: boolean;
@@ -69,7 +68,7 @@ async function settledOnPage(page: Page) {
         .toBe(true);
 }
 
-const PATHS: Settings = { previousPaths: true, nextPaths: true };
+const PATHS: Settings = { nextPaths: true };
 /** A threshold most moves in the demo are over, so warnings show */
 const LOW_THRESHOLD = [
     `UPDATE field_properties SET json_data = json_set(json_data, '$.stepSizeWarningThresholdInches', 14)`,
@@ -214,8 +213,12 @@ async function applySettings(page: Page, settings: Settings) {
             key,
             JSON.stringify({
                 ...stored,
-                previousPaths: false,
                 nextPaths: false,
+                // Start flag positions (#331) aren't compared here
+                startFlagPositions: {
+                    always: { dots: "off", paths: "off" },
+                    hold: { dots: "off", paths: "off" },
+                },
                 stepSizeWarnings: false,
                 showCollisions: false,
                 ...settings,

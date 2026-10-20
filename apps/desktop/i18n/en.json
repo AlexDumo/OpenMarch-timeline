@@ -133,7 +133,6 @@
             "focusTimeline": "Edit timeline",
             "openFieldMenu": "Open the field menu",
             "hideNextPaths": "Hide next page paths",
-            "hidePreviousPaths": "Hide previous page paths",
             "openCommandPalette": "Command palette",
             "openSettings": "Settings…",
             "openView3d": "Open 3D View",
@@ -141,12 +140,14 @@
             "runFieldBenchmark": "Run field benchmark",
             "runFieldBenchmarkKeywords": "performance fps speed test frame rate",
             "showShortcuts": "Keyboard shortcuts",
+            "hideStartFlagPositions": "Hide start flag positions",
+            "showStartFlagPositions": "Show start flag positions",
+            "toggleStartFlagPositions": "Toggle start flag positions",
+            "toggleStartFlagPositionsKeywords": "previous paths dots where marchers were came from hold peek latch",
             "toggleWorkspace": "Switch workspace (Editor or Visuals)",
             "toggleWorkspaceKeywords": "visuals editor workspace cues mode",
             "showNextPaths": "Show next page paths",
-            "showPreviousPaths": "Show previous page paths",
             "toggleNextPaths": "Toggle next page paths",
-            "togglePreviousPaths": "Toggle previous page paths",
             "togglePreview": "Preview the show",
             "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play"
         }
@@ -2037,6 +2038,21 @@
             "followAgain": "Let selected marchers follow again",
             "keepHere": "Keep selected marchers here"
         },
+        "startFlagPositions": {
+            "always": "Always",
+            "dots": "Dots",
+            "hold": "Hold {key}",
+            "holdHeading": "Hold",
+            "holdNoKey": "Hold (no key set)",
+            "label": "Start flag positions",
+            "level": {
+                "all": "All",
+                "off": "Off",
+                "selected": "Selected"
+            },
+            "paths": "Paths",
+            "stateLine": "{state} · Dots: {dots} · Paths: {paths}"
+        },
         "split": {
             "menu": "Split {count} selected into new move",
             "menuNone": "Split selected into new move",
@@ -2103,7 +2119,6 @@
             "gridLines": "Grid lines",
             "halfLines": "Half lines",
             "nextPaths": "Next paths",
-            "previousPaths": "Previous paths",
             "stepSizeWarnings": "Step size warnings",
             "uiSettingsToolbar": "Ui Settings Toolbar"
         }

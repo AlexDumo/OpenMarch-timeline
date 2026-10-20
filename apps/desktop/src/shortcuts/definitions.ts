@@ -504,14 +504,17 @@ const STATIC_ACTIONS = {
     },
 
     // UI
-    togglePreviousPagePaths: {
-        labelKey: "actions.ui.togglePreviousPaths",
-        toggleOnKey: "actions.ui.showPreviousPaths",
-        toggleOffKey: "actions.ui.hidePreviousPaths",
+    // Start flag positions (#331): hold N to peek at the Hold N state, tap to latch it
+    toggleStartFlagPositions: {
+        labelKey: "actions.ui.toggleStartFlagPositions",
+        keywordsKey: "actions.ui.toggleStartFlagPositionsKeywords",
+        toggleOnKey: "actions.ui.showStartFlagPositions",
+        toggleOffKey: "actions.ui.hideStartFlagPositions",
         category: "ui",
         editsDrill: false,
         scope: "canvas",
         defaultBindings: ["N"],
+        ignoreRepeat: true,
     },
     toggleNextPagePaths: {
         labelKey: "actions.ui.toggleNextPaths",
