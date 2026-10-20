@@ -85,7 +85,7 @@ const TIMELINE_DEFAULT_PX_PER_BEAT = 16;
 
 /**
  * Room after the show's last beat, fitted or scrolled to the end, so the playhead on the last
- * beat stays on screen with room to right-click it for **Add page** (UI-9). Sized for the **+**
+ * beat stays on screen with room to right-click it for **Create page at playhead** (UI-9). Sized for the **+**
  * that used to sit just after the playhead (its 8px gap, its 16px, and 8px to spare).
  */
 export const TIMELINE_END_INSET = 32;

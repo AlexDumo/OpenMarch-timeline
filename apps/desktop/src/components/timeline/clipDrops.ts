@@ -3,7 +3,7 @@ import { getTrackRange } from "./TimelineGeometry";
 import type { TimelineTrack, TimelineTrackId } from "./TimelineViewModel";
 
 /**
- * Clips that drop out of a page box (ui.md UI-9 **Add page**, "the move drops out of the page"). A
+ * Clips that drop out of a page box (ui.md UI-9 **Create page at playhead**, "the move drops out of the page"). A
  * page's own move is not drawn as a clip: its box stands for it (`timelinesOffPages`). Adding a
  * page at a mid-page count splits the box, so the move no longer fits a box and shows as a clip
  * for the first time; deleting a flag but not its moves does the same to both pages' moves.
@@ -11,7 +11,7 @@ import type { TimelineTrack, TimelineTrackId } from "./TimelineViewModel";
  * page, not as appearing (`TimelineTrackClip`).
  *
  * Found by identity: a move the page boxes stood for (`pageMoves`) that now has a clip. So the
- * playhead menu's **Add page**,
+ * playhead menu's **Create page at playhead**,
  * the inspector's **Split page**, redo and **Delete page** drop the same way, whichever of the
  * pages and the tracks arrives first; a move made on purpose (a window, **Add selected
  * marchers**) was never behind a box, so it just appears.

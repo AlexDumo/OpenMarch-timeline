@@ -187,7 +187,7 @@ export const toTimelineSelection = (
  * The timeline (ui.md, from the 0.2 branch). It takes the file's real beats, pages and measures, and plays through the app's existing audio clock. Its
  * selection is `useTimelineSelectionStore`'s (UI-9): the initial page box selects home, a page box
  * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
- * **Add page** on the free paused playhead's right-click menu adds a page flag there and selects
+ * **Create page at playhead** on the free paused playhead's right-click menu adds a page flag there and selects
  * the new page; a page box's right-click menu deletes its flag (P8.13's writes, wired by P8.15), or the page and its
  * moves (defined coordinates, owner decision 3). Neither Create Track
  * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
@@ -417,7 +417,7 @@ export default function TimelineModePanel() {
                   },
         [isPlaying, isolated, movePageFlag],
     );
-    // Not while a paused preview holds a frame (UI-11), as **Add page**
+    // Not while a paused preview holds a frame (UI-11), as **Create page at playhead**
     const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
     // The show's end (endless counts rule 4) is the last page's flag, shaded past it in the page
     // row; playback and Fit go on to the latest of it, the music's end and the last move's end
@@ -617,7 +617,7 @@ export default function TimelineModePanel() {
 }
 
 /**
- * The timeline fed by the audio playback, with its zoom, its window and **Add page**. The playback
+ * The timeline fed by the audio playback, with its zoom, its window and **Create page at playhead**. The playback
  * position changes once a beat while playing or scrubbing, the window (from the start flag to the
  * playhead) with it, and the zoom every frame of a pinch, so all of them are read here, under the
  * panel: they re-render the timeline, not the panel and its queries.
@@ -700,7 +700,7 @@ export function PlayingTimeline({
         () => <AudioClock pausedSeconds={pausedSeconds} />,
         [pausedSeconds],
     );
-    // UI-9 **Add page** on the free paused playhead's menu; the new page becomes the selection
+    // UI-9 **Create page at playhead** on the free paused playhead's menu; the new page becomes the selection
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
     // Endless counts (rules 1 and 7): the timeline draws the counts on past the stored ones, with
     // some room past where playback stops; the scroll ends there
@@ -734,6 +734,13 @@ export function PlayingTimeline({
         playheadBeat,
         isPlaying: playback.isPlaying || holding,
         onAdded: selectAddedPage,
+    });
+    // F and Shift+F do what the playhead's menu does, whenever it would open
+    useActionHandler("timelineCreatePageAtPlayhead", addPageFlag.add, {
+        enabled: addPageFlag.insertion !== null,
+    });
+    useActionHandler("timelineCreateSubsetAtPlayhead", addPageFlag.addSubset, {
+        enabled: addPageFlag.insertion !== null,
     });
     return (
         <Timeline
@@ -826,7 +833,7 @@ function useEndlessCounts({
  * **+ N counts** after the last page (N is the show's "new page counts" setting, which its
  * right-click menu changes, EC-16), and, when the music runs on more than N counts past the last
  * flag, pages every N counts to the music's end (EC-10). Each is one undoable edit that stores the
- * counts it lands on; the new page is selected, as **Add page** selects it.
+ * counts it lands on; the new page is selected, as **Create page at playhead** selects it.
  */
 function useAppendCountsControls({
     lastFlag,
@@ -946,7 +953,7 @@ export function selectionAfterDeleteWithMoves(
         : { kind: "home" };
 }
 
-/** **Add page** selects the new page's page timeline (UI-9: "The new page is selected"). */
+/** **Create page at playhead** selects the new page's page timeline (UI-9: "The new page is selected"). */
 export const selectAddedPage = ({
     startBeat,
     endBeat,

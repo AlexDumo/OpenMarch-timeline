@@ -24,7 +24,7 @@ for that: the grid just keeps going.
    A tempo or meter change is an edit to stored counts, and the endless counts follow whatever
    comes last. Changing the last stored measure's timing changes everything after it.
 3. **Counts are stored when something lands on them.** Placing anything at or past the stored
-   end first appends counts up to it, in the same transaction and undo step: **Add page** (the playhead's menu) or a page flag
+   end first appends counts up to it, in the same transaction and undo step: **Create page at playhead** (the playhead's menu, or F) or a page flag
    drag, the last page's length, and a timeline move's create, shift or resize. Undoing the edit
    removes the counts with it. Looking, scrolling, scrubbing and playing store nothing.
 4. **The show's end is the end of the last page:** its flag plus its counts (`last_page_counts`).

@@ -112,6 +112,8 @@
             "swap": "Swap two marchers"
         },
         "timeline": {
+            "createPageAtPlayhead": "Create page at playhead",
+            "createSubsetAtPlayhead": "Create subset at playhead",
             "goTo": "Go to a page, measure or rehearsal mark",
             "nextPage": "Next page (timeline)",
             "playPause": "Play / pause audio",

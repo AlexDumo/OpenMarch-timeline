@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import tolgee from "@/global/singletons/Tolgee";
+import type { ActionId } from "@/shortcuts/definitions";
+import { getActionLabel, getActionShortcutLabel } from "@/shortcuts/labels";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import {
     KEEP_MENU_EVENTS,
     TIMELINE_MENU_CONTENT_CLASS,
@@ -12,10 +15,11 @@ const ITEM_CLASS =
 /**
  * The paused playhead's right-click menu (UI-9; replaced the **+** beside the playhead, owner
  * 2026-10-19: a button on the end of the start flag–playhead pair read as acting on that range,
- * but adding a page only puts a flag at one beat). **Add page** puts a flag at the playhead, and
- * **Add subset page** adds the same page as a subset, so later pages keep their numbers. Each shows
- * the name the new page would get, muted. Without `onAddPage` (playing, on a flag, at home, past
- * the beats) there's no menu and `children` render as they are.
+ * but adding a page only puts a flag at one beat). **Create page at playhead** (F) puts a flag at
+ * the playhead, and **Create subset at playhead** (Shift+F) adds the same page as a subset, so later
+ * pages keep their numbers. Each is its action's label, with the name the new page would get, muted,
+ * and the action's shortcut. Without `onAddPage` (playing, on a flag, at home, past the beats)
+ * there's no menu and `children` render as they are.
  */
 export function AddPageFlagMenu({
     onAddPage,
@@ -44,26 +48,19 @@ export function AddPageFlagMenu({
                     {...KEEP_MENU_EVENTS}
                     className={TIMELINE_MENU_CONTENT_CLASS}
                 >
-                    <ContextMenu.Item
-                        data-testid="timeline-add-page"
+                    <MenuEntry
+                        testId="timeline-add-page"
+                        action="timelineCreatePageAtPlayhead"
                         onSelect={onAddPage}
-                        className={ITEM_CLASS}
-                    >
-                        {tolgee.t("timeline.addPageFlag.page", "Add page")}
-                        <MutedName name={names?.page} />
-                    </ContextMenu.Item>
+                        name={names?.page}
+                    />
                     {onAddSubsetPage && (
-                        <ContextMenu.Item
-                            data-testid="timeline-add-subset-page"
+                        <MenuEntry
+                            testId="timeline-add-subset-page"
+                            action="timelineCreateSubsetAtPlayhead"
                             onSelect={onAddSubsetPage}
-                            className={ITEM_CLASS}
-                        >
-                            {tolgee.t(
-                                "timeline.addPageFlag.subset",
-                                "Add subset page",
-                            )}
-                            <MutedName name={names?.subset} />
-                        </ContextMenu.Item>
+                            name={names?.subset}
+                        />
                     )}
                 </ContextMenu.Content>
             </ContextMenu.Portal>
@@ -71,13 +68,46 @@ export function AddPageFlagMenu({
     );
 }
 
-/** The new page's name, after the entry's words */
-const MutedName = ({ name }: { name?: string }) =>
-    name ? (
-        <span
-            data-testid="timeline-add-page-name"
-            className="text-text-subtitle ml-auto pl-16 text-[11px]"
+const translate = (key: string, params?: Record<string, string | number>) =>
+    tolgee.t(key, params);
+
+/** An entry: the action's label, the new page's name, muted, and the action's shortcut */
+function MenuEntry({
+    testId,
+    action,
+    onSelect,
+    name,
+}: {
+    testId: string;
+    action: ActionId;
+    onSelect: () => void;
+    name?: string;
+}) {
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const shortcut = getActionShortcutLabel(action, { overrides });
+    return (
+        <ContextMenu.Item
+            data-testid={testId}
+            onSelect={onSelect}
+            className={ITEM_CLASS}
         >
-            {name}
-        </span>
-    ) : null;
+            {getActionLabel(action, translate)}
+            {name && (
+                <span
+                    data-testid="timeline-add-page-name"
+                    className="text-text-subtitle text-[11px]"
+                >
+                    {name}
+                </span>
+            )}
+            {shortcut && (
+                <span
+                    data-testid="timeline-add-page-shortcut"
+                    className="text-text-subtitle ml-auto pl-16 text-[11px]"
+                >
+                    {shortcut}
+                </span>
+            )}
+        </ContextMenu.Item>
+    );
+}

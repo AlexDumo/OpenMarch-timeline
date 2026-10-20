@@ -8,7 +8,7 @@ import { Timeline, type TimelineInput } from "../Timeline";
 import { TIMELINE_PAGE_ROW_TOP } from "../TimelineGeometry";
 
 /**
- * A page's move that stops fitting its box drops out of the page row (UI-9 **Add page** and deleting
+ * A page's move that stops fitting its box drops out of the page row (UI-9 **Create page at playhead** and deleting
  * a flag, `useClipDrops`): its clip is first drawn up in the page row, over the pinned header, and
  * springs down into its track row. A clip shown for any other reason draws in its row at once.
  */
@@ -57,7 +57,7 @@ const PAGES = [
     page(2, "1", BEATS.slice(1, 9)),
     page(3, "2", BEATS.slice(9, 17)),
 ];
-/** **Add page** at count 5 of page 1: the new page 1 takes counts 1–4, the old page (now 2) keeps 5–8 */
+/** **Create page at playhead** at count 5 of page 1: the new page 1 takes counts 1–4, the old page (now 2) keeps 5–8 */
 const PAGES_SPLIT = [
     page(1, "0", [BEATS[0]!]),
     page(4, "1", BEATS.slice(1, 5)),

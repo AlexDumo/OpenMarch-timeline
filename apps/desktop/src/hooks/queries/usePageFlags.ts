@@ -182,7 +182,7 @@ export function useAddPageFlag({
 }): {
     insertion: PageFlagInsertion | null;
     add: () => void;
-    /** **Add subset page**: the same page, as a subset */
+    /** **Create subset at playhead**: the same page, as a subset */
     addSubset: () => void;
     /** What the new page would be named as a plain page and as a subset; null with no insertion */
     names: { page: string; subset: string } | null;

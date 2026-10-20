@@ -258,7 +258,7 @@ export async function waitForIdle(page: Page, quietMs = 250) {
 
 /**
  * Adds a page flag at the start of a measure: moves the playhead there with
- * the timeline's Go to field, then picks **Add page** from the playhead's
+ * the timeline's Go to field, then picks **Create page at playhead** from the playhead's
  * right-click menu. The new page runs from that beat to the next flag (or the
  * show's last page counts).
  */

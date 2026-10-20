@@ -283,14 +283,14 @@ export interface TimelineInteractionProps {
     /** A clip's move commands (UI-14), by track id here: its menu, ⋯ button and keys */
     readonly moveCommands?: TimelineMoveCommands<TimelineTrackId>;
     /**
-     * UI-9 **Add page**: adds a page whose flag is at the paused playhead, from the playhead's
+     * UI-9 **Create page at playhead**: adds a page whose flag is at the paused playhead, from the playhead's
      * right-click menu while it's given and the timeline isn't playing; the owner passes it only
      * where a page can be added. Without it the playhead has no menu.
      */
     readonly onAddPageFlag?: () => void;
-    /** **Add subset page** in the playhead's right-click menu, after **Add page** */
+    /** **Create subset at playhead** in the playhead's right-click menu, after **Create page at playhead** */
     readonly onAddSubsetPage?: () => void;
-    /** The names the playhead's menu shows, muted, after **Add page** and **Add subset page** */
+    /** The names the playhead's menu shows, muted, after **Create page at playhead** and **Create subset at playhead** */
     readonly addPageNames?: { readonly page: string; readonly subset: string };
     /**
      * Moving page flags by their grips (docs/timeline/research/move-page-flag), in view beats here.

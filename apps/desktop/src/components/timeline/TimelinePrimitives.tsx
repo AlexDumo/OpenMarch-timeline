@@ -2805,9 +2805,9 @@ export const TimelinePlayhead = memo(function TimelinePlayhead({
      * follows the pointer by a transform, without re-rendering (`useScrubFollow`)
      */
     scrubLine?: TimelineLiveValue<number | null>;
-    /** The right-click menu's **Add page** at the playhead (`AddPageFlagMenu`); no menu without it */
+    /** The right-click menu's **Create page at playhead** at the playhead (`AddPageFlagMenu`); no menu without it */
     onAddPage?: () => void;
-    /** The menu's **Add subset page** */
+    /** The menu's **Create subset at playhead** */
     onAddSubsetPage?: () => void;
     /** The new page's names, after the menu's entries */
     addPageNames?: { page: string; subset: string };

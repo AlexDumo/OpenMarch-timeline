@@ -184,13 +184,16 @@ from it. The spec still wins on the model; this file decides presentation.
     `useSelectedPage` is read in timeline mode keeps new code from bringing
     it back. Coordinate sheets and drill-chart exports loop over every page
     and don't read the selection, so they stay.
-  - **Add page (was +).** When the paused playhead isn't on a flag (and there
-    is a beat there), right-clicking the playhead opens a menu with **Add
-    page**. It adds a page whose flag is at the playhead in one edit. Until
+  - **Create page at playhead (was +, then Add page).** When the paused playhead isn't on a flag
+    (and there is a beat there), right-clicking the playhead opens a menu with **Create page at
+    playhead**, or press **F** (for flag). It adds a page whose flag is at the playhead in one
+    edit. The menu's entries are the actions' labels and show their shortcuts, which can be
+    rebound in Settings and are in ⌘K (_owner, 2026-10-19_: F rather than P, because Shift+P and
+    Alt+P are taken). Until
     2026-10-19 this was a **+** just after the playhead; the owner moved it to
     the playhead's menu because a button on the end of the start flag–playhead
     pair read as acting on that range, while adding a page only puts a flag at
-    one beat (_owner, 2026-10-19_). Older notes below that say **+** mean this
+    one beat (_owner, 2026-10-19_). Older notes below that say **+** or **Add page** mean this
     entry. The page that was split keeps its flag, id and
     per-page data (notes, appearance); the new page comes before it, and
     later pages renumber, unless it is a subset page (below). Only page rows change, plus
@@ -214,7 +217,9 @@ from it. The spec still wins on the model; this file decides presentation.
     over the page bar; it takes no clicks until it lands. The page boxes themselves don't
     animate (owner). With reduced motion nothing moves. V-289.
   - **Subset pages (2026-10-13).** The playhead's menu (right-clicking **+**
-    until 2026-10-19) has **Add page** and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
+    until 2026-10-19) has **Create page at playhead** (F) and **Create subset at playhead**
+    (Shift+F: Shift for the smaller step, as Shift+Q/E steps a beat), each with the name the new
+    page would get, muted, and its shortcut. The subset one adds the same page as a
     subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
     a page box offers **Change to subset**, or **Change to normal page** on a
     subset page, matching the Subset switch in page mode's menu and the

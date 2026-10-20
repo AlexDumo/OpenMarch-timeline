@@ -510,7 +510,7 @@ test("Visuals has its own timeline, and the field only selects there", async ({
         "visuals",
     );
     // the cue lanes are the timeline's lanes: no drill clips, no window, and
-    // no Add page on the playhead
+    // no Create page at playhead on the playhead
     await expect(page.getByTestId("visuals-band")).toBeVisible();
     await expect(page.getByTestId("timeline-clip")).toHaveCount(0);
     await expect(page.getByTestId("timeline-selection-range")).toHaveCount(0);
