@@ -138,6 +138,14 @@ export default function FavoritesRing() {
                 data-shape-ui
             >
                 <div className="absolute top-1/2 left-1/2">
+                    {/* A faint track, so a ring of one or two shapes still reads as a ring */}
+                    <div
+                        className="border-text/15 absolute -translate-x-1/2 -translate-y-1/2 rounded-full border"
+                        style={{
+                            width: 2 * RING_RADIUS,
+                            height: 2 * RING_RADIUS,
+                        }}
+                    />
                     <div
                         className="border-stroke bg-modal shadow-modal absolute size-24 -translate-x-1/2 -translate-y-1/2 rounded-full border"
                         data-testid="shape-ring-center"
