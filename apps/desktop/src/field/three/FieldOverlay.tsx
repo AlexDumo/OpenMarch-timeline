@@ -13,7 +13,7 @@ import {
     selectionHandles,
     type DrawnSelectionBox,
 } from "./selectionFrame";
-import { SELECTION_COLOR } from "./selectionRing";
+import { ringReach, SELECTION_COLOR } from "./selectionRing";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -32,6 +32,12 @@ const SHAPE_OUTLINE_DASH = "6 4";
 const SPOT_RADIUS = 4;
 const SPOT_WIDTH = 1.5;
 const WALK_WIDTH = 1;
+/**
+ * The hollow ring where each of the shape's marchers starts, in CSS px: just outside a selected
+ * marcher's ring, so a marcher standing on its start shows both.
+ */
+const START_RING_GAP = 2;
+const START_RING_WIDTH = 1.5;
 const SHAPE_HANDLE_SIZE = 9;
 const SHAPE_HANDLE_WIDTH = 1.5;
 
@@ -315,6 +321,21 @@ function ModeDrawing({
                     strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
                 />
             )}
+            {drawing.rings?.map((point, i) => {
+                const p = at(point);
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={ringReach(z) * z + START_RING_GAP}
+                        fill="none"
+                        stroke={shape}
+                        strokeWidth={START_RING_WIDTH}
+                        data-testid="fieldShapeStartRing"
+                    />
+                );
+            })}
             {drawing.walks.map(({ from, to }, i) => {
                 const a = at(from);
                 const b = at(to);

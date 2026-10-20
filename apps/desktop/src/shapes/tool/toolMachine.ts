@@ -285,7 +285,21 @@ export function redo(state: ToolState): ToolState {
     };
 }
 
-/** Where each marcher goes, in `marchers` order; empty until a shape is drawn and released */
+/**
+ * Where each marcher starts the move, in `marchers` order: their position at the start flag, or
+ * where they stand when that's the same (at home, beat 0, the home spots). The open shape is
+ * measured from here (spec #344): the hollow rings, the walks and least travel all start here.
+ */
+export function startsOf(state: ToolState): XY[] {
+    return state.marchers.map(startOf);
+}
+
+const startOf = (m: AssignMarcher): XY => m.from ?? m.at;
+
+/**
+ * Where each marcher goes, from their start (`startsOf`), in `marchers` order; empty until a
+ * shape is drawn and released
+ */
 export function targetsOf(
     state: ToolState,
     ctx: ShapeContext,
@@ -294,6 +308,6 @@ export function targetsOf(
     const slots = slotsOf(state, ctx);
     return state.marchers.map((m, i) => {
         const slot = state.assignment![i]!;
-        return { id: m.id, from: m.at, to: slots[slot]!, slot };
+        return { id: m.id, from: startOf(m), to: slots[slot]!, slot };
     });
 }
