@@ -33,6 +33,19 @@ const ITEM_CLASS =
 /** A shortcut after an entry's words, as the transport's popover shows Ctrl+M */
 const SHORTCUT_CLASS = "text-text-subtitle ml-auto pl-16 font-mono text-[11px]";
 
+/**
+ * A small switch in front of a checkbox entry's words, drawn from the entry's `data-state`. It's
+ * only a picture: the entry itself is the `menuitemcheckbox`, so the menu's keys still work.
+ */
+const MenuSwitch = () => (
+    <span
+        aria-hidden="true"
+        className="border-stroke bg-fg-2 relative inline-flex h-[14px] w-[24px] shrink-0 items-center rounded-full border"
+    >
+        <span className="bg-text/80 group-data-[state=checked]:bg-accent block size-[10px] translate-x-[1px] rounded-full transition-transform duration-100 group-data-[state=checked]:translate-x-[11px]" />
+    </span>
+);
+
 /** The entry's key, right-aligned and quiet; nothing without one. */
 const MenuShortcut = ({ keys }: { keys?: string }) =>
     keys ? (
@@ -259,8 +272,8 @@ export interface TimelineAddMarchersMenu<T = TimelineBeatRange> {
      */
     readonly keepHere?: TimelineKeepHereMenu;
     /**
-     * **Change to subset** or **Change to normal page** on a page box (UI-9), whichever the page
-     * isn't now. Without it, the menu has no such entry.
+     * **Subset** on a page box (UI-9): a switch that shows whether the page is a subset, and
+     * flips it. Without it, the menu has no such entry.
      */
     readonly subset?: {
         readonly isSubset: (pageId: string | number) => boolean;
@@ -488,28 +501,25 @@ export function useTimelineRangeMenu({
                     )}
                     {menu?.subset && open.target.pageId !== undefined && (
                         <>
-                            <DropdownMenu.Item
+                            <DropdownMenu.CheckboxItem
                                 data-testid="timeline-range-menu-subset"
-                                onSelect={() =>
+                                checked={menu.subset.isSubset(
+                                    open.target.pageId,
+                                )}
+                                onCheckedChange={(checked) =>
                                     menu.subset?.onSet(
                                         open.target.pageId!,
-                                        !menu.subset.isSubset(
-                                            open.target.pageId!,
-                                        ),
+                                        checked,
                                     )
                                 }
-                                className={ITEM_CLASS}
+                                className={`${ITEM_CLASS} group`}
                             >
-                                {menu.subset.isSubset(open.target.pageId)
-                                    ? tolgee.t(
-                                          "timeline.rangeMenu.toNormalPage",
-                                          "Change to normal page",
-                                      )
-                                    : tolgee.t(
-                                          "timeline.rangeMenu.toSubset",
-                                          "Change to subset",
-                                      )}
-                            </DropdownMenu.Item>
+                                <MenuSwitch />
+                                {tolgee.t(
+                                    "timeline.rangeMenu.subset",
+                                    "Subset",
+                                )}
+                            </DropdownMenu.CheckboxItem>
                             <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
                         </>
                     )}

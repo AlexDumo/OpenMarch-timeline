@@ -227,9 +227,9 @@ from it. The spec still wins on the model; this file decides presentation.
     (Shift+F: Shift for the smaller step, as Shift+Q/E steps a beat), each with the name the new
     page would get, muted, and its shortcut. The subset one adds the same page as a
     subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
-    a page box offers **Change to subset**, or **Change to normal page** on a
-    subset page, matching the Subset switch in page mode's menu and the
-    inspector. It flips the page
+    a page box offers **Subset** with a switch in front of it (2026-10-20; it was
+    **Change to subset** / **Change to normal page** before), matching the Subset
+    switch in page mode's menu and the inspector. It flips the page
     and its name, and a later page's number may change as a subset page joins
     or leaves the numbering. Home can't be a subset (it has no box). Each action
     is one undo step.

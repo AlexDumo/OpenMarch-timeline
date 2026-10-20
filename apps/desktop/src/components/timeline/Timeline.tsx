@@ -213,8 +213,8 @@ export interface TimelineProps {
     /** The names the playhead's menu shows, muted, after **Create page at playhead** and **Create subset at playhead** */
     readonly addPageNames?: { readonly page: string; readonly subset: string };
     /**
-     * The page box menu's **Change to subset** / **Change to normal page** (UI-9): sets page
-     * `pageId` to a subset page, or back to a numbered one. Without it, the menu has no such entry.
+     * The page box menu's **Subset** switch (UI-9): sets page `pageId` to a subset page, or back
+     * to a numbered one. Without it, the menu has no such entry.
      */
     readonly onSetPageSubset?: (pageId: number, subset: boolean) => void;
     /** **+ Add N-Count Page** at the paused playhead past the last page */
