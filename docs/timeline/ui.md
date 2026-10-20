@@ -194,7 +194,14 @@ from it. The spec still wins on the model; this file decides presentation.
     the playhead's menu because a button on the end of the start flag–playhead
     pair read as acting on that range, while adding a page only puts a flag at
     one beat (_owner, 2026-10-19_). Older notes below that say **+** or **Add page** mean this
-    entry. The page that was split keeps its flag, id and
+    entry.
+    **+ Add N-Count Page (2026-10-20, owner).** With the paused playhead past the last page (the
+    shaded "no page" zone), a pill beside its head reads **+ Add N-Count Page**, N being the counts
+    from the last flag to the playhead (not from the start flag). Clicking it adds that page, as
+    **Create page at playhead** does there. Hovering or focusing it shades the new page's range,
+    unless the window already shows it (the start flag on the last flag). Near the surface's right
+    end it sits on the playhead's left. It replaced **+ N counts** after the last flag and its
+    right-click menu (endless-counts.md EC-10, EC-16). The page that was split keeps its flag, id and
     per-page data (notes, appearance); the new page comes before it, and
     later pages renumber, unless it is a subset page (below). Only page rows change, plus
     `last_page_counts` when the last page is split; no timeline is written,

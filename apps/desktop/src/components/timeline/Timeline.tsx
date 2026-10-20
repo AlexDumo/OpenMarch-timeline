@@ -45,7 +45,7 @@ import type {
 import type {
     TimelineActivitySpan,
     TimelineBasicPoint,
-    TimelineAppendCounts,
+    TimelineAppendAtPlayhead,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineNavigation,
@@ -215,8 +215,8 @@ export interface TimelineProps {
      * `pageId` to a subset page, or back to a numbered one. Without it, the menu has no such entry.
      */
     readonly onSetPageSubset?: (pageId: number, subset: boolean) => void;
-    /** **+ N counts** after the last page, shown while paused */
-    readonly appendCounts?: TimelineAppendCounts;
+    /** **+ Add N-Count Page** at the paused playhead past the last page */
+    readonly appendAtPlayhead?: TimelineAppendAtPlayhead;
     /** The beats Fit fits (rule 7, where playback stops), in spec beats; without it, every beat */
     readonly fitBeat?: number;
     /** The scroller's width in counts, so the owner leaves room past where playback stops */
@@ -961,7 +961,7 @@ export function Timeline(props: TimelineProps) {
         onAddSubsetPage: useLatestCallback(props.onAddSubsetPage),
         addPageNames: props.addPageNames,
         pageFlagMove,
-        appendCounts: props.appendCounts,
+        appendAtPlayhead: props.appendAtPlayhead,
         fitBeatCount:
             props.fitBeat === undefined
                 ? undefined
@@ -1009,7 +1009,7 @@ export function Timeline(props: TimelineProps) {
 
 export type {
     TimelineActivitySpan,
-    TimelineAppendCounts,
+    TimelineAppendAtPlayhead,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineSeekGesture,

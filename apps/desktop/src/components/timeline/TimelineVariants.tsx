@@ -14,7 +14,7 @@ import { TimelineLoopBar } from "./TimelineLoopBar";
 import { useClipDrops } from "./clipDrops";
 import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import { flushSync } from "react-dom";
-import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react";
+import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { useTimelineFollow, type FollowZoomAnchor } from "./useTimelineFollow";
 import clsx from "clsx";
 import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
@@ -57,7 +57,7 @@ import {
 import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import { useLatestCallback } from "./useLatestCallback";
-import { TimelineAppendCountsMenu } from "./TimelineAppendCountsMenu";
+import { TimelineAppendAtPlayhead } from "./TimelineAppendAtPlayhead";
 import { useViewportExtent } from "./useViewportExtent";
 import {
     createLiveValue,
@@ -108,10 +108,6 @@ export function fitBackZoom(
             : Math.max(TIMELINE_DEFAULT_PX_PER_BEAT, fitValue * 2);
     return Math.min(back, TIMELINE_MAX_PX_PER_BEAT);
 }
-
-/** About how wide **+ N counts** is, and the room kept for it after the last beat */
-const APPEND_COUNTS_WIDTH = 84;
-const APPEND_COUNTS_ROOM = APPEND_COUNTS_WIDTH + 16;
 
 /** How much one pixel of wheel or pinch delta zooms */
 const WHEEL_ZOOM_RATE = 0.0025;
@@ -749,11 +745,7 @@ const TimelineSurface = memo(function TimelineSurface({
         // Fit fits up to where playback stops (endless counts rule 7), not the counts drawn past it
         beatCount: props.fitBeatCount ?? model.beatCount,
         leadingInset: initialPageWidth,
-        // Fitted, **+ N counts** stays in view
-        trailingInset: Math.max(
-            TIMELINE_END_INSET,
-            props.appendCounts ? APPEND_COUNTS_ROOM : 0,
-        ),
+        trailingInset: TIMELINE_END_INSET,
         playheadBeat: positionBeat,
         onPixelsPerBeatChange: props.onPixelsPerBeatChange,
         fitted: props.zoomFitted,
@@ -777,7 +769,7 @@ const TimelineSurface = memo(function TimelineSurface({
     });
     // Endless counts rule 7: say how wide a screen is, for the room past the end
     useViewportExtent(viewportRef, props.onViewportExtent);
-    // **+ N counts** goes after the last page's flag
+    // Past the last page's flag, **+ Add N-Count Page** adds the page from it to the playhead
     const lastFlagBeat = Math.min(
         model.beatCount,
         model.pages.reduce(
@@ -785,13 +777,9 @@ const TimelineSurface = memo(function TimelineSurface({
             0,
         ),
     );
-    const appendCountsX = lastFlagBeat * pixelsPerBeat + 8;
-    const showAppendCounts = props.appendCounts != null && !props.isPlaying;
-    // Right-clicking **+ N counts** sets how many counts new pages get
-    const [appendMenuAt, setAppendMenuAt] = useState<{
-        x: number;
-        y: number;
-    } | null>(null);
+    const appendAtPlayhead = props.isPlaying
+        ? undefined
+        : props.appendAtPlayhead;
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
     // UI-12: clicks and scrubs land on a nearby downbeat or page line; Basic's on any count
@@ -1248,52 +1236,24 @@ const TimelineSurface = memo(function TimelineSurface({
                             onAddSubsetPage={props.onAddSubsetPage}
                             addPageNames={props.addPageNames}
                         />
-                        {showAppendCounts && props.appendCounts && (
-                            <button
-                                type="button"
-                                data-testid="timeline-append-counts"
-                                data-timeline-interactive="true"
-                                aria-label={props.appendCounts.title}
-                                title={props.appendCounts.title}
-                                onPointerDown={(event) =>
-                                    event.stopPropagation()
+                        {appendAtPlayhead && (
+                            <TimelineAppendAtPlayhead
+                                append={appendAtPlayhead}
+                                positionBeat={positionBeat}
+                                lastFlagBeat={lastFlagBeat}
+                                pixelsPerBeat={pixelsPerBeat}
+                                height={pinnedHeight}
+                                surfaceWidth={surfaceWidth}
+                                windowShowsPage={
+                                    !basic &&
+                                    sameRange(selectionRange, {
+                                        startBeatIndex: lastFlagBeat,
+                                        endBeatIndex: positionBeat,
+                                    })
                                 }
-                                onClick={props.appendCounts.onAppend}
-                                onContextMenu={(event) => {
-                                    const { counts, onCountsChange } =
-                                        props.appendCounts ?? {};
-                                    if (counts === undefined || !onCountsChange)
-                                        return;
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    setAppendMenuAt({
-                                        x: event.clientX,
-                                        y: event.clientY,
-                                    });
-                                }}
-                                className="border-accent text-accent bg-bg-1 hover:bg-accent hover:text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex h-16 items-center gap-2 rounded-full border px-6 text-[10px] leading-none font-medium whitespace-nowrap outline-hidden focus-visible:ring-2"
-                                style={{
-                                    left: appendCountsX,
-                                    top: TIMELINE_PAGE_ROW_TOP + 6,
-                                }}
-                            >
-                                <PlusIcon size={9} weight="bold" />
-                                {props.appendCounts.label}
-                            </button>
+                                scrubLine={pointer.scrubLine}
+                            />
                         )}
-                        {appendMenuAt &&
-                            props.appendCounts?.counts !== undefined &&
-                            props.appendCounts.onCountsChange && (
-                                <TimelineAppendCountsMenu
-                                    at={appendMenuAt}
-                                    counts={props.appendCounts.counts}
-                                    onCountsChange={
-                                        props.appendCounts.onCountsChange
-                                    }
-                                    toEnd={props.appendCounts.toEnd}
-                                    onClose={() => setAppendMenuAt(null)}
-                                />
-                            )}
                         <TimelineRangePreview
                             preview={pointer.rangePreview}
                             pixelsPerBeat={pixelsPerBeat}

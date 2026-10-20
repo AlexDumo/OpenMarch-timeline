@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTolgee } from "@tolgee/react";
 import {
     pageFlagMoveLimits,
@@ -35,15 +35,6 @@ import {
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
 import { useTimelineTracksState } from "@/timeline/useTimelineTracks";
-import {
-    updateWorkspaceSettingsMutationOptions,
-    workspaceSettingsQueryOptions,
-} from "@/hooks/queries/useWorkspaceSettings";
-import {
-    appendPageOfCountsMutationOptions,
-    usePagesToEnd,
-} from "@/hooks/queries/useAppendPages";
-import { pageEndBeat } from "@/timeline/pageEndBeat";
 import { musicEndBeat } from "@/timeline/countsPastEnd";
 import { AudioClock } from "./Clock";
 import {
@@ -417,19 +408,9 @@ export default function TimelineModePanel() {
                   },
         [isPlaying, isolated, movePageFlag],
     );
-    // Not while a paused preview holds a frame (UI-11), as **Create page at playhead**
-    const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
-    // The show's end (endless counts rule 4) is the last page's flag, shaded past it in the page
-    // row; playback and Fit go on to the latest of it, the music's end and the last move's end
-    const lastPage = pages[pages.length - 1];
-    const showEndBeat = lastPage ? pageEndBeat(lastPage) : 0;
+    // Playback and Fit go on to the latest of the last page's flag, the music's end and the last
+    // move's end (endless counts rule 4)
     const stopBeat = usePlaybackStopBeat();
-    const appendCounts = useAppendCountsControls({
-        lastFlag: showEndBeat,
-        musicEndBeat:
-            musicEnd === null ? null : musicEndBeat(countGrid, musicEnd),
-        hidden: isPlaying || holding,
-    });
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
     // Change to subset / normal page: one `updatePages` edit, one undo step
     const { mutate: updatePages } = useMutation(
@@ -580,7 +561,6 @@ export default function TimelineModePanel() {
                     clipPeel={basic ? undefined : splitMerge.clipPeel}
                     pageMenuExtra={basic ? undefined : splitMerge.pageMenuExtra}
                     pageFlagMove={pageFlagMove}
-                    appendCounts={appendCounts}
                     countGrid={countGrid}
                     fitBeat={stopBeat}
                     onSetPageSubset={(pageId, subset) =>
@@ -636,6 +616,7 @@ export function PlayingTimeline({
     | "onAddPageFlag"
     | "onAddSubsetPage"
     | "addPageNames"
+    | "appendAtPlayhead"
     | "loop"
     | "onLoopChange"
     | "onViewportExtent"
@@ -742,6 +723,19 @@ export function PlayingTimeline({
     useActionHandler("timelineCreateSubsetAtPlayhead", addPageFlag.addSubset, {
         enabled: addPageFlag.insertion !== null,
     });
+    // Past the last page, the playhead offers **+ Add N-Count Page**: a page from the last flag to it
+    const { t } = useTolgee();
+    const { insertion, add: addPage } = addPageFlag;
+    const appendAtPlayhead = useMemo(() => {
+        if (insertion?.kind !== "append") return undefined;
+        const counts = insertion.beat - insertion.lastPage.end;
+        return {
+            counts,
+            label: t("timeline.appendAtPlayhead.label", { counts }),
+            title: t("timeline.appendAtPlayhead.title", { counts }),
+            onAppend: addPage,
+        };
+    }, [insertion, addPage, t]);
     return (
         <Timeline
             {...props}
@@ -752,6 +746,7 @@ export function PlayingTimeline({
             transportClock={clock}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
             addPageNames={addPageFlag.names ?? undefined}
+            appendAtPlayhead={appendAtPlayhead}
             onAddSubsetPage={
                 addPageFlag.insertion ? addPageFlag.addSubset : undefined
             }
@@ -826,68 +821,6 @@ function useEndlessCounts({
         beats: drawnBeats as TimelineProps["beats"],
         measures: drawnMeasures as TimelineProps["measures"],
         onViewportExtent,
-    };
-}
-
-/**
- * **+ N counts** after the last page (N is the show's "new page counts" setting, which its
- * right-click menu changes, EC-16), and, when the music runs on more than N counts past the last
- * flag, pages every N counts to the music's end (EC-10). Each is one undoable edit that stores the
- * counts it lands on; the new page is selected, as **Create page at playhead** selects it.
- */
-function useAppendCountsControls({
-    lastFlag,
-    musicEndBeat,
-    hidden,
-}: {
-    /** The last page's flag, a spec beat position */
-    lastFlag: number;
-    /** The first whole count at or after the music's end; null without music */
-    musicEndBeat: number | null;
-    hidden: boolean;
-}) {
-    const { t } = useTolgee();
-    const queryClient = useQueryClient();
-    const { data: settings } = useQuery(workspaceSettingsQueryOptions());
-    const { counts, addPagesToEnd } = usePagesToEnd();
-    const { mutate: updateSettings } = useMutation(
-        updateWorkspaceSettingsMutationOptions(queryClient),
-    );
-    const { mutate: appendPage } = useMutation(
-        appendPageOfCountsMutationOptions(queryClient, selectAddedPage),
-    );
-    // The pill's right-click menu sets the file's default new page counts
-    const saveCounts = settings
-        ? (next: number) =>
-              updateSettings({ ...settings, defaultNewPageCounts: next })
-        : undefined;
-    if (hidden) return undefined;
-    return {
-        label: t("timeline.appendCounts.label", { counts }),
-        title: t("timeline.appendCounts.title", { counts }),
-        onAppend: () => appendPage(counts),
-        counts,
-        ...(saveCounts ? { onCountsChange: saveCounts } : {}),
-        ...(musicEndBeat !== null && musicEndBeat - lastFlag > counts
-            ? {
-                  toEnd: {
-                      label: (shown: number) =>
-                          t("timeline.appendCounts.pagesToEnd", {
-                              counts: shown,
-                          }),
-                      title: (shown: number) =>
-                          t("timeline.appendCounts.pagesToEndTitle", {
-                              counts: shown,
-                          }),
-                      // A new length is saved once the pages are in: the settings write
-                      // can't run inside the pages' transaction
-                      onAppend: (shown: number) =>
-                          addPagesToEnd(musicEndBeat, shown, () => {
-                              if (shown !== counts) saveCounts?.(shown);
-                          }),
-                  },
-              }
-            : {}),
     };
 }
 
