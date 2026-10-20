@@ -2065,7 +2065,9 @@
         },
         "appendAtPlayhead": {
             "label": "Add {counts}-Count Page",
-            "title": "{counts, plural, one {Add a page of # count, from the last page to the playhead} other {Add a page of # counts, from the last page to the playhead}}"
+            "title": "{counts, plural, one {Add a page of # count, from the last page to the playhead} other {Add a page of # counts, from the last page to the playhead}}",
+            "subsetLabel": "Add {counts}-Count Subset",
+            "subsetTitle": "{counts, plural, one {Add a subset page of # count, from the last page to the playhead} other {Add a subset page of # counts, from the last page to the playhead}}"
         }
     },
     "titlebar": {

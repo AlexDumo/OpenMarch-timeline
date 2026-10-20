@@ -104,11 +104,19 @@ const show = ({
     );
 
 // The playhead at spec beat 21 (view 20), four counts past the last flag (view 16)
-const append = (onAppend = vi.fn()): TimelineAppendAtPlayhead => ({
+const append = (
+    onAppend = vi.fn(),
+    onSubset = vi.fn(),
+): TimelineAppendAtPlayhead => ({
     counts: 4,
     label: "Add 4-Count Page",
     title: "Add a page of 4 counts, from the last page to the playhead",
     onAppend,
+    subset: {
+        label: "Add 4-Count Subset",
+        title: "Add a subset page of 4 counts, from the last page to the playhead",
+        onAppend: onSubset,
+    },
 });
 
 const button = () => screen.queryByTestId("timeline-append-at-playhead");
@@ -125,6 +133,25 @@ describe("+ Add N-Count Page at the playhead", () => {
         expect(parseFloat(found.parentElement!.style.left)).toBe(20 * PX);
         expect(found.className).toContain("left-8");
         fireEvent.click(found);
+        expect(onAppend).toHaveBeenCalledTimes(1);
+    });
+
+    it("with Shift held reads Add N-Count Subset and adds a subset", () => {
+        const onAppend = vi.fn();
+        const onSubset = vi.fn();
+        show({ appendAtPlayhead: append(onAppend, onSubset) });
+        fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
+        expect(button()!.textContent).toContain("Add 4-Count Subset");
+        fireEvent.click(button()!, { shiftKey: true });
+        expect(onSubset).toHaveBeenCalledTimes(1);
+        expect(onAppend).not.toHaveBeenCalled();
+        fireEvent.keyUp(window, { key: "Shift", shiftKey: false });
+        expect(button()!.textContent).toContain("Add 4-Count Page");
+        // Shift let go outside the window: leaving it lets go
+        fireEvent.keyDown(window, { key: "Shift", shiftKey: true });
+        fireEvent.blur(window);
+        expect(button()!.textContent).toContain("Add 4-Count Page");
+        fireEvent.click(button()!);
         expect(onAppend).toHaveBeenCalledTimes(1);
     });
 

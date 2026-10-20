@@ -142,6 +142,15 @@ export interface TimelineAppendAtPlayhead {
     /** Its tooltip and accessible name */
     readonly title: string;
     readonly onAppend: () => void;
+    /**
+     * With Shift held the button adds the page as a subset (owner 2026-10-20), as **Create subset
+     * at playhead** does: its text and tooltip, and the add
+     */
+    readonly subset?: {
+        readonly label: string;
+        readonly title: string;
+        readonly onAppend: () => void;
+    };
 }
 
 /** What the timeline's scroller shows, so its owner can leave room past the show (endless counts) */

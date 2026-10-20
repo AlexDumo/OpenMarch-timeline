@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { PlusIcon } from "@phosphor-icons/react";
 import { beatToX, TIMELINE_PAGE_ROW_TOP } from "./TimelineGeometry";
@@ -9,7 +9,8 @@ import type { TimelineAppendAtPlayhead as AppendAtPlayhead } from "./TimelineVie
 /**
  * **+ Add N-Count Page** beside the paused playhead past the last page (UI-9, owner 2026-10-20):
  * one click adds the page from the last flag to the playhead. Hovering or focusing it shades that
- * range, unless the window (start flag to playhead) already covers exactly it. Like the playhead,
+ * range, unless the window (start flag to playhead) already covers exactly it. With Shift held it
+ * reads **+ Add N-Count Subset** and adds the page as a subset. Like the playhead,
  * a scrub carries it along. Where it wouldn't fit before the scroller's visible right edge, it
  * sits on the playhead's left.
  */
@@ -35,6 +36,8 @@ export function TimelineAppendAtPlayhead({
     const ref = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const [previewing, setPreviewing] = useState(false);
+    const shift = useShiftHeld();
+    const shown = shift && append.subset ? append.subset : append;
     const playheadX = Math.round(beatToX(positionBeat, pixelsPerBeat));
     useScrubFollow(ref, scrubLine, playheadX, pixelsPerBeat);
     // Room for it on the playhead's right, else on its left; scrolling or a new spot re-measures
@@ -62,7 +65,7 @@ export function TimelineAppendAtPlayhead({
         place();
         viewport.addEventListener("scroll", place, { passive: true });
         return () => viewport.removeEventListener("scroll", place);
-    }, [playheadX, append.label]);
+    }, [playheadX, shown.label]);
     const startX = beatToX(lastFlagBeat, pixelsPerBeat);
     return (
         <>
@@ -89,10 +92,17 @@ export function TimelineAppendAtPlayhead({
                     type="button"
                     data-testid="timeline-append-at-playhead"
                     data-timeline-interactive="true"
-                    aria-label={append.title}
-                    title={append.title}
+                    data-subset={shown !== append || undefined}
+                    aria-label={shown.title}
+                    title={shown.title}
                     onPointerDown={(event) => event.stopPropagation()}
-                    onClick={append.onAppend}
+                    // The click's own Shift decides, in case a key event was missed
+                    onClick={(event) =>
+                        (event.shiftKey && append.subset
+                            ? append.subset
+                            : append
+                        ).onAppend()
+                    }
                     onPointerEnter={() => setPreviewing(true)}
                     onPointerLeave={() => setPreviewing(false)}
                     onFocus={() => setPreviewing(true)}
@@ -103,9 +113,27 @@ export function TimelineAppendAtPlayhead({
                     )}
                 >
                     <PlusIcon size={9} weight="bold" />
-                    {append.label}
+                    {shown.label}
                 </button>
             </div>
         </>
     );
+}
+
+/** Whether Shift is held, from key events anywhere; leaving the window lets go of it */
+function useShiftHeld() {
+    const [held, setHeld] = useState(false);
+    useEffect(() => {
+        const read = (event: KeyboardEvent) => setHeld(event.shiftKey);
+        const release = () => setHeld(false);
+        window.addEventListener("keydown", read);
+        window.addEventListener("keyup", read);
+        window.addEventListener("blur", release);
+        return () => {
+            window.removeEventListener("keydown", read);
+            window.removeEventListener("keyup", read);
+            window.removeEventListener("blur", release);
+        };
+    }, []);
+    return held;
 }

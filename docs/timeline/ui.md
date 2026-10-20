@@ -199,7 +199,7 @@ from it. The spec still wins on the model; this file decides presentation.
     shaded "no page" zone), a pill beside its head reads **+ Add N-Count Page**, N being the counts
     from the last flag to the playhead (not from the start flag). Clicking it adds that page, as
     **Create page at playhead** does there. Hovering or focusing it shades the new page's range,
-    unless the window already shows it (the start flag on the last flag). Where it wouldn't fit before the timeline's visible right edge, it sits on the playhead's left. It replaced **+ N counts** after the last flag and its
+    unless the window already shows it (the start flag on the last flag). Where it wouldn't fit before the timeline's visible right edge, it sits on the playhead's left. Holding Shift turns it into **+ Add N-Count Subset**, which adds the page as a subset, as **Create subset at playhead** does (_owner, 2026-10-20_). It replaced **+ N counts** after the last flag and its
     right-click menu (endless-counts.md EC-10, EC-16). The page that was split keeps its flag, id and
     per-page data (notes, appearance); the new page comes before it, and
     later pages renumber, unless it is a subset page (below). Only page rows change, plus
@@ -594,9 +594,9 @@ from it. The spec still wins on the model; this file decides presentation.
   - **The window badge** shows only while a handle is dragged or when the window starts off a page
     line; from a page line its length is the playhead's count, which the readout shows. It uses the
     field line's words: "counts 3–6" inside one page box, or "12 counts" when it passes a flag.
-    Past the last page flag it always shows (#163), counting from that flag to the window's end
-    ("5 counts"), so a new page's length can be read off; with a flag after the window's end the
-    rule above holds.
+    Past the last page flag it always shows (#163). It counts the window, start flag to playhead
+    (_owner, 2026-10-20_; until then it counted from the last flag, which **+ Add N-Count Page**
+    now says); with a flag after the window's end the rule above holds.
   - Deferred (UX review): counts along the selected page box in shows with measures, a count
     under the pointer while hovering, and thinning to downbeats in odd meters.
 

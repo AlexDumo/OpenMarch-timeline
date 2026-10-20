@@ -725,7 +725,7 @@ export function PlayingTimeline({
     });
     // Past the last page, the playhead offers **+ Add N-Count Page**: a page from the last flag to it
     const { t } = useTolgee();
-    const { insertion, add: addPage } = addPageFlag;
+    const { insertion, add: addPage, addSubset } = addPageFlag;
     const appendAtPlayhead = useMemo(() => {
         if (insertion?.kind !== "append") return undefined;
         const counts = insertion.beat - insertion.lastPage.end;
@@ -734,8 +734,13 @@ export function PlayingTimeline({
             label: t("timeline.appendAtPlayhead.label", { counts }),
             title: t("timeline.appendAtPlayhead.title", { counts }),
             onAppend: addPage,
+            subset: {
+                label: t("timeline.appendAtPlayhead.subsetLabel", { counts }),
+                title: t("timeline.appendAtPlayhead.subsetTitle", { counts }),
+                onAppend: addSubset,
+            },
         };
-    }, [insertion, addPage, t]);
+    }, [insertion, addPage, addSubset, t]);
     return (
         <Timeline
             {...props}
