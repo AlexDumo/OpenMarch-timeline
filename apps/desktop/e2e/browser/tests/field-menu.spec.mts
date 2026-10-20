@@ -139,7 +139,7 @@ test("right-clicking a marcher that isn't selected selects it and opens the menu
     expect(Math.abs(box.x - t2.screen.x)).toBeLessThan(24);
     expect(Math.abs(box.y - t2.screen.y)).toBeLessThan(24);
 
-    await entry(page, "Unset here").click();
+    await entry(page, "Remove keyframe").click();
     await expect(menu(page)).toBeHidden();
     await expect
         .poll(() => spots(show, 2))
@@ -170,7 +170,7 @@ test("right-clicking a selected marcher or empty field keeps the selection; the 
     await expect(menu(page)).toBeVisible();
     expect(await selectedDrillNumbers(page)).toEqual(["T1", "T2"]);
     // T2 holds over page 3: that page follows its page 2 spot
-    await entry(page, "Unset here and on Page 3").click();
+    await entry(page, "Remove keyframe, Page 3 follows back").click();
     await expect
         .poll(() => spots(show, 2))
         .toEqual({ ...PAGE_2_BEFORE, T1: "400,340", T2: "500,340" });
@@ -186,7 +186,7 @@ test("only offers Unset here and on Pages N–M when pages follow, and Unset is 
     await atPage2(show);
     // T1 moves again over page 3: no page follows its spot
     await rightClickMarcher(page, "T1");
-    await expect(entry(page, "Unset here")).toBeEnabled();
+    await expect(entry(page, "Remove keyframe")).toBeEnabled();
     await expect(
         menu(page).getByRole("menuitem", { name: /Unset here and on/ }),
     ).toHaveCount(0);
@@ -194,7 +194,7 @@ test("only offers Unset here and on Pages N–M when pages follow, and Unset is 
 
     // T3 holds over page 2: it isn't Set here
     await rightClickMarcher(page, "T3");
-    await expect(entry(page, "Unset here")).toHaveAttribute(
+    await expect(entry(page, "Remove keyframe")).toHaveAttribute(
         "data-disabled",
         "",
     );
@@ -263,7 +263,7 @@ test("the context-menu key and Shift+F10 open it at the selection, only with one
     const box = (await menu(page).boundingBox())!;
     expect(Math.abs(box.x - t2.screen.x)).toBeLessThan(24);
     // The keyboard reaches the entries
-    await expect(entry(page, "Unset here")).toBeVisible();
+    await expect(entry(page, "Remove keyframe")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(menu(page)).toBeHidden();
 

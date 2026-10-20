@@ -83,6 +83,8 @@ export interface SelectionKeyframe {
     readonly set: number;
     /** How many marchers are selected */
     readonly total: number;
+    /** The selected marchers Set on the count, in selection order (the diamond names them) */
+    readonly marcherIds: readonly number[];
 }
 
 /**
@@ -90,16 +92,28 @@ export interface SelectionKeyframe {
  * is Set. The first page has none: everyone is Set there, always.
  *
  * @param setBeats each selected marcher's Set beats (`marcherSetBeats`)
+ * @param marcherIds the selected marchers, in the same order as `setBeats`
  */
 export function selectionKeyframes(
     setBeats: readonly (readonly number[])[],
+    marcherIds: readonly number[],
 ): SelectionKeyframe[] {
-    const counts = new Map<number, number>();
-    for (const beats of setBeats)
-        for (const beat of beats)
-            if (beat !== 0) counts.set(beat, (counts.get(beat) ?? 0) + 1);
+    const setOn = new Map<number, number[]>();
+    setBeats.forEach((beats, index) => {
+        for (const beat of beats) {
+            if (beat === 0) continue;
+            const ids = setOn.get(beat);
+            if (ids) ids.push(marcherIds[index]!);
+            else setOn.set(beat, [marcherIds[index]!]);
+        }
+    });
     const total = setBeats.length;
-    return [...counts]
+    return [...setOn]
         .sort(([a], [b]) => a - b)
-        .map(([beat, set]) => ({ beat, set, total }));
+        .map(([beat, ids]) => ({
+            beat,
+            set: ids.length,
+            total,
+            marcherIds: ids,
+        }));
 }

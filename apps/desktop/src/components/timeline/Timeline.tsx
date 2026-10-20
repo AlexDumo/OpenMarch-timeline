@@ -26,10 +26,12 @@ import {
     CollapsedTimeline,
     ExpandedTimeline,
 } from "./TimelineVariants";
-import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
 import type { TimelineBand } from "./TimelineBand";
 import type { PageKeepChains } from "./PageKeepChain";
-import type { TimelineKeyframeMenu } from "./TimelineKeyframes";
+import type {
+    TimelineKeyframe,
+    TimelineKeyframeMenu,
+} from "./TimelineKeyframes";
 import type {
     TimelineAddMarchersMenu,
     TimelineKeepHereMenu,
@@ -251,7 +253,7 @@ export interface TimelineProps {
         timelineId?: number,
     ) => void;
     /** #303: where the selected marchers are Set, spec beats; none without a selection */
-    readonly keyframes?: readonly SelectionKeyframe[];
+    readonly keyframes?: readonly TimelineKeyframe[];
     /** #306: a keyframe diamond's right-click Unset actions, by spec beat; without it, no menu */
     readonly keyframeMenu?: TimelineKeyframeMenu;
     /** The chains on the page boxes (UI-18 keep later pages), by page id; none without a selection */

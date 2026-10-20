@@ -128,33 +128,35 @@ describe("who follows at a count", () => {
 
 describe("the selection's keyframes", () => {
     it("are the counts any selected marcher is Set on, ascending, filled where all of them are", () => {
-        expect(selectionKeyframes([[9, 17, 33], [17], [9, 25]])).toEqual([
-            { beat: 9, set: 2, total: 3 },
-            { beat: 17, set: 2, total: 3 },
-            { beat: 25, set: 1, total: 3 },
-            { beat: 33, set: 1, total: 3 },
+        expect(
+            selectionKeyframes([[9, 17, 33], [17], [9, 25]], [4, 7, 2]),
+        ).toEqual([
+            { beat: 9, set: 2, total: 3, marcherIds: [4, 2] },
+            { beat: 17, set: 2, total: 3, marcherIds: [4, 7] },
+            { beat: 25, set: 1, total: 3, marcherIds: [2] },
+            { beat: 33, set: 1, total: 3, marcherIds: [4] },
         ]);
-        expect(selectionKeyframes([[9, 17], [17]])).toEqual([
-            { beat: 9, set: 1, total: 2 },
-            { beat: 17, set: 2, total: 2 },
+        expect(selectionKeyframes([[9, 17], [17]], [1, 2])).toEqual([
+            { beat: 9, set: 1, total: 2, marcherIds: [1] },
+            { beat: 17, set: 2, total: 2, marcherIds: [1, 2] },
         ]);
     });
 
     it("are every Set count of one selected marcher, each filled", () => {
-        expect(selectionKeyframes([[9, 29]])).toEqual([
-            { beat: 9, set: 1, total: 1 },
-            { beat: 29, set: 1, total: 1 },
+        expect(selectionKeyframes([[9, 29]], [5])).toEqual([
+            { beat: 9, set: 1, total: 1, marcherIds: [5] },
+            { beat: 29, set: 1, total: 1, marcherIds: [5] },
         ]);
     });
 
     it("leave out the first page, where everyone is always Set", () => {
-        expect(selectionKeyframes([[0, 9], [9]])).toEqual([
-            { beat: 9, set: 2, total: 2 },
+        expect(selectionKeyframes([[0, 9], [9]], [1, 2])).toEqual([
+            { beat: 9, set: 2, total: 2, marcherIds: [1, 2] },
         ]);
     });
 
     it("are none with nothing selected, or when nobody selected is Set anywhere", () => {
-        expect(selectionKeyframes([])).toEqual([]);
-        expect(selectionKeyframes([[], []])).toEqual([]);
+        expect(selectionKeyframes([], [])).toEqual([]);
+        expect(selectionKeyframes([[], []], [1, 2])).toEqual([]);
     });
 });

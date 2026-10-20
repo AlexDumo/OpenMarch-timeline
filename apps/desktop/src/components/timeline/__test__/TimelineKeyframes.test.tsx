@@ -1,11 +1,13 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
-import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
 import { Timeline } from "../Timeline";
-import type { TimelineKeyframeMenu } from "../TimelineKeyframes";
+import type {
+    TimelineKeyframe,
+    TimelineKeyframeMenu,
+} from "../TimelineKeyframes";
 import {
     BasicTimeline,
     CollapsedTimeline,
@@ -34,10 +36,16 @@ const commonProps = {
 };
 
 /** Page 2's flag (beat 16), mid Page 2A (beat 20), and Page 4's count 2 (beat 26) */
-const KEYFRAMES: readonly SelectionKeyframe[] = [
-    { beat: 16, set: 3, total: 3 },
-    { beat: 20, set: 1, total: 3 },
-    { beat: 26, set: 2, total: 3 },
+const KEYFRAMES: readonly TimelineKeyframe[] = [
+    {
+        beat: 16,
+        set: 3,
+        total: 3,
+        marcherIds: [1, 2, 3],
+        names: "B1, B2 and B3",
+    },
+    { beat: 20, set: 1, total: 3, marcherIds: [2] },
+    { beat: 26, set: 2, total: 3, marcherIds: [1, 3], names: null },
 ];
 
 const diamonds = () =>
@@ -70,26 +78,37 @@ describe.each([
         ).toBe(`${20 * 16}px`);
     });
 
-    it("name each diamond's count and how many selected marchers are Set there", () => {
+    it("are named Keyframe with their count, and say who of the selection has them", () => {
         render(<Variant {...commonProps} keyframes={KEYFRAMES} />);
         expect(
             screen.getByTestId("timeline-keyframe-16-filled"),
-        ).toHaveAccessibleName("Page 2, count 8: 3 of 3 selected marchers Set");
+        ).toHaveAccessibleName(
+            "Keyframe · Page 2, count 8. 3 of 3 selected: B1, B2 and B3",
+        );
+        // Names not known: only counted
         expect(
             screen.getByTestId("timeline-keyframe-26-hollow"),
-        ).toHaveAccessibleName("Page 4, count 2: 2 of 3 selected marchers Set");
+        ).toHaveAccessibleName("Keyframe · Page 4, count 2. 2 of 3 selected");
     });
 
-    it("say just Set with one marcher selected", () => {
+    it("say only Keyframe and the count with one marcher selected", () => {
         render(
             <Variant
                 {...commonProps}
-                keyframes={[{ beat: 20, set: 1, total: 1 }]}
+                keyframes={[
+                    {
+                        beat: 20,
+                        set: 1,
+                        total: 1,
+                        marcherIds: [2],
+                        names: "B2",
+                    },
+                ]}
             />,
         );
         expect(
             screen.getByTestId("timeline-keyframe-20-filled"),
-        ).toHaveAccessibleName("Page 2A, count 4: Set");
+        ).toHaveAccessibleName("Keyframe · Page 2A, count 4");
     });
 
     it("move the playhead to the diamond's count on a click, without a scrub", () => {
@@ -112,7 +131,8 @@ const keyframeMenu = (
     const menu = {
         stateFor: vi.fn((beat: number) => ({
             canUnset: true,
-            followingLabel: beat === 16 ? "Unset here and on Pages 3–4" : null,
+            followingLabel:
+                beat === 16 ? "Remove keyframe, Pages 3–4 follow back" : null,
             ...state,
         })),
         onUnset: vi.fn(),
@@ -146,12 +166,12 @@ describe.each([
                 screen.getByTestId("timeline-keyframe-16-filled"),
             );
             expect(menuItems()).toEqual([
-                "Unset here",
-                "Unset here and on Pages 3–4",
+                "Remove keyframe",
+                "Remove keyframe, Pages 3–4 follow back",
             ]);
             expect(menu.stateFor).toHaveBeenCalledWith(16);
             fireEvent.click(
-                screen.getByRole("menuitem", { name: "Unset here" }),
+                screen.getByRole("menuitem", { name: "Remove keyframe" }),
             );
             expect(menu.onUnset.mock.calls).toEqual([[16]]);
 
@@ -160,7 +180,7 @@ describe.each([
             );
             fireEvent.click(
                 screen.getByRole("menuitem", {
-                    name: "Unset here and on Pages 3–4",
+                    name: "Remove keyframe, Pages 3–4 follow back",
                 }),
             );
             expect(menu.onUnsetAndFollowing.mock.calls).toEqual([[16]]);
@@ -180,9 +200,9 @@ describe.each([
             fireEvent.contextMenu(
                 screen.getByTestId("timeline-keyframe-20-hollow"),
             );
-            expect(menuItems()).toEqual(["Unset here"]);
+            expect(menuItems()).toEqual(["Remove keyframe"]);
             fireEvent.click(
-                screen.getByRole("menuitem", { name: "Unset here" }),
+                screen.getByRole("menuitem", { name: "Remove keyframe" }),
             );
             expect(menu.onUnset.mock.calls).toEqual([[20]]);
         });
@@ -202,7 +222,9 @@ describe.each([
             fireEvent.contextMenu(
                 screen.getByTestId("timeline-keyframe-16-filled"),
             );
-            const item = screen.getByRole("menuitem", { name: "Unset here" });
+            const item = screen.getByRole("menuitem", {
+                name: "Remove keyframe",
+            });
             expect(item).toHaveAttribute("aria-disabled", "true");
             fireEvent.click(item);
             expect(menu.onUnset).not.toHaveBeenCalled();
@@ -224,8 +246,8 @@ describe.each([
             diamond.focus();
             fireEvent.keyDown(diamond, key);
             expect(menuItems()).toEqual([
-                "Unset here",
-                "Unset here and on Pages 3–4",
+                "Remove keyframe",
+                "Remove keyframe, Pages 3–4 follow back",
             ]);
         });
 
@@ -326,7 +348,7 @@ const showTimeline = (props: Partial<Parameters<typeof Timeline>[0]> = {}) =>
             timelines={[]}
             showTransport={false}
             pixelsPerBeat={16}
-            keyframes={[{ beat: 17, set: 1, total: 1 }]}
+            keyframes={[{ beat: 17, set: 1, total: 1, marcherIds: [1] }]}
             {...props}
         />,
     );
@@ -340,7 +362,9 @@ describe("a keyframe diamond's menu in the Timeline (#306)", () => {
             screen.getByTestId("timeline-keyframe-16-filled"),
         );
         expect(menu.stateFor).toHaveBeenCalledWith(17);
-        fireEvent.click(screen.getByRole("menuitem", { name: "Unset here" }));
+        fireEvent.click(
+            screen.getByRole("menuitem", { name: "Remove keyframe" }),
+        );
         expect(menu.onUnset.mock.calls).toEqual([[17]]);
     });
 

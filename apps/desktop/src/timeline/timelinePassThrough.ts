@@ -80,7 +80,7 @@ export function passedPages(
 }
 
 /**
- * The toast's text for `pass`: "Page 3 is no longer a stop" or "Pages 3–4 are no longer stops"
+ * The toast's text for `pass`: "Page 3 is no longer a keyframe" or "Pages 3–4 are no longer keyframes"
  * when it passes page flags; otherwise (it crossed only other moves) what it moves through and
  * what catches up after it, named by `moveName` from `moves` (the stored timelines).
  */
@@ -95,18 +95,18 @@ export function passThroughMessage(
         return pages.first === pages.last
             ? translate(
                   "timeline.edit.passThrough.noLongerStop.one",
-                  "Page {page} is no longer a stop",
+                  "Page {page} is no longer a keyframe",
                   { page: pages.first },
               )
             : translate(
                   "timeline.edit.passThrough.noLongerStop.many",
-                  "Pages {first}–{last} are no longer stops",
+                  "Pages {first}–{last} are no longer keyframes",
                   pages,
               );
     if (pass.flags.length > 0)
         return translate(
             "timeline.edit.passThrough.noLongerStop.unnamed",
-            "The sets inside this move are no longer stops",
+            "The pages inside this move are no longer keyframes",
         );
     const through = joinList(
         pass.overridden.map((r) => moveName(r, boxes, moves)),
@@ -136,7 +136,7 @@ export function passThroughMessage(
 
 /**
  * The action's label, by what it does to the user's sets: every flag inside the drag becomes a
- * stop again, so "Keep Page 3 as a stop" or "Keep Pages 3–4 as stops".
+ * stop again, so "Keep Page 3 as a keyframe" or "Keep Pages 3–4 as keyframes".
  */
 export function keepStopsLabel(
     pass: Pick<TimelinePassThrough, "flags">,
@@ -147,17 +147,17 @@ export function keepStopsLabel(
     if (!pages)
         return translate(
             "timeline.edit.passThrough.keepStops.unnamed",
-            "Keep them as stops",
+            "Keep them as keyframes",
         );
     return pages.first === pages.last
         ? translate(
               "timeline.edit.passThrough.keepStops.one",
-              "Keep Page {page} as a stop",
+              "Keep Page {page} as a keyframe",
               { page: pages.first },
           )
         : translate(
               "timeline.edit.passThrough.keepStops.many",
-              "Keep Pages {first}–{last} as stops",
+              "Keep Pages {first}–{last} as keyframes",
               pages,
           );
 }

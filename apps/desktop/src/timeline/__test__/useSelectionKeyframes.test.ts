@@ -93,16 +93,16 @@ describeDbTests("the selection's keyframes from the resolver", (it) => {
         );
         await waitFor(() =>
             expect(result.current).toEqual([
-                { beat: page2, set: 1, total: 1 },
-                { beat: page3, set: 1, total: 1 },
+                { beat: page2, set: 1, total: 1, marcherIds: [1] },
+                { beat: page3, set: 1, total: 1, marcherIds: [1] },
             ]),
         );
 
         // Both selected: page 2 filled, page 3 hollow (only marcher 1)
         rerender({ ids: [1, 2] });
         expect(result.current).toEqual([
-            { beat: page2, set: 2, total: 2 },
-            { beat: page3, set: 1, total: 2 },
+            { beat: page2, set: 2, total: 2, marcherIds: [1, 2] },
+            { beat: page3, set: 1, total: 2, marcherIds: [1] },
         ]);
 
         // Nothing selected, none
@@ -116,7 +116,9 @@ describeDbTests("the selection's keyframes from the resolver", (it) => {
             await timelineResolverSettled();
         });
         await waitFor(() =>
-            expect(result.current).toEqual([{ beat: page2, set: 2, total: 2 }]),
+            expect(result.current).toEqual([
+                { beat: page2, set: 2, total: 2, marcherIds: [1, 2] },
+            ]),
         );
     });
 });

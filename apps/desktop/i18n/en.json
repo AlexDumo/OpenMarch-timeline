@@ -119,11 +119,11 @@
             "splitMoveAtPlayhead": "Split the move at the playhead",
             "tapBeats": "Add {count} temporary beats",
             "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again",
-            "unsetHere": "Unset here",
-            "unsetHereAndFollowing": "Unset here and on the pages that follow",
-            "unsetHereAndPage": "Unset here and on Page {page}",
-            "unsetHereAndPages": "Unset here and on Pages {first}–{last}",
-            "unsetHereKeywords": "set following remove take back coordinate position delete",
+            "unsetHere": "Remove keyframe",
+            "unsetHereAndFollowing": "Remove keyframe, later pages follow back",
+            "unsetHereAndPage": "Remove keyframe, Page {page} follows back",
+            "unsetHereAndPages": "Remove keyframe, Pages {first}–{last} follow back",
+            "unsetHereKeywords": "keyframe diamond unset set following remove clear take back coordinate position delete",
             "splitSelectedIntoNewMove": "Split selected marchers into a new move",
             "mergeMoveIntoPage": "Merge this move into its page"
         },
@@ -794,12 +794,12 @@
                 "someHoldHere": "Some of these marchers hold here",
                 "someKeptOnThisPage": "Some of these marchers are kept on this page",
                 "theseMarchers": "these marchers",
-                "unsetHere": "Unset here",
-                "unsetHereAndFollowingHint": "Take back their coordinate on this count, and {pages} follow back to the earlier spot",
-                "unsetHereAndFollowingHintSome": "Take back the coordinate of the {count} of the {total} selected that are Set on this count, and {pages} follow back to the earlier spot",
-                "unsetHereHint": "Take back their coordinate on this count, so they follow from earlier. Later pages keep their spots",
-                "unsetHereHintSome": "Take back the coordinate of the {count} of the {total} selected that are Set on this count, so they follow from earlier. Later pages keep their spots",
-                "unsetHereNone": "None of the selected marchers is Set on this count"
+                "unsetHere": "Remove keyframe",
+                "unsetHereAndFollowingHint": "Remove their keyframe on this count, and {pages} follow back to the keyframe before it",
+                "unsetHereAndFollowingHintSome": "Remove the keyframe of the {count} of the {total} selected that have one on this count, and {pages} follow back to the keyframe before it",
+                "unsetHereHint": "Remove their keyframe on this count, so they follow from earlier. Later pages stay where they are",
+                "unsetHereHintSome": "Remove the keyframe of the {count} of the {total} selected that have one on this count, so they follow from earlier. Later pages stay where they are",
+                "unsetHereNone": "None of the selected marchers has a keyframe on this count"
             },
             "title": "{count} Marchers",
             "titleSingle": "Marcher {drillNumber}"
@@ -1911,14 +1911,14 @@
             "passThrough": {
                 "catchUp": "Now catches up to the set at the end of {caughtUp}",
                 "keepStops": {
-                    "many": "Keep Pages {first}–{last} as stops",
-                    "one": "Keep Page {page} as a stop",
-                    "unnamed": "Keep them as stops"
+                    "many": "Keep Pages {first}–{last} as keyframes",
+                    "one": "Keep Page {page} as a keyframe",
+                    "unnamed": "Keep them as keyframes"
                 },
                 "noLongerStop": {
-                    "many": "Pages {first}–{last} are no longer stops",
-                    "one": "Page {page} is no longer a stop",
-                    "unnamed": "The sets inside this move are no longer stops"
+                    "many": "Pages {first}–{last} are no longer keyframes",
+                    "one": "Page {page} is no longer a keyframe",
+                    "unnamed": "The pages inside this move are no longer keyframes"
                 },
                 "through": "Now moves straight through {through}",
                 "throughAndCatchUp": "Now moves straight through {through}, then catches up to the set at the end of {caughtUp}"
@@ -1991,8 +1991,9 @@
             }
         },
         "keyframes": {
-            "label": "Page {page}, count {count}: {set} of {total} selected marchers Set",
-            "labelOne": "Page {page}, count {count}: Set"
+            "detail": "{set} of {total} selected",
+            "detailNames": "{set} of {total} selected: {names}",
+            "title": "Keyframe · Page {page}, count {count}"
         },
         "label": "Timeline",
         "masterVolume": "Master Volume",

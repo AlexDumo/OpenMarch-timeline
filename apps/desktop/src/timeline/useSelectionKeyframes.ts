@@ -34,6 +34,7 @@ export function useSelectionKeyframes(
                     kept,
                 ),
             ),
+            marcherIds,
         );
     }, [resolver, version, kept, marcherIds]);
 }

@@ -107,9 +107,12 @@ async function atPage2With(show: Show, drillNumbers: string[]) {
 /** Runs Unset here from the command palette. */
 async function unsetFromPalette(page: Page) {
     await page.keyboard.press("ControlOrMeta+k");
-    await page.getByPlaceholder("Search commands…").fill("Unset here");
+    await page.getByPlaceholder("Search commands…").fill("Remove keyframe");
     await expect(
-        page.getByRole("option", { name: "Unset here Timeline", exact: true }),
+        page.getByRole("option", {
+            name: "Remove keyframe Timeline",
+            exact: true,
+        }),
     ).not.toHaveAttribute("aria-disabled", "true");
     await page.keyboard.press("Enter");
 }
@@ -171,9 +174,12 @@ test("Unset here is disabled when no selected marcher is Set on the count", asyn
     await atPage2With(show, ["T3"]);
     await expect(unsetButton(page)).toBeDisabled();
     await page.keyboard.press("ControlOrMeta+k");
-    await page.getByPlaceholder("Search commands…").fill("Unset here");
+    await page.getByPlaceholder("Search commands…").fill("Remove keyframe");
     await expect(
-        page.getByRole("option", { name: "Unset here Timeline", exact: true }),
+        page.getByRole("option", {
+            name: "Remove keyframe Timeline",
+            exact: true,
+        }),
     ).toHaveAttribute("aria-disabled", "true");
     await page.keyboard.press("Escape");
 

@@ -134,11 +134,11 @@ async function unsetHereThenUndo(show: Show) {
         .getByTestId("timeline-keyframe-16-filled")
         .click({ button: "right" });
     expect(await menuItems(page)).toEqual([
-        "Unset here",
-        "Unset here and on Page 3",
+        "Remove keyframe",
+        "Remove keyframe, Page 3 follows back",
     ]);
     await page
-        .getByRole("menuitem", { name: "Unset here", exact: true })
+        .getByRole("menuitem", { name: "Remove keyframe", exact: true })
         .click();
 
     // T2 follows page 1's spot on page 2's flag; page 3 keeps its spot
@@ -170,7 +170,7 @@ test("Unset here and on Page 3 from a diamond lets page 3 follow back", async ({
         .getByTestId("timeline-keyframe-16-filled")
         .click({ button: "right" });
     await page
-        .getByRole("menuitem", { name: "Unset here and on Page 3" })
+        .getByRole("menuitem", { name: "Remove keyframe, Page 3 follows back" })
         .click();
 
     await expect
@@ -195,7 +195,7 @@ test("a hollow diamond takes back only the selected marchers Set there", async (
         .getByTestId("timeline-keyframe-16-hollow")
         .click({ button: "right" });
     await page
-        .getByRole("menuitem", { name: "Unset here", exact: true })
+        .getByRole("menuitem", { name: "Remove keyframe", exact: true })
         .click();
 
     await expect
@@ -221,7 +221,7 @@ test("only Unset here where no page follows, and the keyboard opens the menu", a
     await diamond.focus();
     await page.keyboard.press("Shift+F10");
     await expect(page.getByTestId("timeline-keyframe-menu")).toBeVisible();
-    expect(await menuItems(page)).toEqual(["Unset here"]);
+    expect(await menuItems(page)).toEqual(["Remove keyframe"]);
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("timeline-keyframe-menu")).toHaveCount(0);
     expect(await spots(show, 2)).toEqual(PAGE_2_BEFORE);

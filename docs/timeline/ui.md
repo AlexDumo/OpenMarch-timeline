@@ -935,18 +935,21 @@ from it. The spec still wins on the model; this file decides presentation.
     marchers selected, in both modes, the timeline shows a **keyframe diamond** at every count where
     a selected marcher is Set (#300, #303): filled where all of them are Set, hollow where only some
     are, at the exact count, on the page row's bottom edge. A click moves the playhead there. A
-    right-click (or the context-menu key, or Shift+F10 on a focused diamond) offers **Unset here**
-    and, where pages follow, **Unset here and on Pages N–M** for the selected marchers Set at that
-    count, leaving the playhead where it is (#306, V-297 to V-299). Each
-    one's tooltip and accessible name give its count and how many selected marchers are Set there
-    ("Page 2, count 8: 2 of 3 selected marchers Set"; "Page 2, count 8: Set" for one). The first page
+    right-click (or the context-menu key, or Shift+F10 on a focused diamond) offers **Remove
+    keyframe** and, where pages follow, **Remove keyframe, Pages N–M follow back** for the selected
+    marchers Set at that count, leaving the playhead where it is (#306, V-297 to V-299). Each
+    one's tooltip names it and its count ("Keyframe · Page 2, count 8"), and with more than one
+    marcher selected adds who has it ("2 of 3 selected: B1 and B4", counted only when a name isn't
+    known); the accessible name says both (V-514). The UI says "keyframe", not "Set": in drill a
+    set is a page. The first page
     gets none: everyone is Set there. Nothing shows without a selection. They replaced the page
     boxes' hold marks (a hold bar where all hold, a dashed bar for some, a diamond by the flag where
     they move) and their tooltip. Ordinary edits and nudges show no toast (but see **Only Page 2**
     under keep later pages).
   - **Toasts are kept for surprises only, and short.** A window passing a flag: "Page 3 is no
-    longer a stop", with **Keep Page 3 as a stop** (it was "Only change Page N"; the action starts
-    the move from the last flag inside, so every passed flag is a stop again). Page mode's
+    longer a keyframe", with **Keep Page 3 as a keyframe** (it was "Only change Page N", then "…as a
+    stop" until 2026-10-20; the action starts the move from the last flag inside, so every passed
+    flag is a keyframe again). Page mode's
     carry-forward: "Pages 3–4 followed (they were copies)" with **Only Page 2**. Delete with its
     moves, above. Toast buttons never wrap.
   - **Move them too** (owner asked to see it, 2026-10-09; `research/defined-coordinates/09`). When an

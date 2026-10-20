@@ -93,11 +93,11 @@ describe("FieldContextMenu", () => {
         const off = registerActionHandler("timelineUnsetHereAndFollowing", {
             run: vi.fn(),
             isEnabled: () => true,
-            label: () => "Unset here and on Pages 3–4",
+            label: () => "Remove keyframe, Pages 3–4 follow back",
         });
         open();
         expect(item("timelineUnsetHereAndFollowing")).toHaveTextContent(
-            "Unset here and on Pages 3–4",
+            "Remove keyframe, Pages 3–4 follow back",
         );
         cleanup();
         off();
@@ -132,7 +132,7 @@ describe("FieldContextMenu", () => {
             screen.getAllByRole("menuitem").map((el) => el.textContent),
         ).toEqual(
             expect.arrayContaining([
-                expect.stringContaining("Unset here"),
+                expect.stringContaining("Remove keyframe"),
                 expect.stringContaining("Align horizontally"),
                 expect.stringContaining("Select all"),
             ]),

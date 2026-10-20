@@ -133,12 +133,12 @@ export function unsetFollowingLabel(
     return first === last
         ? translate(
               "actions.timeline.unsetHereAndPage",
-              "Unset here and on Page {page}",
+              "Remove keyframe, Page {page} follows back",
               { page: first },
           )
         : translate(
               "actions.timeline.unsetHereAndPages",
-              "Unset here and on Pages {first}–{last}",
+              "Remove keyframe, Pages {first}–{last} follow back",
               { first, last },
           );
 }

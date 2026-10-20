@@ -107,7 +107,7 @@ async function atPage2With(show: Show, drillNumbers: string[]) {
 /** The palette's search for the Unset actions, open. */
 async function searchUnset(page: Page) {
     await page.keyboard.press("ControlOrMeta+k");
-    await page.getByPlaceholder("Search commands…").fill("Unset here");
+    await page.getByPlaceholder("Search commands…").fill("Remove keyframe");
 }
 
 const button = (page: Page) =>
@@ -138,7 +138,7 @@ async function fromPaletteThenUndo(show: Show) {
     await atPage2With(show, ["T2"]);
     await searchUnset(page);
     const item = page.getByRole("option", {
-        name: "Unset here and on Page 3",
+        name: "Remove keyframe, Page 3 follows back",
     });
     await expect(item).not.toHaveAttribute("aria-disabled", "true");
     await item.click();
@@ -157,7 +157,9 @@ test("the inspector names the pages, and a mixed selection takes back only the S
 }) => {
     const { page } = show;
     await atPage2With(show, ["T2", "T3"]);
-    await expect(button(page)).toHaveText("Unset here and on Page 3");
+    await expect(button(page)).toHaveText(
+        "Remove keyframe, Page 3 follows back",
+    );
     await button(page).click();
     await expectFollowedBack(show);
     await undoRestores(show);
@@ -174,7 +176,7 @@ test("it isn't offered when no later page follows the spot", async ({
     await searchUnset(page);
     await expect(
         page.getByRole("option", {
-            name: "Unset here and on the pages that follow",
+            name: "Remove keyframe, later pages follow back",
         }),
     ).toHaveAttribute("aria-disabled", "true");
     await page.keyboard.press("Escape");

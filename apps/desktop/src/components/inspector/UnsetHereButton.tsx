@@ -28,16 +28,16 @@ export default function UnsetHereButton({
         targets.length === 0
             ? t("inspector.marcher.timeline.unsetHereNone", {
                   defaultValue:
-                      "None of the selected marchers is Set on this count",
+                      "None of the selected marchers has a keyframe on this count",
               })
             : targets.length === marcherIds.length
               ? t("inspector.marcher.timeline.unsetHereHint", {
                     defaultValue:
-                        "Take back their coordinate on this count, so they follow from earlier. Later pages keep their spots",
+                        "Remove their keyframe on this count, so they follow from earlier. Later pages stay where they are",
                 })
               : t("inspector.marcher.timeline.unsetHereHintSome", {
                     defaultValue:
-                        "Take back the coordinate of the {count} of the {total} selected that are Set on this count, so they follow from earlier. Later pages keep their spots",
+                        "Remove the keyframe of the {count} of the {total} selected that have one on this count, so they follow from earlier. Later pages stay where they are",
                     count: String(targets.length),
                     total: String(marcherIds.length),
                 });
@@ -47,14 +47,14 @@ export default function UnsetHereButton({
             data-testid="timeline-unset-here"
             tooltip={tooltip}
             aria-label={`${t("inspector.marcher.timeline.unsetHere", {
-                defaultValue: "Unset here",
+                defaultValue: "Remove keyframe",
             })}. ${tooltip}`}
             className={clsx(
                 getButtonClassName({ variant: "secondary", size: "compact" }),
             )}
         >
             {t("inspector.marcher.timeline.unsetHere", {
-                defaultValue: "Unset here",
+                defaultValue: "Remove keyframe",
             })}
         </ActionButton>
     );
@@ -82,12 +82,12 @@ export function UnsetHereAndFollowingButton({
         targets.length === marcherIds.length
             ? t("inspector.marcher.timeline.unsetHereAndFollowingHint", {
                   defaultValue:
-                      "Take back their coordinate on this count, and {pages} follow back to the earlier spot",
+                      "Remove their keyframe on this count, and {pages} follow back to the keyframe before it",
                   pages,
               })
             : t("inspector.marcher.timeline.unsetHereAndFollowingHintSome", {
                   defaultValue:
-                      "Take back the coordinate of the {count} of the {total} selected that are Set on this count, and {pages} follow back to the earlier spot",
+                      "Remove the keyframe of the {count} of the {total} selected that have one on this count, and {pages} follow back to the keyframe before it",
                   count: String(targets.length),
                   total: String(marcherIds.length),
                   pages,

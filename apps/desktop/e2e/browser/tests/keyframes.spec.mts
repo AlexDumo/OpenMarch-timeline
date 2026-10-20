@@ -103,7 +103,7 @@ for (const mode of ["expert", "basic"] as const)
                 ]);
             await expect(
                 page.getByTestId("timeline-keyframe-16-filled"),
-            ).toHaveAccessibleName("Page 2, count 8: Set");
+            ).toHaveAccessibleName("Keyframe · Page 2, count 8");
 
             // T2 too: it's only Following on page 2, so that one's hollow
             await clickMarcher(page, "T2", { add: true });
@@ -117,7 +117,7 @@ for (const mode of ["expert", "basic"] as const)
             await expect(
                 page.getByTestId("timeline-keyframe-16-hollow"),
             ).toHaveAccessibleName(
-                "Page 2, count 8: 1 of 2 selected marchers Set",
+                "Keyframe · Page 2, count 8. 1 of 2 selected: T1",
             );
 
             // The page boxes' old hold marks are gone

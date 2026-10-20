@@ -18,9 +18,17 @@ import {
 } from "./TimelineRangeMenu";
 
 /**
- * A keyframe diamond's right-click menu (#306), by the diamond's beat: **Unset here** and, where
- * pages follow the spot, **Unset here and on Pages N–M**, for the selected marchers Set at that
- * count. The playhead doesn't move.
+ * A selection keyframe as the timeline draws it, with the selected marchers Set there by name
+ * ("B1, B2 and 4 others"), or null when a name isn't known and the tooltip only counts them.
+ */
+export interface TimelineKeyframe extends SelectionKeyframe {
+    readonly names?: string | null;
+}
+
+/**
+ * A keyframe diamond's right-click menu (#306), by the diamond's beat: **Remove keyframe** and,
+ * where pages follow the spot, **Remove keyframe, Pages N–M follow back** (the Unset actions), for
+ * the selected marchers Set at that count. The playhead doesn't move.
  */
 export interface TimelineKeyframeMenu {
     /**
@@ -55,7 +63,7 @@ export const TimelineKeyframes = memo(function TimelineKeyframes({
     onSeek,
     menu,
 }: {
-    keyframes: readonly SelectionKeyframe[];
+    keyframes: readonly TimelineKeyframe[];
     pages: readonly TimelinePageMarker[];
     pixelsPerBeat: number;
     onSeek?: (beat: number) => void;
@@ -73,7 +81,8 @@ export const TimelineKeyframes = memo(function TimelineKeyframes({
                 <KeyframeDiamond
                     key={keyframe.beat}
                     keyframe={keyframe}
-                    label={labels[index]!}
+                    title={labels[index]!.title}
+                    detail={labels[index]!.detail}
                     left={beatToX(keyframe.beat, pixelsPerBeat)}
                     onSeek={onSeek}
                     menu={menu}
@@ -83,28 +92,36 @@ export const TimelineKeyframes = memo(function TimelineKeyframes({
     );
 });
 
-/** A diamond's name: its page and count, and how many selected marchers are Set there. */
+/**
+ * A diamond's tooltip: "Keyframe · Page 2, count 8", then, with more than one marcher selected,
+ * who has it ("2 of 3 selected: B1 and B4"). The accessible name says both.
+ */
 function keyframeLabel(
-    keyframe: SelectionKeyframe,
+    keyframe: TimelineKeyframe,
     pages: readonly TimelinePageMarker[],
-): string {
+): { readonly title: string; readonly detail: string | null } {
     const { pageLabel, count } = getPageCountAt({ pages }, keyframe.beat);
-    return keyframe.total === 1
-        ? tolgee.t(
-              "timeline.keyframes.labelOne",
-              "Page {page}, count {count}: Set",
-              { page: pageLabel, count },
-          )
-        : tolgee.t(
-              "timeline.keyframes.label",
-              "Page {page}, count {count}: {set} of {total} selected marchers Set",
-              {
-                  page: pageLabel,
-                  count,
-                  set: keyframe.set,
-                  total: keyframe.total,
-              },
-          );
+    const title = tolgee.t(
+        "timeline.keyframes.title",
+        "Keyframe · Page {page}, count {count}",
+        { page: pageLabel, count },
+    );
+    if (keyframe.total === 1) return { title, detail: null };
+    const counted = { set: keyframe.set, total: keyframe.total };
+    return {
+        title,
+        detail: keyframe.names
+            ? tolgee.t(
+                  "timeline.keyframes.detailNames",
+                  "{set} of {total} selected: {names}",
+                  { ...counted, names: keyframe.names },
+              )
+            : tolgee.t(
+                  "timeline.keyframes.detail",
+                  "{set} of {total} selected",
+                  counted,
+              ),
+    };
 }
 
 /**
@@ -113,13 +130,15 @@ function keyframeLabel(
  */
 const KeyframeDiamond = memo(function KeyframeDiamond({
     keyframe,
-    label,
+    title,
+    detail,
     left,
     onSeek,
     menu,
 }: {
-    keyframe: SelectionKeyframe;
-    label: string;
+    keyframe: TimelineKeyframe;
+    title: string;
+    detail: string | null;
     left: number;
     onSeek?: (beat: number) => void;
     menu?: TimelineKeyframeMenu;
@@ -130,7 +149,7 @@ const KeyframeDiamond = memo(function KeyframeDiamond({
             type="button"
             data-testid={`timeline-keyframe-${keyframe.beat}-${filled ? "filled" : "hollow"}`}
             data-timeline-interactive="true"
-            aria-label={label}
+            aria-label={detail ? `${title}. ${detail}` : title}
             aria-haspopup={menu ? "menu" : undefined}
             // Under the start flag (z-40) and the playhead (z-50), over the flag grips (z-35)
             className="group/keyframe focus-visible:ring-accent pointer-events-auto absolute z-[36] flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2"
@@ -165,13 +184,23 @@ const KeyframeDiamond = memo(function KeyframeDiamond({
     // Without a menu, a right-click goes on to the timeline's own
     if (!menu)
         return (
-            <ShortcutTooltip label={label} side="top" closeOnPress>
+            <ShortcutTooltip
+                label={title}
+                hint={detail ?? undefined}
+                side="top"
+                closeOnPress
+            >
                 {button}
             </ShortcutTooltip>
         );
     return (
         <ContextMenu.Root>
-            <ShortcutTooltip label={label} side="top" closeOnPress>
+            <ShortcutTooltip
+                label={title}
+                hint={detail ?? undefined}
+                side="top"
+                closeOnPress
+            >
                 <ContextMenu.Trigger asChild>{button}</ContextMenu.Trigger>
             </ShortcutTooltip>
             <ContextMenu.Portal>
@@ -206,7 +235,7 @@ function KeyframeMenuItems({
                 disabled={!canUnset}
                 onSelect={() => menu.onUnset(beat)}
             >
-                {tolgee.t("actions.timeline.unsetHere", "Unset here")}
+                {tolgee.t("actions.timeline.unsetHere", "Remove keyframe")}
             </ContextMenu.Item>
             {followingLabel && (
                 <ContextMenu.Item

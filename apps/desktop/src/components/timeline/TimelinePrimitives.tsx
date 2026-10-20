@@ -97,9 +97,9 @@ import {
     type TimelineLiveValue,
     useLiveValue,
 } from "./timelineLiveValue";
-import type { SelectionKeyframe } from "@/timeline/timelineSetFollowing";
 import {
     TimelineKeyframes,
+    type TimelineKeyframe,
     type TimelineKeyframeMenu,
 } from "./TimelineKeyframes";
 import {
@@ -777,7 +777,7 @@ export const TimelineRuler = memo(function TimelineRuler({
     /** The playhead, which a dragged flag lands on when near, as on downbeats and page lines */
     flagSnapPlayhead?: () => BeatPosition;
     /** Where the selected marchers are Set (#303); none without a selection */
-    keyframes?: readonly SelectionKeyframe[];
+    keyframes?: readonly TimelineKeyframe[];
     /** A diamond's right-click Unset actions (#306), by view beat; without it, no menu */
     keyframeMenu?: TimelineKeyframeMenu;
     /** The chains on the page boxes (UI-18 keep later pages), by page id */

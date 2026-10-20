@@ -155,7 +155,7 @@ const show = async (db: DbConnection) => {
     return { a: a!, b: b!, c: c! };
 };
 
-describeDbTests("Unset here", (it) => {
+describeDbTests("Remove keyframe", (it) => {
     it("the marchers follow from earlier on the count, and later pages keep their spots", async ({
         db,
         marchersAndPages: _,
@@ -476,7 +476,7 @@ describeDbTests(
                 });
             expect(await at(PAGE2.end)).toEqual({
                 canUnset: true,
-                followingLabel: "Unset here and on Pages 3–4",
+                followingLabel: "Remove keyframe, Pages 3–4 follow back",
             });
             expect(await at(PAGE3.end)).toEqual({
                 canUnset: false,
