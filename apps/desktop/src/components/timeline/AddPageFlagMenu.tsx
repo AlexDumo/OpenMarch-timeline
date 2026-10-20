@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import tolgee from "@/global/singletons/Tolgee";
 import type { ActionId } from "@/shortcuts/definitions";
@@ -19,7 +19,9 @@ const ITEM_CLASS =
  * the playhead, and **Create subset at playhead** (Shift+F) adds the same page as a subset, so later
  * pages keep their numbers. Each is its action's label, with the name the new page would get, muted,
  * and the action's shortcut. Without `onAddPage` (playing, on a flag, at home, past the beats)
- * there's no menu and `children` render as they are.
+ * there's no menu and a right-click passes through. The trigger stays mounted either way, so the
+ * playhead button isn't remounted (and doesn't lose focus mid arrow-key step) as `onAddPage` comes
+ * and goes.
  */
 export function AddPageFlagMenu({
     onAddPage,
@@ -32,38 +34,46 @@ export function AddPageFlagMenu({
     names?: { page: string; subset: string };
     children: ReactNode;
 }) {
-    if (!onAddPage) return <>{children}</>;
+    // Radix's context menu keeps its own open state, so this copy drops a menu left open when
+    // adding stops (Play), rather than letting it come back open with `onAddPage`
+    const [open, setOpen] = useState(false);
+    if (open && !onAddPage) setOpen(false);
     return (
-        <ContextMenu.Root>
+        <ContextMenu.Root onOpenChange={setOpen}>
             {/* A right-click on the playhead is its own, not the surface's range menu */}
             <ContextMenu.Trigger
                 asChild
-                onContextMenu={(event) => event.stopPropagation()}
+                disabled={!onAddPage}
+                onContextMenu={
+                    onAddPage ? (event) => event.stopPropagation() : undefined
+                }
             >
                 {children}
             </ContextMenu.Trigger>
-            <ContextMenu.Portal>
-                <ContextMenu.Content
-                    data-testid="timeline-add-page-flag-menu"
-                    {...KEEP_MENU_EVENTS}
-                    className={TIMELINE_MENU_CONTENT_CLASS}
-                >
-                    <MenuEntry
-                        testId="timeline-add-page"
-                        action="timelineCreatePageAtPlayhead"
-                        onSelect={onAddPage}
-                        name={names?.page}
-                    />
-                    {onAddSubsetPage && (
+            {open && onAddPage && (
+                <ContextMenu.Portal>
+                    <ContextMenu.Content
+                        data-testid="timeline-add-page-flag-menu"
+                        {...KEEP_MENU_EVENTS}
+                        className={TIMELINE_MENU_CONTENT_CLASS}
+                    >
                         <MenuEntry
-                            testId="timeline-add-subset-page"
-                            action="timelineCreateSubsetAtPlayhead"
-                            onSelect={onAddSubsetPage}
-                            name={names?.subset}
+                            testId="timeline-add-page"
+                            action="timelineCreatePageAtPlayhead"
+                            onSelect={onAddPage}
+                            name={names?.page}
                         />
-                    )}
-                </ContextMenu.Content>
-            </ContextMenu.Portal>
+                        {onAddSubsetPage && (
+                            <MenuEntry
+                                testId="timeline-add-subset-page"
+                                action="timelineCreateSubsetAtPlayhead"
+                                onSelect={onAddSubsetPage}
+                                name={names?.subset}
+                            />
+                        )}
+                    </ContextMenu.Content>
+                </ContextMenu.Portal>
+            )}
         </ContextMenu.Root>
     );
 }

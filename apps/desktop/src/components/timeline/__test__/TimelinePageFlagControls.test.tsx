@@ -78,7 +78,7 @@ const clip: TimelineInput = {
     activitySpans: [{ startBeatIndex: 3, endBeatIndex: 7, active: true }],
 };
 
-const show = ({
+const view = ({
     positionBeat = 5,
     isPlaying = false,
     onAddPageFlag,
@@ -96,27 +96,28 @@ const show = ({
     onAddSubsetPage?: () => void;
     onSetPageSubset?: (pageId: number, subset: boolean) => void;
     withAdd?: boolean;
-}) =>
-    render(
-        <Timeline
-            mode="expanded"
-            beats={BEATS}
-            pages={PAGES}
-            measures={[]}
-            timelines={[clip]}
-            showTransport={false}
-            playback={{ positionBeat, isPlaying }}
-            selection={null}
-            onSelectionChange={vi.fn()}
-            addSelectedMarchers={withAdd ? { onAdd: vi.fn() } : undefined}
-            onAddPageFlag={onAddPageFlag}
-            onDeletePageFlag={onDeletePageFlag}
-            onDeletePageWithMoves={onDeletePageWithMoves}
-            onAddSubsetPage={onAddSubsetPage}
-            addPageNames={{ page: "3", subset: "2A" }}
-            onSetPageSubset={onSetPageSubset}
-        />,
-    );
+}) => (
+    <Timeline
+        mode="expanded"
+        beats={BEATS}
+        pages={PAGES}
+        measures={[]}
+        timelines={[clip]}
+        showTransport={false}
+        playback={{ positionBeat, isPlaying }}
+        selection={null}
+        onSelectionChange={vi.fn()}
+        addSelectedMarchers={withAdd ? { onAdd: vi.fn() } : undefined}
+        onAddPageFlag={onAddPageFlag}
+        onDeletePageFlag={onDeletePageFlag}
+        onDeletePageWithMoves={onDeletePageWithMoves}
+        onAddSubsetPage={onAddSubsetPage}
+        addPageNames={{ page: "3", subset: "2A" }}
+        onSetPageSubset={onSetPageSubset}
+    />
+);
+
+const show = (props: Parameters<typeof view>[0]) => render(view(props));
 
 const playhead = () => screen.getByTestId("timeline-playhead");
 const addPageMenu = () => screen.queryByTestId("timeline-add-page-flag-menu");
@@ -200,6 +201,30 @@ describe("Create page at playhead on the paused playhead's right-click menu (UI-
         cleanup();
         show({ onAddPageFlag: undefined });
         fireEvent.contextMenu(playhead());
+        expect(addPageMenu()).toBeNull();
+    });
+
+    it("keeps the playhead button, and its focus, as the menu comes and goes", () => {
+        // An arrow-key step onto a flag takes the menu away; a remount would drop focus, and the
+        // next arrow would go to the page step instead of the playhead's beat step
+        const { rerender } = show({ onAddPageFlag: vi.fn() });
+        const button = playhead();
+        button.focus();
+        rerender(view({ onAddPageFlag: undefined }));
+        expect(playhead()).toBe(button);
+        expect(document.activeElement).toBe(button);
+        rerender(view({ onAddPageFlag: vi.fn() }));
+        expect(playhead()).toBe(button);
+        expect(document.activeElement).toBe(button);
+    });
+
+    it("closes a menu left open when adding stops, and doesn't bring it back", () => {
+        const { rerender } = show({ onAddPageFlag: vi.fn() });
+        fireEvent.contextMenu(playhead());
+        expect(addPageMenu()).not.toBeNull();
+        rerender(view({ onAddPageFlag: undefined }));
+        expect(addPageMenu()).toBeNull();
+        rerender(view({ onAddPageFlag: vi.fn() }));
         expect(addPageMenu()).toBeNull();
     });
 

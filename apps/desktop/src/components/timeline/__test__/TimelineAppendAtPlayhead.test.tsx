@@ -74,11 +74,13 @@ const show = ({
     isPlaying = false,
     appendAtPlayhead,
     selection = null,
+    readOnly = false,
 }: {
     positionBeat?: number;
     isPlaying?: boolean;
     appendAtPlayhead?: TimelineAppendAtPlayhead;
     selection?: TimelineSelection;
+    readOnly?: boolean;
 }) =>
     render(
         <TimelineWaveformProvider
@@ -99,6 +101,7 @@ const show = ({
                 selection={selection}
                 onSelectionChange={vi.fn()}
                 appendAtPlayhead={appendAtPlayhead}
+                readOnly={readOnly}
             />
         </TimelineWaveformProvider>,
     );
@@ -134,6 +137,11 @@ describe("+ Add N-Count Page at the playhead", () => {
         expect(found.className).toContain("left-8");
         fireEvent.click(found);
         expect(onAppend).toHaveBeenCalledTimes(1);
+    });
+
+    it("isn't there on a read-only timeline (Preview, Visuals), though it's given one", () => {
+        show({ appendAtPlayhead: append(), readOnly: true });
+        expect(button()).toBeNull();
     });
 
     it("with Shift held reads Add N-Count Subset and adds a subset", () => {

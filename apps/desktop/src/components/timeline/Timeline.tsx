@@ -431,6 +431,7 @@ const READ_ONLY_EDITS = {
     onAddPageFlag: undefined,
     onAddSubsetPage: undefined,
     addPageNames: undefined,
+    appendAtPlayhead: undefined,
     pageFlagMove: undefined,
     onOpenRange: undefined,
     onTimelineRangeCommit: undefined,
