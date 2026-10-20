@@ -24,12 +24,18 @@ For more on field settings, see [Editing the Field](/guides/editing-the-grid).
 1. Open the **View** tab in the toolbar.
 2. Click **Step size warnings** to toggle them off (eye slash).
 
-This control sits next to Previous Paths and Next Paths and uses the same eye / eye-slash pattern. Your choice is saved and persists across reloads.
+This control sits next to Next Paths and uses the same eye / eye-slash pattern. Your choice is saved and persists across reloads.
 
 ![Step size warnings toggle on the View tab](/docs/guides/step-size-warnings/view-toggle.png)
 
 With warnings off:
 
-- Over-threshold paths no longer force-show in red.
-- Pathways follow normal Previous Paths / Next Paths visibility.
+- Over-threshold next paths no longer force-show in red.
+- Pathways follow normal Next Paths visibility.
 - Visible pathways use normal (non-red) styling.
+
+## Start flag positions
+
+Previous Paths is gone. To see where marchers came from, use **start flag positions** (the path icon on the right of the timeline transport, or hold **N**). Its paths show each marcher's route from the start flag to the playhead.
+
+With warnings on, any stretch of a drawn start flag path that is over the threshold is red and dashed, and the rest of the path stays thin and gray. A path that isn't drawn shows no warning.

@@ -178,6 +178,7 @@ export const TimelineTransport = memo(function TimelineTransport({
     fitted = false,
     accessories,
     secondary,
+    leadingViewControls,
     viewControls,
     onSeek,
     onSelectionChange,
@@ -203,6 +204,8 @@ export const TimelineTransport = memo(function TimelineTransport({
     accessories?: ReactNode;
     /** Controls after those that fold into "⋯" on a narrow panel, such as Sound */
     secondary?: ReactNode;
+    /** View controls first in the row's right group, before Fit; they fold too */
+    leadingViewControls?: ReactNode;
     /** View controls at the row's end, such as Compact; they fold too */
     viewControls?: ReactNode;
     /** The go-to box seeks to a measure or rehearsal mark (view beats) */
@@ -369,7 +372,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                                 <button
                                     type="button"
                                     aria-label="More controls"
-                                    title="More: sound, the clock, Fit and Compact"
+                                    title="More: sound, the clock, Fit and the view controls"
                                     className="rounded-4 text-text enabled:hover:bg-fg-2 focus-visible:ring-accent flex size-24 items-center justify-center outline-hidden focus-visible:ring-2"
                                 >
                                     <DotsThreeIcon size={18} weight="bold" />
@@ -384,6 +387,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                                 >
                                     {clock}
                                     {secondary}
+                                    {leadingViewControls}
                                     {fit}
                                     {viewControls}
                                 </Popover.Content>
@@ -391,6 +395,7 @@ export const TimelineTransport = memo(function TimelineTransport({
                         </Popover.Root>
                     ) : (
                         <>
+                            {leadingViewControls}
                             {fit}
                             {viewControls}
                         </>
