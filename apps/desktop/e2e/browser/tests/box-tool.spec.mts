@@ -4,6 +4,7 @@ import {
     drawnMarchers,
     expectCanvasMatchesShow,
     readField,
+    selectPage,
     setUiSettings,
     waitForIdle,
 } from "../app.mjs";
@@ -53,6 +54,8 @@ test.use({
         })),
         positions: [HOME, HOME, HOME],
     }),
+    // The time-stretch worklet (#216) can't load in the harness (see props.spec.mts)
+    allowedPageErrors: [/Audio worklet error/],
 });
 
 type Point = { x: number; y: number };
@@ -549,3 +552,89 @@ test("the View tab's numbers-only labels draw drill order, not drill numbers", a
         )
         .toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
 });
+
+// The open shape is measured from the start flag (#346, spec #344): its hollow
+// rings and walks start where each marcher stands at the start flag, not where
+// the page has them at the playhead. On page 2 that's page 1's positions; at
+// home it's the home spots.
+const shifted = (dy: number): SeedPosition[] =>
+    HOME.map(([id, x, y]) => [id, x, y + dy]);
+const PAGE_1 = shifted(60);
+const PAGE_2 = shifted(120);
+
+/** The rings' points, sorted, to compare with where marchers stand */
+const sortedPoints = (points: readonly Point[]) =>
+    [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+
+const expectSamePoints = (
+    actual: readonly Point[],
+    expected: readonly SeedPosition[],
+) => {
+    const a = sortedPoints(actual);
+    const e = sortedPoints(expected.map(([, x, y]) => ({ x, y })));
+    expect(a).toHaveLength(e.length);
+    a.forEach((p, i) => {
+        expect(p.x).toBeCloseTo(e[i]!.x, 3);
+        expect(p.y).toBeCloseTo(e[i]!.y, 3);
+    });
+};
+
+for (const editorMode of ["expert", "basic"] as const) {
+    test.describe(`measured from the start flag (${editorMode})`, () => {
+        test.use({
+            appSettings: { optOutAnalytics: true, editorMode },
+            seedSql: seedShowSql({
+                beats: 48,
+                pageStarts: [16, 32],
+                measureStarts: Array.from({ length: 12 }, (_, i) => 1 + i * 4),
+                marchers: HOME.map(([id]) => ({
+                    id,
+                    section: "Trumpet",
+                    prefix: "T",
+                    order: id,
+                })),
+                positions: [HOME, PAGE_1, PAGE_2],
+            }),
+        });
+
+        test("on a page, rings and walks start at the start flag, not at the playhead", async ({
+            show,
+        }) => {
+            const { page } = show;
+            await selectPage(show, "Page 2");
+            // The field shows the playhead: page 2's positions
+            await expect
+                .poll(async () =>
+                    (await drawnMarchers(page)).map((m) => m.y).sort(),
+                )
+                .toEqual(PAGE_2.map(([, , y]) => y).sort());
+            await drawBox(show);
+            const overlay = (await shapeOverlay(page))!;
+            expectSamePoints(overlay.rings, PAGE_1);
+            expectSamePoints(
+                overlay.walks.map((w) => w.from),
+                PAGE_1,
+            );
+        });
+
+        test("at home, rings and walks start at the home spots", async ({
+            show,
+        }) => {
+            const { page } = show;
+            await selectPage(show, "Page 2");
+            await page.keyboard.press("Home");
+            await expect
+                .poll(async () =>
+                    (await drawnMarchers(page)).map((m) => m.y).sort(),
+                )
+                .toEqual(HOME.map(([, , y]) => y).sort());
+            await drawBox(show);
+            const overlay = (await shapeOverlay(page))!;
+            expectSamePoints(overlay.rings, HOME);
+            expectSamePoints(
+                overlay.walks.map((w) => w.from),
+                HOME,
+            );
+        });
+    });
+}

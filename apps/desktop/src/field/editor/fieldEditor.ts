@@ -214,6 +214,11 @@ export type FieldModeDrawing = {
     walks: readonly { from: FieldPoint; to: FieldPoint }[];
     handles: readonly FieldPoint[];
     /**
+     * Hollow rings where the shape's marchers start the move (08-shape-system-ux.md, "Marcher
+     * styling"): at the start flag, the same points the walks leave from
+     */
+    rings?: readonly FieldPoint[];
+    /**
      * The shape's look at this stage (docs/timeline/research/shapes/08-shape-system-ux.md,
      * "Marcher styling"): while it's drawn, a dashed outline and solid spots; once open, a solid
      * outline with a faint fill. Dashed rings when absent.
