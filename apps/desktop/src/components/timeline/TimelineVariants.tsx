@@ -1243,7 +1243,6 @@ const TimelineSurface = memo(function TimelineSurface({
                                 lastFlagBeat={lastFlagBeat}
                                 pixelsPerBeat={pixelsPerBeat}
                                 height={pinnedHeight}
-                                surfaceWidth={surfaceWidth}
                                 windowShowsPage={
                                     !basic &&
                                     sameRange(selectionRange, {

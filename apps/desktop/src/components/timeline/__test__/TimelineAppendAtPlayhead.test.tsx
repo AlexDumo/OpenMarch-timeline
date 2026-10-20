@@ -165,9 +165,17 @@ describe("+ Add N-Count Page at the playhead", () => {
         expect(preview()).toBeTruthy();
     });
 
-    it("goes on the playhead's left at the surface's right end", () => {
-        show({ positionBeat: 33, appendAtPlayhead: append() });
-        expect(button()!.className).toContain("right-8");
+    it("goes on the playhead's left where it wouldn't fit before the visible right edge", () => {
+        // jsdom lays nothing out: put every box's left past every box's right
+        const rect = vi
+            .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+            .mockReturnValue({ left: 400, right: 300, width: 300 } as DOMRect);
+        try {
+            show({ appendAtPlayhead: append() });
+            expect(button()!.className).toContain("right-8");
+        } finally {
+            rect.mockRestore();
+        }
     });
 
     it("doesn't show while playing, or without the command", () => {
