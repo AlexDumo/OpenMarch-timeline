@@ -36,7 +36,10 @@ import type { TimelineBeatRange } from "./TimelineViewModel";
  * button.
  */
 
-/** The menus' entry style; `data-[disabled]` dims an unavailable one */
+/**
+ * The menus' entry style; `data-[disabled]` dims a Radix-disabled one (Keep here, Follow again).
+ * Entries with a reason dim themselves (`MenuItemWithReason`).
+ */
 const ITEM_CLASS =
     "rounded-4 data-[highlighted]:bg-fg-2 flex cursor-default items-center gap-8 px-8 py-6 text-[12px] outline-hidden select-none data-[disabled]:opacity-50";
 
@@ -85,26 +88,21 @@ function MenuItemWithReason({
     children: ReactNode;
 }) {
     const reasonId = useId();
+    // Highlighted (hover or keys) or pressed; the tip shows only while there's a reason
     const [open, setOpen] = useState(false);
     const closeMenu = useContext(TimelineMenuClose);
-    if (reason === null)
-        return (
-            <DropdownMenu.Item
-                data-testid={testId}
-                onSelect={onSelect}
-                className={className}
-            >
-                {children}
-            </DropdownMenu.Item>
-        );
+    const unavailable = reason !== null;
+    // One element either way, so a reason that comes or goes while the menu is open (playback
+    // stopping) keeps the entry, and the keyboard focus on it
     return (
         <>
             <DropdownMenu.Item
                 data-testid={testId}
-                aria-disabled="true"
-                aria-describedby={reasonId}
-                // Pressing it shows why instead of closing the menu
+                aria-disabled={unavailable ? "true" : undefined}
+                aria-describedby={unavailable ? reasonId : undefined}
                 onSelect={(event) => {
+                    if (!unavailable) return onSelect();
+                    // Pressing it shows why instead of closing the menu
                     event.preventDefault();
                     setOpen(true);
                 }}
@@ -112,41 +110,53 @@ function MenuItemWithReason({
                 onBlur={() => setOpen(false)}
                 className={className}
             >
-                <span className="flex items-center gap-8 opacity-50">
-                    {children}
-                </span>
-                <Tooltip.Provider delayDuration={0}>
-                    <Tooltip.Root
-                        open={open}
-                        onOpenChange={(next) => {
-                            if (!next) setOpen(false);
-                        }}
-                    >
-                        <Tooltip.Trigger asChild>
-                            <span
-                                aria-hidden="true"
-                                data-testid={`${reasonTestId}-icon`}
-                                className="text-text-subtitle ml-auto pl-16"
-                            >
-                                <QuestionIcon size={14} />
-                            </span>
-                        </Tooltip.Trigger>
-                        <Tooltip.Portal>
-                            <Tooltip.Content
-                                side="right"
-                                sideOffset={8}
-                                onEscapeKeyDown={() => closeMenu?.()}
-                                className={`${TooltipClassName} max-w-[240px] text-[12px]`}
-                            >
-                                {reason}
-                            </Tooltip.Content>
-                        </Tooltip.Portal>
-                    </Tooltip.Root>
-                </Tooltip.Provider>
+                {unavailable ? (
+                    <>
+                        <span className="flex items-center gap-8 opacity-50">
+                            {children}
+                        </span>
+                        <Tooltip.Provider
+                            delayDuration={0}
+                            disableHoverableContent
+                        >
+                            {/* Only the entry opens and closes it: the tooltip's own pointer
+                                handling would close it as the pointer crosses the ? */}
+                            <Tooltip.Root open={open} onOpenChange={() => {}}>
+                                <Tooltip.Trigger asChild>
+                                    <span
+                                        aria-hidden="true"
+                                        data-testid={`${reasonTestId}-icon`}
+                                        className="text-text-subtitle ml-auto pl-16"
+                                    >
+                                        <QuestionIcon size={14} />
+                                    </span>
+                                </Tooltip.Trigger>
+                                <Tooltip.Portal>
+                                    <Tooltip.Content
+                                        side="right"
+                                        sideOffset={8}
+                                        onEscapeKeyDown={() =>
+                                            closeMenu
+                                                ? closeMenu()
+                                                : setOpen(false)
+                                        }
+                                        className={`${TooltipClassName} max-w-[240px] text-[12px]`}
+                                    >
+                                        {reason}
+                                    </Tooltip.Content>
+                                </Tooltip.Portal>
+                            </Tooltip.Root>
+                        </Tooltip.Provider>
+                    </>
+                ) : (
+                    children
+                )}
             </DropdownMenu.Item>
-            <span id={reasonId} data-testid={reasonTestId} className="sr-only">
-                {reason}
-            </span>
+            {unavailable && (
+                <span id={reasonId} data-testid={reasonTestId} hidden>
+                    {reason}
+                </span>
+            )}
         </>
     );
 }
@@ -597,7 +607,7 @@ export function useTimelineRangeMenu({
                                 >
                                     <MenuSwitch />
                                     {tolgee.t(
-                                        "timeline.rangeMenu.subset",
+                                        "timeline.page.contextMenu.subsetToggle",
                                         "Subset",
                                     )}
                                 </DropdownMenu.CheckboxItem>

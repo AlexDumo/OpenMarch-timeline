@@ -14,7 +14,11 @@ import {
     type TimelineInput,
 } from "../Timeline";
 import type { TimelineSelection } from "../TimelineViewModel";
-import type { TimelineMoveCommands } from "../TimelineRangeMenu";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import {
+    TimelineMoveMenuItems,
+    type TimelineMoveCommands,
+} from "../TimelineRangeMenu";
 
 /**
  * UI-14: a clip is a move. Its right-click menu, the selected clip's ⋯ button and the focused
@@ -756,5 +760,53 @@ describe("the flags over the waveform row (UI-21)", () => {
             screen.getByTestId("timeline-playhead"),
         ])
             expect(parseFloat(handle.style.height)).toBeGreaterThan(64);
+    });
+});
+
+describe("an unavailable entry's reason tip", () => {
+    const menuWith = (disabledReason: string | null) => (
+        <DropdownMenu.Root open modal={false}>
+            <DropdownMenu.Trigger />
+            <DropdownMenu.Content data-testid="menu">
+                <TimelineMoveMenuItems
+                    actions={{
+                        onEdit: vi.fn(),
+                        onRename: vi.fn(),
+                        onDelete: vi.fn(),
+                        disabledReason,
+                    }}
+                />
+            </DropdownMenu.Content>
+        </DropdownMenu.Root>
+    );
+
+    // jsdom can't reproduce the tooltip's hover grace area, so crossing the ? is checked in the
+    // app; here: the entry's highlight alone opens and closes it
+    it("opens while the entry is highlighted, and only then", () => {
+        render(menuWith("Pause to edit or delete a move."));
+        const edit = screen.getByTestId("timeline-move-menu-edit");
+        expect(screen.queryByRole("tooltip")).toBeNull();
+        fireEvent.focus(edit);
+        expect(screen.getByRole("tooltip").textContent).toBe(
+            "Pause to edit or delete a move.",
+        );
+        fireEvent.blur(edit);
+        expect(screen.queryByRole("tooltip")).toBeNull();
+    });
+
+    it("keeps the entry, and its focus, when the reason comes or goes", () => {
+        const { rerender } = render(
+            menuWith("Pause to edit or delete a move."),
+        );
+        const edit = screen.getByTestId("timeline-move-menu-edit");
+        edit.focus();
+        rerender(menuWith(null));
+        expect(screen.getByTestId("timeline-move-menu-edit")).toBe(edit);
+        expect(document.activeElement).toBe(edit);
+        expect(edit.getAttribute("aria-disabled")).toBeNull();
+        expect(screen.queryByRole("tooltip")).toBeNull();
+        rerender(menuWith("Pause to edit or delete a move."));
+        expect(screen.getByTestId("timeline-move-menu-edit")).toBe(edit);
+        expect(edit.getAttribute("aria-disabled")).toBe("true");
     });
 });
