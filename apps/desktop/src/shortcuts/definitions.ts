@@ -673,6 +673,25 @@ const STATIC_ACTIONS = {
         ignoreRepeat: true,
     },
 
+    // UI-9: a page flag at the paused playhead, as its right-click menu does. F for flag; Shift
+    // for the smaller step (as Shift+Q/E steps a beat), a subset page keeping later pages' numbers
+    timelineCreatePageAtPlayhead: {
+        labelKey: "actions.timeline.createPageAtPlayhead",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: ["F"],
+        ignoreRepeat: true,
+    },
+    timelineCreateSubsetAtPlayhead: {
+        labelKey: "actions.timeline.createSubsetAtPlayhead",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: ["Shift+F"],
+        ignoreRepeat: true,
+    },
+
     // UI-27: the move the playhead is inside becomes two that meet there (Expert); unbound
     timelineSplitMoveAtPlayhead: {
         labelKey: "actions.timeline.splitMoveAtPlayhead",

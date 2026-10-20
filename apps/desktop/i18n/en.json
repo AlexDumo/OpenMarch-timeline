@@ -112,6 +112,8 @@
             "swap": "Swap two marchers"
         },
         "timeline": {
+            "createPageAtPlayhead": "Create page at playhead",
+            "createSubsetAtPlayhead": "Create subset at playhead",
             "goTo": "Go to a page, measure or rehearsal mark",
             "nextPage": "Next page (timeline)",
             "playPause": "Play / pause audio",
@@ -2075,11 +2077,13 @@
             "noPageMove": "{page} has no move of its own to merge into."
         },
         "appendCounts": {
-            "label": "{counts, plural, one {# count} other {# counts}}",
-            "title": "{counts, plural, one {Add a page of # count after the last page. Right-click to change how many.} other {Add a page of # counts after the last page. Right-click to change how many.}}",
-            "pagesAdded": "{pages, plural, one {Added # page to the end of the show.} other {Added # pages to the end of the show.}}",
-            "pagesToEnd": "{counts, plural, one {Create pages every count to the end} other {Create pages every # counts to the end}}",
-            "pagesToEndTitle": "{counts, plural, one {Add pages every count to the end of the music} other {Add pages every # counts to the end of the music}}"
+            "pagesAdded": "{pages, plural, one {Added # page to the end of the show.} other {Added # pages to the end of the show.}}"
+        },
+        "appendAtPlayhead": {
+            "label": "Add {counts}-Count Page",
+            "title": "{counts, plural, one {Add a page of # count, from the last page to the playhead} other {Add a page of # counts, from the last page to the playhead}}",
+            "subsetLabel": "Add {counts}-Count Subset",
+            "subsetTitle": "{counts, plural, one {Add a subset page of # count, from the last page to the playhead} other {Add a subset page of # counts, from the last page to the playhead}}"
         }
     },
     "titlebar": {
