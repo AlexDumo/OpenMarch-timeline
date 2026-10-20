@@ -853,8 +853,15 @@ test("tapping R keeps the ring open: a click away dismisses it, a click on Box a
     await selectAll(page);
     const at = await pointAtField(show);
 
+    // The Shapes tab says how to open the ring
+    await page.getByRole("tab", { name: "Shapes" }).click();
+    await expect(page.getByTestId("shapes-tab-ring-hint")).toHaveText(
+        "Hold R on the field for the shape ring",
+    );
+    await page.mouse.move(at.x, at.y);
     await page.keyboard.press("r");
     await expect(ring(page)).toHaveAttribute("data-latched", "true");
+    await expect(page.getByTestId("shape-ring-hint")).toBeVisible();
     // A click away dismisses it, and doesn't reach the field
     await page.mouse.click(at.x + 300, at.y + 200);
     await expect(ring(page)).toBeHidden();
@@ -911,5 +918,10 @@ test.describe("with the ring rebound to J", () => {
         await expect(ring(page)).toBeHidden();
         await page.keyboard.press("j");
         await expect(ring(page)).toHaveAttribute("data-latched", "true");
+        await page.keyboard.press("Escape");
+        await page.getByRole("tab", { name: "Shapes" }).click();
+        await expect(page.getByTestId("shapes-tab-ring-hint")).toHaveText(
+            "Hold J on the field for the shape ring",
+        );
     });
 });

@@ -3,6 +3,8 @@ import { useMemo } from "react";
 import { performersOnly } from "@/global/classes/Marcher";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import ActionButton from "@/shortcuts/ActionButton";
+import { getActionShortcutLabel } from "@/shortcuts/labels";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { kindPickGate } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
@@ -23,6 +25,8 @@ export default function ShapesTab() {
     );
     const armed = useShapeToolStore((s) => s.tool?.kind ?? null);
     const gate = kindPickGate(armed !== null, performers);
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const ringKey = getActionShortcutLabel("openShapeRing", { overrides });
     return (
         <div className="flex w-full flex-wrap items-center gap-8">
             <ToolbarSection aria-label="Shape kinds">
@@ -55,6 +59,15 @@ export default function ShapesTab() {
                     );
                 })}
             </ToolbarSection>
+            {/* The ring has no button, so the tab says how to open it (sims, ring round 1) */}
+            {ringKey && (
+                <span
+                    className="text-sub text-text-subtitle"
+                    data-testid="shapes-tab-ring-hint"
+                >
+                    Hold {ringKey} on the field for the shape ring
+                </span>
+            )}
             {!gate.ok && (
                 <span
                     className="text-sub text-text-subtitle"

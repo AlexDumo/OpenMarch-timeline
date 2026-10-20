@@ -163,11 +163,20 @@ export default function FavoritesRing() {
                     ))}
                     {!gate.ok && (
                         <span
-                            className="rounded-6 bg-modal text-sub text-text-subtitle shadow-modal absolute -translate-x-1/2 px-8 py-2 whitespace-nowrap"
-                            style={{ top: RING_RADIUS + 28 }}
+                            className="rounded-6 bg-modal text-body text-text shadow-modal absolute -translate-x-1/2 px-8 py-2 whitespace-nowrap"
+                            style={{ top: 20 }}
                             data-testid="shape-ring-reason"
                         >
                             {gate.reason}
+                        </span>
+                    )}
+                    {gate.ok && ring.latched && (
+                        <span
+                            className="rounded-6 bg-modal text-sub text-text-subtitle shadow-modal absolute -translate-x-1/2 px-8 py-2 whitespace-nowrap"
+                            style={{ top: 20 }}
+                            data-testid="shape-ring-hint"
+                        >
+                            Click a shape, or anywhere else to close
                         </span>
                     )}
                 </div>
