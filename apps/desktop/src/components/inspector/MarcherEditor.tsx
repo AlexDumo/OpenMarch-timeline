@@ -17,7 +17,6 @@ import {
     SelectItem,
     SelectTriggerCompact,
 } from "@openmarch/ui";
-import MarcherRotationInput from "./marcher/MarcherRotationInput";
 import StepSizeWarningBadge from "./StepSizeWarningBadge";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { performersOnly } from "@/global/classes/Marcher";
@@ -685,11 +684,6 @@ function MarcherEditor() {
 
                                     {/* Alignment, distribution, and transformation buttons */}
                                     <AlignmentButtons />
-
-                                    {/* Add rotation controls */}
-                                    <div className="w-full">
-                                        <MarcherRotationInput />
-                                    </div>
 
                                     <TagButtons
                                         selectedMarcherIds={

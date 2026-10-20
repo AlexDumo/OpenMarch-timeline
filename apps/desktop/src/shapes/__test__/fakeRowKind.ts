@@ -100,6 +100,12 @@ export const rowTool: ToolKind<RowParams> = {
                     ? base
                     : { ...base, gap: gapOf(steps, env.stepPx) };
             },
+            widen(p, _n, by, env) {
+                const steps = p.gap / env.stepPx + by;
+                return steps < 0.5 - 1e-9
+                    ? null
+                    : { ...p, gap: gapOf(steps, env.stepPx) };
+            },
         },
     ],
     scaling: "interval",
@@ -164,3 +170,103 @@ export const rowTool: ToolKind<RowParams> = {
         flipY: frame.flipY || undefined,
     }),
 };
+
+/**
+ * A second test kind (#349) with no regular spacing: its spots spread along a length, so it
+ * scales its footprint in half steps instead of an interval. The host scales it without knowing
+ * which it is.
+ */
+export interface SpreadParams {
+    readonly center: XY;
+    /** Field units from the first spot to the last */
+    readonly length: number;
+    readonly rotation: number;
+    readonly flipX?: boolean;
+    readonly flipY?: boolean;
+}
+
+const asRow = (p: SpreadParams, n: number): RowParams => ({
+    center: p.center,
+    gap: p.length / Math.max(1, n - 1),
+    rotation: p.rotation,
+    flipX: p.flipX,
+    flipY: p.flipY,
+});
+
+const spreadShape: ShapeKind<SpreadParams> = {
+    ...(rowShape as unknown as ShapeKind<SpreadParams>),
+    id: "test-spread",
+    label: "Spread",
+    fit: () => ({ center: { x: 0, y: 0 }, length: 50, rotation: 0 }),
+    outline: (p, n, ctx) => rowShape.outline(asRow(p, n), n, ctx),
+    generate: (p, n, ctx) => rowShape.generate(asRow(p, n), n, ctx),
+    orderKey: (p, point, ctx, n) =>
+        rowShape.orderKey(asRow(p, n), point, ctx, n),
+};
+
+export const spreadTool: ToolKind<SpreadParams> = {
+    shape: spreadShape,
+    params: [
+        {
+            key: "length",
+            label: "Length, in steps",
+            unit: "steps",
+            primary: true,
+            drag: "x",
+            interval: false,
+            blends: true,
+            range: { min: 0.5 },
+            display: (p, _n, stepPx) => formatSteps(p.length / stepPx),
+            type(p, _n, text, env) {
+                const steps = parseSteps(text);
+                return steps === null
+                    ? null
+                    : { ...p, length: steps * env.stepPx };
+            },
+            scrub: (base) => base,
+        },
+    ],
+    scaling: "footprint",
+    draw(from, to, _n, env) {
+        const length = Math.abs(to.x - from.x);
+        if (length < env.stepPx / 2) return undefined;
+        return {
+            center: env.gridSnap({ x: (from.x + to.x) / 2, y: from.y }),
+            length,
+            rotation: 0,
+        };
+    },
+    handles: (p, n) => rowTool.handles(asRow(p, n), n),
+    dragHandle(base, n, _key, to) {
+        const local = fieldToFrame(spreadFrame(base, n), to);
+        return { ...base, length: 2 * Math.abs(local.x) };
+    },
+    contains: (p, n, at) => rowTool.contains(asRow(p, n), n, at),
+    move: (base, _n, delta, env) => ({
+        ...base,
+        center: env.gridSnap({
+            x: base.center.x + delta.x,
+            y: base.center.y + delta.y,
+        }),
+    }),
+    frameOf: (p, n) => spreadFrame(p, n),
+    fromFrame: (frame) => ({
+        center: frame.center,
+        length: 2 * frame.halfWidth,
+        rotation: frame.rotation,
+        flipX: frame.flipX || undefined,
+        flipY: frame.flipY || undefined,
+    }),
+    withFrame: (p, _n, frame) => ({
+        ...p,
+        center: frame.center,
+        rotation: frame.rotation,
+        flipX: frame.flipX || undefined,
+        flipY: frame.flipY || undefined,
+    }),
+    withSize: (p, _n, half) => ({ ...p, length: 2 * half.halfWidth }),
+};
+
+function spreadFrame(p: SpreadParams, n: number): ShapeFrame {
+    return rowFrame(asRow(p, n), n);
+}

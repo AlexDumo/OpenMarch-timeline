@@ -741,6 +741,168 @@ for (const editorMode of ["expert", "basic"] as const) {
     });
 }
 
+// The inspector's Transform section (#349, spec #344): the pivot grid, the
+// rotation and the flips for any selection, and for a shape scaling by
+// interval in half steps. A plain selection writes positions only, no recipe.
+
+const recipeCount = async (show: Show) => {
+    const [row] = await show.query<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM timeline_shape_recipes",
+    );
+    return row.count;
+};
+
+/** "3½" as 3.5 */
+const halves = (text: string) =>
+    Number(text.replace("½", "").trim() || "0") +
+    (text.includes("½") ? 0.5 : 0);
+
+/** The open box's spacings in the floating editor, in steps */
+async function spacings(page: Page): Promise<[number, number]> {
+    const bar = page.getByTestId("shape-tool-readout");
+    return [
+        halves(await bar.getByTestId("shape-editor-across").innerText()),
+        halves(await bar.getByTestId("shape-editor-deep").innerText()),
+    ];
+}
+
+test("change: the Transform section flips and turns a plain selection around the pivot, writing positions only", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    const section = page.getByTestId("transform-section");
+    await expect(section).toBeVisible();
+    // A plain selection has no scale
+    await expect(section.getByTestId("transform-scale-more")).toHaveCount(0);
+    const steps = await undoSteps(show);
+
+    // Around the left edge: everyone mirrors to the left of the leftmost marcher
+    const left = Math.min(...HOME.map(([, x]) => x));
+    await section.getByTestId("transform-pivot-w").click();
+    await section.getByTestId("transform-flip-across").click();
+    await expect
+        .poll(() => savedPositions(show, 0))
+        .toEqual(asPositions(HOME.map(([id, x, y]) => [id, 2 * left - x, y])));
+    expect(await undoSteps(show)).toBe(steps + 1);
+    expect(await recipeCount(show)).toBe(0);
+
+    // A quarter turn clockwise around the back-left corner of their box
+    const flipped = await savedPositions(show, 0);
+    const corner = {
+        x: Math.min(...flipped.map((p) => p.x)),
+        y: Math.min(...flipped.map((p) => p.y)),
+    };
+    await section.getByTestId("transform-pivot-nw").click();
+    const rotation = section.getByRole("textbox", { name: "Rotation" });
+    await rotation.fill("90");
+    await rotation.blur();
+    await expect
+        .poll(async () =>
+            (await savedPositions(show, 0)).every((p) => {
+                const was = flipped.find((f) => f.id === p.id)!;
+                const want = {
+                    x: corner.x - (was.y - corner.y),
+                    y: corner.y + (was.x - corner.x),
+                };
+                return Math.hypot(p.x - want.x, p.y - want.y) < 0.01;
+            }),
+        )
+        .toBe(true);
+    expect(await undoSteps(show)).toBe(steps + 2);
+    expect(await recipeCount(show)).toBe(0);
+    await expectCanvasMatchesShow(show);
+});
+
+test("change: a box's − and + in the Transform section change its spacing by half a step", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const section = page.getByTestId("transform-section");
+    const [across, deep] = await spacings(page);
+
+    await section.getByTestId("transform-scale-more").click();
+    await expect.poll(() => spacings(page)).toEqual([across + 0.5, deep + 0.5]);
+    await section.getByTestId("transform-scale-less").click();
+    await section.getByTestId("transform-scale-less").click();
+    await expect.poll(() => spacings(page)).toEqual([across - 0.5, deep - 0.5]);
+    // Still open: nobody moves until Place
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+});
+
+test("change: handles snap spacings to half steps, Alt to tenths, with a length readout while dragging", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const se = () =>
+        shapeOverlay(page).then((o) =>
+            o!.handles.reduce((a, b) => (b.x + b.y > a.x + a.y ? b : a)),
+        );
+
+    let tip: string | null = null;
+    let from = await se();
+    await drag(
+        page,
+        from,
+        { x: from.x + 47, y: from.y + 23 },
+        {
+            beforeRelease: async () => {
+                tip = (await shapeOverlay(page))!.tip;
+            },
+        },
+    );
+    expect(tip).toMatch(/^[\d½]+ × [\d½]+ steps · ↔ [\d½]+ ↕ [\d½]+ apart$/);
+    expect((await shapeOverlay(page))!.tip).toBeNull();
+    for (const s of await spacings(page)) expect((s * 2) % 1).toBe(0);
+
+    // With Alt: tenths
+    from = await se();
+    await page.keyboard.down("Alt");
+    await drag(page, from, { x: from.x + 13, y: from.y + 7 });
+    await page.keyboard.up("Alt");
+    const bar = page.getByTestId("shape-tool-readout");
+    for (const id of ["shape-editor-across", "shape-editor-deep"]) {
+        const text = await bar.getByTestId(id).innerText();
+        expect(text).toMatch(/^\d+(\.\d)?$|^[\d½]+$/);
+    }
+});
+
+test("change: a placed box comes back turned and flipped when selected again", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const section = page.getByTestId("transform-section");
+    await section.getByTestId("transform-rotation").click();
+    await page.getByTestId("transform-rotation-input").fill("30");
+    await page.getByTestId("transform-rotation-input").press("Enter");
+    await section.getByTestId("transform-flip-deep").click();
+    const turned = await section.getByTestId("transform-rotation").innerText();
+    expect(turned).not.toBe("0°");
+
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await waitForIdle(page);
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+    const [recipe] = await show.query<{ params: string }>(
+        "SELECT params FROM timeline_shape_recipes",
+    );
+    const stored = JSON.parse(recipe.params);
+    expect(stored.flipY ?? stored.flipX).toBe(true);
+
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await expect(section.getByTestId("transform-rotation")).toHaveText(turned);
+});
+
 // The command bar (#354): `/` and ⌘K open one bar; Shape › Box docks it at the
 // top of the field and asks the box's numbers one at a time, the box showing
 // live on the field.

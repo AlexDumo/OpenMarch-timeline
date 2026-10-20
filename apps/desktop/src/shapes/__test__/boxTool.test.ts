@@ -154,14 +154,15 @@ describe("drawing a box", () => {
         expect(box.across).toBe(box.deep);
     });
 
-    it("Alt doesn't round", () => {
+    it("Alt rounds to tenths of a step, not half steps", () => {
         const box = drawBox(
             { x: 0, y: 0 },
             { x: 83, y: 83 },
             16,
             env({ snap: false }),
         )!;
-        expect(box.across).toBeCloseTo(83 / 3);
+        // 2.77 steps is 2.8
+        expect(box.across).toBeCloseTo(28);
     });
 
     it("keeps the file count until another fits clearly better", () => {

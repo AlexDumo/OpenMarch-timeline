@@ -170,6 +170,7 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         knob: drawing.knob ? screen(drawing.knob.at) : null,
         centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,
         labels: (drawing.labels ?? []).map((l) => l.text),
+        tip: drawing.tip?.text ?? null,
     };
     function screen(at: FieldPoint) {
         const { x, y } = fieldToElement(view, at.x, at.y);
