@@ -16,7 +16,7 @@ export interface ToolEnv {
     readonly gridSnap: (p: XY) => XY;
     /** How far from a handle a press still takes it, in field units */
     readonly hitRadius: number;
-    /** What turns, flips and resizes go around (the inspector's pivot); back-left when absent */
+    /** What turns, flips and scales go around (the Transform section's pivot); the center when absent */
     readonly pivot?: PivotKey;
     /** The box's ratio lock: changing one spacing changes the other in proportion */
     readonly ratioLocked?: boolean;
@@ -78,6 +78,12 @@ export interface ToolParam<P> {
         readonly more: string;
         by(params: P, n: number, by: -1 | 1, env: ToolEnv): P | null;
     };
+    /**
+     * An interval's part in scaling (#349): the params with it `by` steps wider (closer when
+     * negative), every gap of a gap list at once, kept on half steps; null where it can't go
+     * (under half a step). The pivot is the host's: where the shape grows from doesn't matter.
+     */
+    widen?(params: P, n: number, by: number, env: ToolEnv): P | null;
 }
 
 /**
@@ -127,6 +133,16 @@ export interface ToolKind<P> {
     frameOf(params: P, n: number): ShapeFrame;
     /** The params with `frame`'s center, turn and flip; the kind keeps its own size */
     withFrame(params: P, n: number, frame: ShapeFrame): P;
+    /**
+     * A `footprint` kind's part in scaling (#349): the params with the frame's half sizes set,
+     * its center, turn and flip kept. Absent for `interval` kinds, which scale their spacings.
+     */
+    withSize?(
+        params: P,
+        n: number,
+        half: { readonly halfWidth: number; readonly halfDepth: number },
+        env: ToolEnv,
+    ): P;
     /** After a turn or flip: the shape put back on the grid, if it snaps to one */
     settle?(params: P, n: number, env: ToolEnv): P;
 }

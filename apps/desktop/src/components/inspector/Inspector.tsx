@@ -1,6 +1,7 @@
 import MarcherEditor from "./MarcherEditor";
 import PageEditor from "./PageEditor";
 import { ShapeToolSection } from "@/shapes/tool/ShapeToolSection";
+import { TransformSection } from "@/shapes/transform/TransformSection";
 import { PageNotesSection } from "./PageNotesSection";
 import { TimelineMoveCardSlot } from "./TimelineMoveCard";
 import { T } from "@tolgee/react";
@@ -23,6 +24,8 @@ function Inspector() {
                 <div className="relative mt-8 flex min-h-0 flex-1 flex-col gap-48 overflow-y-auto">
                     {/* Shapes come first: picking one is the usual next step after selecting */}
                     <ShapeToolSection />
+                    {/* Pivot, turn, flip and scale for any selection (#349) */}
+                    <TransformSection />
                     {/* UI-14 review: a selected move's card comes first */}
                     {!basic && <TimelineMoveCardSlot />}
                     <PageEditor />

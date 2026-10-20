@@ -12,6 +12,7 @@ import {
     type ShapeTarget,
 } from "../frame/gestures";
 import { rotationDegrees } from "../frame/frame";
+import { lengthReadout } from "../frame/scale";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { ShapeField } from "./shapeField";
 
@@ -77,7 +78,7 @@ export function drillTerms(p: XY): string | null {
 /**
  * What every open or selected shape draws for its frame (08, "Handles and gestures"): the knob
  * and the center dot, and during a gesture its guide: the pivot and the angle while turning,
- * where the center is in drill terms while moving.
+ * where the center is in drill terms while moving, its length and spacing while stretching.
  */
 export function frameDrawing(
     kind: AnyToolKind,
@@ -85,7 +86,7 @@ export function frameDrawing(
     n: number,
     gesture: ShapeGesture | null,
     pointer: XY | null,
-    env: Pick<ToolEnv, "hitRadius">,
+    env: ToolEnv,
 ): Pick<FieldModeDrawing, "knob" | "centerDot" | "pivot" | "tip"> {
     const controls = frameControls(kind, params, n, env);
     const out: Pick<FieldModeDrawing, "knob" | "centerDot" | "pivot" | "tip"> =
@@ -101,6 +102,11 @@ export function frameDrawing(
             pivot: { at: gesture.pivot, to: pointer },
             tip: { at: pointer, text: `${degrees}°` },
         };
+    }
+    if (gesture.type === "handle") {
+        // How long the shape is and how far apart, so a long one shows where the next snap lands
+        const text = lengthReadout(kind, params, n, env);
+        return text ? { ...out, tip: { at: pointer, text } } : out;
     }
     if (gesture.type === "center" || gesture.type === "move") {
         const text = drillTerms(controls.center);

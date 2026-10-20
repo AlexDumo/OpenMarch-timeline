@@ -10,17 +10,21 @@ import {
     activeFieldEditor,
     subscribeActiveFieldEditor,
 } from "@/field/editor/activeFieldEditor";
-import type { FieldEditor } from "@/field/editor/fieldEditor";
+import type { FieldEditor, FieldPoint } from "@/field/editor/fieldEditor";
+import type { FieldRect } from "@/field/editor/selectionArea";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 
+/** Around the selection's box's center unless `around` picks another point of it */
+type Around = (box: FieldRect) => FieldPoint;
+
 /** Rotates the selection on the field on screen, through its editor. */
-function MarcherRotationInput() {
+function MarcherRotationInput({ around }: { around?: Around }) {
     const editor = useSyncExternalStore(
         subscribeActiveFieldEditor,
         activeFieldEditor,
     );
     return editor ? (
-        <FieldRotationInput editor={editor} />
+        <FieldRotationInput editor={editor} around={around} />
     ) : (
         <RotationDragInput value={0} disabled />
     );
@@ -55,13 +59,20 @@ function RotationDragInput(
 
 /**
  * The new field's rotation (#198, user story 54): typing or dragging turns
- * the selection about its box's center through the editor, as the rotate
- * handle does, and leaving the input saves it through the same drop. Left
+ * the selection about its box's center (or the Transform section's pivot,
+ * #349) through the editor, as the rotate handle does, and leaving the
+ * input saves it through the same drop. Left
  * unchanged, it saves nothing. It shows what's typed until the rotation
  * ends, then 0 again: the selection's box fits it again. A press on the
  * field saves it before the blur does.
  */
-function FieldRotationInput({ editor }: { editor: FieldEditor }) {
+function FieldRotationInput({
+    editor,
+    around,
+}: {
+    editor: FieldEditor;
+    around?: Around;
+}) {
     const subscribe = useCallback(
         (listener: () => void) => editor.subscribe(listener),
         [editor],
@@ -81,8 +92,8 @@ function FieldRotationInput({ editor }: { editor: FieldEditor }) {
         <RotationDragInput
             key={ended}
             value={0}
-            onDragChange={(value) => editor.rotateSelection(value)}
-            onChange={(value) => editor.rotateSelection(value)}
+            onDragChange={(value) => editor.rotateSelection(value, around)}
+            onChange={(value) => editor.rotateSelection(value, around)}
             onBlur={save}
             onDragEnd={save}
             disabled={!canRotate}

@@ -662,20 +662,24 @@ export class FieldEditor {
     }
 
     /**
-     * Turns the selection `degrees` clockwise about its box's center, from
+     * Turns the selection `degrees` clockwise about its box's center (or the
+     * point `around` picks on that box, the Transform section's pivot), from
      * where it was when the typing started, as the rotate handle does (user
      * story 54). Drawn until {@link endRotation} saves it. Refused during a
      * drag and while a mode that locks the selection is on. Over a drop still
      * saving it starts from where that drop is drawn, and is dropped if that
      * drop is refused.
      */
-    rotateSelection(degrees: number): void {
+    rotateSelection(
+        degrees: number,
+        around: (box: FieldRect) => FieldPoint = centerOf,
+    ): void {
         if (this.gesture || this.modePress || this.mode?.locksSelection) return;
         if (!this.typed) {
             const starts = this.drawnPositions(this.ports.selection.get());
             const box = boundsOf(starts);
             if (starts.length < 2 || !box) return;
-            this.typed = { starts, center: centerOf(box), degrees: 0 };
+            this.typed = { starts, center: around(box), degrees: 0 };
         }
         this.typed.degrees = degrees;
         this.showLive(

@@ -95,11 +95,14 @@ export function withBoxFrame<P extends BlockParams>(
 
 export const halfStep = (env: ToolEnv): number => env.stepPx / 2;
 
-/** An interval as drawn: half steps when snapping, never under half a step */
+/**
+ * An interval as drawn or stretched: half steps, tenths of a step with Alt (spec #344), never
+ * under half a step
+ */
 export function snapInterval(v: number, env: ToolEnv): number {
     const half = halfStep(env);
-    const snapped = env.snap ? Math.round(v / half) * half : v;
-    return Math.max(half, snapped);
+    const unit = env.snap ? half : env.stepPx / 10;
+    return Math.max(half, Math.round(v / unit) * unit);
 }
 
 /**

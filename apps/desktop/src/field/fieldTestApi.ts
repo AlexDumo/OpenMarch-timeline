@@ -183,6 +183,8 @@ export type FieldTestShapeOverlay = {
     centerDot: ScreenPoint | null;
     /** Who will stand on each spot, as labeled. */
     labels: string[];
+    /** The readout by the pointer during a gesture ("7½ × 2 steps · ↔ 2½ ↕ 2 apart"), or null. */
+    tip: string | null;
 };
 
 /** A placed box outlined on the field. */

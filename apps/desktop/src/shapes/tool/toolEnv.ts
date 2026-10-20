@@ -1,8 +1,6 @@
 import { getRoundCoordinates2 } from "@/utilities/CoordinateActions";
 import type { ShapeField } from "../field/shapeField";
 import { useShapeEditorStore } from "../frame/shapeEditorStore";
-import { DEFAULT_PIVOT } from "../frame/frame";
-import { isBasicMode } from "@/stores/EditorModeStore";
 import type { ToolEnv } from "./toolKind";
 
 /** How far from a handle a press still takes it, in screen pixels */
@@ -34,8 +32,8 @@ export function toolEnvFor(
             return { x: r.xPixels, y: r.yPixels };
         },
         hitRadius: HANDLE_REACH_PX / (field.zoom() || 1),
-        // Basic has no pivot grid: it always uses the default
-        pivot: isBasicMode() ? DEFAULT_PIVOT : editor.pivot,
+        // The Transform section's pivot, the same in Basic and Expert (spec #344)
+        pivot: editor.pivot,
         ratioLocked: editor.ratioLocked,
     };
 }
