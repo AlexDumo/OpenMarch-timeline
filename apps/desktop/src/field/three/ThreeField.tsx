@@ -67,6 +67,7 @@ import {
     PlacedBoxesOverlay,
 } from "@/shapes/placed/PlacedBoxesOverlay";
 import { ShapeEditor } from "@/shapes/editor/ShapeEditorBar";
+import FavoritesRing from "@/shapes/tool/FavoritesRing";
 import { useShapeFocus } from "@/shapes/field/useShapeFocus";
 import { useFieldItemWrites } from "@/field/fieldItemWrites";
 import {
@@ -676,6 +677,7 @@ function ThreeFieldView() {
                 {fieldProperties && (
                     <ShapeEditor stepPx={fieldProperties.pixelsPerStep} />
                 )}
+                <FavoritesRing />
                 <KeptMarksOverlay
                     marks={keptMarks}
                     elements={keptMarkElements}

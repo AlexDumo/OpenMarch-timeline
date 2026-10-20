@@ -99,6 +99,7 @@
             "delete": "Deletes the current selected shapes",
             "noMarchersSelected": "No marchers selected",
             "block": "Shape: Box",
+            "ring": "Favorites ring: hold to pick a shape, tap to keep it open",
             "apply": "Place marchers on the shape",
             "keywords": "shape form formation set place"
         },

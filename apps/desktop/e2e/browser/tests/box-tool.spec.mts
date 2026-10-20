@@ -797,3 +797,119 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
         )
         .toBe(true);
 });
+
+// The favorites ring (#351): hold R around the cursor and let go over a shape
+// to arm it, or tap R to keep it open until a click. Stars come with the
+// library (#352), so for now it holds the basic kinds.
+const ring = (page: Page) => page.getByTestId("shape-ring");
+const ringSlot = (page: Page, id: string) =>
+    page.getByTestId(`shape-ring-slot-${id}`);
+
+/** Puts the pointer on the field, where the ring opens around it */
+async function pointAtField(show: Show): Promise<Point> {
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const at = await toScreen(show.page, {
+        x: grid.centerFront.x,
+        y: grid.centerFront.y - 20 * S,
+    });
+    await show.page.mouse.move(at.x, at.y);
+    return at;
+}
+
+test("holding R opens the ring around the cursor; sliding to Box and letting go arms it", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    const at = await pointAtField(show);
+    await page.keyboard.down("r");
+    await expect(ring(page)).toBeVisible();
+    await expect(ring(page)).toHaveAttribute("data-latched", "false");
+    // Opened around the cursor
+    const center = (await page.getByTestId("shape-ring-center").boundingBox())!;
+    expect(
+        Math.hypot(
+            center.x + center.width / 2 - at.x,
+            center.y + center.height / 2 - at.y,
+        ),
+    ).toBeLessThan(4);
+    const box = ringSlot(page, "block");
+    await expect(box).toHaveText("Box");
+    await expect(box).toHaveAttribute("data-hot", "false");
+
+    await page.mouse.move(at.x, at.y - 90, { steps: 4 });
+    await expect(box).toHaveAttribute("data-hot", "true");
+    await page.keyboard.up("r");
+    await expect(ring(page)).toBeHidden();
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    expect((await readField(page)).activeGesture).toBe("shape");
+});
+
+test("tapping R keeps the ring open: a click away dismisses it, a click on Box arms it, and Escape closes it before the shape", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    const at = await pointAtField(show);
+
+    await page.keyboard.press("r");
+    await expect(ring(page)).toHaveAttribute("data-latched", "true");
+    // A click away dismisses it, and doesn't reach the field
+    await page.mouse.click(at.x + 300, at.y + 200);
+    await expect(ring(page)).toBeHidden();
+    expect((await readField(page)).selection).toEqual(ALL);
+    await expect(page.getByTestId("shape-tool-hint")).toBeHidden();
+
+    await page.mouse.move(at.x, at.y);
+    await page.keyboard.press("r");
+    await ringSlot(page, "block").click();
+    await expect(ring(page)).toBeHidden();
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+
+    // With the box armed, Escape closes the ring first and keeps the shape
+    await page.keyboard.press("r");
+    await expect(ring(page)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(ring(page)).toBeHidden();
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-tool-hint")).toBeHidden();
+});
+
+test("with nobody selected the ring's shapes are greyed out and say why, and letting go over one picks nothing", async ({
+    show,
+}) => {
+    const { page } = show;
+    expect((await readField(page)).selection).toEqual([]);
+    const at = await pointAtField(show);
+    await page.keyboard.down("r");
+    const box = ringSlot(page, "block");
+    await expect(box).toBeDisabled();
+    await expect(page.getByTestId("shape-ring-reason")).toHaveText(
+        "Select marchers first",
+    );
+    await page.mouse.move(at.x, at.y - 90, { steps: 4 });
+    await page.keyboard.up("r");
+    await expect(ring(page)).toBeHidden();
+    await expect(page.getByTestId("shape-tool-hint")).toBeHidden();
+    expect((await readField(page)).activeGesture).not.toBe("shape");
+});
+
+test.describe("with the ring rebound to J", () => {
+    test.use({
+        initScript: `localStorage.setItem("openmarch:shortcutOverrides", ${JSON.stringify(
+            JSON.stringify({ openShapeRing: ["J"] }),
+        )});`,
+    });
+
+    test("J opens the ring and R no longer does", async ({ show }) => {
+        const { page } = show;
+        await selectAll(page);
+        await pointAtField(show);
+        await page.keyboard.press("r");
+        await expect(ring(page)).toBeHidden();
+        await page.keyboard.press("j");
+        await expect(ring(page)).toHaveAttribute("data-latched", "true");
+    });
+});

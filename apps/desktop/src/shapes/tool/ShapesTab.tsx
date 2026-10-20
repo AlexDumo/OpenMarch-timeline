@@ -13,7 +13,7 @@ import { useShapeToolStore } from "./shapeToolStore";
  * name. A kind's button runs its action, which goes through the host's `pickShapeKind`: it arms
  * the kind, or turns the open shape into it. With nobody selected the kinds are greyed out and
  * say why. Starred shapes and the Library button join after a divider once the library exists
- * (#351).
+ * (#352).
  */
 export default function ShapesTab() {
     const selected = useSelectedMarchers()?.selectedMarchers;
