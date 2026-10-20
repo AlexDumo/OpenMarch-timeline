@@ -28,6 +28,8 @@ import type { AnyToolKind, ToolEnv } from "./toolKind";
 
 /** What undo steps between */
 export interface ToolSnapshot {
+    /** The kind of shape: picking another kind is a step too */
+    readonly kind: AnyToolKind;
     /** Null until a shape is drawn */
     readonly params: unknown;
     /** The slot index for each marcher, in `marchers` order; null with no shape */
@@ -55,7 +57,6 @@ export type Gesture =
     | (ShapeGesture & { readonly before: ToolSnapshot });
 
 export interface ToolState extends ToolSnapshot {
-    readonly kind: AnyToolKind;
     /** In selection order, with where they stand when the tool opened */
     readonly marchers: readonly AssignMarcher[];
     /**
@@ -92,6 +93,7 @@ export function openTool(
 }
 
 const snapshot = (s: ToolState): ToolSnapshot => ({
+    kind: s.kind,
     params: s.params,
     assignment: s.assignment,
     order: s.order,
@@ -251,6 +253,28 @@ export function beginEdit(state: ToolState): ToolState {
 export function previewEdit(state: ToolState, params: unknown): ToolState {
     if (state.gesture?.type !== "edit" || params === state.params) return state;
     return { ...state, params };
+}
+
+/**
+ * Picking `kind` with the tool open (#344): before anything is drawn it is simply the kind drawn
+ * next. A drawn shape turns into `kind` keeping its frame (center, size, turn and flip), so forms
+ * can be compared in place, and who goes where is worked out again on the new spots. One undo
+ * step.
+ */
+export function switchKind(
+    state: ToolState,
+    kind: AnyToolKind,
+    ctx: ShapeContext,
+    env: ToolEnv,
+): ToolState {
+    if (state.gesture || kind === state.kind) return state;
+    if (state.params === null) return { ...state, kind };
+    const n = state.spots;
+    const params = kind.fromFrame(state.kind.frameOf(state.params, n), n, env);
+    return reassign(
+        pushHistory({ ...state, kind, params }, snapshot(state)),
+        ctx,
+    );
 }
 
 /** Least travel or drill order, worked out at once: one undo step */
