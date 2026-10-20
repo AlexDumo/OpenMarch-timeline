@@ -260,12 +260,14 @@ export async function waitForIdle(page: Page, quietMs = 250) {
 
 /**
  * Adds a page flag at the start of a measure: moves the playhead there with
- * the timeline's Go to field, then presses the timeline's **+**. The new page
- * runs from that beat to the next flag (or the show's last page counts).
+ * the timeline's Go to field, then picks **Create page at playhead** from the playhead's
+ * right-click menu. The new page runs from that beat to the next flag (or the
+ * show's last page counts).
  */
 export async function addPageAt(page: Page, measure: number) {
     await goTo(page, `m${measure}`);
-    await page.getByTestId("timeline-add-page-flag").click();
+    await page.getByTestId("timeline-playhead").click({ button: "right" });
+    await page.getByTestId("timeline-add-page").click();
 }
 
 /** Moves the playhead with the timeline's Go to field ("m6" is measure 6). */

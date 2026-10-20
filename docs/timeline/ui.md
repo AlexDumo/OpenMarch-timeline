@@ -184,9 +184,23 @@ from it. The spec still wins on the model; this file decides presentation.
     `useSelectedPage` is read in timeline mode keeps new code from bringing
     it back. Coordinate sheets and drill-chart exports loop over every page
     and don't read the selection, so they stay.
-  - **+.** When the paused playhead isn't on a flag (and there is a beat
-    there), a **+** shows just after it. It adds a page whose flag is at the
-    playhead in one edit. The page that was split keeps its flag, id and
+  - **Create page at playhead (was +, then Add page).** When the paused playhead isn't on a flag
+    (and there is a beat there), right-clicking the playhead opens a menu with **Create page at
+    playhead**, or press **F** (for flag). It adds a page whose flag is at the playhead in one
+    edit. The menu's entries are the actions' labels and show their shortcuts, which can be
+    rebound in Settings and are in ⌘K (_owner, 2026-10-19_: F rather than P, because Shift+P and
+    Alt+P are taken). Until
+    2026-10-19 this was a **+** just after the playhead; the owner moved it to
+    the playhead's menu because a button on the end of the start flag–playhead
+    pair read as acting on that range, while adding a page only puts a flag at
+    one beat (_owner, 2026-10-19_). Older notes below that say **+** or **Add page** mean this
+    entry.
+    **+ Add N-Count Page (2026-10-20, owner).** With the paused playhead past the last page (the
+    shaded "no page" zone), a pill beside its head reads **+ Add N-Count Page**, N being the counts
+    from the last flag to the playhead (not from the start flag). Clicking it adds that page, as
+    **Create page at playhead** does there. Hovering or focusing it shades the new page's range,
+    unless the window already shows it (the start flag on the last flag). Where it wouldn't fit before the timeline's visible right edge, it sits on the playhead's left. Holding Shift turns it into **+ Add N-Count Subset**, which adds the page as a subset, as **Create subset at playhead** does (_owner, 2026-10-20_). It replaced **+ N counts** after the last flag and its
+    right-click menu (endless-counts.md EC-10, EC-16). The page that was split keeps its flag, id and
     per-page data (notes, appearance); the new page comes before it, and
     later pages renumber, unless it is a subset page (below). Only page rows change, plus
     `last_page_counts` when the last page is split; no timeline is written,
@@ -208,8 +222,10 @@ from it. The spec still wins on the model; this file decides presentation.
     **Add selected marchers**) just appears, whatever its range. Only the dropping clip draws
     over the page bar; it takes no clicks until it lands. The page boxes themselves don't
     animate (owner). With reduced motion nothing moves. V-289.
-  - **Subset pages (2026-10-13).** Right-clicking **+** opens a menu with
-    **Add page** (the same as clicking **+**) and **Add subset page**, each with the name the new page would get, muted. The subset one adds the same page as a
+  - **Subset pages (2026-10-13).** The playhead's menu (right-clicking **+**
+    until 2026-10-19) has **Create page at playhead** (F) and **Create subset at playhead**
+    (Shift+F: Shift for the smaller step, as Shift+Q/E steps a beat), each with the name the new
+    page would get, muted, and its shortcut. The subset one adds the same page as a
     subset: it takes a letter ("3A") and no later page renumbers. Right-clicking
     a page box offers **Change to subset**, or **Change to normal page** on a
     subset page, matching the Subset switch in page mode's menu and the
@@ -578,9 +594,9 @@ from it. The spec still wins on the model; this file decides presentation.
   - **The window badge** shows only while a handle is dragged or when the window starts off a page
     line; from a page line its length is the playhead's count, which the readout shows. It uses the
     field line's words: "counts 3–6" inside one page box, or "12 counts" when it passes a flag.
-    Past the last page flag it always shows (#163), counting from that flag to the window's end
-    ("5 counts"), so a new page's length can be read off; with a flag after the window's end the
-    rule above holds.
+    Past the last page flag it always shows (#163). It counts the window, start flag to playhead
+    (_owner, 2026-10-20_; until then it counted from the last flag, which **+ Add N-Count Page**
+    now says); with a flag after the window's end the rule above holds.
   - Deferred (UX review): counts along the selected page box in shows with measures, a count
     under the pointer while hovering, and thinning to downbeats in odd meters.
 
@@ -1371,8 +1387,8 @@ from it. The spec still wins on the model; this file decides presentation.
     window's move when the playhead is inside it, else on the one move the playhead is strictly
     inside; with none or several it says so ("Several moves cross Page 3 count 4. Right-click the
     one to split."). A page's own move (the oldest over its box, UI-25) has no clip or card, so it
-    isn't offered, while a move split off it by marchers is a move like any other; **+** and
-    **Split page** are the page's tools (_lead default_, V-344). Greyed out in ⌘K in Basic, where
+    isn't offered, while a move split off it by marchers is a move like any other; **Add page**
+    (the playhead's menu) and **Split page** are the page's tools (_lead default_, V-344). Greyed out in ⌘K in Basic, where
     there are no moves to split, and while playing.
   - **When.** Only while paused (the menu entry says "Pause to split a move."), and only with the
     playhead strictly inside the move: on an end there is nothing to split off, and the entry is

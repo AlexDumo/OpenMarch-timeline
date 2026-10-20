@@ -3,7 +3,7 @@ import { initialClipDrops, landClip, nextClipDrops } from "../clipDrops";
 import type { TimelineTrack } from "../TimelineViewModel";
 
 /**
- * Which clips drop out of a page box (UI-9 **+**, deleting a flag): a move the page boxes stood
+ * Which clips drop out of a page box (UI-9 **Create page at playhead**, deleting a flag): a move the page boxes stood
  * for that now has a clip. It was hidden behind its box; the box no longer fits it, so it shows
  * as a clip, sliding down from the page row. Found by identity, never by range.
  */

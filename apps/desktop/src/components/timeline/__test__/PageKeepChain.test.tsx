@@ -124,14 +124,11 @@ const show = ({
     pixelsPerBeat = 16,
     positionBeat,
     onSeek,
-    onAddPageFlag,
 }: {
     /** Where the playhead is, paused */
     positionBeat?: number;
     /** Seeks, with the playhead at beat 0 unless `positionBeat` says otherwise */
     onSeek?: (beat: number, options?: unknown) => void;
-    /** Shows the add-page-flag **+** after the playhead */
-    onAddPageFlag?: () => void;
     keepChains?: PageKeepChains;
     keepHere?: TimelineKeepHereMenu;
     selection?: TimelineSelection;
@@ -164,7 +161,6 @@ const show = ({
                           onSeek,
                       }
             }
-            onAddPageFlag={onAddPageFlag}
         />,
     );
 
@@ -386,74 +382,6 @@ describe("the chains on the page boxes", () => {
         // And clear of the playhead on the box's own flag, at its right
         expect(chainX + 16).toBeLessThan(
             flagX + parseFloat(box.style.width) - 6,
-        );
-    });
-
-    it("the add-page-flag + moves past the chain of the playhead's box rather than cover it", () => {
-        // Page 3's box from x 128; the playhead a beat in (x 144), so the + (8px after it, 16px
-        // wide, drawn above the chain) would land on the chain
-        show({
-            keepChains: new Map([[3, chain("follows")]]),
-            selection: {
-                kind: "range",
-                range: { startBeatIndex: 9, endBeatIndex: 17 },
-            },
-            positionBeat: 10,
-            onAddPageFlag: vi.fn(),
-        });
-        const [button] = chains();
-        const ruler = screen.getByTestId("timeline-page-ruler");
-        const plus = screen.getByTestId("timeline-add-page-flag");
-        // The chain's x in the layer the + is drawn in: inside the ruler's 1px border
-        const chainX =
-            parseFloat(ruler.style.left) + 1 + parseFloat(button!.style.left);
-        const chainEnd = chainX + parseFloat(button!.style.width);
-        expect(parseFloat(plus.style.left)).toBeGreaterThanOrEqual(chainEnd);
-    });
-
-    it("zoomed out, the + moves past the next box's chain from a beat before its flag", () => {
-        // At 6px a beat page 3's box is 48px, room for a 12px chain beside its number. The
-        // playhead on page 2's last beat sits 6px before page 3's flag, so the + (8px after it,
-        // 16px wide) would reach that chain; page 3 is selected, so the linked chain shows
-        show({
-            keepChains: new Map([[3, chain("follows")]]),
-            selection: {
-                kind: "range",
-                range: { startBeatIndex: 9, endBeatIndex: 17 },
-            },
-            pixelsPerBeat: 6,
-            positionBeat: 8,
-            onAddPageFlag: vi.fn(),
-        });
-        const [button] = chains();
-        expect(button!.style.width).toBe("12px");
-        const ruler = screen.getByTestId("timeline-page-ruler");
-        const plus = screen.getByTestId("timeline-add-page-flag");
-        const chainX =
-            parseFloat(ruler.style.left) + 1 + parseFloat(button!.style.left);
-        const chainEnd = chainX + parseFloat(button!.style.width);
-        expect(parseFloat(plus.style.left)).toBeGreaterThanOrEqual(chainEnd);
-    });
-
-    it("the + stays 8px after the playhead where it can't reach a chain", () => {
-        // Three beats into page 3 (x 176): already past its chain
-        show({
-            keepChains: new Map([[3, chain("kept")]]),
-            positionBeat: 12,
-            onAddPageFlag: vi.fn(),
-        });
-        expect(screen.getByTestId("timeline-add-page-flag").style.left).toBe(
-            "184px",
-        );
-        cleanup();
-        // A beat into page 3 (x 144) with no chain there (only page 4 has one)
-        show({
-            keepChains: new Map([[4, chain("kept")]]),
-            positionBeat: 10,
-            onAddPageFlag: vi.fn(),
-        });
-        expect(screen.getByTestId("timeline-add-page-flag").style.left).toBe(
-            "152px",
         );
     });
 

@@ -21,19 +21,17 @@ export const timelinePageBox = (page: Page, name: string) =>
 
 /**
  * Where to click a page box so the click lands on the box itself: the
- * timeline's **+** sits just right of the playhead and covers the box's
- * middle whenever the playhead stopped there (after playback, say).
+ * playhead's 12px handle is drawn above the boxes and covers the box's middle
+ * whenever the playhead stopped there (after playback, say).
  */
 async function clearPointInPageBox(page: Page, name: string) {
     const box = await timelinePageBox(page, name).boundingBox();
     if (!box) return undefined;
-    const plus = page.getByTestId("timeline-add-page-flag");
-    const plusBox = (await plus.isVisible()) ? await plus.boundingBox() : null;
+    const playhead = await page.getByTestId("timeline-playhead").boundingBox();
     const y = box.height / 2;
-    if (!plusBox) return { x: box.width / 2, y };
-    // The playhead line is 8px left of the +; keep clear of both.
-    const blockedFrom = plusBox.x - 16 - box.x;
-    const blockedTo = plusBox.x + plusBox.width + 4 - box.x;
+    if (!playhead) return { x: box.width / 2, y };
+    const blockedFrom = playhead.x - 4 - box.x;
+    const blockedTo = playhead.x + playhead.width + 4 - box.x;
     const x = [0.5, 0.25, 0.75, 0.15, 0.85]
         .map((fraction) => box.width * fraction)
         .find((candidate) => candidate < blockedFrom || candidate > blockedTo);
@@ -52,8 +50,8 @@ export async function selectTimelinePage(page: Page, name: string) {
 
 /**
  * Adds a page flag at the start of a measure: moves the playhead there with
- * the timeline's Go to field, then presses the timeline's **+**. The new page
- * ends at that measure.
+ * the timeline's Go to field, then picks **Create page at playhead** from the playhead's
+ * right-click menu. The new page ends at that measure.
  */
 export async function addPageFlagAt(page: Page, measure: number) {
     await page.getByTestId("timeline-readout").click();
@@ -62,7 +60,8 @@ export async function addPageFlagAt(page: Page, measure: number) {
     });
     await goTo.fill(`m${measure}`);
     await goTo.press("Enter");
-    await page.getByTestId("timeline-add-page-flag").click();
+    await page.getByTestId("timeline-playhead").click({ button: "right" });
+    await page.getByTestId("timeline-add-page").click();
 }
 
 /** Opens a page box's menu (right-click) and picks an entry by its test id suffix. */
