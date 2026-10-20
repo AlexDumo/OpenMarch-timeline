@@ -126,6 +126,7 @@
             "hideNextPaths": "Hide next page paths",
             "hidePreviousPaths": "Hide previous page paths",
             "openCommandPalette": "Command palette",
+            "openCommandBar": "Command bar",
             "openSettings": "Settings…",
             "openView3d": "Open 3D View",
             "openView3dKeywords": "3d three dimensional stadium venue window",
@@ -305,7 +306,14 @@
         "suggested": "Suggested",
         "title": "Command palette",
         "unavailable": "Not available right now",
-        "offInPreview": "Not in Preview — exit Preview to edit"
+        "offInPreview": "Not in Preview — exit Preview to edit",
+        "shape": "Shape",
+        "next": "Next",
+        "done": "Done",
+        "back": "Back",
+        "cancel": "Cancel",
+        "notUnderstood": "Not understood — try again",
+        "stepOf": "{step} of {count}"
     },
     "convertShow": {
         "backupFolder": "In {folder}",

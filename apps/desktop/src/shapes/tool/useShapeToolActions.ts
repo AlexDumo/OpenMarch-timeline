@@ -14,6 +14,7 @@ import {
 import { boxTool } from "../box/boxTool";
 import { placementOf, writePlacement } from "./shapePlacement";
 import { shapeSelectionGate } from "./selectionGate";
+import { useShapePaletteSource } from "../command/useShapePaletteSource";
 import { openTool, type ToolState } from "./toolMachine";
 import { leaveShapeTool } from "./shapeLeave";
 import {
@@ -90,6 +91,7 @@ export function useShapeToolActions(): void {
     );
     const apply = useApplyShape();
     const openBox = useOpenBoxTool();
+    useShapePaletteSource(ready, selectedPerformers);
 
     useActionHandler("shapeBlock", openBox, {
         enabled: ready && shapeSelectionGate(selectedPerformers).ok,
