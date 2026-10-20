@@ -36,46 +36,121 @@ import { applyKeptChange, useKeptAssignmentsStore } from "./useKeepLaterPages";
 
 const NOTHING: UnsetResult = { unset: [], markers: { added: [], removed: [] } };
 
+/** What the Unset actions read for some marchers, worked out once per show version. */
+interface UnsetReads {
+    resolver: Resolver | null;
+    kept: ReadonlySet<number>;
+    marcherIds: readonly number[];
+    boxes?: readonly PageBox[];
+}
+
+/**
+ * The Unset actions' reads for `marcherIds` at any count (`unsetTargets`, `unsetFollowingPages`).
+ * Each marcher's Set beats are worked out once, and each count's answers the first time it's
+ * asked, so scrubbing with a large selection looks counts up instead of walking every move again.
+ * Make a new one when the resolver version, kept markers, selection or page boxes change.
+ */
+export function unsetReader({
+    resolver,
+    kept,
+    marcherIds,
+    boxes = [],
+}: UnsetReads): {
+    targets: (beat: number) => number[];
+    followingPages: (beat: number) => string[] | null;
+} {
+    let setBeats: Map<number, readonly number[]> | null = null;
+    const setBeatsOf = (id: number) => {
+        setBeats ??= new Map(
+            resolver
+                ? marcherIds.map((m) => [
+                      m,
+                      marcherSetBeats(
+                          resolverSpans(resolver, m),
+                          (b) => resolver.positionAt(m, b),
+                          kept,
+                      ),
+                  ])
+                : [],
+        );
+        return setBeats.get(id) ?? [];
+    };
+    const targetsAt = new Map<number, number[]>();
+    const targets = (beat: number): number[] => {
+        if (!resolver || beat <= 0) return [];
+        let out = targetsAt.get(beat);
+        if (!out) {
+            out = marcherIds
+                .filter((id) => isSetAt(setBeatsOf(id), beat))
+                .sort((a, b) => a - b);
+            targetsAt.set(beat, out);
+        }
+        return out;
+    };
+    let pages: ReturnType<typeof keepPagesOfBoxes> | null = null;
+    const followingAt = new Map<number, string[] | null>();
+    const pagesFollowing = (beat: number): string[] | null => {
+        if (followingAt.has(beat)) return followingAt.get(beat)!;
+        const out = pagesFollowingAt(beat);
+        followingAt.set(beat, out);
+        return out;
+    };
+    const pagesFollowingAt = (beat: number): string[] | null => {
+        const set = targets(beat);
+        if (!resolver || set.length === 0) return null;
+        pages ??= keepPagesOfBoxes(boxes);
+        const holding = pages.find(
+            (p) => p.range && p.range.start < beat && beat <= p.flag,
+        );
+        if (!holding) return null;
+        // Later pages follow the spot only if nothing of the marcher's own ends after it in this page
+        const flag = holding.flag;
+        const lastInPage = set.filter(
+            (id) =>
+                !resolverSpans(resolver, id).some(
+                    (s) => s.kind !== "hold" && s.end > beat && s.end <= flag,
+                ),
+        );
+        if (lastInPage.length === 0) return null;
+        const states = pageKeepStates({
+            pages,
+            marcherIds: lastInPage,
+            spansOf: (id) => resolverSpans(resolver, id),
+            kept,
+        });
+        return followingPages(states, holding.id)?.names ?? null;
+    };
+    return { targets, followingPages: pagesFollowing };
+}
+
 /**
  * Of `marcherIds`, the ones Set at `beat` (`timelineSetFollowing`), ascending: what Unset acts on.
  * None on the first page (beat 0), where everyone is Set but nobody has a move to take back.
  */
 export function unsetTargets({
-    resolver,
-    kept,
-    marcherIds,
     beat,
-}: {
-    resolver: Resolver | null;
-    kept: ReadonlySet<number>;
-    marcherIds: readonly number[];
-    beat: number;
-}): number[] {
-    if (!resolver || beat <= 0) return [];
-    return marcherIds
-        .filter((id) =>
-            isSetAt(
-                marcherSetBeats(
-                    resolverSpans(resolver, id),
-                    (b) => resolver.positionAt(id, b),
-                    kept,
-                ),
-                beat,
-            ),
-        )
-        .sort((a, b) => a - b);
+    ...reads
+}: UnsetReads & { beat: number }): number[] {
+    return unsetReader(reads).targets(beat);
+}
+
+/** `unsetReader` for `marcherIds` and the page boxes, new when the show or selection changes. */
+function useUnsetReader(marcherIds: readonly number[]) {
+    const resolver = useTimelineResolverStore((s) => s.resolver);
+    const version = useTimelineResolverStore((s) => s.version);
+    const kept = useKeptAssignmentsStore((s) => s.ids);
+    const boxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    return useMemo(() => {
+        void version; // a new version means new spans
+        return unsetReader({ resolver, kept, marcherIds, boxes });
+    }, [resolver, version, kept, marcherIds, boxes]);
 }
 
 /** `unsetTargets` for `marcherIds` at the count shown, kept current. */
 export function useUnsetTargets(marcherIds: readonly number[]): number[] {
-    const resolver = useTimelineResolverStore((s) => s.resolver);
-    const version = useTimelineResolverStore((s) => s.version);
-    const kept = useKeptAssignmentsStore((s) => s.ids);
+    const reader = useUnsetReader(marcherIds);
     const beat = useTimelineSelectionStore(displayedBeat);
-    return useMemo(() => {
-        void version; // a new version means new spans
-        return unsetTargets({ resolver, kept, marcherIds, beat });
-    }, [resolver, version, kept, marcherIds, beat]);
+    return useMemo(() => reader.targets(beat), [reader, beat]);
 }
 
 /**
@@ -85,41 +160,13 @@ export function useUnsetTargets(marcherIds: readonly number[]): number[] {
  * N** read it). What **Unset here and on Pages N–M** lets follow back; null when none follow.
  */
 export function unsetFollowingPages({
-    resolver,
-    kept,
-    marcherIds,
     beat,
-    boxes,
-}: {
-    resolver: Resolver | null;
-    kept: ReadonlySet<number>;
-    marcherIds: readonly number[];
+    ...reads
+}: UnsetReads & {
     beat: number;
     boxes: readonly PageBox[];
 }): string[] | null {
-    const targets = unsetTargets({ resolver, kept, marcherIds, beat });
-    if (!resolver || targets.length === 0) return null;
-    const pages = keepPagesOfBoxes(boxes);
-    const holding = pages.find(
-        (p) => p.range && p.range.start < beat && beat <= p.flag,
-    );
-    if (!holding) return null;
-    // Later pages follow the spot only if nothing of the marcher's own ends after it in this page
-    const flag = holding.flag;
-    const lastInPage = targets.filter(
-        (id) =>
-            !resolverSpans(resolver, id).some(
-                (s) => s.kind !== "hold" && s.end > beat && s.end <= flag,
-            ),
-    );
-    if (lastInPage.length === 0) return null;
-    const states = pageKeepStates({
-        pages,
-        marcherIds: lastInPage,
-        spansOf: (id) => resolverSpans(resolver, id),
-        kept,
-    });
-    return followingPages(states, holding.id)?.names ?? null;
+    return unsetReader(reads).followingPages(beat);
 }
 
 /** **Unset here and on Pages N–M**'s label for the pages that follow (`unsetFollowingPages`). */
@@ -147,21 +194,9 @@ export function unsetFollowingLabel(
 export function useUnsetFollowingPages(
     marcherIds: readonly number[],
 ): string[] | null {
-    const resolver = useTimelineResolverStore((s) => s.resolver);
-    const version = useTimelineResolverStore((s) => s.version);
-    const kept = useKeptAssignmentsStore((s) => s.ids);
+    const reader = useUnsetReader(marcherIds);
     const beat = useTimelineSelectionStore(displayedBeat);
-    const boxes = useTimelineSelectionStore((s) => s.pageBoxes);
-    return useMemo(() => {
-        void version; // a new version means new spans
-        return unsetFollowingPages({
-            resolver,
-            kept,
-            marcherIds,
-            beat,
-            boxes,
-        });
-    }, [resolver, version, kept, marcherIds, beat, boxes]);
+    return useMemo(() => reader.followingPages(beat), [reader, beat]);
 }
 
 /**
@@ -177,9 +212,10 @@ export function unsetMenuStateAt({
     followingLabel: string | null;
 } {
     if (isPlaying) return { canUnset: false, followingLabel: null };
-    const following = unsetFollowingPages(at);
+    const reader = unsetReader(at);
+    const following = reader.followingPages(at.beat);
     return {
-        canUnset: unsetTargets(at).length > 0,
+        canUnset: reader.targets(at.beat).length > 0,
         followingLabel: following ? unsetFollowingLabel(following) : null,
     };
 }
@@ -282,15 +318,30 @@ async function unsetSetMarchers(
         applyKeptChange(result.markers);
         return result;
     } catch (error) {
-        toastTimelineError(error, "Error unsetting the marchers");
+        toastTimelineError(
+            error,
+            tolgee.t(
+                "timeline.keyframes.removeError",
+                "Couldn't remove the keyframes",
+            ),
+        );
         return NOTHING;
     }
 }
 
-/** Basic's lock toast for marchers Unset left alone (as `toastLockedMarchers`). */
+/** Basic's lock toast for marchers Remove keyframe left alone (as `toastLockedMarchers`). */
 function toastLockedUnset(count: number, wrote: boolean): void {
-    const who = count === 1 ? "One marcher uses" : `${count} marchers use`;
     toastBasicLock(
-        `${who} Expert moves on this page${wrote ? `, so ${count === 1 ? "it wasn't" : "they weren't"} unset` : ""}. Switch to Expert to edit ${count === 1 ? "it" : "them"}.`,
+        wrote
+            ? tolgee.t(
+                  "timeline.keyframes.removeLocked",
+                  "{count, plural, one {One marcher uses Expert moves on this page, so its keyframe wasn't removed. Switch to Expert to edit it.} other {# marchers use Expert moves on this page, so their keyframes weren't removed. Switch to Expert to edit them.}}",
+                  { count },
+              )
+            : tolgee.t(
+                  "timeline.keyframes.removeLockedAll",
+                  "{count, plural, one {One marcher uses Expert moves on this page. Switch to Expert to edit it.} other {# marchers use Expert moves on this page. Switch to Expert to edit them.}}",
+                  { count },
+              ),
     );
 }

@@ -1994,6 +1994,9 @@
         "keyframes": {
             "detail": "{set} of {total} selected",
             "detailNames": "{set} of {total} selected: {names}",
+            "removeError": "Couldn't remove the keyframes",
+            "removeLocked": "{count, plural, one {One marcher uses Expert moves on this page, so its keyframe wasn't removed. Switch to Expert to edit it.} other {# marchers use Expert moves on this page, so their keyframes weren't removed. Switch to Expert to edit them.}}",
+            "removeLockedAll": "{count, plural, one {One marcher uses Expert moves on this page. Switch to Expert to edit it.} other {# marchers use Expert moves on this page. Switch to Expert to edit them.}}",
             "title": "Keyframe · Page {page}, count {count}"
         },
         "label": "Timeline",
