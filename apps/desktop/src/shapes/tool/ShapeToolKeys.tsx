@@ -1,6 +1,4 @@
-import { useRef } from "react";
-import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
-import { discardShapeTool } from "./discardToast";
+import { discardShapeTool, restoreDiscardedShape } from "./shapeLeave";
 import { NUDGE_ACTION_IDS, type NudgeArgs } from "@/shortcuts/definitions";
 import { resolveNudgeDistance } from "@/shortcuts/nudge";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
@@ -42,21 +40,17 @@ export function stepFiles(delta: number): void {
  * The keys the open shape tool takes over. Mounted only while it's open, after the editor's own
  * handlers, so these sit on top of them and the keys go back once the tool closes.
  *
- * - Escape: a gesture goes back to where it started; otherwise the tool closes, placing nothing,
- *   and a toast offers to bring the shape back.
+ * - Escape: a gesture goes back to where it started; otherwise the tool closes, placing nothing.
+ *   That is an undo step: undo right after it brings the shape back ({@link DiscardedShapeKeys}).
  * - Undo and Redo step through the shape's own edits; the show is untouched until Place.
  * - The nudge keys move the whole shape, as one undo step each (08), not the marchers under it.
  */
 export function ShapeToolKeys(): null {
-    // The selection now, for the discard toast's Undo
-    const selected = useSelectedMarchers()?.selectedMarchers;
-    const selection = useRef<readonly number[]>([]);
-    selection.current = (selected ?? []).map((m) => m.id);
     const rounding = useUiSettingsStore((s) => s.uiSettings.coordinateRounding);
     useActionHandler("cancelAlignmentUpdates", () => {
         const { tool } = useShapeToolStore.getState();
         if (tool?.gesture) updateTool(cancelGesture);
-        else discardShapeTool(() => selection.current);
+        else discardShapeTool();
     });
     useActionHandler("performUndo", () => updateTool(undo));
     useActionHandler("performRedo", () => updateTool(redo));
@@ -79,6 +73,19 @@ export function ShapeToolKeys(): null {
             );
             return edit(tool, params, shapeContextFor(field));
         });
+    });
+    return null;
+}
+
+/**
+ * Mounted while a shape Escape discarded can still come back, on top of the editor's keys: the
+ * undo right after Escape opens the shape again, with its numbers and who goes where, instead of
+ * undoing the show (spec #344). Anything else that happens first (an edit, a new moment, another
+ * selection) ends this, and undo is the show's again.
+ */
+export function DiscardedShapeKeys(): null {
+    useActionHandler("performUndo", () => {
+        restoreDiscardedShape();
     });
     return null;
 }

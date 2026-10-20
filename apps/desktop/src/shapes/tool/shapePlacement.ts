@@ -6,7 +6,10 @@ import {
     type ShapeRecipeRecord,
 } from "@/db-functions/shapeRecipes";
 import { historyKeys } from "@/hooks/queries/useHistory";
-import { transformMarchersInSelection } from "@/timeline/timelineCoordinateWrites";
+import {
+    transformMarchersInSelection,
+    type CanvasEditPlan,
+} from "@/timeline/timelineCoordinateWrites";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import type { ShapeContext } from "../types";
 import { targetsOf, type ToolState } from "./toolMachine";
@@ -67,6 +70,11 @@ export async function writePlacement(
     queryClient: QueryClient,
     /** The toast's title if the write fails */
     failure: string,
+    /**
+     * The edit window to write to, the current one unless given: a shape placed because the
+     * moment moved on goes where it was drawn, and the playhead stays where it was moved to
+     */
+    plan: CanvasEditPlan | null = null,
 ): Promise<boolean> {
     const { members, replaces } = placement;
     const to = new Map(members.map((m) => [m.marcherId, m]));
@@ -81,6 +89,7 @@ export async function writePlacement(
                         ? [{ marcher_id: c.marcher_id, x: spot.x, y: spot.y }]
                         : [];
                 }),
+            ...(plan ? { plan, keepPlayhead: true } : {}),
             writesShapes: true,
             afterWrite: async (tx, timelineId) => {
                 await saveShapeRecipeInTransaction({
