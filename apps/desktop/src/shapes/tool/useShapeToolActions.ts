@@ -11,6 +11,7 @@ import { placementOf, writePlacement } from "./shapePlacement";
 import { kindPickGate, pickShapeKind } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
 import type { ToolState } from "./toolMachine";
+import { useShapePaletteSource } from "../command/useShapePaletteSource";
 import { leaveShapeTool } from "./shapeLeave";
 import { closeShapeTool, useShapeToolStore } from "./shapeToolStore";
 
@@ -68,6 +69,7 @@ export function useShapeToolActions(): void {
     );
     const apply = useApplyShape();
     const shapeOpen = useShapeToolStore((s) => s.tool !== null);
+    useShapePaletteSource(ready, selectedPerformers, apply);
 
     // A kind's key arms it, or turns the open shape into it
     useActionHandlerGroup(
