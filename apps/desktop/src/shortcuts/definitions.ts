@@ -600,6 +600,16 @@ const STATIC_ACTIONS = {
         allowInInputs: true,
         hiddenFromPalette: true,
     },
+    // #354: `/` opens the same bar as ⌘K. Its own action so it isn't taken from inputs, where a
+    // slash is typed
+    openCommandBar: {
+        labelKey: "actions.ui.openCommandBar",
+        category: "ui",
+        editsDrill: false,
+        scope: "global",
+        defaultBindings: ["Slash"],
+        hiddenFromPalette: true,
+    },
     exitTimelineFocus: {
         labelKey: "actions.ui.exitTimelineFocus",
         category: "ui",
@@ -621,6 +631,8 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["B"],
         args: { kind: "block" },
+        // The command bar lists Shape › Box instead (#354), which asks the box's numbers
+        hiddenFromPalette: true,
     },
     applyShape: {
         labelKey: "actions.shape.apply",

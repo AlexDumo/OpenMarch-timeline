@@ -741,6 +741,107 @@ for (const editorMode of ["expert", "basic"] as const) {
     });
 }
 
+// The command bar (#354): `/` and ⌘K open one bar; Shape › Box docks it at the
+// top of the field and asks the box's numbers one at a time, the box showing
+// live on the field.
+
+const bar = (page: Page) => page.getByTestId("docked-command-bar");
+const answer = (page: Page) => page.getByTestId("docked-command-input");
+const question = (page: Page) => bar(page).locator("label");
+
+test("change: / opens the command bar, and Shape › Box asks each number with a default while the box shows live", async ({
+    show,
+}) => {
+    const { page } = show;
+    const steps = await undoSteps(show);
+    await selectAll(page);
+    await page.keyboard.press("/");
+    await page.getByRole("combobox").fill("box");
+    await expect(page.getByRole("option").first()).toHaveText(/^Shape › Box/);
+    await page.keyboard.press("Enter");
+
+    // Docked, not the centered palette, and the box is already on the field
+    await expect(bar(page)).toBeVisible();
+    await expect(page.getByRole("listbox")).toBeHidden();
+    await expect(question(page)).toHaveText(/^Size/);
+    const size = await answer(page).inputValue();
+    expect(size).toMatch(/^\d+ × \d+$/);
+    expect((await shapeOverlay(page))!.spots).toHaveLength(ALL.length);
+    expect(await readout(page)).toBe(`${size} · 2 × 2 steps`);
+
+    // Each keystroke shows on the field
+    await answer(page).fill("4x2");
+    await expect.poll(() => readout(page)).toBe("4 × 2 · 2 × 2 steps");
+    await page.keyboard.press("Enter");
+    await expect(question(page)).toHaveText(/^Side-to-side/);
+    await expect(answer(page)).toHaveValue("2");
+    await answer(page).fill("3");
+    await expect.poll(() => readout(page)).toBe("4 × 2 · 3 × 2 steps");
+
+    // Backspace in an empty answer goes back a step, keeping its answer
+    await answer(page).fill("");
+    await page.keyboard.press("Backspace");
+    await expect(question(page)).toHaveText(/^Size/);
+    await expect(answer(page)).toHaveValue("4x2");
+    await page.keyboard.press("Enter");
+    await answer(page).fill("3");
+    await page.keyboard.press("Enter");
+    await expect(question(page)).toHaveText(/^Front-to-back/);
+
+    // The show is untouched until the last answer, which places the box as one undo step
+    expect(await readout(page)).toBe("4 × 2 · 3 × 2 steps");
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    const spots = (await shapeOverlay(page))!.spots;
+    await page.keyboard.press("Enter");
+    await expect(bar(page)).toBeHidden();
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(() => onSpots(show, spots)).toBe(true);
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 1);
+});
+
+test('change: a one-liner such as "box 4x2 3" fills the answers ahead and shows them at once, and Escape puts back the box that was open', async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const numbers = await readout(page);
+    const spots = (await shapeOverlay(page))!.spots;
+
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.getByRole("combobox").fill("box 4x2 3");
+    await expect(page.getByRole("option").first()).toHaveText(
+        /^Shape › Box 4x2 · 3/,
+    );
+    await page.keyboard.press("Enter");
+    // Opens at the first step it didn't fill, with everything it did fill on the field. Started
+    // from the open box: its depth spacing is its own
+    await expect(question(page)).toHaveText(/^Front-to-back/);
+    const deep = numbers.split(" × ").at(-1);
+    await expect.poll(() => readout(page)).toBe(`4 × 2 · 3 × ${deep}`);
+
+    await page.keyboard.press("Escape");
+    await expect(bar(page)).toBeHidden();
+    // The box drawn before, as it was, still open
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await readout(page)).toBe(numbers);
+    expect((await shapeOverlay(page))!.spots).toEqual(spots);
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+});
+
+test("change: with nobody selected, Shape › Box is greyed out with why", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.keyboard.press("/");
+    await page.getByRole("combobox").fill("box");
+    const box = page.getByRole("option").filter({ hasText: /^Shape › Box/ });
+    await expect(box).toHaveAttribute("aria-disabled", "true");
+    await expect(box).toContainText("Select marchers first");
+    await page.keyboard.press("Enter");
+    await expect(bar(page)).toBeHidden();
+});
+
 test("the Shapes tab lists the kinds, greyed out until marchers are selected; picking Box arms it, a drag draws it and Enter places it", async ({
     show,
 }) => {
