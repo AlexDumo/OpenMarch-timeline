@@ -200,17 +200,29 @@ describe("the clip's menu (UI-14)", () => {
         });
         fireEvent.contextMenu(clipButton());
         const split = screen.getByTestId("timeline-move-menu-split");
-        expect(split.getAttribute("data-disabled")).not.toBeNull();
+        expect(split.getAttribute("aria-disabled")).toBe("true");
+        const reason = screen.getByTestId("timeline-move-menu-split-reason");
+        expect(reason.textContent).toBe(
+            "Put the playhead inside the move to split it there.",
+        );
+        // The reason is the entry's description, and sits behind a ? until asked for
+        expect(split.getAttribute("aria-describedby")).toBe(reason.id);
         expect(
-            screen.getByTestId("timeline-move-menu-split-reason").textContent,
-        ).toBe("Put the playhead inside the move to split it there.");
+            screen.getByTestId("timeline-move-menu-split-reason-icon"),
+        ).toBeTruthy();
+        expect(screen.queryByRole("tooltip")).toBeNull();
         fireEvent.click(split);
         expect(moves.onSplit).not.toHaveBeenCalled();
+        // Pressing it shows why and leaves the menu open
+        expect(screen.getByRole("tooltip").textContent).toBe(
+            "Put the playhead inside the move to split it there.",
+        );
+        expect(screen.getByTestId("timeline-range-menu")).toBeTruthy();
         // Edit and Delete stay available: only the split is blocked
         expect(
             screen
                 .getByTestId("timeline-move-menu-edit")
-                .getAttribute("data-disabled"),
+                .getAttribute("aria-disabled"),
         ).toBeNull();
     });
 

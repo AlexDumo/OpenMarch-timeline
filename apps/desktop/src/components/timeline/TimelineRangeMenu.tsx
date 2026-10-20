@@ -1,5 +1,7 @@
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { useId, useState, type MouseEvent, type ReactNode } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import { TooltipClassName } from "@openmarch/ui";
 import {
     CursorTextIcon,
     FlagIcon,
@@ -11,6 +13,7 @@ import {
     TrashIcon,
     UserPlusIcon,
     ScissorsIcon,
+    QuestionIcon,
 } from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
 import type { TimelineBeatRange } from "./TimelineViewModel";
@@ -46,6 +49,92 @@ const MenuSwitch = () => (
     </span>
 );
 
+/**
+ * A menu entry that may be unavailable (`reason` says why). An unavailable entry stays in the
+ * menu's arrow-key order, as menus keep disabled entries, but does nothing: its words dim and a
+ * **?** at its end opens the reason beside it while the entry is highlighted (hover or keys) or
+ * pressed (touch). Screen readers hear the reason as the entry's description.
+ */
+function MenuItemWithReason({
+    testId,
+    reason,
+    reasonTestId,
+    onSelect,
+    className = ITEM_CLASS,
+    children,
+}: {
+    testId: string;
+    reason: string | null;
+    reasonTestId: string;
+    onSelect: () => void;
+    className?: string;
+    children: ReactNode;
+}) {
+    const reasonId = useId();
+    const [open, setOpen] = useState(false);
+    if (reason === null)
+        return (
+            <DropdownMenu.Item
+                data-testid={testId}
+                onSelect={onSelect}
+                className={className}
+            >
+                {children}
+            </DropdownMenu.Item>
+        );
+    return (
+        <>
+            <DropdownMenu.Item
+                data-testid={testId}
+                aria-disabled="true"
+                aria-describedby={reasonId}
+                // Pressing it shows why instead of closing the menu
+                onSelect={(event) => {
+                    event.preventDefault();
+                    setOpen(true);
+                }}
+                onFocus={() => setOpen(true)}
+                onBlur={() => setOpen(false)}
+                className={className}
+            >
+                <span className="flex items-center gap-8 opacity-50">
+                    {children}
+                </span>
+                <Tooltip.Provider delayDuration={0}>
+                    <Tooltip.Root
+                        open={open}
+                        onOpenChange={(next) => {
+                            if (!next) setOpen(false);
+                        }}
+                    >
+                        <Tooltip.Trigger asChild>
+                            <span
+                                aria-hidden="true"
+                                data-testid={`${reasonTestId}-icon`}
+                                className="text-text-subtitle ml-auto pl-16"
+                            >
+                                <QuestionIcon size={14} />
+                            </span>
+                        </Tooltip.Trigger>
+                        <Tooltip.Portal>
+                            <Tooltip.Content
+                                side="right"
+                                sideOffset={8}
+                                className={`${TooltipClassName} max-w-[240px] text-[12px]`}
+                            >
+                                {reason}
+                            </Tooltip.Content>
+                        </Tooltip.Portal>
+                    </Tooltip.Root>
+                </Tooltip.Provider>
+            </DropdownMenu.Item>
+            <span id={reasonId} data-testid={reasonTestId} className="sr-only">
+                {reason}
+            </span>
+        </>
+    );
+}
+
 /** The entry's key, right-aligned and quiet; nothing without one. */
 const MenuShortcut = ({ keys }: { keys?: string }) =>
     keys ? (
@@ -75,8 +164,8 @@ export const KEEP_MENU_EVENTS = {
 
 /**
  * An extra entry for a clip's or a page box's menu (UI-25 **Split N selected into new move**,
- * **Merge into Page N**, **Merge moves**), built by the app when the menu opens. A disabled entry
- * says why under it.
+ * **Merge into Page N**, **Merge moves**), built by the app when the menu opens. An unavailable
+ * entry says why behind a **?** (`MenuItemWithReason`).
  */
 export interface TimelineMenuEntry {
     /** For `data-testid`: `timeline-menu-<id>` */
@@ -87,7 +176,7 @@ export interface TimelineMenuEntry {
     readonly icon?: "split" | "merge";
 }
 
-/** Extra entries (`TimelineMenuEntry`), each with its reason under it when disabled. */
+/** Extra entries (`TimelineMenuEntry`), each with its reason behind a **?** when unavailable. */
 export function TimelineMenuEntries({
     entries,
 }: {
@@ -98,29 +187,20 @@ export function TimelineMenuEntries({
             {entries.map((entry) => {
                 const reason = entry.disabledReason ?? null;
                 return (
-                    <div key={entry.id} className="contents">
-                        <DropdownMenu.Item
-                            data-testid={`timeline-menu-${entry.id}`}
-                            disabled={reason !== null}
-                            onSelect={entry.onSelect}
-                            className={ITEM_CLASS}
-                        >
-                            {entry.icon === "merge" ? (
-                                <ArrowsMergeIcon size={14} />
-                            ) : (
-                                <ArrowsSplitIcon size={14} />
-                            )}
-                            {entry.label}
-                        </DropdownMenu.Item>
-                        {reason !== null && (
-                            <p
-                                data-testid={`timeline-menu-${entry.id}-reason`}
-                                className="text-text-subtitle max-w-[260px] px-8 pb-4 text-[11px]"
-                            >
-                                {reason}
-                            </p>
+                    <MenuItemWithReason
+                        key={entry.id}
+                        testId={`timeline-menu-${entry.id}`}
+                        reason={reason}
+                        reasonTestId={`timeline-menu-${entry.id}-reason`}
+                        onSelect={entry.onSelect}
+                    >
+                        {entry.icon === "merge" ? (
+                            <ArrowsMergeIcon size={14} />
+                        ) : (
+                            <ArrowsSplitIcon size={14} />
                         )}
-                    </div>
+                        {entry.label}
+                    </MenuItemWithReason>
                 );
             })}
         </>
@@ -167,7 +247,7 @@ export interface TimelineMoveCommands<Id = number> {
 /**
  * A move's entries (UI-14), for the clip's right-click menu and its ⋯ button: **Edit move**,
  * **Rename move…**, then **Delete move**, red and last. Editing and deleting wait while playing,
- * with the reason; renaming only changes a label, so it doesn't.
+ * each with the reason behind a **?**; renaming only changes a label, so it doesn't.
  */
 export function TimelineMoveMenuItems({
     actions,
@@ -183,15 +263,15 @@ export function TimelineMoveMenuItems({
     const extra = actions.extra?.() ?? [];
     return (
         <>
-            <DropdownMenu.Item
-                data-testid="timeline-move-menu-edit"
-                disabled={reason !== null}
+            <MenuItemWithReason
+                testId="timeline-move-menu-edit"
+                reason={reason}
+                reasonTestId="timeline-move-menu-reason"
                 onSelect={actions.onEdit}
-                className={ITEM_CLASS}
             >
                 <PencilSimpleIcon size={14} />
                 Edit move
-            </DropdownMenu.Item>
+            </MenuItemWithReason>
             <DropdownMenu.Item
                 data-testid="timeline-move-menu-rename"
                 onSelect={actions.onRename}
@@ -201,15 +281,15 @@ export function TimelineMoveMenuItems({
                 Rename move…
             </DropdownMenu.Item>
             {actions.onSplit && (
-                <DropdownMenu.Item
-                    data-testid="timeline-move-menu-split"
-                    disabled={splitReason !== null}
+                <MenuItemWithReason
+                    testId="timeline-move-menu-split"
+                    reason={splitReason}
+                    reasonTestId="timeline-move-menu-split-reason"
                     onSelect={actions.onSplit}
-                    className={ITEM_CLASS}
                 >
                     <ScissorsIcon size={14} />
                     Split at playhead
-                </DropdownMenu.Item>
+                </MenuItemWithReason>
             )}
             {extra.length > 0 && (
                 <>
@@ -218,31 +298,16 @@ export function TimelineMoveMenuItems({
                 </>
             )}
             <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
-            <DropdownMenu.Item
-                data-testid="timeline-move-menu-delete"
-                disabled={reason !== null}
+            <MenuItemWithReason
+                testId="timeline-move-menu-delete"
+                reason={reason}
+                reasonTestId="timeline-move-menu-delete-reason"
                 onSelect={actions.onDelete}
                 className={`${ITEM_CLASS} text-red`}
             >
                 <TrashIcon size={14} />
                 Delete move
-            </DropdownMenu.Item>
-            {reason === null && splitReason !== null && (
-                <p
-                    data-testid="timeline-move-menu-split-reason"
-                    className="text-text-subtitle px-8 pb-4 text-[11px]"
-                >
-                    {splitReason}
-                </p>
-            )}
-            {reason !== null && (
-                <p
-                    data-testid="timeline-move-menu-reason"
-                    className="text-text-subtitle px-8 pb-4 text-[11px]"
-                >
-                    {reason}
-                </p>
-            )}
+            </MenuItemWithReason>
         </>
     );
 }
@@ -437,22 +502,15 @@ export function useTimelineRangeMenu({
                     className={TIMELINE_MENU_CONTENT_CLASS}
                 >
                     {menu?.onAdd && (
-                        <DropdownMenu.Item
-                            disabled={disabledReason !== null}
+                        <MenuItemWithReason
+                            testId="timeline-range-menu-add"
+                            reason={disabledReason}
+                            reasonTestId="timeline-range-menu-reason"
                             onSelect={() => menu.onAdd?.(open.target)}
-                            className={ITEM_CLASS}
                         >
                             <UserPlusIcon size={14} />
                             Add selected marchers
-                        </DropdownMenu.Item>
-                    )}
-                    {menu?.onAdd && disabledReason !== null && (
-                        <p
-                            data-testid="timeline-range-menu-reason"
-                            className="text-text-subtitle px-8 pb-4 text-[11px]"
-                        >
-                            {disabledReason}
-                        </p>
+                        </MenuItemWithReason>
                     )}
                     {pageExtra.length > 0 && (
                         <>

@@ -1229,8 +1229,10 @@ from it. The spec still wins on the model; this file decides presentation.
     the clip's ⋯ menu, the Move card (under "N marchers · Select them") and ⌘K ("Split selected
     marchers into a new move", for the window's move). The new move has the same counts, is named
     by the "Move N" rule (UI-14), and gets its own clip row; it is selected and isolated
-    (_lead default_, V-334), so Esc goes back to where you were. Disabled, with the reason under
-    it: while playing ("Pause to split or merge moves."), when none of the selected marchers is in
+    (_lead default_, V-334), so Esc goes back to where you were. Disabled, with the reason behind
+    a **?** at the entry's end (owner 2026-10-20, for every unavailable timeline menu entry: the
+    tip opens while the entry is hovered or arrowed to, or when it's pressed, and the menu stays
+    open; the entry stays in arrow-key order and screen readers hear the reason): while playing ("Pause to split or merge moves."), when none of the selected marchers is in
     the move, and when all of them are (that would only rename it). The entry shows, disabled,
     with no marchers selected too, so it can be found (_lead default_, V-337).
   - **No motion changes** (owner). Each chosen marcher's transition moves to the new timeline as it
