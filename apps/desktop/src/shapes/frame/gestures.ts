@@ -1,6 +1,7 @@
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { XY } from "../types";
 import {
+    DEGREE,
     fieldToFrame,
     flipFrame,
     frameCorners,
@@ -9,6 +10,7 @@ import {
     normalizeAngle,
     pivotPoint,
     rotateFrame,
+    rotationDegrees,
     snapRotation,
     type PivotKey,
 } from "./frame";
@@ -221,4 +223,39 @@ export function flipShape(
         flipFrame(kind.frameOf(params, n), axis, pivot),
     );
     return kind.settle ? kind.settle(flipped, n, env) : flipped;
+}
+
+/** The shape's outline on the field: the kind's own, or its frame's four corners */
+export function shapeOutline(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+): readonly XY[] {
+    return kind.outline?.(params, n) ?? frameCorners(kind.frameOf(params, n));
+}
+
+/** Pixels of drag per degree on a rotation number */
+export const ROTATION_PX_PER_DEGREE = 2;
+
+/**
+ * The shape's rotation dragged `distance` px clockwise: 1° per 2 px, 15° with Shift, free with
+ * Alt, from where it started
+ */
+export function scrubTurn(
+    kind: AnyToolKind,
+    base: unknown,
+    n: number,
+    distance: number,
+    pivot: PivotKey,
+    env: ToolEnv,
+): unknown {
+    const turn = distance / ROTATION_PX_PER_DEGREE;
+    if (Math.trunc(turn) === 0 && env.snap) return base;
+    const degrees = rotationDegrees(kind.frameOf(base, n).rotation) + turn;
+    const snapped = !env.snap
+        ? degrees
+        : env.shift
+          ? Math.round(degrees / 15) * 15
+          : Math.round(degrees);
+    return turnShape(kind, base, n, snapped * DEGREE, pivot, env);
 }

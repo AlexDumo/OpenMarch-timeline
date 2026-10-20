@@ -1,14 +1,9 @@
 import { useCallback } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { historyKeys } from "@/hooks/queries/useHistory";
-import { db } from "@/global/database/db";
-import { saveShapeRecipeInTransaction } from "@/db-functions/shapeRecipes";
 import {
     planCanvasEdit,
-    transformMarchersInSelection,
     type CanvasEditPlan,
 } from "@/timeline/timelineCoordinateWrites";
-import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useEditorReadiness } from "@/shortcuts/handlers/useEditorReadiness";
 import {
@@ -17,7 +12,9 @@ import {
     shapeContextFor,
 } from "../field/shapeFieldContext";
 import { boxTool } from "../box/boxTool";
-import { openTool, targetsOf, type ToolState } from "./toolMachine";
+import { placementOf, writePlacement } from "./shapePlacement";
+import { shapeSelectionGate } from "./selectionGate";
+import { openTool, type ToolState } from "./toolMachine";
 import { leaveShapeTool } from "./shapeLeave";
 import {
     closeShapeTool,
@@ -26,11 +23,11 @@ import {
 } from "./shapeToolStore";
 
 /**
- * The host's place function (spec #344): every shape is placed through here, whether by Place
- * (Enter) or by leaving it open (`shapeLeave.ts`). The tool's marchers go to their spots as one
- * edit, through the same path as a canvas drag (they leave the start flag and arrive at the
- * playhead), and the shape's recipe is saved in the same edit (ADR 0006). `plan` is the edit
- * window to write to, the current one unless given. Resolves false when nothing was placed.
+ * The host's place function (spec #344): every open shape is placed through here, whether by
+ * Place (Enter) or by leaving it open (`shapeLeave.ts`). Its marchers go to their spots and its
+ * recipe is saved as one edit (`writePlacement`, the same write a placed shape's edits use).
+ * `plan` is the edit window to write to, the current one unless given. Resolves false when
+ * nothing was placed.
  */
 export async function placeShape(
     tool: ToolState,
@@ -38,59 +35,15 @@ export async function placeShape(
     plan: CanvasEditPlan | null = null,
 ): Promise<boolean> {
     const field = currentShapeField();
-    if (!field || tool.gesture || tool.params === null) return false;
-    const targets = targetsOf(tool, shapeContextFor(field));
-    if (targets.length === 0) return false;
-    const to = new Map(targets.map((t) => [t.id, t.to]));
-    const transform = (current: readonly { marcher_id: number }[]) =>
-        current.flatMap((c) => {
-            const spot = to.get(c.marcher_id);
-            return spot
-                ? [{ marcher_id: c.marcher_id, x: spot.x, y: spot.y }]
-                : [];
-        });
-    const kind = tool.kind.shape;
-    try {
-        await transformMarchersInSelection({
-            db,
-            marcherIds: tool.marchers.map((m) => m.id),
-            transform,
-            ...(plan
-                ? // Placed on leaving: the playhead stays where it was moved to
-                  { plan, keepPlayhead: true }
-                : {}),
-            writesShapes: true,
-            afterWrite: async (tx, timelineId) => {
-                await saveShapeRecipeInTransaction({
-                    tx,
-                    timelineId,
-                    recipe: {
-                        kind: kind.id,
-                        kindVersion: kind.version,
-                        // The spot count keeps holes when members leave later
-                        params: {
-                            ...(tool.params as object),
-                            spots: targets.length,
-                        },
-                        orderMode: tool.kept ? "kept" : tool.order,
-                        reverse: false,
-                    },
-                    members: targets.map((t) => ({
-                        marcherId: t.id,
-                        slot: t.slot,
-                        x: t.to.x,
-                        y: t.to.y,
-                    })),
-                });
-            },
-        });
-    } catch (e) {
-        toastTimelineError(e, "Error placing the shape");
-        return false;
-    }
-    // Not a React Query mutation, so refresh what one would
-    void queryClient.invalidateQueries({ queryKey: historyKeys.all() });
-    return true;
+    if (!field) return false;
+    const placement = placementOf(tool, shapeContextFor(field));
+    if (!placement) return false;
+    return writePlacement(
+        placement,
+        queryClient,
+        "Error placing the shape",
+        plan,
+    );
 }
 
 /** Place (Enter): places the open shape at the edit window now, then closes the tool */
@@ -115,15 +68,15 @@ export function useLeaveShapeTool(): () => void {
     );
 }
 
-/** Opens the box tool on the selected performers: a selected prop takes no spot (C2.2) */
+/** Opens the box tool on the selected performers, if the selection gate lets it */
 export function useOpenBoxTool(): () => void {
     const { selectedPerformers } = useEditorReadiness();
     return useCallback(() => {
         const field = currentShapeField();
-        if (!field || selectedPerformers.length === 0) return;
-        const ids = selectedPerformers.map((m) => m.id);
+        const gate = shapeSelectionGate(selectedPerformers);
+        if (!field || !gate.ok) return;
         openShapeTool(
-            openTool(boxTool, marchersOnField(field, ids)),
+            openTool(boxTool, marchersOnField(field, gate.ids)),
             planCanvasEdit(),
         );
     }, [selectedPerformers]);
@@ -139,7 +92,7 @@ export function useShapeToolActions(): void {
     const openBox = useOpenBoxTool();
 
     useActionHandler("shapeBlock", openBox, {
-        enabled: ready && selectedPerformers.length > 0,
+        enabled: ready && shapeSelectionGate(selectedPerformers).ok,
     });
     useActionHandler(
         "applyShape",

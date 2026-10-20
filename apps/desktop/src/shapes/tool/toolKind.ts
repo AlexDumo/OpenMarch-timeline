@@ -1,4 +1,5 @@
 import type { PivotKey, ShapeFrame } from "../frame/frame";
+import type { ScrubMove } from "../editor/scrub";
 import type { AnyShapeKind, XY } from "../types";
 
 /**
@@ -29,6 +30,57 @@ export interface ToolHandle {
 }
 
 /**
+ * One of a kind's numbers (#344, "The kind contract"), declared once so the host can show and
+ * change it without knowing the kind: the floating chip shows the primary ones now, and the
+ * inspector, the command bar's steps and a later API read the same list. Everything is pure.
+ * `n` is the spot count, which the host gives; a kind never reads the selection.
+ */
+export interface ToolParam<P> {
+    /** Stable for the kind: the command bar and saved shapes name the parameter by it */
+    readonly key: string;
+    /** What it is, for tooltips and screen readers: "Side-to-side spacing, in steps" */
+    readonly label: string;
+    /** Counts are whole numbers; steps and degrees are typed and shown as such */
+    readonly unit: "count" | "steps" | "degrees";
+    /** Shown in the floating chip */
+    readonly primary: boolean;
+    /** Which way a drag changes it: right for more, up for more, or the first way moved */
+    readonly drag: "x" | "y" | "both";
+    /** A spacing between neighbors: scaling by interval changes it in half steps */
+    readonly interval: boolean;
+    /**
+     * Can change smoothly over a move. Recorded only: nothing reads it until transforms over
+     * time are built (#355).
+     */
+    readonly blends: boolean;
+    /** The answer the command bar starts from, in `unit`; absent when it depends on the shape */
+    readonly default?: number;
+    /** Smallest and largest values, in `unit`; counts are also capped by the spot count */
+    readonly range?: { readonly min?: number; readonly max?: number };
+    /** A mark before the number in the chip ("↔"), so its direction reads without words */
+    readonly glyph?: string;
+    /** Hidden while this is false (a spacing with only one spot that way) */
+    shown?(params: P, n: number): boolean;
+    /** The number as shown: "6 × 2", "2" */
+    display(params: P, n: number, stepPx: number): string;
+    /** A note after the number, such as "1 short"; null for none */
+    note?(params: P, n: number): string | null;
+    /** The params with `text` typed over the number; null when the text isn't understood */
+    type(params: P, n: number, text: string, env: ToolEnv): P | null;
+    /** The params with the number dragged by `move` from `base`, the params at the press */
+    scrub(base: P, n: number, move: ScrubMove, env: ToolEnv): P;
+    /**
+     * The chip's − and + buttons, with what each does in words; `by` gives null where it can't
+     * go that way. Absent for numbers without buttons.
+     */
+    readonly stepper?: {
+        readonly less: string;
+        readonly more: string;
+        by(params: P, n: number, by: -1 | 1, env: ToolEnv): P | null;
+    };
+}
+
+/**
  * How one kind of shape is drawn and edited with the pointer. The tool's state machine
  * (`toolMachine.ts`) owns the gestures and calls these; a kind never sees a pointer event.
  * Everything is pure.
@@ -36,6 +88,18 @@ export interface ToolHandle {
 export interface ToolKind<P> {
     /** The shape kind that generates its spots and is stored in recipes */
     readonly shape: AnyShapeKind;
+    /** Its numbers, in the order the chip shows them (#344) */
+    readonly params: readonly ToolParam<P>[];
+    /**
+     * What scaling changes (#344): `interval` kinds change their spacings in half steps,
+     * `footprint` kinds (no regular spacing) their size in steps
+     */
+    readonly scaling: "interval" | "footprint";
+    /**
+     * The chip offers a lock that keeps the kind's two spacings in proportion
+     * ({@link ToolEnv.ratioLocked})
+     */
+    readonly ratioLock?: boolean;
     /**
      * The params a drag from `from` to `to` draws, or undefined while the drag is too short.
      * `previous` is what this same drag drew on the last pointer move.
@@ -50,6 +114,8 @@ export interface ToolKind<P> {
     handles(params: P, n: number): readonly ToolHandle[];
     /** The params with handle `key` dragged to `to`, starting from `base` (the params at press) */
     dragHandle(base: P, n: number, key: string, to: XY, env: ToolEnv): P;
+    /** The shape's outline on the field; the frame's four corners when absent */
+    outline?(params: P, n: number): readonly XY[];
     /** Whether a press at `at` grabs the whole shape to move it */
     contains(params: P, n: number, at: XY): boolean;
     /** `base` moved by `delta` */

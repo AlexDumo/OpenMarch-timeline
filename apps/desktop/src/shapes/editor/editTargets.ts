@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { BoxParams } from "../box/boxGeometry";
+import { boxTool } from "../box/boxTool";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import {
     previewPlacedBox,
@@ -20,18 +21,21 @@ import {
     type ToolOrder,
 } from "../tool/toolMachine";
 import { updateTool, useShapeToolStore } from "../tool/shapeToolStore";
+import type { AnyToolKind } from "../tool/toolKind";
 import { useApplyShape } from "../tool/useShapeToolActions";
 
 /**
  * What the floating editor edits (08-shape-system-ux.md, "The floating editor"): the shape the
  * tool has open, which waits for Place, or a selected placed shape, which saves each edit on
- * release. The editor itself doesn't know which.
+ * release. The editor itself doesn't know which, nor the shape's kind: it shows the numbers the
+ * kind declares.
  */
 export interface ShapeEditTarget {
-    readonly params: BoxParams;
-    /** Spots in the box, holes included */
+    readonly kind: AnyToolKind;
+    readonly params: unknown;
+    /** Spots in the shape, holes included */
     readonly spots: number;
-    /** Spots no member stands on any more (a placed box's holes) */
+    /** Spots no member stands on any more (a placed shape's holes) */
     readonly empty: number;
     readonly order: ToolOrder;
     /** Who goes where was kept through a turn or flip: neither order is lit */
@@ -42,10 +46,10 @@ export interface ShapeEditTarget {
     readonly drawnOn: string | null;
     /** A number's drag starts, moves and ends: one change when it's kept */
     begin(): void;
-    preview(params: BoxParams): void;
+    preview(params: unknown): void;
     end(keep: boolean): void;
     /** One change at once: a typed number, a button */
-    apply(params: BoxParams): void;
+    apply(params: unknown): void;
     setOrder(order: ToolOrder): void;
 }
 
@@ -61,8 +65,9 @@ export function useToolEditTarget(): ShapeEditTarget | null {
     return useMemo(() => {
         if (!tool || tool.params === null) return null;
         return {
-            params: tool.params as BoxParams,
-            spots: tool.marchers.length,
+            kind: tool.kind,
+            params: tool.params,
+            spots: tool.spots,
             empty: 0,
             order: tool.order,
             kept: tool.kept,
@@ -98,6 +103,7 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
                 setTimeout(() => previewPlacedBox(null), PREVIEW_HOLD_MS),
             );
         return {
+            kind: boxTool,
             params: box.params,
             spots: box.spots,
             empty: box.spots - box.recipe.members.length,
@@ -105,14 +111,14 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
             kept: keptOf(box),
             drawnOn,
             begin: () => previewPlacedBox(box.params),
-            preview: (params) => previewPlacedBox(params),
+            preview: (params) => previewPlacedBox(params as BoxParams),
             end: (keep) => {
                 const { params } = usePlacedBoxPreviewStore.getState();
                 if (keep && params && params !== box.params) void save(params);
                 else previewPlacedBox(null);
             },
             apply: (params) => {
-                if (params !== box.params) void save(params);
+                if (params !== box.params) void save(params as BoxParams);
             },
             setOrder: (order) =>
                 void commitBox(box, box.params, queryClient, order),

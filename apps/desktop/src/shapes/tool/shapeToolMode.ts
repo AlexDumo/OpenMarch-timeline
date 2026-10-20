@@ -1,9 +1,8 @@
 import { create } from "zustand";
 import type { FieldMode } from "@/field/editor/fieldEditor";
 import type { XY } from "../types";
-import type { BoxParams } from "../box/boxGeometry";
+import { shapeOutline } from "../frame/gestures";
 import {
-    boxOutline,
     drillNumbers,
     frameDrawing,
     keysOf,
@@ -76,7 +75,7 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
     const field = currentShapeField();
     if (!field) return null;
     const ctx = shapeContextFor(field);
-    const n = tool.marchers.length;
+    const n = tool.spots;
     const spots = slotsOf(tool, ctx);
     // The marchers' hollow rings stand where they start the move: at the start flag (#346)
     const rings = startsOf(tool);
@@ -96,7 +95,7 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
             : null;
     return {
         stage: drawing ? ("drawing" as const) : ("open" as const),
-        outline: boxOutline(tool.params as BoxParams, n),
+        outline: shapeOutline(tool.kind, tool.params, n),
         spots,
         walks: targets.map((t) => ({ from: t.from, to: t.to })),
         rings,
@@ -165,12 +164,7 @@ export const shapeToolMode: FieldMode = {
         hoverAt(tool, pointer.field, env.hitRadius);
         const target = pressTarget(tool, pointer.field, env);
         if (target.type === "draw") return "crosshair";
-        return shapeCursor(
-            tool.kind,
-            tool.params,
-            tool.marchers.length,
-            target,
-        );
+        return shapeCursor(tool.kind, tool.params, tool.spots, target);
     },
     drawing: () => drawingOf(shownNow()),
     subscribe: (listener) => {

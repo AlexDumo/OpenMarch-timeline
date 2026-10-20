@@ -1,9 +1,11 @@
 import { blockKind } from "../kinds/block";
 import { resizeCursor } from "../frame/frame";
 import type { ToolKind } from "../tool/toolKind";
+import { BOX_PARAMS } from "./boxParams";
 import {
     type BoxHandleKey,
     type BoxParams,
+    boxCorners,
     boxFrame,
     boxHandlePoint,
     drawBox,
@@ -22,6 +24,9 @@ import {
  */
 export const boxTool: ToolKind<BoxParams> = {
     shape: blockKind,
+    params: BOX_PARAMS,
+    scaling: "interval",
+    ratioLock: true,
     draw: drawBox,
     handles(params, n) {
         const frame = boxFrame(params, n);
@@ -37,6 +42,7 @@ export const boxTool: ToolKind<BoxParams> = {
     },
     dragHandle: (base, n, key, to, env) =>
         stretchBox(base, n, key as BoxHandleKey, to, env),
+    outline: boxCorners,
     contains: insideBox,
     move: moveBox,
     frameOf: boxFrame,
