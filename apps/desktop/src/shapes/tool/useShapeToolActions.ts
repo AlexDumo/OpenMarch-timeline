@@ -1,27 +1,19 @@
 import { useCallback } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
 import {
-    planCanvasEdit,
-    type CanvasEditPlan,
-} from "@/timeline/timelineCoordinateWrites";
-import { useActionHandler } from "@/shortcuts/useActionHandler";
+    useActionHandler,
+    useActionHandlerGroup,
+} from "@/shortcuts/useActionHandler";
 import { useEditorReadiness } from "@/shortcuts/handlers/useEditorReadiness";
-import {
-    currentShapeField,
-    marchersOnField,
-    shapeContextFor,
-} from "../field/shapeFieldContext";
-import { boxTool } from "../box/boxTool";
+import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { placementOf, writePlacement } from "./shapePlacement";
-import { shapeSelectionGate } from "./selectionGate";
+import { kindPickGate, pickShapeKind } from "./pickKind";
+import { SHAPE_TOOLS } from "./shapeTools";
+import type { ToolState } from "./toolMachine";
 import { useShapePaletteSource } from "../command/useShapePaletteSource";
-import { openTool, type ToolState } from "./toolMachine";
 import { leaveShapeTool } from "./shapeLeave";
-import {
-    closeShapeTool,
-    openShapeTool,
-    useShapeToolStore,
-} from "./shapeToolStore";
+import { closeShapeTool, useShapeToolStore } from "./shapeToolStore";
 
 /**
  * The host's place function (spec #344): every open shape is placed through here, whether by
@@ -69,20 +61,6 @@ export function useLeaveShapeTool(): () => void {
     );
 }
 
-/** Opens the box tool on the selected performers, if the selection gate lets it */
-export function useOpenBoxTool(): () => void {
-    const { selectedPerformers } = useEditorReadiness();
-    return useCallback(() => {
-        const field = currentShapeField();
-        const gate = shapeSelectionGate(selectedPerformers);
-        if (!field || !gate.ok) return;
-        openShapeTool(
-            openTool(boxTool, marchersOnField(field, gate.ids)),
-            planCanvasEdit(),
-        );
-    }, [selectedPerformers]);
-}
-
 /** Opens and places the shape tool from shortcuts, buttons and the command palette */
 export function useShapeToolActions(): void {
     const { ready, selectedPerformers } = useEditorReadiness();
@@ -90,12 +68,18 @@ export function useShapeToolActions(): void {
         (s) => s.tool !== null && s.tool.params !== null && !s.tool.gesture,
     );
     const apply = useApplyShape();
-    const openBox = useOpenBoxTool();
+    const shapeOpen = useShapeToolStore((s) => s.tool !== null);
     useShapePaletteSource(ready, selectedPerformers, apply);
 
-    useActionHandler("shapeBlock", openBox, {
-        enabled: ready && shapeSelectionGate(selectedPerformers).ok,
-    });
+    // A kind's key arms it, or turns the open shape into it
+    useActionHandlerGroup(
+        SHAPE_TOOLS.map((entry) => entry.action),
+        (id) => {
+            const entry = SHAPE_TOOLS.find((e) => e.action === id);
+            if (entry) pickShapeKind(entry.kind, selectedPerformers);
+        },
+        { enabled: ready && kindPickGate(shapeOpen, selectedPerformers).ok },
+    );
     useActionHandler(
         "applyShape",
         () => {

@@ -9,9 +9,15 @@ import {
 import { toolEnvFor } from "../tool/toolEnv";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { ShapeField } from "../field/shapeField";
-import { edit, openTool, startsOf, type ToolState } from "../tool/toolMachine";
+import {
+    edit,
+    openTool,
+    startsOf,
+    switchKind,
+    type ToolState,
+} from "../tool/toolMachine";
 import { useShapeToolStore } from "../tool/shapeToolStore";
-import { shapeSteps, startingParams, switchedParams } from "./shapeSteps";
+import { shapeSteps, startingParams } from "./shapeSteps";
 
 /**
  * What the command starts from: the open shape (switched to `kind` keeping its frame if it's
@@ -27,16 +33,9 @@ function startFrom(
     if (open !== null && open.params !== null && !open.gesture) {
         if (open.kind === kind)
             return { start: open, base: open.params, keeps: true };
-        const start = openTool(kind, open.marchers);
-        const base = switchedParams(
-            kind,
-            open.kind,
-            open.params,
-            startsOf(start),
-            start.spots,
-            env,
-        );
-        return base === null ? null : { start, base, keeps: true };
+        // Another kind: the open shape turns into it keeping its frame, as picking it does
+        const start = switchKind(open, kind, shapeContextFor(field), env);
+        return { start, base: start.params, keeps: true };
     }
     if (ids.length === 0) return null;
     const start = openTool(kind, marchersOnField(field, ids));

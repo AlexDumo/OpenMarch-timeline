@@ -9,6 +9,7 @@ import {
     SELECT_MARCHERS_FIRST,
     shapeSelectionGate,
 } from "../tool/selectionGate";
+import { kindPickGate } from "../tool/pickKind";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import {
     edit,
@@ -17,6 +18,7 @@ import {
     press,
     release,
     slotsOf,
+    switchKind,
     targetsOf,
     undo,
     redo,
@@ -254,5 +256,99 @@ describe("the selection gate", () => {
             ok: true,
             ids: [4, 2],
         });
+    });
+});
+
+describe("switching kinds with a shape open", () => {
+    const N = 6;
+    const sameFrame = (
+        a: AnyToolKind,
+        pa: unknown,
+        b: AnyToolKind,
+        pb: unknown,
+    ) => {
+        const fa = a.frameOf(pa, N);
+        const fb = b.frameOf(pb, N);
+        // Sizes land on the new kind's half-step spacing
+        const slack = ((N - 1) * half) / 2;
+        expect(Math.abs(fb.center.x - fa.center.x)).toBeLessThanOrEqual(
+            half / 2,
+        );
+        expect(Math.abs(fb.center.y - fa.center.y)).toBeLessThanOrEqual(
+            half / 2,
+        );
+        expect(Math.abs(fb.halfWidth - fa.halfWidth)).toBeLessThanOrEqual(
+            slack,
+        );
+        expect(fb.rotation).toBeCloseTo(fa.rotation);
+        expect(fb.flipX).toBe(fa.flipX);
+        expect(fb.flipY).toBe(fa.flipY);
+    };
+
+    it("arms the other kind when nothing is drawn yet", () => {
+        const t = switchKind(
+            openTool(boxTool, marchers(N)),
+            rowTool,
+            ctx,
+            env(),
+        );
+        expect(t.kind).toBe(rowTool);
+        expect(t.params).toBeNull();
+        expect(t.past).toEqual([]);
+    });
+
+    it("turns a box into the fake kind keeping its center, size, turn and flip", () => {
+        let t = drawn(boxTool, N, { x: 0, y: 0 }, { x: 100, y: 0 });
+        t = edit(
+            t,
+            turnShape(boxTool, t.params, N, 30 * DEGREE, "c", env()),
+            ctx,
+        );
+        t = edit(t, flipShape(boxTool, t.params, N, "across", "c", env()), ctx);
+        const row = switchKind(t, rowTool, ctx, env());
+        expect(row.kind).toBe(rowTool);
+        sameFrame(boxTool, t.params, rowTool, row.params);
+        // Everyone gets a spot of their own on the new shape
+        expect(new Set(targetsOf(row, ctx).map((x) => x.slot)).size).toBe(N);
+    });
+
+    it("turns the fake kind into a box keeping its frame", () => {
+        let t = drawn(rowTool, N, { x: 0, y: 0 }, { x: 100, y: 0 });
+        t = edit(t, flipShape(rowTool, t.params, N, "across", "c", env()), ctx);
+        const box = switchKind(t, boxTool, ctx, env());
+        expect(box.kind).toBe(boxTool);
+        sameFrame(rowTool, t.params, boxTool, box.params);
+        expect(targetsOf(box, ctx)).toHaveLength(N);
+    });
+
+    it("is one undo step: undo brings back the old kind and shape", () => {
+        const t = drawn(boxTool, N, { x: 0, y: 0 }, { x: 100, y: 40 });
+        const row = switchKind(t, rowTool, ctx, env());
+        const back = undo(row);
+        expect(back.kind).toBe(boxTool);
+        expect(back.params).toBe(t.params);
+        expect(goingTo(back)).toEqual(goingTo(t));
+        const again = redo(back);
+        expect(again.kind).toBe(rowTool);
+        expect(again.params).toBe(row.params);
+    });
+
+    it("does nothing when the kind is the open one", () => {
+        const t = drawn(boxTool, N, { x: 0, y: 0 }, { x: 100, y: 40 });
+        expect(switchKind(t, boxTool, ctx, env())).toBe(t);
+    });
+});
+
+describe("picking a kind", () => {
+    it("needs marchers selected to open a shape", () => {
+        expect(kindPickGate(false, [])).toEqual({
+            ok: false,
+            reason: SELECT_MARCHERS_FIRST,
+        });
+        expect(kindPickGate(false, [{ id: 3 }])).toEqual({ ok: true });
+    });
+
+    it("switches the open shape's kind whatever is selected", () => {
+        expect(kindPickGate(true, [])).toEqual({ ok: true });
     });
 });

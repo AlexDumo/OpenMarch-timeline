@@ -89,23 +89,6 @@ export function startingParams(
     return params;
 }
 
-/**
- * `from`'s shape as `kind`, keeping its frame (center, turn and flip; spec #344, "Switching
- * kinds"): the new kind's own starting shape put where the old one was
- */
-export function switchedParams(
-    kind: AnyToolKind,
-    fromKind: AnyToolKind,
-    fromParams: unknown,
-    starts: readonly XY[],
-    n: number,
-    env: ToolEnv,
-): unknown {
-    const fresh = startingParams(kind, starts, n, env);
-    if (fresh === null) return null;
-    return kind.withFrame(fresh, n, fromKind.frameOf(fromParams, n));
-}
-
 function middleOf(points: readonly XY[]): XY {
     if (points.length === 0) return { x: 0, y: 0 };
     const sum = points.reduce((s, p) => ({ x: s.x + p.x, y: s.y + p.y }), {

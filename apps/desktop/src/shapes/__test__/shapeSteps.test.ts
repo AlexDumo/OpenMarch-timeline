@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
 import { filesOf, ranksOf, type BoxParams } from "../box/boxGeometry";
-import {
-    shapeSteps,
-    startingParams,
-    switchedParams,
-} from "../command/shapeSteps";
+import { shapeSteps, startingParams } from "../command/shapeSteps";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { XY } from "../types";
 import { rowTool, type RowParams } from "./fakeRowKind";
@@ -91,25 +87,5 @@ describe("a kind the host has never heard of gets its steps too", () => {
             ["gap", "2"],
         ]);
         expect((params as RowParams).gap).toBeCloseTo(3.5 * STEP);
-    });
-
-    it("switching to another kind keeps the frame: center, turn and flip", () => {
-        const box = {
-            ...(startingParams(boxTool, starts(N), N, env) as BoxParams),
-            center: { x: 120, y: 80 },
-            rotation: Math.PI / 2,
-            flipX: true,
-        };
-        const row = switchedParams(
-            rowTool,
-            boxTool,
-            box,
-            starts(N),
-            N,
-            env,
-        ) as RowParams;
-        expect(row.center).toEqual({ x: 120, y: 80 });
-        expect(row.rotation).toBeCloseTo(Math.PI / 2);
-        expect(row.flipX).toBe(true);
     });
 });

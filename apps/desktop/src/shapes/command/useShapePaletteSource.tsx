@@ -6,9 +6,11 @@ import {
 import type { Translate } from "@/shortcuts/labels";
 import { isActionOffInWorkspace } from "@/shortcuts/workspaceActions";
 import { isPreviewMode } from "@/stores/PreviewModeStore";
+import { kindPickGate } from "../tool/pickKind";
 import { shapeSelectionGate } from "../tool/selectionGate";
 import type { AnyToolKind } from "../tool/toolKind";
-import { TOOL_KINDS } from "../tool/toolKinds";
+import { SHAPE_TOOLS } from "../tool/shapeTools";
+import { useShapeToolStore } from "../tool/shapeToolStore";
 import { beginShapeCommand } from "./shapeCommand";
 
 /** The Shape branch's id in the command tree */
@@ -42,7 +44,7 @@ export function useShapePaletteSource(
             icon: <ShapesIcon size={18} />,
             keywords: t("actions.shape.keywords").split(/\s+/),
             children: () => [
-                ...TOOL_KINDS.map((kind) =>
+                ...SHAPE_TOOLS.map(({ kind }) =>
                     kindItem(kind, ready, selected, t, place),
                 ),
                 ...savedShapeItems(),
@@ -59,6 +61,11 @@ function kindItem(
     place: () => Promise<void>,
 ): PaletteItem {
     const gate = shapeSelectionGate(selected);
+    // With a shape open, any kind can be picked: the open shape turns into it
+    const pick = kindPickGate(
+        useShapeToolStore.getState().tool !== null,
+        selected,
+    );
     // Shapes edit the drill, like the box tool's key
     const offHere = isActionOffInWorkspace("shapeBlock");
     const Icon = kind.shape.icon;
@@ -69,15 +76,15 @@ function kindItem(
         group: t("commandPalette.shape"),
         icon: <Icon size={18} />,
         keywords: [kind.shape.id],
-        disabled: !ready || offHere || !gate.ok,
+        disabled: !ready || offHere || !pick.ok,
         disabledReason: offHere
             ? t(
                   isPreviewMode()
                       ? "commandPalette.offInPreview"
                       : "commandPalette.editsDrill",
               )
-            : !gate.ok
-              ? gate.reason
+            : !pick.ok
+              ? pick.reason
               : undefined,
         command: {
             begin: () =>
