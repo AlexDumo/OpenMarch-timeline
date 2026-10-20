@@ -152,6 +152,16 @@ export const rowTool: ToolKind<RowParams> = {
         }),
     }),
     frameOf: rowFrame,
+    fromFrame: (frame, n, env) => ({
+        center: frame.center,
+        gap: gapOf(
+            (2 * frame.halfWidth) / Math.max(1, n - 1) / env.stepPx,
+            env.stepPx,
+        ),
+        rotation: frame.rotation,
+        flipX: frame.flipX || undefined,
+        flipY: frame.flipY || undefined,
+    }),
     withFrame: (p, _n, frame) => ({
         ...p,
         center: frame.center,
@@ -240,6 +250,13 @@ export const spreadTool: ToolKind<SpreadParams> = {
         }),
     }),
     frameOf: (p, n) => spreadFrame(p, n),
+    fromFrame: (frame) => ({
+        center: frame.center,
+        length: 2 * frame.halfWidth,
+        rotation: frame.rotation,
+        flipX: frame.flipX || undefined,
+        flipY: frame.flipY || undefined,
+    }),
     withFrame: (p, _n, frame) => ({
         ...p,
         center: frame.center,

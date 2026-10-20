@@ -208,6 +208,35 @@ const spread = (extent: number, count: number, env: ToolEnv) =>
     count > 1 ? snapInterval(extent / (count - 1), env) : undefined;
 
 /**
+ * A box filling `frame`, as if drawn over it: the files suit the frame's proportions and the
+ * intervals spread the marchers edge to edge in half steps, turned and flipped like the frame
+ */
+export function boxInFrame(
+    frame: ShapeFrame,
+    n: number,
+    env: ToolEnv,
+): BoxParams {
+    const width = 2 * frame.halfWidth;
+    const depth = 2 * frame.halfDepth;
+    const files = splitFor(width, depth, n);
+    const ranks = Math.ceil(Math.max(1, n) / files);
+    const a = spread(width, files, env);
+    const d = spread(depth, ranks, env);
+    const across = a ?? d ?? snapInterval(Math.max(width, depth), env);
+    const box: BoxParams = {
+        center: frame.center,
+        rotation: 0,
+        files,
+        across,
+        deep: d ?? across,
+        pattern: "grid",
+        shortRank: "center",
+        shortRankAt: "back",
+    };
+    return snapToGrid(withBoxFrame(box, frame), n, env);
+}
+
+/**
  * The box a drag from `from` to `to` draws for `n` marchers: the files suit the rectangle's
  * proportions, a marcher stands on the corner pressed, and the intervals spread the rest to the
  * opposite edges, in half steps (so the far edge lands near the cursor, not always on it).

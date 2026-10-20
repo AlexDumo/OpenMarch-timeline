@@ -143,6 +143,12 @@ export interface ToolKind<P> {
         half: { readonly halfWidth: number; readonly halfDepth: number },
         env: ToolEnv,
     ): P;
+    /**
+     * A new shape of this kind filling `frame`: its center, turn and flip, and its size as near
+     * as the kind's spacing allows. Picking another kind with a shape open turns the shape into
+     * this kind this way, so the frame is kept (#344).
+     */
+    fromFrame(frame: ShapeFrame, n: number, env: ToolEnv): P;
     /** After a turn or flip: the shape put back on the grid, if it snaps to one */
     settle?(params: P, n: number, env: ToolEnv): P;
 }
