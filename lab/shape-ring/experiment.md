@@ -32,4 +32,4 @@ arrives, with the basic shapes filling the rest (8 at most).
 - Picking from the ring while a shape is drawn turns the drawn shape into
   the one you picked (with only the box, there's nothing to switch to
   yet).
-- The key can be changed in Settings › Shortcuts, under Shape.
+- The key can be changed in Settings › Keyboard shortcuts, under Shape. The Shapes tab shows the current key.
