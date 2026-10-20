@@ -365,18 +365,120 @@ const screenOf = async (page: Page, id: number): Promise<[number, number]> => {
     return [m.screen.x, m.screen.y];
 };
 
-test("change: Escape discards an open box and its toast's Undo brings it back", async ({
+const toasts = (page: Page) => page.locator("[data-sonner-toast]");
+
+/** Whether every marcher stands on page 0 on one of `spots`. */
+const onSpots = async (show: Show, spots: readonly Point[]) =>
+    (await savedPositions(show, 0)).every((p) =>
+        spots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < CLOSE),
+    );
+
+test("change: Escape discards an open box with no toast, and undo right after brings it back", async ({
+    show,
+}) => {
+    const { page } = show;
+    const steps = await undoSteps(show);
+    await drawBox(show);
+    // A change in the box's own history, which comes back too
+    await page.getByRole("button", { name: "One more across" }).click();
+    const numbers = await readout(page);
+    const spots = (await shapeOverlay(page))!.spots;
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect(toasts(page)).toHaveCount(0);
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await readout(page)).toBe(numbers);
+    expect((await shapeOverlay(page))!.spots).toEqual(spots);
+    // The show was never touched
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    expect(await undoSteps(show)).toBe(steps);
+    // Undo goes on through the box's own history
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => readout(page)).not.toBe(numbers);
+});
+
+test("change: Escape while typing a number cancels only the number", async ({
     show,
 }) => {
     const { page } = show;
     await drawBox(show);
-    const spots = (await shapeOverlay(page))!.spots;
+    const numbers = await readout(page);
+    await page.getByTestId("shape-editor-across").click();
+    await page.keyboard.type("7");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-editor-across-input")).toBeHidden();
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await readout(page)).toBe(numbers);
+    // The next Escape discards the box
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
-    await page.getByRole("button", { name: "Undo" }).click();
+});
+
+test("change: scrubbing with a box open places it where it was drawn as one undo step, with no toast", async ({
+    show,
+}) => {
+    const { page } = show;
+    const steps = await undoSteps(show);
+    await drawBox(show);
+    const spots = (await shapeOverlay(page))!.spots;
+    // One beat on: the moment the box was drawn at is left
+    await page.keyboard.press("Shift+E");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(() => onSpots(show, spots)).toBe(true);
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 1);
+    await expect(toasts(page)).toHaveCount(0);
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedPositions(show, 0)).toEqual(asPositions(HOME));
+});
+
+test("change: changing the selection with a box open places it as one undo step, with no toast", async ({
+    show,
+}) => {
+    const { page } = show;
+    const steps = await undoSteps(show);
+    // Box only the first two
+    await page.mouse.click(...(await screenOf(page, 1)));
+    await page.keyboard.down("Shift");
+    await page.mouse.click(...(await screenOf(page, 2)));
+    await page.keyboard.up("Shift");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([1, 2]);
+    await page.keyboard.press("b");
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await drag(
+        page,
+        await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+        await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 23 * S }),
+    );
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
-    expect((await shapeOverlay(page))!.spots).toEqual(spots);
-    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    const spots = (await shapeOverlay(page))!.spots;
+
+    await selectAll(page);
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    const placed = async () =>
+        (await savedPositions(show, 0))
+            .filter((p) => p.id <= 2)
+            .every((p) =>
+                spots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < CLOSE),
+            );
+    await expect.poll(placed).toBe(true);
+    await waitForIdle(page);
+    // Nobody else moved
+    expect((await savedPositions(show, 0)).filter((p) => p.id > 2)).toEqual(
+        asPositions(HOME).filter((p) => p.id > 2),
+    );
+    expect(await undoSteps(show)).toBe(steps + 1);
+    await expect(toasts(page)).toHaveCount(0);
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedPositions(show, 0)).toEqual(asPositions(HOME));
 });
 
 test("change: the rotation is a number in ⋯ you type, and Tab goes from number to number", async ({

@@ -269,11 +269,17 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     plan = planCanvasEdit(),
     afterWrite,
     writesShapes,
+    keepPlayhead = false,
 }: {
     db: DbConnection;
     marcherIds: readonly number[];
     transform: (current: CoordinateRecord[]) => R[];
     plan?: CanvasEditPlan;
+    /**
+     * Inside isolation, leave the playhead where it is rather than taking it to the edit's end:
+     * for an edit written to an earlier plan after the playhead moved on (a shape placed on a scrub)
+     */
+    keepPlayhead?: boolean;
     /** App data written in the same edit, such as a shape recipe (ADR 0006) */
     afterWrite?: (
         tx: DbTransaction,
@@ -283,7 +289,7 @@ export async function transformMarchersInSelection<R extends MarcherXY>({
     writesShapes?: boolean;
 }): Promise<R[]> {
     if (!plan.ok) throw plan.error;
-    snapIsolatedPlayheadToEnd();
+    if (!keepPlayhead) snapIsolatedPlayheadToEnd();
     const next = transform(timelineCoordinateRecords(plan.beat, marcherIds));
     const moves = toTimelineMoves(next);
     // Basic's locked marchers are dropped there (UI-19)
