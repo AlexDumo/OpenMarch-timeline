@@ -740,3 +740,60 @@ for (const editorMode of ["expert", "basic"] as const) {
         });
     });
 }
+
+test("the Shapes tab lists the kinds, greyed out until marchers are selected; picking Box arms it, a drag draws it and Enter places it", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await page.getByRole("tab", { name: "Shapes" }).click();
+    const box = page.getByTestId("shapes-tab-block");
+    await expect(box).toHaveText("Box");
+
+    // Nobody selected: greyed out, and it says why
+    expect((await readField(page)).selection).toEqual([]);
+    await expect(box).toBeDisabled();
+    await expect(page.getByTestId("shapes-tab-reason")).toHaveText(
+        "Select marchers first",
+    );
+
+    await selectAll(page);
+    await expect(box).toBeEnabled();
+    await expect(page.getByTestId("shapes-tab-reason")).toBeHidden();
+    await expect(box).toHaveAttribute("aria-pressed", "false");
+    await expect(box).toHaveAttribute("title", /Box.*\bB\b/);
+
+    // Picking it arms the box: the field draws it on the next drag
+    await box.click();
+    await expect(box).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    expect((await readField(page)).activeGesture).toBe("shape");
+    await drag(
+        page,
+        await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+        await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
+    );
+    const drawn = (await shapeOverlay(page))!;
+    expect(drawn.spots).toHaveLength(ALL.length);
+    expect(await readout(page)).toMatch(/^4 × 2 · /);
+
+    // Picking the open kind again keeps the shape
+    await box.click();
+    expect((await shapeOverlay(page))!.spots).toEqual(drawn.spots);
+
+    // Enter places it, even after the tab's button was clicked
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect(box).toHaveAttribute("aria-pressed", "false");
+    await expect
+        .poll(async () =>
+            (await savedPositions(show, 0)).every((p) =>
+                drawn.walks.some(
+                    (w) => Math.hypot(w.to.x - p.x, w.to.y - p.y) < CLOSE,
+                ),
+            ),
+        )
+        .toBe(true);
+});

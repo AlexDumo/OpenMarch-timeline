@@ -8,6 +8,7 @@ import {
     boxCorners,
     boxFrame,
     boxHandlePoint,
+    boxInFrame,
     drawBox,
     handleDirection,
     handleKeysOf,
@@ -47,5 +48,6 @@ export const boxTool: ToolKind<BoxParams> = {
     move: moveBox,
     frameOf: boxFrame,
     withFrame: (params, _n, frame) => withBoxFrame(params, frame),
+    fromFrame: boxInFrame,
     settle: snapToGrid,
 };
