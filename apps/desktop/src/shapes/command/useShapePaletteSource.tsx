@@ -31,6 +31,8 @@ export function savedShapeItems(): readonly PaletteItem[] {
 export function useShapePaletteSource(
     ready: boolean,
     selected: readonly { readonly id: number }[],
+    /** The host's place for the open shape (Place, Enter), which the last answer runs */
+    place: () => Promise<void>,
 ): void {
     usePaletteSource("shapes", ({ t }) => [
         {
@@ -40,7 +42,9 @@ export function useShapePaletteSource(
             icon: <ShapesIcon size={18} />,
             keywords: t("actions.shape.keywords").split(/\s+/),
             children: () => [
-                ...TOOL_KINDS.map((kind) => kindItem(kind, ready, selected, t)),
+                ...TOOL_KINDS.map((kind) =>
+                    kindItem(kind, ready, selected, t, place),
+                ),
                 ...savedShapeItems(),
             ],
         },
@@ -52,6 +56,7 @@ function kindItem(
     ready: boolean,
     selected: readonly { readonly id: number }[],
     t: Translate,
+    place: () => Promise<void>,
 ): PaletteItem {
     const gate = shapeSelectionGate(selected);
     // Shapes edit the drill, like the box tool's key
@@ -76,10 +81,12 @@ function kindItem(
               : undefined,
         command: {
             begin: () =>
-                beginShapeCommand(kind, gate.ok ? gate.ids : [], [
-                    t("commandPalette.shape"),
-                    label,
-                ]),
+                beginShapeCommand(
+                    kind,
+                    gate.ok ? gate.ids : [],
+                    [t("commandPalette.shape"), label],
+                    place,
+                ),
         },
     };
 }

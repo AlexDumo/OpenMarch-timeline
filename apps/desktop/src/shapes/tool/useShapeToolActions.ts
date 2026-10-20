@@ -91,7 +91,7 @@ export function useShapeToolActions(): void {
     );
     const apply = useApplyShape();
     const openBox = useOpenBoxTool();
-    useShapePaletteSource(ready, selectedPerformers);
+    useShapePaletteSource(ready, selectedPerformers, apply);
 
     useActionHandler("shapeBlock", openBox, {
         enabled: ready && shapeSelectionGate(selectedPerformers).ok,

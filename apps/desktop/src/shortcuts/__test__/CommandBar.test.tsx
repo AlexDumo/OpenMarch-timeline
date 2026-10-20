@@ -189,7 +189,7 @@ describe("the command bar", () => {
         expect(box.cancel).not.toHaveBeenCalled();
     });
 
-    it('a one-liner such as "box 4x3 2" fills the answers ahead', async () => {
+    it('a one-liner such as "box 4x3 2" fills the answers ahead and opens at the first one it didn\'t fill', async () => {
         const box = withShapeBranch();
         renderBar();
         const input = openWith("openCommandPalette");
@@ -197,13 +197,31 @@ describe("the command bar", () => {
         expect(optionLabels()[0]).toMatch(/^Shape › Box 5x4 · 2½/);
         fireEvent.keyDown(input, { key: "Enter" });
         await vi.waitFor(() => screen.getByTestId("docked-command-bar"));
-        expect(answer().value).toBe("5x4");
-        key("Enter");
+        expect(question()).toBe("Deep");
+        expect(answer().value).toBe("2");
+        // The whole line shows at once
+        expect(box.shown.at(-1)).toEqual(["5x4", "2½", "2"]);
+        // What it filled can still be gone back over
+        type("");
+        key("Backspace");
+        expect(question()).toBe("Across");
         expect(answer().value).toBe("2½");
         key("Enter");
-        expect(answer().value).toBe("2");
         key("Enter");
         expect(box.finish).toHaveBeenCalledWith(["5x4", "2½", "2"]);
+    });
+
+    it("a one-liner that fills every step finishes on one Enter", async () => {
+        const box = withShapeBranch();
+        renderBar();
+        const input = openWith("openCommandPalette");
+        fireEvent.change(input, { target: { value: "box 4x2 3 1½" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+        await vi.waitFor(() => screen.getByTestId("docked-command-bar"));
+        expect(question()).toBe("Deep");
+        expect(answer().value).toBe("1½");
+        key("Enter");
+        expect(box.finish).toHaveBeenCalledWith(["4x2", "3", "1½"]);
     });
 
     it("Backspace in an empty answer goes back a step, keeping its answer", async () => {
@@ -216,6 +234,24 @@ describe("the command bar", () => {
         key("Backspace");
         expect(question()).toBe("Size");
         expect(answer().value).toBe("6x2");
+    });
+
+    it("Tab goes to the next step and Shift+Tab back, as in a form", async () => {
+        const box = withShapeBranch();
+        renderBar();
+        await choose("box");
+        type("6x2");
+        key("Tab");
+        expect(question()).toBe("Across");
+        fireEvent.keyDown(answer(), { key: "Tab", shiftKey: true });
+        expect(question()).toBe("Size");
+        expect(answer().value).toBe("6x2");
+        key("Tab");
+        key("Tab");
+        // Tab on the last step doesn't finish; Enter does
+        key("Tab");
+        expect(question()).toBe("Deep");
+        expect(box.finish).not.toHaveBeenCalled();
     });
 
     it("Backspace in the first empty answer cancels back to the branch", async () => {

@@ -52,14 +52,15 @@ function startFrom(
  * another kind is switched to keeping its frame. Otherwise it starts from the kind's defaults
  * around where the marchers stand.
  *
- * The answers are one undo step in the shape's own history. Finishing leaves the shape open for
- * the chip and Place (Enter); Escape puts back whatever was open before. If the shape ends
+ * The answers are one undo step in the shape's own history, and the last one places the shape
+ * through the host's place function; Escape puts back whatever was open before. If the shape ends
  * another way while the bar is up (a scrub or a new selection places it), the bar closes.
  */
 export function beginShapeCommand(
     kind: AnyToolKind,
     ids: readonly number[],
     path: readonly string[],
+    place: () => Promise<void>,
 ): CommandRun | null {
     const field = currentShapeField();
     if (!field) return null;
@@ -103,9 +104,13 @@ export function beginShapeCommand(
                 }),
             );
         },
+        // The last answer places the shape, through the host's place function (sims B354: a
+        // "Done" that left it open read as a trap)
+        finishLabel: "Place",
         finish(answers) {
             unsubscribe();
             run.preview(answers);
+            void place();
         },
         cancel() {
             unsubscribe();

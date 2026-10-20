@@ -32,6 +32,8 @@ export interface CommandRun {
     preview(answers: readonly string[]): readonly CommandStep[];
     /** The last step was answered */
     finish(answers: readonly string[]): void;
+    /** What answering the last step does, for its key hint ("Place"); "Done" when absent */
+    readonly finishLabel?: string;
     /** Escape: everything as it was before the command began */
     cancel(): void;
 }

@@ -54,18 +54,27 @@ function DockedSteps({
 }) {
     const { t: tolgeeT } = useTolgee();
     const t: Translate = (key, params) => tolgeeT(key, params as never);
-    const [answers, setAnswers] = useState<readonly string[]>([]);
-    const [text, setText] = useState(
-        () => prefill[0] ?? run.preview([])[0]?.initial ?? "",
-    );
+    // A one-liner opens at the first step it didn't fill, or the last one, so one Enter finishes
+    // it (sims B354); Backspace still goes back over what it filled
+    const [opening] = useState(() => {
+        const steps = run.preview(prefill);
+        const at = Math.max(0, Math.min(prefill.length, steps.length - 1));
+        return {
+            answers: prefill.slice(0, at),
+            text: prefill[at] ?? steps[at]?.initial ?? "",
+        };
+    });
+    const [answers, setAnswers] = useState<readonly string[]>(opening.answers);
+    const [text, setText] = useState(opening.text);
     const input = useRef<HTMLInputElement>(null);
 
-    // What the field shows follows every keystroke
-    const steps = useMemo(
-        () => run.preview([...answers, text]),
-        [run, answers, text],
-    );
     const index = answers.length;
+    // What the field shows follows every keystroke, with a one-liner's later answers too, so the
+    // whole line shows at once (sims B354)
+    const steps = useMemo(
+        () => run.preview([...answers, text, ...prefill.slice(index + 1)]),
+        [run, answers, text, prefill, index],
+    );
     const step = steps[index];
 
     // A command with nothing to ask is done as soon as it begins
@@ -87,17 +96,23 @@ function DockedSteps({
         closeDockedCommand(run);
     };
 
+    const back = () => {
+        setText(answers[index - 1] ?? "");
+        setAnswers(answers.slice(0, -1));
+    };
+
     const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
         const handled = () => {
             event.preventDefault();
             // The bar's keys aren't the field's: Enter isn't Place, Escape isn't discard
             event.stopPropagation();
         };
-        if (event.key === "Enter") {
+        const last = index === steps.length - 1;
+        if (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey)) {
             handled();
-            if (!step || step.invalid) return;
+            if (!step || step.invalid || (event.key === "Tab" && last)) return;
             const next = [...answers, text];
-            if (next.length >= steps.length) {
+            if (last) {
                 run.finish(next);
                 closeDockedCommand(run);
                 return;
@@ -108,12 +123,14 @@ function DockedSteps({
         } else if (event.key === "Escape") {
             handled();
             cancel();
+        } else if (event.key === "Tab" && event.shiftKey) {
+            // Back a step, as in a form (sims B354); not out of the command
+            handled();
+            if (index > 0) back();
         } else if (event.key === "Backspace" && text === "") {
             handled();
-            if (index > 0) {
-                setText(answers[index - 1] ?? "");
-                setAnswers(answers.slice(0, -1));
-            } else {
+            if (index > 0) back();
+            else {
                 // Back up the tree to the branch it was chosen from
                 cancel();
                 openPalette(from);
@@ -192,15 +209,13 @@ function DockedSteps({
                           })}
                 </span>
                 <span className="palette-footer-hint" aria-hidden>
-                    <kbd className="keycap">↵</kbd>
-                    {t(
-                        index === steps.length - 1
-                            ? "commandPalette.done"
-                            : "commandPalette.next",
-                    )}
+                    <kbd className="keycap">Enter</kbd>
+                    {index === steps.length - 1
+                        ? (run.finishLabel ?? t("commandPalette.done"))
+                        : t("commandPalette.next")}
                 </span>
                 <span className="palette-footer-hint" aria-hidden>
-                    <kbd className="keycap">⌫</kbd>
+                    <kbd className="keycap">Backspace</kbd>
                     {t("commandPalette.back")}
                 </span>
                 <span className="palette-footer-hint" aria-hidden>

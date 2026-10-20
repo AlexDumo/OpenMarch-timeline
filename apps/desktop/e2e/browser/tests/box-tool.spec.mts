@@ -787,21 +787,20 @@ test("change: / opens the command bar, and Shape › Box asks each number with a
     await answer(page).fill("3");
     await page.keyboard.press("Enter");
     await expect(question(page)).toHaveText(/^Front-to-back/);
-    await page.keyboard.press("Enter");
 
-    // Done: the box stays open for the chip, and the show is untouched until Place
-    await expect(bar(page)).toBeHidden();
+    // The show is untouched until the last answer, which places the box as one undo step
     expect(await readout(page)).toBe("4 × 2 · 3 × 2 steps");
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
     const spots = (await shapeOverlay(page))!.spots;
     await page.keyboard.press("Enter");
+    await expect(bar(page)).toBeHidden();
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
     await expect.poll(() => onSpots(show, spots)).toBe(true);
     await waitForIdle(page);
     expect(await undoSteps(show)).toBe(steps + 1);
 });
 
-test('change: a one-liner such as "box 4x2 3" fills the answers ahead, and Escape puts back the box that was open', async ({
+test('change: a one-liner such as "box 4x2 3" fills the answers ahead and shows them at once, and Escape puts back the box that was open', async ({
     show,
 }) => {
     const { page } = show;
@@ -815,10 +814,9 @@ test('change: a one-liner such as "box 4x2 3" fills the answers ahead, and Escap
         /^Shape › Box 4x2 · 3/,
     );
     await page.keyboard.press("Enter");
-    await expect(answer(page)).toHaveValue("4x2");
-    await page.keyboard.press("Enter");
-    await expect(answer(page)).toHaveValue("3");
-    // Started from the open box: its depth spacing is its own
+    // Opens at the first step it didn't fill, with everything it did fill on the field. Started
+    // from the open box: its depth spacing is its own
+    await expect(question(page)).toHaveText(/^Front-to-back/);
     const deep = numbers.split(" × ").at(-1);
     await expect.poll(() => readout(page)).toBe(`4 × 2 · 3 × ${deep}`);
 
