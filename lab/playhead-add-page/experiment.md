@@ -3,12 +3,12 @@
 # Keep `id` stable: feedback is filed under it.
 id: playhead-add-page
 title: Add a page from the playhead's right-click menu
-summary: The + next to the playhead is gone. Right-click the playhead and choose Create page at playhead (or press F) to put a page flag there.
+summary: The + next to the playhead is gone. Right-click the playhead and choose Create page at playhead (or press F) to put a page flag there. Past the end of the show, the playhead offers + Add N-Count Page.
 status: open
 questions:
   - Before reading "What to try", how did you go about adding a page? How long did it take you to find the playhead's menu?
   - Did right-clicking the playhead feel like the right place for Create page at playhead? Did you miss the old + button?
-  - At the end of the show, did you add pages from the playhead's menu or with the "+ N counts" button? Which felt better?
+  - Past the end of the show, did the "+ Add N-Count Page" button on the playhead make sense? Was the length it offered the one you expected?
 ---
 
 The **+** that sat next to the playhead is gone. It looked like it did
@@ -30,8 +30,10 @@ middle of the show without help. Note how you looked for it.
   new page will get.
 - Right-click the playhead while it sits on a page flag, or while playing.
   There's no menu there, since there's no page to add.
-- Scroll past the last page, click there, and add a page from the playhead's
-  menu. Then compare with the **+ N counts** button just after the last flag.
+- Put the playhead past the last page (press **End**, then **Shift+E** a few
+  times). A **+ Add N-Count Page** button sits on the playhead: N counts from
+  the last page to the playhead. Hover it to see where the page goes, then
+  click it. Hold **Shift** and it reads **Add N-Count Subset** instead.
 
 **Good to know**
 
