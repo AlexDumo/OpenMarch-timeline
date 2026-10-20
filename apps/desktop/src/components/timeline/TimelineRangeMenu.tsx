@@ -1,4 +1,11 @@
-import { useId, useState, type MouseEvent, type ReactNode } from "react";
+import {
+    createContext,
+    useContext,
+    useId,
+    useState,
+    type MouseEvent,
+    type ReactNode,
+} from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { TooltipClassName } from "@openmarch/ui";
@@ -50,10 +57,17 @@ const MenuSwitch = () => (
 );
 
 /**
+ * Closes the timeline menu an entry is in. An open reason tip is the top layer, so it gets Escape
+ * first; with this, that one Escape closes the menu too. Without it, Escape closes only the tip.
+ */
+export const TimelineMenuClose = createContext<(() => void) | null>(null);
+
+/**
  * A menu entry that may be unavailable (`reason` says why). An unavailable entry stays in the
  * menu's arrow-key order, as menus keep disabled entries, but does nothing: its words dim and a
  * **?** at its end opens the reason beside it while the entry is highlighted (hover or keys) or
- * pressed (touch). Screen readers hear the reason as the entry's description.
+ * pressed (touch). Screen readers hear the reason as the entry's description. Escape closes the
+ * tip and the menu together (`TimelineMenuClose`).
  */
 function MenuItemWithReason({
     testId,
@@ -72,6 +86,7 @@ function MenuItemWithReason({
 }) {
     const reasonId = useId();
     const [open, setOpen] = useState(false);
+    const closeMenu = useContext(TimelineMenuClose);
     if (reason === null)
         return (
             <DropdownMenu.Item
@@ -120,6 +135,7 @@ function MenuItemWithReason({
                             <Tooltip.Content
                                 side="right"
                                 sideOffset={8}
+                                onEscapeKeyDown={() => closeMenu?.()}
                                 className={`${TooltipClassName} max-w-[240px] text-[12px]`}
                             >
                                 {reason}
@@ -501,117 +517,126 @@ export function useTimelineRangeMenu({
                     {...KEEP_MENU_EVENTS}
                     className={TIMELINE_MENU_CONTENT_CLASS}
                 >
-                    {menu?.onAdd && (
-                        <MenuItemWithReason
-                            testId="timeline-range-menu-add"
-                            reason={disabledReason}
-                            reasonTestId="timeline-range-menu-reason"
-                            onSelect={() => menu.onAdd?.(open.target)}
-                        >
-                            <UserPlusIcon size={14} />
-                            Add selected marchers
-                        </MenuItemWithReason>
-                    )}
-                    {pageExtra.length > 0 && (
-                        <>
-                            <TimelineMenuEntries entries={pageExtra} />
-                            <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
-                        </>
-                    )}
-                    {keepState && (
-                        <>
-                            <DropdownMenu.Item
-                                data-testid="timeline-range-menu-keep-here"
-                                disabled={!keepState.canKeep}
-                                aria-keyshortcuts={keepState.keepShortcut}
-                                onSelect={() =>
-                                    menu?.keepHere?.onKeep(open.target.pageId!)
-                                }
-                                className={ITEM_CLASS}
+                    <TimelineMenuClose.Provider value={() => setOpen(null)}>
+                        {menu?.onAdd && (
+                            <MenuItemWithReason
+                                testId="timeline-range-menu-add"
+                                reason={disabledReason}
+                                reasonTestId="timeline-range-menu-reason"
+                                onSelect={() => menu.onAdd?.(open.target)}
                             >
-                                <LinkBreakIcon size={14} />
-                                {tolgee.t(
-                                    "timeline.rangeMenu.keepHere",
-                                    "Keep selected marchers here",
-                                )}
-                                <MenuShortcut keys={keepState.keepShortcut} />
-                            </DropdownMenu.Item>
-                            <DropdownMenu.Item
-                                data-testid="timeline-range-menu-follow-again"
-                                disabled={!keepState.canFollow}
-                                aria-keyshortcuts={keepState.followShortcut}
-                                onSelect={() =>
-                                    menu?.keepHere?.onFollow(
-                                        open.target.pageId!,
-                                    )
-                                }
-                                className={ITEM_CLASS}
-                            >
-                                <LinkSimpleIcon size={14} />
-                                {tolgee.t(
-                                    "timeline.rangeMenu.followAgain",
-                                    "Let selected marchers follow again",
-                                )}
-                                <MenuShortcut keys={keepState.followShortcut} />
-                            </DropdownMenu.Item>
-                            <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
-                        </>
-                    )}
-                    {menu?.subset && open.target.pageId !== undefined && (
-                        <>
-                            <DropdownMenu.CheckboxItem
-                                data-testid="timeline-range-menu-subset"
-                                checked={menu.subset.isSubset(
-                                    open.target.pageId,
-                                )}
-                                onCheckedChange={(checked) =>
-                                    menu.subset?.onSet(
-                                        open.target.pageId!,
-                                        checked,
-                                    )
-                                }
-                                className={`${ITEM_CLASS} group`}
-                            >
-                                <MenuSwitch />
-                                {tolgee.t(
-                                    "timeline.rangeMenu.subset",
-                                    "Subset",
-                                )}
-                            </DropdownMenu.CheckboxItem>
-                            <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
-                        </>
-                    )}
-                    {menu?.onDeleteFlag && open.target.pageId !== undefined && (
-                        <DropdownMenu.Item
-                            data-testid="timeline-range-menu-delete-flag"
-                            onSelect={() =>
-                                menu.onDeleteFlag?.(open.target.pageId!)
-                            }
-                            className={`${ITEM_CLASS} text-red`}
-                        >
-                            <FlagIcon size={14} />
-                            Delete page
-                        </DropdownMenu.Item>
-                    )}
-                    {menu?.onDeleteWithMoves &&
-                        open.target.pageId !== undefined && (
-                            <DropdownMenu.Item
-                                data-testid="timeline-range-menu-delete-with-moves"
-                                onSelect={() =>
-                                    menu.onDeleteWithMoves?.(
-                                        open.target.pageId!,
-                                    )
-                                }
-                                className={`${ITEM_CLASS} text-red`}
-                            >
-                                <TrashIcon size={14} />
-                                {tolgee.t(
-                                    "timeline.rangeMenu.deleteWithMoves",
-                                    "Delete page and its moves",
-                                )}
-                            </DropdownMenu.Item>
+                                <UserPlusIcon size={14} />
+                                Add selected marchers
+                            </MenuItemWithReason>
                         )}
-                    {moves && <TimelineMoveMenuItems actions={moves} />}
+                        {pageExtra.length > 0 && (
+                            <>
+                                <TimelineMenuEntries entries={pageExtra} />
+                                <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                            </>
+                        )}
+                        {keepState && (
+                            <>
+                                <DropdownMenu.Item
+                                    data-testid="timeline-range-menu-keep-here"
+                                    disabled={!keepState.canKeep}
+                                    aria-keyshortcuts={keepState.keepShortcut}
+                                    onSelect={() =>
+                                        menu?.keepHere?.onKeep(
+                                            open.target.pageId!,
+                                        )
+                                    }
+                                    className={ITEM_CLASS}
+                                >
+                                    <LinkBreakIcon size={14} />
+                                    {tolgee.t(
+                                        "timeline.rangeMenu.keepHere",
+                                        "Keep selected marchers here",
+                                    )}
+                                    <MenuShortcut
+                                        keys={keepState.keepShortcut}
+                                    />
+                                </DropdownMenu.Item>
+                                <DropdownMenu.Item
+                                    data-testid="timeline-range-menu-follow-again"
+                                    disabled={!keepState.canFollow}
+                                    aria-keyshortcuts={keepState.followShortcut}
+                                    onSelect={() =>
+                                        menu?.keepHere?.onFollow(
+                                            open.target.pageId!,
+                                        )
+                                    }
+                                    className={ITEM_CLASS}
+                                >
+                                    <LinkSimpleIcon size={14} />
+                                    {tolgee.t(
+                                        "timeline.rangeMenu.followAgain",
+                                        "Let selected marchers follow again",
+                                    )}
+                                    <MenuShortcut
+                                        keys={keepState.followShortcut}
+                                    />
+                                </DropdownMenu.Item>
+                                <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                            </>
+                        )}
+                        {menu?.subset && open.target.pageId !== undefined && (
+                            <>
+                                <DropdownMenu.CheckboxItem
+                                    data-testid="timeline-range-menu-subset"
+                                    checked={menu.subset.isSubset(
+                                        open.target.pageId,
+                                    )}
+                                    onCheckedChange={(checked) =>
+                                        menu.subset?.onSet(
+                                            open.target.pageId!,
+                                            checked,
+                                        )
+                                    }
+                                    className={`${ITEM_CLASS} group`}
+                                >
+                                    <MenuSwitch />
+                                    {tolgee.t(
+                                        "timeline.rangeMenu.subset",
+                                        "Subset",
+                                    )}
+                                </DropdownMenu.CheckboxItem>
+                                <DropdownMenu.Separator className="bg-stroke mx-4 h-px" />
+                            </>
+                        )}
+                        {menu?.onDeleteFlag &&
+                            open.target.pageId !== undefined && (
+                                <DropdownMenu.Item
+                                    data-testid="timeline-range-menu-delete-flag"
+                                    onSelect={() =>
+                                        menu.onDeleteFlag?.(open.target.pageId!)
+                                    }
+                                    className={`${ITEM_CLASS} text-red`}
+                                >
+                                    <FlagIcon size={14} />
+                                    Delete page
+                                </DropdownMenu.Item>
+                            )}
+                        {menu?.onDeleteWithMoves &&
+                            open.target.pageId !== undefined && (
+                                <DropdownMenu.Item
+                                    data-testid="timeline-range-menu-delete-with-moves"
+                                    onSelect={() =>
+                                        menu.onDeleteWithMoves?.(
+                                            open.target.pageId!,
+                                        )
+                                    }
+                                    className={`${ITEM_CLASS} text-red`}
+                                >
+                                    <TrashIcon size={14} />
+                                    {tolgee.t(
+                                        "timeline.rangeMenu.deleteWithMoves",
+                                        "Delete page and its moves",
+                                    )}
+                                </DropdownMenu.Item>
+                            )}
+                        {moves && <TimelineMoveMenuItems actions={moves} />}
+                    </TimelineMenuClose.Provider>
                 </DropdownMenu.Content>
             </DropdownMenu.Portal>
         </DropdownMenu.Root>

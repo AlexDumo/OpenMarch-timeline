@@ -67,6 +67,7 @@ import {
 import {
     KEEP_MENU_EVENTS,
     TIMELINE_MENU_CONTENT_CLASS,
+    TimelineMenuClose,
     TimelineMoveMenuItems,
     timelineRangeTargetProps,
     type TimelineMoveCommands,
@@ -2070,7 +2071,11 @@ export const TimelineTrackClip = memo(function TimelineTrackClip({
                             {...KEEP_MENU_EVENTS}
                             className={TIMELINE_MENU_CONTENT_CLASS}
                         >
-                            <TimelineMoveMenuItems actions={menuActions!} />
+                            <TimelineMenuClose.Provider
+                                value={() => setMenuOpen(false)}
+                            >
+                                <TimelineMoveMenuItems actions={menuActions!} />
+                            </TimelineMenuClose.Provider>
                         </DropdownMenu.Content>
                     </DropdownMenu.Portal>
                 </DropdownMenu.Root>

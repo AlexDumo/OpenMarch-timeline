@@ -224,6 +224,12 @@ describe("the clip's menu (UI-14)", () => {
                 .getByTestId("timeline-move-menu-edit")
                 .getAttribute("aria-disabled"),
         ).toBeNull();
+        // One Escape closes the tip and the menu together
+        fireEvent.keyDown(document.activeElement ?? document.body, {
+            key: "Escape",
+        });
+        expect(screen.queryByRole("tooltip")).toBeNull();
+        expect(screen.queryByTestId("timeline-range-menu")).toBeNull();
     });
 
     it("keeps Delete page alone on a page box, and nothing on a dragged range", () => {
