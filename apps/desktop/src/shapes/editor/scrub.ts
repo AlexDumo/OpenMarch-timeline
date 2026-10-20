@@ -6,6 +6,16 @@
 /** Which way a number drags: sideways (right for more) or up and down (up for more) */
 export type ScrubAxis = "x" | "y";
 
+/** What a drag on a number reports, from where the press was */
+export interface ScrubMove {
+    readonly dx: number;
+    readonly dy: number;
+    /** The direction a two-way number locked to */
+    readonly axis: ScrubAxis;
+    readonly alt: boolean;
+    readonly shift: boolean;
+}
+
 export interface ScrubRate {
     readonly axis: ScrubAxis;
     /** Pixels of drag per step of the value */

@@ -58,6 +58,12 @@ export interface ToolState extends ToolSnapshot {
     readonly kind: AnyToolKind;
     /** In selection order, with where they stand when the tool opened */
     readonly marchers: readonly AssignMarcher[];
+    /**
+     * How many spots the shape has, which the host gives every kind function as `n`: a kind
+     * never reads the selection. One per marcher for now; spots and who goes where stay separate
+     * steps so a shape can later have spots nobody stands on (#358).
+     */
+    readonly spots: number;
     readonly gesture: Gesture | null;
     /** Where the pointer is during a gesture, for the guides drawn by it */
     readonly pointer?: XY;
@@ -74,6 +80,7 @@ export function openTool(
     return {
         kind,
         marchers,
+        spots: marchers.length,
         params: null,
         assignment: null,
         order: "nearest",
@@ -94,7 +101,7 @@ const snapshot = (s: ToolState): ToolSnapshot => ({
 /** The spots for the open shape, in the kind's order; empty before one is drawn */
 export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {
     if (state.params === null) return [];
-    return state.kind.shape.generate(state.params, state.marchers.length, ctx);
+    return state.kind.shape.generate(state.params, state.spots, ctx);
 }
 
 /** Who goes where on the current shape, worked out again from where the marchers start */
@@ -129,13 +136,9 @@ export function pressTarget(
 ): ShapeTarget | { type: "draw" } {
     if (state.params === null) return { type: "draw" };
     return (
-        shapeTargetAt(
-            state.kind,
-            state.params,
-            state.marchers.length,
-            at,
-            env,
-        ) ?? { type: "draw" }
+        shapeTargetAt(state.kind, state.params, state.spots, at, env) ?? {
+            type: "draw",
+        }
     );
 }
 
@@ -145,13 +148,7 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
     const onShape =
         state.params === null
             ? null
-            : startShapeGesture(
-                  state.kind,
-                  state.params,
-                  state.marchers.length,
-                  at,
-                  env,
-              );
+            : startShapeGesture(state.kind, state.params, state.spots, at, env);
     const gesture: Gesture = onShape
         ? { ...onShape, before }
         : { type: "draw", from: env.gridSnap(at), before };
@@ -161,7 +158,7 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
 export function pointerMove(state: ToolState, at: XY, env: ToolEnv): ToolState {
     const g = state.gesture;
     if (!g || g.type === "edit") return state;
-    const n = state.marchers.length;
+    const n = state.spots;
     state = { ...state, pointer: at };
     if (g.type === "draw") {
         // What this drag drew a moment ago, not the shape it replaces
@@ -191,7 +188,7 @@ export function release(state: ToolState, ctx: ShapeContext): ToolState {
 /** `state` holding its spots after a change from `before`: kept, if it turned or flipped */
 function keptThrough(state: ToolState, before: unknown): ToolState {
     if (state.kept || before === null || state.params === null) return state;
-    const n = state.marchers.length;
+    const n = state.spots;
     const a = state.kind.frameOf(before, n);
     const b = state.kind.frameOf(state.params, n);
     const turned =
@@ -212,7 +209,7 @@ function holdsSpots(
 ): boolean {
     if (!state.assignment || before === null || state.params === null)
         return false;
-    const n = state.marchers.length;
+    const n = state.spots;
     const was = state.kind.shape.generate(before, n, ctx);
     const now = slotsOf(state, ctx);
     if (was.length !== now.length) return false;

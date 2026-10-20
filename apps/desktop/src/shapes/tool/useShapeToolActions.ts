@@ -1,10 +1,5 @@
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { historyKeys } from "@/hooks/queries/useHistory";
-import { db } from "@/global/database/db";
-import { saveShapeRecipeInTransaction } from "@/db-functions/shapeRecipes";
-import { transformMarchersInSelection } from "@/timeline/timelineCoordinateWrites";
-import { toastTimelineError } from "@/timeline/timelineErrorMessages";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useEditorReadiness } from "@/shortcuts/handlers/useEditorReadiness";
 import {
@@ -13,7 +8,9 @@ import {
     shapeContextFor,
 } from "../field/shapeFieldContext";
 import { boxTool } from "../box/boxTool";
-import { openTool, targetsOf } from "./toolMachine";
+import { placementOf, writePlacement } from "./shapePlacement";
+import { shapeSelectionGate } from "./selectionGate";
+import { openTool, type ToolState } from "./toolMachine";
 import {
     closeShapeTool,
     openShapeTool,
@@ -21,75 +18,39 @@ import {
 } from "./shapeToolStore";
 
 /**
- * Places the tool's marchers on its shape as one edit, through the same path as a canvas drag
- * (they leave the start flag and arrive at the playhead), then closes the tool. The shape's
- * recipe is saved in the same edit (ADR 0006).
+ * The host's place function (#344): every open shape is placed through here. Its marchers go to
+ * their spots and its recipe is saved as one edit (`writePlacement`, the same write a placed
+ * shape's edits use). Resolves false when nothing was placed.
  */
+export async function placeShape(
+    tool: ToolState,
+    queryClient: QueryClient,
+): Promise<boolean> {
+    const field = currentShapeField();
+    if (!field) return false;
+    const placement = placementOf(tool, shapeContextFor(field));
+    if (!placement) return false;
+    return writePlacement(placement, queryClient, "Error placing the shape");
+}
+
+/** Place (Enter): places the open shape, then closes the tool */
 export function useApplyShape(): () => Promise<void> {
     const queryClient = useQueryClient();
     return useCallback(async () => {
-        const field = currentShapeField();
         const { tool } = useShapeToolStore.getState();
-        if (!field || !tool || tool.gesture || tool.params === null) return;
-        const targets = targetsOf(tool, shapeContextFor(field));
-        if (targets.length === 0) return;
-        const to = new Map(targets.map((t) => [t.id, t.to]));
-        const transform = (current: readonly { marcher_id: number }[]) =>
-            current.flatMap((c) => {
-                const spot = to.get(c.marcher_id);
-                return spot
-                    ? [{ marcher_id: c.marcher_id, x: spot.x, y: spot.y }]
-                    : [];
-            });
-        const kind = tool.kind.shape;
-        try {
-            await transformMarchersInSelection({
-                db,
-                marcherIds: tool.marchers.map((m) => m.id),
-                transform,
-                writesShapes: true,
-                afterWrite: async (tx, timelineId) => {
-                    await saveShapeRecipeInTransaction({
-                        tx,
-                        timelineId,
-                        recipe: {
-                            kind: kind.id,
-                            kindVersion: kind.version,
-                            // The spot count keeps holes when members leave later
-                            params: {
-                                ...(tool.params as object),
-                                spots: targets.length,
-                            },
-                            orderMode: tool.kept ? "kept" : tool.order,
-                            reverse: false,
-                        },
-                        members: targets.map((t) => ({
-                            marcherId: t.id,
-                            slot: t.slot,
-                            x: t.to.x,
-                            y: t.to.y,
-                        })),
-                    });
-                },
-            });
-        } catch (e) {
-            toastTimelineError(e, "Error placing the shape");
-            return;
-        }
-        // Not a React Query mutation, so refresh what one would
-        void queryClient.invalidateQueries({ queryKey: historyKeys.all() });
-        closeShapeTool();
+        if (!tool) return;
+        if (await placeShape(tool, queryClient)) closeShapeTool();
     }, [queryClient]);
 }
 
-/** Opens the box tool on the selected performers: a selected prop takes no spot (C2.2) */
+/** Opens the box tool on the selected performers, if the selection gate lets it */
 export function useOpenBoxTool(): () => void {
     const { selectedPerformers } = useEditorReadiness();
     return useCallback(() => {
         const field = currentShapeField();
-        if (!field || selectedPerformers.length === 0) return;
-        const ids = selectedPerformers.map((m) => m.id);
-        openShapeTool(openTool(boxTool, marchersOnField(field, ids)));
+        const gate = shapeSelectionGate(selectedPerformers);
+        if (!field || !gate.ok) return;
+        openShapeTool(openTool(boxTool, marchersOnField(field, gate.ids)));
     }, [selectedPerformers]);
 }
 
@@ -103,7 +64,7 @@ export function useShapeToolActions(): void {
     const openBox = useOpenBoxTool();
 
     useActionHandler("shapeBlock", openBox, {
-        enabled: ready && selectedPerformers.length > 0,
+        enabled: ready && shapeSelectionGate(selectedPerformers).ok,
     });
     useActionHandler(
         "applyShape",

@@ -1,0 +1,49 @@
+import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
+
+/** One number in the floating chip, worked out from its kind's declaration */
+export interface ChipNumber {
+    // The chip shows numbers of any kind; each keeps the params of the shape it was read from
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    readonly param: ToolParam<any>;
+    readonly display: string;
+    /** "1 short", or null */
+    readonly note: string | null;
+    /** What − and + would make the shape; null where it can't go that way or has no buttons */
+    readonly less: unknown;
+    readonly more: unknown;
+}
+
+/**
+ * The floating chip's numbers (#344; 08-shape-system-ux.md, "The floating editor"): the kind's
+ * primary parameters that apply to this shape, counts and other single values first, then its
+ * spacings (intervals). The chip draws these and knows nothing else about the kind.
+ */
+export interface ChipLayout {
+    readonly values: readonly ChipNumber[];
+    readonly intervals: readonly ChipNumber[];
+    /** Offer the lock that keeps the spacings in proportion: the kind has one and both show */
+    readonly ratioLock: boolean;
+}
+
+export function chipLayout(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    env: ToolEnv,
+): ChipLayout {
+    const numbers: ChipNumber[] = kind.params
+        .filter((p) => p.primary && (p.shown?.(params, n) ?? true))
+        .map((param) => ({
+            param,
+            display: param.display(params, n, env.stepPx),
+            note: param.note?.(params, n) ?? null,
+            less: param.stepper?.by(params, n, -1, env) ?? null,
+            more: param.stepper?.by(params, n, 1, env) ?? null,
+        }));
+    const intervals = numbers.filter((x) => x.param.interval);
+    return {
+        values: numbers.filter((x) => !x.param.interval),
+        intervals,
+        ratioLock: kind.ratioLock === true && intervals.length > 1,
+    };
+}

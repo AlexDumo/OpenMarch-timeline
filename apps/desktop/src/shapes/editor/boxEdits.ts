@@ -9,14 +9,14 @@ import {
     onField,
     type BoxParams,
 } from "../box/boxGeometry";
-import { turnShape, flipShape } from "../frame/gestures";
-import { boxTool } from "../box/boxTool";
 import {
-    DEGREE,
-    normalizeAngle,
-    rotationDegrees,
-    type PivotKey,
-} from "../frame/frame";
+    flipShape,
+    ROTATION_PX_PER_DEGREE,
+    scrubTurn,
+    turnShape,
+} from "../frame/gestures";
+import { boxTool } from "../box/boxTool";
+import { DEGREE, normalizeAngle, type PivotKey } from "../frame/frame";
 
 import type { ToolEnv } from "../tool/toolKind";
 import {
@@ -166,26 +166,16 @@ export function scrubSize(
 }
 
 /** The rotation dragged `distance` px clockwise: 1° per 2 px, 15° with Shift, free with Alt */
-export function scrubRotation(
+export const scrubRotation = (
     base: BoxParams,
     distance: number,
     spots: number,
     pivot: PivotKey,
     env: ToolEnv,
-): BoxParams {
-    const turn = distance / ROTATION_PX_PER_DEGREE;
-    if (Math.trunc(turn) === 0 && env.snap) return base;
-    const degrees = rotationDegrees(base.rotation) + turn;
-    const snapped = !env.snap
-        ? degrees
-        : env.shift
-          ? Math.round(degrees / 15) * 15
-          : Math.round(degrees);
-    return turnTo(base, spots, snapped, pivot, env);
-}
+): BoxParams =>
+    scrubTurn(boxTool, base, spots, distance, pivot, env) as BoxParams;
 
-/** Pixels of drag per degree on the rotation number */
-export const ROTATION_PX_PER_DEGREE = 2;
+export { ROTATION_PX_PER_DEGREE };
 
 /** The box turned by `degrees` (clockwise on the field) about the pivot */
 export function turnBy(
