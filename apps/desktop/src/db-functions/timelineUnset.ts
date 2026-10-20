@@ -16,9 +16,11 @@ import { keepMarchersOnPageInTransaction } from "./timelineKeepHere";
  * transitions and any timeline that leaves empty (`clearOwnPageMoves`).
  *
  * **Unset here** (#304) keeps the later pages that followed the deleted spot where they were: the
- * first page box starting on or after the count gets a kept stay move, ending where the marcher
+ * first page box starting on or after the count gets a move of the marcher's own, ending where it
  * stood there before the edit, for each marcher that follows there and would otherwise move
- * (Only Page N's `keepMarchersOnPage` with `at`). Pages after it follow the stay. **Unset here
+ * (Only Page N's `keepMarchersOnPage` with `at`, but unmarked). That move walks somewhere, so its
+ * end is a keyframe the designer can see and remove in turn (owner, 2026-10-20); it isn't a kept
+ * spot, so the page's keep chain doesn't show it. Pages after it follow it. **Unset here
  * and on Pages N–M** (#305) is the same delete without the stay (`keepLaterPages` false), so the
  * followers carry back to the earlier spot.
  *
@@ -31,8 +33,8 @@ export interface UnsetResult {
     /** The marchers whose coordinate on the count was deleted, ascending */
     unset: number[];
     /**
-     * The kept markers written (the stays) or cleared (a deleted move that was a kept spot), by
-     * assignment id, for the renderer's copy (`applyKeptChange`)
+     * The kept markers cleared (a deleted move that was a kept spot), by assignment id, for the
+     * renderer's copy (`applyKeptChange`). `added` is always empty: the stays aren't marked kept.
      */
     markers: { added: number[]; removed: number[] };
 }
@@ -106,13 +108,13 @@ export async function unsetMarchersAtInTransaction({
         for (const [id, spot] of before)
             if (!samePosition(spot, resolver.positionAt(id, box.end)))
                 at.set(id, spot);
-        const stays = await keepMarchersOnPageInTransaction({
+        await keepMarchersOnPageInTransaction({
             tx,
             pageBox: box,
             marcherIds: [...at.keys()],
             at,
+            markKept: false,
         });
-        result.markers.added = stays.markers.added;
     }
     return result;
 }

@@ -144,11 +144,14 @@ export async function keepMarchersOnPageInTransaction({
     pageBox,
     marcherIds,
     at,
+    markKept = true,
 }: {
     tx: DbTransaction;
     pageBox: KeptPageBox;
     marcherIds: readonly number[];
     at?: ReadonlyMap<number, XY>;
+    /** False writes the moves as the marchers' own, unmarked (Remove keyframe's stays, #332) */
+    markKept?: boolean;
 }): Promise<KeepResult> {
     await refuseUnlessPageBox(tx, pageBox);
     const states = await statesOnBox(tx, pageBox, marcherIds);
@@ -184,6 +187,7 @@ export async function keepMarchersOnPageInTransaction({
                 point,
             });
     }
+    if (!markKept) return result;
     const marked = ascending(added.map((o) => o.assignmentId));
     await markAssignmentsKeptInTransaction(tx, marked);
     result.markers.added = marked;
