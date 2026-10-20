@@ -107,5 +107,15 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
                 n,
                 env,
             ),
+        widen(p, n, by, env) {
+            const field = onField(p, n);
+            const steps =
+                (across ? field.acrossSpacing : field.deepSpacing) /
+                    env.stepPx +
+                by;
+            if (steps < 0.5 - 1e-9) return null;
+            const next = withSpacing(p, ownKey(p, n), steps, n, env);
+            return next === p ? null : next;
+        },
     };
 }

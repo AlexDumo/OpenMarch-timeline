@@ -10,7 +10,7 @@ import {
     PlusIcon,
 } from "@phosphor-icons/react";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
-import { DEFAULT_PIVOT, DEGREE, rotationDegrees } from "../frame/frame";
+import { DEGREE, rotationDegrees } from "../frame/frame";
 import {
     flipShape,
     scrubTurn,
@@ -33,7 +33,6 @@ import {
 } from "./editTargets";
 import { parseDegrees, scrubDistance } from "./scrub";
 import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
-import { isBasicMode } from "@/stores/EditorModeStore";
 
 /** The gap between the shape's outline and the editor, in CSS px */
 const GAP_PX = 14;
@@ -97,6 +96,7 @@ function ShapeEditorBar({
 }) {
     const { kind, params, spots } = target;
     const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
+    // The Transform section's pivot, the same in Basic and Expert (spec #344)
     const pivot = useShapeEditorStore((s) => s.pivot);
     const [more, setMore] = useState(false);
     const place = usePlacement(kind, params, spots);
@@ -108,7 +108,6 @@ function ShapeEditorBar({
         ? chipLayout(kind, params, spots, { ...env, stepPx })
         : { values: [], intervals: [], ratioLock: false };
     const degrees = rotationDegrees(kind.frameOf(params, spots).rotation);
-    const turnPivot = isBasicMode() ? DEFAULT_PIVOT : pivot;
 
     /** One change at once, worked out with no keys held */
     const apply = (change: (env: ToolEnv) => unknown) => {
@@ -290,7 +289,7 @@ function ShapeEditorBar({
                                     b,
                                     spots,
                                     scrubDistance("x", m.dx, m.dy),
-                                    turnPivot,
+                                    pivot,
                                     env,
                                 ),
                             )}
@@ -303,7 +302,7 @@ function ShapeEditorBar({
                                         params,
                                         spots,
                                         typed * DEGREE,
-                                        turnPivot,
+                                        pivot,
                                         env,
                                     ),
                                 );
@@ -321,7 +320,7 @@ function ShapeEditorBar({
                                     params,
                                     spots,
                                     "across",
-                                    turnPivot,
+                                    pivot,
                                     env,
                                 ),
                             )
@@ -340,7 +339,7 @@ function ShapeEditorBar({
                                     params,
                                     spots,
                                     "deep",
-                                    turnPivot,
+                                    pivot,
                                     env,
                                 ),
                             )
