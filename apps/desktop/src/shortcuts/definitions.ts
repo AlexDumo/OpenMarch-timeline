@@ -583,6 +583,16 @@ const STATIC_ACTIONS = {
         defaultBindings: ["$mod+Shift+V"],
         ignoreRepeat: true,
     },
+    // Preview: watch the show without editing it (the workspace switch's third mode)
+    togglePreview: {
+        labelKey: "actions.ui.togglePreview",
+        keywordsKey: "actions.ui.togglePreviewKeywords",
+        category: "ui",
+        editsDrill: false,
+        scope: "global",
+        defaultBindings: ["Alt+P"],
+        ignoreRepeat: true,
+    },
     // UI-17 follow-up: ? lists every shortcut
     showShortcuts: {
         labelKey: "actions.ui.showShortcuts",
@@ -690,6 +700,31 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["G", "$mod+G", "Control+G"],
         ignoreRepeat: true,
+    },
+
+    // UI-27: the move the playhead is inside becomes two that meet there (Expert); unbound
+    timelineSplitMoveAtPlayhead: {
+        labelKey: "actions.timeline.splitMoveAtPlayhead",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: [],
+    },
+    // UI-25: split the selected marchers off the window's move, or merge a split move back into
+    // its page (Expert timeline mode; not registered in Basic, so hidden there)
+    splitSelectedIntoNewMove: {
+        labelKey: "actions.timeline.splitSelectedIntoNewMove",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: [],
+    },
+    mergeMoveIntoPage: {
+        labelKey: "actions.timeline.mergeMoveIntoPage",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: [],
     },
 
     // Timeline (audio editor)

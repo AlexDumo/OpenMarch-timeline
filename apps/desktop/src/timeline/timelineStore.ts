@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { isPlaywrightSession } from "@/utilities/playwrightSession";
 import { create } from "zustand";
 import type {
     Beat,
@@ -351,3 +352,33 @@ export function resolverSpans(
 ): SpanInfo[] {
     return hasMarcher(resolver, marcherId) ? resolver.spanInfos(marcherId) : [];
 }
+
+declare global {
+    interface Window {
+        /** Scenario reads, in Playwright sessions only; see below. */
+        openmarchResolver?: {
+            positionsAt(beats: readonly number[]): Record<number, number[][]>;
+            version(): number;
+        };
+    }
+}
+
+/**
+ * Scenario reads (UI-25 parity checks): every marcher's resolved position at each of `beats`, from
+ * the resolver the app draws with, so a scenario can compare a show before and after an edit at
+ * every beat without seeking the playhead to each one. `version` is the resolver store's version.
+ */
+if (typeof window !== "undefined" && isPlaywrightSession())
+    window.openmarchResolver = {
+        positionsAt: (beats) => {
+            const resolver = useTimelineResolverStore.getState().resolver;
+            const out: Record<number, number[][]> = {};
+            if (!resolver) return out;
+            for (const id of resolver.marcherIds())
+                out[id] = beats.map((beat) => [
+                    ...resolver.positionAt(id, beat),
+                ]);
+            return out;
+        },
+        version: () => useTimelineResolverStore.getState().version,
+    };

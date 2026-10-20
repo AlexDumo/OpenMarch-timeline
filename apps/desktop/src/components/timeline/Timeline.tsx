@@ -33,12 +33,20 @@ import type { TimelineKeyframeMenu } from "./TimelineKeyframes";
 import type {
     TimelineAddMarchersMenu,
     TimelineKeepHereMenu,
+    TimelineMenuEntry,
     TimelineMenuTarget,
     TimelineMoveCommands,
 } from "./TimelineRangeMenu";
 import type {
+    TimelineClipPeel,
+    TimelineMovePeel,
+    TimelineMovePeelTarget,
+    TimelinePeelTarget,
+} from "./TimelineClipPeel";
+import type {
     TimelineActivitySpan,
     TimelineBasicPoint,
+    TimelineAppendCounts,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineNavigation,
@@ -48,6 +56,7 @@ import type {
     TimelineSeekOptions,
     TimelineSelection,
     TimelineTarget,
+    TimelineViewportExtent,
     TimelineTrack,
     TimelineTrackTargetType,
     TimelineViewModel,
@@ -149,6 +158,8 @@ export interface TimelineProps {
      * commands given are ignored
      */
     readonly readOnly?: boolean;
+    /** A read-only timeline with no start flag drawn (Preview, which always plays on) */
+    readonly hideStartFlag?: boolean;
     /** Lanes drawn in place of the clip rows, under the waveform (Visuals mode's cue lanes) */
     readonly band?: TimelineBand;
     readonly mode: TimelineMode;
@@ -205,6 +216,12 @@ export interface TimelineProps {
      * `pageId` to a subset page, or back to a numbered one. Without it, the menu has no such entry.
      */
     readonly onSetPageSubset?: (pageId: number, subset: boolean) => void;
+    /** **+ N counts** after the last page, shown while paused */
+    readonly appendCounts?: TimelineAppendCounts;
+    /** The beats Fit fits (rule 7, where playback stops), in spec beats; without it, every beat */
+    readonly fitBeat?: number;
+    /** The scroller's width in counts, so the owner leaves room past where playback stops */
+    readonly onViewportExtent?: (extent: TimelineViewportExtent) => void;
     /** The page box menu's **Delete page** (UI-9 Deleting a flag), by page id */
     readonly onDeletePageFlag?: (pageId: number) => void;
     /** The page box menu's **Delete page and its moves**, by page id */
@@ -215,6 +232,10 @@ export interface TimelineProps {
      * the stored timeline's id (the clip's `linkId`).
      */
     readonly moveCommands?: TimelineMoveCommands;
+    /** UI-25: dragging a clip down splits, onto a move or page box merges (by stored id) */
+    readonly clipPeel?: TimelineMovePeel;
+    /** UI-25: a page box's split entries, by page id, read when its menu opens */
+    readonly pageMenuExtra?: (pageId: number) => readonly TimelineMenuEntry[];
     /**
      * Moving page flags by their grips (docs/timeline/research/move-page-flag), in spec beats:
      * where page `pageId`'s flag can go, and the move. Omit both where flags can't move.
@@ -224,13 +245,23 @@ export interface TimelineProps {
      * Double-clicking a page box or a clip: isolate that range's stored timeline. It gets the
      * range in spec beats (a clip's stored range).
      */
-    readonly onOpenRange?: (range: TimelineBeatRange) => void;
+    readonly onOpenRange?: (
+        range: TimelineBeatRange,
+        /** UI-25: the clip's stored timeline, when a clip was double-clicked */
+        timelineId?: number,
+    ) => void;
     /** #303: where the selected marchers are Set, spec beats; none without a selection */
     readonly keyframes?: readonly SelectionKeyframe[];
     /** #306: a keyframe diamond's right-click Unset actions, by spec beat; without it, no menu */
     readonly keyframeMenu?: TimelineKeyframeMenu;
     /** The chains on the page boxes (UI-18 keep later pages), by page id; none without a selection */
     readonly keepChains?: PageKeepChains;
+    /**
+     * The moves a page box stands for, so they have no clip (`timelinesOffPages`), by track id.
+     * One that gets a clip (its box was split, or a flag deleted) drops out of the page row
+     * (`useClipDrops`)
+     */
+    readonly pageMoves?: ReadonlySet<string | number>;
     /** The page box menu's **Keep selected marchers here** and **Let selected marchers follow again** */
     readonly keepHere?: TimelineKeepHereMenu;
     /** UI-19 Basic: the selected marchers' mid-page positions, spec beats */
@@ -258,12 +289,19 @@ export function TimelineWaveformProvider({
     );
 }
 
+const NO_PEAKS: readonly number[] = [];
+
+/** The injected waveform on `beatCount` beats: beats after the music (or with none) have no peaks */
 const useTimelineWaveform = (beatCount: number): TimelineWaveform => {
     const injected = useContext(TimelineWaveformContext);
     return useMemo(() => {
-        if (injected?.peaksByBeat.length === beatCount) return injected;
+        const peaks = injected?.peaksByBeat ?? [];
+        if (injected && peaks.length === beatCount) return injected;
         return {
-            peaksByBeat: Array.from({ length: beatCount }, () => []),
+            peaksByBeat: Array.from(
+                { length: beatCount },
+                (_, i) => peaks[i] ?? NO_PEAKS,
+            ),
         };
     }, [beatCount, injected]);
 };
@@ -351,6 +389,13 @@ export const selectionToView = (
                         ),
                     }
                   : {}),
+              ...(selection.timelineId !== undefined
+                  ? { timelineId: selection.timelineId }
+                  : {}),
+              ...(selection.onClip ? { onClip: true } : {}),
+              ...(selection.pairedTimelineId !== undefined
+                  ? { pairedTimelineId: selection.pairedTimelineId }
+                  : {}),
           }
         : selection;
 
@@ -368,6 +413,10 @@ export const selectionToSpec = (
               },
               ...(selection.drawn ? { drawn: true } : {}),
               ...(selection.via ? { via: selection.via } : {}),
+              ...(selection.timelineId !== undefined
+                  ? { timelineId: selection.timelineId }
+                  : {}),
+              ...(selection.extend ? { extend: true } : {}),
           }
         : selection;
 
@@ -390,6 +439,7 @@ const READ_ONLY_EDITS = {
     onUnpinStart: undefined,
     holdMarks: undefined,
     keepChains: undefined,
+    pageMoves: undefined,
     basicPoints: undefined,
     onRemoveBasicPoint: undefined,
     expertMarks: undefined,
@@ -593,6 +643,7 @@ export function Timeline(props: TimelineProps) {
         onSetPageSubset,
         onOpenRange,
         keepHere,
+        pageMenuExtra,
     } = props;
     // A clip's stored spec range, else the view range mapped back (as the menu's Add does)
     const specRangeOf = ({ range, trackId }: TimelineMenuTarget) => {
@@ -612,7 +663,20 @@ export function Timeline(props: TimelineProps) {
     };
     const openRange = useLatestCallback(
         onOpenRange
-            ? (target: TimelineMenuTarget) => onOpenRange(specRangeOf(target))
+            ? (target: TimelineMenuTarget) => {
+                  const track =
+                      target.trackId === undefined
+                          ? undefined
+                          : timelines.find(
+                                (t) => String(t.id) === target.trackId,
+                            );
+                  onOpenRange(
+                      specRangeOf(target),
+                      track?.linkId === undefined
+                          ? undefined
+                          : Number(track.linkId),
+                  );
+              }
             : undefined,
     );
     // A clip sends its stored spec range: the view axis folds spec beats 0 and 1 together, so a
@@ -657,7 +721,13 @@ export function Timeline(props: TimelineProps) {
                   addSelectedMarchers.onAdd?.(specRangeOf(target))
             : undefined,
     );
+    const pageExtra = useLatestCallback(
+        pageMenuExtra
+            ? (pageId: string | number) => pageMenuExtra(Number(pageId))
+            : undefined,
+    );
     const hasMarchersMenu = !!(
+        pageMenuExtra ||
         addSelectedMarchers ||
         onDeletePageFlag ||
         onDeletePageWithMoves ||
@@ -678,6 +748,7 @@ export function Timeline(props: TimelineProps) {
                           : {}),
                       ...(keepHere ? { keepHere } : {}),
                       ...(subsetMenu ? { subset: subsetMenu } : {}),
+                      ...(pageExtra ? { extraFor: pageExtra } : {}),
                       onAdd: addMarchers,
                   }
                 : undefined,
@@ -689,6 +760,7 @@ export function Timeline(props: TimelineProps) {
             hasMarchersMenu,
             keepHere,
             subsetMenu,
+            pageExtra,
         ],
     );
     // A clip's track id to its stored timeline (`linkId`), for the move commands (UI-14)
@@ -723,7 +795,34 @@ export function Timeline(props: TimelineProps) {
               }
             : undefined,
     );
+    // UI-27: Split at playhead, by stored id too; its reason is read as the menu opens
+    const splitMove = useLatestCallback(
+        moveCommands?.onSplit
+            ? (trackId: string | number) => {
+                  const id = storedIdOf(trackId);
+                  if (id !== null) moveCommands.onSplit!(id);
+              }
+            : undefined,
+    );
+    const splitMoveReason = useLatestCallback(
+        moveCommands?.splitDisabledReason
+            ? (trackId: string | number): string | null => {
+                  const id = storedIdOf(trackId);
+                  return id === null
+                      ? null
+                      : moveCommands.splitDisabledReason!(id);
+              }
+            : undefined,
+    );
     const moveDisabledReason = moveCommands?.disabledReason;
+    const moveExtraFor = useLatestCallback(
+        moveCommands?.extraFor
+            ? (trackId: string | number) => {
+                  const id = storedIdOf(trackId);
+                  return id === null ? [] : moveCommands.extraFor!(id);
+              }
+            : undefined,
+    );
     // Stable while only closures change, like the other commands, so memoized clips don't redraw
     const trackMoveCommands = useMemo(
         () =>
@@ -733,9 +832,65 @@ export function Timeline(props: TimelineProps) {
                       onEdit: editMove,
                       onDelete: deleteMove,
                       onRename: renameMove,
+                      ...(splitMove ? { onSplit: splitMove } : {}),
+                      ...(splitMoveReason
+                          ? { splitDisabledReason: splitMoveReason }
+                          : {}),
+                      ...(moveExtraFor ? { extraFor: moveExtraFor } : {}),
                   }
                 : undefined,
-        [deleteMove, editMove, moveDisabledReason, renameMove],
+        [
+            deleteMove,
+            editMove,
+            moveDisabledReason,
+            renameMove,
+            splitMove,
+            splitMoveReason,
+            moveExtraFor,
+        ],
+    );
+    // UI-25: the drag-out and drag-to-merge gesture, from track ids to stored ones
+    const { clipPeel } = props;
+    const peelTarget = (
+        target: TimelinePeelTarget,
+    ): TimelineMovePeelTarget | null => {
+        if ("pageId" in target) return { pageId: Number(target.pageId) };
+        const id = storedIdOf(target.trackId);
+        return id === null ? null : { timelineId: id };
+    };
+    const peelSplit = useLatestCallback(clipPeel?.split);
+    const peelMerge = useLatestCallback(clipPeel?.merge);
+    const peelOnSplit = useLatestCallback(clipPeel?.onSplit);
+    const peelOnMerge = useLatestCallback(clipPeel?.onMerge);
+    const trackPeel = useMemo<TimelineClipPeel | undefined>(
+        () =>
+            peelSplit && peelMerge && peelOnSplit && peelOnMerge
+                ? {
+                      split: (trackId) => {
+                          const id = storedIdOf(trackId);
+                          return id === null ? null : peelSplit(id);
+                      },
+                      merge: (trackId, target) => {
+                          const id = storedIdOf(trackId);
+                          const to = peelTarget(target);
+                          return id === null || to === null
+                              ? null
+                              : peelMerge(id, to);
+                      },
+                      onSplit: (trackId) => {
+                          const id = storedIdOf(trackId);
+                          if (id !== null) peelOnSplit(id);
+                      },
+                      onMerge: (trackId, target) => {
+                          const id = storedIdOf(trackId);
+                          const to = peelTarget(target);
+                          if (id !== null && to !== null) peelOnMerge(id, to);
+                      },
+                  }
+                : undefined,
+        // storedIdOf reads `timelines`, which the callbacks see through it
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [peelSplit, peelMerge, peelOnSplit, peelOnMerge, timelines],
     );
     // Page flags move in spec beats; the grips work in view beats
     const flagMove = props.pageFlagMove;
@@ -826,10 +981,17 @@ export function Timeline(props: TimelineProps) {
         onCreateTrack: createTrack,
         addSelectedMarchers: addMarchersMenu,
         moveCommands: trackMoveCommands,
+        clipPeel: trackPeel,
         onAddPageFlag: useLatestCallback(props.onAddPageFlag),
         onAddSubsetPage: useLatestCallback(props.onAddSubsetPage),
         addPageNames: props.addPageNames,
         pageFlagMove,
+        appendCounts: props.appendCounts,
+        fitBeatCount:
+            props.fitBeat === undefined
+                ? undefined
+                : Math.min(axis.toView(props.fitBeat), axis.beatCount),
+        onViewportExtent: useLatestCallback(props.onViewportExtent),
         onOpenRange: openRange,
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
@@ -843,6 +1005,7 @@ export function Timeline(props: TimelineProps) {
         keyframes: viewKeyframes,
         keyframeMenu: viewKeyframeMenu,
         keepChains: props.keepChains,
+        pageMoves: props.pageMoves,
         basicPoints: viewBasicPoints,
         onRemoveBasicPoint: removeBasicPoint,
         expertMarks: props.expertMarks,
@@ -854,7 +1017,9 @@ export function Timeline(props: TimelineProps) {
         ? {
               ...commonProps,
               ...READ_ONLY_EDITS,
-              startFlagBeat: readOnlyStartFlag(selection),
+              startFlagBeat: props.hideStartFlag
+                  ? undefined
+                  : readOnlyStartFlag(selection),
               band: props.band,
           }
         : { ...commonProps, band: props.band };
@@ -870,6 +1035,7 @@ export function Timeline(props: TimelineProps) {
 
 export type {
     TimelineActivitySpan,
+    TimelineAppendCounts,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineSeekGesture,

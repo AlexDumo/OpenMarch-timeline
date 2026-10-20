@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { isPlaywrightSession } from "@/utilities/playwrightSession";
+import { isPageTimeline, oldestOver } from "@/timeline/timelineViewModel";
 
 /**
  * The timeline-mode edit window and paused playhead (docs/timeline/ui.md UI-9, UI-10, C-12;
@@ -81,6 +82,8 @@ export interface TimelineIsolation {
     readonly restore: {
         readonly startBeat: number;
         readonly playheadBeat: number;
+        /** UI-25: the move the window stood for, when several shared its range */
+        readonly windowTimelineId?: number | null;
     };
 }
 
@@ -135,12 +138,26 @@ export interface TimelineSelectionState {
     /** Every stored timeline, by start then id; `null` until loaded */
     readonly storedTimelines: readonly StoredTimelineMembership[] | null;
     /**
-     * The end of the show (`beats.length`), the furthest the playhead goes; `null` while unknown.
-     * Kept by `useTimelinePlaybackDriver`.
+     * Where playing on stops (docs/timeline/endless-counts.md rule 6): the latest of the show's end,
+     * the music's end and the last move's end; `null` while unknown. The playhead isn't held to
+     * it: the counts never end, so it goes anywhere. Kept by `useTimelinePlaybackDriver`.
      */
     readonly showEndBeat: number | null;
     /** The isolated timeline, or `null` (see the module comment) */
     readonly isolation: TimelineIsolation | null;
+    /**
+     * UI-25: the stored timeline the window stands for when several share its range (a move split
+     * off a page's timeline): the one whose clip was clicked. `null` means the oldest over the
+     * range, the page's. Cleared whenever the window leaves that timeline's range.
+     */
+    readonly windowTimelineId: number | null;
+    /**
+     * UI-25: a second move selected beside the window's (Shift+click on its clip), so **Merge
+     * moves** has two. Cleared whenever the window changes.
+     */
+    readonly pairedTimelineId: number | null;
+    /** Selects `timelineId` beside the window's move (`pairedTimelineId`), or clears it with `null` */
+    readonly pairTimeline: (timelineId: number | null) => void;
     /**
      * The playback cursor when it isn't the playhead (UI-11): where playback started or a loop
      * went back to, or the beat a scrub over playback shows. `null` when it is the playhead.
@@ -185,11 +202,16 @@ export interface TimelineSelectionState {
      * Sets the window to `[start, end)`: the playhead to `end` and S to `start`. Page boxes, page
      * navigation, **+**, a dragged range and the range handles call this.
      */
-    readonly selectRange: (start: number, end: number) => void;
+    readonly selectRange: (
+        start: number,
+        end: number,
+        /** UI-25: the stored timeline over the range that was picked (a clip), when several share it */
+        timelineId?: number,
+    ) => void;
     /** Clears the selection; the playhead and S stay. */
     readonly selectNothing: () => void;
     /**
-     * Navigation: moves the playhead (`normalizePlayheadBeat`, at most `showEndBeat`). In Basic S
+     * Navigation: moves the playhead (`normalizePlayheadBeat`; the counts never end). In Basic S
      * follows it, except during a gesture (`beginScrub`). In Expert S stays, and a beat behind it
      * swaps them (UI-26): that beat becomes S and the old S the playhead; S's own beat makes the
      * window the beat after it; beat 0 is home. A non-finite beat is ignored.
@@ -231,6 +253,8 @@ export interface TimelineSelectionState {
     readonly followTimelineShift: (
         from: { readonly start: number; readonly end: number },
         delta: number,
+        /** UI-25: the timeline that moved, so a move sharing `from` with it stays put */
+        timelineId?: number,
     ) => void;
     /**
      * A page flag moved from beat `from` to `to` (docs/timeline/research/move-page-flag case 14):
@@ -249,6 +273,8 @@ export interface TimelineSelectionState {
     readonly followTimelineRange: (
         from: { readonly start: number; readonly end: number },
         to: { readonly start: number; readonly end: number },
+        /** UI-25: the timeline that changed, so a move sharing `from` with it stays put */
+        timelineId?: number,
     ) => void;
     /** Used by `TimelineModePanel` only. */
     readonly setPageBoxes: (boxes: readonly PageBox[]) => void;
@@ -380,26 +406,37 @@ export function selectionIsRange(
 }
 
 /**
- * The stored timeline a selection resolves to: the one with exactly the selected range. `null`
- * for home, nothing, a range with no stored timeline yet, or before the timelines are loaded.
+ * The stored timeline a selection resolves to: the one with exactly the selected range. When
+ * several share it (UI-25), `windowTimelineId` when it is one of them, else the oldest (the page's
+ * timeline). `null` for home, nothing, a range with no stored timeline yet, or before the
+ * timelines are loaded.
  */
 export function resolveStoredTimeline(
     selection: TimelineEditSelection,
     timelines: readonly StoredTimelineMembership[] | null,
+    windowTimelineId: number | null = null,
 ): StoredTimelineMembership | null {
     if (selection.kind !== "range" || !timelines) return null;
     return (
         timelines.find(
-            (t) => t.start === selection.start && t.end === selection.end,
-        ) ?? null
+            (t) =>
+                t.id === windowTimelineId &&
+                t.start === selection.start &&
+                t.end === selection.end,
+        ) ?? oldestOver(timelines, selection)
     );
 }
 
 /** `resolveStoredTimeline` for the store's state. */
 export const selectedStoredTimeline = (
-    state: Pick<TimelineSelectionState, "selection" | "storedTimelines">,
+    state: Pick<TimelineSelectionState, "selection" | "storedTimelines"> &
+        Partial<Pick<TimelineSelectionState, "windowTimelineId">>,
 ): StoredTimelineMembership | null =>
-    resolveStoredTimeline(state.selection, state.storedTimelines);
+    resolveStoredTimeline(
+        state.selection,
+        state.storedTimelines,
+        state.windowTimelineId ?? null,
+    );
 
 /** The isolated stored timeline with its members, or `null` (also before the timelines load). */
 export const isolatedTimeline = (
@@ -421,14 +458,19 @@ export const windowMove = (
     state: Pick<
         TimelineSelectionState,
         "selection" | "storedTimelines" | "isolation" | "pageBoxes"
-    >,
+    > &
+        Partial<Pick<TimelineSelectionState, "windowTimelineId">>,
 ): StoredTimelineMembership | null => {
     const timeline = isolatedTimeline(state) ?? selectedStoredTimeline(state);
     if (!timeline) return null;
-    const onPageBox = state.pageBoxes.some(
-        (box) => box.start === timeline.start && box.end === timeline.end,
-    );
-    return onPageBox ? null : timeline;
+    // UI-25: a move split off a page's timeline keeps the page's range but is a move
+    return isPageTimeline(
+        timeline,
+        state.storedTimelines ?? [],
+        state.pageBoxes,
+    )
+        ? null
+        : timeline;
 };
 
 /**
@@ -475,6 +517,44 @@ const sameSelection = (
     a.kind === b.kind &&
     (a.kind !== "range" ||
         (b.kind === "range" && a.start === b.start && a.end === b.end));
+
+/**
+ * UI-25: `windowTimelineId` holds only while the window is that timeline's range (and it exists);
+ * any update that moves the window off it, or deletes it, clears it.
+ */
+const keepWindowTimeline = (
+    s: TimelineSelectionState,
+    next: Partial<TimelineSelectionState>,
+): Partial<TimelineSelectionState> => {
+    const id =
+        next.windowTimelineId !== undefined
+            ? next.windowTimelineId
+            : s.windowTimelineId;
+    // The paired move goes with any change of the window
+    if (
+        s.pairedTimelineId !== null &&
+        next.pairedTimelineId === undefined &&
+        ((next.selection !== undefined && next.selection !== s.selection) ||
+            (next.windowTimelineId !== undefined &&
+                next.windowTimelineId !== s.windowTimelineId) ||
+            next.isolation !== undefined)
+    )
+        next = { ...next, pairedTimelineId: null };
+    if (id === null) return next;
+    const selection = next.selection ?? s.selection;
+    const timelines =
+        next.storedTimelines !== undefined
+            ? next.storedTimelines
+            : s.storedTimelines;
+    if (timelines === null && selection.kind === "range") return next;
+    const timeline = timelines?.find((t) => t.id === id);
+    return timeline &&
+        selection.kind === "range" &&
+        timeline.start === selection.start &&
+        timeline.end === selection.end
+        ? next
+        : { ...next, windowTimelineId: null };
+};
 
 /**
  * Keeps the current `selection` object when an update writes an equal one, so `s => s.selection`
@@ -527,21 +607,23 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                   ) => Partial<TimelineSelectionState>),
         ) =>
             rawSet((s) =>
-                keepEqualSelection(
+                keepWindowTimeline(
                     s,
-                    loopFollowsWindow(
+                    keepEqualSelection(
                         s,
-                        typeof update === "function" ? update(s) : update,
+                        loopFollowsWindow(
+                            s,
+                            typeof update === "function" ? update(s) : update,
+                        ),
                     ),
                 ),
             );
+        // The counts never end (endless counts), so only isolation bounds the playhead
         const clamp = (s: TimelineSelectionState, beat: number) => {
             const whole = normalizePlayheadBeat(beat);
-            const bounded =
-                s.showEndBeat === null ? whole : Math.min(whole, s.showEndBeat);
             return s.isolation === null
-                ? bounded
-                : isolatedPlayhead(s.isolation, bounded);
+                ? whole
+                : isolatedPlayhead(s.isolation, whole);
         };
         // Inside isolation the playhead stays after the start: on the start flag, UI-10's window
         // falls back to the page box ending there, so a drag would edit the previous move
@@ -651,14 +733,9 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
         const restored = (s: TimelineSelectionState) => {
             const r = s.isolation!.restore;
             return {
-                ...windowFields(
-                    r.startBeat,
-                    s.showEndBeat === null
-                        ? r.playheadBeat
-                        : Math.min(r.playheadBeat, s.showEndBeat),
-                    s.pageBoxes,
-                ),
+                ...windowFields(r.startBeat, r.playheadBeat, s.pageBoxes),
                 isolation: null,
+                windowTimelineId: r.windowTimelineId ?? null,
                 playheadRevision: s.playheadRevision + 1,
             };
         };
@@ -672,6 +749,9 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             storedTimelines: null,
             showEndBeat: null,
             isolation: null,
+            windowTimelineId: null,
+            pairedTimelineId: null,
+            pairTimeline: (timelineId) => set({ pairedTimelineId: timelineId }),
             cursorBeat: null,
             loop: null,
             playback: null,
@@ -694,11 +774,13 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                             restore ?? {
                                 startBeat: s.startBeat,
                                 playheadBeat: s.playheadBeat,
+                                windowTimelineId: s.windowTimelineId,
                             },
                     };
                     return {
                         ...isolatedWindow(s, isolation, timeline.end),
                         isolation,
+                        windowTimelineId: timelineId,
                         // Isolated, there is no line drag (UI-21)
                         lineDrag: null,
                         playheadRevision: s.playheadRevision + 1,
@@ -714,9 +796,10 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                     lineDrag: s.lineDrag?.scrub ? null : s.lineDrag,
                     playheadRevision: s.playheadRevision + 1,
                 })),
-            selectRange: (start, end) =>
+            selectRange: (start, end, timelineId) =>
                 set((s) => ({
                     isolation: null,
+                    windowTimelineId: timelineId ?? null,
                     scrubbing: false,
                     lineDrag: s.lineDrag?.scrub ? null : s.lineDrag,
                     ...windowFields(start, end, s.pageBoxes),
@@ -904,12 +987,27 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                             : {}),
                     };
                 }),
-            followTimelineRange: (from, to) =>
+            // eslint-disable-next-line max-lines-per-function
+            followTimelineRange: (from, to, timelineId) =>
                 set(
+                    // eslint-disable-next-line max-lines-per-function
                     keepCursorWhilePlaying((s) => {
+                        // UI-25: with several moves over `from`, only the one that changed
+                        const isIt = (t: {
+                            id: number;
+                            start: number;
+                            end: number;
+                        }) =>
+                            timelineId === undefined
+                                ? t.start === from.start && t.end === from.end
+                                : t.id === timelineId;
                         const isolation =
-                            s.isolation?.start === from.start &&
-                            s.isolation.end === from.end
+                            s.isolation !== null &&
+                            isIt({
+                                id: s.isolation.timelineId,
+                                start: s.isolation.start,
+                                end: s.isolation.end,
+                            })
                                 ? {
                                       ...s.isolation,
                                       start: to.start,
@@ -952,8 +1050,15 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                             !selectionIsRange(s.selection, from.start, from.end)
                         )
                             return {};
+                        const selected = selectedStoredTimeline(s);
+                        if (
+                            timelineId !== undefined &&
+                            selected !== null &&
+                            selected.id !== timelineId
+                        )
+                            return {};
                         const moved = (t: StoredTimelineMembership) =>
-                            t.start === from.start && t.end === from.end
+                            isIt(t)
                                 ? {
                                       ...t,
                                       start: to.start,
@@ -968,6 +1073,7 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                             // selection still resolves to it meanwhile
                             storedTimelines:
                                 s.storedTimelines?.map(moved) ?? null,
+                            windowTimelineId: timelineId ?? s.windowTimelineId,
                         };
                     }),
                 ),
@@ -1017,11 +1123,14 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
                         };
                     }),
                 ),
-            followTimelineShift: (from, delta) =>
-                useTimelineSelectionStore.getState().followTimelineRange(from, {
-                    start: from.start + delta,
-                    end: from.end + delta,
-                }),
+            followTimelineShift: (from, delta, timelineId) =>
+                useTimelineSelectionStore
+                    .getState()
+                    .followTimelineRange(
+                        from,
+                        { start: from.start + delta, end: from.end + delta },
+                        timelineId,
+                    ),
             setPageBoxes: (pageBoxes) =>
                 set(
                     keepCursorWhilePlaying((s) => {
@@ -1112,12 +1221,8 @@ export const useTimelineSelectionStore = create<TimelineSelectionState>(
             cue: (beat) =>
                 set((s) => {
                     if (!Number.isFinite(beat)) return {};
-                    const whole = normalizePlayheadBeat(beat);
                     return {
-                        cursorBeat:
-                            s.showEndBeat === null
-                                ? whole
-                                : Math.min(whole, s.showEndBeat),
+                        cursorBeat: normalizePlayheadBeat(beat),
                         playheadRevision: s.playheadRevision + 1,
                     };
                 }),

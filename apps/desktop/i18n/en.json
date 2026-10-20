@@ -116,13 +116,16 @@
             "nextPage": "Next page (timeline)",
             "playPause": "Play / pause audio",
             "previousPage": "Previous page (timeline)",
+            "splitMoveAtPlayhead": "Split the move at the playhead",
             "tapBeats": "Add {count} temporary beats",
             "toggleKeepOnPage": "Keep the selected marchers where they hold on this page (on the next page if they move here), or let them follow again",
             "unsetHere": "Unset here",
             "unsetHereAndFollowing": "Unset here and on the pages that follow",
             "unsetHereAndPage": "Unset here and on Page {page}",
             "unsetHereAndPages": "Unset here and on Pages {first}–{last}",
-            "unsetHereKeywords": "set following remove take back coordinate position delete"
+            "unsetHereKeywords": "set following remove take back coordinate position delete",
+            "splitSelectedIntoNewMove": "Split selected marchers into a new move",
+            "mergeMoveIntoPage": "Merge this move into its page"
         },
         "ui": {
             "exitTimelineFocus": "Done editing timeline",
@@ -143,7 +146,9 @@
             "showNextPaths": "Show next page paths",
             "showPreviousPaths": "Show previous page paths",
             "toggleNextPaths": "Toggle next page paths",
-            "togglePreviousPaths": "Toggle previous page paths"
+            "togglePreviousPaths": "Toggle previous page paths",
+            "togglePreview": "Preview the show",
+            "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play"
         }
     },
     "analyticsOptIn": {
@@ -308,7 +313,8 @@
         "run": "Run",
         "suggested": "Suggested",
         "title": "Command palette",
-        "unavailable": "Not available right now"
+        "unavailable": "Not available right now",
+        "offInPreview": "Not in Preview — exit Preview to edit"
     },
     "convertShow": {
         "backupFolder": "In {folder}",
@@ -387,6 +393,8 @@
     },
     "exportCoordinates": {
         "abbreviateCoordinateDescriptions": "Abbreviate coordinate descriptions",
+        "addPagesToEnd": "Add pages to the end",
+        "addPagesToEndTitle": "{counts, plural, one {Add a page every count up to the end of the last move} other {Add a page every # counts up to the end of the last move}}",
         "cancel": "Cancel",
         "cancelledByUser": "Export cancelled by user",
         "coordinatesError": "Error: Could not calculate coordinates for marcher page {id}",
@@ -438,6 +446,7 @@
         "marchersWithoutPositions": "No positions found for {drillNumbers}.",
         "measuresHeader": "Measure",
         "mobile": "Mobile",
+        "movesPastEnd": "{count, plural, one {# move runs past the end of the show (Pg {page}) and won't be in this export.} other {# moves run past the end of the show (Pg {page}) and won't be in this export.}}",
         "mobilePreviewAlt": "OpenMarch mobile export preview",
         "noFieldProperties": "No field properties provided",
         "noMarcher": "No marcher provided",
@@ -852,6 +861,8 @@
                 "nameLimit": "{max} characters at most.",
                 "paused": "Pause to delete a move.",
                 "selectMarchers": "Select them",
+                "split": "Split at playhead",
+                "splitHelp": "Put the playhead inside the move to split it there.",
                 "title": "Move"
             }
         },
@@ -1990,6 +2001,12 @@
             "withPage": "Deleted {label} · Page {pages} changed",
             "withPages": "Deleted {label} · Pages {pages} changed"
         },
+        "moveSplit": {
+            "message": "Split {label} at {where}",
+            "oneChanged": "1 marcher's path is redrawn: straight before it, restarted after",
+            "changed": "{count} marchers' paths are redrawn: straight before it, restarted after",
+            "paused": "Pause to split a move."
+        },
         "music": {
             "add": "Add Music"
         },
@@ -2014,13 +2031,39 @@
             "subset": "Subset"
         },
         "pages": "Pages",
-        "perspective": {
-            "label": "Perspective"
-        },
         "rangeMenu": {
             "deleteWithMoves": "Delete page and its moves",
             "followAgain": "Let selected marchers follow again",
             "keepHere": "Keep selected marchers here"
+        },
+        "split": {
+            "menu": "Split {count} selected into new move",
+            "menuNone": "Split selected into new move",
+            "drag": "Split {count, plural, one {# marcher} other {# marchers}}",
+            "done": "Split {count, plural, one {# marcher} other {# marchers}} into {label}",
+            "paused": "Pause to split or merge moves.",
+            "nothingOnPage": "Nothing moves on this page yet, so there is nothing to split."
+        },
+        "merge": {
+            "menuPair": "Merge {source} into {target}",
+            "menuPairFit": "Merge {source} into {target} · fit to its counts",
+            "menuInto": "Merge into {target}",
+            "menuIntoFit": "Merge into {target} · fit to its counts",
+            "done": "Merged {source} into {target}",
+            "page": "Page {name}",
+            "thisPage": "this page",
+            "thisPageStart": "This page",
+            "thisMove": "this move",
+            "pickTwo": "Pick two moves to merge.",
+            "inBoth": "{count, plural, one {A marcher is} other {# marchers are}} in both moves, so merging would give them two moves at once.",
+            "noPageMove": "{page} has no move of its own to merge into."
+        },
+        "appendCounts": {
+            "label": "{counts, plural, one {# count} other {# counts}}",
+            "title": "{counts, plural, one {Add a page of # count after the last page. Right-click to change how many.} other {Add a page of # counts after the last page. Right-click to change how many.}}",
+            "pagesAdded": "{pages, plural, one {Added # page to the end of the show.} other {Added # pages to the end of the show.}}",
+            "pagesToEnd": "{counts, plural, one {Create pages every count to the end} other {Create pages every # counts to the end}}",
+            "pagesToEndTitle": "{counts, plural, one {Add pages every count to the end of the music} other {Add pages every # counts to the end of the music}}"
         }
     },
     "titlebar": {
@@ -2126,6 +2169,7 @@
             "count": "Count {count} of {total}",
             "noPages": "No pages",
             "page": "Page {page}",
+            "pastEnd": "END +{count}",
             "showTime": "Show time"
         },
         "unit": {
@@ -2353,7 +2397,8 @@
         "workspace": {
             "label": "Workspace",
             "editor": "Editor",
-            "visuals": "Visuals"
+            "visuals": "Visuals",
+            "preview": "Preview"
         },
         "channels": {
             "feet": "Feet",

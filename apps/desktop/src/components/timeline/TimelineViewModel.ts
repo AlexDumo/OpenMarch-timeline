@@ -3,6 +3,7 @@ import type { TimelineBand } from "./TimelineBand";
 import type { PageKeepChains } from "./PageKeepChain";
 import type { TimelineClipResizeCommands } from "./TimelineClipResize";
 import type { TimelineKeyframeMenu } from "./TimelineKeyframes";
+import type { TimelineClipPeel } from "./TimelineClipPeel";
 import type { ReactNode } from "react";
 import type {
     TimelineAddMarchersMenu,
@@ -122,8 +123,44 @@ export interface TimelineTrack {
 }
 
 export interface TimelineWaveform {
-    /** Normalized peak magnitudes (0..1), grouped by beat. */
+    /**
+     * Normalized peak magnitudes (0..1), grouped by beat. It may stop before the timeline's last
+     * beat (the music ends); the beats after it have none.
+     */
     readonly peaksByBeat: readonly (readonly number[])[];
+}
+
+/**
+ * **+ N counts** after the last page: always offered while paused, since nothing lies after
+ * the end of the show. The owner names it, since it adds counts.
+ */
+export interface TimelineAppendCounts {
+    /** The button's text, such as "+ 16 counts" */
+    readonly label: string;
+    /** Its tooltip and accessible name, such as "Add a page of 16 counts after the last page" */
+    readonly title: string;
+    readonly onAppend: () => void;
+    /** The page length it adds now; with `onCountsChange`, a right-click changes it */
+    readonly counts?: number;
+    /** Sets the file's default new page counts, from the pill's right-click menu */
+    readonly onCountsChange?: (counts: number) => void;
+    /**
+     * "Create pages every 16 counts to the end", when the music runs on past the last page (EC-10):
+     * an entry in the pill's right-click menu. Each takes the page length the menu shows: the one
+     * typed in its box, else `counts`; `onAppend` also saves that length as the default once the
+     * pages are in (the menu doesn't save it itself when this is picked).
+     */
+    readonly toEnd?: {
+        readonly label: (counts: number) => string;
+        readonly title: (counts: number) => string;
+        readonly onAppend: (counts: number) => void;
+    };
+}
+
+/** What the timeline's scroller shows, so its owner can leave room past the show (endless counts) */
+export interface TimelineViewportExtent {
+    /** The scroller's width in pixels; with the zoom, how many counts one screen holds */
+    readonly width: number;
 }
 
 export interface TimelineViewModel {
@@ -154,6 +191,24 @@ export type TimelineSelection =
           readonly via?: "pages";
           /** The range was drawn by dragging on empty timeline space (Ctrl+drag) */
           readonly drawn?: boolean;
+          /**
+           * UI-25: the stored timeline the window stands for, when known (a clicked clip; the
+           * app's resolved one). Several moves may share a range since a move can be split off a
+           * page's timeline, so the range alone doesn't say which clip is selected
+           */
+          readonly timelineId?: number;
+          /**
+           * UI-25: the window is a move's clip, not a page box, though its range may be a page
+           * box's (a move split off it): the page box doesn't show selected
+           */
+          readonly onClip?: boolean;
+          /**
+           * UI-25: a second move selected beside the window's (Shift+click on its clip), for
+           * **Merge moves**; its clip shows selected too
+           */
+          readonly pairedTimelineId?: number;
+          /** From the timeline: a Shift+click on a clip, which adds it beside the selected one */
+          readonly extend?: boolean;
       }
     | null;
 
@@ -242,6 +297,12 @@ export interface TimelineInteractionProps {
      * The owner passes it only where flags can move (paused, not isolated).
      */
     readonly pageFlagMove?: TimelinePageFlagMove;
+    /** **+ N counts** after the last page's flag; without it, none */
+    readonly appendCounts?: TimelineAppendCounts;
+    /** The beats Fit fits (rule 7: where playback stops), in view beats; without it, every beat */
+    readonly fitBeatCount?: number;
+    /** The scroller's width (rule 7) */
+    readonly onViewportExtent?: (extent: TimelineViewportExtent) => void;
     /** Double-clicking a page box or clip opens (isolates) its range, in view beats here */
     readonly onOpenRange?: (target: TimelineMenuTarget) => void;
 }
@@ -281,6 +342,8 @@ export interface TimelineCommonProps
     ) => TimelineRangeCommitResult;
     /** Resizing a clip by its edges (resize-move), in view beats; without it clips have no handles */
     readonly clipResize?: TimelineClipResizeCommands;
+    /** UI-25: dragging a clip down splits the selected marchers off; onto a move, merges */
+    readonly clipPeel?: TimelineClipPeel;
     /** The loop (UI-17), view beats; `null` or absent when looping is off */
     readonly loop?: TimelineBeatRange | null;
     /** A loop end dragged or stepped (UI-17), view beats */
@@ -295,6 +358,12 @@ export interface TimelineCommonProps
     readonly keyframeMenu?: TimelineKeyframeMenu;
     /** The chains on the page boxes (UI-18 keep later pages); none without a selection */
     readonly keepChains?: PageKeepChains;
+    /**
+     * The moves a page box stands for, so they have no clip (`timelinesOffPages`), by track id.
+     * One that gets a clip (its box was split, or a flag deleted) drops out of the page row
+     * (`useClipDrops`)
+     */
+    readonly pageMoves?: ReadonlySet<string | number>;
     /** UI-19 Basic: the selected marchers' mid-page positions, view beats */
     readonly basicPoints?: readonly TimelineBasicPoint[];
     /** UI-19 Basic: **Remove this count's position**, by its view beat */

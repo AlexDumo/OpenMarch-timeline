@@ -24,8 +24,17 @@ export function useActionHandler(
     id: ActionId,
     run: (args: ActionArgs | undefined) => void,
     options: HandlerOptions = {},
+    /**
+     * When false the action has no handler at all, so the command palette doesn't list it (not
+     * just greyed out). Default true.
+     */
+    registered = true,
 ): void {
-    useActionHandlerGroup([id], (_id, args) => run(args), options);
+    useActionHandlerGroup(
+        registered ? [id] : [],
+        (_id, args) => run(args),
+        options,
+    );
 }
 
 export function useActionHandlerGroup(

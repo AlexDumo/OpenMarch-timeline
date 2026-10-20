@@ -150,6 +150,9 @@ export async function createMeasures({
     return transactionResult;
 }
 
+/** Rows per insert statement, well under SQLite's 32,766 bound values */
+const INSERT_CHUNK_ROWS = 2000;
+
 export const createMeasuresInTransaction = async ({
     newItems,
     tx,
@@ -157,10 +160,17 @@ export const createMeasuresInTransaction = async ({
     newItems: NewMeasureArgs[];
     tx: DbTransaction;
 }): Promise<DatabaseMeasure[]> => {
-    const createdItems = await tx
-        .insert(schema.measures)
-        .values(newItems.map(newMeasureArgsToRealNewMeasureArgs))
-        .returning();
+    // In chunks: one statement binds at most 32,766 values, and endless counts can store
+    // thousands of measures in one edit
+    const rows = newItems.map(newMeasureArgsToRealNewMeasureArgs);
+    const createdItems = [];
+    for (let i = 0; i < rows.length; i += INSERT_CHUNK_ROWS)
+        createdItems.push(
+            ...(await tx
+                .insert(schema.measures)
+                .values(rows.slice(i, i + INSERT_CHUNK_ROWS))
+                .returning()),
+        );
 
     return createdItems.map(realDatabaseMeasureToDatabaseMeasure);
 };

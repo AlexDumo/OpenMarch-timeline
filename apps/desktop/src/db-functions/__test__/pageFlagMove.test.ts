@@ -241,7 +241,7 @@ describeDbTests("moving a page flag (roll edit)", (it) => {
             expect(await snapshot(db)).toEqual(before);
         });
 
-        it("refuses home, unknown pages, passing a neighbor and the show's end, writing nothing", async ({
+        it("refuses home, unknown pages and passing a neighbor, writing nothing", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -254,14 +254,14 @@ describeDbTests("moving a page flag (roll edit)", (it) => {
             await expectRefused(movePageFlag({ db, pageId: 2, beat: 30 }));
             await expectRefused(movePageFlag({ db, pageId: 2, beat: 9 }));
             await expectRefused(movePageFlag({ db, pageId: 2, beat: 18.5 }));
-            // Past the show's 96 counts
-            await expectRefused(movePageFlag({ db, pageId: 6, beat: 98 }));
+            // Past the show's 96 counts is allowed now: the counts never end
+            await expectRefused(movePageFlag({ db, pageId: 6, beat: 98.5 }));
             expect(await snapshot(db)).toEqual(before);
         });
     });
 
     describe("pageFlagMoveLimits", () => {
-        it("stops one count short of each neighbor, and the last flag at the show's end", async ({
+        it("stops one count short of each neighbor; the last flag doesn't stop", async ({
             db,
             marchersAndPages: _,
         }) => {
@@ -280,8 +280,8 @@ describeDbTests("moving a page flag (roll edit)", (it) => {
                 minBlock: { kind: "flag", pageId: 0 },
             });
             expect(await pageFlagMoveLimits({ db, pageId: 6 })).toMatchObject({
-                max: 97,
-                maxBlock: { kind: "show-end" },
+                max: Infinity,
+                maxBlock: { kind: "open" },
             });
             expect(await pageFlagMoveLimits({ db, pageId: 0 })).toBeNull();
             expect(await pageFlagMoveLimits({ db, pageId: 99 })).toBeNull();

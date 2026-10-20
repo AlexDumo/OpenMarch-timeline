@@ -1,3 +1,4 @@
+import { usePreviewModeStore } from "@/stores/PreviewModeStore";
 import { useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { FieldProperties } from "@openmarch/core";
@@ -188,6 +189,7 @@ function useFieldDimming(enabled: boolean): FieldDimming {
             }),
             useWorkspaceViewStore.subscribe(update),
             useEditorModeStore.subscribe(update),
+            usePreviewModeStore.subscribe(update),
         ];
         return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
     }, [dimming, enabled]);

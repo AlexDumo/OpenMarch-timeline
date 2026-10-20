@@ -195,6 +195,38 @@ describe("the Move card (UI-14)", () => {
         expect(useTimelineSelectionStore.getState().playheadBeat).toBe(12);
     });
 
+    it("offers Split at playhead only while its move is isolated, and only with P inside (UI-27)", () => {
+        const store = twoPages();
+        // Selected, the window ends at P: P is never inside, so the card doesn't offer it
+        store.selectRange(9, 12);
+        renderSection();
+        expect(
+            screen.queryByTestId("timeline-move-card-split-at-playhead"),
+        ).toBeNull();
+        cleanup();
+        store.isolate(7);
+        store.seek(10);
+        renderSection();
+        const split = screen.getByTestId(
+            "timeline-move-card-split-at-playhead",
+        ) as HTMLButtonElement;
+        expect(split.disabled).toBe(false);
+        expect(
+            screen.queryByText(
+                "Put the playhead inside the move to split it there.",
+            ),
+        ).toBeNull();
+        act(() => {
+            store.seek(12);
+        });
+        expect(split.disabled).toBe(true);
+        expect(
+            screen.getByText(
+                "Put the playhead inside the move to split it there.",
+            ),
+        ).toBeTruthy();
+    });
+
     it("Edit move's request flashes the card and puts focus on its heading, not the menu button", () => {
         twoPages().selectRange(9, 12);
         renderSection();

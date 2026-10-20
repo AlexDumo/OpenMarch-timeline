@@ -28,6 +28,7 @@ import {
     runAction,
 } from "../registry";
 import { isActionOffInWorkspace } from "../workspaceActions";
+import { isPreviewMode } from "@/stores/PreviewModeStore";
 import type { PaletteContext, PaletteItem } from "./sources";
 
 const CATEGORY_ICONS: Record<ActionCategory, Icon> = {
@@ -98,9 +99,14 @@ export function getActionPaletteItems(
                     : [],
                 shortcut: getActionShortcutKeys(id, { overrides }),
                 disabled: !isActionEnabled(id),
-                // Visuals mode turns the drill edits off: say so, and where they work
+                // Visuals mode turns the drill edits off, and Preview every edit: say so, and
+                // where they work
                 disabledReason: isActionOffInWorkspace(id)
-                    ? t("commandPalette.editsDrill")
+                    ? t(
+                          isPreviewMode()
+                              ? "commandPalette.offInPreview"
+                              : "commandPalette.editsDrill",
+                      )
                     : undefined,
                 suggestedRank: SUGGESTED_ACTIONS.includes(id)
                     ? SUGGESTED_ACTIONS.indexOf(id)

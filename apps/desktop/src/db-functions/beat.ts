@@ -340,6 +340,9 @@ export async function createBeats({
     return transactionResult;
 }
 
+/** Rows per insert statement, well under SQLite's 32,766 bound values */
+const INSERT_CHUNK_ROWS = 2000;
+
 /**
  * Creates beats within a transaction.
  */
@@ -383,17 +386,29 @@ export const createBeatsInTransaction = async ({
         newBeatArgsToRealNewBeatArgs(beat, currentPosition + index),
     );
 
-    const createdBeats = await tx
-        .insert(schema.beats)
-        .values(realNewBeats)
-        .returning();
-    const createdBeatsIds = createdBeats.map((beat) => beat.id);
+    // In chunks: one statement binds at most 32,766 values, and endless counts can store
+    // thousands of beats in one edit
+    const createdBeatsIds: number[] = [];
+    for (let i = 0; i < realNewBeats.length; i += INSERT_CHUNK_ROWS) {
+        const created = await tx
+            .insert(schema.beats)
+            .values(realNewBeats.slice(i, i + INSERT_CHUNK_ROWS))
+            .returning({ id: schema.beats.id });
+        for (const beat of created) createdBeatsIds.push(beat.id);
+    }
 
     await flattenOrderInTransaction({ tx });
-    const actualCreatedBeats = await tx.query.beats.findMany({
-        where: inArray(schema.beats.id, createdBeatsIds),
-        orderBy: asc(schema.beats.position),
-    });
+    const actualCreatedBeats = [];
+    for (let i = 0; i < createdBeatsIds.length; i += INSERT_CHUNK_ROWS)
+        actualCreatedBeats.push(
+            ...(await tx.query.beats.findMany({
+                where: inArray(
+                    schema.beats.id,
+                    createdBeatsIds.slice(i, i + INSERT_CHUNK_ROWS),
+                ),
+            })),
+        );
+    actualCreatedBeats.sort((a, b) => a.position - b.position);
 
     return actualCreatedBeats.map(realDatabaseBeatToDatabaseBeat);
 };

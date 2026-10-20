@@ -13,13 +13,27 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import { allMarcherRowsQueryOptions } from "@/hooks/queries/useMarchers";
 import { toastTimelineError } from "@/timeline/timelineErrorMessages";
-import { moveLabel, moveLabels } from "@/timeline/timelineViewModel";
+import {
+    isPageTimeline,
+    moveLabel,
+    moveLabels,
+} from "@/timeline/timelineViewModel";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { timelineExists } from "@/db-functions/timelines";
 import { pageRunsLabel, type NamedPage } from "@/db-functions/pageDelete";
+import {
+    splitTimelineAtBeat,
+    type MotionChange,
+} from "@/db-functions/timelineSplitAtBeat";
+import { beatWhere } from "@/timeline/timelineRangeWords";
 import { useMoveCardRevealStore } from "@/stores/MoveCardRevealStore";
 import { useMoveMemberSelectionStore } from "@/stores/MoveMemberSelectionStore";
-import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import {
+    useTimelineSelectionStore,
+    windowMove,
+    type StoredTimelineMembership,
+    type TimelineSelectionState,
+} from "@/stores/TimelineSelectionStore";
 import type { TimelineInput } from "./Timeline";
 import type { TimelineAddMarchersMenu } from "./TimelineRangeMenu";
 import type {
@@ -90,7 +104,11 @@ export function useTimelineCommands({
                     if (result)
                         useTimelineSelectionStore
                             .getState()
-                            .followTimelineShift(from, shift.delta);
+                            .followTimelineShift(
+                                from,
+                                shift.delta,
+                                shift.timelineId,
+                            );
                     return result !== null;
                 },
                 (error: unknown) => {
@@ -166,6 +184,12 @@ export function focusAfterMoveDelete(timelineId: number): void {
 /** Moves being deleted now, across every caller, so a repeated Delete doesn't delete twice */
 const deletingMoves = new Set<number>();
 
+/**
+ * Moves being split now, likewise: a second click or ⌘K before the first lands reads the old
+ * range, and would be refused with an error toast just after the split worked
+ */
+const splittingMoves = new Set<number>();
+
 /** How long the delete toast stays, unless another edit, undo or redo closes it first */
 const DELETE_TOAST_MS = 8000;
 
@@ -205,8 +229,13 @@ export function toastMoveDeleted(
     undo: () => void,
     changedPages: readonly NamedPage[] = [],
 ): void {
+    toastMoveEdit(moveDeletedMessage(label, changedPages), undo);
+}
+
+/** A move edit's toast with **Undo**, closed by the next history change (see `toastMoveDeleted`). */
+function toastMoveEdit(message: string, undo: () => void): void {
     let unsubscribe = () => {};
-    const id = toast.success(moveDeletedMessage(label, changedPages), {
+    const id = toast.success(message, {
         duration: DELETE_TOAST_MS,
         action: { label: "Undo", onClick: undo },
         onDismiss: () => unsubscribe(),
@@ -216,6 +245,97 @@ export function toastMoveDeleted(
         unsubscribe();
         toast.dismiss(id);
     });
+}
+
+/**
+ * Why **Split at playhead** (UI-27) can't split `move` now, or null: playing, or the playhead not
+ * strictly inside the move (on an end there is nothing to split off).
+ */
+export function splitMoveBlocker(
+    move: { readonly start: number; readonly end: number } | undefined,
+    playheadBeat: number,
+    isPlaying: boolean,
+): string | null {
+    if (isPlaying)
+        return tolgee.t("timeline.moveSplit.paused", "Pause to split a move.");
+    if (move && !(move.start < playheadBeat && playheadBeat < move.end))
+        return tolgee.t(
+            "inspector.timeline.move.splitHelp",
+            "Put the playhead inside the move to split it there.",
+        );
+    return null;
+}
+
+/**
+ * The move ⌘K's **Split at playhead** acts on (UI-27): while a move is isolated, that move, and
+ * only with the playhead inside it; else the window's move when the playhead is inside it, else
+ * the one move (not a page's) the playhead is strictly inside. With none, or several, the reason
+ * to show instead.
+ */
+export function moveAtPlayhead(
+    state: Pick<
+        TimelineSelectionState,
+        | "selection"
+        | "storedTimelines"
+        | "isolation"
+        | "pageBoxes"
+        | "playheadBeat"
+    >,
+): StoredTimelineMembership | string {
+    const beat = state.playheadBeat;
+    const inside = (t: { start: number; end: number }) =>
+        t.start < beat && beat < t.end;
+    // Isolated, the split is of the move being edited, never another one under the playhead
+    if (state.isolation) {
+        const isolated = state.storedTimelines?.find(
+            (t) => t.id === state.isolation!.timelineId,
+        );
+        if (isolated && inside(isolated)) return isolated;
+        return "Put the playhead inside the move you're editing to split it.";
+    }
+    const current = windowMove(state);
+    if (current && inside(current)) return current;
+    // A page's own timeline is the oldest over its box (UI-25): a move split off it shares the
+    // range and is still a move
+    const stored = state.storedTimelines ?? [];
+    const crossing = stored.filter(
+        (t) => inside(t) && !isPageTimeline(t, stored, state.pageBoxes),
+    );
+    if (crossing.length === 1) return crossing[0]!;
+    const where = beatWhere(beat, state.pageBoxes) ?? "the playhead";
+    return crossing.length === 0
+        ? `No move crosses ${where}. Put the playhead inside a move to split it.`
+        : `Several moves cross ${where}. Right-click the one to split.`;
+}
+
+/**
+ * "Split Move 2 at Page 3 count 4", and when paths changed (a path that wasn't a straight line
+ * before the split, UI-27), "… · 3 marchers' paths are redrawn: straight before it, restarted
+ * after".
+ */
+export function moveSplitMessage(
+    label: string,
+    where: string,
+    changed: readonly MotionChange[],
+): string {
+    const base = tolgee.t(
+        "timeline.moveSplit.message",
+        "Split {label} at {where}",
+        { label, where },
+    );
+    if (changed.length === 0) return base;
+    const note =
+        changed.length === 1
+            ? tolgee.t(
+                  "timeline.moveSplit.oneChanged",
+                  "1 marcher's path is redrawn: straight before it, restarted after",
+              )
+            : tolgee.t(
+                  "timeline.moveSplit.changed",
+                  "{count} marchers' paths are redrawn: straight before it, restarted after",
+                  { count: changed.length },
+              );
+    return `${base} · ${note}`;
 }
 
 /**
@@ -331,6 +451,21 @@ export function createMoveCommands({
             }
         },
         selectMarchers,
+        /**
+         * **Split at playhead** (UI-27): the move becomes two that meet at the playhead, the one
+         * before it new. That new move becomes the window (its clip selected, the Move card on
+         * it), ending any isolation. Resolves once the split has settled.
+         */
+        splitMoveAtPlayhead: (timelineId: number, isPlaying = false) =>
+            splitMoveAtPlayhead({
+                database,
+                undo,
+                timelineId,
+                isPlaying,
+                move: stored(timelineId),
+                label: labelOf(timelineId),
+                report,
+            }),
         editMove: (timelineId: number) => {
             if (!stored(timelineId)) return;
             // UI-14 review: isolation shows who is in it, so nobody is selected (one Esc
@@ -339,4 +474,59 @@ export function createMoveCommands({
             useMoveCardRevealStore.getState().reveal(timelineId);
         },
     };
+}
+
+/** `createMoveCommands`' **Split at playhead**; see it for what happens. */
+async function splitMoveAtPlayhead({
+    database,
+    undo,
+    timelineId,
+    isPlaying,
+    move,
+    label,
+    report,
+}: {
+    database: DbConnection;
+    undo: () => void;
+    timelineId: number;
+    isPlaying: boolean;
+    move: StoredTimelineMembership | undefined;
+    label: string;
+    report: (timelineId: number, error: unknown) => Promise<void>;
+}): Promise<void> {
+    if (
+        !move ||
+        deletingMoves.has(timelineId) ||
+        splittingMoves.has(timelineId)
+    )
+        return;
+    const { playheadBeat, pageBoxes } = useTimelineSelectionStore.getState();
+    const reason = splitMoveBlocker(move, playheadBeat, isPlaying);
+    if (reason !== null) {
+        toast.error(reason, { id: "timeline-split-move" });
+        return;
+    }
+    splittingMoves.add(timelineId);
+    try {
+        const { before, motionChanged } = await splitTimelineAtBeat({
+            db: database,
+            timelineId,
+            beat: playheadBeat,
+        });
+        useTimelineSelectionStore
+            .getState()
+            .selectRange(before.start_beat, before.end_beat);
+        toastMoveEdit(
+            moveSplitMessage(
+                label,
+                beatWhere(playheadBeat, pageBoxes) ?? "the playhead",
+                motionChanged,
+            ),
+            undo,
+        );
+    } catch (error: unknown) {
+        await report(timelineId, error);
+    } finally {
+        splittingMoves.delete(timelineId);
+    }
 }
