@@ -20,6 +20,7 @@ import {
     pressTarget,
     release,
     slotsOf,
+    startsOf,
     targetsOf,
     type ToolState,
 } from "./toolMachine";
@@ -77,8 +78,10 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
     const ctx = shapeContextFor(field);
     const n = tool.marchers.length;
     const spots = slotsOf(tool, ctx);
+    // The marchers' hollow rings stand where they start the move: at the start flag (#346)
+    const rings = startsOf(tool);
     if (tool.params === null)
-        return { outline: null, spots, walks: [], handles: [] };
+        return { outline: null, spots, walks: [], handles: [], rings };
     // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every
     // other gesture holds who goes where, so the walks follow it live.
     const drawing = tool.gesture?.type === "draw";
@@ -96,6 +99,7 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
         outline: boxOutline(tool.params as BoxParams, n),
         spots,
         walks: targets.map((t) => ({ from: t.from, to: t.to })),
+        rings,
         labels:
             n <= SPOT_LABEL_LIMIT
                 ? targets.map((t) => ({

@@ -172,6 +172,8 @@ export type FieldTestShapeOverlay = {
     spots: { x: number; y: number }[];
     /** From each marcher to its spot; empty during a gesture. */
     walks: { from: { x: number; y: number }; to: { x: number; y: number } }[];
+    /** The hollow rings where its marchers start (at the start flag), field units. */
+    rings: { x: number; y: number }[];
     /** Its handles, in the viewport. */
     handles: ScreenPoint[];
     /** Drawing (a drag draws it) or open; null for a mode that doesn't say. */
