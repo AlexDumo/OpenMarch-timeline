@@ -20,7 +20,8 @@ import {
     targetsOf,
     type ToolState,
 } from "../tool/toolMachine";
-import type { ToolEnv } from "../tool/toolKind";
+import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
+import { rowTool } from "./fakeRowKind";
 import type { ShapeContext, XY } from "../types";
 
 /**
@@ -28,6 +29,7 @@ import type { ShapeContext, XY } from "../types";
  * flag"): its hollow rings, its walks and least travel start where each marcher stands at the
  * start flag, not where they stand at the playhead. Expert's start flag is where it is put;
  * Basic's is the start of the page holding the playhead; at home both are beat 0, the home spots.
+ * Run with the box and a fake test kind, so the rule is the host's, not one kind's.
  */
 
 /**
@@ -111,9 +113,9 @@ const env: ToolEnv = {
 };
 const ctx: ShapeContext = { stepPx: STEP, snapPoint: (p) => p };
 
-/** Opens the box on both marchers and draws a 2-wide box below them, left to right */
-function drawBox(field: ShapeField): ToolState {
-    let tool = openTool(boxTool, marchersOnField(field, [1, 2]));
+/** Opens `kind` on both marchers and draws it below them, left to right: two spots */
+function drawShape(kind: AnyToolKind, field: ShapeField): ToolState {
+    let tool = openTool(kind, marchersOnField(field, [1, 2]));
     tool = press(tool, { x: 0, y: 200 }, env);
     tool = pointerMove(tool, { x: 100, y: 210 }, env);
     return release(tool, ctx);
@@ -134,7 +136,10 @@ const onTheLeft = (tool: ToolState) => {
 
 const selection = () => useTimelineSelectionStore.getState();
 
-describe("the open shape measures from the start flag (#346)", () => {
+describe.each<[string, AnyToolKind]>([
+    ["the box", boxTool],
+    ["a fake test kind", rowTool],
+])("the open shape measures from the start flag (#346), with %s", (_, kind) => {
     let resolver: Resolver;
     const at = (id: number, beat: number): XY => {
         const [x, y] = resolver.positionAt(id, beat);
@@ -169,7 +174,7 @@ describe("the open shape measures from the start flag (#346)", () => {
             start: 3,
             end: PLAYHEAD,
         });
-        const tool = drawBox(fieldAt(resolver, PLAYHEAD));
+        const tool = drawShape(kind, fieldAt(resolver, PLAYHEAD));
 
         const rings = startsOf(tool);
         near(rings[0]!, at(1, 3));
@@ -191,7 +196,7 @@ describe("the open shape measures from the start flag (#346)", () => {
             start: 7,
             end: PLAYHEAD,
         });
-        const tool = drawBox(fieldAt(resolver, PLAYHEAD));
+        const tool = drawShape(kind, fieldAt(resolver, PLAYHEAD));
 
         const rings = startsOf(tool);
         near(rings[0]!, at(1, 7));
@@ -206,7 +211,7 @@ describe("the open shape measures from the start flag (#346)", () => {
         selection().setStartStays(true);
         selection().selectHome();
         expect(selection().selection).toEqual({ kind: "home" });
-        const tool = drawBox(fieldAt(resolver, 0));
+        const tool = drawShape(kind, fieldAt(resolver, 0));
 
         const rings = startsOf(tool);
         near(rings[0]!, { x: 0, y: 0 });
@@ -221,7 +226,7 @@ describe("the open shape measures from the start flag (#346)", () => {
         selection().setStartStays(true);
         selection().selectRange(3, PLAYHEAD);
         let tool = openTool(
-            boxTool,
+            kind,
             marchersOnField(fieldAt(resolver, PLAYHEAD), [1, 2]),
         );
         tool = press(tool, { x: 0, y: 200 }, env);
