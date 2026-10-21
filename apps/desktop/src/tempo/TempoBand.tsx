@@ -55,10 +55,7 @@ import { queryClient } from "@/App";
 import { historyKeys } from "@/hooks/queries/useHistory";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { useTimingObjects } from "@/hooks/useTimingObjects";
-import {
-    workspaceSettingsKeys,
-    workspaceSettingsQueryOptions,
-} from "@/hooks/queries/useWorkspaceSettings";
+import { workspaceSettingsKeys } from "@/hooks/queries/useWorkspaceSettings";
 import { useAudioEnvelopeStore } from "@/timeline/timelineWaveform";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
@@ -79,7 +76,6 @@ import type {
 } from "@/components/timeline/TimelineBand";
 import {
     assignTaps,
-    bpmOf,
     lockAfter,
     lockBefore,
     moveBeatTo,
@@ -87,7 +83,6 @@ import {
     moveOneCount,
     pinBeats,
     rampLengths,
-    regroupMeasures,
     respace,
     retime,
     startsOf,
@@ -102,8 +97,6 @@ import {
     moveRehearsalMark,
     readMoves,
     type MoveSpan,
-    patchWorkspaceSettings,
-    regroupMeasuresWrite,
     setMeasureNumber as writeMeasureNumber,
     writeMarks,
     setRehearsalMark,
@@ -111,8 +104,21 @@ import {
     type CountEditResult,
 } from "./tempoWrites";
 import { useMusicOnsets } from "./useMusicOnsets";
-import { estimateBeatPeriod, fitCountsToOnsets, snapToOnset } from "./onsets";
-import { firstCountLength, trackCounts } from "./onsetsTrack";
+import { snapToOnset } from "./onsets";
+import { planFit } from "./fitMusic";
+import {
+    tempoSettingsKey,
+    useAudioOffsetSeconds,
+    writeAudioOffset,
+} from "./audioOffset";
+import {
+    METER_CHOICES,
+    meterLabel,
+    meterOfMeasure,
+    parseMeter,
+    quarterBpmOf,
+} from "./meters";
+import { planMeter, writeMeter } from "./meterWrites";
 import { readTapCheck, TapCheckPanel, type TapCheckResult } from "./TapCheck";
 import {
     createLabelPlacer,
@@ -309,6 +315,9 @@ interface TempoMeasure {
     counts: number;
     id: number | null;
     overridden: boolean;
+    /** The time signature written here ("7/8"), and its grouping in eighths ("2+2+3") */
+    meter?: string | null;
+    grouping?: string | null;
 }
 
 interface TempoData {
@@ -350,8 +359,9 @@ const tempoMarksQuery = () => ({
 
 function useTempoData(beatCount: number): TempoData {
     const { beats, measures, countGrid } = useTimingObjects();
-    const { data: settings } = useQuery(workspaceSettingsQueryOptions());
     const { data: marks } = useQuery(tempoMarksQuery());
+    // The music offset in the show's history (it undoes with the counts it lines up)
+    const audioOffset = useAudioOffsetSeconds();
     return useMemo(() => {
         const n = Math.max(beatCount + 1, beats.length);
         const durations = [0];
@@ -382,6 +392,8 @@ function useTempoData(beatCount: number): TempoData {
             overridden:
                 (m as { number_override?: number | null }).number_override !=
                 null,
+            meter: (m as { meter?: string | null }).meter ?? null,
+            grouping: (m as { grouping?: string | null }).grouping ?? null,
         }));
         // The endless measures carry on the last one's length
         const last = ms[ms.length - 1];
@@ -407,9 +419,9 @@ function useTempoData(beatCount: number): TempoData {
             ids,
             measures: ms,
             storedCount: beats.length,
-            audioOffset: settings?.audioOffsetSeconds ?? 0,
+            audioOffset,
         };
-    }, [beats, measures, countGrid, settings, marks, beatCount]);
+    }, [beats, measures, countGrid, marks, beatCount, audioOffset]);
 }
 
 /** Save pins and holds (spec beats) as beat flags: one undo step */
@@ -426,6 +438,8 @@ async function commitEdit(
     before: TempoData,
     result: TempoEditResult,
     refetch: () => Promise<unknown>,
+    /** The music offset to set in the same edit (a fit that moved the music) */
+    audioOffset?: number,
 ) {
     const maxLock = Math.max(0, ...result.locks);
     const after = [...result.durations];
@@ -436,7 +450,9 @@ async function commitEdit(
         before: before.durations,
         after,
         pins: result.locks,
+        audioOffset,
     });
+    await queryClient.invalidateQueries({ queryKey: tempoSettingsKey });
     await refetch();
     if (result.note) toast.info(result.note, { id: NOTE_TOAST });
 }
@@ -624,16 +640,36 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
     const durations = preview?.durations ?? data.durations;
     const locks = preview?.locks ?? data.locks;
     const starts = useMemo(() => startsOf(durations), [durations]);
+    // Eighths per count, from each measure's grouping (2 = a quarter): the tempo lane reads in
+    // quarter notes, so 7/8 as 2+2+3 at ♩=176 reads 176, not a sawtooth
+    const units = useMemo(() => {
+        const out: number[] = [];
+        for (const m of data.measures) {
+            if (!m.meter) continue;
+            const g = meterOfMeasure(m).grouping;
+            if (g.length !== m.counts) continue;
+            g.forEach((u, i) => (out[m.start + i] = u));
+        }
+        return out;
+    }, [data.measures]);
+    /** Count `b`'s tempo, in quarter notes per minute */
+    const qBpm = useCallback(
+        (b: number, d: readonly number[] = durations) =>
+            quarterBpmOf(d[b]!, units[b] ?? 2),
+        [durations, units],
+    );
     // Holds aren't tempo: the tempo lane leaves them out
     const segments = useMemo(() => {
-        const d = durations.slice(0, data.storedCount).map((len, b) => {
-            if (!data.holds.has(b)) return len;
+        // in quarter-note lengths, so groupings read as one tempo
+        const q = (b: number) => (durations[b] ?? 0) / ((units[b] ?? 2) / 2);
+        const d = durations.slice(0, data.storedCount).map((_, b) => {
+            if (!data.holds.has(b)) return q(b);
             let n = b - 1;
             while (n > 0 && data.holds.has(n)) n--;
-            return durations[n] ?? len;
+            return q(n);
         });
         return tempoSegments(d, 1.2);
-    }, [durations, data.storedCount, data.holds]);
+    }, [durations, data.storedCount, data.holds, units]);
 
     // Visible spec beats
     const firstBeat = Math.max(1, Math.floor(beatAtX(win.left, ppb)) - 1);
@@ -648,14 +684,14 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         let hi = -Infinity;
         for (let b = 1; b < durations.length; b++) {
             if (data.holds.has(b)) continue;
-            const bpm = bpmOf(durations[b]!);
+            const bpm = qBpm(b);
             if (bpm < lo) lo = bpm;
             if (bpm > hi) hi = bpm;
         }
         if (!Number.isFinite(lo)) return { lo: 60, hi: 180 };
         const pad = Math.max(12, (hi - lo) * 0.2);
         return { lo: Math.max(10, lo - pad), hi: hi + pad };
-    }, [durations, data.holds]);
+    }, [durations, data.holds, qBpm]);
     const yOfBpm = useCallback(
         (bpm: number) =>
             TEMPO.top +
@@ -690,9 +726,9 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 data.holds.has(b + 1)
             )
                 continue;
-            const a = bpmOf(durations[b - 1]!);
-            const m = bpmOf(durations[b]!);
-            const c = bpmOf(durations[b + 1]!);
+            const a = qBpm(b - 1);
+            const m = qBpm(b);
+            const c = qBpm(b + 1);
             const up = (m - a) / a;
             const down = (c - m) / m;
             if (
@@ -703,7 +739,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 out.push({ beat: b, bpm: m, before: a, after: c });
         }
         return out;
-    }, [durations, data.holds, data.storedCount, firstBeat, lastBeat]);
+    }, [data.holds, data.storedCount, firstBeat, lastBeat, qBpm]);
 
     const run = useCallback(
         async (label: string, work: () => Promise<unknown>) => {
@@ -723,7 +759,12 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         [busy],
     );
     const commit = useCallback(
-        (label: string, result: TempoEditResult | null, keepUnsure = false) => {
+        (
+            label: string,
+            result: TempoEditResult | null,
+            keepUnsure = false,
+            audioOffset?: number,
+        ) => {
             if (!result) {
                 toast.error(
                     `${label}: that would make a count too fast or too slow`,
@@ -736,7 +777,9 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 ? { durations: result.durations, landed: false }
                 : null;
             setPreview(result);
-            void run(label, () => commitEdit(data, result, refetch));
+            void run(label, () =>
+                commitEdit(data, result, refetch, audioOffset),
+            );
         },
         [data, refetch, run],
     );
@@ -960,7 +1003,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 pen = false;
                 continue;
             }
-            const y = yOfBpm(bpmOf(durations[b]!));
+            const y = yOfBpm(qBpm(b));
             if (!pen) ctx.moveTo(X(b), y);
             else ctx.lineTo(X(b), y);
             ctx.lineTo(X(b + 1), y);
@@ -1021,6 +1064,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             ctx.restore();
         }
     }, [
+        qBpm,
         win,
         width,
         ppb,
@@ -1101,7 +1145,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
     const tempoAfter = (end: number) => {
         let b = end;
         while (data.holds.has(b)) b++;
-        return b < data.storedCount ? bpmOf(data.durations[b]!) : null;
+        return b < data.storedCount ? qBpm(b, data.durations) : null;
     };
     const bpmText = (bpm: number) => `♩${Math.round(bpm * 10) / 10}`;
     /** The stretches of counts whose lengths differ, split at `split`, with their tempo before and after */
@@ -1185,10 +1229,9 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
     };
     const moveMusicToCountOne = (seconds: number) =>
         void run("Music start", async () => {
-            const offset = data.audioOffset - seconds;
-            await patchWorkspaceSettings(() => ({
-                audioOffsetSeconds: offset,
-            }));
+            // in the show's history: it undoes like any tempo edit
+            await writeAudioOffset(data.audioOffset - seconds);
+            await queryClient.invalidateQueries({ queryKey: tempoSettingsKey });
             await refetch();
             toast.success(
                 `Moved the music ${Math.abs(seconds).toFixed(2)} s ${seconds > 0 ? "earlier" : "later"}, so that hit is on count 1`,
@@ -1210,7 +1253,10 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 data.locks,
                 from,
                 to,
-                rampLengths(to - from, bpmFrom, bpmTo),
+                // quarter-note tempos; a count of a grouping is as long as its eighths
+                rampLengths(to - from, bpmFrom, bpmTo).map(
+                    (l, i) => (l * (units[from + i] ?? 2)) / 2,
+                ),
                 { fixed: data.holds },
             ),
         );
@@ -1253,75 +1299,40 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             return;
         }
         const end = Math.min(to, data.durations.length - 1);
-        // split at the pins inside, so each stretch is fitted between its own pins
-        const cuts = [
+        const plan = planFit({
+            env: onsets,
+            durations: data.durations,
+            locks: data.locks,
+            holds: data.holds,
             from,
-            ...[...data.locks]
-                .filter((l) => l > from && l < end)
-                .sort((a, b) => a - b),
-            end,
-        ];
-        let result: TempoEditResult = {
-            durations: [...data.durations],
-            locks: new Set(data.locks),
-        };
-        const unsure = new Set<number>();
-        for (let i = 0; i + 1 < cuts.length; i++) {
-            const a = cuts[i]!;
-            const b = cuts[i + 1]!;
-            if (b - a < 1) continue;
-            const s = startsOf(result.durations);
-            const endPinned =
-                result.locks.has(b) || lockAfter(result.locks, a) === b;
-            let fitted: number[];
-            if (endPinned) {
-                fitted = fitCountsToOnsets({
-                    env: onsets,
-                    guess: s.slice(a, b + 1),
-                    startFixed: true,
-                    endFixed: true,
-                });
-            } else {
-                const now = (s[b]! - s[a]!) / (b - a);
-                const first =
-                    firstCountLength(onsets, s[a]!, estimateBeatPeriod) ?? now;
-                // the octave nearest the counts as they are
-                const len = [first, first / 2, first * 2].reduce((x, y) =>
-                    Math.abs(Math.log(y / now)) < Math.abs(Math.log(x / now))
-                        ? y
-                        : x,
-                );
-                const tr = trackCounts({
-                    env: onsets,
-                    start: s[a]!,
-                    firstLength: len,
-                    counts: b - a,
-                });
-                fitted = tr.times;
-                tr.onHit.forEach((hit, k) => {
-                    if (!hit) unsure.add(a + k + 1);
-                });
-            }
-            result = retime(
-                result.durations,
-                result.locks,
-                a,
-                b,
-                fitted.slice(1).map((t, k) => t - fitted[k]!),
+            to: end,
+            measureStarts: data.measures
+                .filter((m) => m.id !== null)
+                .map((m) => m.start),
+        });
+        useTempoUi.getState().setUnsure(plan.unsure);
+        const parts: string[] = [];
+        if (plan.moveMusic !== 0)
+            parts.push(
+                `Moved the music ${Math.abs(plan.moveMusic).toFixed(2)} s ${plan.moveMusic > 0 ? "earlier" : "later"} so its first hit is on count 1`,
             );
-        }
-        useTempoUi.getState().setUnsure(unsure);
+        const last = plan.stoppedAt ?? end;
+        parts.push(`Lined up ${rangeLabel(from, last)} with the music`);
+        if (plan.stoppedAt !== null)
+            parts.push(
+                `It lost the music at ${measureLabel(plan.stoppedAt)}: a hold, a meter change or a cut there? Fix it, then Fit again from there`,
+            );
+        if (plan.unsure.size)
+            parts.push(
+                `${plan.unsure.size} count(s) found no hit (dashed red)`,
+            );
         commit(
-            unsure.size
-                ? `Fitted counts ${from}–${end}; ${unsure.size} found no hit (dashed red)`
-                : `Fitted counts ${from}–${end} to the music`,
-            {
-                ...result,
-                note: unsure.size
-                    ? `${unsure.size} count(s) found no hit in the music: check the dashed red lines`
-                    : undefined,
-            },
+            "Fit to the music",
+            { ...plan.result, note: parts.join(". ") },
             true,
+            plan.moveMusic !== 0
+                ? data.audioOffset - plan.moveMusic
+                : undefined,
         );
     };
 
@@ -1666,22 +1677,6 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
     };
 
     // ---- measures and marks --------------------------------------------------------------
-    const setTimeSignature = (start: number, counts: number) => {
-        const r = regroupMeasures(
-            data.measures.filter((m) => m.id !== null).map((m) => m.start),
-            data.storedCount,
-            start,
-            counts,
-        );
-        void run("Time signature", async () => {
-            await regroupMeasuresWrite(r);
-            await refetch();
-            if (r.leftover)
-                toast.info(
-                    `The last measure before the next change is short: ${r.leftover} count(s) (marked *)`,
-                );
-        });
-    };
     const setMeasureNumber = (measure: TempoMeasure, value: string) => {
         if (measure.id === null) return;
         const n = value.trim() === "" ? null : Number(value);
@@ -2353,7 +2348,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 const end = tempoStretchEnd(beat);
                 const stretch = { from: beat, to: end };
                 const span = rangeLabel(beat, end);
-                const current = bpmOf(data.durations[beat]!);
+                const current = qBpm(beat, data.durations);
                 items.push({
                     label: `Change the tempo from ${span}…`,
                     onSelect: () =>
@@ -2393,7 +2388,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                             e,
                             range.from,
                             range.to,
-                            `${Math.round(bpmOf(data.durations[range.from]!))}`,
+                            `${Math.round(qBpm(range.from, data.durations))}`,
                         ),
                     range,
                 },
@@ -2418,7 +2413,8 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 },
             );
         else {
-            const from = lockBefore(data.locks, beat + 1);
+            // from the count clicked: what's before it stays as it is
+            const from = Math.max(1, beat);
             const end = lockAfter(data.locks, from) ?? musicEndBeat();
             items.push({
                 label: `Fit ${rangeLabel(from, end)} to the music`,
@@ -2494,13 +2490,73 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         }
         setMenu({ x: e.clientX, y: e.clientY, items });
     };
+    /**
+     * Set a meter with its grouping from the measure at `start` to the next change, at the
+     * quarter-note tempo just before it (owner, 2026-10-21: "7/8 2+2+3")
+     */
+    const setMeter = (start: number, text: string) => {
+        const meter = parseMeter(text);
+        if (!meter) {
+            toast.error(
+                `"${text}" isn't a time signature: try 7/8, or 7/8 2+2+3 (the grouping in eighths)`,
+            );
+            return;
+        }
+        const plan = planMeter({
+            durations: data.durations,
+            locks: data.locks,
+            measureStarts: data.measures
+                .filter((m) => m.id !== null)
+                .map((m) => m.start),
+            beatCount: data.storedCount,
+            start,
+            meter,
+            // the tempo just before: the counts from `start` on may still be at a guessed tempo
+            quarterBpm: qBpm(Math.max(1, start - 1), data.durations),
+        });
+        const label = meterLabel(meter, true);
+        setPreview(plan.result);
+        void run("Time signature", async () => {
+            await writeMeter({
+                plan,
+                before: data.durations,
+                meter: {
+                    meter: `${meter.top}/${meter.bottom}`,
+                    grouping: meter.grouping.join("+"),
+                },
+            });
+            await refetch();
+            toast.success(
+                `${label} from ${measureLabel(plan.from)}, ${meter.grouping.length} counts a measure at ♩${Math.round(plan.quarterBpm * 10) / 10}` +
+                    (plan.leftover
+                        ? `. The last measure before the next change is short: ${plan.leftover} count(s) (marked *)`
+                        : ""),
+                { id: NOTE_TOAST },
+            );
+        });
+    };
     const signatureMenu = (x: number, y: number, start: number): Menu => ({
         x,
         y,
-        items: [2, 3, 4, 5, 6, 7, 8, 9, 12].map((n) => ({
-            label: `${n} counts a measure`,
-            onSelect: () => setTimeSignature(start, n),
-        })),
+        items: [
+            ...METER_CHOICES.map((choice) => ({
+                label: choice.includes(" ")
+                    ? `${choice.split(" ")[0]} counted ${choice.split(" ")[1]}`
+                    : choice,
+                onSelect: () => setMeter(start, choice),
+            })),
+            {
+                label: "Other… (like 11/8 3+3+3+2)",
+                onSelect: () =>
+                    setEditor({
+                        x,
+                        y,
+                        value: "",
+                        hint: 'Time signature, and how it is counted in eighths: "7/8 2+2+3", "5/8 3+2", "3/2" (counted in quarters)',
+                        onCommit: (value) => setMeter(start, value),
+                    }),
+            },
+        ],
     });
 
     // ---- labels --------------------------------------------------------------------------
@@ -2561,7 +2617,8 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         const left = xOf(m.start, ppb);
         const chip = changed && !partial;
         const chipWidth = chip
-            ? textWidth(`${m.counts}/4`, `10px ${fontFamily}`) + 10
+            ? textWidth(meterLabel(meterOfMeasure(m)), `10px ${fontFamily}`) +
+              10
             : 0;
         const measureWidth = ppb * m.counts;
         if (chip)
@@ -2582,7 +2639,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                         type="button"
                         className="bg-fg-1 border-stroke text-text hover:border-accent absolute rounded-full border px-4 text-[10px] leading-[14px] whitespace-nowrap"
                         style={{ left: box.x, top: box.y }}
-                        title={`Time signature ${m.counts}/4: click to change it from here to the next change`}
+                        title={`Time signature ${meterLabel(meterOfMeasure(m), true)}: click to change it from here to the next change`}
                         onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) =>
                             setMenu(
@@ -2590,7 +2647,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                             )
                         }
                     >
-                        {m.counts}/4
+                        {meterLabel(meterOfMeasure(m))}
                     </button>
                 ),
             });
@@ -2684,7 +2741,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         if (s.uneven)
             for (let b = s.from; b < s.to && b < durations.length; b++) {
                 if (data.holds.has(b)) continue;
-                const bpm = bpmOf(durations[b]!);
+                const bpm = qBpm(b);
                 lo = Math.min(lo, bpm);
                 hi = Math.max(hi, bpm);
             }
@@ -2910,6 +2967,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             ref={rootRef}
             data-testid="tempo-band"
             data-ppb={ppb}
+            data-offset={data.audioOffset}
             data-pins={[...data.locks].join(",")}
             // for scenario checks: the selection, unsure counts, red dots (beat:x:y), page starts
             data-range={ui.range ? `${ui.range.from}-${ui.range.to}` : ""}
@@ -2929,7 +2987,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 .flatMap((m) => (m.mark ? [`${m.start}:${m.mark}`] : []))
                 .join(",")}
             data-counts={durations
-                .slice(1, 80)
+                .slice(1, 400)
                 .map((d) => d.toFixed(3))
                 .join(",")}
             className="absolute left-0 select-none"
@@ -3003,10 +3061,8 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                         onFit={() => {
                             const r = ui.range;
                             if (r) return fitToMusic(r.from, r.to);
-                            const from = lockBefore(
-                                data.locks,
-                                Math.round(playheadBeat) + 1,
-                            );
+                            // from the playhead: what's before it stays as it is
+                            const from = Math.max(1, Math.floor(playheadBeat));
                             fitToMusic(
                                 from,
                                 lockAfter(data.locks, from) ?? musicEndBeat(),

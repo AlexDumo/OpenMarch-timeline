@@ -4,6 +4,7 @@
  * for a time signature, rehearsal marks. Locks and measure-number overrides live in the
  * workspace settings, which have no undo (a prototype shortcut).
  */
+import { setAudioOffsetInTransaction } from "./audioOffset";
 import { and, asc, eq, gt, gte, inArray, lt } from "drizzle-orm";
 import { db, schema } from "@/global/database/db";
 import { transactionWithHistory } from "@/db-functions/history";
@@ -47,6 +48,7 @@ export async function writeDurations({
     after,
     pins,
     holds,
+    audioOffset,
 }: {
     before: readonly number[];
     after: readonly number[];
@@ -54,6 +56,8 @@ export async function writeDurations({
     pins?: ReadonlySet<number>;
     /** The held spec beats after the edit */
     holds?: ReadonlySet<number>;
+    /** The music offset after the edit (a fit that moved the music), in the same undo step */
+    audioOffset?: number;
 }): Promise<void> {
     const changed: number[] = [];
     for (let b = 1; b < after.length; b++)
@@ -63,7 +67,8 @@ export async function writeDurations({
         )
             changed.push(b);
     const marks = [...(pins ?? []), ...(holds ?? [])];
-    if (changed.length === 0 && !pins && !holds) return;
+    if (changed.length === 0 && !pins && !holds && audioOffset === undefined)
+        return;
     const last = Math.max(changed[changed.length - 1] ?? 0, ...marks);
     await transactionWithHistory(db, "tempoEdit", async (tx) => {
         await ensureCountsInTransaction({ tx, through: last + 1 });
@@ -76,6 +81,8 @@ export async function writeDurations({
                     .map((b) => ({ id: ids[b]!, duration: after[b]! })),
             });
         await writeMarksInTransaction(tx, ids, { pins, holds });
+        if (audioOffset !== undefined)
+            await setAudioOffsetInTransaction(tx, audioOffset);
     });
 }
 
@@ -451,75 +458,72 @@ export async function regroupMeasuresInTransaction(
         meter?: { meter: string | null; grouping: string | null };
     },
 ): Promise<void> {
-    {
-        await ensureCountsInTransaction({ tx, through: to });
-        const ids = await beatIdsInTransaction(tx);
-        const ordinalOf = new Map(ids.map((id, i) => [id, i]));
-        const all = await tx.select().from(schema.measures);
-        const inside = all.filter((m) => {
-            const o = ordinalOf.get(m.start_beat);
-            return o !== undefined && o >= from && o < to;
+    await ensureCountsInTransaction({ tx, through: to });
+    const ids = await beatIdsInTransaction(tx);
+    const ordinalOf = new Map(ids.map((id, i) => [id, i]));
+    const all = await tx.select().from(schema.measures);
+    const inside = all.filter((m) => {
+        const o = ordinalOf.get(m.start_beat);
+        return o !== undefined && o >= from && o < to;
+    });
+    const wanted = new Set(starts.map((s) => ids[s]!));
+    const marks = new Map<
+        number,
+        { mark: string | null; notes: string | null }
+    >();
+    for (const m of inside)
+        if (!wanted.has(m.start_beat) && (m.rehearsal_mark || m.notes)) {
+            // the new measure holding this count
+            const o = ordinalOf.get(m.start_beat)!;
+            const holder = [...starts].reverse().find((s) => s <= o) ?? from;
+            marks.set(ids[holder]!, {
+                mark: m.rehearsal_mark,
+                notes: m.notes,
+            });
+        }
+    const drop = inside.filter((m) => !wanted.has(m.start_beat));
+    if (drop.length)
+        await deleteMeasuresInTransaction({
+            tx,
+            itemIds: new Set(drop.map((m) => m.id)),
         });
-        const wanted = new Set(starts.map((s) => ids[s]!));
-        const marks = new Map<
-            number,
-            { mark: string | null; notes: string | null }
-        >();
-        for (const m of inside)
-            if (!wanted.has(m.start_beat) && (m.rehearsal_mark || m.notes)) {
-                // the new measure holding this count
-                const o = ordinalOf.get(m.start_beat)!;
-                const holder =
-                    [...starts].reverse().find((s) => s <= o) ?? from;
-                marks.set(ids[holder]!, {
-                    mark: m.rehearsal_mark,
-                    notes: m.notes,
-                });
-            }
-        const drop = inside.filter((m) => !wanted.has(m.start_beat));
-        if (drop.length)
-            await deleteMeasuresInTransaction({
-                tx,
-                itemIds: new Set(drop.map((m) => m.id)),
-            });
-        const have = new Set(inside.map((m) => m.start_beat));
-        const add = starts.map((s) => ids[s]!).filter((id) => !have.has(id));
-        if (add.length)
-            await createMeasuresInTransaction({
-                tx,
-                newItems: add.map((id) => ({
-                    start_beat: id,
-                    rehearsal_mark: marks.get(id)?.mark ?? null,
-                    notes: marks.get(id)?.notes ?? null,
-                })),
-            });
-        const keptWithMark = inside.filter(
-            (m) => wanted.has(m.start_beat) && marks.has(m.start_beat),
+    const have = new Set(inside.map((m) => m.start_beat));
+    const add = starts.map((s) => ids[s]!).filter((id) => !have.has(id));
+    if (add.length)
+        await createMeasuresInTransaction({
+            tx,
+            newItems: add.map((id) => ({
+                start_beat: id,
+                rehearsal_mark: marks.get(id)?.mark ?? null,
+                notes: marks.get(id)?.notes ?? null,
+            })),
+        });
+    const keptWithMark = inside.filter(
+        (m) => wanted.has(m.start_beat) && marks.has(m.start_beat),
+    );
+    if (keptWithMark.length)
+        await updateMeasuresInTransaction({
+            tx,
+            modifiedItems: keptWithMark.map((m) => ({
+                id: m.id,
+                rehearsal_mark:
+                    m.rehearsal_mark ?? marks.get(m.start_beat)!.mark,
+            })),
+        });
+    if (meter) {
+        const ids2 = new Set(starts.map((s) => ids[s]!));
+        const now = (await tx.select().from(schema.measures)).filter((m) =>
+            ids2.has(m.start_beat),
         );
-        if (keptWithMark.length)
+        if (now.length)
             await updateMeasuresInTransaction({
                 tx,
-                modifiedItems: keptWithMark.map((m) => ({
+                modifiedItems: now.map((m) => ({
                     id: m.id,
-                    rehearsal_mark:
-                        m.rehearsal_mark ?? marks.get(m.start_beat)!.mark,
+                    meter: meter.meter,
+                    grouping: meter.grouping,
                 })),
             });
-        if (meter) {
-            const ids2 = new Set(starts.map((s) => ids[s]!));
-            const now = (await tx.select().from(schema.measures)).filter((m) =>
-                ids2.has(m.start_beat),
-            );
-            if (now.length)
-                await updateMeasuresInTransaction({
-                    tx,
-                    modifiedItems: now.map((m) => ({
-                        id: m.id,
-                        meter: meter.meter,
-                        grouping: meter.grouping,
-                    })),
-                });
-        }
     }
 }
 

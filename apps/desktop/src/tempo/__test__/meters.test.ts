@@ -8,7 +8,7 @@ import {
     quarterBpmOf,
 } from "../meters";
 
-import { planMeter } from "../meterWrites";
+import { planMeter } from "../meterPlan";
 import { parseMeter as parse } from "../meters";
 import { startsOf } from "../tempoMath";
 

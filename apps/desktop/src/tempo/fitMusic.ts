@@ -86,6 +86,7 @@ export function planFit({
     from,
     to,
     measureStarts = [],
+    holds,
 }: {
     env: OnsetEnvelope;
     durations: readonly number[];
@@ -94,6 +95,8 @@ export function planFit({
     to: number;
     /** First spec beat of each measure: an uneven grouping (2+2+3) is kept as it is */
     measureStarts?: readonly number[];
+    /** Holds (fermatas) keep their length */
+    holds?: ReadonlySet<number>;
 }): FitPlan {
     let moveMusic = 0;
     // From the very start, the first hit goes on count 1
@@ -103,11 +106,19 @@ export function planFit({
     }
     const music = shifted(env, moveMusic);
     const end = Math.min(to, durations.length - 1);
+    // Fitted in stretches: between pins, and wherever the counting changes between even
+    // measures and uneven ones (a grouping like 2+2+3), as each is fitted its own way
+    const evenness = measureEvenness(durations, measureStarts);
+    const switches = evenness
+        .filter((m, i) => i > 0 && m.uneven !== evenness[i - 1]!.uneven)
+        .map((m) => m.start);
     const cuts = [
-        from,
-        ...[...locks].filter((l) => l > from && l < end).sort((a, b) => a - b),
-        end,
-    ];
+        ...new Set([
+            from,
+            ...[...locks, ...switches].filter((l) => l > from && l < end),
+            end,
+        ]),
+    ].sort((a, b) => a - b);
     let result: TempoEditResult = {
         durations: [...durations],
         locks: new Set(locks),
@@ -167,16 +178,9 @@ export function planFit({
                           })
                         : tr.times;
             } else {
-                // Uneven counts (a grouping like 2+2+3): keep their shape, at the music's tempo
-                const period =
-                    estimateBeatPeriod(music, s[a]!, s[a]! + 8) ?? null;
-                const mean = (s[b]! - s[a]!) / (b - a);
-                const scale = period ? nearestOctave(period, mean) / mean : 1;
-                const guess = [s[a]!];
-                for (let k = a; k < b; k++)
-                    guess.push(
-                        guess[guess.length - 1]! + result.durations[k]! * scale,
-                    );
+                // Uneven counts (a grouping like 2+2+3, set at the tempo in effect): keep their
+                // shape and move each count onto its nearest hit
+                const guess = s.slice(a, b + 1);
                 fitted = fitCountsToOnsets({
                     env: music,
                     guess,
@@ -198,6 +202,7 @@ export function planFit({
             a,
             until,
             fitted.slice(1).map((t, k) => t - fitted[k]!),
+            { fixed: holds },
         );
         if (stoppedAt !== null) break;
     }
@@ -214,6 +219,24 @@ function hasPeakNear(peaks: readonly { t: number }[], t: number, tol: number) {
         else hi = mid;
     }
     return lo < peaks.length && peaks[lo]!.t <= t + tol;
+}
+
+/** Each measure's first spec beat, and whether its counts are uneven (a grouping) */
+function measureEvenness(
+    durations: readonly number[],
+    measureStarts: readonly number[],
+) {
+    const sorted = [...measureStarts].sort((x, y) => x - y);
+    return sorted.map((a, i) => {
+        const b = sorted[i + 1] ?? a;
+        let lo = Infinity;
+        let hi = 0;
+        for (let k = a; k < b; k++) {
+            lo = Math.min(lo, durations[k]!);
+            hi = Math.max(hi, durations[k]!);
+        }
+        return { start: a, uneven: b - a >= 2 && hi / lo >= 1.4 };
+    });
 }
 
 /**
@@ -240,16 +263,4 @@ function hasUnevenMeasures(
         if (hi / lo >= 1.4) return true;
     }
     return false;
-}
-
-/** `period` times a power of two, nearest `target` */
-function nearestOctave(period: number, target: number) {
-    let best = period;
-    for (const f of [0.25, 0.5, 1, 2, 4])
-        if (
-            Math.abs(Math.log((period * f) / target)) <
-            Math.abs(Math.log(best / target))
-        )
-            best = period * f;
-    return best;
 }
