@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
+import { StarIcon } from "@phosphor-icons/react";
 import { create } from "zustand";
 import { performersOnly } from "@/global/classes/Marcher";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
@@ -156,6 +157,7 @@ export default function FavoritesRing() {
                             slot={slot}
                             angle={slotAngle(i, slots.length)}
                             hot={ring.hot === i}
+                            starred={starred.some((s) => s.id === slot.id)}
                             disabled={!gate.ok}
                             title={gate.ok ? undefined : gate.reason}
                             onPick={() => pick(i)}
@@ -190,6 +192,7 @@ function RingSlot({
     slot,
     angle,
     hot,
+    starred,
     disabled,
     title,
     onPick,
@@ -197,6 +200,8 @@ function RingSlot({
     slot: RingShape;
     angle: number;
     hot: boolean;
+    /** Starred in the library, rather than a basic kind filling an empty slot */
+    starred: boolean;
     disabled: boolean;
     title: string | undefined;
     onPick: () => void;
@@ -211,6 +216,7 @@ function RingSlot({
             title={title}
             data-testid={`shape-ring-slot-${slot.id}`}
             data-hot={hot}
+            data-starred={starred}
             className={clsx(
                 "border-stroke shadow-modal text-body pointer-events-auto absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-6 rounded-full border px-12 py-6 whitespace-nowrap",
                 hot && !disabled
@@ -230,6 +236,9 @@ function RingSlot({
         >
             <Icon size={20} weight={hot ? "bold" : "regular"} />
             {slot.label}
+            {starred && (
+                <StarIcon size={12} weight="fill" aria-label="Starred" />
+            )}
         </button>
     );
 }

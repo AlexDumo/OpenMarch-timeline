@@ -8,6 +8,7 @@ import MobileExportModal from "../mobile/MobileExportModal";
 import AssetsModal from "@/components/assets/AssetsModal";
 import { isWebBuild } from "@/utilities/webBuild";
 import PropsModal from "@/components/items/PropsModal";
+import ShapeLibraryModal from "@/shapes/library/ShapeLibraryPanel";
 
 export default function Sidebar() {
     return (
@@ -22,6 +23,7 @@ export default function Sidebar() {
                 <FieldModal />
                 <MetronomeModal />
                 <AppearanceModal />
+                <ShapeLibraryModal />
                 {/* The Library lives in main; the web build has no Library IPC. */}
                 {!isWebBuild && <AssetsModal />}
             </div>
