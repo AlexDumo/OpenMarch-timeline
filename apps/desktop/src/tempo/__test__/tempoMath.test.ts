@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     assignTaps,
     moveBeatTo,
+    movePinsWithMusic,
     pinBeats,
     rampLengths,
     regroupMeasures,
@@ -118,5 +119,21 @@ describe("regroupMeasures", () => {
             starts: [5, 8, 11, 14],
             leftover: 0,
         });
+    });
+});
+
+describe("movePinsWithMusic", () => {
+    it("moves every pinned count earlier with the music, the counts before the first pin taking it up", () => {
+        // pins at counts 5 and 9; the music moves 0.4 s earlier
+        const d = movePinsWithMusic(even(12), new Set([5, 9]), 0.4)!;
+        const s = startsOf(d);
+        expect(s[1]).toBeCloseTo(0);
+        expect(s[5]).toBeCloseTo(2 - 0.4);
+        expect(s[9]).toBeCloseTo(4 - 0.4);
+        expect(d[6]).toBeCloseTo(0.5);
+    });
+
+    it("does nothing without pins", () => {
+        expect(movePinsWithMusic(even(8), new Set(), 0.4)).toBeNull();
     });
 });

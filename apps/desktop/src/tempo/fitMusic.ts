@@ -23,6 +23,7 @@ import { firstCountLength, onsetPeaks, trackCounts } from "./onsetsTrack";
 import {
     lockAfter,
     moveBeatTo,
+    movePinsWithMusic,
     retime,
     startsOf,
     type TempoEditResult,
@@ -271,6 +272,11 @@ export function planFit({
         durations: [...durations],
         locks: new Set(locks),
     };
+    // The music moving earlier takes the pinned counts with it (they're tied to the music)
+    if (moveMusic !== 0) {
+        const moved = movePinsWithMusic(result.durations, locks, moveMusic);
+        if (moved) result = { ...result, durations: moved };
+    }
     // From a count near its hit (but not on it), it first goes onto the hit, the counts back to
     // the pin before (or the start) taking the difference evenly, so a drift that built up over
     // them isn't put into one count

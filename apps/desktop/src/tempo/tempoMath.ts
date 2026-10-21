@@ -67,6 +67,28 @@ const scaleRange = (
 };
 
 /**
+ * The music moved `seconds` earlier (the lead-in): pinned counts are tied to the music, so each
+ * moves with it. Count 1 stays at the start, so the counts up to the first pin take up the
+ * difference; the spacing from the first pin on doesn't change. Null when there are no pins, or
+ * the counts before the first pin would get too short.
+ */
+export function movePinsWithMusic(
+    durations: readonly number[],
+    locks: ReadonlySet<number>,
+    seconds: number,
+): number[] | null {
+    const first = lockAfter(locks, 1);
+    if (first === null || seconds === 0) return null;
+    const starts = startsOf(durations);
+    const now = starts[first]! - starts[1]!;
+    const wanted = now - seconds;
+    if (wanted < (first - 1) * MIN_COUNT_SECONDS || now <= 0) return null;
+    const next = [...durations];
+    scaleRange(next, 1, first, wanted / now);
+    return next;
+}
+
+/**
  * Give beats `from`..`to - 1` the lengths `lengths`, then keep the next lock in place by
  * stretching the counts after them up to it. Locks inside the range are dropped (the edit decides
  * those counts now). When the counts after can't absorb it (the next lock is right at `to`, or
