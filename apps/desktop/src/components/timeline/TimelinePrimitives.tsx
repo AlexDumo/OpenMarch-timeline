@@ -413,6 +413,7 @@ export const TimelineTransport = memo(function TimelineTransport({
  * it, edge to edge, so the controls never take the timeline's width.
  */
 export const TimelineShell = ({
+    header,
     transport,
     children,
     viewportRef,
@@ -420,6 +421,8 @@ export const TimelineShell = ({
     pinnedHeight = 0,
     overlay,
 }: {
+    /** A row over the transport (a band's header: tempo mode's) */
+    header?: ReactNode;
     transport?: ReactNode;
     children: ReactNode;
     viewportRef: RefObject<HTMLDivElement | null>;
@@ -435,6 +438,7 @@ export const TimelineShell = ({
             className,
         )}
     >
+        {header}
         {transport}
         {/* Its own stacking context: nothing on the timeline (+, the playhead) paints over a menu */}
         <section className="relative isolate flex min-h-0 min-w-0 flex-1 flex-col px-6 pt-4">

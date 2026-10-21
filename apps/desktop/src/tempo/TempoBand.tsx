@@ -18,6 +18,7 @@
  * - **T** taps along while playing; stopping shows the taps as drafts to apply or discard.
  */
 import {
+    Fragment,
     useCallback,
     useEffect,
     useLayoutEffect,
@@ -28,6 +29,24 @@ import {
     type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import * as Popover from "@radix-ui/react-popover";
+import clsx from "clsx";
+import {
+    CheckIcon,
+    HandTapIcon,
+    MagicWandIcon,
+    MagnetIcon,
+    MetronomeIcon,
+    PushPinSlashIcon,
+    QuestionIcon,
+    SpeakerHighIcon,
+    TimerIcon,
+} from "@phosphor-icons/react";
+import {
+    Keycaps,
+    ShortcutTooltip,
+    TransportTooltipProvider,
+} from "@/components/timeline/ShortcutTooltip";
 import { create } from "zustand";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
@@ -88,20 +107,18 @@ import { useMusicOnsets } from "./useMusicOnsets";
 import { estimateBeatPeriod, fitCountsToOnsets, snapToOnset } from "./onsets";
 import { firstCountLength, trackCounts } from "./onsetsTrack";
 import { readTapCheck, TapCheckPanel, type TapCheckResult } from "./TapCheck";
+import {
+    createLabelPlacer,
+    textWidth,
+    useOnScreen,
+    type LabelBox,
+} from "./bandLayout";
+import { useTempoModeStore } from "./tempoModeStore";
 
 // ---------------------------------------------------------------------------------------------
 // State
 
-/** Whether the timeline is in tempo mode */
-export const useTempoModeStore = create<{
-    on: boolean;
-    toggle: () => void;
-    setOn: (on: boolean) => void;
-}>((set) => ({
-    on: false,
-    toggle: () => set((s) => ({ on: !s.on })),
-    setOn: (on) => set({ on }),
-}));
+export { useTempoModeStore };
 
 /** Adding or removing counts: re-divide the same time, or shift everything after */
 type CountChoice = "keep" | "shift";
@@ -162,16 +179,63 @@ const useTempoUi = create<TempoUiState>((set) => ({
 // ---------------------------------------------------------------------------------------------
 // Layout
 
-const TOOLBAR = { top: 0, height: 30 };
-const MARKS = { top: 30, height: 20 };
-const MEASURES = { top: 50, height: 22 };
-const TEMPO = { top: 72, height: 76 };
-const MUSIC = { top: 148, height: 124 };
+// The mode's header row (its tools) is over the timeline's transport, not in the band
+const MARKS = { top: 0, height: 20 };
+const MEASURES = { top: 20, height: 22 };
+const TEMPO = { top: 42, height: 76 };
+const MUSIC = { top: 118, height: 124 };
 export const TEMPO_BAND_HEIGHT = MUSIC.top + MUSIC.height + 6;
+/** The lane names' column at the view's left edge: as wide as the home page's column before beat 0 */
+const LANE_GUTTER = 40;
+/** The lanes' names in that column, with what each lane does */
+const LANES = [
+    {
+        ...MARKS,
+        name: "Marks",
+        title: "Rehearsal marks: double-click to name one, or press M while playing to drop the next",
+    },
+    {
+        ...MEASURES,
+        name: "Meas.",
+        title: "Measures: drag along to select counts, double-click to renumber, click a time signature to change it",
+    },
+    {
+        ...TEMPO,
+        name: "Tempo",
+        title: "Tempo: drag the line up or down, double-click it to type a tempo, right-click for holds and more",
+    },
+    {
+        ...MUSIC,
+        name: "Music",
+        title: "The music: drag a hit onto its count, or a count's handle (the triangle at the top) onto the music",
+    },
+];
+
+/** Where tempo mode's header goes: a row over the timeline's transport (`TimelineBand.header`) */
+const useHeaderSlot = create<{
+    element: HTMLElement | null;
+    setElement: (element: HTMLElement | null) => void;
+}>((set) => ({
+    element: null,
+    setElement: (element) => set({ element }),
+}));
+
+function TempoHeaderSlot() {
+    const setElement = useHeaderSlot((s) => s.setElement);
+    return (
+        <div
+            ref={setElement}
+            data-testid="tempo-mode-header"
+            className="border-stroke relative flex h-32 shrink-0 border-b"
+        />
+    );
+}
 
 /** The band the timeline draws in tempo mode */
 export const TEMPO_BAND: TimelineBand = {
     height: TEMPO_BAND_HEIGHT,
+    focus: true,
+    header: <TempoHeaderSlot />,
     render: (geometry) => <TempoLanes geometry={geometry} />,
 };
 
@@ -434,6 +498,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
     const rootRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const win = useScrollWindow(rootRef);
+    const headerSlot = useHeaderSlot((s) => s.element);
     const data = useTempoData(beatCount);
     const { fetchTimingObjects } = useTimingObjects();
     const refetch = useCallback(async () => {
@@ -704,7 +769,8 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 MUSIC.top + MUSIC.height - TEMPO.top,
             );
             ctx.globalAlpha = 1;
-            const cx = X(b) + Math.max(ppb, 30) / 2;
+            // centred on the count, as its "hold" label is
+            const cx = X(b) + ppb / 2;
             const cy = TEMPO.top + 22;
             ctx.lineWidth = 1.5;
             ctx.beginPath();
@@ -1394,6 +1460,34 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
     });
+    // Esc leaves tempo mode once nothing else takes it: a drag or taps waiting, a popover of the
+    // band's, a dialog or menu, or a text field
+    const popoverOpen = !!(editor || menu || ask || tapCheck);
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape" || e.defaultPrevented || e.repeat) return;
+            if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+            if (popoverOpen || gestureRef.current) return;
+            const state = useTempoUi.getState();
+            if (state.draft || state.taps) return;
+            const target = e.target as HTMLElement | null;
+            if (
+                target?.closest(
+                    "input, textarea, select, [contenteditable=true]",
+                ) ||
+                document.querySelector(
+                    '[role="dialog"], [role="alertdialog"], [role="menu"]',
+                )
+            )
+                return;
+            e.preventDefault();
+            useTempoModeStore.getState().setOn(false);
+        };
+        // Before the app's shortcuts, which give Esc to the canvas; the checks above leave a
+        // drag, taps and popovers their own Esc
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [popoverOpen]);
     // Stopping turns the pass into drafts (taps that don't fit the counts are dropped)
     const wasPlaying = useRef(isPlaying);
     useEffect(() => {
@@ -1798,7 +1892,50 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
     });
 
     // ---- labels --------------------------------------------------------------------------
-    const labels: ReactNode[] = [];
+    // Placed in order of importance; one that would overlap another (or hide under the lane
+    // names) is shortened or left out, so zooming out thins the text instead of piling it up
+    const fontFamily = rootRef.current
+        ? getComputedStyle(rootRef.current).fontFamily
+        : "sans-serif";
+    const viewLeft = win.left - geometry.leadingInset;
+    const viewRight = viewLeft + win.width;
+    const gutterRight = viewLeft + LANE_GUTTER;
+    const labelGap = 4;
+    const placer = createLabelPlacer(
+        [
+            // the lane names' column: a label may start right at its edge
+            {
+                x: viewLeft,
+                y: 0,
+                w: LANE_GUTTER - labelGap,
+                h: TEMPO_BAND_HEIGHT,
+            },
+        ],
+        labelGap,
+    );
+    const candidates: {
+        priority: number;
+        boxes: LabelBox[];
+        render: (index: number, box: LabelBox) => ReactNode;
+    }[] = [];
+    // Zoomed out, every 2nd, 4th, 8th... measure is numbered, so the numbers stay evenly spaced
+    const visibleMeasures = data.measures.filter(
+        (m) => m.start + m.counts >= firstBeat && m.start <= lastBeat,
+    );
+    const typicalCounts =
+        [...visibleMeasures].sort((a, b) => a.counts - b.counts)[
+            Math.floor(visibleMeasures.length / 2)
+        ]?.counts ?? 4;
+    const widestNumber = textWidth(
+        String(visibleMeasures[visibleMeasures.length - 1]?.number ?? 99),
+        `10px ${fontFamily}`,
+    );
+    let numberStride = 1;
+    while (
+        numberStride < 64 &&
+        ppb * typicalCounts * numberStride < widestNumber + 3 + labelGap + 2
+    )
+        numberStride *= 2;
     data.measures.forEach((m, i) => {
         const prev = data.measures[i - 1];
         const next = data.measures[i + 1];
@@ -1810,111 +1947,196 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             (!next || next.counts !== m.counts);
         if (!visible) return;
         const left = xOf(m.start, ppb);
-        if (changed && !partial)
-            labels.push(
-                <button
-                    key={`sig-${m.start}`}
-                    type="button"
-                    className="bg-fg-1 border-stroke text-text hover:border-accent absolute rounded-full border px-4 text-[10px] leading-[14px]"
-                    style={{ left: left + 2, top: MEASURES.top + 3 }}
-                    title="Time signature: click to change it from here to the next change"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) =>
-                        setMenu(signatureMenu(e.clientX, e.clientY, m.start))
-                    }
-                >
-                    {m.counts}/4
-                </button>,
-            );
-        // with a time signature chip there, the number goes after it only when the measure has room
-        const chipRoom = changed && !partial ? 34 : 0;
-        if (
-            (ppb * m.counts > 18 + chipRoom ||
-                ((m.number % 4 === 1 || m.overridden) && chipRoom === 0)) &&
-            ppb * m.counts > chipRoom + 10
-        )
-            labels.push(
+        const chip = changed && !partial;
+        const chipWidth = chip
+            ? textWidth(`${m.counts}/4`, `10px ${fontFamily}`) + 10
+            : 0;
+        const measureWidth = ppb * m.counts;
+        if (chip)
+            candidates.push({
+                // a chip wider than its measure (a pickup) gives way to the next measure's
+                priority: measureWidth >= chipWidth + 4 ? 0 : 1,
+                boxes: [
+                    {
+                        x: left + 2,
+                        y: MEASURES.top + 3,
+                        w: chipWidth,
+                        h: 16,
+                    },
+                ],
+                render: (_, box) => (
+                    <button
+                        key={`sig-${m.start}`}
+                        type="button"
+                        className="bg-fg-1 border-stroke text-text hover:border-accent absolute rounded-full border px-4 text-[10px] leading-[14px] whitespace-nowrap"
+                        style={{ left: box.x, top: box.y }}
+                        title={`Time signature ${m.counts}/4: click to change it from here to the next change`}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) =>
+                            setMenu(
+                                signatureMenu(e.clientX, e.clientY, m.start),
+                            )
+                        }
+                    >
+                        {m.counts}/4
+                    </button>
+                ),
+            });
+        const numberText = `${m.number}${partial ? "*" : ""}`;
+        const marked = partial || m.overridden;
+        const onStride = (m.number - 1) % numberStride === 0;
+        const numberWidth = textWidth(
+            numberText,
+            `${m.overridden ? "bold " : ""}10px ${fontFamily}`,
+        );
+        candidates.push({
+            priority: marked ? 1 : 2,
+            // at the measure's start, or after its time signature chip when that was placed;
+            // never starting past the measure's end
+            boxes: [
+                left + 3,
+                ...(chip ? [left + 2 + chipWidth + labelGap] : []),
+            ]
+                .filter(
+                    (x) => (marked || onStride) && x < left + measureWidth - 2,
+                )
+                .map((x) => ({
+                    x,
+                    y: MEASURES.top + 4,
+                    w: numberWidth,
+                    h: 14,
+                })),
+            render: (_, box) => (
                 <span
                     key={`n-${m.start}`}
                     title={
                         partial
-                            ? `A short measure: ${m.counts} count(s)`
+                            ? `Measure ${m.number}: a short measure, ${m.counts} count(s)`
                             : m.overridden
-                              ? "Numbered by hand"
+                              ? `Measure ${m.number}: numbered by hand`
                               : undefined
                     }
-                    className={`absolute text-[10px] leading-[14px] ${m.overridden ? "text-accent font-bold" : "text-text-subtitle"} ${partial ? "text-red" : ""}`}
+                    className={`absolute text-[10px] leading-[14px] whitespace-nowrap ${m.overridden ? "text-accent font-bold" : "text-text-subtitle"} ${partial ? "text-red" : ""}`}
                     style={{
-                        left: left + chipRoom + 3,
-                        top: MEASURES.top + 4,
+                        left: box.x,
+                        top: box.y,
                         pointerEvents:
                             partial || m.overridden ? "auto" : "none",
                     }}
                 >
-                    {m.number}
-                    {partial ? "*" : ""}
-                </span>,
-            );
-        if (m.mark)
-            labels.push(
-                <span
-                    key={`mk-${m.start}`}
-                    className="bg-accent text-text-invert pointer-events-none absolute rounded-[3px] px-4 text-[11px] leading-[16px] font-bold"
-                    style={{ left: left + 1, top: MARKS.top + 2 }}
-                >
-                    {m.mark}
-                </span>,
-            );
+                    {numberText}
+                </span>
+            ),
+        });
+        if (m.mark) {
+            const mark = m.mark;
+            candidates.push({
+                priority: 0,
+                boxes: [
+                    {
+                        x: left + 1,
+                        y: MARKS.top + 2,
+                        w: textWidth(mark, `bold 11px ${fontFamily}`) + 8,
+                        h: 16,
+                    },
+                ],
+                render: (_, box) => (
+                    <span
+                        key={`mk-${m.start}`}
+                        className="bg-accent text-text-invert pointer-events-none absolute rounded-[3px] px-4 text-[11px] leading-[16px] font-bold whitespace-nowrap"
+                        style={{ left: box.x, top: box.y }}
+                    >
+                        {mark}
+                    </span>
+                ),
+            });
+        }
     });
     for (const s of segments) {
         if (s.to < firstBeat || s.from > lastBeat) continue;
-        if ((s.to - s.from) * ppb < 22) continue;
-        const text = s.uneven
-            ? `~${Math.round((s.bpmFrom + s.bpmTo) / 2)}`
+        // the label stays in view along its segment, right of the lane names
+        const left = Math.max(xOf(s.from, ppb), gutterRight) + 3;
+        const right = Math.min(xOf(s.to, ppb), viewRight) - 3;
+        const from = Math.round(s.bpmFrom);
+        const texts = s.uneven
+            ? [`♩~${Math.round((s.bpmFrom + s.bpmTo) / 2)}`]
             : s.ramp
-              ? `${Math.round(s.bpmFrom)}→${Math.round(s.bpmTo)}`
-              : `${Math.round(s.bpmFrom * 10) / 10}`;
+              ? [`♩${from}→${Math.round(s.bpmTo)}`, `♩${from}`]
+              : [`♩${Math.round(s.bpmFrom * 10) / 10}`, `♩${from}`];
         const y = yOfBpm(s.bpmFrom);
-        labels.push(
-            <span
-                key={`t-${s.from}`}
-                className="text-accent pointer-events-none absolute text-[10px] leading-[12px] font-medium"
-                style={{
-                    left: Math.max(xOf(s.from, ppb), win.left + 60) + 3,
-                    top: y < TEMPO.top + 16 ? y + 3 : y - 14,
-                }}
-            >
-                ♩{text}
-            </span>,
-        );
+        const top = y < TEMPO.top + 16 ? y + 3 : y - 14;
+        const boxes = texts
+            .map((text) => ({
+                x: left,
+                y: top,
+                w: textWidth(text, `500 10px ${fontFamily}`),
+                h: 12,
+            }))
+            // only in its own segment, where the line is at its height
+            .filter((box) => box.x + box.w <= right);
+        candidates.push({
+            priority: 1,
+            boxes,
+            render: (index, box) => (
+                <span
+                    key={`t-${s.from}`}
+                    className="text-accent pointer-events-none absolute text-[10px] leading-[12px] font-medium whitespace-nowrap"
+                    style={{ left: box.x, top: box.y }}
+                >
+                    {texts[index]}
+                </span>
+            ),
+        });
     }
     for (const b of data.holds) {
         if (b < firstBeat || b > lastBeat) continue;
-        labels.push(
-            <span
-                key={`h-${b}`}
-                className="text-accent pointer-events-none absolute text-center text-[11px] leading-[12px]"
-                style={{
-                    left: xOf(b, ppb),
-                    width: Math.max(ppb, 30),
-                    top: TEMPO.top + 26,
-                }}
-                title={`Hold: ${durations[b]!.toFixed(2)} s`}
-            >
-                hold {durations[b]!.toFixed(1)}s
-            </span>,
-        );
+        const seconds = durations[b]!.toFixed(1);
+        const texts = [`hold ${seconds}s`, `${seconds}s`];
+        const center = xOf(b, ppb) + ppb / 2;
+        candidates.push({
+            priority: 0,
+            boxes: texts.map((text) => {
+                const w = textWidth(text, `11px ${fontFamily}`);
+                return { x: center - w / 2, y: TEMPO.top + 26, w, h: 12 };
+            }),
+            render: (index, box) => (
+                <span
+                    key={`h-${b}`}
+                    className="text-accent pointer-events-none absolute text-[11px] leading-[12px] whitespace-nowrap"
+                    style={{ left: box.x, top: box.y }}
+                >
+                    {texts[index]}
+                </span>
+            ),
+        });
     }
-    if (blocked)
+    const labels: ReactNode[] = [];
+    // stable: within a priority, left to right
+    candidates
+        .map((c, order) => ({ c, order }))
+        .sort((a, b) => a.c.priority - b.c.priority || a.order - b.order)
+        .forEach(({ c }) => {
+            const index = placer.place(c.boxes);
+            if (index >= 0) labels.push(c.render(index, c.boxes[index]!));
+        });
+    if (blocked) {
+        const w = textWidth(blocked.text, `11px ${fontFamily}`) + 10;
         labels.push(
             <span
                 key="blocked"
                 className="bg-red text-text-invert pointer-events-none absolute z-[5] rounded-[3px] px-4 text-[11px] whitespace-nowrap"
-                style={{ left: blocked.x + 6, top: MUSIC.top + 14 }}
+                style={{
+                    left: Math.max(
+                        gutterRight + 2,
+                        Math.min(blocked.x + 6, viewRight - w - 6),
+                    ),
+                    top: MUSIC.top + 14,
+                }}
             >
                 {blocked.text}
             </span>,
         );
+    }
 
     const status =
         tapCue ??
@@ -1962,47 +2184,73 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 style={{ left: win.left }}
             />
             {labels}
+            {/* The lane names, fixed to the view's left edge while it scrolls */}
             <div
-                className="pointer-events-none absolute top-0"
-                style={{ left: win.left, width: Math.min(win.width, width) }}
+                className="border-stroke bg-bg-1 bg-fg-1 absolute top-0 border-r"
+                style={{
+                    left: viewLeft,
+                    width: LANE_GUTTER,
+                    height: TEMPO_BAND_HEIGHT,
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }}
             >
-                <TempoToolbar
-                    status={status}
-                    busy={busy}
-                    tapping={ui.taps !== null}
-                    draftCount={ui.draft?.length ?? 0}
-                    range={ui.range}
-                    lockCount={data.locks.size}
-                    onFit={() => {
-                        const r = ui.range;
-                        if (r) return fitToMusic(r.from, r.to);
-                        const from = lockBefore(
-                            data.locks,
-                            Math.round(playheadBeat) + 1,
-                        );
-                        fitToMusic(
-                            from,
-                            lockAfter(data.locks, from) ?? musicEndBeat(),
-                        );
-                    }}
-                    onTap={() => {
-                        if (!playing) return;
-                        if (isPlaying)
-                            stopTimelinePlayback(playing.setIsPlaying);
-                        else startTapping();
-                    }}
-                    onCheckTapping={() => setTapCheck({ thenTap: false })}
-                    onApplyDraft={applyDraft}
-                    onDiscardDraft={() => useTempoUi.getState().setDraft(null)}
-                    onClearPins={() =>
-                        void run("Pins", () => saveMarks({ locks: new Set() }))
-                    }
-                />
-                <LaneName top={MARKS.top} text="Marks" />
-                <LaneName top={MEASURES.top} text="Measures" />
-                <LaneName top={TEMPO.top} text="Tempo" />
-                <LaneName top={MUSIC.top} text="Music" />
+                {LANES.map((lane) => (
+                    <div
+                        key={lane.name}
+                        className="border-stroke text-text-subtitle absolute inset-x-0 border-b px-4 pt-3 text-[9px] leading-[12px] tracking-wide uppercase"
+                        style={{ top: lane.top, height: lane.height }}
+                        title={lane.title}
+                    >
+                        {lane.name}
+                    </div>
+                ))}
             </div>
+            {/* The mode's header, over the transport (in a portal: it is outside the viewport) */}
+            {headerSlot &&
+                createPortal(
+                    <TempoToolbar
+                        status={status}
+                        busy={busy}
+                        tapping={ui.taps !== null}
+                        draftCount={ui.draft?.length ?? 0}
+                        range={ui.range}
+                        lockCount={data.locks.size}
+                        onFit={() => {
+                            const r = ui.range;
+                            if (r) return fitToMusic(r.from, r.to);
+                            const from = lockBefore(
+                                data.locks,
+                                Math.round(playheadBeat) + 1,
+                            );
+                            fitToMusic(
+                                from,
+                                lockAfter(data.locks, from) ?? musicEndBeat(),
+                            );
+                        }}
+                        onTap={() => {
+                            if (!playing) return;
+                            if (isPlaying)
+                                stopTimelinePlayback(playing.setIsPlaying);
+                            else startTapping();
+                        }}
+                        onCheckTapping={() => setTapCheck({ thenTap: false })}
+                        onApplyDraft={applyDraft}
+                        onDiscardDraft={() =>
+                            useTempoUi.getState().setDraft(null)
+                        }
+                        onClearPins={() =>
+                            void run("Pins", () =>
+                                saveMarks({ locks: new Set() }),
+                            )
+                        }
+                    />,
+                    headerSlot,
+                )}
             {/* in a portal: the timeline's viewport clips anything fixed inside it */}
             {editor &&
                 createPortal(
@@ -2038,17 +2286,18 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
     );
 }
 
-function LaneName({ top, text }: { top: number; text: string }) {
-    return (
-        <span
-            className="text-text-subtitle bg-bg-1/80 absolute left-2 rounded-[3px] px-3 text-[9px] tracking-wide uppercase"
-            style={{ top: top + 2 }}
-        >
-            {text}
-        </span>
+/** A tool button in tempo mode's header, lit when `on` (its colors are either/or, not overrides) */
+const toolButton = (on = false, iconOnly = false) =>
+    clsx(
+        "pointer-events-auto rounded-6 bg-fg-1 hover:border-accent focus-visible:ring-accent flex h-22 shrink-0 items-center gap-4 border text-[11px] whitespace-nowrap outline-hidden focus-visible:ring-2 disabled:opacity-50",
+        iconOnly ? "px-4" : "px-8",
+        on ? "border-accent text-accent" : "border-stroke text-text",
     );
-}
 
+/**
+ * Tempo mode's header row: the mode's name, its tools, a line of status, help and Done. Narrow, the
+ * tools drop their words for their icons (the full name is the tooltip) and the status shortens.
+ */
 function TempoToolbar(props: {
     status: string | null;
     busy: boolean;
@@ -2066,103 +2315,277 @@ function TempoToolbar(props: {
     const ui = useTempoUi();
     const click = useMetronomeStore((s) => s.isMetronomeOn);
     const toggleClick = useMetronomeStore((s) => s.toggleMetronome);
-    const button =
-        "pointer-events-auto rounded-6 border border-stroke bg-fg-1 px-8 py-1 text-[11px] text-text hover:border-accent disabled:opacity-50";
+    const fitName = props.range
+        ? `Fit to the music: counts ${props.range.from}–${props.range.to}`
+        : "Fit to the music";
     return (
-        <div
-            className="absolute flex items-center gap-6 px-6 whitespace-nowrap"
-            style={{ top: TOOLBAR.top + 4, height: TOOLBAR.height - 8 }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onDoubleClick={(e) => e.stopPropagation()}
-            onContextMenu={(e) => e.stopPropagation()}
-        >
-            <span className="text-accent text-[11px] font-bold">
-                Tempo mode
-            </span>
-            {props.draftCount > 0 ? (
-                <>
-                    <span className="text-[11px]">
-                        {props.draftCount} taps to check (click one to drop it)
-                    </span>
-                    <button
-                        type="button"
-                        className={`${button} border-accent text-accent`}
-                        onClick={props.onApplyDraft}
-                    >
-                        Apply (Enter)
-                    </button>
-                    <button
-                        type="button"
-                        className={button}
-                        onClick={props.onDiscardDraft}
-                    >
-                        Discard (Esc)
-                    </button>
-                </>
-            ) : (
-                <>
-                    <button
-                        type="button"
-                        className={button}
-                        disabled={props.busy}
-                        onClick={props.onFit}
-                        title="Moves counts onto hits in the music between pins (from the playhead, or the selected counts). Pinned counts never move."
-                    >
-                        Fit to the music
-                        {props.range
-                            ? ` (counts ${props.range.from}–${props.range.to})`
-                            : ""}
-                    </button>
-                    <button
-                        type="button"
-                        className={`${button} ${props.tapping ? "border-accent text-accent" : ""}`}
-                        onClick={props.onTap}
-                        title="Plays from a measure before the playhead; tap T on the counts, stop to review"
-                    >
-                        {props.tapping
-                            ? "Tapping… (stop to review)"
-                            : "Tap (T)"}
-                    </button>
-                </>
-            )}
-            <button
-                type="button"
-                className={button}
-                onClick={props.onCheckTapping}
-                title="Tap along to a click for 10 seconds: measures how late your taps land on this computer, and how even they are"
+        <TransportTooltipProvider>
+            <div
+                className="@container flex min-w-0 flex-1 items-center gap-6 px-8"
+                // In a portal: the band's own pointer handling mustn't see these
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerMove={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                onContextMenu={(e) => e.stopPropagation()}
             >
-                Check tapping
-            </button>
-            <button
-                type="button"
-                className={`${button} ${click ? "border-accent text-accent" : ""}`}
-                onClick={toggleClick}
-                title="A click on every count, to hear whether the counts sit on the music"
-            >
-                Click {click ? "on" : "off"}
-            </button>
-            <label className="pointer-events-auto flex items-center gap-4 text-[11px]">
-                <input
-                    type="checkbox"
-                    checked={ui.snap}
-                    onChange={(e) => ui.setSnap(e.target.checked)}
-                />
-                Snap to hits
-            </label>
-            {props.lockCount > 0 && (
-                <button
-                    type="button"
-                    className={button}
-                    onClick={props.onClearPins}
+                <span className="text-accent flex shrink-0 items-center gap-4 text-[12px] font-bold whitespace-nowrap">
+                    <MetronomeIcon size={14} weight="bold" aria-hidden />
+                    <span className="@max-[640px]:hidden">Tempo mode</span>
+                </span>
+                <span className="bg-stroke h-16 w-px shrink-0" aria-hidden />
+                {props.draftCount > 0 ? (
+                    <>
+                        <span
+                            className="min-w-0 truncate text-[11px]"
+                            title="Click a tap in the music to drop it"
+                        >
+                            {props.draftCount} taps to check
+                            <span className="text-text-subtitle @max-[720px]:hidden">
+                                {" "}
+                                · click one to drop it
+                            </span>
+                        </span>
+                        <ShortcutTooltip
+                            label="Apply the taps"
+                            shortcut="Enter"
+                        >
+                            <button
+                                type="button"
+                                className={toolButton(true)}
+                                onClick={props.onApplyDraft}
+                            >
+                                <CheckIcon
+                                    size={12}
+                                    weight="bold"
+                                    aria-hidden
+                                />
+                                Apply
+                            </button>
+                        </ShortcutTooltip>
+                        <ShortcutTooltip
+                            label="Discard the taps"
+                            shortcut="Esc"
+                        >
+                            <button
+                                type="button"
+                                className={toolButton()}
+                                onClick={props.onDiscardDraft}
+                            >
+                                Discard
+                            </button>
+                        </ShortcutTooltip>
+                    </>
+                ) : (
+                    <>
+                        <ShortcutTooltip
+                            label={fitName}
+                            hint="Moves counts onto hits in the music between pins, from the playhead or across the selected counts. Pinned counts never move."
+                        >
+                            <button
+                                type="button"
+                                aria-label={fitName}
+                                className={toolButton()}
+                                disabled={props.busy}
+                                onClick={props.onFit}
+                            >
+                                <MagicWandIcon size={12} aria-hidden />
+                                <span className="@max-[860px]:hidden">
+                                    {props.range
+                                        ? `Fit ${props.range.from}–${props.range.to}`
+                                        : "Fit to the music"}
+                                </span>
+                            </button>
+                        </ShortcutTooltip>
+                        <ShortcutTooltip
+                            label={
+                                props.tapping
+                                    ? "Tapping: stop to review"
+                                    : "Tap along"
+                            }
+                            shortcut="T"
+                            hint="Plays from a measure before the playhead: tap T on the counts, then stop to review the taps"
+                        >
+                            <button
+                                type="button"
+                                aria-label={
+                                    props.tapping ? "Stop tapping" : "Tap (T)"
+                                }
+                                className={toolButton(props.tapping)}
+                                onClick={props.onTap}
+                            >
+                                <HandTapIcon size={12} aria-hidden />
+                                <span className="@max-[860px]:hidden">
+                                    {props.tapping ? "Stop" : "Tap"}
+                                </span>
+                            </button>
+                        </ShortcutTooltip>
+                    </>
+                )}
+                <ShortcutTooltip
+                    label={click ? "Click: on" : "Click: off"}
+                    hint="A click on every count, to hear whether the counts sit on the music"
                 >
-                    Unpin all ({props.lockCount})
-                </button>
-            )}
-            <span className="text-text-subtitle text-[11px]">
-                {props.status ??
-                    "Drag a hit in the music onto its count, or a count\u2019s handle (the small triangle at the top of the Music lane) onto the music · Shift: just that count · Alt: no snap · right-click for more"}
-            </span>
-        </div>
+                    <button
+                        type="button"
+                        aria-label="Click"
+                        aria-pressed={click}
+                        className={toolButton(click)}
+                        onClick={toggleClick}
+                    >
+                        <SpeakerHighIcon size={12} aria-hidden />
+                        <span className="@max-[860px]:hidden">Click</span>
+                    </button>
+                </ShortcutTooltip>
+                <ShortcutTooltip
+                    label={ui.snap ? "Snap to hits: on" : "Snap to hits: off"}
+                    hint="Dragged counts and taps land on hits in the music. Hold Alt while dragging to place freely."
+                >
+                    <button
+                        type="button"
+                        aria-label="Snap to hits"
+                        aria-pressed={ui.snap}
+                        className={toolButton(ui.snap)}
+                        onClick={() => ui.setSnap(!ui.snap)}
+                    >
+                        <MagnetIcon size={12} aria-hidden />
+                        <span className="@max-[860px]:hidden">Snap</span>
+                    </button>
+                </ShortcutTooltip>
+                {props.lockCount > 0 && (
+                    <ShortcutTooltip
+                        label={`Unpin all ${props.lockCount} pinned counts`}
+                        hint="Pinned counts stay where they are when you fit or drag"
+                    >
+                        <button
+                            type="button"
+                            aria-label={`Unpin all (${props.lockCount})`}
+                            className={toolButton()}
+                            onClick={props.onClearPins}
+                        >
+                            <PushPinSlashIcon size={12} aria-hidden />
+                            <span className="@max-[860px]:hidden">
+                                Unpin all
+                            </span>
+                            <span className="text-text-subtitle tabular-nums">
+                                {props.lockCount}
+                            </span>
+                        </button>
+                    </ShortcutTooltip>
+                )}
+                <span
+                    className="text-text-subtitle min-w-0 flex-1 truncate text-[11px]"
+                    title={props.status ?? DRAG_HINT}
+                >
+                    {props.status ?? DRAG_HINT}
+                </span>
+                <ShortcutTooltip
+                    label="Check tapping"
+                    hint="Tap along to a click for 10 seconds: measures how late your taps land on this computer, and how even they are"
+                >
+                    <button
+                        type="button"
+                        aria-label="Check tapping"
+                        className={toolButton()}
+                        onClick={props.onCheckTapping}
+                    >
+                        <TimerIcon size={12} aria-hidden />
+                        <span className="@max-[1100px]:hidden">
+                            Check tapping
+                        </span>
+                    </button>
+                </ShortcutTooltip>
+                <TempoHelp />
+                <ShortcutTooltip label="Done: leave tempo mode" shortcut="Esc">
+                    <button
+                        type="button"
+                        aria-label="Done"
+                        className="bg-accent text-text-invert rounded-6 focus-visible:ring-accent pointer-events-auto flex h-22 shrink-0 items-center gap-4 px-10 text-[11px] font-bold whitespace-nowrap outline-hidden hover:opacity-90 focus-visible:ring-2 focus-visible:ring-offset-1"
+                        onClick={() =>
+                            useTempoModeStore.getState().setOn(false)
+                        }
+                    >
+                        <CheckIcon size={12} weight="bold" aria-hidden />
+                        Done
+                    </button>
+                </ShortcutTooltip>
+            </div>
+        </TransportTooltipProvider>
+    );
+}
+
+/** The toolbar's line when there's nothing to report: the main gesture */
+const DRAG_HINT = "Drag a hit in the music onto its count";
+
+/** How tempo mode works, behind a "?" in its header */
+function TempoHelp() {
+    const rows: [string, string][] = [
+        ["Drag a hit in the music", "onto its count"],
+        [
+            "Drag a count's handle",
+            "(the triangle atop the music) onto the music",
+        ],
+        ["Shift while dragging", "moves just that count"],
+        ["Alt while dragging", "places it without snapping to hits"],
+        ["Drag the tempo line", "up or down; double-click it to type a tempo"],
+        ["Drag along Measures", "selects counts to fit or edit"],
+        ["Right-click", "pins, holds, adding and removing counts"],
+    ];
+    const keys: [string, string][] = [
+        ["T", "Tap along (plays from a measure back)"],
+        ["M", "Drop a rehearsal mark while playing"],
+        ["Enter", "Apply taps"],
+        ["Esc", "Cancel a drag or taps, or leave tempo mode"],
+        ["Shift + T", "Tempo mode on and off"],
+    ];
+    return (
+        <Popover.Root>
+            <ShortcutTooltip label="How tempo mode works">
+                <Popover.Trigger asChild>
+                    <button
+                        type="button"
+                        aria-label="How tempo mode works"
+                        className={toolButton(false, true)}
+                    >
+                        <QuestionIcon size={13} aria-hidden />
+                    </button>
+                </Popover.Trigger>
+            </ShortcutTooltip>
+            <Popover.Portal>
+                <Popover.Content
+                    side="bottom"
+                    align="end"
+                    sideOffset={6}
+                    collisionPadding={8}
+                    className="border-stroke bg-modal text-text shadow-modal rounded-8 z-[100] flex w-[340px] max-w-[calc(100vw-16px)] flex-col gap-8 border px-12 py-10 backdrop-blur-md"
+                    onPointerDown={(e) => e.stopPropagation()}
+                >
+                    <div className="text-[12px] font-bold">
+                        Line the counts up with the music
+                    </div>
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-8 gap-y-3 text-[11px]">
+                        {rows.map(([what, how]) => (
+                            <Fragment key={what}>
+                                <dt className="font-medium whitespace-nowrap">
+                                    {what}
+                                </dt>
+                                <dd className="text-text-subtitle">{how}</dd>
+                            </Fragment>
+                        ))}
+                    </dl>
+                    <dl className="border-stroke grid grid-cols-[auto_1fr] items-center gap-x-8 gap-y-3 border-t pt-8 text-[11px]">
+                        {keys.map(([key, what]) => (
+                            <Fragment key={key}>
+                                <dt>
+                                    <Keycaps shortcut={key} />
+                                </dt>
+                                <dd className="text-text-subtitle">{what}</dd>
+                            </Fragment>
+                        ))}
+                    </dl>
+                </Popover.Content>
+            </Popover.Portal>
+        </Popover.Root>
     );
 }
 
@@ -2185,6 +2608,19 @@ function CountAskPopover({
     };
     const ref = useRef<HTMLButtonElement>(null);
     useEffect(() => ref.current?.focus(), []);
+    const boxRef = useRef<HTMLDivElement>(null);
+    const position = useOnScreen(boxRef, ask.x, ask.y, "above", ask);
+    // Esc cancels wherever the focus is, and only cancels (tempo mode stays on)
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+    }, [onClose]);
     const option = (
         choice: CountChoice,
         title: string,
@@ -2204,13 +2640,10 @@ function CountAskPopover({
     );
     return (
         <div
+            ref={boxRef}
             data-testid="tempo-count-ask"
-            className="bg-modal shadow-modal text-text border-stroke rounded-6 fixed z-[100] flex w-[340px] flex-col gap-6 border p-8 shadow-lg backdrop-blur-md"
-            style={{
-                left: Math.min(ask.x, window.innerWidth - 360),
-                top: ask.y - 8,
-                transform: "translateY(-100%)",
-            }}
+            className="bg-modal shadow-modal text-text border-stroke rounded-6 fixed z-[100] flex w-[340px] max-w-[calc(100vw-16px)] flex-col gap-6 border p-8 shadow-lg backdrop-blur-md"
+            style={position}
             onPointerDown={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
                 e.stopPropagation();
@@ -2241,22 +2674,21 @@ function InlineEditor({
 }) {
     const [value, setValue] = useState(editor.value);
     const ref = useRef<HTMLInputElement>(null);
+    const boxRef = useRef<HTMLDivElement>(null);
+    const position = useOnScreen(boxRef, editor.x, editor.y, "above", editor);
     useEffect(() => {
         ref.current?.focus();
         ref.current?.select();
     }, []);
     return (
         <div
-            className="bg-modal shadow-modal text-text border-stroke rounded-6 fixed z-[100] flex flex-col gap-4 border p-6 shadow-lg backdrop-blur-md"
-            style={{
-                left: editor.x,
-                top: editor.y - 8,
-                transform: "translateY(-100%)",
-            }}
+            ref={boxRef}
+            className="bg-modal shadow-modal text-text border-stroke rounded-6 fixed z-[100] flex max-w-[280px] flex-col gap-4 border p-6 shadow-lg backdrop-blur-md"
+            style={position}
             onPointerDown={(e) => e.stopPropagation()}
             onDoubleClick={(e) => e.stopPropagation()}
         >
-            <span className="text-text-subtitle max-w-[260px] text-[11px]">
+            <span className="text-text-subtitle text-[11px]">
                 {editor.hint}
             </span>
             <input
@@ -2281,24 +2713,30 @@ function InlineEditor({
 function ContextMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) {
     useEffect(() => {
         const close = () => onClose();
+        // Esc closes the menu, and only the menu (not tempo mode)
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+        };
         window.addEventListener("pointerdown", close);
         window.addEventListener("blur", close);
+        window.addEventListener("keydown", onKey, true);
         return () => {
             window.removeEventListener("pointerdown", close);
             window.removeEventListener("blur", close);
+            window.removeEventListener("keydown", onKey, true);
         };
     }, [onClose]);
+    const ref = useRef<HTMLDivElement>(null);
+    const position = useOnScreen(ref, menu.x, menu.y, "below", menu);
     return (
         <div
+            ref={ref}
             data-testid="tempo-menu"
-            className="bg-modal shadow-modal text-text border-stroke rounded-6 fixed z-[100] flex min-w-[240px] flex-col border py-4 shadow-lg backdrop-blur-md"
-            style={{
-                left: menu.x,
-                top: Math.min(
-                    menu.y,
-                    window.innerHeight - 24 * menu.items.length - 16,
-                ),
-            }}
+            className="bg-modal shadow-modal text-text border-stroke rounded-6 fixed z-[100] flex max-h-[calc(100vh-16px)] min-w-[220px] flex-col overflow-y-auto border py-4 shadow-lg backdrop-blur-md"
+            style={position}
             onPointerDown={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
         >
@@ -2307,7 +2745,8 @@ function ContextMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) {
                     key={item.label}
                     type="button"
                     disabled={item.disabled}
-                    className="hover:bg-fg-2 text-text px-10 py-3 text-left text-[12px] disabled:opacity-40"
+                    title={item.hint}
+                    className="hover:bg-fg-2 text-text px-10 py-3 text-left text-[12px] whitespace-nowrap disabled:opacity-40"
                     onClick={() => {
                         onClose();
                         item.onSelect();

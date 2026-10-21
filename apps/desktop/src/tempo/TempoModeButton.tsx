@@ -6,7 +6,7 @@ import { MetronomeIcon } from "@phosphor-icons/react";
 import clsx from "clsx";
 import { useEffect } from "react";
 import { ShortcutTooltip } from "@/components/timeline/ShortcutTooltip";
-import { useTempoModeStore } from "./TempoBand";
+import { useTempoModeStore } from "./tempoModeStore";
 
 export function TempoModeButton() {
     const on = useTempoModeStore((s) => s.on);
@@ -30,7 +30,7 @@ export function TempoModeButton() {
             shortcut="Shift + T"
             hint={
                 on
-                    ? "Drag hits in the music onto counts, drag the tempo line, tap with T"
+                    ? "Line the counts up with the music. Esc or Shift + T leaves."
                     : "Line the counts up with the music: tempo, time signatures, rehearsal marks"
             }
         >

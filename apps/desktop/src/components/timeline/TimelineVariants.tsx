@@ -777,9 +777,10 @@ const TimelineSurface = memo(function TimelineSurface({
             0,
         ),
     );
-    const appendAtPlayhead = props.isPlaying
-        ? undefined
-        : props.appendAtPlayhead;
+    // A band being edited (tempo mode) is the only thing in focus: no page editing beside it
+    const bandFocus = !!band?.focus;
+    const appendAtPlayhead =
+        props.isPlaying || bandFocus ? undefined : props.appendAtPlayhead;
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
     // UI-12: clicks and scrubs land on a nearby downbeat or page line; Basic's on any count
@@ -948,6 +949,7 @@ const TimelineSurface = memo(function TimelineSurface({
 
     return (
         <TimelineShell
+            header={band?.header}
             viewportRef={viewportRef}
             className={className}
             pinnedHeight={audioTop}
@@ -987,7 +989,12 @@ const TimelineSurface = memo(function TimelineSurface({
             }
         >
             <div
-                className="relative"
+                className={clsx(
+                    "relative",
+                    // The page row steps back while a band is edited (tempo mode)
+                    bandFocus &&
+                        "[&_[data-testid=timeline-page-ruler]]:opacity-50",
+                )}
                 style={{ width: surfaceWidth, height: surfaceHeight }}
                 onContextMenu={rangeMenu.onContextMenu}
                 onDoubleClick={(event) => {
@@ -1079,6 +1086,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             pixelsPerBeat,
                             beatCount: model.beatCount,
                             snapBeats: seekSnapBeats,
+                            leadingInset: initialPageWidth,
                         })}
                     </div>
                     {/* The clips dropping out of a page box (`useClipDrops`), over the pinned
@@ -1149,7 +1157,9 @@ const TimelineSurface = memo(function TimelineSurface({
                             seekSnapBeats={seekSnapBeats}
                             scrubLine={pointer.scrubLine}
                             pageFlagMove={
-                                props.isPlaying ? undefined : props.pageFlagMove
+                                props.isPlaying || bandFocus
+                                    ? undefined
+                                    : props.pageFlagMove
                             }
                             height={pinnedHeight}
                             flagSnapPlayhead={playheadAt}
@@ -1230,7 +1240,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             isPlaying={props.isPlaying}
                             scrubLine={pointer.scrubLine}
                             onAddPage={
-                                props.isPlaying
+                                props.isPlaying || bandFocus
                                     ? undefined
                                     : props.onAddPageFlag
                             }

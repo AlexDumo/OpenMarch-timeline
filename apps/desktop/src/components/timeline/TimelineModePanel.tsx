@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import { StartFlagPositionsButton } from "./StartFlagPositionsButton";
 import { TEMPO_BAND, useTempoModeStore } from "@/tempo/TempoBand";
 import { TempoModeButton } from "@/tempo/TempoModeButton";
@@ -213,7 +214,8 @@ export default function TimelineModePanel() {
     );
     const musicEnd = useMusicEndSeconds();
     const waveform = useMemo(() => {
-        if (!envelope || waveformHidden) return null;
+        // Tempo mode draws the music in its own lane: one waveform, not two
+        if (!envelope || waveformHidden || tempoMode) return null;
         const through =
             musicEnd === null ? 0 : musicEndBeat(countGrid, musicEnd);
         const peaks = peaksByBeat(
@@ -226,7 +228,15 @@ export default function TimelineModePanel() {
         if (basic && !peaks.some((beat) => beat.some((peak) => peak > 0)))
             return null;
         return { peaksByBeat: peaks };
-    }, [envelope, beats, countGrid, musicEnd, waveformHidden, basic]);
+    }, [
+        envelope,
+        beats,
+        countGrid,
+        musicEnd,
+        waveformHidden,
+        basic,
+        tempoMode,
+    ]);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );
@@ -520,7 +530,11 @@ export default function TimelineModePanel() {
                     {...(basic ? basicExtras : {})}
                     zoomFitted={zoomFitted}
                     onZoomFittedChange={setZoomFitted}
-                    className="w-full"
+                    // Tempo mode is a focused mode: the timeline is framed in the accent
+                    className={clsx(
+                        "w-full",
+                        tempoMode && "ring-accent ring-2",
+                    )}
                     beats={beats}
                     pages={pages}
                     measures={measures}

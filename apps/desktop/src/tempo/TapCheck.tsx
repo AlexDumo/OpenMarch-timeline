@@ -183,7 +183,7 @@ export function TapCheckPanel({
     return (
         <div
             data-testid="tempo-tap-check"
-            className="bg-modal shadow-modal text-text border-stroke rounded-6 fixed top-1/3 left-1/2 z-[100] flex w-[380px] -translate-x-1/2 flex-col gap-8 border p-12 backdrop-blur-md"
+            className="bg-modal shadow-modal text-text border-stroke rounded-6 fixed top-1/3 left-1/2 z-[100] flex max-h-[calc(100vh-32px)] w-[380px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col gap-8 overflow-y-auto border p-12 backdrop-blur-md"
             onPointerDown={(e) => e.stopPropagation()}
         >
             <div className="text-[13px] font-bold">Check your tapping</div>
