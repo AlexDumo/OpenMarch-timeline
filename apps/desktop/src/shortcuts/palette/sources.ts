@@ -20,10 +20,14 @@ export interface PaletteItem {
     /** Curated position in "Suggested" before usage history exists (lower comes first). */
     suggestedRank?: number;
     run: () => void;
+    /** PROTOTYPE (fork #357 spike): listed first while searching, whatever the search matches */
+    pinned?: boolean;
 }
 
 export interface PaletteContext {
     t: Translate;
+    /** PROTOTYPE (fork #357 spike): the text typed, for sources that parse it */
+    query?: string;
 }
 
 /**

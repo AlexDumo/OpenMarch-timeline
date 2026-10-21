@@ -66,8 +66,10 @@ function arrange(
             (item) => Math.min(3, Math.log10(1 + (usage.get(item.id) ?? 0))),
         );
         const items = [
-            ...matches.filter((item) => !item.disabled),
-            ...matches.filter((item) => item.disabled),
+            // PROTOTYPE (fork #357 spike): a parsed sentence row stays on top
+            ...all.filter((item) => item.pinned),
+            ...matches.filter((item) => !item.disabled && !item.pinned),
+            ...matches.filter((item) => item.disabled && !item.pinned),
         ];
         return {
             items,
@@ -133,7 +135,7 @@ export default function CommandPalette() {
             // While closing, keep the last results so the exit animation doesn't show an empty list.
             if (!open) return lastArrangement.current;
             lastArrangement.current = arrange(
-                getPaletteItems({ t }),
+                getPaletteItems({ t, query }),
                 query,
                 usage,
                 t("commandPalette.suggested"),

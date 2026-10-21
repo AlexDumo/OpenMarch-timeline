@@ -15,6 +15,9 @@ import TimelineResolverHost from "@/timeline/TimelineResolverHost";
 import LaunchPage from "@/components/launchpage/LaunchPage";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import CommandPalette from "@/shortcuts/palette/CommandPalette";
+// PROTOTYPE (fork #357 spike): command contract bridge, throwaway
+import CommandsProtoBridge from "@/commands-proto/bridge";
+import { installCommandsProto } from "@/commands-proto/agent";
 import ExportCoordinatesModal from "@/components/exporting/ExportCoordinatesModal";
 import ShortcutDispatcher from "@/shortcuts/ShortcutDispatcher";
 import {
@@ -83,6 +86,9 @@ export const queryClient = new QueryClient({
         },
     }),
 });
+
+// PROTOTYPE (fork #357 spike)
+installCommandsProto();
 
 function App() {
     useLoadFileErrorHandler();
@@ -318,6 +324,7 @@ function App() {
                                             <StateInitializer />
                                             <FileActionHandlers />
                                             <EditorActionHandlers />
+                                            <CommandsProtoBridge />
                                             <ExportCoordinatesModal />
                                             <TimelineResolverHost />
                                             <View3dPublisher />
