@@ -2120,10 +2120,16 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
     onInteractionChange,
     positionBeat,
     scrubLine,
+    grabHeight,
 }: {
     range: TimelineBeatRange;
     /** Where to draw the start flag when it isn't the range's start (UI-10, after Stop) */
     startFlagBeatIndex?: number;
+    /**
+     * How far down the start flag's line can be grabbed (default: all of it). A focused band
+     * (tempo mode) has its own handles under the ruler, which must win over the flag's line
+     */
+    grabHeight?: number;
     beatCount: number;
     pixelsPerBeat: number;
     height: number;
@@ -2487,7 +2493,10 @@ export const TimelineSelectionRange = memo(function TimelineSelectionRange({
                     title={flagTitle(kind, beatIndex)}
                     {...flagHandlers(kind, beatIndex)}
                     className="focus-visible:ring-accent pointer-events-auto absolute top-0 z-40 w-12 -translate-x-1/2 touch-none border-0 bg-transparent p-0 outline-hidden focus-visible:ring-2 enabled:cursor-ew-resize! disabled:cursor-default!"
-                    style={{ left: x, height }}
+                    style={{
+                        left: x,
+                        height: Math.min(height, grabHeight ?? height),
+                    }}
                 >
                     {/* UI-20: 2px, from the headroom strip down */}
                     <span
