@@ -836,6 +836,17 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             ? `m. ${m.number} count ${beat - m.start + 1}`
             : `count ${beat}`;
     };
+    /** The count where the music ends (its last hit), or the last count drawn */
+    const musicEndBeat = () => {
+        const last = data.durations.length - 1;
+        if (!onsets) return last;
+        let i = onsets.values.length - 1;
+        while (i > 0 && onsets.values[i]! < 0.2) i--;
+        const t = onsets.startSeconds + i / onsets.rate;
+        let b = 1;
+        while (b < last && starts[b + 1]! <= t) b++;
+        return Math.min(last, b + 1);
+    };
     const audible = () =>
         getLivePlaybackPosition() -
         (LIVE_LEAD + (audioContextRef?.outputLatency ?? 0)) *
@@ -1589,7 +1600,6 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             const to = Math.max(g.anchor, g.to);
             if (to - from < 1) {
                 useTempoUi.getState().setRange(null);
-                useTimelineSelectionStore.getState().seek(from);
             } else useTempoUi.getState().setRange({ from, to });
         }
     };
@@ -1713,9 +1723,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             );
         else {
             const from = lockBefore(data.locks, beat + 1);
-            const end =
-                lockAfter(data.locks, from) ??
-                Math.min(from + 64, data.durations.length - 1);
+            const end = lockAfter(data.locks, from) ?? musicEndBeat();
             items.push({
                 label: `Fit counts ${from}–${end} to the music`,
                 onSelect: () => fitToMusic(from, end),
@@ -1792,7 +1800,13 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                     {m.counts}/4
                 </button>,
             );
-        if (ppb * m.counts > 18 || m.number % 4 === 1 || m.overridden)
+        // with a time signature chip there, the number goes after it only when the measure has room
+        const chipRoom = changed && !partial ? 34 : 0;
+        if (
+            (ppb * m.counts > 18 + chipRoom ||
+                ((m.number % 4 === 1 || m.overridden) && chipRoom === 0)) &&
+            ppb * m.counts > chipRoom + 10
+        )
             labels.push(
                 <span
                     key={`n-${m.start}`}
@@ -1805,7 +1819,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                     }
                     className={`absolute text-[10px] leading-[14px] ${m.overridden ? "text-accent font-bold" : "text-text-subtitle"} ${partial ? "text-red" : ""}`}
                     style={{
-                        left: left + (changed && !partial ? 34 : 3),
+                        left: left + chipRoom + 3,
                         top: MEASURES.top + 4,
                         pointerEvents:
                             partial || m.overridden ? "auto" : "none",
@@ -1942,8 +1956,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                         );
                         fitToMusic(
                             from,
-                            lockAfter(data.locks, from) ??
-                                Math.min(from + 64, data.durations.length - 1),
+                            lockAfter(data.locks, from) ?? musicEndBeat(),
                         );
                     }}
                     onTap={() => {
