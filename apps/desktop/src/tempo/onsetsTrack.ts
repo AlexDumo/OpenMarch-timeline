@@ -60,6 +60,9 @@ const firstAtOrAfter = (peaks: Peak[], t: number) => {
     return lo;
 };
 
+/** How many counts back the follow's decisions settle */
+const SETTLE_COUNTS = 16;
+
 interface Path {
     t: number;
     len: number;
@@ -151,7 +154,15 @@ export function trackCounts({
             kept.push(p);
             if (kept.length >= beam) break;
         }
-        paths = kept;
+        // Decisions settle after a while (fixed lag): paths that disagree with the best one about
+        // a count well behind are dropped, so music much later can't rewrite what fitted here
+        const lag = k - SETTLE_COUNTS;
+        if (lag > 0) {
+            const settled = kept[0]!.times[lag]!;
+            paths = kept.filter(
+                (p) => Math.abs(p.times[lag]! - settled) < 0.015,
+            );
+        } else paths = kept;
     }
     const best = paths[0]!;
     return { times: best.times, onHit: best.hits };

@@ -612,8 +612,13 @@ function bestPath(
                     for (let c = 0; c < kc; c++) {
                         const s = ps[c * kb + a];
                         if (s === -Infinity) continue;
-                        const r = l - pl[c * kb + a];
-                        const v = s - SMOOTHNESS * r * r;
+                        // the change in count length, against the change the guess has there (an
+                        // uneven grouping or a rit. is not a mistake)
+                        // or a steady one, whichever is closer: a jittered guess shouldn't pull)
+                        const steady = l - pl[c * kb + a];
+                        const shaped = steady - (prior - logPrior[i - 2]);
+                        const r2 = Math.min(steady * steady, shaped * shaped);
+                        const v = s - SMOOTHNESS * r2;
                         if (v > best) {
                             best = v;
                             bestC = c;
