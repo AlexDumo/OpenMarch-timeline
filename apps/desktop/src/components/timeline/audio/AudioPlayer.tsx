@@ -41,7 +41,7 @@ export const lightProgressColor = "rgb(100, 66, 255)";
 export const darkProgressColor = "rgb(150, 126, 255)";
 const PLAYBACK_DELAY = 0.1; // Delay in seconds to start playback
 // The live position leads the audio by this much wall time (the delay, plus a little)
-const LIVE_LEAD = PLAYBACK_DELAY + 0.01;
+export const LIVE_LEAD = PLAYBACK_DELAY + 0.01;
 // Stopping fades the sources out over this many seconds, so a stop or restart doesn't click
 const STOP_FADE = 0.008;
 

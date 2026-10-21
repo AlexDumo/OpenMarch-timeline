@@ -74,6 +74,8 @@ export const fromDatabaseMeasures = (args: {
     databaseMeasures: DatabaseMeasure[];
     allBeats: Beat[];
     measurementNumberOffset?: number;
+    /** PROTOTYPE (tempo mode): a measure starting on beat id `key` is numbered `value`, and the ones after count on */
+    numberOverrides?: Readonly<Record<string, number>>;
 }): Measure[] => {
     const sortedBeats = args.allBeats.sort(compareBeats);
     let currentMeasureNumber = args.measurementNumberOffset ?? 1;
@@ -90,6 +92,8 @@ export const fromDatabaseMeasures = (args: {
     });
     const createdMeasures = sortedDbMeasures.map((measure, i) => {
         const startBeat = beatMap.get(measure.start_beat) ?? tempBeat;
+        const override = args.numberOverrides?.[String(measure.start_beat)];
+        if (override !== undefined) currentMeasureNumber = override;
         const nextMeasure = sortedDbMeasures[i + 1] || null;
         const nextBeat = nextMeasure
             ? (beatMap.get(nextMeasure.start_beat) ?? tempBeat)

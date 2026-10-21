@@ -139,6 +139,10 @@ export const _combineTimingObjects = (
         workspaceSettingsLoading || workspaceSettingsError
             ? 1
             : (workspaceSettings?.measurementOffset ?? 1);
+    const measureNumberOverrides =
+        workspaceSettingsLoading || workspaceSettingsError
+            ? undefined
+            : workspaceSettings?.measureNumberOverrides;
 
     // Check if any query is still loading
     const isLoading =
@@ -199,6 +203,7 @@ export const _combineTimingObjects = (
         utility,
         pageNumberOffset,
         measurementNumberOffset,
+        measureNumberOverrides,
     ];
     if (
         lastBuilt &&
@@ -217,6 +222,7 @@ export const _combineTimingObjects = (
         databaseMeasures: [...measures],
         allBeats: createdBeats,
         measurementNumberOffset: measurementNumberOffset,
+        numberOverrides: measureNumberOverrides,
     });
 
     const lastPageCounts = utility.last_page_counts;
