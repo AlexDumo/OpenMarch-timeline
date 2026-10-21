@@ -1,5 +1,7 @@
 import { assignSlots, type AssignMarcher } from "../assign";
+import { carryPivot } from "../frame/pivot";
 import {
+    centerPivot,
     dragShape,
     shapeTargetAt,
     startShapeGesture,
@@ -175,10 +177,21 @@ export function pointerMove(state: ToolState, at: XY, env: ToolEnv): ToolState {
     return { ...state, params: dragShape(state.kind, n, g, at, env) };
 }
 
-/** Ends the gesture: one undo step if it changed anything, and who goes where worked out again */
-export function release(state: ToolState, ctx: ShapeContext): ToolState {
+/**
+ * Ends the gesture: one undo step if it changed anything, and who goes where worked out again. A
+ * double click on the pivot sends it back to the center (#350).
+ */
+export function release(
+    state: ToolState,
+    ctx: ShapeContext,
+    click?: { readonly double: boolean } | null,
+): ToolState {
     const g = state.gesture;
     if (!g) return state;
+    if (click?.double && g.type !== "draw" && g.type !== "edit") {
+        const centered = centerPivot(g);
+        if (centered !== null) state = { ...state, params: centered };
+    }
     const ended = { ...state, gesture: null };
     if (state.params === g.before.params) return ended;
     const next = pushHistory(ended, g.before);
@@ -237,6 +250,7 @@ export function edit(
     ctx: ShapeContext,
 ): ToolState {
     if (state.gesture || params === state.params) return state;
+    params = carryPivot(state.params, params);
     const next = pushHistory({ ...state, params }, snapshot(state));
     return holdsSpots(next, state.params, ctx)
         ? keptThrough(next, state.params)
@@ -252,14 +266,14 @@ export function beginEdit(state: ToolState): ToolState {
 /** The shape as the dragged number has it, who goes where held */
 export function previewEdit(state: ToolState, params: unknown): ToolState {
     if (state.gesture?.type !== "edit" || params === state.params) return state;
-    return { ...state, params };
+    return { ...state, params: carryPivot(state.params, params) };
 }
 
 /**
  * Picking `kind` with the tool open (#344): before anything is drawn it is simply the kind drawn
- * next. A drawn shape turns into `kind` keeping its frame (center, size, turn and flip), so forms
- * can be compared in place, and who goes where is worked out again on the new spots. One undo
- * step.
+ * next. A drawn shape turns into `kind` keeping its frame (center, size, turn, flip and pivot),
+ * so forms can be compared in place, and who goes where is worked out again on the new spots. One
+ * undo step.
  */
 export function switchKind(
     state: ToolState,
@@ -270,7 +284,11 @@ export function switchKind(
     if (state.gesture || kind === state.kind) return state;
     if (state.params === null) return { ...state, kind };
     const n = state.spots;
-    const params = kind.fromFrame(state.kind.frameOf(state.params, n), n, env);
+    // The pivot too: it sits on the frame
+    const params = carryPivot(
+        state.params,
+        kind.fromFrame(state.kind.frameOf(state.params, n), n, env),
+    );
     return reassign(
         pushHistory({ ...state, kind, params }, snapshot(state)),
         ctx,

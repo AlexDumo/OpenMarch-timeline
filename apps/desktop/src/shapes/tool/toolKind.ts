@@ -1,4 +1,4 @@
-import type { PivotKey, ShapeFrame } from "../frame/frame";
+import type { Pivot, ShapeFrame } from "../frame/frame";
 import type { ScrubMove } from "../editor/scrub";
 import type { AnyShapeKind, XY } from "../types";
 
@@ -16,8 +16,15 @@ export interface ToolEnv {
     readonly gridSnap: (p: XY) => XY;
     /** How far from a handle a press still takes it, in field units */
     readonly hitRadius: number;
-    /** What turns, flips and scales go around (the Transform section's pivot); the center when absent */
-    readonly pivot?: PivotKey;
+    /** Cmd (Mac) or Ctrl is held: a drag from the center dot pulls the pivot out (#350) */
+    readonly mod?: boolean;
+    /**
+     * What a change the kind works out grows from (a new count, a spacing): the shape's pivot
+     * when the host sets it, the center when absent
+     */
+    readonly pivot?: Pivot;
+    /** Where marchers stand, for a dragged pivot to snap to (#350); none when absent */
+    readonly pivotSnaps?: () => readonly XY[];
     /** The box's ratio lock: changing one spacing changes the other in proportion */
     readonly ratioLocked?: boolean;
 }

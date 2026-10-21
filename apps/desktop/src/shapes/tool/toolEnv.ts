@@ -1,6 +1,7 @@
 import { getRoundCoordinates2 } from "@/utilities/CoordinateActions";
 import type { ShapeField } from "../field/shapeField";
 import { useShapeEditorStore } from "../frame/shapeEditorStore";
+import type { XY } from "../types";
 import type { ToolEnv } from "./toolKind";
 
 /** How far from a handle a press still takes it, in screen pixels */
@@ -11,10 +12,14 @@ const HALF_STEP_ROUNDING = {
     coordinateRounding: { nearestXSteps: 0.5, nearestYSteps: 0.5 },
 } as const;
 
-/** The tool's view of the field for one pointer event, with the keys held then */
+/**
+ * The tool's view of the field for one pointer event, with the keys held then. A dragged pivot
+ * snaps to every marcher drawn, and to `spots` (an open shape's, where its marchers will stand).
+ */
 export function toolEnvFor(
     field: ShapeField,
-    keys: { shift: boolean; alt: boolean },
+    keys: { shift: boolean; alt: boolean; mod?: boolean },
+    spots?: () => readonly XY[],
 ): ToolEnv {
     const { fieldProperties } = field;
     const editor = useShapeEditorStore.getState();
@@ -22,6 +27,7 @@ export function toolEnvFor(
         stepPx: fieldProperties.pixelsPerStep,
         snap: !keys.alt,
         shift: keys.shift,
+        mod: keys.mod ?? false,
         gridSnap: (p) => {
             if (keys.alt) return p;
             const r = getRoundCoordinates2({
@@ -32,8 +38,10 @@ export function toolEnvFor(
             return { x: r.xPixels, y: r.yPixels };
         },
         hitRadius: HANDLE_REACH_PX / (field.zoom() || 1),
-        // The Transform section's pivot, the same in Basic and Expert (spec #344)
-        pivot: editor.pivot,
         ratioLocked: editor.ratioLocked,
+        pivotSnaps: () => [
+            ...field.drawn(field.marchers().map((m) => m.id)).values(),
+            ...(spots?.() ?? []),
+        ],
     };
 }

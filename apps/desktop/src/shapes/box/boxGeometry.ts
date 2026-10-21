@@ -1,8 +1,8 @@
 import type { BlockParams } from "../kinds/block";
 import type { XY } from "../types";
 import type { ToolEnv } from "../tool/toolKind";
+import { pivotOf } from "../frame/pivot";
 import {
-    DEFAULT_PIVOT,
     fieldToFrame,
     frameToField,
     pivotPoint,
@@ -521,7 +521,7 @@ export function resizeFiles(
 
 /**
  * `after`, a resize of `before` (a new count or spacing), moved so the pivot stays where it was:
- * by default the center (2026-10-18). Then back on the grid.
+ * the shape's own, the center by default (2026-10-18). Then back on the grid.
  */
 export function grownFromPivot(
     before: BoxParams,
@@ -529,7 +529,7 @@ export function grownFromPivot(
     n: number,
     env: ToolEnv,
 ): BoxParams {
-    const key = env.pivot ?? DEFAULT_PIVOT;
+    const key = env.pivot ?? pivotOf(before);
     const was = pivotPoint(boxFrame(before, n), key);
     const now = pivotPoint(boxFrame(after, n), key);
     return snapToGrid(

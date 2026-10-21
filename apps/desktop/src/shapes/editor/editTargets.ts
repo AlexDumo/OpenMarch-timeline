@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { BoxParams } from "../box/boxGeometry";
 import { boxTool } from "../box/boxTool";
+import { carryPivot } from "../frame/pivot";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import {
     previewPlacedBox,
@@ -111,14 +112,16 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
             kept: keptOf(box),
             drawnOn,
             begin: () => previewPlacedBox(box.params),
-            preview: (params) => previewPlacedBox(params as BoxParams),
+            preview: (params) =>
+                previewPlacedBox(carryPivot(box.params, params as BoxParams)),
             end: (keep) => {
                 const { params } = usePlacedBoxPreviewStore.getState();
                 if (keep && params && params !== box.params) void save(params);
                 else previewPlacedBox(null);
             },
             apply: (params) => {
-                if (params !== box.params) void save(params as BoxParams);
+                if (params !== box.params)
+                    void save(carryPivot(box.params, params as BoxParams));
             },
             setOrder: (order) =>
                 void commitBox(box, box.params, queryClient, order),

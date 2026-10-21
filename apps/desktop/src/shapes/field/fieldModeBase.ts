@@ -20,6 +20,8 @@ import type { ShapeField } from "./shapeField";
 export const keysOf = (pointer: FieldPointer) => ({
     shift: pointer.shift,
     alt: pointer.alt,
+    // Cmd on a Mac, where Ctrl+press is a right-click and never reaches a shape; Ctrl elsewhere
+    mod: pointer.meta || pointer.ctrl,
 });
 
 /** A handle's cursor from a shape kind, as the field shows it */
@@ -40,6 +42,7 @@ export function shapeCursor(
     switch (target.type) {
         case "move":
         case "center":
+        case "pivot":
             return "move";
         case "rotate":
             return "grab";
@@ -75,10 +78,16 @@ export function drillTerms(p: XY): string | null {
     }
 }
 
+type FrameDrawing = Pick<
+    FieldModeDrawing,
+    "knob" | "centerDot" | "pivotMark" | "pivot" | "tip"
+>;
+
 /**
- * What every open or selected shape draws for its frame (08, "Handles and gestures"): the knob
- * and the center dot, and during a gesture its guide: the pivot and the angle while turning,
- * where the center is in drill terms while moving, its length and spacing while stretching.
+ * What every open or selected shape draws for its frame (08, "Handles and gestures"): the knob,
+ * the center dot and the pivot once it's out of the center (#350), and during a gesture its
+ * guide: the pivot and the angle while turning, where the center is in drill terms while moving,
+ * its length and spacing while stretching.
  */
 export function frameDrawing(
     kind: AnyToolKind,
@@ -87,13 +96,13 @@ export function frameDrawing(
     gesture: ShapeGesture | null,
     pointer: XY | null,
     env: ToolEnv,
-): Pick<FieldModeDrawing, "knob" | "centerDot" | "pivot" | "tip"> {
+): FrameDrawing {
     const controls = frameControls(kind, params, n, env);
-    const out: Pick<FieldModeDrawing, "knob" | "centerDot" | "pivot" | "tip"> =
-        {
-            knob: { at: controls.knob, stem: controls.stem },
-            centerDot: controls.center,
-        };
+    const out: FrameDrawing = {
+        knob: { at: controls.knob, stem: controls.stem },
+        centerDot: controls.center,
+        ...(controls.pivot ? { pivotMark: controls.pivot } : {}),
+    };
     if (!gesture || !pointer) return out;
     if (gesture.type === "rotate") {
         const degrees = rotationDegrees(kind.frameOf(params, n).rotation);

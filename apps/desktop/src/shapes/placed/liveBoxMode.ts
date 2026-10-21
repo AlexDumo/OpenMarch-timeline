@@ -125,7 +125,7 @@ export class LiveBoxMode implements FieldMode {
 
     release(pointer: FieldPointer, click: { double: boolean } | null): void {
         const before = this.live;
-        const out = releaseLive(before);
+        const out = releaseLive(before, click);
         this.live = out.live;
         this.emit();
         if (out.changed)

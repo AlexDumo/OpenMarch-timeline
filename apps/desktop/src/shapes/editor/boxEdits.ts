@@ -16,7 +16,7 @@ import {
     turnShape,
 } from "../frame/gestures";
 import { boxTool } from "../box/boxTool";
-import { DEGREE, normalizeAngle, type PivotKey } from "../frame/frame";
+import { DEGREE, normalizeAngle, type Pivot } from "../frame/frame";
 
 import type { ToolEnv } from "../tool/toolKind";
 import {
@@ -170,7 +170,7 @@ export const scrubRotation = (
     base: BoxParams,
     distance: number,
     spots: number,
-    pivot: PivotKey,
+    pivot: Pivot,
     env: ToolEnv,
 ): BoxParams =>
     scrubTurn(boxTool, base, spots, distance, pivot, env) as BoxParams;
@@ -182,7 +182,7 @@ export function turnBy(
     p: BoxParams,
     spots: number,
     degrees: number,
-    pivot: PivotKey,
+    pivot: Pivot,
     env: ToolEnv,
 ): BoxParams {
     return turnShape(
@@ -200,7 +200,7 @@ export function turnTo(
     p: BoxParams,
     spots: number,
     degrees: number,
-    pivot: PivotKey,
+    pivot: Pivot,
     env: ToolEnv,
 ): BoxParams {
     return turnShape(
@@ -218,7 +218,7 @@ export const flipBox = (
     p: BoxParams,
     spots: number,
     axis: "across" | "deep",
-    pivot: PivotKey,
+    pivot: Pivot,
     env: ToolEnv,
 ): BoxParams => flipShape(boxTool, p, spots, axis, pivot, env) as BoxParams;
 

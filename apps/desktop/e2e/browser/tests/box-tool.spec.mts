@@ -904,6 +904,90 @@ test("change: a placed box comes back turned and flipped when selected again", a
     await expect(section.getByTestId("transform-rotation")).toHaveText(turned);
 });
 
+// The pivot on the field (#350): Cmd/Ctrl-drag from the center dot pulls it
+// out into a yellow crosshair, it snaps to marchers, turns go around it, it is
+// saved with the box, and a double click sends it back to the center.
+
+const near = (a: Point, b: Point, px = 1.5) =>
+    Math.hypot(a.x - b.x, a.y - b.y) <= px;
+
+test("change: Cmd/Ctrl-drag from the center dot pulls the pivot out onto a marcher, turns go around it, and the placed box keeps it until a double click", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const section = page.getByTestId("transform-section");
+    let overlay = (await shapeOverlay(page))!;
+    expect(overlay.pivotMark).toBeNull();
+    const center = overlay.centerDot!;
+
+    // A plain drag on the center dot would move the box; with Ctrl/Cmd it
+    // pulls the pivot out, and it snaps onto T1 near where it's let go
+    const t1 = await marcherScreen(page, 1);
+    await page.keyboard.down("ControlOrMeta");
+    await drag(page, center, { x: t1.x + 3, y: t1.y - 2 });
+    await page.keyboard.up("ControlOrMeta");
+    overlay = (await shapeOverlay(page))!;
+    expect(near(overlay.pivotMark!, t1)).toBe(true);
+    expect(near(overlay.centerDot!, center)).toBe(true);
+    // Off the grid's 9 points, so none of them is lit
+    await expect(section.locator('[aria-checked="true"]')).toHaveCount(0);
+
+    // A quarter turn swings the box around T1; the crosshair stays put
+    await section.getByTestId("transform-rotation").click();
+    await page.getByTestId("transform-rotation-input").fill("90");
+    await page.getByTestId("transform-rotation-input").press("Enter");
+    overlay = (await shapeOverlay(page))!;
+    expect(near(overlay.pivotMark!, t1)).toBe(true);
+    const swung = {
+        x: t1.x - (center.y - t1.y),
+        y: t1.y + (center.x - t1.x),
+    };
+    expect(near(overlay.centerDot!, swung, 3)).toBe(true);
+
+    // Placed, the recipe keeps the pivot
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await waitForIdle(page);
+    const stored = async () => {
+        const [recipe] = await show.query<{ params: string }>(
+            "SELECT params FROM timeline_shape_recipes",
+        );
+        return JSON.parse(recipe.params).pivot;
+    };
+    expect(typeof (await stored())).toBe("object");
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+
+    // Selected again, its pivot is where it was left
+    const member = await marcherScreen(page, 2);
+    await page.mouse.click(member.x, member.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await expect
+        .poll(async () => {
+            const mark = (await shapeOverlay(page))?.pivotMark;
+            return mark != null && near(mark, t1);
+        })
+        .toBe(true);
+
+    // A double click on it sends it back to the center, saved as one step
+    const steps = await undoSteps(show);
+    await page.mouse.dblclick(t1.x, t1.y);
+    await expect
+        .poll(async () => (await shapeOverlay(page))?.pivotMark ?? null)
+        .toBeNull();
+    await expect.poll(stored).toBeUndefined();
+    expect(await undoSteps(show)).toBe(steps + 1);
+    await expect(section.getByTestId("transform-pivot-c")).toHaveAttribute(
+        "aria-checked",
+        "true",
+    );
+});
+
 // The command bar (#354): `/` and ⌘K open one bar; Shape › Box docks it at the
 // top of the field and asks the box's numbers one at a time, the box showing
 // live on the field.
