@@ -90,6 +90,10 @@ export const beats = sqliteTable(
         include_in_measure: integer().default(1).notNull(),
         /** Human readable notes. */
         notes: text(),
+        /** PROTOTYPE (tempo mode): 1 when this beat's start is pinned to the music */
+        tempo_pin: integer().default(0).notNull(),
+        /** PROTOTYPE (tempo mode): 1 when this beat is a hold (a fermata: one count, its own length) */
+        tempo_hold: integer().default(0).notNull(),
         ...timestamps,
     },
     (_table) => [
@@ -106,6 +110,8 @@ export const measures = sqliteTable("measures", {
         .references(() => beats.id),
     rehearsal_mark: text(),
     notes: text(),
+    /** PROTOTYPE (tempo mode): the number this measure gets; the ones after count on from it */
+    number_override: integer(),
     created_at: text()
         .default(sql`(CURRENT_TIMESTAMP)`)
         .notNull(),

@@ -85,6 +85,19 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     25: (db) => dropTables(db, ["item_placement_marchers", "item_placements"]),
     // Artwork slot assignments (C2.4)
     26: (db) => dropTables(db, ["item_artwork_slots"]),
+    // PROTOTYPE tempo mode: pins, holds and measure numbers. The history triggers name the
+    // columns; the migration service recreates every trigger
+    27: (db) => {
+        const triggers = db
+            .prepare(
+                "SELECT name FROM sqlite_schema WHERE type = 'trigger' AND tbl_name IN ('beats', 'measures')",
+            )
+            .all() as { name: string }[];
+        for (const { name } of triggers) db.exec(`DROP TRIGGER \`${name}\``);
+        db.exec("ALTER TABLE beats DROP COLUMN tempo_pin");
+        db.exec("ALTER TABLE beats DROP COLUMN tempo_hold");
+        db.exec("ALTER TABLE measures DROP COLUMN number_override");
+    },
 };
 
 /**

@@ -19,14 +19,31 @@ const DEFAULT_LAST_PAGE_COUNTS = 8;
 export async function readShowTiming(
     tx: DbTransaction | DbConnection,
 ): Promise<{ beats: Beat[]; pages: Page[] }> {
+    // The columns a page-era file has: the converter reads it before the timeline-only
+    // migrations add any (tempo mode's tempo_pin and tempo_hold, say)
     const beatRows = await tx
-        .select()
+        .select({
+            id: schema.beats.id,
+            duration: schema.beats.duration,
+            position: schema.beats.position,
+            include_in_measure: schema.beats.include_in_measure,
+            notes: schema.beats.notes,
+            created_at: schema.beats.created_at,
+            updated_at: schema.beats.updated_at,
+        })
         .from(schema.beats)
         .orderBy(asc(schema.beats.position))
         .all();
     const beats = calculateTimestamps(
         beatRows.map((b, i) =>
-            fromDatabaseBeat(realDatabaseBeatToDatabaseBeat(b), i),
+            fromDatabaseBeat(
+                realDatabaseBeatToDatabaseBeat({
+                    ...b,
+                    tempo_pin: 0,
+                    tempo_hold: 0,
+                }),
+                i,
+            ),
         ),
     );
     const pageRows = await tx.select().from(schema.pages).all();

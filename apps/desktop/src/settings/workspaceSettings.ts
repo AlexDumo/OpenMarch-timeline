@@ -42,21 +42,6 @@ export const workspaceSettingsSchema = z.object({
      * absent (`warnPropMovesWithoutCrewOf`): a placed prop may move with people outside the show.
      */
     warnPropMovesWithoutCrew: z.boolean().optional(),
-
-    /**
-     * PROTOTYPE (tempo mode): beats (by id) whose start is tied to the music, so tempo edits
-     * around them never move them (`src/tempo/tempoMath.ts`). Not in undo.
-     */
-    tempoLocks: z.array(z.int()).optional(),
-
-    /**
-     * PROTOTYPE (tempo mode): measures whose number is set by hand, keyed by the id of the beat they
-     * start on; the measures after count on from there. Not in undo.
-     */
-    measureNumberOverrides: z.record(z.string(), z.int()).optional(),
-
-    /** PROTOTYPE (tempo mode): counts (beat ids) that are holds (fermatas): one count, its own length. Not in undo. */
-    tempoHolds: z.array(z.int()).optional(),
 });
 
 export type WorkspaceSettings = z.infer<typeof workspaceSettingsSchema>;

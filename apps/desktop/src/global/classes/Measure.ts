@@ -71,11 +71,11 @@ type BeatWithIndex = Beat & { index: number };
  * @returns A sorted array of `Measure` objects representing the measures in the piece.
  */
 export const fromDatabaseMeasures = (args: {
-    databaseMeasures: DatabaseMeasure[];
+    databaseMeasures: (Omit<DatabaseMeasure, "number_override"> & {
+        number_override?: number | null;
+    })[];
     allBeats: Beat[];
     measurementNumberOffset?: number;
-    /** PROTOTYPE (tempo mode): a measure starting on beat id `key` is numbered `value`, and the ones after count on */
-    numberOverrides?: Readonly<Record<string, number>>;
 }): Measure[] => {
     const sortedBeats = args.allBeats.sort(compareBeats);
     let currentMeasureNumber = args.measurementNumberOffset ?? 1;
@@ -92,8 +92,10 @@ export const fromDatabaseMeasures = (args: {
     });
     const createdMeasures = sortedDbMeasures.map((measure, i) => {
         const startBeat = beatMap.get(measure.start_beat) ?? tempBeat;
-        const override = args.numberOverrides?.[String(measure.start_beat)];
-        if (override !== undefined) currentMeasureNumber = override;
+        // PROTOTYPE (tempo mode): a number set by hand; the measures after count on from it
+        const override = measure.number_override;
+        if (override !== undefined && override !== null)
+            currentMeasureNumber = override;
         const nextMeasure = sortedDbMeasures[i + 1] || null;
         const nextBeat = nextMeasure
             ? (beatMap.get(nextMeasure.start_beat) ?? tempBeat)

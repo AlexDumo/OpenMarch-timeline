@@ -43,9 +43,15 @@ async function beatIdsInTransaction(tx: DbTransaction): Promise<number[]> {
 export async function writeDurations({
     before,
     after,
+    pins,
+    holds,
 }: {
     before: readonly number[];
     after: readonly number[];
+    /** The pinned spec beats after the edit, written in the same undo step */
+    pins?: ReadonlySet<number>;
+    /** The held spec beats after the edit */
+    holds?: ReadonlySet<number>;
 }): Promise<void> {
     const changed: number[] = [];
     for (let b = 1; b < after.length; b++)
@@ -54,16 +60,91 @@ export async function writeDurations({
             b >= before.length
         )
             changed.push(b);
-    if (changed.length === 0) return;
-    const last = changed[changed.length - 1]!;
+    const marks = [...(pins ?? []), ...(holds ?? [])];
+    if (changed.length === 0 && !pins && !holds) return;
+    const last = Math.max(changed[changed.length - 1] ?? 0, ...marks);
     await transactionWithHistory(db, "tempoEdit", async (tx) => {
         await ensureCountsInTransaction({ tx, through: last + 1 });
         const ids = await beatIdsInTransaction(tx);
-        await updateBeatsInTransaction({
+        if (changed.length)
+            await updateBeatsInTransaction({
+                tx,
+                modifiedBeats: changed
+                    .filter((b) => ids[b] !== undefined)
+                    .map((b) => ({ id: ids[b]!, duration: after[b]! })),
+            });
+        await writeMarksInTransaction(tx, ids, { pins, holds });
+    });
+}
+
+/** Pins and holds, as beat flags: the beats that change get the new value, in one statement each */
+async function writeMarksInTransaction(
+    tx: DbTransaction,
+    ids: readonly number[],
+    {
+        pins,
+        holds,
+    }: { pins?: ReadonlySet<number>; holds?: ReadonlySet<number> },
+) {
+    const write = async (
+        column: "tempo_pin" | "tempo_hold",
+        set: ReadonlySet<number> | undefined,
+    ) => {
+        if (!set) return;
+        const want = [...set].flatMap((b) =>
+            ids[b] === undefined ? [] : [ids[b]!],
+        );
+        const now = (
+            await tx
+                .select({ id: schema.beats.id })
+                .from(schema.beats)
+                .where(eq(schema.beats[column], 1))
+        ).map((r) => r.id);
+        const off = now.filter((id) => !want.includes(id));
+        const on = want.filter((id) => !now.includes(id));
+        if (off.length)
+            await tx
+                .update(schema.beats)
+                .set({ [column]: 0 })
+                .where(inArray(schema.beats.id, off));
+        if (on.length)
+            await tx
+                .update(schema.beats)
+                .set({ [column]: 1 })
+                .where(inArray(schema.beats.id, on));
+    };
+    await write("tempo_pin", pins);
+    await write("tempo_hold", holds);
+}
+
+/** Pin or hold counts (spec beats) on their own: one undo step */
+export async function writeMarks(marks: {
+    pins?: ReadonlySet<number>;
+    holds?: ReadonlySet<number>;
+}): Promise<void> {
+    await transactionWithHistory(db, "tempoMarks", async (tx) => {
+        const last = Math.max(0, ...(marks.pins ?? []), ...(marks.holds ?? []));
+        await ensureCountsInTransaction({ tx, through: last + 1 });
+        await writeMarksInTransaction(
             tx,
-            modifiedBeats: changed
-                .filter((b) => ids[b] !== undefined)
-                .map((b) => ({ id: ids[b]!, duration: after[b]! })),
+            await beatIdsInTransaction(tx),
+            marks,
+        );
+    });
+}
+
+/** Set (or clear, with null) the number a measure gets by hand: one undo step */
+export async function setMeasureNumber({
+    measureId,
+    number,
+}: {
+    measureId: number;
+    number: number | null;
+}): Promise<void> {
+    await transactionWithHistory(db, "tempoMeasureNumber", async (tx) => {
+        await updateMeasuresInTransaction({
+            tx,
+            modifiedItems: [{ id: measureId, number_override: number }],
         });
     });
 }
@@ -366,7 +447,7 @@ export async function setRehearsalMark({
     });
 }
 
-/** Read-modify-write the workspace settings (locks, measure numbers) */
+/** Read-modify-write the workspace settings (the audio offset) */
 export async function patchWorkspaceSettings(
     patch: (s: WorkspaceSettings) => Partial<WorkspaceSettings>,
 ): Promise<void> {

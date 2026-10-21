@@ -78,6 +78,8 @@ import {
     insertCounts,
     patchWorkspaceSettings,
     regroupMeasuresWrite,
+    setMeasureNumber as writeMeasureNumber,
+    writeMarks,
     setRehearsalMark,
     writeDurations,
     type CountEditResult,
@@ -85,6 +87,7 @@ import {
 import { useMusicOnsets } from "./useMusicOnsets";
 import { estimateBeatPeriod, fitCountsToOnsets, snapToOnset } from "./onsets";
 import { firstCountLength, trackCounts } from "./onsetsTrack";
+import { readTapCheck, TapCheckPanel, type TapCheckResult } from "./TapCheck";
 
 // ---------------------------------------------------------------------------------------------
 // State
@@ -251,34 +254,63 @@ interface TempoData {
     audioOffset: number;
 }
 
+/** Pinned and held beats (flags on the beats rows, so they're in undo with the edits) */
+const tempoMarksQuery = () => ({
+    // under "beats", so whatever refreshes the beats (an edit, undo) refreshes these too
+    queryKey: ["beats", "tempoMarks"] as const,
+    queryFn: async () => {
+        const { db, schema } = await import("@/global/database/db");
+        const { or, eq } = await import("drizzle-orm");
+        return await db
+            .select({
+                id: schema.beats.id,
+                pin: schema.beats.tempo_pin,
+                hold: schema.beats.tempo_hold,
+            })
+            .from(schema.beats)
+            .where(
+                or(
+                    eq(schema.beats.tempo_pin, 1),
+                    eq(schema.beats.tempo_hold, 1),
+                ),
+            );
+    },
+});
+
 function useTempoData(beatCount: number): TempoData {
     const { beats, measures, countGrid } = useTimingObjects();
     const { data: settings } = useQuery(workspaceSettingsQueryOptions());
+    const { data: marks } = useQuery(tempoMarksQuery());
     return useMemo(() => {
         const n = Math.max(beatCount + 1, beats.length);
         const durations = [0];
         for (let b = 1; b < n; b++) durations.push(countGrid.durationAt(b));
         const ids = beats.map((b) => b.id);
         const ordinalOf = new Map(ids.map((id, i) => [id, i]));
-        const toOrdinals = (list: readonly number[] | undefined) => {
+        const toOrdinals = (list: readonly number[]) => {
             const out = new Set<number>();
-            for (const id of list ?? []) {
+            for (const id of list) {
                 const o = ordinalOf.get(id);
                 if (o !== undefined && o >= 1) out.add(o);
             }
             return out;
         };
-        const locks = toOrdinals(settings?.tempoLocks);
+        const locks = toOrdinals(
+            (marks ?? []).filter((m) => m.pin === 1).map((m) => m.id),
+        );
         locks.delete(1);
-        const holds = toOrdinals(settings?.tempoHolds);
-        const overrides = settings?.measureNumberOverrides ?? {};
+        const holds = toOrdinals(
+            (marks ?? []).filter((m) => m.hold === 1).map((m) => m.id),
+        );
         const ms: TempoMeasure[] = measures.map((m) => ({
             start: m.startBeat.index,
             number: m.number,
             mark: m.rehearsalMark,
             counts: m.counts,
             id: m.id,
-            overridden: overrides[String(m.startBeat.id)] !== undefined,
+            overridden:
+                (m as { number_override?: number | null }).number_override !=
+                null,
         }));
         // The endless measures carry on the last one's length
         const last = ms[ms.length - 1];
@@ -306,29 +338,16 @@ function useTempoData(beatCount: number): TempoData {
             storedCount: beats.length,
             audioOffset: settings?.audioOffsetSeconds ?? 0,
         };
-    }, [beats, measures, countGrid, settings, beatCount]);
+    }, [beats, measures, countGrid, settings, marks, beatCount]);
 }
 
-/** Save pins and holds (spec beats) as beat ids, reading the ids fresh (an edit may store counts) */
+/** Save pins and holds (spec beats) as beat flags: one undo step */
 async function saveMarks(sets: {
     locks?: ReadonlySet<number>;
     holds?: ReadonlySet<number>;
 }) {
-    const { db, schema } = await import("@/global/database/db");
-    const { asc } = await import("drizzle-orm");
-    const rows = await db
-        .select({ id: schema.beats.id })
-        .from(schema.beats)
-        .orderBy(asc(schema.beats.position));
-    const idsOf = (set: ReadonlySet<number>) =>
-        [...set].filter((b) => b < rows.length).map((b) => rows[b]!.id);
-    await patchWorkspaceSettings(() => ({
-        ...(sets.locks ? { tempoLocks: idsOf(sets.locks) } : {}),
-        ...(sets.holds ? { tempoHolds: idsOf(sets.holds) } : {}),
-    }));
-    await queryClient.invalidateQueries({
-        queryKey: workspaceSettingsKeys.all(),
-    });
+    await writeMarks({ pins: sets.locks, holds: sets.holds });
+    await queryClient.invalidateQueries({ queryKey: ["beats"] });
 }
 
 /** Write a tempo edit: the new lengths, then the pins by beat id (the counts may be new) */
@@ -341,8 +360,12 @@ async function commitEdit(
     const after = [...result.durations];
     // a pin past the stored counts needs its count stored
     while (after.length <= maxLock) after.push(after[after.length - 1]!);
-    await writeDurations({ before: before.durations, after });
-    await saveMarks({ locks: result.locks });
+    // the lengths and the pins in one undo step
+    await writeDurations({
+        before: before.durations,
+        after,
+        pins: result.locks,
+    });
     await refetch();
     if (result.note) toast.info(result.note);
 }
@@ -847,9 +870,12 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         while (b < last && starts[b + 1]! <= t) b++;
         return Math.min(last, b + 1);
     };
-    const audible = () =>
+    /** The music heard now; for a tap, less how late this person's taps land (the tapping check) */
+    const audible = (tap = false) =>
         getLivePlaybackPosition() -
-        (LIVE_LEAD + (audioContextRef?.outputLatency ?? 0)) *
+        (LIVE_LEAD +
+            (audioContextRef?.outputLatency ?? 0) +
+            (tap ? (readTapCheck()?.latency ?? 0) : 0)) *
             getLivePlaybackRate();
 
     /**
@@ -1213,20 +1239,14 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         });
     };
     const setMeasureNumber = (measure: TempoMeasure, value: string) => {
-        const beatId = data.ids[measure.start];
-        if (beatId === undefined) return;
+        if (measure.id === null) return;
         const n = value.trim() === "" ? null : Number(value);
         if (n !== null && !Number.isInteger(n)) {
             toast.error(`"${value}" isn't a measure number`);
             return;
         }
         void run("Measure number", async () => {
-            await patchWorkspaceSettings((s) => {
-                const next = { ...(s.measureNumberOverrides ?? {}) };
-                if (n === null) delete next[String(beatId)];
-                else next[String(beatId)] = n;
-                return { measureNumberOverrides: next };
-            });
+            await writeMeasureNumber({ measureId: measure.id!, number: n });
             await refetch();
         });
     };
@@ -1288,8 +1308,14 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
     const cancelGesture = useRef(false);
     const tapsRef = useRef<number[] | null>(null);
     tapsRef.current = ui.taps;
+    const [tapCheck, setTapCheck] = useState<null | { thenTap: boolean }>(null);
     const startTapping = useCallback(() => {
         if (!playing) return;
+        // the first time, check how late this person's taps land (and how even they are)
+        if (!readTapCheck()) {
+            setTapCheck({ thenTap: true });
+            return;
+        }
         const m = measureAt(playheadBeat);
         useTempoUi.getState().setDraft(null);
         useTempoUi.getState().setTaps([]);
@@ -1339,7 +1365,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 else
                     useTempoUi
                         .getState()
-                        .setTaps([...(tapsRef.current ?? []), audible()]);
+                        .setTaps([...(tapsRef.current ?? []), audible(true)]);
             } else if (key === "m" && isPlaying) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1965,6 +1991,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                             stopTimelinePlayback(playing.setIsPlaying);
                         else startTapping();
                     }}
+                    onCheckTapping={() => setTapCheck({ thenTap: false })}
                     onApplyDraft={applyDraft}
                     onDiscardDraft={() => useTempoUi.getState().setDraft(null)}
                     onClearPins={() =>
@@ -1988,6 +2015,18 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             {menu &&
                 createPortal(
                     <ContextMenu menu={menu} onClose={() => setMenu(null)} />,
+                    document.body,
+                )}
+            {tapCheck &&
+                createPortal(
+                    <TapCheckPanel
+                        onClose={(result: TapCheckResult | null) => {
+                            const thenTap = tapCheck.thenTap;
+                            setTapCheck(null);
+                            if (thenTap && result)
+                                setTimeout(startTapping, 300);
+                        }}
+                    />,
                     document.body,
                 )}
             {ask &&
@@ -2019,6 +2058,7 @@ function TempoToolbar(props: {
     lockCount: number;
     onFit: () => void;
     onTap: () => void;
+    onCheckTapping: () => void;
     onApplyDraft: () => void;
     onDiscardDraft: () => void;
     onClearPins: () => void;
@@ -2087,6 +2127,14 @@ function TempoToolbar(props: {
             )}
             <button
                 type="button"
+                className={button}
+                onClick={props.onCheckTapping}
+                title="Tap along to a click for 10 seconds: measures how late your taps land on this computer, and how even they are"
+            >
+                Check tapping
+            </button>
+            <button
+                type="button"
                 className={`${button} ${click ? "border-accent text-accent" : ""}`}
                 onClick={toggleClick}
                 title="A click on every count, to hear whether the counts sit on the music"
@@ -2112,7 +2160,7 @@ function TempoToolbar(props: {
             )}
             <span className="text-text-subtitle text-[11px]">
                 {props.status ??
-                    "Drag a hit in the music onto its count, or a count\u2019s ▾ handle onto the music · Shift: just that count · Alt: no snap · right-click for more"}
+                    "Drag a hit in the music onto its count, or a count\u2019s handle (the small triangle at the top of the Music lane) onto the music · Shift: just that count · Alt: no snap · right-click for more"}
             </span>
         </div>
     );
