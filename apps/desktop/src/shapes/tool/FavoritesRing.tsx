@@ -169,9 +169,12 @@ export default function FavoritesRing() {
                 data-shape-ui
             >
                 <div className="absolute top-1/2 left-1/2">
-                    {/* A faint track, so a ring of one or two shapes still reads as a ring */}
+                    {/*
+                     * A faint track, so a ring of one or two shapes still reads as a ring. Dark in
+                     * both themes: the field it sits on stays light in the dark theme too (#379).
+                     */}
                     <div
-                        className="border-text/15 absolute -translate-x-1/2 -translate-y-1/2 rounded-full border"
+                        className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-black/20"
                         style={{
                             width: 2 * RING_RADIUS,
                             height: 2 * RING_RADIUS,
