@@ -12,13 +12,17 @@ import { kindPickGate, pickShapeKind } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
 import { useShapeToolStore } from "./shapeToolStore";
 import { useStarredShapes } from "./starredShapes";
+import ShapePreviewIcon from "../preview/ShapePreviewIcon";
+
+/** Shapes show as pictures only, so many fit (#378): the name is the tooltip and the label */
+const PREVIEW_SIZE = 26;
 
 const BUTTON =
-    "enabled:hover:text-accent text-text flex items-center gap-6 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
+    "enabled:hover:text-accent flex items-center gap-6 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50";
 
 /**
- * The top bar's Shapes tab (#348), the quick pick: every kind that can be drawn, with its icon and
- * name. A kind's button runs its action, which goes through the host's `pickShapeKind`: it arms
+ * The top bar's Shapes tab (#348), the quick pick: every kind that can be drawn, as its picture
+ * (#378), named by its tooltip. A kind's button runs its action, which goes through the host's `pickShapeKind`: it arms
  * the kind, or turns the open shape into it. With nobody selected the kinds are greyed out and
  * say why. After a divider come the starred shapes (#352), picked the same way, and the Library
  * button, which opens the shape library in the left sidebar.
@@ -34,33 +38,36 @@ export default function ShapesTab() {
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const ringKey = getActionShortcutLabel("openShapeRing", { overrides });
     const starred = useStarredShapes();
+    /** A greyed-out shape's tooltip: its name, then why it can't be picked */
+    const greyedTitle = (label: string) =>
+        gate.ok ? undefined : `${label}: ${gate.reason}`;
     return (
         <div className="flex w-full flex-wrap items-center gap-8">
             <ToolbarSection aria-label="Shape kinds">
                 {SHAPE_TOOLS.map(({ kind, action }) => {
-                    const Icon = kind.shape.icon;
                     const on = kind === armed;
                     return (
                         // A disabled button gets no hover, so its reason sits on the wrapper
                         <span
                             key={kind.shape.id}
-                            title={gate.ok ? undefined : gate.reason}
+                            title={greyedTitle(kind.shape.label)}
                         >
                             <ActionButton
                                 action={action}
                                 disabled={!gate.ok}
                                 aria-pressed={on}
+                                aria-label={kind.shape.label}
                                 data-testid={`shapes-tab-${kind.shape.id}`}
                                 className={clsx(
-                                    "flex items-center gap-6",
+                                    "flex items-center",
                                     on ? "text-accent" : "text-text",
                                 )}
                             >
-                                <Icon
-                                    size={22}
-                                    weight={on ? "bold" : "regular"}
+                                <ShapePreviewIcon
+                                    kind={kind}
+                                    size={PREVIEW_SIZE}
+                                    bold={on}
                                 />
-                                {kind.shape.label}
                             </ActionButton>
                         </span>
                     );
@@ -71,12 +78,9 @@ export default function ShapesTab() {
                     data-testid="shapes-tab-divider"
                 />
                 {starred.map((shape) => {
-                    const Icon = shape.icon;
+                    const on = shape.kind === armed;
                     return (
-                        <span
-                            key={shape.id}
-                            title={gate.ok ? undefined : gate.reason}
-                        >
+                        <span key={shape.id} title={greyedTitle(shape.label)}>
                             <button
                                 type="button"
                                 disabled={!gate.ok}
@@ -84,11 +88,19 @@ export default function ShapesTab() {
                                     pickShapeKind(shape.kind, performers)
                                 }
                                 title={gate.ok ? shape.label : undefined}
-                                className={BUTTON}
+                                aria-label={shape.label}
+                                aria-pressed={on}
+                                className={clsx(
+                                    BUTTON,
+                                    on ? "text-accent" : "text-text",
+                                )}
                                 data-testid={`shapes-tab-starred-${shape.id}`}
                             >
-                                <Icon size={22} />
-                                {shape.label}
+                                <ShapePreviewIcon
+                                    kind={shape.kind}
+                                    size={PREVIEW_SIZE}
+                                    bold={on}
+                                />
                             </button>
                         </span>
                     );
@@ -97,7 +109,7 @@ export default function ShapesTab() {
                     type="button"
                     onClick={showShapeLibrary}
                     title="Open the shape library, to star shapes"
-                    className={BUTTON}
+                    className={clsx(BUTTON, "text-text")}
                     data-testid="shapes-tab-library"
                 >
                     <ShapesIcon size={22} />

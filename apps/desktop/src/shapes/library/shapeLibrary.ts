@@ -7,7 +7,7 @@ import type { SavedShape } from "./savedShapes";
 export const MAX_STARS = RING_SLOTS;
 
 /**
- * A shape the library lists (#352, spec #344): a star, an icon, a name and a note. Basic rows are
+ * A shape the library lists (#352, spec #344): a star, a picture, a name and a note. Basic rows are
  * the kinds that can be drawn; saved shapes (#353) join them as a Saved group.
  */
 export interface ShapeLibraryRow extends RingShape {
@@ -40,7 +40,6 @@ export function basicShapeRows(
         id: kind.shape.id,
         group: "basic",
         label: kind.shape.label,
-        icon: kind.shape.icon,
         kind,
         note: intervalNote(
             kind.params.flatMap((p) =>

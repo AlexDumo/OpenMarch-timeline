@@ -1,4 +1,3 @@
-import { CircleHalfIcon } from "@phosphor-icons/react";
 import { centroid, dist, sub, xy } from "../geometry/vec";
 import {
     autoEdgeCount,
@@ -82,7 +81,6 @@ export const fillKind: ShapeKind<FillParams> = {
     id: "fill",
     version: 1,
     label: "Filled",
-    icon: CircleHalfIcon,
     family: "fill",
     defaultOrder: "nearest",
     unlisted: true,

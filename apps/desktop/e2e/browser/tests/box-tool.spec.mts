@@ -1115,13 +1115,23 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
     const cf = grid.centerFront;
     await page.getByRole("tab", { name: "Shapes" }).click();
     const box = page.getByTestId("shapes-tab-block");
-    await expect(box).toHaveText("Box");
+    // A picture only, drawn from the box's own spots (#378); the name is its label
+    await expect(box).toHaveText("");
+    await expect(box).toHaveAccessibleName("Box");
+    await expect(box.getByTestId("shape-preview")).toHaveAttribute(
+        "data-spots",
+        "9",
+    );
 
-    // Nobody selected: greyed out, and it says why
+    // Nobody selected: greyed out, and it says why, naming the shape on hover
     expect((await readField(page)).selection).toEqual([]);
     await expect(box).toBeDisabled();
     await expect(page.getByTestId("shapes-tab-reason")).toHaveText(
         "Select marchers first",
+    );
+    await expect(box.locator("..")).toHaveAttribute(
+        "title",
+        "Box: Select marchers first",
     );
 
     await selectAll(page);
@@ -1201,6 +1211,11 @@ test("holding R opens the ring around the cursor; sliding to Box and letting go 
     ).toBeLessThan(4);
     const box = ringSlot(page, "block");
     await expect(box).toHaveText("Box");
+    // The same picture as the Shapes tab (#378)
+    await expect(box.getByTestId("shape-preview")).toHaveAttribute(
+        "data-spots",
+        "9",
+    );
     await expect(box).toHaveAttribute("data-hot", "false");
 
     await page.mouse.move(at.x, at.y - 90, { steps: 4 });
@@ -1396,7 +1411,7 @@ test("the Shapes tab's Library button opens the library; a star puts Box in the 
 
     // In the Shapes tab after the divider, and picking it arms the box
     const starred = page.getByTestId("shapes-tab-starred-block");
-    await expect(starred).toHaveText("Box");
+    await expect(starred).toHaveAccessibleName("Box");
     await starred.click();
     await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
     await page.keyboard.press("Escape");
@@ -1488,7 +1503,13 @@ test("change: ☆ Save keeps a box's spacing as a starred saved shape that draws
         .toEqual([1, 2, 3, 4, 5]);
     await page.getByRole("tab", { name: "Shapes" }).click();
     const starred = page.getByTestId(`shapes-tab-starred-${id}`);
-    await expect(starred).toHaveText("Wide box");
+    await expect(starred).toHaveAccessibleName("Wide box");
+    // Its picture is drawn at its own spacing, so it isn't the plain box's (#378)
+    const picture = (id: string) =>
+        page.getByTestId(id).getByTestId("shape-preview").innerHTML();
+    expect(await picture(`shapes-tab-starred-${id}`)).not.toBe(
+        await picture("shapes-tab-block"),
+    );
     await starred.click();
     await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
     const grid = await fieldGrid(show);

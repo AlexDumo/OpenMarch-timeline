@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { SidebarModalLauncher } from "@/components/sidebar/SidebarModal";
+import ShapePreviewIcon from "../preview/ShapePreviewIcon";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { MAX_STARS, type ShapeLibraryRow } from "./shapeLibrary";
 import { useShapeLibraryRows, useShapeStarsStore } from "./shapeStars";
@@ -192,7 +193,6 @@ function LibraryRow({
     /** Adds a saved shape only the open show has to the user's library */
     onAddToLibrary?: () => void;
 }) {
-    const Icon = row.icon;
     return (
         <li
             className="rounded-6 hover:bg-fg-2 group flex items-center gap-8 px-4 py-4"
@@ -220,7 +220,11 @@ function LibraryRow({
                 className="flex min-w-0 flex-1 items-center gap-8 text-left disabled:opacity-60"
                 data-testid={`shape-library-pick-${row.id}`}
             >
-                <Icon size={22} className="shrink-0" />
+                <ShapePreviewIcon
+                    kind={row.kind}
+                    size={22}
+                    className="shrink-0"
+                />
                 <span className="text-body truncate">{row.label}</span>
                 {row.note && (
                     <span className="text-sub text-text-subtitle truncate">

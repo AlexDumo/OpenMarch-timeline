@@ -1,4 +1,3 @@
-import { SquaresFourIcon } from "@phosphor-icons/react";
 import { flatness, principalExtremes, typicalSpacing } from "../geometry/fit";
 import {
     add,
@@ -134,7 +133,6 @@ export const blockKind: ShapeKind<BlockParams> = {
     id: "block",
     version: 1,
     label: "Box",
-    icon: SquaresFourIcon,
     family: "fill",
     groups: [
         {

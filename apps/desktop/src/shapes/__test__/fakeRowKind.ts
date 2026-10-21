@@ -1,4 +1,3 @@
-import { LineSegmentIcon } from "@phosphor-icons/react";
 import { fieldToFrame, frameToField, type ShapeFrame } from "../frame/frame";
 import { formatSteps } from "../editor/format";
 import { parseSteps, scrubDistance, scrubValue } from "../editor/scrub";
@@ -47,7 +46,6 @@ const rowShape: ShapeKind<RowParams> = {
     id: "test-row",
     version: 1,
     label: "Row",
-    icon: LineSegmentIcon,
     family: "path",
     unlisted: true,
     groups: [],

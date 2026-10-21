@@ -12,7 +12,6 @@
  * converting with {@link ShapeContext.stepPx}.
  */
 
-import type { Icon } from "@phosphor-icons/react";
 import type { Path } from "./geometry/path";
 
 export interface XY {
@@ -267,7 +266,6 @@ export interface ShapeKind<P> {
     /** Bump when `generate` gives different slots for the same params */
     readonly version: number;
     readonly label: string;
-    readonly icon: Icon;
     readonly family: "path" | "fill";
     /** Not offered in the shape pickers: reached another way (a filled shape, by its switch) */
     readonly unlisted?: boolean;

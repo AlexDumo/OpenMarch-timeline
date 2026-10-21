@@ -1,4 +1,3 @@
-import { CircleIcon } from "@phosphor-icons/react";
 import { radiusForChords } from "../geometry/chords";
 import { fitCircle } from "../geometry/fit";
 import { makePath, type Path } from "../geometry/path";
@@ -65,7 +64,6 @@ export const circleKind: ShapeKind<CircleParams> = {
     id: "circle",
     version: 1,
     label: "Circle",
-    icon: CircleIcon,
     family: "path",
     groups: [SPACING_GROUP],
     measures: [

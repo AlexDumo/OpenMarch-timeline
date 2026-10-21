@@ -21,7 +21,6 @@ const basics: ShapeToolEntry[] = [
 const star = (id: string): RingShape => ({
     id,
     label: id,
-    icon: boxTool.shape.icon,
     kind: rowTool,
 });
 
@@ -61,7 +60,6 @@ describe("the favorites ring's slots", () => {
         const starredBox: RingShape = {
             id: boxTool.shape.id,
             label: "Box",
-            icon: boxTool.shape.icon,
             kind: boxTool,
         };
         expect(ringSlots([starredBox], basics).map((s) => s.label)).toEqual([
