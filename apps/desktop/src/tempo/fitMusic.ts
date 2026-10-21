@@ -45,6 +45,8 @@ export interface FitPlan {
      * counts may sit on the music a beat or two off the bars. Null when the downbeats look right.
      */
     downbeat: { count: number; measures: number } | null;
+    /** The last count start that was fitted to the music (past `to` when the fit went on to the music's end) */
+    fittedTo: number;
 }
 
 /** The first clear hit in the music: the strongest of the opening onsets, not a breath of noise */
@@ -54,6 +56,59 @@ export function firstHit(env: OnsetEnvelope): number | null {
     const strong = Math.max(...peaks.slice(0, 40).map((p) => p.s));
     const first = peaks.find((p) => p.s >= 0.45 * strong);
     return first ? first.t : null;
+}
+
+/**
+ * Where following lost the music: the first of three counts in a row that found no real hit. A
+ * real hit is one at least 30% as strong as the counts' recent hits, so the faint ticks under a
+ * held note don't count as the music going on. -1 when it never lost it.
+ */
+export function lostAt(env: OnsetEnvelope, times: readonly number[]): number {
+    const peaks = onsetPeaks(env);
+    const strengths: number[] = [];
+    const strong: boolean[] = [];
+    const recent: number[] = [];
+    for (let k = 1; k < times.length; k++) {
+        const t = times[k]!;
+        const tol = Math.max(0.03, 0.12 * (t - times[k - 1]!));
+        let best = 0;
+        for (let i = firstPeakFrom(peaks, t - tol); i < peaks.length; i++) {
+            if (peaks[i]!.t > t + tol) break;
+            best = Math.max(best, peaks[i]!.s);
+        }
+        strengths.push(best);
+        const ref = recent.length
+            ? [...recent].sort((x, y) => x - y)[recent.length >> 1]!
+            : best;
+        const isStrong = best > 0 && best >= 0.3 * ref;
+        strong.push(isStrong);
+        if (isStrong) {
+            recent.push(best);
+            if (recent.length > 8) recent.shift();
+        }
+    }
+    return strong.findIndex((hit, j) => !hit && strong[j + 1] === false);
+}
+
+const firstPeakFrom = (peaks: readonly { t: number }[], t: number) => {
+    let lo = 0;
+    let hi = peaks.length;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (peaks[mid]!.t < t) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo;
+};
+
+/** The last clear hit in the music (a quiet tail of reverb isn't one) */
+export function lastHit(env: OnsetEnvelope): number | null {
+    const peaks = onsetPeaks(env);
+    if (peaks.length === 0) return null;
+    const strong = Math.max(...peaks.map((p) => p.s));
+    for (let i = peaks.length - 1; i >= 0; i--)
+        if (peaks[i]!.s >= 0.15 * strong) return peaks[i]!.t;
+    return null;
 }
 
 /** The share of counts in `starts[from..to]` that sit on a hit (within 10% of a count, or 30 ms) */
@@ -97,6 +152,7 @@ export function planFit({
     to,
     measureStarts = [],
     holds,
+    toEnd,
 }: {
     env: OnsetEnvelope;
     durations: readonly number[];
@@ -107,6 +163,13 @@ export function planFit({
     measureStarts?: readonly number[];
     /** Holds (fermatas) keep their length */
     holds?: ReadonlySet<number>;
+    /**
+     * Fitting to the end of the music: `to` is only a first guess (made on the counts as they
+     * were, which may run slower than the music), so the fit goes on through the music's last
+     * hit, and the stored counts after it, up to `carryTo`, keep the last tempo (no pin in the
+     * way; the endless counts after the stored ones carry on from the last one anyway).
+     */
+    toEnd?: { carryTo: number };
 }): FitPlan {
     let moveMusic = 0;
     // From a count that isn't on the music, a fit would follow the wrong beats: say so instead
@@ -124,6 +187,7 @@ export function planFit({
                 stoppedAt: null,
                 refused: "start-off-music",
                 downbeat: null,
+                fittedTo: from,
             };
     }
     // From the very start, the first hit goes on count 1
@@ -135,7 +199,7 @@ export function planFit({
     const end = Math.min(to, durations.length - 1);
     // Fitted in stretches: between pins, and wherever the counting changes between even
     // measures and uneven ones (a grouping like 2+2+3), as each is fitted its own way
-    const evenness = measureEvenness(durations, measureStarts);
+    const evenness = measureEvenness(durations, measureStarts, holds);
     const switches = evenness
         .filter((m, i) => i > 0 && m.uneven !== evenness[i - 1]!.uneven)
         .map((m) => m.start);
@@ -172,7 +236,9 @@ export function planFit({
             });
         } else {
             modes.push("follow");
-            if (!hasUnevenMeasures(result.durations, measureStarts, a, b)) {
+            if (
+                !hasUnevenMeasures(result.durations, measureStarts, a, b, holds)
+            ) {
                 // The music's own pulse (72–190 BPM, the octave whose counts land on most hits)
                 const first =
                     firstCountLength(music, s[a]!, estimateBeatPeriod) ??
@@ -184,12 +250,7 @@ export function planFit({
                     counts: b - a,
                 });
                 // Stop where it loses the music, rather than guess on past it
-                const lost = tr.onHit.findIndex(
-                    (hit, j) =>
-                        !hit &&
-                        tr.onHit[j + 1] === false &&
-                        tr.onHit[j + 2] === false,
-                );
+                const lost = lostAt(music, tr.times);
                 if (lost > 0) {
                     stoppedAt = a + lost;
                     tr.times.length = lost + 1;
@@ -234,6 +295,13 @@ export function planFit({
         );
         if (stoppedAt !== null) break;
     }
+    let fittedTo = stoppedAt ?? end;
+    if (toEnd && stoppedAt === null && !result.locks.has(end)) {
+        const extended = toTheEnd(music, result, end, toEnd.carryTo, holds);
+        result = extended.result;
+        fittedTo = extended.fittedTo;
+        for (const b of extended.unsure) unsure.add(b);
+    }
     return {
         result,
         unsure,
@@ -246,9 +314,93 @@ export function planFit({
             result.durations,
             measureStarts,
             from,
-            stoppedAt ?? end,
+            fittedTo,
         ),
+        fittedTo,
     };
+}
+
+/**
+ * After a fit that reached `end`, carry on to the music's last hit (following it as before), then
+ * give the counts after the music, up to `carryTo` or the next pin, the last tempo, so the tempo
+ * doesn't jump back to the old guess where the music stops.
+ */
+function toTheEnd(
+    music: OnsetEnvelope,
+    start: TempoEditResult,
+    end: number,
+    carryTo: number,
+    holds?: ReadonlySet<number>,
+): { result: TempoEditResult; fittedTo: number; unsure: Set<number> } {
+    let result = start;
+    const unsure = new Set<number>();
+    const pin = lockAfter(result.locks, end);
+    // following the music can go on into the endless counts; only up to a pin
+    const limit = Math.min(pin ?? Infinity, result.durations.length - 1);
+    if (limit <= end) return { result, fittedTo: end, unsure };
+    const s = startsOf(result.durations);
+    // the tempo the fit ended on: the middle of the last few counts that aren't holds
+    const recent: number[] = [];
+    for (let b = end - 1; b >= 1 && recent.length < 4; b--)
+        if (!holds?.has(b)) recent.push(s[b + 1]! - s[b]!);
+    if (recent.length === 0) return { result, fittedTo: end, unsure };
+    const len = [...recent].sort((x, y) => x - y)[recent.length >> 1]!;
+    let fittedTo = end;
+    const last = lastHit(music);
+    if (last !== null && s[end]! < last - 0.5 * len) {
+        const counts = Math.min(
+            limit - end,
+            Math.ceil((last - s[end]!) / len) + 1,
+        );
+        const tr = trackCounts({
+            env: music,
+            start: s[end]!,
+            firstLength: len,
+            counts,
+        });
+        const lost = lostAt(music, tr.times);
+        if (lost >= 0) tr.times.length = lost + 1;
+        // only counts that start by the last hit are the music's
+        while (
+            tr.times.length > 1 &&
+            tr.times[tr.times.length - 1]! > last + 0.5 * len
+        )
+            tr.times.length--;
+        if (tr.times.length > 1) {
+            const peaks = onsetPeaks(music);
+            for (let k = 1; k < tr.times.length - 1; k++) {
+                const t = tr.times[k]!;
+                const tol = Math.max(0.03, 0.12 * (tr.times[k + 1]! - t));
+                if (!hasPeakNear(peaks, t, tol)) unsure.add(end + k);
+            }
+            fittedTo = end + tr.times.length - 1;
+            result = retime(
+                result.durations,
+                result.locks,
+                end,
+                fittedTo,
+                tr.times.slice(1).map((t, k) => t - tr.times[k]!),
+                { fixed: holds },
+            );
+        }
+    }
+    // after the music, up to the end of the counts: the last tempo carries on (not up to a pin,
+    // whose place is set)
+    const carry = Math.min(carryTo, result.durations.length - 1);
+    if (pin === null && fittedTo < carry) {
+        const lengths = Array<number>(carry - fittedTo).fill(len);
+        result = retime(
+            result.durations,
+            result.locks,
+            fittedTo,
+            carry,
+            lengths,
+            {
+                fixed: holds,
+            },
+        );
+    }
+    return { result, fittedTo, unsure };
 }
 
 /** Whether an onset peak lies within `tol` of `t` (peaks ascending) */
@@ -314,18 +466,36 @@ export function downbeatCheck(
 function measureEvenness(
     durations: readonly number[],
     measureStarts: readonly number[],
+    holds?: ReadonlySet<number>,
 ) {
     const sorted = [...measureStarts].sort((x, y) => x - y);
     return sorted.map((a, i) => {
         const b = sorted[i + 1] ?? a;
-        let lo = Infinity;
-        let hi = 0;
-        for (let k = a; k < b; k++) {
-            lo = Math.min(lo, durations[k]!);
-            hi = Math.max(hi, durations[k]!);
-        }
-        return { start: a, uneven: b - a >= 2 && hi / lo >= 1.4 };
+        return { start: a, uneven: unevenCounts(durations, a, b, holds) };
     });
+}
+
+/**
+ * Whether the counts `a`..`b` (one measure) have different lengths on purpose: the long count at
+ * least 1.4 times the others. A hold (fermata) is long because it's held, not grouped, so it's left
+ * out.
+ */
+function unevenCounts(
+    durations: readonly number[],
+    a: number,
+    b: number,
+    holds?: ReadonlySet<number>,
+) {
+    let lo = Infinity;
+    let hi = 0;
+    let n = 0;
+    for (let k = a; k < b; k++) {
+        if (holds?.has(k)) continue;
+        lo = Math.min(lo, durations[k]!);
+        hi = Math.max(hi, durations[k]!);
+        n++;
+    }
+    return n >= 2 && hi / lo >= 1.4;
 }
 
 /**
@@ -337,19 +507,14 @@ function hasUnevenMeasures(
     measureStarts: readonly number[],
     from: number,
     to: number,
+    holds?: ReadonlySet<number>,
 ) {
     const sorted = [...measureStarts].sort((x, y) => x - y);
     for (let i = 0; i + 1 < sorted.length; i++) {
         const a = sorted[i]!;
         const b = sorted[i + 1]!;
         if (b <= from || a >= to || b - a < 2) continue;
-        let lo = Infinity;
-        let hi = 0;
-        for (let k = a; k < b; k++) {
-            lo = Math.min(lo, durations[k]!);
-            hi = Math.max(hi, durations[k]!);
-        }
-        if (hi / lo >= 1.4) return true;
+        if (unevenCounts(durations, a, b, holds)) return true;
     }
     return false;
 }

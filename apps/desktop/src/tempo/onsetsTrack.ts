@@ -60,12 +60,27 @@ const firstAtOrAfter = (peaks: Peak[], t: number) => {
     return lo;
 };
 
+/** The strongest peak within 30 ms of `t`, or 0 */
+const strengthNear = (peaks: Peak[], t: number) => {
+    let s = 0;
+    for (let i = firstAtOrAfter(peaks, t - 0.03); i < peaks.length; i++) {
+        if (peaks[i]!.t > t + 0.03) break;
+        s = Math.max(s, peaks[i]!.s);
+    }
+    return s;
+};
+
+/** A peak under this share of the hits being followed is a faint tick, not a hit */
+const WEAK = 0.3;
+
 /** How many counts back the follow's decisions settle */
 const SETTLE_COUNTS = 16;
 
 interface Path {
     t: number;
     len: number;
+    /** How strong the hits it has followed are (a running average); 0 before the first */
+    ref: number;
     score: number;
     times: number[];
     hits: boolean[];
@@ -76,6 +91,53 @@ export interface TrackResult {
     times: number[];
     /** Whether each count's start (from the second on) landed on a hit in the music */
     onHit: boolean[];
+}
+
+/** Every way path `p` can take its next count (each hit about a count on, or a miss), into `next` */
+function stepPath(
+    p: Path,
+    peaks: Peak[],
+    localPulse: ((t: number) => number | null) | undefined,
+    changeWeight: number,
+    missCost: number,
+    next: Path[],
+) {
+    // the pulse here, at the octave nearest the counts'
+    const raw = localPulse?.(p.t) ?? null;
+    const pulse =
+        raw === null
+            ? null
+            : [raw, raw / 2, raw * 2].reduce((a, b) =>
+                  Math.abs(Math.log(b / p.len)) < Math.abs(Math.log(a / p.len))
+                      ? b
+                      : a,
+              );
+    const lo = p.t + 0.66 * Math.min(p.len, pulse ?? p.len);
+    const hi = p.t + 1.38 * Math.max(p.len, pulse ?? p.len);
+    const extend = (t: number, gain: number, hit: boolean) => {
+        const len = t - p.t;
+        const rPrev = Math.log(len / p.len);
+        const rPulse = pulse === null ? Infinity : Math.log(len / pulse);
+        // changing tempo costs less when it goes to the music's own pulse
+        const r2 = Math.min(rPrev * rPrev, rPulse * rPulse + 0.02);
+        next.push({
+            t,
+            // follow the tempo, smoothed so one late hit doesn't swing it
+            len: hit ? 0.8 * len + 0.2 * p.len : p.len,
+            ref: hit ? (p.ref ? 0.8 * p.ref + 0.2 * gain : gain) : p.ref,
+            score: p.score + gain - changeWeight * r2,
+            times: [...p.times, t],
+            hits: [...p.hits, hit],
+        });
+    };
+    for (
+        let i = firstAtOrAfter(peaks, lo);
+        i < peaks.length && peaks[i]!.t <= hi;
+        i++
+    )
+        // faint ticks (under a held note, in a caesura) aren't the music going on
+        if (peaks[i]!.s >= WEAK * p.ref) extend(peaks[i]!.t, peaks[i]!.s, true);
+    extend(p.t + p.len, -missCost, false);
 }
 
 /**
@@ -102,50 +164,21 @@ export function trackCounts({
     localPulse?: (t: number) => number | null;
 }): TrackResult {
     const peaks = onsetPeaks(env);
+    // the hit it starts on sets how strong a hit is
     let paths: Path[] = [
-        { t: start, len: firstLength, score: 0, times: [start], hits: [] },
+        {
+            t: start,
+            len: firstLength,
+            ref: strengthNear(peaks, start),
+            score: 0,
+            times: [start],
+            hits: [],
+        },
     ];
     for (let k = 0; k < counts; k++) {
         const next: Path[] = [];
-        for (const p of paths) {
-            // the pulse here, at the octave nearest the counts'
-            const raw = localPulse?.(p.t) ?? null;
-            const pulse =
-                raw === null
-                    ? null
-                    : [raw, raw / 2, raw * 2].reduce((a, b) =>
-                          Math.abs(Math.log(b / p.len)) <
-                          Math.abs(Math.log(a / p.len))
-                              ? b
-                              : a,
-                      );
-            const lo = p.t + 0.66 * Math.min(p.len, pulse ?? p.len);
-            const hi = p.t + 1.38 * Math.max(p.len, pulse ?? p.len);
-            const extend = (t: number, gain: number, hit: boolean) => {
-                const len = t - p.t;
-                const rPrev = Math.log(len / p.len);
-                const rPulse =
-                    pulse === null ? Infinity : Math.log(len / pulse);
-                // changing tempo costs less when it goes to the music's own pulse
-                const r2 = Math.min(rPrev * rPrev, rPulse * rPulse + 0.02);
-                const r = Math.sqrt(r2);
-                next.push({
-                    t,
-                    // follow the tempo, smoothed so one late hit doesn't swing it
-                    len: hit ? 0.8 * len + 0.2 * p.len : p.len,
-                    score: p.score + gain - changeWeight * r * r,
-                    times: [...p.times, t],
-                    hits: [...p.hits, hit],
-                });
-            };
-            for (
-                let i = firstAtOrAfter(peaks, lo);
-                i < peaks.length && peaks[i]!.t <= hi;
-                i++
-            )
-                extend(peaks[i]!.t, peaks[i]!.s, true);
-            extend(p.t + p.len, -missCost, false);
-        }
+        for (const p of paths)
+            stepPath(p, peaks, localPulse, changeWeight, missCost, next);
         next.sort((a, b) => b.score - a.score);
         // keep the best path per landing spot (within 15 ms)
         const kept: Path[] = [];
@@ -170,9 +203,12 @@ export function trackCounts({
 
 /**
  * How long the first count is, from the music near `start`: the steady pulse there, at the
- * octave (half or double) whose counts land on the most strong hits, between 72 and 190 BPM
- * (marching tempos). Null when the music has no clear pulse there.
+ * octave (half or double) whose counts land on the most strong hits, between 50 and 200 BPM
+ * (marching tempos, and a ballad at ♩60 after a fermata). Null when the music has no clear pulse
+ * there.
  */
+const MIN_LEN = 60 / 200;
+const MAX_LEN = 60 / 50;
 export function firstCountLength(
     env: OnsetEnvelope,
     start: number,
@@ -184,7 +220,7 @@ export function firstCountLength(
         max: number,
     ) => number | null,
 ): number | null {
-    const p = estimate(env, start, start + 8, 60 / 190, 60 / 72);
+    const p = estimate(env, start, start + 8, MIN_LEN, MAX_LEN);
     if (!p) return null;
     const peaks = onsetPeaks(env).filter(
         (q) => q.t >= start && q.t < start + 8 && q.s > 0.5,
@@ -210,7 +246,7 @@ export function firstCountLength(
         );
     };
     const candidates = [p, p / 2, p * 2].filter(
-        (c) => c >= 60 / 190 - 1e-9 && c <= 60 / 72 + 1e-9,
+        (c) => c >= MIN_LEN - 1e-9 && c <= MAX_LEN + 1e-9,
     );
     return candidates.reduce((a, b) => (coverage(b) > coverage(a) ? b : a));
 }

@@ -1390,7 +1390,8 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
      * suggestions; it fills between pins). Between two pins both ends stay; past the last pin the
      * counts are followed one at a time from the pin, and the ones that found no hit are marked.
      */
-    const fitToMusic = (from: number, to: number) => {
+    /** `toEnd`: `to` is the end of the music as the counts were; the fit goes on to the real end */
+    const fitToMusic = (from: number, to: number, toEnd = false) => {
         if (!onsets) {
             toast.info("Still listening to the music…");
             return;
@@ -1406,6 +1407,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             measureStarts: data.measures
                 .filter((m) => m.id !== null)
                 .map((m) => m.start),
+            toEnd: toEnd ? { carryTo: data.storedCount } : undefined,
         });
         if (plan.refused === "start-off-music") {
             toast.error(
@@ -1415,7 +1417,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             return;
         }
         useTempoUi.getState().setUnsure(plan.unsure);
-        const last = plan.stoppedAt ?? end;
+        const last = plan.fittedTo;
         const fitted = Math.max(1, last - from);
         // say plainly how well it went: most counts on hits, or not
         const onHits = 1 - plan.unsure.size / fitted;
@@ -2666,11 +2668,17 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             // from the count clicked: what's before it stays as it is (nothing to fit past the
             // end of the music)
             const from = Math.max(1, beat);
-            const end = lockAfter(data.locks, from) ?? musicEndBeat();
+            const pin = lockAfter(data.locks, from);
+            const end = pin ?? musicEndBeat();
             if (end > from)
                 items.push({
-                    label: `Fit ${rangeLabel(from, end)} to the music`,
-                    onSelect: () => fitToMusic(from, end),
+                    // up to a pin, or on to the end of the music (where that is on the counts as
+                    // they are now is only a guess)
+                    label:
+                        pin === null
+                            ? `Fit from ${measureLabel(from)} to the end of the music`
+                            : `Fit ${rangeLabel(from, end)} to the music`,
+                    onSelect: () => fitToMusic(from, end, pin === null),
                     range: { from, to: end },
                 });
         }
@@ -3181,7 +3189,9 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 className="border-accent text-accent bg-modal pointer-events-none absolute z-[5] rounded-[3px] border px-4 text-[11px] leading-[14px] whitespace-nowrap"
                 style={{
                     left: Math.max(gutterRight + 2, xOf(tapFrom, ppb) + 4),
-                    top: MARKS.top + 2,
+                    // under the Music lane's handles: clear of the rehearsal letters and the
+                    // tempo label
+                    top: MUSIC.top + 20,
                 }}
             >
                 Taps count from {measuresLabel(tapFrom, tapFrom + 1)}
@@ -3271,6 +3281,10 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             data-marks={data.measures
                 .flatMap((m) => (m.mark ? [`${m.start}:${m.mark}`] : []))
                 .join(",")}
+            data-measures={data.measures
+                .map((m) => `${m.start}:${m.counts}:${m.number}`)
+                .join(",")}
+            data-holds={[...data.holds].join(",")}
             data-counts={durations
                 .slice(1, 400)
                 .map((d) => d.toFixed(3))
@@ -3349,7 +3363,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                             // the whole show (owner, 2026-10-21): what's already on the music is
                             // only nudged, so running it again is safe
                             // (fitted between any pins on the way, which never move)
-                            fitToMusic(1, musicEndBeat());
+                            fitToMusic(1, musicEndBeat(), true);
                         }}
                         onTap={() => {
                             if (!playing) return;
