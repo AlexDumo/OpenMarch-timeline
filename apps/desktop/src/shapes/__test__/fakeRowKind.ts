@@ -78,6 +78,7 @@ export const rowTool: ToolKind<RowParams> = {
             range: { min: 0.5 },
             glyph: "↔",
             display: (p, _n, stepPx) => formatSteps(p.gap / stepPx),
+            value: (p, _n, stepPx) => p.gap / stepPx,
             type(p, _n, text, env) {
                 const steps = parseSteps(text);
                 return steps === null

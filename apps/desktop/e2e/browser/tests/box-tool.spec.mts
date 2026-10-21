@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { test, expect, type Show } from "../fixtures.mjs";
 import {
+    clickMarcher,
     drawnMarchers,
     expectCanvasMatchesShow,
     readField,
@@ -1340,4 +1341,154 @@ test("the Shapes tab's Library button opens the library; a star puts Box in the 
     await star.click();
     await expect(star).toHaveAttribute("aria-pressed", "false");
     await expect(page.getByTestId("shapes-tab-starred-block")).toHaveCount(0);
+});
+
+// Saved shapes (#353): ☆ Save keeps a shape's kind and spacing, not its size
+// or count, starred, in the user's library and in the show; picked for another
+// selection it draws at its spacing, and the show keeps its copy for a machine
+// whose library doesn't have it.
+/**
+ * Draws a box on everyone, sets its spacing to 2½ × 1½ and saves it from the
+ * ⋯ row as "Wide box", leaving it open. Returns the saved shape's id.
+ */
+async function saveWideBox(show: Show): Promise<string> {
+    const { page } = show;
+    await drawBox(show);
+    await page.getByTestId("shape-editor-across").click();
+    await page.keyboard.type("2.5");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => readout(page)).toBe("4 × 2 · 2½ × 6 steps");
+    await page.getByTestId("shape-editor-deep").click();
+    await page.keyboard.type("1.5");
+    await page.keyboard.press("Enter");
+    await expect.poll(() => readout(page)).toBe("4 × 2 · 2½ × 1½ steps");
+
+    // Save asks for a name, offering the kind and its spacing
+    await page.getByTestId("shape-editor-more").click();
+    await page.getByTestId("shape-editor-save").click();
+    const name = page.getByTestId("shape-editor-save-name");
+    await expect(name).toBeFocused();
+    await expect(name).toHaveValue("Box 2½ × 1½ apart");
+    await name.fill("Wide box");
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-editor-save")).toHaveText(
+        "Saved as Wide box",
+    );
+    // Enter named it: the box is still open
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+
+    // The show keeps a copy: the kind and its intervals, no size or count
+    await expect
+        .poll(() =>
+            show.query<{ name: string; kind: string; intervals: string }>(
+                "SELECT name, kind, intervals FROM saved_shapes",
+            ),
+        )
+        .toEqual([
+            {
+                name: "Wide box",
+                kind: "block",
+                intervals: JSON.stringify({ across: 2.5, deep: 1.5 }),
+            },
+        ]);
+    const [{ id }] = await show.query<{ id: string }>(
+        "SELECT id FROM saved_shapes",
+    );
+    return id;
+}
+
+test("change: ☆ Save keeps a box's spacing as a starred saved shape that draws at that spacing on another selection, and the show keeps a copy", async ({
+    show,
+}) => {
+    const { page } = show;
+    const id = await saveWideBox(show);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+
+    // Starred: it's in the Shapes tab. Picked for five marchers, a drag draws
+    // a box of five at the saved spacing
+    await page.keyboard.press("Escape");
+    for (const [i, drill] of ["T1", "T2", "T3", "T4", "T5"].entries())
+        await clickMarcher(page, drill, { add: i > 0 });
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([1, 2, 3, 4, 5]);
+    await page.getByRole("tab", { name: "Shapes" }).click();
+    const starred = page.getByTestId(`shapes-tab-starred-${id}`);
+    await expect(starred).toHaveText("Wide box");
+    await starred.click();
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await drag(
+        page,
+        await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+        await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
+    );
+    expect((await shapeOverlay(page))!.spots).toHaveLength(5);
+    await expect.poll(() => readout(page)).toMatch(/ · 2½ × 1½ steps$/);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    // An ordinary box recipe: it reopens without the saved shape
+    await expect
+        .poll(async () =>
+            (
+                await show.query<{ kind: string }>(
+                    "SELECT kind FROM timeline_shape_recipes",
+                )
+            ).map((r) => r.kind),
+        )
+        .toEqual(["block"]);
+
+    // On a machine whose library doesn't have it, the show still lists it,
+    // and it can be deleted there
+    await page.evaluate(() => localStorage.removeItem("openmarch:savedShapes"));
+    await page.reload();
+    await waitForField(page);
+    await page.getByTestId("shape-library-tab").click();
+    const row = page.getByTestId(`shape-library-row-${id}`);
+    await expect(row).toContainText("Wide box");
+    await expect(row).toContainText("2½ × 1½ apart · this show only");
+    await page.getByTestId(`shape-library-delete-${id}`).click();
+    await expect(row).toHaveCount(0);
+    await expect
+        .poll(() => show.query("SELECT id FROM saved_shapes"))
+        .toEqual([]);
+    await expect(page.getByTestId("shape-library-saved-empty")).toBeVisible();
+});
+
+test("change: ☆ Save at the bottom of the inspector's shape section saves a selected placed box, starred in the library", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const t3 = await marcherScreen(page, 3);
+    await page.mouse.click(t3.x, t3.y);
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+
+    const section = page.getByTestId("shape-tool-section");
+    await section.getByTestId("shape-section-save").click();
+    const name = section.getByTestId("shape-section-save-name");
+    await expect(name).toBeFocused();
+    await name.fill("Placed box");
+    await section.getByTestId("shape-section-save-confirm").click();
+    await expect(section.getByTestId("shape-section-save")).toHaveText(
+        "Saved as Placed box",
+    );
+
+    await expect
+        .poll(() => show.query("SELECT name FROM saved_shapes"))
+        .toEqual([{ name: "Placed box" }]);
+    const [{ id }] = await show.query<{ id: string }>(
+        "SELECT id FROM saved_shapes",
+    );
+    await page.getByTestId("shape-library-tab").click();
+    await expect(page.getByTestId(`shape-library-row-${id}`)).toContainText(
+        "Placed box",
+    );
+    await expect(page.getByTestId(`shape-library-star-${id}`)).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
 });

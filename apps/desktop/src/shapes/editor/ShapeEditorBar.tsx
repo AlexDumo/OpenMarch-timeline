@@ -34,6 +34,7 @@ import {
 } from "./editTargets";
 import { parseDegrees, scrubDistance } from "./scrub";
 import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
+import { SaveShapeButton } from "../library/SaveShapeButton";
 
 /** The gap between the shape's outline and the editor, in CSS px */
 const GAP_PX = 14;
@@ -47,7 +48,7 @@ const GAP_PX = 14;
  * Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
  * For a box: `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`. Every number can be typed or dragged,
  * and follows the field: across is side to side however the box is turned. ⋯ opens a second row:
- * the rotation (typed or dragged), flips, and who goes where. Place shows only for a new
+ * the rotation (typed or dragged), flips, who goes where and ☆ Save. Place shows only for a new
  * shape; a selected placed shape saves each edit on release.
  */
 export function ShapeEditor({ stepPx }: { stepPx: number }) {
@@ -372,6 +373,13 @@ function ShapeEditorBar({
                             </span>
                         )}
                     </span>
+                    <Divider />
+                    <SaveShapeButton
+                        shape={{ kind, params, spots }}
+                        stepPx={stepPx}
+                        className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
+                        testId="shape-editor-save"
+                    />
                 </div>
             )}
         </div>

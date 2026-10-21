@@ -1,6 +1,7 @@
 import { formatSteps } from "../editor/format";
 import { RING_SLOTS, type RingShape } from "../tool/ringMachine";
 import type { ShapeToolEntry } from "../tool/shapeTools";
+import type { SavedShape } from "./savedShapes";
 
 /** The most shapes that can be starred: one star puts a shape in the ring, which holds this many */
 export const MAX_STARS = RING_SLOTS;
@@ -13,6 +14,14 @@ export interface ShapeLibraryRow extends RingShape {
     readonly group: "basic" | "saved";
     /** What sets it apart, such as "2 apart"; null for nothing to say */
     readonly note: string | null;
+    /**
+     * A saved shape's own record, and whether it's in the user's library or only in the open
+     * show; absent for basic kinds
+     */
+    readonly saved?: {
+        readonly shape: SavedShape;
+        readonly inLibrary: boolean;
+    };
 }
 
 /** How far apart the spots are, in steps: "2 apart", "2 × 4 apart"; null for no spacing */

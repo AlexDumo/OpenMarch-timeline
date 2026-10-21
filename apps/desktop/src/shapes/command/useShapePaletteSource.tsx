@@ -12,17 +12,33 @@ import type { AnyToolKind } from "../tool/toolKind";
 import { SHAPE_TOOLS } from "../tool/shapeTools";
 import { useShapeToolStore } from "../tool/shapeToolStore";
 import { beginShapeCommand } from "./shapeCommand";
+import type { ShapeLibraryRow } from "../library/shapeLibrary";
+import { useShapeLibraryRows } from "../library/shapeStars";
 
 /** The Shape branch's id in the command tree */
 export const SHAPE_BRANCH = "shape";
 
 /**
- * The saved shapes listed in the Shape branch after the kinds (#344 story 19). Saved shapes come
- * with the library (#352, #353); this is where they join the branch, each a command that opens
- * its kind with its intervals.
+ * The saved shapes listed in the Shape branch after the kinds (#344 story 19, #353), each a
+ * command that opens its kind with its intervals, by its name
  */
-export function savedShapeItems(): readonly PaletteItem[] {
-    return [];
+export function savedShapeItems(
+    rows: readonly ShapeLibraryRow[],
+    ready: boolean,
+    selected: readonly { readonly id: number }[],
+    t: Translate,
+    place: () => Promise<void>,
+): readonly PaletteItem[] {
+    return rows.flatMap((row) =>
+        row.saved
+            ? [
+                  kindItem(row.kind, ready, selected, t, place, {
+                      id: row.id,
+                      label: row.label,
+                  }),
+              ]
+            : [],
+    );
 }
 
 /**
@@ -36,6 +52,7 @@ export function useShapePaletteSource(
     /** The host's place for the open shape (Place, Enter), which the last answer runs */
     place: () => Promise<void>,
 ): void {
+    const rows = useShapeLibraryRows();
     usePaletteSource("shapes", ({ t }) => [
         {
             id: SHAPE_BRANCH,
@@ -47,7 +64,7 @@ export function useShapePaletteSource(
                 ...SHAPE_TOOLS.map(({ kind }) =>
                     kindItem(kind, ready, selected, t, place),
                 ),
-                ...savedShapeItems(),
+                ...savedShapeItems(rows, ready, selected, t, place),
             ],
         },
     ]);
@@ -59,6 +76,8 @@ function kindItem(
     selected: readonly { readonly id: number }[],
     t: Translate,
     place: () => Promise<void>,
+    /** A saved shape's own id and name; the kind's when absent */
+    named?: { readonly id: string; readonly label: string },
 ): PaletteItem {
     const gate = shapeSelectionGate(selected);
     // With a shape open, any kind can be picked: the open shape turns into it
@@ -69,13 +88,13 @@ function kindItem(
     // Shapes edit the drill, like the box tool's key
     const offHere = isActionOffInWorkspace("shapeBlock");
     const Icon = kind.shape.icon;
-    const label = kind.shape.label;
+    const label = named?.label ?? kind.shape.label;
     return {
-        id: `${SHAPE_BRANCH}:${kind.shape.id}`,
+        id: `${SHAPE_BRANCH}:${named?.id ?? kind.shape.id}`,
         label,
         group: t("commandPalette.shape"),
         icon: <Icon size={18} />,
-        keywords: [kind.shape.id],
+        keywords: named ? [kind.shape.id, kind.shape.label] : [kind.shape.id],
         disabled: !ready || offHere || !pick.ok,
         disabledReason: offHere
             ? t(

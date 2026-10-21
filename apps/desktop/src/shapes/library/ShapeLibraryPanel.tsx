@@ -1,10 +1,21 @@
 import clsx from "clsx";
 import { useEffect } from "react";
-import { ShapesIcon, StarIcon, XIcon } from "@phosphor-icons/react";
+import {
+    DownloadSimpleIcon,
+    ShapesIcon,
+    StarIcon,
+    TrashIcon,
+    XIcon,
+} from "@phosphor-icons/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { SidebarModalLauncher } from "@/components/sidebar/SidebarModal";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { MAX_STARS, type ShapeLibraryRow } from "./shapeLibrary";
 import { useShapeLibraryRows, useShapeStarsStore } from "./shapeStars";
+import { kindPickGate, pickShapeKind } from "../tool/pickKind";
+import { useShapeToolStore } from "../tool/shapeToolStore";
+import { addSavedShapeToLibrary, deleteSavedShape } from "./saveShape";
 
 export const SHAPE_LIBRARY_CONTENT_ID = "shapes";
 
@@ -32,7 +43,9 @@ export function showShapeLibrary() {
 /**
  * The shape library: every shape by group, each with a star, an icon, a name and a note. One star
  * puts a shape in both the ring and the Shapes tab; with all {@link MAX_STARS} taken, starring
- * another asks to unstar one first. Saved shapes (#353) come as a Saved group after Basic.
+ * another asks to unstar one first. Clicking a shape picks it, as the Shapes tab does. Saved
+ * shapes (#353) come as a Saved group after Basic, each with a delete button; one only the open
+ * show has can be added to the user's library.
  */
 export function ShapeLibraryContents({
     rows: rowsProp,
@@ -48,6 +61,10 @@ export function ShapeLibraryContents({
     const toggle = useShapeStarsStore((s) => s.toggle);
     const dismissAsk = useShapeStarsStore((s) => s.dismissAsk);
     const asked = rows.find((r) => r.id === asking);
+    const queryClient = useQueryClient();
+    const selected = useSelectedMarchers()?.selectedMarchers ?? [];
+    const shapeOpen = useShapeToolStore((s) => s.tool !== null);
+    const pick = kindPickGate(shapeOpen, selected);
     // The question is about this visit to the library
     useEffect(() => dismissAsk, [dismissAsk]);
 
@@ -97,7 +114,7 @@ export function ShapeLibraryContents({
             <div className="flex min-h-0 flex-1 flex-col gap-16 overflow-y-auto">
                 {groups.map(({ id, title }) => {
                     const inGroup = rows.filter((r) => r.group === id);
-                    if (inGroup.length === 0) return null;
+                    if (inGroup.length === 0 && id !== "saved") return null;
                     return (
                         <section
                             key={id}
@@ -107,6 +124,15 @@ export function ShapeLibraryContents({
                             <h5 className="text-sub text-text-subtitle font-mono uppercase">
                                 {title}
                             </h5>
+                            {inGroup.length === 0 && (
+                                <p
+                                    className="text-sub text-text-subtitle"
+                                    data-testid="shape-library-saved-empty"
+                                >
+                                    Save a shape from its ⋯ row or the inspector
+                                    to keep it here, for every show.
+                                </p>
+                            )}
                             <ul className="flex flex-col gap-4">
                                 {inGroup.map((row) => (
                                     <LibraryRow
@@ -114,6 +140,27 @@ export function ShapeLibraryContents({
                                         row={row}
                                         starred={stars.includes(row.id)}
                                         onStar={() => toggle(row.id, rows)}
+                                        canPick={pick}
+                                        onPick={() =>
+                                            pickShapeKind(row.kind, selected)
+                                        }
+                                        onDelete={
+                                            row.saved
+                                                ? () =>
+                                                      void deleteSavedShape(
+                                                          row.saved!.shape,
+                                                          queryClient,
+                                                      )
+                                                : undefined
+                                        }
+                                        onAddToLibrary={
+                                            row.saved && !row.saved.inLibrary
+                                                ? () =>
+                                                      addSavedShapeToLibrary(
+                                                          row.saved!.shape,
+                                                      )
+                                                : undefined
+                                        }
                                     />
                                 ))}
                             </ul>
@@ -129,15 +176,26 @@ function LibraryRow({
     row,
     starred,
     onStar,
+    canPick,
+    onPick,
+    onDelete,
+    onAddToLibrary,
 }: {
     row: ShapeLibraryRow;
     starred: boolean;
     onStar: () => void;
+    /** Whether clicking the shape picks it now, and why not */
+    canPick: ReturnType<typeof kindPickGate>;
+    onPick: () => void;
+    /** Deletes a saved shape; absent for basic kinds */
+    onDelete?: () => void;
+    /** Adds a saved shape only the open show has to the user's library */
+    onAddToLibrary?: () => void;
 }) {
     const Icon = row.icon;
     return (
         <li
-            className="rounded-6 hover:bg-fg-2 flex items-center gap-8 px-4 py-4"
+            className="rounded-6 hover:bg-fg-2 group flex items-center gap-8 px-4 py-4"
             data-testid={`shape-library-row-${row.id}`}
         >
             <button
@@ -154,10 +212,45 @@ function LibraryRow({
             >
                 <StarIcon size={18} weight={starred ? "fill" : "regular"} />
             </button>
-            <Icon size={22} />
-            <span className="text-body">{row.label}</span>
-            {row.note && (
-                <span className="text-sub text-text-subtitle">{row.note}</span>
+            <button
+                type="button"
+                onClick={onPick}
+                disabled={!canPick.ok}
+                title={canPick.ok ? `Draw a ${row.label}` : canPick.reason}
+                className="flex min-w-0 flex-1 items-center gap-8 text-left disabled:opacity-60"
+                data-testid={`shape-library-pick-${row.id}`}
+            >
+                <Icon size={22} className="shrink-0" />
+                <span className="text-body truncate">{row.label}</span>
+                {row.note && (
+                    <span className="text-sub text-text-subtitle truncate">
+                        {row.note}
+                    </span>
+                )}
+            </button>
+            {onAddToLibrary && (
+                <button
+                    type="button"
+                    onClick={onAddToLibrary}
+                    aria-label={`Add ${row.label} to my Library`}
+                    title="Add to my Library, for every show"
+                    className="text-text-subtitle hover:text-accent duration-150 ease-out"
+                    data-testid={`shape-library-add-${row.id}`}
+                >
+                    <DownloadSimpleIcon size={16} />
+                </button>
+            )}
+            {onDelete && (
+                <button
+                    type="button"
+                    onClick={onDelete}
+                    aria-label={`Delete ${row.label}`}
+                    title="Delete this saved shape"
+                    className="text-text-subtitle hover:text-red duration-150 ease-out"
+                    data-testid={`shape-library-delete-${row.id}`}
+                >
+                    <TrashIcon size={16} />
+                </button>
             )}
         </li>
     );

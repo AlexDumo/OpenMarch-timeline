@@ -71,6 +71,11 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         const field = onField(p, n);
         return across ? field.acrossKey : field.deepKey;
     };
+    /** The spacing this way, in steps */
+    const stepsOf = (p: BoxParams, n: number, stepPx: number) => {
+        const field = onField(p, n);
+        return (across ? field.acrossSpacing : field.deepSpacing) / stepPx;
+    };
     return {
         key: way,
         label: across
@@ -88,12 +93,8 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
             const field = onField(p, n);
             return (across ? field.across : field.deep) > 1;
         },
-        display(p, n, stepPx) {
-            const field = onField(p, n);
-            return formatSteps(
-                (across ? field.acrossSpacing : field.deepSpacing) / stepPx,
-            );
-        },
+        display: (p, n, stepPx) => formatSteps(stepsOf(p, n, stepPx)),
+        value: stepsOf,
         type(p, n, text, env) {
             const steps = parseSteps(text);
             if (steps === null) return null;
