@@ -399,16 +399,23 @@ export function moveLimits(
     durations: readonly number[],
     locks: ReadonlySet<number>,
     beat: number,
+    /** Held counts: the count after a hold moves only the hold, which may be any length */
+    holds?: ReadonlySet<number>,
 ): { min: number; max: number; minReason: string; maxReason: string } {
     const starts = startsOf(durations);
     const prev = lockBefore(locks, beat);
     const next = lockAfter(locks, beat);
     const left = beat - prev;
-    let min = starts[prev]! + left * MIN_COUNT_SECONDS;
-    let max = starts[prev]! + left * MAX_COUNT_SECONDS;
+    const afterHold = holds?.has(beat - 1) ?? false;
+    let min = afterHold
+        ? starts[beat - 1]! + MIN_COUNT_SECONDS
+        : starts[prev]! + left * MIN_COUNT_SECONDS;
+    let max = afterHold ? Infinity : starts[prev]! + left * MAX_COUNT_SECONDS;
     const pinBefore =
         prev > 1 ? `count ${prev} is pinned` : "the show starts here";
-    let minReason = `${pinBefore}: the counts between would pass 400 BPM`;
+    let minReason = afterHold
+        ? "a hold can't be shorter than a count at 400 BPM"
+        : `${pinBefore}: the counts between would pass 400 BPM`;
     let maxReason = `${pinBefore}: the counts between would drop under 20 BPM`;
     if (next !== null && next < starts.length) {
         const right = next - beat;

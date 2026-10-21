@@ -67,7 +67,12 @@ export async function writeDurations({
         )
             changed.push(b);
     const marks = [...(pins ?? []), ...(holds ?? [])];
-    if (changed.length === 0 && !pins && !holds && audioOffset === undefined)
+    // An edit that changes nothing writes nothing: history refuses an empty step
+    if (
+        changed.length === 0 &&
+        audioOffset === undefined &&
+        !(await marksWouldChange({ pins, holds }))
+    )
         return;
     const last = Math.max(changed[changed.length - 1] ?? 0, ...marks);
     await transactionWithHistory(db, "tempoEdit", async (tx) => {
@@ -126,11 +131,42 @@ export async function writeMarksInTransaction(
     await write("tempo_hold", holds);
 }
 
+/** Whether writing these pins and holds (spec beats) would change any beat's flags */
+async function marksWouldChange({
+    pins,
+    holds,
+}: {
+    pins?: ReadonlySet<number>;
+    holds?: ReadonlySet<number>;
+}): Promise<boolean> {
+    if (!pins && !holds) return false;
+    const rows = await db
+        .select({
+            id: schema.beats.id,
+            pin: schema.beats.tempo_pin,
+            hold: schema.beats.tempo_hold,
+        })
+        .from(schema.beats)
+        .orderBy(asc(schema.beats.position));
+    const differs = (
+        set: ReadonlySet<number> | undefined,
+        flag: (r: (typeof rows)[number]) => number,
+    ) => {
+        if (!set) return false;
+        for (const b of set)
+            if (b >= rows.length || flag(rows[b]!) !== 1) return true;
+        const count = rows.filter((r) => flag(r) === 1).length;
+        return count !== [...set].filter((b) => b < rows.length).length;
+    };
+    return differs(pins, (r) => r.pin) || differs(holds, (r) => r.hold);
+}
+
 /** Pin or hold counts (spec beats) on their own: one undo step */
 export async function writeMarks(marks: {
     pins?: ReadonlySet<number>;
     holds?: ReadonlySet<number>;
 }): Promise<void> {
+    if (!(await marksWouldChange(marks))) return;
     await transactionWithHistory(db, "tempoMarks", async (tx) => {
         const last = Math.max(0, ...(marks.pins ?? []), ...(marks.holds ?? []));
         await ensureCountsInTransaction({ tx, through: last + 1 });
