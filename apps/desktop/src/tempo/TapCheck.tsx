@@ -145,20 +145,42 @@ export function TapCheckPanel({
         requestAnimationFrame(tick);
     };
 
+    const panelRef = useRef<HTMLDivElement>(null);
+    const primaryRef = useRef<HTMLButtonElement>(null);
+    // The focus starts on the main button (Start, then Done), so Enter presses it
+    useEffect(() => {
+        if (phase.kind !== "running") primaryRef.current?.focus();
+    }, [phase.kind]);
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.key === "Escape") {
                 e.preventDefault();
-                e.stopPropagation();
+                e.stopImmediatePropagation();
                 void ctxRef.current?.close();
                 ctxRef.current = null;
                 onClose(null);
                 return;
             }
-            if (e.key.toLowerCase() !== "t" || e.repeat) return;
+            const key = e.key.toLowerCase();
+            // While it's open, T, Space and Enter are the check's alone: they never reach
+            // playback or the tempo lanes' tapping (jo)
+            if (key !== "t" && key !== " " && key !== "enter") return;
             e.preventDefault();
-            e.stopPropagation();
+            e.stopImmediatePropagation();
+            if (e.repeat) return;
             const ctx = ctxRef.current;
+            if (key === "enter" || (key === " " && !ctx)) {
+                // Enter (or Space) presses the focused button in the panel, else its main one
+                const focused = document.activeElement;
+                const button =
+                    focused instanceof HTMLButtonElement &&
+                    panelRef.current?.contains(focused)
+                        ? focused
+                        : primaryRef.current;
+                button?.click();
+                return;
+            }
+            // T, or Space, taps while the clicks play
             if (!ctx) return;
             // when the press happened, in the audio clock's time as heard at the speakers
             const stamp = ctx.getOutputTimestamp();
@@ -195,6 +217,9 @@ export function TapCheckPanel({
     };
     return (
         <div
+            ref={panelRef}
+            role="dialog"
+            aria-label="Check your tapping"
             data-testid="tempo-tap-check"
             className="bg-modal shadow-modal text-text border-stroke rounded-6 fixed top-1/3 left-1/2 z-[100] flex max-h-[calc(100vh-32px)] w-[380px] max-w-[calc(100vw-32px)] -translate-x-1/2 flex-col gap-8 overflow-y-auto border p-12 backdrop-blur-md"
             onPointerDown={(e) => e.stopPropagation()}
@@ -221,8 +246,9 @@ export function TapCheckPanel({
                     )}
                     <div className="flex gap-6">
                         <button
+                            ref={primaryRef}
                             type="button"
-                            className="rounded-6 border-accent text-accent border px-10 py-3 text-[12px]"
+                            className="rounded-6 border-accent text-accent focus-visible:ring-accent border px-10 py-3 text-[12px] outline-hidden focus-visible:ring-2"
                             onClick={() => void start()}
                         >
                             Start
@@ -247,7 +273,7 @@ export function TapCheckPanel({
                     <div className="text-[12px]">
                         {phase.beat < LISTEN
                             ? `Listen… ${Math.max(1, phase.beat + 1)} of ${LISTEN}`
-                            : `Tap T with the clicks: ${phase.heard} tap(s)`}
+                            : `Tap T (or Space) with the clicks: ${phase.heard} tap(s)`}
                     </div>
                 </div>
             )}
@@ -272,8 +298,9 @@ export function TapCheckPanel({
                     )}
                     <div className="flex gap-6">
                         <button
+                            ref={primaryRef}
                             type="button"
-                            className="rounded-6 border-accent text-accent border px-10 py-3 text-[12px]"
+                            className="rounded-6 border-accent text-accent focus-visible:ring-accent border px-10 py-3 text-[12px] outline-hidden focus-visible:ring-2"
                             onClick={() => onClose(phase.result)}
                         >
                             Done
