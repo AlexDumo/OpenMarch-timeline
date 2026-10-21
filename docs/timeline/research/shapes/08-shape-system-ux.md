@@ -85,7 +85,9 @@ and its first size are chosen. (Reworked 2026-10-20.)
 
 - A **Shapes** tab in the top bar, next to Alignment (which is unchanged).
 - Its ribbon, left to right:
-  1. every registered kind, each with an icon and its name (only the box today);
+  1. every registered kind, as a picture only, its name in the tooltip and the accessible label
+     (only the box today). The picture is drawn from the shape's own spots and outline (#378),
+     never a hand-drawn icon, and the ring, library and command bar show the same one;
   2. a divider, then the user's starred shapes;
   3. a **Library** button, which opens the library in the left sidebar.
 - **Sketch** joins it when sketch exists.
@@ -105,7 +107,7 @@ and its first size are chosen. (Reworked 2026-10-20.)
 
 - **Changed 2026-10-20:** the library is its own entry in the left sidebar, beside the show's
   other resources (Marchers, Props, Music, Assets), not a modal.
-- Groups: **Basic** and **Saved**. Each row has a star, an icon, a name and a note ("Box · 2
+- Groups: **Basic** and **Saved**. Each row has a star, a picture, a name and a note ("Box · 2
   apart"). Saved rows can be deleted.
 - One star puts a shape in both the ring and the Shapes tab. At most 8; starring a ninth asks the
   user to unstar one first. Stars are a per-user preference, so they follow the user across

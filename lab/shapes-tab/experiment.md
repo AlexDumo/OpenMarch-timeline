@@ -3,31 +3,40 @@
 # Keep `id` stable: feedback is filed under it.
 id: shapes-tab
 title: Pick a shape from the Shapes tab
-summary: A Shapes tab in the top bar lists the shapes you can draw. Pick one, then drag it out on the field.
+summary: The Shapes tab now shows each shape as a small picture of its own dots, with the name on hover, so many shapes fit.
 status: open
 questions:
-  - Where did you look first for shapes? Did you find the Shapes tab on your own?
-  - When a shape was greyed out, did you understand why and what to do?
-  - After picking Box, was it clear the app was waiting for you to drag on the field?
-  - With a box drawn, you clicked Box again. What did you expect to happen?
+  - Could you tell which shape each picture is without hovering? Which ones did you have to hover?
+  - Does a saved shape's picture look like that shape (a wide box looking wide)?
+  - When the shapes were greyed out, did you still understand why and what to do?
+  - Do the pictures in the ring, the library and the command bar read as the same shapes as the tab's?
 ---
 
-This build adds a **Shapes** tab to the top bar, next to Alignment. It
-lists every shape you can draw. Only the box exists for now; lines, arcs
-and circles join it later, along with your starred shapes and a library.
+The Shapes tab used to show each shape as an icon and a name. It now shows
+**pictures only**: each shape is drawn from its own dots, and from its
+outline where it has one. The name is in the tooltip, and screen readers
+read it out. Saved shapes get a picture of themselves too, at their own
+spacing, so nobody has to draw an icon for a new shape.
+
+The shape ring (hold **R** on the field), the shape library (the
+**Library** button) and the command bar (**/** or **⌘K**, then
+**Shape**) show the same pictures.
 
 **What to try**
 
 - Open a demo show or start a new one, and click the **Shapes** tab
-  before selecting anyone.
-- Select some marchers, then click **Box** in the tab (or press **B**).
-- Drag on the field from one corner of the block to the other.
-- Press **Enter** to place the marchers, or **Esc** to back out.
+  before selecting anyone. Hover a greyed-out shape.
+- Select some marchers, hover **Box** in the tab, then click it and drag
+  on the field.
+- Change the box's spacing (for example 2½ across, 1½ deep), then save it
+  from **⋯ › Save** with a name. Its starred picture appears after the
+  divider in the tab: compare it with the plain Box.
+- Hold **R** on the field, open the **Library**, and type **/ shape**, and
+  look at the same pictures in each place.
 
 **Good to know**
 
-- With nobody selected, the shapes are greyed out and say why.
-- The shape you picked is highlighted in the tab while it's open.
-- Picking another shape while one is drawn will turn the drawn shape into
-  it in the same place and size. With only the box, there's nothing to
-  switch to yet.
+- Only the box exists for now, so there are just one or two pictures to
+  tell apart. Lines, arcs and circles join it later, each with its own
+  picture.
+- The picture you picked is drawn bolder in the tab while it's open.

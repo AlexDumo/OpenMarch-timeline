@@ -22,12 +22,11 @@ const other = (id: string): ShapeLibraryRow => ({
     group: "saved",
     label: id,
     note: null,
-    icon: rowTool.shape.icon,
     kind: rowTool,
 });
 
 describe("the shape library's rows", () => {
-    it("lists every basic kind in the Shapes tab's order, with its icon, name and spacing", () => {
+    it("lists every basic kind in the Shapes tab's order, with its name and spacing", () => {
         const rows = basicShapeRows(basics);
         expect(
             rows.map(({ id, group, label, note }) => ({
@@ -40,7 +39,6 @@ describe("the shape library's rows", () => {
             { id: "block", group: "basic", label: "Box", note: "2 apart" },
             { id: "test-row", group: "basic", label: "Row", note: "2 apart" },
         ]);
-        expect(rows[0].icon).toBe(boxTool.shape.icon);
         expect(rows[0].kind).toBe(boxTool);
     });
 

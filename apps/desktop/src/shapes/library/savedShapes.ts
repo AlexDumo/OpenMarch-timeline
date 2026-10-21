@@ -201,7 +201,6 @@ export function savedShapeRows(
                     id: saved.id,
                     group: "saved",
                     label: saved.name,
-                    icon: base.shape.icon,
                     kind: savedToolKind(base, saved),
                     note,
                     saved: { shape: saved, inLibrary },
