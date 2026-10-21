@@ -9,6 +9,8 @@ questions:
   - Did holding R, sliding and letting go feel quick enough to use all the time?
   - Did tapping R to keep the ring open make sense? Did you ever get one when you meant the other?
   - With nobody selected, did you understand why the shapes were greyed out?
+  - Did the line from the ring's center to your cursor make it clearer which shape you were aiming at?
+  - Do the ring's buttons stand off the field enough now, in both light and dark themes?
   - The ring only holds the box for now. What would you want in it once you can star shapes?
 ---
 
@@ -20,7 +22,8 @@ arrives, with the basic shapes filling the rest (8 at most).
 **What to try**
 
 - Select some marchers, put the mouse on the field, then hold **R**.
-- Slide toward **Box** until it lights up, and let go of R. Then drag on
+- Slide toward **Box**: a line follows your cursor from the ring's
+  center, and Box lights up when you aim at it. Let go of R. Then drag on
   the field to draw the box, and press **Enter** to place it.
 - Tap **R** quickly instead: the ring stays open. Click **Box** to pick
   it, or click anywhere else to close the ring.
@@ -28,6 +31,8 @@ arrives, with the basic shapes filling the rest (8 at most).
 
 **Good to know**
 
+- New in this build: the aim line, and heavier shadows on the ring's
+  buttons so they stand off the field.
 - **Esc** closes the ring before anything else, so a drawn shape stays.
 - Picking from the ring while a shape is drawn turns the drawn shape into
   the one you picked (with only the box, there's nothing to switch to

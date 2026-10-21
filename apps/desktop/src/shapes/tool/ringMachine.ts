@@ -72,17 +72,28 @@ export function slotAngle(index: number, count: number): number {
     return -Math.PI / 2 + (index * 2 * Math.PI) / count;
 }
 
-/** An open ring: where it opened, when, whether a tap latched it, and the slot aimed at */
+/**
+ * An open ring: where it opened, when, whether a tap latched it, the slot aimed at, and the
+ * pointer, which the aim line runs to from the center (#379)
+ */
 export interface RingState {
     readonly center: Point;
     readonly openedAt: number;
     readonly latched: boolean;
     readonly hot: number | null;
+    readonly aim: Point;
 }
 
-/** R went down: the ring opens around the pointer, aiming at nothing yet */
-export function openRing(center: Point, now: number): RingState {
-    return { center, openedAt: now, latched: false, hot: null };
+/**
+ * R went down: the ring opens around the pointer, aiming at nothing yet. `pointer` is where the
+ * pointer really is, when the ring had to open away from it to stay on screen.
+ */
+export function openRing(
+    center: Point,
+    now: number,
+    pointer: Point = center,
+): RingState {
+    return { center, openedAt: now, latched: false, hot: null, aim: pointer };
 }
 
 const offsetFrom = (ring: RingState, pointer: Point): Point => ({
@@ -97,7 +108,7 @@ export function pointRing(
     count: number,
 ): RingState {
     const hot = slotAt(offsetFrom(ring, pointer), count, ring.latched);
-    return hot === ring.hot ? ring : { ...ring, hot };
+    return { ...ring, hot, aim: pointer };
 }
 
 /**

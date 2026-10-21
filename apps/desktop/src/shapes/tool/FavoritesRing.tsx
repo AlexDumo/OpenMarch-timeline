@@ -32,6 +32,13 @@ const setRing = (ring: RingState | null) => useRingStore.setState({ ring });
 /** How far the ring keeps from the window's edges, so every slot stays on screen */
 const EDGE = RING_RADIUS + 64;
 
+/**
+ * The ring's buttons cast a heavier shadow than a menu's, so they stand off the field (#379): a
+ * tight contact shadow under a wide soft one, which the dark theme darkens.
+ */
+const BUTTON_SHADOW =
+    "shadow-[0_2px_4px_rgba(0,0,0,0.3),0_6px_16px_var(--color-modal-shadow),0_12px_36px_var(--color-modal-shadow)]";
+
 /** Where the pointer last was, in the window; the ring opens around it */
 let pointer: { x: number; y: number } | null = null;
 
@@ -80,7 +87,14 @@ export default function FavoritesRing() {
         () => {
             // R again closes a latched ring
             if (useRingStore.getState().ring) setRing(null);
-            else setRing(openRing(ringCenter(), performance.now()));
+            else
+                setRing(
+                    openRing(
+                        ringCenter(),
+                        performance.now(),
+                        pointer ?? undefined,
+                    ),
+                );
         },
         {
             enabled: ready,
@@ -125,6 +139,22 @@ export default function FavoritesRing() {
                 }}
                 onContextMenu={(event) => event.preventDefault()}
             />
+            {/* The aim line, from the ring's center to the pointer, under the buttons (#379) */}
+            <svg
+                className="pointer-events-none fixed inset-0 z-50 size-full overflow-visible"
+                data-shape-ui
+            >
+                <line
+                    x1={ring.center.x}
+                    y1={ring.center.y}
+                    x2={ring.aim.x}
+                    y2={ring.aim.y}
+                    className="stroke-accent drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    data-testid="shape-ring-aim"
+                />
+            </svg>
             {/* The ring's whole area, its slots placed from its middle */}
             <div
                 className="pointer-events-none fixed z-50"
@@ -148,7 +178,10 @@ export default function FavoritesRing() {
                         }}
                     />
                     <div
-                        className="border-stroke bg-modal shadow-modal absolute size-24 -translate-x-1/2 -translate-y-1/2 rounded-full border"
+                        className={clsx(
+                            "border-stroke bg-modal absolute size-24 -translate-x-1/2 -translate-y-1/2 rounded-full border",
+                            BUTTON_SHADOW,
+                        )}
                         data-testid="shape-ring-center"
                     />
                     {slots.map((slot, i) => (
@@ -218,10 +251,11 @@ function RingSlot({
             data-hot={hot}
             data-starred={starred}
             className={clsx(
-                "border-stroke shadow-modal text-body pointer-events-auto absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-6 rounded-full border px-12 py-6 whitespace-nowrap",
+                "border-stroke text-body pointer-events-auto absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-6 rounded-full border px-12 py-6 whitespace-nowrap",
                 hot && !disabled
                     ? "bg-accent text-text-invert"
                     : "bg-modal text-text",
+                BUTTON_SHADOW,
                 disabled && "opacity-50",
             )}
             style={{
