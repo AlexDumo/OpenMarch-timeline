@@ -816,6 +816,22 @@ test("change: the Transform section flips and turns a plain selection around the
     await expectCanvasMatchesShow(show);
 });
 
+test("change: with a kind armed and nothing drawn yet, the Transform section shows the selection's controls", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    await page.keyboard.press("b");
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    const section = page.getByTestId("transform-section");
+    await expect(section).toBeVisible();
+    await expect(
+        section.getByRole("textbox", { name: "Rotation" }),
+    ).toBeVisible();
+    await expect(section.getByTestId("transform-flip-across")).toBeVisible();
+    await expect(section.getByTestId("transform-scale-more")).toHaveCount(0);
+});
+
 test("change: a box's − and + in the Transform section change its spacing by half a step", async ({
     show,
 }) => {
@@ -1449,7 +1465,7 @@ test("change: ☆ Save keeps a box's spacing as a starred saved shape that draws
     await page.getByTestId("shape-library-tab").click();
     const row = page.getByTestId(`shape-library-row-${id}`);
     await expect(row).toContainText("Wide box");
-    await expect(row).toContainText("2½ × 1½ apart · this show only");
+    await expect(row).toContainText("Box · 2½ × 1½ apart · this show only");
     await page.getByTestId(`shape-library-delete-${id}`).click();
     await expect(row).toHaveCount(0);
     await expect
@@ -1491,4 +1507,67 @@ test("change: ☆ Save at the bottom of the inspector's shape section saves a se
         "aria-pressed",
         "true",
     );
+});
+
+// Another show, with my library from the show a shape was saved in: the
+// harness opens one show per test, so this show starts with the user's
+// library as the app keeps it (#353 "saved shapes appear in another show").
+const SAVED_ELSEWHERE = {
+    id: "0b6c1f4e-6f5d-4a0e-9a57-3f1f2f6b9b11",
+    name: "Wide box",
+    kind: "block",
+    kindVersion: 1,
+    intervals: { across: 2.5, deep: 1.5 },
+};
+
+test.describe("another show, with a shape saved in my library", () => {
+    test.use({
+        initScript: `localStorage.setItem("openmarch:savedShapes", ${JSON.stringify(
+            JSON.stringify([SAVED_ELSEWHERE]),
+        )})`,
+    });
+
+    test("change: the library lists my saved shape, and placing it from there gives this show its own copy", async ({
+        show,
+    }) => {
+        const { page } = show;
+        const { id } = SAVED_ELSEWHERE;
+        expect(await show.query("SELECT id FROM saved_shapes")).toEqual([]);
+
+        await page.getByTestId("shape-library-tab").click();
+        const row = page.getByTestId(`shape-library-row-${id}`);
+        await expect(row).toContainText("Wide box");
+        await expect(row).toContainText("Box · 2½ × 1½ apart");
+        await expect(row).not.toContainText("this show only");
+
+        await selectAll(page);
+        await page.getByTestId(`shape-library-pick-${id}`).click();
+        await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+        const grid = await fieldGrid(show);
+        const S = grid.pixelsPerStep;
+        const cf = grid.centerFront;
+        await drag(
+            page,
+            await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+            await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
+        );
+        await expect.poll(() => readout(page)).toMatch(/ · 2½ × 1½ steps$/);
+        await page.keyboard.press("Enter");
+        await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+
+        await expect
+            .poll(() =>
+                show.query(
+                    "SELECT id, name, kind, intervals FROM saved_shapes",
+                ),
+            )
+            .toEqual([
+                {
+                    id,
+                    name: "Wide box",
+                    kind: "block",
+                    intervals: JSON.stringify(SAVED_ELSEWHERE.intervals),
+                },
+            ]);
+    });
 });

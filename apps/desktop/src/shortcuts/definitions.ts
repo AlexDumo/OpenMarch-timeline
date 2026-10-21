@@ -15,6 +15,24 @@ export type ActionCategory =
     | "timeline";
 export type ActionArgs = Readonly<Record<string, string | number | boolean>>;
 
+/**
+ * A number an action asks for before it runs (#354, spec #344 "The command bar"). Chosen from the
+ * palette, an action that declares params docks the command bar and asks them one at a time,
+ * then runs with the answers in its `args`, by `key`. The Shape branch asks its kinds' params the
+ * same way through the palette tree.
+ */
+export interface ActionParam {
+    /** Stable for the action: the answer's key in `args` */
+    readonly key: string;
+    /** i18n key of what it asks, e.g. "actions.timeline.pageCounts" */
+    readonly labelKey: string;
+    /** Counts are whole numbers; steps take halves ("2½"); degrees any number */
+    readonly unit: "count" | "steps" | "degrees";
+    /** The answer the bar starts from */
+    readonly default?: number;
+    readonly range?: { readonly min?: number; readonly max?: number };
+}
+
 export interface ActionDefinition {
     /** i18n key, e.g. "actions.alignment.lockX" */
     labelKey: string;
@@ -44,6 +62,8 @@ export interface ActionDefinition {
     /** A held key runs the action once, not again on each repeat (for toggles) */
     ignoreRepeat?: boolean;
     args?: ActionArgs;
+    /** Asked in the command bar when chosen from the palette; the answers join `args` */
+    params?: readonly ActionParam[];
 }
 
 export type NudgeDirection = "up" | "down" | "left" | "right";

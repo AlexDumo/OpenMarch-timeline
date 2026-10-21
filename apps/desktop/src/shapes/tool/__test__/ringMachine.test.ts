@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { boxTool } from "../box/boxTool";
-import { rowTool } from "./fakeRowKind";
+import { boxTool } from "../../box/boxTool";
+import { rowTool } from "../../__test__/fakeRowKind";
 import {
     clickRing,
     openRing,
@@ -10,8 +10,8 @@ import {
     ringSlots,
     slotAt,
     type RingShape,
-} from "../tool/ringMachine";
-import type { ShapeToolEntry } from "../tool/shapeTools";
+} from "../ringMachine";
+import type { ShapeToolEntry } from "../shapeTools";
 
 const basics: ShapeToolEntry[] = [
     { kind: boxTool, action: "shapeBlock" },

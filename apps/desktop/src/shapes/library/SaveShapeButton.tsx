@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { useState } from "react";
 import { StarIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
+import { keepFocus } from "../editor/keepFocus";
 import { saveShape, type SavableShape } from "./saveShape";
 import { suggestedName } from "./savedShapes";
 
@@ -32,7 +33,7 @@ export function SaveShapeButton({
                 type="button"
                 title="Save this shape to your library, starred"
                 aria-label="Save this shape to your library"
-                onPointerDown={(e) => e.preventDefault()}
+                onPointerDown={keepFocus}
                 onClick={() => {
                     setSaved(null);
                     setName(

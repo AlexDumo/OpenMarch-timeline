@@ -15,6 +15,7 @@ import {
     rotationDegrees,
     samePivot,
     snapRotation,
+    type FlipAxis,
     type Pivot,
 } from "./frame";
 import { carryPivot, pivotOf, snapPivot, withPivot } from "./pivot";
@@ -276,7 +277,7 @@ export function flipShape(
     kind: AnyToolKind,
     params: unknown,
     n: number,
-    axis: "across" | "deep",
+    axis: FlipAxis,
     pivot: Pivot,
     env: ToolEnv,
 ): unknown {

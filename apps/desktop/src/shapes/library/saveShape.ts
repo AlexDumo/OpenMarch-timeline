@@ -1,10 +1,9 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type { MutationOptions, QueryClient } from "@tanstack/react-query";
 import {
-    copySavedShapeToShow,
-    deleteSavedShapeFromShow,
-    showSavedShapeKeys,
-} from "@/hooks/queries/useShowSavedShapes";
-import { conToastError } from "@/utilities/utils";
+    createSavedShapeMutationOptions,
+    deleteSavedShapeMutationOptions,
+    savedShapeKeys,
+} from "@/hooks/queries/useSavedShapes";
 import type { AnyToolKind } from "../tool/toolKind";
 import { showShapeLibrary } from "./ShapeLibraryPanel";
 import { useSavedShapeLibrary } from "./savedShapeLibrary";
@@ -24,7 +23,23 @@ export interface SavableShape {
 }
 
 const showShapes = (queryClient: QueryClient): readonly SavedShape[] =>
-    queryClient.getQueryData<SavedShape[]>(showSavedShapeKeys.all()) ?? [];
+    queryClient.getQueryData<SavedShape[]>(savedShapeKeys.all()) ?? [];
+
+/**
+ * Runs a mutation outside a component, as `useMutation` would: its own invalidation and error
+ * toast included. Resolves either way; a failure is the mutation's toast.
+ */
+async function mutate<V>(
+    queryClient: QueryClient,
+    options: MutationOptions<void, Error, V>,
+    variables: V,
+): Promise<void> {
+    await queryClient
+        .getMutationCache()
+        .build(queryClient, options)
+        .execute(variables)
+        .catch(() => {});
+}
 
 /**
  * Saves `shape` under `name`: its kind and intervals join the user's library and the open show,
@@ -52,11 +67,11 @@ export async function saveShape(
         ),
     );
     if (useShapeStarsStore.getState().asking === saved.id) showShapeLibrary();
-    try {
-        await copySavedShapeToShow(saved, queryClient);
-    } catch (error) {
-        conToastError("Couldn't copy the saved shape into the show", error);
-    }
+    await mutate(
+        queryClient,
+        createSavedShapeMutationOptions(queryClient),
+        saved,
+    );
     return saved;
 }
 
@@ -71,11 +86,11 @@ export async function deleteSavedShape(
     useSavedShapeLibrary.getState().remove(saved.id);
     const stars = useShapeStarsStore.getState();
     if (stars.stars.includes(saved.id)) stars.toggle(saved.id, []);
-    try {
-        await deleteSavedShapeFromShow(saved.id, queryClient);
-    } catch (error) {
-        conToastError("Couldn't delete the saved shape from the show", error);
-    }
+    await mutate(
+        queryClient,
+        deleteSavedShapeMutationOptions(queryClient),
+        saved.id,
+    );
 }
 
 /** A saved shape only the open show has joins the user's library, for every show */
@@ -92,9 +107,9 @@ export async function keepSavedShapeInShow(
     queryClient: QueryClient,
 ): Promise<void> {
     if (!isSavedKind(kind)) return;
-    try {
-        await copySavedShapeToShow(kind.saved, queryClient);
-    } catch (error) {
-        conToastError("Couldn't copy the saved shape into the show", error);
-    }
+    await mutate(
+        queryClient,
+        createSavedShapeMutationOptions(queryClient),
+        kind.saved,
+    );
 }

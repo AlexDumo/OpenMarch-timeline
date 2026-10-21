@@ -184,6 +184,9 @@ export function rotateFrame(
     };
 }
 
+/** Side to side on the field (`across`) or front to back (`deep`): which way a flip mirrors */
+export type FlipAxis = "across" | "deep";
+
 /**
  * The frame mirrored side to side (`across`: side 1 and side 2 swap) or front to back (`deep`)
  * on the field, about a line through `around`. Mirroring a turned frame turns it the other
@@ -191,7 +194,7 @@ export function rotateFrame(
  */
 export function flipFrame(
     frame: ShapeFrame,
-    axis: "across" | "deep",
+    axis: FlipAxis,
     around: Pivot,
 ): ShapeFrame {
     const pivot = pivotPoint(frame, around);

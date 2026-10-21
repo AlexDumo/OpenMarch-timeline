@@ -22,3 +22,4 @@ export * from "./itemPlacements";
 export * from "./itemArtworkSlots";
 export * from "./itemPutDown";
 export * from "./itemBeatRemap";
+export * from "./savedShapes";

@@ -8,15 +8,17 @@ import {
 import { TolgeeProvider } from "@tolgee/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import tolgee from "@/global/singletons/Tolgee";
-import CommandPalette from "../palette/CommandPalette";
-import DockedCommandBar from "../palette/DockedCommandBar";
+import CommandPalette from "../CommandPalette";
+import DockedCommandBar from "../DockedCommandBar";
 import {
     oneLinerAnswers,
+    paramsCommand,
+    parseParam,
     useCommandBarStore,
     type CommandRun,
-} from "../palette/commandBar";
-import { registerPaletteSource, type PaletteItem } from "../palette/sources";
-import { registerActionHandler, runAction } from "../registry";
+} from "../commandBar";
+import { registerPaletteSource, type PaletteItem } from "../sources";
+import { registerActionHandler, runAction } from "../../registry";
 
 /**
  * The command bar (#354): palette entries nest (Shape › Box), and a command that declares
@@ -348,5 +350,64 @@ describe("one-liners", () => {
         expect(oneLinerAnswers("box", ["Box"])).toBeNull();
         expect(oneLinerAnswers("box ", ["Box"])).toBeNull();
         expect(oneLinerAnswers("boxes 2", ["Box"])).toBeNull();
+    });
+});
+
+describe("commands with typed parameters (an action's `params`)", () => {
+    afterEach(() => offs.splice(0).forEach((off) => off()));
+    const params = [
+        {
+            key: "counts",
+            label: "Counts",
+            unit: "count" as const,
+            default: 8,
+            range: { min: 1 },
+        },
+        {
+            key: "interval",
+            label: "Interval",
+            unit: "steps" as const,
+            default: 2.5,
+        },
+        { key: "turn", label: "Turn", unit: "degrees" as const },
+    ];
+
+    it("parse each answer in its unit, inside its range", () => {
+        const [counts, interval, turn] = params;
+        expect(parseParam(counts!, "16")).toBe(16);
+        expect(parseParam(counts!, "1.5")).toBeNull();
+        expect(parseParam(counts!, "0")).toBeNull();
+        expect(parseParam(interval!, "2½")).toBe(2.5);
+        expect(parseParam(interval!, "½")).toBe(0.5);
+        expect(parseParam(interval!, "two")).toBeNull();
+        expect(parseParam(turn!, "-45°")).toBe(-45);
+    });
+
+    it("ask each in turn from its default, and run with typed values by key", () => {
+        const run = vi.fn();
+        const bar = paramsCommand(["Make page"], params, run).begin()!;
+        expect(bar.preview([]).map((s) => [s.key, s.initial])).toEqual([
+            ["counts", "8"],
+            ["interval", "2½"],
+            ["turn", ""],
+        ]);
+        expect(bar.preview(["x"])[0]!.invalid).toBe(true);
+        // An unanswered step without a default can't finish
+        bar.finish(["", "3", ""]);
+        expect(run).not.toHaveBeenCalled();
+        bar.finish(["", "3", "90"]);
+        expect(run).toHaveBeenCalledWith({ counts: 8, interval: 3, turn: 90 });
+    });
+
+    it("pass the answers to the action's handler over its own args", () => {
+        const handler = vi.fn();
+        offs.push(
+            registerActionHandler("nextPage", {
+                run: handler,
+                isEnabled: () => true,
+            }),
+        );
+        expect(runAction("nextPage", { counts: 4 })).toBe(true);
+        expect(handler).toHaveBeenCalledWith({ counts: 4 });
     });
 });

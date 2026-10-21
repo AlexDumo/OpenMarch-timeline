@@ -271,3 +271,128 @@ export const spreadTool: ToolKind<SpreadParams> = {
 function spreadFrame(p: SpreadParams, n: number): ShapeFrame {
     return rowFrame(asRow(p, n), n);
 }
+
+/**
+ * A third test kind (#349, spec #344 story 36): a row whose neighbors have a gap list of their own
+ * (4, 4, 2), so scaling by interval must change every gap of the list by half a step. Only its
+ * gaps differ from the row; the host scales it without knowing that.
+ */
+export interface GapListParams {
+    readonly center: XY;
+    /** Field units between each pair of neighbors, n - 1 of them */
+    readonly gaps: readonly number[];
+    readonly rotation: number;
+}
+
+const gapListFrame = (p: GapListParams): ShapeFrame => ({
+    center: p.center,
+    halfWidth: p.gaps.reduce((sum, g) => sum + g, 0) / 2,
+    halfDepth: 0,
+    rotation: p.rotation,
+    flipX: false,
+    flipY: false,
+});
+
+function gapListSpots(p: GapListParams, n: number) {
+    const frame = gapListFrame(p);
+    let x = -frame.halfWidth;
+    return Array.from({ length: n }, (_, i) => {
+        if (i > 0) x += p.gaps[i - 1] ?? 0;
+        return { ...frameToField(frame, { x, y: 0 }), row: 0, col: i };
+    });
+}
+
+const gapListShape: ShapeKind<GapListParams> = {
+    ...(rowShape as unknown as ShapeKind<GapListParams>),
+    id: "test-gap-list",
+    label: "Gap list",
+    fit: () => ({ center: { x: 0, y: 0 }, gaps: [], rotation: 0 }),
+    outline: (p, n) => [gapListSpots(p, n).map(({ x, y }) => ({ x, y }))],
+    generate: gapListSpots,
+    orderKey: (p, point) => [fieldToFrame(gapListFrame(p), point).x],
+};
+
+/** Field units on half steps, never under half a step */
+const halfSteps = (steps: number, stepPx: number) =>
+    Math.max(0.5, Math.round(steps * 2) / 2) * stepPx;
+
+export const gapListTool: ToolKind<GapListParams> = {
+    shape: gapListShape,
+    params: [
+        {
+            key: "gaps",
+            label: "Gaps, in steps",
+            unit: "steps",
+            primary: true,
+            drag: "x",
+            interval: true,
+            blends: true,
+            display: (p, _n, stepPx) =>
+                p.gaps.map((g) => formatSteps(g / stepPx)).join(", "),
+            type(p, n, text, env) {
+                const steps = text.split(",").map((t) => parseSteps(t));
+                if (steps.length !== n - 1 || steps.some((s) => s === null))
+                    return null;
+                return {
+                    ...p,
+                    gaps: steps.map((s) => halfSteps(s!, env.stepPx)),
+                };
+            },
+            scrub: (base) => base,
+            widen(p, _n, by, env) {
+                const steps = p.gaps.map((g) => g / env.stepPx + by);
+                if (steps.some((s) => s < 0.5 - 1e-9)) return null;
+                return {
+                    ...p,
+                    gaps: steps.map((s) => halfSteps(s, env.stepPx)),
+                };
+            },
+        },
+    ],
+    scaling: "interval",
+    draw(from, to, n, env) {
+        const length = Math.abs(to.x - from.x);
+        if (length < env.stepPx / 2) return undefined;
+        const gap = halfSteps(
+            length / Math.max(1, n - 1) / env.stepPx,
+            env.stepPx,
+        );
+        return {
+            center: env.gridSnap({ x: (from.x + to.x) / 2, y: from.y }),
+            gaps: Array.from({ length: Math.max(0, n - 1) }, () => gap),
+            rotation: 0,
+        };
+    },
+    handles: () => [],
+    dragHandle: (base) => base,
+    contains(p, _n, at) {
+        const local = fieldToFrame(gapListFrame(p), at);
+        return (
+            Math.abs(local.x) <= gapListFrame(p).halfWidth + 5 &&
+            Math.abs(local.y) <= 5
+        );
+    },
+    move: (base, _n, delta, env) => ({
+        ...base,
+        center: env.gridSnap({
+            x: base.center.x + delta.x,
+            y: base.center.y + delta.y,
+        }),
+    }),
+    frameOf: (p) => gapListFrame(p),
+    fromFrame: (frame, n, env) => ({
+        center: frame.center,
+        gaps: Array.from({ length: Math.max(0, n - 1) }, () =>
+            halfSteps(
+                (2 * frame.halfWidth) / Math.max(1, n - 1) / env.stepPx,
+                env.stepPx,
+            ),
+        ),
+        rotation: frame.rotation,
+    }),
+    withFrame: (p, _n, frame) => ({
+        ...p,
+        center: frame.center,
+        rotation: frame.rotation,
+    }),
+};

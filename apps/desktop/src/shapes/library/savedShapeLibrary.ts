@@ -1,7 +1,6 @@
-import * as z from "zod";
 import { create } from "zustand";
-import { syncFromStorage } from "@/stores/syncFromStorage";
-import type { SavedShape } from "./savedShapes";
+import { SavedShapeSchema, type SavedShape } from "@/db-functions/savedShapes";
+import { userList } from "./userStorage";
 
 /**
  * The user's saved shapes (#353), kept across shows. Like stars they're the user's, not the
@@ -10,41 +9,14 @@ import type { SavedShape } from "./savedShapes";
  */
 export const SAVED_SHAPES_STORAGE_KEY = "openmarch:savedShapes";
 
-const SavedShapeSchema = z.object({
-    id: z.string().min(1),
-    name: z.string(),
-    kind: z.string(),
-    kindVersion: z.number().int(),
-    intervals: z.record(z.string(), z.number().finite()),
-});
-
-/** The saved shapes in `raw`, leaving out any that don't read */
-function parseSaved(raw: string): SavedShape[] {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((entry) => {
+const SAVED = userList(
+    SAVED_SHAPES_STORAGE_KEY,
+    (entry): SavedShape | null => {
         const shape = SavedShapeSchema.safeParse(entry);
-        return shape.success ? [shape.data] : [];
-    });
-}
-
-function loadSaved(): SavedShape[] {
-    try {
-        const stored = localStorage.getItem(SAVED_SHAPES_STORAGE_KEY);
-        return stored ? parseSaved(stored) : [];
-    } catch (error) {
-        console.error("Failed to load saved shapes:", error);
-        return [];
-    }
-}
-
-function storeSaved(shapes: readonly SavedShape[]): void {
-    try {
-        localStorage.setItem(SAVED_SHAPES_STORAGE_KEY, JSON.stringify(shapes));
-    } catch (error) {
-        console.error("Failed to save the saved shapes:", error);
-    }
-}
+        return shape.success ? shape.data : null;
+    },
+    "saved shapes",
+);
 
 interface SavedShapeLibraryStore {
     /** The user's saved shapes, in the order they were saved */
@@ -56,23 +28,21 @@ interface SavedShapeLibraryStore {
 
 export const useSavedShapeLibrary = create<SavedShapeLibraryStore>(
     (set, get) => ({
-        shapes: loadSaved(),
+        shapes: SAVED.load(),
         put: (shape) => {
             const shapes = get().shapes;
             const next = shapes.some((s) => s.id === shape.id)
                 ? shapes.map((s) => (s.id === shape.id ? shape : s))
                 : [...shapes, shape];
             set({ shapes: next });
-            storeSaved(next);
+            SAVED.save(next);
         },
         remove: (id) => {
             const next = get().shapes.filter((s) => s.id !== id);
             set({ shapes: next });
-            storeSaved(next);
+            SAVED.save(next);
         },
     }),
 );
 
-syncFromStorage(SAVED_SHAPES_STORAGE_KEY, parseSaved, (shapes) =>
-    useSavedShapeLibrary.setState({ shapes }),
-);
+SAVED.sync((shapes) => useSavedShapeLibrary.setState({ shapes }));

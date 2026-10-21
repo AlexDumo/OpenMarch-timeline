@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { boxTool } from "../box/boxTool";
-import { filesOf, ranksOf, type BoxParams } from "../box/boxGeometry";
+import { boxTool } from "../../box/boxTool";
+import { filesOf, ranksOf, type BoxParams } from "../../box/boxGeometry";
 import {
     savedShapeOf,
     savedShapeRows,
     savedToolKind,
     suggestedName,
     intervalsOf,
-} from "../library/savedShapes";
-import { placementOf } from "../tool/shapePlacement";
-import { shapeSteps, startingParams } from "../command/shapeSteps";
-import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
+} from "../savedShapes";
+import { placementOf } from "../../tool/shapePlacement";
+import { shapeSteps, startingParams } from "../../command/shapeSteps";
+import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
 import {
     edit,
     openTool,
@@ -19,9 +19,9 @@ import {
     release,
     switchKind,
     type ToolState,
-} from "../tool/toolMachine";
-import type { ShapeContext, XY } from "../types";
-import { rowTool, type RowParams } from "./fakeRowKind";
+} from "../../tool/toolMachine";
+import type { ShapeContext, XY } from "../../types";
+import { rowTool, type RowParams } from "../../__test__/fakeRowKind";
 
 /**
  * Saved shapes (#353): saving keeps a shape's kind and intervals, not its size or count, so a
@@ -206,8 +206,8 @@ describe("the library's Saved group", () => {
         expect(
             rows.map((r) => [r.id, r.label, r.note, r.saved?.inLibrary]),
         ).toEqual([
-            ["a", "Mine", "2 apart", true],
-            ["b", "From the show", "2 apart · this show only", false],
+            ["a", "Mine", "Box · 2 apart", true],
+            ["b", "From the show", "Box · 2 apart · this show only", false],
         ]);
         expect(rows.every((r) => r.group === "saved")).toBe(true);
     });
