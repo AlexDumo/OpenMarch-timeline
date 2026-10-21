@@ -55,7 +55,7 @@ export function createLabelPlacer(obstacles: LabelBox[] = [], gap = 4) {
 /**
  * Where a popover anchored at (`x`, `y`) in the window goes so it stays on the screen: `above`
  * puts its bottom edge just over the anchor (below it when there's no room), `below` its top edge
- * at the anchor (above it when there's no room); either way it slides left from the right edge.
+ * at the anchor (above it when there's no room); near the right edge it opens to the anchor's left.
  * Measured before paint, so it never shows off the screen. `token` re-measures when the content
  * changes at the same anchor.
  */
@@ -77,7 +77,9 @@ export function useOnScreen(
         const margin = 8;
         const maxLeft = window.innerWidth - width - margin;
         const maxTop = window.innerHeight - height - margin;
-        const left = Math.max(margin, Math.min(x, maxLeft));
+        // Near the right edge it opens left of the pointer rather than over it (sam)
+        const flipped = x + width > window.innerWidth - margin ? x - width : x;
+        const left = Math.max(margin, Math.min(flipped, maxLeft));
         let top: number;
         if (side === "above") {
             top = y - 8 - height;
