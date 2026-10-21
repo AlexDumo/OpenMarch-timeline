@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAudioOffsetSeconds } from "./audioOffset";
 import { useQuery } from "@tanstack/react-query";
 import AudioFile from "@/global/classes/AudioFile";
 import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
@@ -94,7 +95,9 @@ export function useMusicOnsets(enabled: boolean): {
     const { data: workspaceSettings } = useQuery(
         workspaceSettingsQueryOptions(),
     );
-    const rawOffset = workspaceSettings?.audioOffsetSeconds ?? 0;
+    // the offset in the show's history, else the workspace setting (audioOffset.ts)
+    const rawOffset = useAudioOffsetSeconds();
+    void workspaceSettings;
     // As audioOffset.worker.ts:198
     const offsetSeconds = Math.abs(rawOffset) >= 0.001 ? rawOffset : 0;
     const key = selectedAudioFile

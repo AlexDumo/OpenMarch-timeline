@@ -112,6 +112,10 @@ export const measures = sqliteTable("measures", {
     notes: text(),
     /** PROTOTYPE (tempo mode): the number this measure gets; the ones after count on from it */
     number_override: integer(),
+    /** PROTOTYPE (tempo mode): the time signature written here, as "7/8"; null = counts per measure /4 */
+    meter: text(),
+    /** PROTOTYPE (tempo mode): how the measure is counted, in beat units, as "2+2+3"; null = even */
+    grouping: text(),
     created_at: text()
         .default(sql`(CURRENT_TIMESTAMP)`)
         .notNull(),
@@ -279,6 +283,20 @@ export const utility = sqliteTable(
             sql`default_beat_duration > 0`,
         ),
     ],
+);
+
+/**
+ * PROTOTYPE (tempo mode): show settings that are part of the show's history, so tempo edits that
+ * change them undo with the rest. One row (id 0).
+ */
+export const tempo_settings = sqliteTable(
+    "tempo_settings",
+    {
+        id: integer().primaryKey(),
+        /** Seconds the music is moved by (positive: later); null = the workspace setting's */
+        audio_offset_seconds: real(),
+    },
+    (_table) => [check("tempo_settings_id_check", sql`id = 0`)],
 );
 
 export const workspace_settings = sqliteTable(

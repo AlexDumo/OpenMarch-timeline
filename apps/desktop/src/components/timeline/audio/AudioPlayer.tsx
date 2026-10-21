@@ -1,4 +1,5 @@
 import { useIsPlaying } from "@/context/IsPlayingContext";
+import { useAudioOffsetSeconds } from "@/tempo/audioOffset";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSelectedAudioFile } from "@/context/SelectedAudioFileContext";
@@ -174,7 +175,9 @@ export default function AudioPlayer() {
     const { data: workspaceSettings } = useQuery(
         workspaceSettingsQueryOptions(),
     );
-    const audioOffsetSeconds = workspaceSettings?.audioOffsetSeconds ?? 0;
+    // PROTOTYPE (tempo mode): the offset in the show's history, else the workspace setting
+    const audioOffsetSeconds = useAudioOffsetSeconds();
+    void workspaceSettings;
     const contextsReady =
         !!selectedPageContext &&
         !!isPlayingContext &&

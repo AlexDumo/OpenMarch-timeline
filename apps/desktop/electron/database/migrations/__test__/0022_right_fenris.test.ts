@@ -43,6 +43,8 @@ const LATER_TABLES = [
     "item_placements",
     "item_placement_marchers",
     "item_artwork_slots",
+    // PROTOTYPE tempo mode (0028)
+    "tempo_settings",
 ];
 
 const CUE_TABLES = [

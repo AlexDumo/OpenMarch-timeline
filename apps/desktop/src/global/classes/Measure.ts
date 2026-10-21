@@ -71,8 +71,13 @@ type BeatWithIndex = Beat & { index: number };
  * @returns A sorted array of `Measure` objects representing the measures in the piece.
  */
 export const fromDatabaseMeasures = (args: {
-    databaseMeasures: (Omit<DatabaseMeasure, "number_override"> & {
+    databaseMeasures: (Omit<
+        DatabaseMeasure,
+        "number_override" | "meter" | "grouping"
+    > & {
         number_override?: number | null;
+        meter?: string | null;
+        grouping?: string | null;
     })[];
     allBeats: Beat[];
     measurementNumberOffset?: number;

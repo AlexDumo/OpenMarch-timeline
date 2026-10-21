@@ -19,6 +19,10 @@ export interface DatabaseMeasure {
     notes: string | null;
     /** PROTOTYPE (tempo mode): this measure's number set by hand; the ones after count on */
     number_override?: number | null;
+    /** PROTOTYPE (tempo mode): "7/8" */
+    meter?: string | null;
+    /** PROTOTYPE (tempo mode): "2+2+3" in beat units */
+    grouping?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -40,12 +44,16 @@ export interface NewMeasureArgs {
     start_beat: number;
     rehearsal_mark?: string | null;
     notes?: string | null;
+    meter?: string | null;
+    grouping?: string | null;
 }
 
 interface RealNewMeasureArgs {
     start_beat: number;
     rehearsal_mark?: string | null;
     notes?: string | null;
+    meter?: string | null;
+    grouping?: string | null;
 }
 
 const newMeasureArgsToRealNewMeasureArgs = (
@@ -63,6 +71,8 @@ export interface ModifiedMeasureArgs {
     rehearsal_mark?: string | null;
     notes?: string | null;
     number_override?: number | null;
+    meter?: string | null;
+    grouping?: string | null;
 }
 
 interface RealModifiedMeasureArgs {
@@ -71,6 +81,8 @@ interface RealModifiedMeasureArgs {
     rehearsal_mark?: string | null;
     notes?: string | null;
     number_override?: number | null;
+    meter?: string | null;
+    grouping?: string | null;
 }
 
 const modifiedMeasureArgsToRealModifiedMeasureArgs = (

@@ -47,6 +47,8 @@ export const tablesWithHistory = [
     schema.item_placement_marchers,
     // Which Artwork sits on each item slot (ADR 0002 D-10)
     schema.item_artwork_slots,
+    // PROTOTYPE tempo mode: the music offset tempo edits change
+    schema.tempo_settings,
 ];
 
 /**

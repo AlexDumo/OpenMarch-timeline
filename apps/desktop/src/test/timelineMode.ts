@@ -127,6 +127,16 @@ export const LATER_COLUMNS = [
         name: "number_override",
         sql: "ALTER TABLE `measures` ADD `number_override` integer",
     },
+    {
+        table: "measures",
+        name: "meter",
+        sql: "ALTER TABLE `measures` ADD `meter` text",
+    },
+    {
+        table: "measures",
+        name: "grouping",
+        sql: "ALTER TABLE `measures` ADD `grouping` text",
+    },
 ] as const;
 
 /** Adds {@link LATER_COLUMNS} to the page-era file at `dbPath`. */
