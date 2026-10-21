@@ -6,6 +6,7 @@ import {
     readField,
     selectPage,
     setUiSettings,
+    waitForField,
     waitForIdle,
 } from "../app.mjs";
 import { fieldGrid, savedPositions, type Position } from "../positions.mjs";
@@ -1146,8 +1147,8 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
 });
 
 // The favorites ring (#351): hold R around the cursor and let go over a shape
-// to arm it, or tap R to keep it open until a click. Stars come with the
-// library (#352), so for now it holds the basic kinds.
+// to arm it, or tap R to keep it open until a click. It holds the starred
+// shapes, then the basic kinds.
 const ring = (page: Page) => page.getByTestId("shape-ring");
 const ringSlot = (page: Page, id: string) =>
     page.getByTestId(`shape-ring-slot-${id}`);
@@ -1271,4 +1272,72 @@ test.describe("with the ring rebound to J", () => {
             "Hold J on the field for the shape ring",
         );
     });
+});
+
+// The shape library (#352): a Shapes entry in the left sidebar lists the basic
+// kinds; a star puts a shape in the Shapes tab and the ring, for this user
+// across shows and restarts. The ninth-star question is a component test
+// (ShapeLibraryPanel.test.tsx): with one basic kind, nine can't be starred here.
+test("the Shapes tab's Library button opens the library; a star puts Box in the tab and the ring, and it's kept after a reload", async ({
+    show,
+}) => {
+    const { page } = show;
+    const shapesTab = () => page.getByRole("tab", { name: "Shapes" }).click();
+    await shapesTab();
+    await expect(page.getByTestId("shapes-tab-starred-block")).toHaveCount(0);
+
+    await page.getByTestId("shapes-tab-library").click();
+    const library = page.getByTestId("shape-library");
+    await expect(library).toBeVisible();
+    const row = page.getByTestId("shape-library-row-block");
+    await expect(row).toContainText("Box");
+    await expect(row).toContainText("2 apart");
+    const star = page.getByTestId("shape-library-star-block");
+    await expect(star).toHaveAttribute("aria-pressed", "false");
+
+    // Before any star the ring's Box only fills an empty slot. R again
+    // closes the tapped ring (Escape would also close the sidebar)
+    await selectAll(page);
+    await pointAtField(show);
+    await page.keyboard.press("r");
+    await expect(ringSlot(page, "block")).toHaveAttribute(
+        "data-starred",
+        "false",
+    );
+    await page.keyboard.press("r");
+    await expect(ring(page)).toBeHidden();
+
+    await star.click();
+    await expect(star).toHaveAttribute("aria-pressed", "true");
+
+    // In the ring, marked as starred
+    await pointAtField(show);
+    await page.keyboard.press("r");
+    await expect(ringSlot(page, "block")).toHaveAttribute(
+        "data-starred",
+        "true",
+    );
+    await page.keyboard.press("r");
+    await expect(ring(page)).toBeHidden();
+
+    // In the Shapes tab after the divider, and picking it arms the box
+    const starred = page.getByTestId("shapes-tab-starred-block");
+    await expect(starred).toHaveText("Box");
+    await starred.click();
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-tool-hint")).toBeHidden();
+
+    // The star is the user's, so it outlasts a reload
+    await page.reload();
+    await waitForField(page);
+    await shapesTab();
+    await expect(page.getByTestId("shapes-tab-starred-block")).toBeVisible();
+    await page.getByTestId("shape-library-tab").click();
+    await expect(star).toHaveAttribute("aria-pressed", "true");
+
+    // Unstarring takes it out of the tab again
+    await star.click();
+    await expect(star).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("shapes-tab-starred-block")).toHaveCount(0);
 });
