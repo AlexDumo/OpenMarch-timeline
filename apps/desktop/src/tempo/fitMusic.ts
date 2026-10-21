@@ -20,7 +20,13 @@ import {
     type OnsetEnvelope,
 } from "./onsets";
 import { firstCountLength, onsetPeaks, trackCounts } from "./onsetsTrack";
-import { lockAfter, retime, startsOf, type TempoEditResult } from "./tempoMath";
+import {
+    lockAfter,
+    moveBeatTo,
+    retime,
+    startsOf,
+    type TempoEditResult,
+} from "./tempoMath";
 
 export interface FitPlan {
     result: TempoEditResult;
@@ -101,6 +107,51 @@ const firstPeakFrom = (peaks: readonly { t: number }[], t: number) => {
     return lo;
 };
 
+/**
+ * How long each count of `a`..`b` is against the others in its measure, from the eighths in it:
+ * the shortest count of a measure is 1 (2+2+3 is 1, 1, 1.5; 3+2 is 1.5, 1; 12/8 is all 1). Only
+ * the shape inside a measure is known: across a meter change the tempo is free to change (♩. = ♩).
+ */
+export function countWeights(
+    units: readonly number[],
+    measureStarts: readonly number[],
+    a: number,
+    b: number,
+): { weights: number[]; shifts: number[] } {
+    const starts = [...measureStarts].sort((x, y) => x - y);
+    const shortestIn = (from: number, to: number) => {
+        let shortest = Infinity;
+        for (let j = from; j < to; j++)
+            if ((units[j] ?? 0) > 0) shortest = Math.min(shortest, units[j]!);
+        return Number.isFinite(shortest) ? shortest : null;
+    };
+    const weights: number[] = [];
+    const shifts: number[] = [];
+    let m = 0;
+    for (let k = a; k < b; k++) {
+        while (m + 1 < starts.length && starts[m + 1]! <= k) m++;
+        const inside = starts[m] !== undefined && starts[m]! <= k;
+        const from = inside ? starts[m]! : k;
+        const to =
+            starts[m + 1] !== undefined && starts[m + 1]! > k
+                ? starts[m + 1]!
+                : k + 1;
+        const shortest = shortestIn(from, to);
+        const u = units[k] ?? 0;
+        weights.push(u > 0 && shortest ? u / shortest : 1);
+        // the first count of a measure counted in other notes than the one before: the eighth
+        // may carry on instead of the count
+        const before =
+            inside && k === from && m > 0
+                ? shortestIn(starts[m - 1]!, from)
+                : null;
+        shifts.push(
+            shortest && before && shortest !== before ? shortest / before : 1,
+        );
+    }
+    return { weights, shifts };
+}
+
 /** The last clear hit in the music (a quiet tail of reverb isn't one) */
 export function lastHit(env: OnsetEnvelope): number | null {
     const peaks = onsetPeaks(env);
@@ -153,6 +204,7 @@ export function planFit({
     measureStarts = [],
     holds,
     toEnd,
+    units,
 }: {
     env: OnsetEnvelope;
     durations: readonly number[];
@@ -170,6 +222,11 @@ export function planFit({
      * way; the endless counts after the stored ones carry on from the last one anyway).
      */
     toEnd?: { carryTo: number };
+    /**
+     * Eighths in each count by spec beat (2 for a quarter; 2, 2, 3 in a 7/8 bar counted 2+2+3).
+     * With it, uneven measures are followed through the music as they're counted.
+     */
+    units?: readonly number[];
 }): FitPlan {
     let moveMusic = 0;
     // From a count that isn't on the music, a fit would follow the wrong beats: say so instead
@@ -214,6 +271,19 @@ export function planFit({
         durations: [...durations],
         locks: new Set(locks),
     };
+    // From a count near its hit (but not on it), it first goes onto the hit, the counts back to
+    // the pin before (or the start) taking the difference evenly, so a drift that built up over
+    // them isn't put into one count
+    if (from > 1 && !locks.has(from)) {
+        const s0 = startsOf(result.durations);
+        const tol = Math.max(0.03, 0.12 * (s0[from + 1]! - s0[from]!));
+        const hit = snapToOnset(music, s0[from]!, tol);
+        const moved =
+            hit !== s0[from]
+                ? moveBeatTo(result.durations, result.locks, from, hit)
+                : null;
+        if (moved) result = { ...result, durations: moved.durations };
+    }
     const unsure = new Set<number>();
     const modes: FitPlan["modes"] = [];
     let stoppedAt: number | null = null;
@@ -236,47 +306,19 @@ export function planFit({
             });
         } else {
             modes.push("follow");
-            if (
-                !hasUnevenMeasures(result.durations, measureStarts, a, b, holds)
-            ) {
-                // The music's own pulse (72–190 BPM, the octave whose counts land on most hits)
-                const first =
-                    firstCountLength(music, s[a]!, estimateBeatPeriod) ??
-                    (s[b]! - s[a]!) / (b - a);
-                const tr = trackCounts({
-                    env: music,
-                    start: s[a]!,
-                    firstLength: first,
-                    counts: b - a,
-                });
-                // Stop where it loses the music, rather than guess on past it
-                const lost = lostAt(music, tr.times);
-                if (lost > 0) {
-                    stoppedAt = a + lost;
-                    tr.times.length = lost + 1;
-                }
-                // The follow lands each count on a hit already; between two pins the last stretch
-                // is evened out to meet the pin
-                fitted =
-                    lost <= 0 && endPinned
-                        ? fitCountsToOnsets({
-                              env: music,
-                              guess: [...tr.times.slice(0, -1), s[b]!],
-                              startFixed: true,
-                              endFixed: true,
-                          })
-                        : tr.times;
-            } else {
-                // Uneven counts (a grouping like 2+2+3, set at the tempo in effect): keep their
-                // shape and move each count onto its nearest hit
-                const guess = s.slice(a, b + 1);
-                fitted = fitCountsToOnsets({
-                    env: music,
-                    guess,
-                    startFixed: true,
-                    endFixed: endPinned,
-                });
-            }
+            const followed = followStretch({
+                music,
+                starts: s,
+                a,
+                b,
+                endPinned,
+                durations: result.durations,
+                measureStarts,
+                holds,
+                units,
+            });
+            fitted = followed.fitted;
+            if (followed.lost > 0) stoppedAt = a + followed.lost;
         }
         const peaks = onsetPeaks(music);
         for (let k = 1; k < fitted.length - 1; k++) {
@@ -318,6 +360,76 @@ export function planFit({
         ),
         fittedTo,
     };
+}
+
+/**
+ * Follow the counts `a`..`b` through the music (counts at a guessed tempo): from the music's own
+ * pulse, each count onto the next hit, as long as its grouping says. Stops where it loses the
+ * music (`lost`, counts from `a`; -1 when it didn't). Between two pins the end meets the pin.
+ */
+function followStretch({
+    music,
+    starts: s,
+    a,
+    b,
+    endPinned,
+    durations,
+    measureStarts,
+    holds,
+    units,
+}: {
+    music: OnsetEnvelope;
+    starts: readonly number[];
+    a: number;
+    b: number;
+    endPinned: boolean;
+    durations: readonly number[];
+    measureStarts: readonly number[];
+    holds?: ReadonlySet<number>;
+    units?: readonly number[];
+}): { fitted: number[]; lost: number } {
+    if (!units && hasUnevenMeasures(durations, measureStarts, a, b, holds))
+        // Uneven counts (a grouping like 2+2+3, set at the tempo in effect) without their
+        // groupings: keep their shape and move each count onto its nearest hit
+        return {
+            fitted: fitCountsToOnsets({
+                env: music,
+                guess: s.slice(a, b + 1),
+                startFixed: true,
+                endFixed: endPinned,
+            }),
+            lost: -1,
+        };
+    // Each count as long as its grouping says (2+2+3: the last is 1.5 of the others), so meters
+    // set before fitting are followed as they're counted
+    const shape = units ? countWeights(units, measureStarts, a, b) : undefined;
+    // The music's own pulse (50–200 BPM, the octave whose counts land on most hits)
+    const first =
+        firstCountLength(music, s[a]!, estimateBeatPeriod, shape?.weights) ??
+        (s[b]! - s[a]!) / (b - a);
+    const tr = trackCounts({
+        env: music,
+        start: s[a]!,
+        firstLength: first,
+        counts: b - a,
+        weights: shape?.weights,
+        shifts: shape?.shifts,
+    });
+    // Stop where it loses the music, rather than guess on past it
+    const lost = lostAt(music, tr.times);
+    if (lost > 0) tr.times.length = lost + 1;
+    // The follow lands each count on a hit already; between two pins the last stretch is evened
+    // out to meet the pin
+    const fitted =
+        lost <= 0 && endPinned
+            ? fitCountsToOnsets({
+                  env: music,
+                  guess: [...tr.times.slice(0, -1), s[b]!],
+                  startFixed: true,
+                  endFixed: true,
+              })
+            : tr.times;
+    return { fitted, lost };
 }
 
 /**

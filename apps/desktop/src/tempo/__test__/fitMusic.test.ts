@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lostAt, planFit } from "../fitMusic";
+import { countWeights, lostAt, planFit } from "../fitMusic";
 import type { OnsetEnvelope } from "../onsets";
 import { startsOf } from "../tempoMath";
 
@@ -77,5 +77,16 @@ describe("planFit toEnd", () => {
         // after the music, up to the stored counts' end: the last tempo carries on
         for (let k = plan.fittedTo; k < 50; k++)
             expect(plan.result.durations[k]).toBeCloseTo(0.5, 2);
+    });
+});
+
+describe("countWeights", () => {
+    it("keeps the shape inside a measure and lets a meter change go either way", () => {
+        // a 4/4 bar (counts 1-4), a 7/8 bar 2+2+3 (5-7), a 6/8 bar 3+3 (8-9), a 3/4 bar (10-12)
+        const units = [0, 2, 2, 2, 2, 2, 2, 3, 3, 3, 2, 2, 2];
+        const { weights, shifts } = countWeights(units, [1, 5, 8, 10], 1, 13);
+        expect(weights).toEqual([1, 1, 1, 1, 1, 1, 1.5, 1, 1, 1, 1, 1]);
+        // into 6/8 the eighth may carry on (a count 1.5 as long); into 3/4, 2/3 as long
+        expect(shifts).toEqual([1, 1, 1, 1, 1, 1, 1, 1.5, 1, 2 / 3, 1, 1]);
     });
 });

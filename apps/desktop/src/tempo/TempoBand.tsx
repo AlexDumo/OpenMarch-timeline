@@ -1408,6 +1408,8 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 .filter((m) => m.id !== null)
                 .map((m) => m.start),
             toEnd: toEnd ? { carryTo: data.storedCount } : undefined,
+            // each count's eighths, so meters set before fitting are followed as they're counted
+            units: data.durations.map((_, b) => units[b] ?? 2),
         });
         if (plan.refused === "start-off-music") {
             toast.error(

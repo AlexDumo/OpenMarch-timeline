@@ -78,6 +78,7 @@ const SETTLE_COUNTS = 16;
 
 interface Path {
     t: number;
+    /** Seconds per unit of count weight (a count of weight 1.5 is 1.5 of these) */
     len: number;
     /** How strong the hits it has followed are (a running average); 0 before the first */
     ref: number;
@@ -101,29 +102,40 @@ function stepPath(
     changeWeight: number,
     missCost: number,
     next: Path[],
+    weight = 1,
+    shift = 1,
 ) {
+    // this count as long as its weight says (a 3-eighth count of 2+2+3 is 1.5 of the others);
+    // where the meter changes, the eighth may stay the same instead of the count (`shift`)
+    const expected = p.len * weight;
+    const shifted = expected * shift;
     // the pulse here, at the octave nearest the counts'
     const raw = localPulse?.(p.t) ?? null;
     const pulse =
         raw === null
             ? null
             : [raw, raw / 2, raw * 2].reduce((a, b) =>
-                  Math.abs(Math.log(b / p.len)) < Math.abs(Math.log(a / p.len))
+                  Math.abs(Math.log(b / expected)) <
+                  Math.abs(Math.log(a / expected))
                       ? b
                       : a,
               );
-    const lo = p.t + 0.66 * Math.min(p.len, pulse ?? p.len);
-    const hi = p.t + 1.38 * Math.max(p.len, pulse ?? p.len);
+    const lo = p.t + 0.66 * Math.min(expected, shifted, pulse ?? expected);
+    const hi = p.t + 1.38 * Math.max(expected, shifted, pulse ?? expected);
     const extend = (t: number, gain: number, hit: boolean) => {
         const len = t - p.t;
-        const rPrev = Math.log(len / p.len);
+        const rSame = Math.log(len / expected);
+        const rShift = Math.log(len / shifted);
+        const viaShift = shift !== 1 && rShift * rShift < rSame * rSame;
+        const rPrev = viaShift ? rShift : rSame;
+        const base = viaShift ? p.len * shift : p.len;
         const rPulse = pulse === null ? Infinity : Math.log(len / pulse);
         // changing tempo costs less when it goes to the music's own pulse
         const r2 = Math.min(rPrev * rPrev, rPulse * rPulse + 0.02);
         next.push({
             t,
             // follow the tempo, smoothed so one late hit doesn't swing it
-            len: hit ? 0.8 * len + 0.2 * p.len : p.len,
+            len: hit ? 0.8 * (len / weight) + 0.2 * base : base,
             ref: hit ? (p.ref ? 0.8 * p.ref + 0.2 * gain : gain) : p.ref,
             score: p.score + gain - changeWeight * r2,
             times: [...p.times, t],
@@ -137,7 +149,8 @@ function stepPath(
     )
         // faint ticks (under a held note, in a caesura) aren't the music going on
         if (peaks[i]!.s >= WEAK * p.ref) extend(peaks[i]!.t, peaks[i]!.s, true);
-    extend(p.t + p.len, -missCost, false);
+    extend(p.t + expected, -missCost, false);
+    if (shift !== 1) extend(p.t + shifted, -missCost, false);
 }
 
 /**
@@ -152,11 +165,23 @@ export function trackCounts({
     changeWeight = 10,
     missCost = 0.35,
     localPulse,
+    weights,
+    shifts,
 }: {
     env: OnsetEnvelope;
     start: number;
     firstLength: number;
     counts: number;
+    /**
+     * How long each count is against the others (from its grouping: 1 for a quarter, 1.5 for a
+     * dotted quarter), so uneven measures are followed as they are counted. All 1 when left out.
+     */
+    weights?: readonly number[];
+    /**
+     * Where the meter changes, how much longer a count is if the eighth note stays the same
+     * (6/8 into 3/4: 2/3), as well as the count staying the same (♩. = ♩). 1 elsewhere.
+     */
+    shifts?: readonly number[];
     beam?: number;
     changeWeight?: number;
     missCost?: number;
@@ -168,7 +193,7 @@ export function trackCounts({
     let paths: Path[] = [
         {
             t: start,
-            len: firstLength,
+            len: firstLength / (weights?.[0] ?? 1),
             ref: strengthNear(peaks, start),
             score: 0,
             times: [start],
@@ -178,7 +203,16 @@ export function trackCounts({
     for (let k = 0; k < counts; k++) {
         const next: Path[] = [];
         for (const p of paths)
-            stepPath(p, peaks, localPulse, changeWeight, missCost, next);
+            stepPath(
+                p,
+                peaks,
+                localPulse,
+                changeWeight,
+                missCost,
+                next,
+                weights?.[k] ?? 1,
+                shifts?.[k] ?? 1,
+            );
         next.sort((a, b) => b.score - a.score);
         // keep the best path per landing spot (within 15 ms)
         const kept: Path[] = [];
@@ -219,6 +253,7 @@ export function firstCountLength(
         min: number,
         max: number,
     ) => number | null,
+    weights?: readonly number[],
 ): number | null {
     const p = estimate(env, start, start + 8, MIN_LEN, MAX_LEN);
     if (!p) return null;
@@ -232,6 +267,7 @@ export function firstCountLength(
             start,
             firstLength: len,
             counts: Math.floor(8 / len),
+            weights,
         });
         let matched = 0;
         for (const q of peaks)
@@ -245,8 +281,13 @@ export function firstCountLength(
             0.02 * Math.abs(Math.log2(len / 0.5))
         );
     };
-    const candidates = [p, p / 2, p * 2].filter(
-        (c) => c >= MIN_LEN - 1e-9 && c <= MAX_LEN + 1e-9,
-    );
+    // the pulse found may be a count of another weight than the first (a dotted quarter in 2+2+3)
+    const w0 = weights?.[0] ?? 1;
+    const ratios = weights?.some((w) => w !== w0)
+        ? [1, 0.5, 2, 1.5, 2 / 3, 0.75, 4 / 3]
+        : [1, 0.5, 2];
+    const candidates = ratios
+        .map((r) => p * r)
+        .filter((c) => c >= MIN_LEN - 1e-9 && c <= MAX_LEN + 1e-9);
     return candidates.reduce((a, b) => (coverage(b) > coverage(a) ? b : a));
 }
