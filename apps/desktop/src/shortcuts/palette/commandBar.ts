@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { ActionParam } from "../definitions";
 import type { PaletteItem } from "./sources";
 
 /**
@@ -41,6 +42,85 @@ export interface CommandRun {
 /** A palette item's command: began when chosen, null when it can't run now */
 export interface ParamCommand {
     begin(): CommandRun | null;
+}
+
+/** A typed parameter with its label worked out, as the bar asks it ({@link ActionParam}) */
+export type CommandParam = Omit<ActionParam, "labelKey"> & {
+    readonly label: string;
+};
+
+/** A typed answer in `param`'s unit; null when it isn't understood or is out of range */
+export function parseParam(param: CommandParam, text: string): number | null {
+    const t = text.trim().replace(/°$/, "").trim();
+    let value: number | null = null;
+    if (param.unit === "count") value = /^\d+$/.test(t) ? Number(t) : null;
+    else if (param.unit === "degrees")
+        value = /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null;
+    else {
+        const m = /^(\d+(?:\.\d+)?)?\s*(½)?$/.exec(t);
+        value =
+            m && (m[1] !== undefined || m[2] !== undefined)
+                ? Number(m[1] ?? 0) + (m[2] ? 0.5 : 0)
+                : null;
+    }
+    if (value === null) return null;
+    const { min, max } = param.range ?? {};
+    if (min !== undefined && value < min) return null;
+    if (max !== undefined && value > max) return null;
+    return value;
+}
+
+/** A default as the bar types it: 2.5 steps is "2½" */
+function typedDefault(param: CommandParam): string {
+    if (param.default === undefined) return "";
+    if (param.unit !== "steps") return String(param.default);
+    const whole = Math.floor(param.default);
+    const half = param.default - whole >= 0.5 ? "½" : "";
+    return whole === 0 && half ? half : `${whole}${half}`;
+}
+
+/**
+ * A command that asks `params` in turn and then runs with every answer by its key, for an action
+ * that declares typed params (`ActionDefinition.params`). It shows nothing live: the answers go
+ * to `run` when the last one is given. An empty answer takes the default.
+ */
+export function paramsCommand(
+    path: readonly string[],
+    params: readonly CommandParam[],
+    run: (values: Readonly<Record<string, number>>) => void,
+): ParamCommand {
+    const valuesOf = (answers: readonly string[]) =>
+        params.map((param, i) => {
+            const answer = answers[i]?.trim() ?? "";
+            return parseParam(
+                param,
+                answer === "" ? typedDefault(param) : answer,
+            );
+        });
+    return {
+        begin: () => ({
+            path,
+            preview(answers) {
+                const values = valuesOf(answers);
+                return params.map((param, i) => ({
+                    key: param.key,
+                    label: param.label,
+                    initial: typedDefault(param),
+                    invalid: i < answers.length && values[i] === null,
+                }));
+            },
+            finish(answers) {
+                const values = valuesOf(answers);
+                if (values.some((v) => v === null)) return;
+                run(
+                    Object.fromEntries(
+                        params.map((param, i) => [param.key, values[i]!]),
+                    ),
+                );
+            },
+            cancel() {},
+        }),
+    };
 }
 
 /** What the palette and the docked bar show; one of them at most */

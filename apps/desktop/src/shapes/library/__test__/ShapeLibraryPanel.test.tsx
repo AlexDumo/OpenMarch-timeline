@@ -1,51 +1,42 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ReactElement } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render as renderDom, screen } from "@testing-library/react";
+import { afterEach, expect } from "vitest";
+import type { ReactElement, ReactNode } from "react";
+import {
+    cleanup,
+    render as renderDom,
+    screen,
+    waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { rowTool } from "./fakeRowKind";
-import { ShapeLibraryContents } from "../library/ShapeLibraryPanel";
+import { describeDbTests, type DbConnection } from "@/test/base";
+import {
+    createSavedShapeInTransaction,
+    getSavedShapes,
+} from "@/db-functions/savedShapes";
+import { rowTool } from "../../__test__/fakeRowKind";
+import { ShapeLibraryContents } from "../ShapeLibraryPanel";
 import {
     basicShapeRows,
     MAX_STARS,
     type ShapeLibraryRow,
-} from "../library/shapeLibrary";
-import {
-    SHAPE_STARS_STORAGE_KEY,
-    useShapeStarsStore,
-} from "../library/shapeStars";
-import { SHAPE_TOOLS } from "../tool/shapeTools";
-import { boxTool } from "../box/boxTool";
+} from "../shapeLibrary";
+import { SHAPE_STARS_STORAGE_KEY, useShapeStarsStore } from "../shapeStars";
+import { SHAPE_TOOLS } from "../../tool/shapeTools";
+import { boxTool } from "../../box/boxTool";
 import {
     SAVED_SHAPES_STORAGE_KEY,
     useSavedShapeLibrary,
-} from "../library/savedShapeLibrary";
-import type { SavedShape } from "../library/savedShapes";
-import { showSavedShapeKeys } from "@/hooks/queries/useShowSavedShapes";
+} from "../savedShapeLibrary";
+import type { SavedShape } from "../savedShapes";
 
-// The show's copies live in the database; here they are only the query's data
-const showWrites = vi.hoisted(() => ({ deleted: [] as string[] }));
-vi.mock("@/hooks/queries/useShowSavedShapes", async (importOriginal) => {
-    const actual =
-        await importOriginal<
-            typeof import("@/hooks/queries/useShowSavedShapes")
-        >();
-    return {
-        ...actual,
-        deleteSavedShapeFromShow: async (id: string) => {
-            showWrites.deleted.push(id);
-        },
-    };
-});
+type Wrapper = (props: { children: ReactNode }) => ReactElement;
 
-/** Renders with a query client whose show has `show` saved shapes, without the database */
-function render(ui: ReactElement, show: SavedShape[] = []) {
-    const client = new QueryClient();
-    client.setQueryData(showSavedShapeKeys.all(), show);
-    return renderDom(
-        <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
-    );
-}
+/** Renders inside the test show: the library reads its saved shapes from the database */
+const render = (ui: ReactElement, wrapper: unknown) =>
+    renderDom(ui, { wrapper: wrapper as Wrapper });
+
+/** Gives the test show its own copy of `shape`, as a show from another computer has */
+const copyIntoShow = (db: DbConnection, shape: SavedShape) =>
+    db.transaction((tx) => createSavedShapeInTransaction({ tx, shape }));
 
 const wide: SavedShape = {
     id: "wide",
@@ -73,9 +64,11 @@ afterEach(() => {
 
 const star = (id: string) => screen.getByTestId(`shape-library-star-${id}`);
 
-describe("the shape library", () => {
-    it("lists the basic kinds, each with a star, a name and a note", () => {
-        render(<ShapeLibraryContents />);
+describeDbTests("the shape library", (it) => {
+    it("lists the basic kinds, each with a star, a name and a note", ({
+        wrapper,
+    }) => {
+        render(<ShapeLibraryContents />, wrapper);
         const box = screen.getByTestId("shape-library-row-block");
         expect(box).toHaveTextContent("Box");
         expect(box).toHaveTextContent("2 apart");
@@ -83,8 +76,10 @@ describe("the shape library", () => {
         expect(screen.getByTestId("shape-library-saved-empty")).toBeVisible();
     });
 
-    it("stars a shape for this user, kept where the app keeps per-user settings", async () => {
-        render(<ShapeLibraryContents />);
+    it("stars a shape for this user, kept where the app keeps per-user settings", async ({
+        wrapper,
+    }) => {
+        render(<ShapeLibraryContents />, wrapper);
         await userEvent.click(star("block"));
         expect(star("block")).toHaveAttribute("aria-pressed", "true");
         expect(useShapeStarsStore.getState().stars).toEqual(["block"]);
@@ -96,13 +91,15 @@ describe("the shape library", () => {
         expect(useShapeStarsStore.getState().stars).toEqual([]);
     });
 
-    it(`asks to unstar one first when starring a shape past ${MAX_STARS}, and stars it once one is unstarred`, async () => {
+    it(`asks to unstar one first when starring a shape past ${MAX_STARS}, and stars it once one is unstarred`, async ({
+        wrapper,
+    }) => {
         const many = Array.from({ length: MAX_STARS }, (_, i) =>
             saved(String(i)),
         );
         const rows = [...basicShapeRows(SHAPE_TOOLS), ...many];
         useShapeStarsStore.setState({ stars: many.map((r) => r.id) });
-        render(<ShapeLibraryContents rows={rows} />);
+        render(<ShapeLibraryContents rows={rows} />, wrapper);
         expect(screen.getByTestId("shape-library-saved")).toBeVisible();
 
         await userEvent.click(star("block"));
@@ -119,20 +116,26 @@ describe("the shape library", () => {
         expect(star("block")).toHaveAttribute("aria-pressed", "true");
     });
 
-    it("lists the user's saved shapes in the Saved group, with their spacing", () => {
+    it("lists the user's saved shapes in the Saved group, with their kind and spacing", ({
+        wrapper,
+    }) => {
         useSavedShapeLibrary.getState().put(wide);
-        render(<ShapeLibraryContents />);
+        render(<ShapeLibraryContents />, wrapper);
         const row = screen.getByTestId("shape-library-row-wide");
         expect(row).toHaveTextContent("Wide box");
-        expect(row).toHaveTextContent("3 × 2 apart");
+        expect(row).toHaveTextContent("Box · 3 × 2 apart");
         expect(
             JSON.parse(localStorage.getItem(SAVED_SHAPES_STORAGE_KEY)!),
         ).toEqual([wide]);
     });
 
-    it("lists a saved shape only the open show has, which can join my library", async () => {
-        render(<ShapeLibraryContents />, [wide]);
-        const row = screen.getByTestId("shape-library-row-wide");
+    it("lists a saved shape only the open show has, which can join my library", async ({
+        db,
+        wrapper,
+    }) => {
+        await copyIntoShow(db, wide);
+        render(<ShapeLibraryContents />, wrapper);
+        const row = await screen.findByTestId("shape-library-row-wide");
         expect(row).toHaveTextContent("this show only");
         await userEvent.click(screen.getByTestId("shape-library-add-wide"));
         expect(useSavedShapeLibrary.getState().shapes).toEqual([wide]);
@@ -142,8 +145,8 @@ describe("the shape library", () => {
         expect(screen.queryByTestId("shape-library-add-wide")).toBeNull();
     });
 
-    it("greys out picking a shape with nobody selected", () => {
-        render(<ShapeLibraryContents />);
+    it("greys out picking a shape with nobody selected", ({ wrapper }) => {
+        render(<ShapeLibraryContents />, wrapper);
         expect(screen.getByTestId("shape-library-pick-block")).toBeDisabled();
         expect(screen.getByTestId("shape-library-pick-block")).toHaveAttribute(
             "title",
@@ -151,15 +154,21 @@ describe("the shape library", () => {
         );
     });
 
-    it("deletes a saved shape from my library and the show, and its star", async () => {
+    it("deletes a saved shape from my library and the show, and its star", async ({
+        db,
+        wrapper,
+    }) => {
+        await copyIntoShow(db, wide);
         useSavedShapeLibrary.getState().put(wide);
         useShapeStarsStore.setState({ stars: ["wide"] });
-        render(<ShapeLibraryContents />);
+        render(<ShapeLibraryContents />, wrapper);
         await userEvent.click(screen.getByTestId("shape-library-delete-wide"));
         expect(screen.queryByTestId("shape-library-row-wide")).toBeNull();
         expect(useSavedShapeLibrary.getState().shapes).toEqual([]);
         expect(useShapeStarsStore.getState().stars).toEqual([]);
-        expect(showWrites.deleted).toEqual(["wide"]);
+        await waitFor(async () =>
+            expect(await getSavedShapes({ db })).toEqual([]),
+        );
         expect(screen.queryByTestId("shape-library-delete-block")).toBeNull();
     });
 });

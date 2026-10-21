@@ -14,7 +14,6 @@ export function useVisualsWorkspaceLock(visuals: boolean) {
     useEffect(() => {
         if (visuals) leave();
         notifyActionHandlersChanged();
-        // Only on switching: `leave` is new when the query client is
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [visuals]);
+        // `leave` is stable (it changes only with the query client), so this runs on switching
+    }, [visuals, leave]);
 }

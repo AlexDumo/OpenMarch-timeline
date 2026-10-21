@@ -24,13 +24,14 @@ import {
     undo,
     type ToolState,
 } from "../tool/toolMachine";
-import {
-    flipSelection,
-    selectionPivot,
-    turnSelection,
-} from "../transform/selectionTransform";
+import { flipSelection, selectionPivot } from "../transform/selectionTransform";
 import type { ShapeContext, XY } from "../types";
-import { rowTool, spreadTool, type SpreadParams } from "./fakeRowKind";
+import {
+    gapListTool,
+    rowTool,
+    spreadTool,
+    type SpreadParams,
+} from "./fakeRowKind";
 
 /**
  * The Transform section's host side (#349, spec #344): scaling by interval or by footprint in half
@@ -137,6 +138,43 @@ describe.each(INTERVAL_KINDS)("scaling %s by interval", (_name, kind) => {
         const b = kind.frameOf(scaled, N);
         expect(b.rotation).toBeCloseTo(a.rotation);
         expect([b.flipX, b.flipY]).toEqual([a.flipX, a.flipY]);
+    });
+});
+
+describe("scaling a shape with uneven gaps (spec #344 story 36)", () => {
+    const N = 4;
+    /** A row of four drawn, then typed to gaps of 4, 4 and 2 steps */
+    const open = () => {
+        const t = drawn(gapListTool, N, { x: 0, y: 0 }, { x: 90, y: 0 });
+        const [gaps] = gapListTool.params;
+        return edit(t, gaps!.type(t.params, N, "4, 4, 2", env())!, ctx);
+    };
+
+    it("+ and − change every gap of the list by half a step", () => {
+        const t = open();
+        expect(gapsOf(t)).toEqual([4, 4, 2]);
+        const wider = edit(
+            t,
+            scaleShape(gapListTool, t.params, N, 1, "c", env()),
+            ctx,
+        );
+        expect(gapsOf(wider)).toEqual([4.5, 4.5, 2.5]);
+        const closer = edit(
+            t,
+            scaleShape(gapListTool, t.params, N, -1, "c", env()),
+            ctx,
+        );
+        expect(gapsOf(closer)).toEqual([3.5, 3.5, 1.5]);
+        expect(scaleReadout(gapListTool, wider.params, N, env())).toBe(
+            "4½, 4½, 2½ apart",
+        );
+    });
+
+    it("− stops when the smallest gap is half a step", () => {
+        const t = open();
+        const [gaps] = gapListTool.params;
+        const tight = gaps!.type(t.params, N, "3, 3, 0.5", env())!;
+        expect(scaleShape(gapListTool, tight, N, -1, "c", env())).toBeNull();
     });
 });
 
@@ -315,12 +353,8 @@ describe("a plain selection", () => {
         ]);
     });
 
-    it("turns clockwise around the pivot", () => {
+    it("puts the pivot on the box around them", () => {
         expect(selectionPivot(points, "ne")).toEqual({ x: 40, y: 0 });
-        const turned = turnSelection(points, 90, "ne");
-        // The pivot's marcher stays, and a quarter clockwise takes the one left of it up the screen
-        expect(near(turned[1]!, { x: 40, y: 0 })).toBe(true);
-        expect(near(turned[0]!, { x: 40, y: -40 })).toBe(true);
-        expect(near(turned[2]!, { x: 20, y: 0 })).toBe(true);
+        expect(selectionPivot(points, "c")).toEqual({ x: 20, y: 10 });
     });
 });

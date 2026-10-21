@@ -16,7 +16,12 @@ import {
     turnShape,
 } from "../frame/gestures";
 import { boxTool } from "../box/boxTool";
-import { DEGREE, normalizeAngle, type Pivot } from "../frame/frame";
+import {
+    DEGREE,
+    normalizeAngle,
+    type FlipAxis,
+    type Pivot,
+} from "../frame/frame";
 
 import type { ToolEnv } from "../tool/toolKind";
 import {
@@ -217,7 +222,7 @@ export function turnTo(
 export const flipBox = (
     p: BoxParams,
     spots: number,
-    axis: "across" | "deep",
+    axis: FlipAxis,
     pivot: Pivot,
     env: ToolEnv,
 ): BoxParams => flipShape(boxTool, p, spots, axis, pivot, env) as BoxParams;

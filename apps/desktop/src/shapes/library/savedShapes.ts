@@ -1,3 +1,4 @@
+import type { SavedShape } from "@/db-functions/savedShapes";
 import type { ShapeFrame } from "../frame/frame";
 import { typedValue } from "../command/shapeSteps";
 import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
@@ -11,16 +12,7 @@ import { intervalNote, type ShapeLibraryRow } from "./shapeLibrary";
  * many spots the saved distance apart. It lives in the user's library across shows, with a copy
  * in each show that uses one (ADR 0006, saved shapes). Everything here is pure.
  */
-export interface SavedShape {
-    /** Its own id, the same in the user's library and in every show's copy */
-    readonly id: string;
-    readonly name: string;
-    /** The shape kind's id and generator version, as a recipe stores them */
-    readonly kind: string;
-    readonly kindVersion: number;
-    /** Each interval parameter's key to its value, in steps */
-    readonly intervals: Readonly<Record<string, number>>;
-}
+export type { SavedShape };
 
 /** A kind a saved shape opens: its own kind, set to the saved intervals as it's drawn */
 export interface SavedToolKind extends AnyToolKind {
@@ -181,7 +173,7 @@ export function savedToolKind(
 
 /**
  * The library's Saved group: the user's saved shapes, then the ones only the open show has (a
- * show from another computer), noted as such. A saved shape whose kind this app doesn't have is
+ * show from another computer), noted as such. Each note starts with the kind: "Box · 2 apart". A saved shape whose kind this app doesn't have is
  * left out.
  */
 export function savedShapeRows(
@@ -196,7 +188,14 @@ export function savedShapeRows(
                 (t) => t.kind.shape.id === saved.kind,
             )?.kind;
             if (!base) return [];
-            const note = intervalNote(Object.values(saved.intervals));
+            // A saved shape has its own name, so its note says which kind it is (story 22)
+            const note = [
+                base.shape.label,
+                intervalNote(Object.values(saved.intervals)),
+                inLibrary ? null : "this show only",
+            ]
+                .filter(Boolean)
+                .join(" · ");
             return [
                 {
                     id: saved.id,
@@ -204,9 +203,7 @@ export function savedShapeRows(
                     label: saved.name,
                     icon: base.shape.icon,
                     kind: savedToolKind(base, saved),
-                    note: inLibrary
-                        ? note
-                        : [note, "this show only"].filter(Boolean).join(" · "),
+                    note,
                     saved: { shape: saved, inLibrary },
                 },
             ];

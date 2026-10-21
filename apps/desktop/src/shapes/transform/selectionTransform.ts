@@ -1,14 +1,15 @@
 import {
-    DEGREE,
     pivotPoint,
+    type FlipAxis,
     type PivotKey,
     type ShapeFrame,
 } from "../frame/frame";
 import type { XY } from "../types";
 
 /**
- * Turning and flipping a plain selection, one that isn't a shape (#349): the marchers' positions
- * change and nothing else, no recipe. Its frame is the box around them, square to the field, so
+ * Flipping a plain selection, one that isn't a shape (#349): the marchers' positions change and
+ * nothing else, no recipe. Turning one goes through the editor's `rotateSelection`, as the
+ * rotate handle does, around the same pivot. Its frame is the box around them, square to the field, so
  * the Transform section's pivot grid means the same as on a shape. Everything here is pure.
  */
 
@@ -46,7 +47,7 @@ export function selectionPivot(
  */
 export function flipSelection<P extends XY>(
     points: readonly P[],
-    axis: "across" | "deep",
+    axis: FlipAxis,
     pivot: PivotKey,
 ): P[] {
     const at = selectionPivot(points, pivot);
@@ -56,21 +57,4 @@ export function flipSelection<P extends XY>(
             ? { ...p, x: 2 * at.x - p.x }
             : { ...p, y: 2 * at.y - p.y },
     );
-}
-
-/** `points` turned `degrees` clockwise on screen about `pivot`, in the same order */
-export function turnSelection<P extends XY>(
-    points: readonly P[],
-    degrees: number,
-    pivot: PivotKey,
-): P[] {
-    const at = selectionPivot(points, pivot);
-    if (!at) return [];
-    const c = Math.cos(degrees * DEGREE);
-    const s = Math.sin(degrees * DEGREE);
-    return points.map((p) => {
-        const dx = p.x - at.x;
-        const dy = p.y - at.y;
-        return { ...p, x: at.x + dx * c - dy * s, y: at.y + dx * s + dy * c };
-    });
 }

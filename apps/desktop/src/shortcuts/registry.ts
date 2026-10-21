@@ -54,12 +54,14 @@ export function actionIgnoresRepeat(id: ActionId): boolean {
     return top(id)?.ignoresRepeat?.() ?? false;
 }
 
-export function runAction(id: ActionId): boolean {
+/** Runs the action with its definition's `args`, and `args` (a command's answers) over them */
+export function runAction(id: ActionId, args?: ActionArgs): boolean {
     const handler = top(id);
     if (!handler || !handler.isEnabled() || isActionOffInWorkspace(id))
         return false;
     runListeners.forEach((listener) => listener(id));
-    handler.run(getActionDefinition(id).args);
+    const own = getActionDefinition(id).args;
+    handler.run(args ? { ...own, ...args } : own);
     return true;
 }
 

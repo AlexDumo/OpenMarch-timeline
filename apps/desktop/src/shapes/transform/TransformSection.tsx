@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { useRef, type ReactNode } from "react";
+import { keepFocus } from "../editor/keepFocus";
 import {
     FlipHorizontalIcon,
     FlipVerticalIcon,
@@ -14,6 +15,7 @@ import {
     DEGREE,
     PIVOT_KEYS,
     rotationDegrees,
+    type FlipAxis,
     type Pivot,
     type PivotKey,
 } from "../frame/frame";
@@ -46,9 +48,8 @@ export function TransformSection() {
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
     const tool = useToolEditTarget();
     const placed = usePlacedEditTarget();
+    // A kind armed with nothing drawn yet has no shape: the selection's own controls show
     const target = toolOpen ? tool : placed;
-    // An open tool with nothing drawn yet has nothing to transform
-    if (toolOpen && !tool) return null;
     if (!target && selected.length === 0) return null;
     return (
         <div className="flex flex-col gap-8" data-testid="transform-section">
@@ -282,7 +283,7 @@ function Flips({
     onFlip,
     disabled,
 }: {
-    onFlip: (axis: "across" | "deep") => void;
+    onFlip: (axis: FlipAxis) => void;
     disabled?: boolean;
 }) {
     const button = clsx(
@@ -327,12 +328,6 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
         </div>
     );
 }
-
-/**
- * A press on the section's buttons doesn't move focus to them, so Enter still places an open
- * shape and Escape still cancels it
- */
-const keepFocus = (e: { preventDefault(): void }) => e.preventDefault();
 
 function SmallButton({
     label,

@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { keepFocus } from "./keepFocus";
 import {
     DotsThreeIcon,
     FlipHorizontalIcon,
@@ -465,12 +466,6 @@ function boundsOf(points: readonly { x: number; y: number }[]) {
         bottom: Math.max(...ys),
     };
 }
-
-/**
- * A press on the editor's buttons doesn't move focus to them, so Enter still places the shape and
- * Escape still cancels it, rather than pressing the last button clicked again
- */
-const keepFocus = (e: { preventDefault(): void }) => e.preventDefault();
 
 /** A button in the ⋯ row: an icon and a word, so nobody has to guess (sims, F1) */
 function TextButton({

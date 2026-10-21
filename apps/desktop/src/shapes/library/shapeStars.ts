@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { create } from "zustand";
-import { useShowSavedShapes } from "@/hooks/queries/useShowSavedShapes";
-import { syncFromStorage } from "@/stores/syncFromStorage";
+import { useQuery } from "@tanstack/react-query";
+import { allSavedShapesQueryOptions } from "@/hooks/queries/useSavedShapes";
 import { SHAPE_TOOLS } from "../tool/shapeTools";
 import {
     basicShapeRows,
@@ -10,6 +10,7 @@ import {
 } from "./shapeLibrary";
 import { useSavedShapeLibrary } from "./savedShapeLibrary";
 import { savedShapeRows, type SavedShape } from "./savedShapes";
+import { userList } from "./userStorage";
 
 /**
  * Stars are the user's, not the show's (#344): they live with the app's other per-user settings
@@ -17,30 +18,11 @@ import { savedShapeRows, type SavedShape } from "./savedShapes";
  */
 export const SHAPE_STARS_STORAGE_KEY = "openmarch:shapeStars";
 
-function parseStars(raw: string): string[] {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed)
-        ? parsed.filter((id): id is string => typeof id === "string")
-        : [];
-}
-
-function loadStars(): string[] {
-    try {
-        const stored = localStorage.getItem(SHAPE_STARS_STORAGE_KEY);
-        return stored ? parseStars(stored) : [];
-    } catch (error) {
-        console.error("Failed to load starred shapes:", error);
-        return [];
-    }
-}
-
-function saveStars(stars: readonly string[]): void {
-    try {
-        localStorage.setItem(SHAPE_STARS_STORAGE_KEY, JSON.stringify(stars));
-    } catch (error) {
-        console.error("Failed to save starred shapes:", error);
-    }
-}
+const STARS = userList(
+    SHAPE_STARS_STORAGE_KEY,
+    (id) => (typeof id === "string" ? id : null),
+    "starred shapes",
+);
 
 interface ShapeStarsStore {
     /** Starred shape ids, in the order they were starred */
@@ -53,7 +35,7 @@ interface ShapeStarsStore {
 }
 
 export const useShapeStarsStore = create<ShapeStarsStore>((set, get) => ({
-    stars: loadStars(),
+    stars: STARS.load(),
     asking: null,
     toggle: (id, rows) => {
         const next = toggleStar(get().stars, id, rows);
@@ -62,14 +44,12 @@ export const useShapeStarsStore = create<ShapeStarsStore>((set, get) => ({
             return;
         }
         set({ stars: next.stars, asking: null });
-        saveStars(next.stars);
+        STARS.save(next.stars);
     },
     dismissAsk: () => set({ asking: null }),
 }));
 
-syncFromStorage(SHAPE_STARS_STORAGE_KEY, parseStars, (stars) =>
-    useShapeStarsStore.setState({ stars }),
-);
+STARS.sync((stars) => useShapeStarsStore.setState({ stars }));
 
 const BASIC_ROWS = basicShapeRows(SHAPE_TOOLS);
 const NONE: readonly SavedShape[] = [];
@@ -89,6 +69,6 @@ export function libraryRowsOf(
  */
 export function useShapeLibraryRows(): readonly ShapeLibraryRow[] {
     const library = useSavedShapeLibrary((s) => s.shapes);
-    const show = useShowSavedShapes().data ?? NONE;
+    const show = useQuery(allSavedShapesQueryOptions()).data ?? NONE;
     return useMemo(() => libraryRowsOf(library, show), [library, show]);
 }

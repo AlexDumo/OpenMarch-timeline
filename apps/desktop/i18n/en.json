@@ -1964,6 +1964,10 @@
             }
         },
         "circle": "Circle",
+        "saved": {
+            "copyFailed": "Couldn't copy the saved shape into the show",
+            "deleteFailed": "Couldn't delete the saved shape from the show"
+        },
         "square": "Square",
         "triangle": "Triangle",
         "x": "X"
