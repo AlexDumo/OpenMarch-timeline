@@ -1,4 +1,3 @@
-import type { Icon } from "@phosphor-icons/react";
 import type { AnyToolKind } from "./toolKind";
 import type { ShapeToolEntry } from "./shapeTools";
 
@@ -9,7 +8,7 @@ export const RING_SLOTS = 8;
 export interface RingShape {
     readonly id: string;
     readonly label: string;
-    readonly icon: Icon;
+    /** Drawn as its picture (#378), from its own geometry */
     readonly kind: AnyToolKind;
 }
 
@@ -28,7 +27,6 @@ export function ringSlots(
         slots.push({
             id: kind.shape.id,
             label: kind.shape.label,
-            icon: kind.shape.icon,
             kind,
         });
     }

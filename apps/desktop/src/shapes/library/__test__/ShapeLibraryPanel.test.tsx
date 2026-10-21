@@ -5,6 +5,7 @@ import {
     render as renderDom,
     screen,
     waitFor,
+    within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describeDbTests, type DbConnection } from "@/test/base";
@@ -51,7 +52,6 @@ const saved = (id: string): ShapeLibraryRow => ({
     group: "saved",
     label: `Saved ${id}`,
     note: "Row · 2 apart",
-    icon: rowTool.shape.icon,
     kind: rowTool,
 });
 
@@ -72,6 +72,11 @@ describeDbTests("the shape library", (it) => {
         const box = screen.getByTestId("shape-library-row-block");
         expect(box).toHaveTextContent("Box");
         expect(box).toHaveTextContent("2 apart");
+        // Drawn from the box's own spots (#378)
+        expect(within(box).getByTestId("shape-preview")).toHaveAttribute(
+            "data-spots",
+            "9",
+        );
         expect(star("block")).toHaveAttribute("aria-pressed", "false");
         expect(screen.getByTestId("shape-library-saved-empty")).toBeVisible();
     });

@@ -12,6 +12,7 @@ import type { AnyToolKind } from "../tool/toolKind";
 import { SHAPE_TOOLS } from "../tool/shapeTools";
 import { useShapeToolStore } from "../tool/shapeToolStore";
 import { beginShapeCommand } from "./shapeCommand";
+import ShapePreviewIcon from "../preview/ShapePreviewIcon";
 import type { ShapeLibraryRow } from "../library/shapeLibrary";
 import { useShapeLibraryRows } from "../library/shapeStars";
 
@@ -87,13 +88,12 @@ function kindItem(
     );
     // Shapes edit the drill, like the box tool's key
     const offHere = isActionOffInWorkspace("shapeBlock");
-    const Icon = kind.shape.icon;
     const label = named?.label ?? kind.shape.label;
     return {
         id: `${SHAPE_BRANCH}:${named?.id ?? kind.shape.id}`,
         label,
         group: t("commandPalette.shape"),
-        icon: <Icon size={18} />,
+        icon: <ShapePreviewIcon kind={kind} size={18} />,
         keywords: named ? [kind.shape.id, kind.shape.label] : [kind.shape.id],
         disabled: !ready || offHere || !pick.ok,
         disabledReason: offHere

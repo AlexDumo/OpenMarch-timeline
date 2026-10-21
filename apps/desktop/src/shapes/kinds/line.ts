@@ -1,4 +1,3 @@
-import { LineSegmentIcon } from "@phosphor-icons/react";
 import { flatness, principalExtremes, typicalSpacing } from "../geometry/fit";
 import { makePath, type Path } from "../geometry/path";
 import {
@@ -56,7 +55,6 @@ export const lineKind: ShapeKind<LineParams> = {
     id: "line",
     version: 1,
     label: "Line",
-    icon: LineSegmentIcon,
     family: "path",
     groups: [SPACING_GROUP],
     measures: [

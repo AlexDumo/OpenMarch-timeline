@@ -7,6 +7,7 @@ import { performersOnly } from "@/global/classes/Marcher";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { useEditorReadiness } from "@/shortcuts/handlers/useEditorReadiness";
+import ShapePreviewIcon from "../preview/ShapePreviewIcon";
 import {
     clickRing,
     openRing,
@@ -206,7 +207,6 @@ function RingSlot({
     title: string | undefined;
     onPick: () => void;
 }) {
-    const Icon = slot.icon;
     return (
         // aria-disabled, not disabled, so a click on a greyed-out shape still dismisses the ring
         <button
@@ -234,7 +234,7 @@ function RingSlot({
                 onPick();
             }}
         >
-            <Icon size={20} weight={hot ? "bold" : "regular"} />
+            <ShapePreviewIcon kind={slot.kind} size={20} bold={hot} />
             {slot.label}
             {starred && (
                 <StarIcon size={12} weight="fill" aria-label="Starred" />
