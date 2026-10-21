@@ -7,10 +7,13 @@ import clsx from "clsx";
 import { useEffect } from "react";
 import { ShortcutTooltip } from "@/components/timeline/ShortcutTooltip";
 import { useTempoModeStore } from "./tempoModeStore";
+import { installTempoKeyGuard } from "./tempoShortcuts";
 
 export function TempoModeButton() {
     const on = useTempoModeStore((s) => s.on);
     const toggle = useTempoModeStore((s) => s.toggle);
+    // Tempo mode leaves only navigation keys on (and its own)
+    useEffect(() => installTempoKeyGuard(), []);
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;

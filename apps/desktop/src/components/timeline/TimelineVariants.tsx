@@ -674,10 +674,13 @@ const TimelineSurface = memo(function TimelineSurface({
     const showWaveform = model.waveform.peaksByBeat.some(
         (peaks) => peaks.length > 0,
     );
+    // A focused band (tempo mode) has its own measure row, so the timeline leaves its own out
+    const measureRow = basic || !props.band?.focus;
     const rowsLayout = getTimelineRows({
         expanded,
         showWaveform,
         rowCount: rows.length,
+        measureRow,
     });
     // Basic (UI-19): under each box's header (the page row) its body: the measure numbers, the
     // waveform, then the count ticks along the bottom. With no waveform (no audio, or hidden in
@@ -689,7 +692,7 @@ const TimelineSurface = memo(function TimelineSurface({
     const { rowPitch, trackHeight, clipHitHeight } = rowsLayout;
     // The measure row under the page boxes (as `getTimelineRows`), where the simple-defaults
     // study's mid-page ticks sit
-    const railHeight = expanded ? 20 : 17;
+    const railHeight = measureRow ? (expanded ? 20 : 17) : 0;
     const audioTop = basic ? basicAudioTop : rowsLayout.audioTop;
     const waveformHeight = basic
         ? basicWaveformHeight
@@ -1153,7 +1156,7 @@ const TimelineSurface = memo(function TimelineSurface({
                             onSelectionChange={onSelectionChange}
                             onSeek={props.onSeek}
                             initialPageWidth={initialPageWidth}
-                            showMeasures={expanded}
+                            showMeasures={expanded && measureRow}
                             seekSnapBeats={seekSnapBeats}
                             scrubLine={pointer.scrubLine}
                             pageFlagMove={
@@ -1179,14 +1182,19 @@ const TimelineSurface = memo(function TimelineSurface({
                             pixelsPerBeat={pixelsPerBeat}
                             width={width}
                         />
-                        <TimelineRehearsalMarkers
-                            model={model}
-                            pixelsPerBeat={pixelsPerBeat}
-                            // Basic's measure row is at the top of the box bodies, as expanded's
-                            top={TIMELINE_PAGE_ROW_BOTTOM + (expanded ? 2 : 1)}
-                            compact={!expanded}
-                            onSeek={props.onSeek}
-                        />
+                        {measureRow && (
+                            <TimelineRehearsalMarkers
+                                model={model}
+                                pixelsPerBeat={pixelsPerBeat}
+                                // Basic's measure row is at the top of the box bodies, as expanded's
+                                top={
+                                    TIMELINE_PAGE_ROW_BOTTOM +
+                                    (expanded ? 2 : 1)
+                                }
+                                compact={!expanded}
+                                onSeek={props.onSeek}
+                            />
+                        )}
                         {basic && props.expertMarks && (
                             <TimelineBasicExpertMarks
                                 pages={model.pages}

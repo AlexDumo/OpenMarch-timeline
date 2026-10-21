@@ -154,13 +154,16 @@ export const getTimelineRows = ({
     expanded,
     showWaveform,
     rowCount,
+    measureRow = true,
 }: {
     expanded: boolean;
     showWaveform: boolean;
     rowCount: number;
+    /** Whether the measure row shows (a focused band, tempo mode, has its own) */
+    measureRow?: boolean;
 }): TimelineRows => {
     // The measure row, under the page boxes
-    const railHeight = expanded ? 20 : 17;
+    const railHeight = measureRow ? (expanded ? 20 : 17) : 0;
     const waveformHeight = expanded ? 32 : 12;
     const audioTop = TIMELINE_PAGE_ROW_BOTTOM + railHeight + 2;
     const trackTop = showWaveform ? audioTop + waveformHeight + 4 : audioTop;
