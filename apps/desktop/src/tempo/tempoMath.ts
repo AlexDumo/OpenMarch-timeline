@@ -79,36 +79,64 @@ export function retime(
     from: number,
     to: number,
     lengths: readonly number[],
-    /** A hold (fermata) may be any length: no 20 BPM floor */
-    { hold = false }: { hold?: boolean } = {},
+    {
+        hold = false,
+        fixed,
+    }: {
+        /** A hold (fermata) may be any length: no 20 BPM floor */
+        hold?: boolean;
+        /**
+         * Counts that keep their length (holds): inside the range they ignore `lengths`, and
+         * neither the counts stretched to keep the next lock nor a fit to it change them
+         */
+        fixed?: ReadonlySet<number>;
+    } = {},
 ): TempoEditResult {
     const next = [...durations];
     const nextLocks = new Set([...locks].filter((l) => l <= from || l >= to));
-    for (let i = 0; i < lengths.length; i++)
+    const isFixed = (b: number) => fixed?.has(b) ?? false;
+    for (let i = 0; i < lengths.length; i++) {
+        if (isFixed(from + i)) continue;
         next[from + i] = hold
             ? Math.max(MIN_COUNT_SECONDS, lengths[i]!)
             : clampCount(lengths[i]!);
+    }
     const lock = lockAfter(nextLocks, to - 1);
     if (lock === null) return { durations: next, locks: nextLocks };
     const starts = startsOf(durations);
     const target = starts[lock]!; // where the lock is now
     const editedEnd = startsOf(next)[to]!;
-    const tailNow = starts[lock]! - starts[to]!;
-    const tailWanted = target - editedEnd;
-    const tailCounts = lock - to;
+    // The counts between the edit and the lock that may stretch (the fixed ones keep theirs)
+    let tailNow = 0;
+    let tailFixed = 0;
+    let tailCounts = 0;
+    for (let b = to; b < lock; b++) {
+        if (isFixed(b)) tailFixed += durations[b]!;
+        else {
+            tailNow += durations[b]!;
+            tailCounts++;
+        }
+    }
+    const tailWanted = target - editedEnd - tailFixed;
     const fits =
         tailCounts > 0 &&
         tailWanted >= tailCounts * MIN_COUNT_SECONDS &&
         tailWanted <= tailCounts * MAX_COUNT_SECONDS;
     if (fits) {
-        scaleRange(next, to, lock, tailWanted / tailNow);
+        for (let b = to; b < lock; b++)
+            if (!isFixed(b)) next[b] = next[b]! * (tailWanted / tailNow);
         return { durations: next, locks: nextLocks };
     }
     // The lock wins: the edited counts plus the tail keep their total
-    const start = startsOf(next)[from]!;
-    const edited = editedEnd - start;
-    const room = target - start - tailNow;
-    scaleRange(next, from, to, room / edited);
+    let edited = 0;
+    let editedFixed = 0;
+    for (let b = from; b < to; b++)
+        if (isFixed(b)) editedFixed += next[b]!;
+        else edited += next[b]!;
+    const room =
+        target - startsOf(next)[from]! - tailNow - tailFixed - editedFixed;
+    for (let b = from; b < to; b++)
+        if (!isFixed(b)) next[b] = next[b]! * (room / edited);
     return {
         durations: next,
         locks: nextLocks,

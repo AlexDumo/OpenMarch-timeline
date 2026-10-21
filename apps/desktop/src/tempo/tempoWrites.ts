@@ -4,7 +4,7 @@
  * for a time signature, rehearsal marks. Locks and measure-number overrides live in the
  * workspace settings, which have no undo (a prototype shortcut).
  */
-import { and, asc, eq, gt, inArray, lt } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lt } from "drizzle-orm";
 import { db, schema } from "@/global/database/db";
 import { transactionWithHistory } from "@/db-functions/history";
 import type { DbTransaction } from "@/db-functions/types";
@@ -180,17 +180,71 @@ export interface CountEditResult {
     couldNotKeep: number;
 }
 
-/** Moves (timelines) whose range strictly contains ordinal `beat` */
-async function movesAround(tx: DbTransaction, beat: number) {
+/**
+ * Moves (timelines) whose range strictly contains ordinal `beat`; with `orEnding`, also the moves
+ * that end right there (a count added at a page boundary goes to the page, and its move, before)
+ */
+async function movesAround(
+    tx: DbTransaction,
+    beat: number,
+    { orEnding = false }: { orEnding?: boolean } = {},
+) {
     return await tx
         .select()
         .from(schema.timelines)
         .where(
             and(
                 lt(schema.timelines.start_beat, beat),
-                gt(schema.timelines.end_beat, beat),
+                (orEnding ? gte : gt)(schema.timelines.end_beat, beat),
             ),
         );
+}
+
+/** A move's range in spec beats (`[start, end)`) */
+export interface MoveSpan {
+    id: number;
+    start: number;
+    end: number;
+}
+
+/** Every move's range, for saying what a count edit does to the drill */
+export async function readMoves(): Promise<MoveSpan[]> {
+    const rows = await db
+        .select({
+            id: schema.timelines.id,
+            start: schema.timelines.start_beat,
+            end: schema.timelines.end_beat,
+        })
+        .from(schema.timelines);
+    return rows;
+}
+
+/**
+ * A breath in the drill, not the music: each of the moves ends one count early, so its marchers
+ * hold there for that count. No count is added. One undo step.
+ */
+export async function endMovesEarly({
+    timelineIds,
+}: {
+    timelineIds: readonly number[];
+}): Promise<void> {
+    await transactionWithHistory(db, "tempoHoldDrill", async (tx) => {
+        for (const id of timelineIds) {
+            const move = await tx
+                .select()
+                .from(schema.timelines)
+                .where(eq(schema.timelines.id, id))
+                .get();
+            if (!move || move.end_beat - move.start_beat < 2)
+                throw new Error("That move is only one count long");
+            await resizeTimelineInTransaction({
+                tx,
+                timelineId: id,
+                start: move.start_beat,
+                end: move.end_beat - 1,
+            });
+        }
+    });
 }
 
 /**
@@ -213,7 +267,9 @@ export async function insertCounts({
 }): Promise<CountEditResult> {
     return await transactionWithHistory(db, "tempoInsertCounts", async (tx) => {
         await ensureCountsInTransaction({ tx, through: at });
-        const around = await movesAround(tx, at);
+        // A count added right after a move's last count lengthens it too (the page before a page
+        // boundary takes the count), so with `keep` that move holds as well
+        const around = await movesAround(tx, at, { orEnding: true });
         await withTimelinePageRipple(tx, async () => {
             await createBeatsInTransaction({
                 tx,
@@ -428,6 +484,27 @@ export async function regroupMeasuresWrite({
                         m.rehearsal_mark ?? marks.get(m.start_beat)!.mark,
                 })),
             });
+    });
+}
+
+/** Move a rehearsal mark from one measure to another: one undo step */
+export async function moveRehearsalMark({
+    fromId,
+    toId,
+    mark,
+}: {
+    fromId: number;
+    toId: number;
+    mark: string;
+}): Promise<void> {
+    await transactionWithHistory(db, "tempoMoveRehearsalMark", async (tx) => {
+        await updateMeasuresInTransaction({
+            tx,
+            modifiedItems: [
+                { id: fromId, rehearsal_mark: null },
+                { id: toId, rehearsal_mark: mark },
+            ],
+        });
     });
 }
 

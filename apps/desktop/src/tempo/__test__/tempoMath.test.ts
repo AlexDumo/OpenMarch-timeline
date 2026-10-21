@@ -48,6 +48,29 @@ describe("retime", () => {
         const r = retime(even(8), new Set(), 1, 3, rampLengths(2, 60));
         expect(startsOf(r.durations)[8]).toBeCloseTo(4.5);
     });
+    it("leaves fixed counts (holds) alone, in the edit and in the stretch to the lock", () => {
+        const d = even(8);
+        d[2] = 4; // a hold inside the edit
+        d[5] = 3; // a hold between the edit and the lock
+        const r = retime(d, new Set([8]), 1, 4, rampLengths(3, 100), {
+            fixed: new Set([2, 5]),
+        });
+        expect(r.durations[2]).toBe(4);
+        expect(r.durations[5]).toBe(3);
+        expect(r.durations[1]).toBeCloseTo(0.6);
+        expect(startsOf(r.durations)[8]).toBeCloseTo(startsOf(d)[8]!);
+        expect(r.note).toBeUndefined();
+    });
+    it("fits the edit to a lock right after it without touching a hold in it", () => {
+        const d = even(8);
+        d[2] = 4;
+        const r = retime(d, new Set([3]), 1, 3, rampLengths(2, 100), {
+            fixed: new Set([2]),
+        });
+        expect(r.durations[2]).toBe(4);
+        expect(startsOf(r.durations)[3]).toBeCloseTo(4.5);
+        expect(r.note).toBeDefined();
+    });
 });
 
 describe("taps", () => {
