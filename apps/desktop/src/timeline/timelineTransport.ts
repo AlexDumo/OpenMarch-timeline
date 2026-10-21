@@ -20,6 +20,14 @@ import {
     restartLivePlaybackAt,
 } from "@/components/timeline/audio/AudioPlayer";
 import { isPreviewMode } from "@/stores/PreviewModeStore";
+// PROTOTYPE (tempo mode): its own tiny store, so the transport doesn't load the tempo lanes
+import { useTempoModeStore } from "@/tempo/tempoModeStore";
+
+/**
+ * PROTOTYPE (tempo mode, owner 2026-10-21): while tempo mode is on, Play plays on from the
+ * playhead and Stop leaves the playhead where playback stopped, as a DAW does
+ */
+const tempoModeOn = (): boolean => useTempoModeStore.getState().on;
 
 /**
  * The transport (docs/timeline/ui.md UI-9; P8.11), shared by the timeline's transport buttons and
@@ -207,10 +215,13 @@ export function consumeSuspendRequest(): boolean {
  */
 export function stopTimelinePlayback(
     setIsPlaying: (isPlaying: boolean) => void,
+    /** How it ends, when the caller knows better than the mode (tempo mode's tap pass goes back) */
+    end?: TimelinePlaybackEnd,
 ): void {
     if (!useTimelineSelectionStore.getState().playback) return;
-    // Preview plays like a video: stopping, or reaching the end of the show, pauses where it is
-    endRequest = isPreviewMode() ? "pause" : "stop";
+    // Preview plays like a video: stopping, or reaching the end of the show, pauses where it is;
+    // so does tempo mode, as a DAW's Stop does
+    endRequest = end ?? (isPreviewMode() || tempoModeOn() ? "pause" : "stop");
     setIsPlaying(false);
 }
 
@@ -414,7 +425,8 @@ export function startTimelinePlayOn(
  * (project owner, 2026-10-13, lab test playback-start: version B won). Alt+Space plays on from the
  * start flag (`playTimelineOn`) and Shift+Space from the playhead (`playTimelinePage`). Playing,
  * it stops and goes back to where Play was pressed (UI-24, `stopTimelinePlayback`); Shift+Space
- * pauses where it is instead.
+ * pauses where it is instead. In tempo mode (prototype) it plays on from the playhead, and Stop
+ * stays where playback stopped.
  */
 export function toggleTimelinePlayback({
     isPlaying,
@@ -432,6 +444,10 @@ export function toggleTimelinePlayback({
         return;
     }
     const state = useTimelineSelectionStore.getState();
+    if (tempoModeOn()) {
+        startTimelinePlayOn(setIsPlaying, state.playheadBeat);
+        return;
+    }
     const bounds = loopBounds(state);
     if (bounds) {
         state.cue(bounds.from);
