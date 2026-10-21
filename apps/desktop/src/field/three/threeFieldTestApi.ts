@@ -169,6 +169,7 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         stage: drawing.stage ?? null,
         knob: drawing.knob ? screen(drawing.knob.at) : null,
         centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,
+        pivotMark: drawing.pivotMark ? screen(drawing.pivotMark) : null,
         labels: (drawing.labels ?? []).map((l) => l.text),
         tip: drawing.tip?.text ?? null,
     };

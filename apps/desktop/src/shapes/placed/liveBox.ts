@@ -1,7 +1,10 @@
 import { assignSlots, type OrderMode } from "../assign";
 import { changeFiles, filesOf, type BoxParams } from "../box/boxGeometry";
 import { boxTool } from "../box/boxTool";
+import { samePivot } from "../frame/frame";
+import { pivotOf } from "../frame/pivot";
 import {
+    centerPivot,
     dragShape,
     startShapeGesture,
     type ShapeGesture,
@@ -63,16 +66,26 @@ const sameParams = (a: BoxParams, b: BoxParams) =>
     a.rotation === b.rotation &&
     (a.flipX ?? false) === (b.flipX ?? false) &&
     (a.flipY ?? false) === (b.flipY ?? false) &&
+    samePivot(pivotOf(a), pivotOf(b)) &&
     filesOf(a) === filesOf(b);
 
-/** Ends the gesture: `changed` when there is something to save */
-export function releaseLive(live: LiveBox): {
+/**
+ * Ends the gesture: `changed` when there is something to save. A double click on the pivot sends
+ * it back to the center (#350).
+ */
+export function releaseLive(
+    live: LiveBox,
+    click?: { readonly double: boolean } | null,
+): {
     live: LiveBox;
     changed: boolean;
 } {
+    const centered =
+        click?.double && live.gesture ? centerPivot(live.gesture) : null;
+    const params = centered === null ? live.params : (centered as BoxParams);
     return {
-        live: { ...live, gesture: null },
-        changed: !sameParams(live.params, live.box.params),
+        live: { ...live, params, gesture: null },
+        changed: !sameParams(params, live.box.params),
     };
 }
 

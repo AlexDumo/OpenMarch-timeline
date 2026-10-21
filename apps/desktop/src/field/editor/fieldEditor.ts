@@ -230,6 +230,11 @@ export type FieldModeDrawing = {
     knob?: { at: FieldPoint; stem: FieldPoint };
     /** The dot that moves the whole shape */
     centerDot?: FieldPoint;
+    /**
+     * The shape's pivot once it's out of the center (#350): a yellow crosshair that drags on its
+     * own. At the center the center dot is the pivot.
+     */
+    pivotMark?: FieldPoint;
     /** While turning: what it turns around, and the pointer */
     pivot?: { at: FieldPoint; to: FieldPoint };
     /** A note by the pointer: the angle, or where the shape is in drill terms */

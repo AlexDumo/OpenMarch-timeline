@@ -73,3 +73,29 @@ Decision 3 is replaced: there are no overrides, and a reopened recipe always mat
 A recipe is shown at its move's end and at later moments while all its members stand on their
 spots. Editing it at a later moment saves a copy on that later move.
 
+
+## Amendment, 2026-10-20: the frame and pivot, and spots with marchers
+
+The shape host (spec #344, owner grilling 2026-10-20) adds two points. Neither changes the schema.
+
+1. **A recipe stores the shape's full frame**: its center, size, rotation, flip and pivot. They
+   live in `params` beside the kind's own numbers. The center, size, rotation and flip are the
+   kind's to store (a box keeps its center, spacings, rotation and flips; its size follows from
+   them and the spot count). The **pivot** is the host's: `params.pivot` is one of the frame's 9
+   points (`"nw"` … `"se"`), or a point of its own `{ x, y }` in the frame's terms (a multiple of
+   the half size across and deep, or field units on an axis with no size), so it moves, turns
+   and stretches with the shape. No `pivot` means the center, which every new shape starts at, so
+   recipes saved before this amendment read as centered. Scaling is never stored as a factor: it
+   becomes the new size and intervals. Reopening a recipe shows the shape turned, flipped and
+   pivoted as it was left.
+2. **A recipe is spots with marchers assigned to them.** The kind lays out the spots
+   (`params.spots` counts them, holes included); `timeline_shape_recipe_marchers` says which
+   marcher stands on which spot (`slot`). The two stay separate steps: a kind is given the spot
+   count by the host and never reads the selection. A spot with no marcher is planned, not built:
+   nobody is placed there, and it is kept only as a hole in a recipe whose members left
+   (Revision, 2026-10-14). Shapes with spots that nobody stands on from the start come later
+   (#358) and fit this model without a schema change.
+
+Verification: the shape host's unit tests save a shape through `placementOf` and read it back
+through `boxesAt` with its pivot (`shapePivot.test.ts`), and a browser scenario places a box with
+a pivot of its own and finds it there when the box is selected again (`box-tool.spec.mts`).

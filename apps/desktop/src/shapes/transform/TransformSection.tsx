@@ -14,8 +14,10 @@ import {
     DEGREE,
     PIVOT_KEYS,
     rotationDegrees,
+    type Pivot,
     type PivotKey,
 } from "../frame/frame";
+import { pivotOf, withPivot } from "../frame/pivot";
 import { flipShape, scrubTurn, turnShape } from "../frame/gestures";
 import { scaleReadout, scaleShape } from "../frame/scale";
 import { setShapePivot, useShapeEditorStore } from "../frame/shapeEditorStore";
@@ -52,7 +54,16 @@ export function TransformSection() {
         <div className="flex flex-col gap-8" data-testid="transform-section">
             <h5 className="text-h5">Transform</h5>
             <div className="flex items-start gap-12">
-                <PivotGrid />
+                {target ? (
+                    <PivotGrid
+                        pivot={pivotOf(target.params)}
+                        onPick={(key) =>
+                            target.apply(withPivot(target.params, key))
+                        }
+                    />
+                ) : (
+                    <SelectionPivotGrid />
+                )}
                 {target ? (
                     <ShapeTransform target={target} />
                 ) : (
@@ -75,9 +86,23 @@ const PIVOT_NAMES: Record<PivotKey, string> = {
     se: "front right",
 };
 
-/** What turns, flips and scales go around: a corner, an edge's middle or the center */
-function PivotGrid() {
+/** A plain selection's pivot: the session's, as there is no shape to keep it */
+function SelectionPivotGrid() {
     const pivot = useShapeEditorStore((s) => s.pivot);
+    return <PivotGrid pivot={pivot} onPick={setShapePivot} />;
+}
+
+/**
+ * What turns, flips and scales go around: a corner, an edge's middle or the center. A shape's
+ * pivot dragged elsewhere on the field (#350) lights none of them.
+ */
+function PivotGrid({
+    pivot,
+    onPick,
+}: {
+    pivot: Pivot;
+    onPick: (key: PivotKey) => void;
+}) {
     return (
         <div
             role="radiogroup"
@@ -94,7 +119,7 @@ function PivotGrid() {
                     aria-label={`Pivot: ${PIVOT_NAMES[key]}`}
                     title={`Turn, flip and scale around the ${PIVOT_NAMES[key]}`}
                     onPointerDown={keepFocus}
-                    onClick={() => setShapePivot(key)}
+                    onClick={() => onPick(key)}
                     data-testid={`transform-pivot-${key}`}
                     className="flex size-16 items-center justify-center"
                 >
@@ -123,7 +148,8 @@ const PLAIN = { alt: false, shift: false };
 /** A shape's rotation, flips and scale */
 function ShapeTransform({ target }: { target: ShapeEditTarget }) {
     const { kind, params, spots } = target;
-    const pivot = useShapeEditorStore((s) => s.pivot);
+    // The shape's own (#350)
+    const pivot = pivotOf(params);
     // The shape at the press of the rotation's drag
     const base = useRef<unknown>(params);
     const env = envFor(PLAIN);

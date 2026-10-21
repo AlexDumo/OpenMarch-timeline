@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { FieldMode } from "@/field/editor/fieldEditor";
+import type { FieldMode, FieldPointer } from "@/field/editor/fieldEditor";
+import type { ShapeField } from "../field/shapeField";
 import type { XY } from "../types";
 import { shapeOutline } from "../frame/gestures";
 import {
@@ -125,6 +126,12 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
     };
 });
 
+/** The env for a pointer event: a dragged pivot also snaps to the open shape's spots (#350) */
+const envOf = (field: ShapeField, tool: ToolState, pointer: FieldPointer) =>
+    toolEnvFor(field, keysOf(pointer), () =>
+        slotsOf(tool, shapeContextFor(field)),
+    );
+
 /**
  * The open shape tool on the field (docs/timeline/research/shapes/06-box-v1.md): a field editor
  * mode that takes every edit press while the tool is open and hands it to the tool's state
@@ -136,21 +143,19 @@ export const shapeToolMode: FieldMode = {
     press(pointer) {
         const field = currentShapeField();
         if (!field) return;
-        updateTool((t) =>
-            press(t, pointer.field, toolEnvFor(field, keysOf(pointer))),
-        );
+        updateTool((t) => press(t, pointer.field, envOf(field, t, pointer)));
     },
     move(pointer) {
         const field = currentShapeField();
         if (!field) return;
         updateTool((t) =>
-            pointerMove(t, pointer.field, toolEnvFor(field, keysOf(pointer))),
+            pointerMove(t, pointer.field, envOf(field, t, pointer)),
         );
     },
-    release() {
+    release(_pointer, click) {
         const field = currentShapeField();
         if (!field) return;
-        updateTool((t) => release(t, shapeContextFor(field)));
+        updateTool((t) => release(t, shapeContextFor(field), click));
     },
     cancel() {
         updateTool(cancelGesture);
@@ -159,7 +164,7 @@ export const shapeToolMode: FieldMode = {
         const tool = useShapeToolStore.getState().tool;
         const field = currentShapeField();
         if (!tool || !field) return null;
-        const env = toolEnvFor(field, keysOf(pointer));
+        const env = envOf(field, tool, pointer);
         // The editor asks for the cursor as the pointer moves, so this is where hovering is seen
         hoverAt(tool, pointer.field, env.hitRadius);
         const target = pressTarget(tool, pointer.field, env);
