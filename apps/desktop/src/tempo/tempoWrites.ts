@@ -28,7 +28,9 @@ import {
 import type { WorkspaceSettings } from "@/settings/workspaceSettings";
 
 /** Beat ids by ordinal (position order), beat 0 first */
-async function beatIdsInTransaction(tx: DbTransaction): Promise<number[]> {
+export async function beatIdsInTransaction(
+    tx: DbTransaction,
+): Promise<number[]> {
     const rows = await tx
         .select({ id: schema.beats.id })
         .from(schema.beats)
@@ -78,7 +80,7 @@ export async function writeDurations({
 }
 
 /** Pins and holds, as beat flags: the beats that change get the new value, in one statement each */
-async function writeMarksInTransaction(
+export async function writeMarksInTransaction(
     tx: DbTransaction,
     ids: readonly number[],
     {
@@ -421,16 +423,35 @@ export async function deleteCounts({
  * signature change. Rehearsal marks stay on their measure's first count, or move to the new
  * measure that holds it.
  */
-export async function regroupMeasuresWrite({
-    from,
-    to,
-    starts,
-}: {
+export async function regroupMeasuresWrite(args: {
     from: number;
     to: number;
     starts: readonly number[];
 }): Promise<void> {
-    await transactionWithHistory(db, "tempoTimeSignature", async (tx) => {
+    await transactionWithHistory(db, "tempoTimeSignature", (tx) =>
+        regroupMeasuresInTransaction(tx, args),
+    );
+}
+
+/**
+ * `regroupMeasuresWrite` inside an edit. With `meter`, every measure of the stretch gets that meter
+ * and grouping (null clears them: counts per measure / 4).
+ */
+export async function regroupMeasuresInTransaction(
+    tx: DbTransaction,
+    {
+        from,
+        to,
+        starts,
+        meter,
+    }: {
+        from: number;
+        to: number;
+        starts: readonly number[];
+        meter?: { meter: string | null; grouping: string | null };
+    },
+): Promise<void> {
+    {
         await ensureCountsInTransaction({ tx, through: to });
         const ids = await beatIdsInTransaction(tx);
         const ordinalOf = new Map(ids.map((id, i) => [id, i]));
@@ -484,7 +505,22 @@ export async function regroupMeasuresWrite({
                         m.rehearsal_mark ?? marks.get(m.start_beat)!.mark,
                 })),
             });
-    });
+        if (meter) {
+            const ids2 = new Set(starts.map((s) => ids[s]!));
+            const now = (await tx.select().from(schema.measures)).filter((m) =>
+                ids2.has(m.start_beat),
+            );
+            if (now.length)
+                await updateMeasuresInTransaction({
+                    tx,
+                    modifiedItems: now.map((m) => ({
+                        id: m.id,
+                        meter: meter.meter,
+                        grouping: meter.grouping,
+                    })),
+                });
+        }
+    }
 }
 
 /** Move a rehearsal mark from one measure to another: one undo step */
