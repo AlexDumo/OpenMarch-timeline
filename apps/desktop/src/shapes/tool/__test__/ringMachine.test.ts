@@ -143,3 +143,31 @@ describe("holding and tapping R", () => {
         expect(clickRing(latched, center, 4)).toBeNull();
     });
 });
+
+describe("the aim line", () => {
+    const center = { x: 400, y: 300 };
+
+    it("starts where the pointer was when the ring opened", () => {
+        expect(openRing(center, 0).aim).toEqual(center);
+        expect(openRing(center, 0, { x: 20, y: 10 }).aim).toEqual({
+            x: 20,
+            y: 10,
+        });
+    });
+
+    it("follows the pointer, even where no slot changes", () => {
+        const ring = pointRing(openRing(center, 0), { x: 400, y: 200 }, 4);
+        expect(ring.aim).toEqual({ x: 400, y: 200 });
+        const further = pointRing(ring, { x: 405, y: 150 }, 4);
+        expect(further.hot).toBe(0);
+        expect(further.aim).toEqual({ x: 405, y: 150 });
+    });
+
+    it("a latched ring keeps following the pointer", () => {
+        const latched = releaseRingKey(openRing(center, 0), 10).ring!;
+        expect(pointRing(latched, { x: 900, y: 300 }, 4).aim).toEqual({
+            x: 900,
+            y: 300,
+        });
+    });
+});

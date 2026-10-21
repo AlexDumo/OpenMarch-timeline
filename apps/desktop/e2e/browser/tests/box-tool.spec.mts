@@ -1226,6 +1226,63 @@ test("holding R opens the ring around the cursor; sliding to Box and letting go 
     expect((await readField(page)).activeGesture).toBe("shape");
 });
 
+/** Where the ring's aim line runs, from and to, in window pixels */
+async function aimLine(page: Page) {
+    const line = page.getByTestId("shape-ring-aim");
+    const read = async (name: string) => Number(await line.getAttribute(name));
+    return {
+        from: { x: await read("x1"), y: await read("y1") },
+        to: { x: await read("x2"), y: await read("y2") },
+    };
+}
+
+test("a line runs from the ring's center to the pointer and follows it, held or latched (#379)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    const at = await pointAtField(show);
+    await page.keyboard.down("r");
+    await expect(ring(page)).toBeVisible();
+    const center = (await page.getByTestId("shape-ring-center").boundingBox())!;
+    const middle = {
+        x: center.x + center.width / 2,
+        y: center.y + center.height / 2,
+    };
+    const gap = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
+    const near = (a: Point, b: Point) => expect(gap(a, b)).toBeLessThan(4);
+
+    const opened = await aimLine(page);
+    near(opened.from, middle);
+    near(opened.to, at);
+
+    // Off toward a corner, past the slots: it still follows, and Box lights up
+    await page.mouse.move(at.x + 40, at.y - 200, { steps: 4 });
+    await expect
+        .poll(async () =>
+            gap((await aimLine(page)).to, { x: at.x + 40, y: at.y - 200 }),
+        )
+        .toBeLessThan(1);
+    near((await aimLine(page)).from, middle);
+    await expect(ringSlot(page, "block")).toHaveAttribute("data-hot", "true");
+    await page.keyboard.press("Escape");
+    await page.keyboard.up("r");
+    await expect(ring(page)).toBeHidden();
+
+    // A latched ring has it too
+    await page.mouse.move(at.x, at.y);
+    await page.keyboard.press("r");
+    await expect(ring(page)).toHaveAttribute("data-latched", "true");
+    await page.mouse.move(at.x - 70, at.y + 30, { steps: 3 });
+    await expect
+        .poll(async () =>
+            gap((await aimLine(page)).to, { x: at.x - 70, y: at.y + 30 }),
+        )
+        .toBeLessThan(1);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-ring-aim")).toBeHidden();
+});
+
 test("tapping R keeps the ring open: a click away dismisses it, a click on Box arms it, and Escape closes it before the shape", async ({
     show,
 }) => {
