@@ -22,6 +22,12 @@ export const PREVIEW_VIEW = 24;
 const PAD = 3;
 /** Half the square the shape is laid out in, in steps */
 const HALF = 4;
+/**
+ * How far the picture's outline stands off the spots, as a share of the shape's size (#382). A
+ * kind's outline runs through its edge spots; pushed out, the dots sit inside a clear shape
+ * instead of on top of its line.
+ */
+const OUTLINE_GAP = 0.22;
 
 /** One field unit per step, on a half-step grid: only the picture's proportions matter */
 const ENV: ToolEnv = {
@@ -64,9 +70,52 @@ export function shapePreview(kind: AnyToolKind): ShapePreview {
         .generate(params, n, CTX)
         .map(({ x, y }): XY => ({ x, y }));
     const outline = kind.outline?.(params, n) ?? null;
-    const preview = fitToView(spots, outline);
+    const preview = fitToView(spots, outline && standOff(outline, spots));
     PREVIEWS.set(kind, preview);
     return preview;
+}
+
+/**
+ * `outline` pushed outward by {@link OUTLINE_GAP} of the spots' size, each corner along its two
+ * edges' normals so every edge moves the same distance
+ */
+function standOff(outline: readonly XY[], spots: readonly XY[]): XY[] {
+    const xs = spots.map((p) => p.x);
+    const ys = spots.map((p) => p.y);
+    const gap =
+        OUTLINE_GAP *
+        Math.max(
+            Math.max(...xs) - Math.min(...xs),
+            Math.max(...ys) - Math.min(...ys),
+        );
+    const n = outline.length;
+    if (n < 3 || gap === 0) return [...outline];
+    // Twice the signed area: which side of each edge is outside
+    let area = 0;
+    for (let i = 0; i < n; i++) {
+        const a = outline[i];
+        const b = outline[(i + 1) % n];
+        area += a.x * b.y - b.x * a.y;
+    }
+    const side = area > 0 ? 1 : -1;
+    const normal = (a: XY, b: XY): XY => {
+        const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        return {
+            x: (side * (b.y - a.y)) / length,
+            y: (side * (a.x - b.x)) / length,
+        };
+    };
+    return outline.map((p, i) => {
+        const before = normal(outline[(i - 1 + n) % n], p);
+        const after = normal(p, outline[(i + 1) % n]);
+        // A miter: the corner moves far enough that both edges move by `gap`
+        const k =
+            gap / Math.max(1 + before.x * after.x + before.y * after.y, 0.25);
+        return {
+            x: p.x + (before.x + after.x) * k,
+            y: p.y + (before.y + after.y) * k,
+        };
+    });
 }
 
 /** `spots` and `outline` scaled into the picture, centered, keeping their proportions */

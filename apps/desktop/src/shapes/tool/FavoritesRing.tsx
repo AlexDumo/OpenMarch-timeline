@@ -271,7 +271,7 @@ function RingSlot({
                 onPick();
             }}
         >
-            <ShapePreviewIcon kind={slot.kind} size={20} bold={hot} />
+            <ShapePreviewIcon kind={slot.kind} size={20} picked={hot} />
             {slot.label}
             {starred && (
                 <StarIcon size={12} weight="fill" aria-label="Starred" />
