@@ -3,6 +3,8 @@ import { useMemo } from "react";
 import { performersOnly } from "@/global/classes/Marcher";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import ActionButton from "@/shortcuts/ActionButton";
+import { getActionShortcutLabel } from "@/shortcuts/labels";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { kindPickGate } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
@@ -13,7 +15,7 @@ import { useShapeToolStore } from "./shapeToolStore";
  * name. A kind's button runs its action, which goes through the host's `pickShapeKind`: it arms
  * the kind, or turns the open shape into it. With nobody selected the kinds are greyed out and
  * say why. Starred shapes and the Library button join after a divider once the library exists
- * (#351).
+ * (#352).
  */
 export default function ShapesTab() {
     const selected = useSelectedMarchers()?.selectedMarchers;
@@ -23,6 +25,8 @@ export default function ShapesTab() {
     );
     const armed = useShapeToolStore((s) => s.tool?.kind ?? null);
     const gate = kindPickGate(armed !== null, performers);
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const ringKey = getActionShortcutLabel("openShapeRing", { overrides });
     return (
         <div className="flex w-full flex-wrap items-center gap-8">
             <ToolbarSection aria-label="Shape kinds">
@@ -55,6 +59,15 @@ export default function ShapesTab() {
                     );
                 })}
             </ToolbarSection>
+            {/* The ring has no button, so the tab says how to open it (sims, ring round 1) */}
+            {ringKey && (
+                <span
+                    className="text-sub text-text-subtitle"
+                    data-testid="shapes-tab-ring-hint"
+                >
+                    Hold {ringKey} on the field for the shape ring
+                </span>
+            )}
             {!gate.ok && (
                 <span
                     className="text-sub text-text-subtitle"

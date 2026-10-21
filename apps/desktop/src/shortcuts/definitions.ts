@@ -634,6 +634,18 @@ const STATIC_ACTIONS = {
         // The command bar lists Shape › Box instead (#354), which asks the box's numbers
         hiddenFromPalette: true,
     },
+    // The favorites ring (#351): hold to aim and let go to pick a shape, tap to keep it open.
+    // The ring takes the key's release, so a held key doesn't repeat it.
+    openShapeRing: {
+        labelKey: "actions.shape.ring",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["R"],
+        ignoreRepeat: true,
+        hiddenFromPalette: true,
+    },
     applyShape: {
         labelKey: "actions.shape.apply",
         category: "shape",
