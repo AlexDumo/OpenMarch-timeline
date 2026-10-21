@@ -415,9 +415,16 @@ export const getPageCountAt = (
 export const getPlayheadReadout = (
     model: Pick<TimelineViewModel, "pages" | "measures" | "beatCount">,
     positionBeat: BeatPosition,
+    /**
+     * Where the measure and beat are read, when not at `positionBeat`: while playing, the page
+     * count names the count being marched (the next one to land) but the beat is the one the
+     * music is in, so the transport reads them from different places (jo: the beat read one
+     * ahead of the clock)
+     */
+    measurePositionBeat: BeatPosition = positionBeat,
 ) => {
     const at = getPageCountAt(model, positionBeat);
-    const measureAt = at.home ? null : getMeasureAt(model, positionBeat);
+    const measureAt = at.home ? null : getMeasureAt(model, measurePositionBeat);
     const page = at.home
         ? "Home"
         : at.after

@@ -221,10 +221,12 @@ export const TimelineTransport = memo(function TimelineTransport({
     const tight = width > 0 && width < TRANSPORT_TIGHT_PX;
     // While playing, the count being marched: the beat the playhead is in lands on the next count,
     // so a loop's first count reads as its own page's count 1, not the previous page's last
-    // (UI-17 follow-up; the paused playhead rests on a landed count)
+    // (UI-17 follow-up; the paused playhead rests on a landed count). The measure's beat is the
+    // one playing, as the music has it (jo: "m2 beat 3" while beat 2 played)
     const readoutText = getPlayheadReadout(
         model,
         isPlaying ? Math.min(positionBeat + 1, model.beatCount) : positionBeat,
+        positionBeat,
     );
     const mod = isMac() ? "⌘" : "Ctrl";
     const [goTo, setGoTo] = useState<string | null>(null);
@@ -804,12 +806,15 @@ export const TimelineRuler = memo(function TimelineRuler({
     useEffect(() => {
         if (!pageFlagMove) setFlagPreview(null);
     }, [pageFlagMove]);
-    // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12)
+    // Rehearsal tabs are never thinned; a number gives way to a tab near it (UI-12). A tab's own
+    // measure number goes just right of the tab when there's room before the next number or tab,
+    // so a renumbered measure (C at m. 101) stays readable (tempo mode prototype, marcus)
     const visibleMeasures = useMemo(() => {
-        const tabBeats = measures
-            .filter((measure) => measure.rehearsalMark?.trim())
-            .map((measure) => measure.atBeat);
-        return filterMarkersByMinimumSpacing(
+        const tabbed = measures.filter((measure) =>
+            measure.rehearsalMark?.trim(),
+        );
+        const tabBeats = tabbed.map((measure) => measure.atBeat);
+        const plain: MeasureNumberMarker[] = filterMarkersByMinimumSpacing(
             measures.filter(
                 (measure) =>
                     !measure.rehearsalMark?.trim() &&
@@ -821,6 +826,24 @@ export const TimelineRuler = memo(function TimelineRuler({
             ),
             pixelsPerBeat,
         );
+        const lefts = [...plain.map((m) => m.atBeat), ...tabBeats]
+            .map((beat) => beat * pixelsPerBeat)
+            .sort((a, b) => a - b);
+        const beside = tabbed.flatMap((measure) => {
+            const x = measure.atBeat * pixelsPerBeat;
+            // the tab: a 2 px bar, padding and its letters in 10 px mono
+            const tab = Math.max(
+                16,
+                measure.rehearsalMark!.trim().length * 6.5 + 10,
+            );
+            const digits = measure.label.replace(/^m/i, "").length;
+            const end = x + tab + 3 + digits * 6.5 + 4;
+            const next = lefts.find((left) => left > x + 0.5);
+            return next === undefined || next >= end
+                ? [{ ...measure, offsetPx: tab }]
+                : [];
+        });
+        return [...plain, ...beside];
     }, [measures, pixelsPerBeat]);
     const holdMarkId = useId();
     const scrub = useRulerScrub(
@@ -1140,6 +1163,11 @@ const TimelinePageBox = memo(function TimelinePageBox({
     );
 });
 
+/** A measure number to draw, `offsetPx` right of its bar line when a rehearsal tab is there */
+type MeasureNumberMarker = TimelineMeasureMarker & {
+    readonly offsetPx?: number;
+};
+
 /**
  * The measure numbers under the page boxes (`TimelineRuler`), or a show without measures' counts
  * of the playhead's page (UI-13, from `countsStart`, `countsTotal` of them)
@@ -1150,7 +1178,7 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
     countsStart,
     pixelsPerBeat,
 }: {
-    visibleMeasures: readonly TimelineMeasureMarker[];
+    visibleMeasures: readonly MeasureNumberMarker[];
     countsTotal: number | null;
     countsStart: number | null;
     pixelsPerBeat: number;
@@ -1164,7 +1192,7 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
             : [];
     return (
         // UI-12: measure numbers without the "M"; a measure with a rehearsal mark shows the
-        // mark instead (TimelineRehearsalMarkers)
+        // mark (TimelineRehearsalMarkers), with its number after it when there's room
         // Each number starts just right of its bar line, so the line doesn't cross it
         <div
             aria-hidden="true"
@@ -1176,7 +1204,10 @@ const TimelineRulerNumbers = memo(function TimelineRulerNumbers({
                     key={measure.id}
                     className="text-text absolute top-4 text-[10px] leading-none whitespace-nowrap opacity-75"
                     style={{
-                        left: beatToX(measure.atBeat, pixelsPerBeat) + 3,
+                        left:
+                            beatToX(measure.atBeat, pixelsPerBeat) +
+                            3 +
+                            (measure.offsetPx ?? 0),
                     }}
                 >
                     {measure.label.replace(/^m/i, "")}
