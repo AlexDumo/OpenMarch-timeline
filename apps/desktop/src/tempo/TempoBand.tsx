@@ -1,3 +1,4 @@
+// cspell:ignore priya
 /**
  * PROTOTYPE (tempo mode, branch tempo/track-proto): the lanes the timeline shows in place of its
  * clip rows while tempo mode is on (docs/tempo/daw-research.md). The axis stays counts, so drill
@@ -81,6 +82,7 @@ import {
     moveBeatTo,
     moveLimits,
     moveOneCount,
+    movePinsWithMusic,
     pinBeats,
     rampLengths,
     respace,
@@ -106,6 +108,7 @@ import {
 import { useMusicOnsets } from "./useMusicOnsets";
 import { snapToOnset } from "./onsets";
 import { planFit } from "./fitMusic";
+import { tempoRegions } from "./tempoSummary";
 import {
     tempoSettingsKey,
     useAudioOffsetSeconds,
@@ -498,7 +501,15 @@ type Gesture =
           startY: number;
           factor: number;
       }
-    | { kind: "range"; anchor: number; to: number }
+    | {
+          kind: "range";
+          anchor: number;
+          to: number;
+          /** Pressed on a time signature chip: a click without a drag opens its menu */
+          meterStart?: number;
+          /** Where a press on a chip was (band px): it's a drag once it moves from there */
+          pressX?: number;
+      }
     | {
           /** Dragging a rehearsal mark along the marks lane to another measure */
           kind: "mark";
@@ -562,6 +573,8 @@ interface CountAsk {
 
 /** The toast a tempo edit's note goes in (one at a time; undo and leaving the mode clear it) */
 const NOTE_TOAST = "tempo-note";
+/** The toast about a tap pass's taps (the ones left out, or that they were discarded) */
+const TAPS_TOAST = "tempo-taps";
 
 /**
  * The tapping check is offered once a session, after a tap pass, as a toast with a button (never a
@@ -626,10 +639,15 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         [],
     );
     // The counts a fit found no hit for are marked until the counts change under them (an undo,
-    // a redo, another edit); leaving tempo mode clears them, the selection and the fit's note
-    const unsureFor = useRef<{ durations: number[]; landed: boolean } | null>(
-        null,
-    );
+    // a redo, another edit) or the music moves; leaving tempo mode clears them, the selection and
+    // the fit's note. Only the stored counts are compared: the endless ones after them follow the
+    // last stored tempo, so they change when the fit is written without matching its result (sam:
+    // the marks stayed after Undo because the fit never counted as written).
+    const unsureFor = useRef<{
+        durations: number[];
+        offset: number;
+        landed: boolean;
+    } | null>(null);
     useEffect(() => {
         const watch = unsureFor.current;
         if (!watch) return;
@@ -637,8 +655,12 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             unsureFor.current = null;
             return;
         }
-        const n = Math.min(watch.durations.length, data.durations.length);
-        let same = true;
+        const n = Math.min(
+            watch.durations.length,
+            data.durations.length,
+            data.storedCount,
+        );
+        let same = Math.abs(watch.offset - data.audioOffset) < 1e-9;
         for (let b = 1; b < n && same; b++)
             same = Math.abs(watch.durations[b]! - data.durations[b]!) < 1e-6;
         if (same) {
@@ -649,7 +671,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         unsureFor.current = null;
         useTempoUi.getState().setUnsure(new Set());
         toast.dismiss(NOTE_TOAST);
-    }, [data.durations]);
+    }, [data.durations, data.audioOffset, data.storedCount]);
     useEffect(
         () => () => {
             const state = useTempoUi.getState();
@@ -682,17 +704,24 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         [durations, units],
     );
     // Holds aren't tempo: the tempo lane leaves them out
-    const segments = useMemo(() => {
-        // in quarter-note lengths, so groupings read as one tempo
-        const q = (b: number) => (durations[b] ?? 0) / ((units[b] ?? 2) / 2);
-        const d = durations.slice(0, data.storedCount).map((_, b) => {
-            if (!data.holds.has(b)) return q(b);
-            let n = b - 1;
-            while (n > 0 && data.holds.has(n)) n--;
-            return q(n);
-        });
-        return tempoSegments(d, 1.2);
-    }, [durations, data.storedCount, data.holds, units]);
+    const segmentsOf = useCallback(
+        (lengths: readonly number[]) => {
+            // in quarter-note lengths, so groupings read as one tempo
+            const q = (b: number) => (lengths[b] ?? 0) / ((units[b] ?? 2) / 2);
+            const d = lengths.slice(0, data.storedCount).map((_, b) => {
+                if (!data.holds.has(b)) return q(b);
+                let n = b - 1;
+                while (n > 0 && data.holds.has(n)) n--;
+                return q(n);
+            });
+            return tempoSegments(d, 1.2);
+        },
+        [data.storedCount, data.holds, units],
+    );
+    const segments = useMemo(
+        () => segmentsOf(durations),
+        [segmentsOf, durations],
+    );
 
     // Visible spec beats
     const firstBeat = Math.max(1, Math.floor(beatAtX(win.left, ppb)) - 1);
@@ -797,12 +826,25 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             }
             if (!keepUnsure) useTempoUi.getState().setUnsure(new Set());
             unsureFor.current = keepUnsure
-                ? { durations: result.durations, landed: false }
+                ? {
+                      durations: result.durations,
+                      offset: audioOffset ?? data.audioOffset,
+                      landed: false,
+                  }
                 : null;
             setPreview(result);
-            void run(label, () =>
-                commitEdit(data, result, refetch, audioOffset),
-            );
+            void run(label, async () => {
+                try {
+                    await commitEdit(data, result, refetch, audioOffset);
+                } catch (e) {
+                    // nothing was written: the marks would never be cleared
+                    if (keepUnsure) {
+                        unsureFor.current = null;
+                        useTempoUi.getState().setUnsure(new Set());
+                    }
+                    throw e;
+                }
+            });
         },
         [data, refetch, run],
     );
@@ -1218,6 +1260,67 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         return b < data.storedCount ? qBpm(b, data.durations) : null;
     };
     const bpmText = (bpm: number) => `♩${Math.round(bpm * 10) / 10}`;
+    /**
+     * Counts `from`..`to - 1`'s tempo as the tempo lane labels it: "♩72", "♩70→60" for a gradual
+     * change, "♩68–74" for an uneven stretch (jo: the label and the toast named one ramp two ways)
+     */
+    const stretchTempo = (
+        lengths: readonly number[],
+        from: number,
+        to: number,
+    ) => {
+        const v: number[] = [];
+        for (let b = from; b < to && b < lengths.length; b++)
+            if (!data.holds.has(b)) v.push(qBpm(b, lengths));
+        if (v.length === 0) return "a hold";
+        const lo = Math.min(...v);
+        const hi = Math.max(...v);
+        if (hi - lo <= 1.2)
+            return bpmText(v.reduce((s, x) => s + x, 0) / v.length);
+        const up = v.every((x, i) => i === 0 || x >= v[i - 1]! - 0.6);
+        const down = v.every((x, i) => i === 0 || x <= v[i - 1]! + 0.6);
+        return up || down
+            ? `♩${Math.round(v[0]!)}→${Math.round(v[v.length - 1]!)}`
+            : `♩${Math.round(lo)}–${Math.round(hi)}`;
+    };
+    /** Where a tempo starts, in words: "m. 41 (C)" on a downbeat, else "m. 41 count 3" */
+    const spotLabel = (beat: number) => {
+        const m = measureAt(beat);
+        if (!m || m.start !== beat) return measureLabel(beat);
+        return `m. ${m.number}${m.mark ? ` (${m.mark})` : ""}`;
+    };
+    /**
+     * What tempos counts `from`..`to - 1` are at, in a few words (dana: say what Fit found):
+     * "♩138, then ♩112 from m. 41 (C)"; more than three changes are summed up
+     */
+    const tempoWords = (
+        lengths: readonly number[],
+        from: number,
+        to: number,
+    ) => {
+        const bpms = lengths.map((_, b) =>
+            b === 0 || data.holds.has(b) ? NaN : qBpm(b, lengths),
+        );
+        const regions = tempoRegions(bpms, segmentsOf(lengths), from, to);
+        if (regions.length === 0) return null;
+        const t = (bpm: number) => `♩${Math.round(bpm)}`;
+        if (regions.length === 1) return `${t(regions[0]!.bpm)} throughout`;
+        if (regions.length <= 4)
+            return regions
+                .map((r, i) =>
+                    i === 0
+                        ? t(r.bpm)
+                        : `then ${t(r.bpm)} from ${spotLabel(r.from)}`,
+                )
+                .join(", ");
+        const values = regions.map((r) => r.bpm);
+        const up = values.every((x, i) => i === 0 || x >= values[i - 1]!);
+        const down = values.every((x, i) => i === 0 || x <= values[i - 1]!);
+        const span = measuresLabel(from, to);
+        return up || down
+            ? `${t(values[0]!)} to ${t(values[values.length - 1]!)} over ${span}`
+            : `between ${t(Math.min(...values))} and ${t(Math.max(...values))} over ${span}`;
+    };
     /** The stretches of counts whose lengths differ, split at `split`, with their tempo before and after */
     const changedStretches = (
         before: readonly number[],
@@ -1297,16 +1400,45 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             ? moveOneCount(base.durations, base.locks, beat, seconds)
             : moveBeatTo(base.durations, base.locks, beat, seconds);
     };
-    const moveMusicToCountOne = (seconds: number) =>
+    /**
+     * Move the music so `seconds` of it is on count 1. Pinned counts are on their hits, so they
+     * move with the music (jo: a pin left behind crammed three hits into the pickup): the counts
+     * before the first pin take up the difference, in the same undo step as the music.
+     */
+    const moveMusicToCountOne = (seconds: number) => {
+        const offset = data.audioOffset - seconds;
+        const firstPin = lockAfter(data.locks, 1);
+        const moved =
+            firstPin === null
+                ? null
+                : movePinsWithMusic(data.durations, data.locks, seconds);
+        if (firstPin !== null && !moved) {
+            toast.error(
+                `Can't move the music that far: ${measureLabel(firstPin)} is pinned to its hit, and the counts before it would get too fast. Unpin it first, or drag a hit closer to count 1.`,
+                { id: NOTE_TOAST },
+            );
+            return;
+        }
+        const said = `Moved the music ${Math.abs(seconds).toFixed(2)} s ${seconds > 0 ? "earlier" : "later"}, so that hit is on count 1`;
         void run("Music start", async () => {
             // in the show's history: it undoes like any tempo edit
-            await writeAudioOffset(data.audioOffset - seconds);
+            if (moved)
+                await writeDurations({
+                    before: data.durations,
+                    after: moved,
+                    pins: data.locks,
+                    audioOffset: offset,
+                });
+            else await writeAudioOffset(offset);
             await queryClient.invalidateQueries({ queryKey: tempoSettingsKey });
             await refetch();
             toast.success(
-                `Moved the music ${Math.abs(seconds).toFixed(2)} s ${seconds > 0 ? "earlier" : "later"}, so that hit is on count 1`,
+                moved
+                    ? `${said}. The pinned counts moved with the music, so they're still on their hits.`
+                    : said,
             );
         });
+    };
 
     // ---- tempo edits ---------------------------------------------------------------------
     // Holds keep their length through every tempo edit
@@ -1330,14 +1462,24 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 { fixed: data.holds },
             ),
         );
-    const parseTempo = (value: string): [number, number] | null => {
+    /** "120" or "120-90" as tempos, or why it isn't one (priya: say the range) */
+    const parseTempo = (
+        value: string,
+    ): { tempo: [number, number] } | { error: string } => {
         const m = value
             .trim()
             .match(/^(\d+(?:\.\d+)?)\s*(?:(?:-|>|→|to)\s*(\d+(?:\.\d+)?))?$/);
-        if (!m) return null;
+        if (!m)
+            return {
+                error: `"${value}" isn't a tempo: type a number like 120, or 120-90 to change gradually`,
+            };
         const a = Number(m[1]);
         const b = m[2] ? Number(m[2]) : a;
-        return a >= 20 && a <= 400 && b >= 20 && b <= 400 ? [a, b] : null;
+        return a >= 20 && a <= 400 && b >= 20 && b <= 400
+            ? { tempo: [a, b] }
+            : {
+                  error: `"${value}" is out of range: a tempo goes from 20 to 400 beats a minute`,
+              };
     };
     /** A tempo segment's tempo as the editor shows it: "120", or "120-90" for a gradual one */
     const segmentText = (s: TempoSegment) =>
@@ -1367,8 +1509,8 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             range: { from, to },
             onCommit: (value) => {
                 const t = parseTempo(value);
-                if (t) setTempo(from, to, t[0], t[1]);
-                else toast.error(`"${value}" isn't a tempo`);
+                if ("tempo" in t) setTempo(from, to, t.tempo[0], t.tempo[1]);
+                else toast.error(t.error);
             },
             extra:
                 whole && (whole.from !== from || whole.to !== to)
@@ -1421,6 +1563,11 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         useTempoUi.getState().setUnsure(plan.unsure);
         const last = plan.fittedTo;
         const fitted = Math.max(1, last - from);
+        // The counts lined up: `fittedTo` is the last count whose start was put on a hit. Going on
+        // to the end of the music, that count is the music's own (its start is the last hit), so
+        // it's named too (marcus: m. 78 count 4 was fitted, the toast said count 3). Where it
+        // stopped, or at the end of a range, the count at `fittedTo` is the first not changed.
+        const lined = plan.stoppedAt === null && last > end ? last + 1 : last;
         // say plainly how well it went: most counts on hits, or not
         const onHits = 1 - plan.unsure.size / fitted;
         const parts: string[] = [];
@@ -1430,9 +1577,15 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             );
         parts.push(
             onHits >= 0.8
-                ? `Lined up ${rangeLabel(from, last)} with the music`
-                : `Tried to line up ${rangeLabel(from, last)}, but only ${Math.round(onHits * 100)}% of the counts found a hit: check it, or Undo`,
+                ? `Lined up ${rangeLabel(from, lined)} with the music`
+                : `Tried to line up ${rangeLabel(from, lined)}, but only ${Math.round(onHits * 100)}% of the counts found a hit: check it, or Undo`,
         );
+        // what it found, in words: the tempos and where they change (dana)
+        const found =
+            onHits >= 0.8
+                ? tempoWords(plan.result.durations, from, lined)
+                : null;
+        if (found) parts.push(`Found ${found}`);
         if (plan.stoppedAt !== null)
             parts.push(
                 `It stopped at ${measureLabel(plan.stoppedAt)}, where it lost the music (a hold, a meter change or a cut?). ${measureLabel(plan.stoppedAt)} to ${measureLabel(end)} weren't changed: fix that spot, then right-click it and Fit from there`,
@@ -1976,10 +2129,27 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
     const [tapFrom, setTapFrom] = useState<number | null>(null);
     /** Enter while tapping: stopping applies the taps at once, with no review */
     const applyOnStop = useRef(false);
+    /** The view's left and right edges (band px, right of the lane names), set as it's drawn */
+    const viewRef = useRef({ left: 0, right: 0 });
     const startTapping = useCallback(() => {
         if (!playing) return;
-        // From a measure before the playhead's (or the selection's) measure: taps in it count too
-        const at = useTempoUi.getState().range?.from ?? playheadBeat;
+        // From a measure before the selection's measure, else the playhead's: taps in it count
+        // too. A playhead out of view would scroll the view away from what's being looked at
+        // (jo: it jumped back to the start from the drum break), so then the pass starts from
+        // what's in view: its first whole measure is the measure before
+        const view = viewRef.current;
+        const px = xOf(playheadBeat, ppb);
+        const firstInView = data.measures.findIndex(
+            (m) => xOf(m.start, ppb) >= view.left,
+        );
+        const range = useTempoUi.getState().range;
+        const playheadInView = px >= view.left && px <= view.right;
+        const at =
+            range?.from ??
+            (playheadInView || firstInView < 0
+                ? playheadBeat
+                : (data.measures[firstInView + 1]?.start ??
+                  data.measures[firstInView]!.start));
         const m = measureAt(at);
         const before = m ? measureAt(m.start - 1) : null;
         const from = Math.max(
@@ -1992,9 +2162,12 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         useTempoUi.getState().setTaps([]);
         applyOnStop.current = false;
         setTapFrom(Math.max(1, from));
+        // Stopping a pass goes back to the playhead: one out of view moves to where the pass
+        // starts, so stopping doesn't scroll the view back to it either
+        if (!playheadInView) useTimelineSelectionStore.getState().seek(from);
         startTimelinePlayOn(playing.setIsPlaying, from);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [playing, playheadBeat, data.measures]);
+    }, [playing, playheadBeat, data.measures, ppb]);
     /** Ends the tap pass and goes back to where it started, ready to tap it again */
     const stopTapping = (apply: boolean) => {
         if (!playing) return;
@@ -2040,7 +2213,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 e.preventDefault();
                 e.stopPropagation();
                 if (e.key === "Enter") applyDraft();
-                else useTempoUi.getState().setDraft(null);
+                else discardDraft();
                 return;
             }
             if (key === "t") {
@@ -2166,7 +2339,10 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                     : `${outside} tap(s) before ${measureLabel(from)}`
                 : "",
         ].filter(Boolean);
-        if (left.length) toast.info(`Left out ${left.join(" and ")}`);
+        // In its own toast, so discarding the taps can take it away (jo: after Discard it read as
+        // if something had been applied)
+        if (left.length)
+            toast.info(`Left out ${left.join(" and ")}`, { id: TAPS_TOAST });
         // Taps land a little late on most computers: offer the check, once, out of the way
         if (!readTapCheck() && !tapCheckOffered && kept.length) {
             tapCheckOffered = true;
@@ -2187,6 +2363,12 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         else useTempoUi.getState().setDraft(kept);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isPlaying]);
+    /** Throw the taps away: nothing is applied, and the note about taps left out goes too */
+    const discardDraft = () => {
+        if (!useTempoUi.getState().draft) return;
+        useTempoUi.getState().setDraft(null);
+        toast.info("Taps discarded: nothing changed", { id: TAPS_TOAST });
+    };
     const applyDraft = () => {
         const draft = useTempoUi.getState().draft;
         useTempoUi.getState().setDraft(null);
@@ -2262,8 +2444,22 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             if (!segment) return;
             setGesture({ kind: "tempo", segment, startY: y, factor: 1 });
         } else if (y >= MEASURES.top) {
-            const b = Math.round(beat);
-            setGesture({ kind: "range", anchor: b, to: b });
+            const chip = (e.target as HTMLElement).closest<HTMLElement>(
+                "[data-meter-start]",
+            );
+            const meterStart = chip
+                ? Number(chip.dataset.meterStart)
+                : undefined;
+            // from a chip, the selection starts on its measure's count 1 (the chip sits after
+            // the number, a little into the measure)
+            const b = meterStart ?? Math.round(beat);
+            setGesture({
+                kind: "range",
+                anchor: b,
+                to: b,
+                meterStart,
+                pressX: chip ? x : undefined,
+            });
         } else {
             const m = markAtX(x);
             if (!m) {
@@ -2408,7 +2604,17 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 ),
             );
         } else {
-            setGesture({ ...gesture, to: Math.round(beatAtX(x, ppb)) });
+            // a press on a chip that hasn't moved yet is still a click
+            if (
+                gesture.pressX !== undefined &&
+                Math.abs(x - gesture.pressX) < 4
+            )
+                return;
+            setGesture({
+                ...gesture,
+                to: Math.round(beatAtX(x, ppb)),
+                pressX: undefined,
+            });
         }
     };
     const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -2488,9 +2694,10 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
         } else {
             const from = Math.min(g.anchor, g.to);
             const to = Math.max(g.anchor, g.to);
-            if (to - from < 1) {
-                useTempoUi.getState().setRange(null);
-            } else useTempoUi.getState().setRange({ from, to });
+            if (to - from >= 1) useTempoUi.getState().setRange({ from, to });
+            else if (g.meterStart !== undefined)
+                setMenu(signatureMenu(e.clientX, e.clientY, g.meterStart));
+            else useTempoUi.getState().setRange(null);
         }
     };
     const onDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -2544,7 +2751,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
             `Pinned ${measureLabel(beat)}. Re-spaced ${stretches
                 .map(
                     (s) =>
-                        `${rangeLabel(s.from, s.to)} (${bpmText(s.before)} → ${bpmText(s.after)})`,
+                        `${rangeLabel(s.from, s.to)}: now ${stretchTempo(result.durations, s.from, s.to)} (was ${stretchTempo(data.durations, s.from, s.to)})`,
                 )
                 .join("; ")}`,
             { id: "tempo-respaced" },
@@ -2838,6 +3045,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
     const viewLeft = win.left - geometry.leadingInset;
     const viewRight = viewLeft + win.width;
     const gutterRight = viewLeft + LANE_GUTTER;
+    viewRef.current = { left: gutterRight, right: viewRight };
     const labelGap = 4;
     const placer = createLabelPlacer(
         [
@@ -2891,54 +3099,27 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
               10
             : 0;
         const measureWidth = ppb * m.counts;
-        if (chip)
-            candidates.push({
-                // a chip wider than its measure (a pickup) gives way to the next measure's
-                priority: measureWidth >= chipWidth + 4 ? 0 : 1,
-                boxes: [
-                    {
-                        x: left + 2,
-                        y: MEASURES.top + 3,
-                        w: chipWidth,
-                        h: 16,
-                    },
-                ],
-                render: (_, box) => (
-                    <button
-                        key={`sig-${m.start}`}
-                        type="button"
-                        className="bg-fg-1 border-stroke text-text hover:border-accent absolute rounded-full border px-4 text-[10px] leading-[14px] whitespace-nowrap"
-                        style={{ left: box.x, top: box.y }}
-                        title={`Time signature ${meterLabel(meterOfMeasure(m), true)}: click to change it from here to the next change`}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) =>
-                            setMenu(
-                                signatureMenu(e.clientX, e.clientY, m.start),
-                            )
-                        }
-                    >
-                        {meterLabel(meterOfMeasure(m))}
-                    </button>
-                ),
-            });
         const numberText = `${m.number}${partial ? "*" : ""}`;
         const marked = partial || m.overridden;
         const onStride = (m.number - 1) % numberStride === 0;
+        const numbered = marked || onStride;
         const numberWidth = textWidth(
             numberText,
             `${m.overridden ? "bold " : ""}10px ${fontFamily}`,
         );
+        // The number sits on its bar line and the time signature chip after it, so a chip never
+        // hides the number or pushes it off the line (jo, priya: "the 4/4 chip pushes the 1 off
+        // its barline"; "the 5/4 chip covers 12")
+        const chipX =
+            numbered && left + 3 < left + measureWidth - 2
+                ? left + 3 + numberWidth + labelGap
+                : left + 2;
         candidates.push({
-            priority: marked ? 1 : 2,
-            // at the measure's start, or after its time signature chip when that was placed;
-            // never starting past the measure's end
-            boxes: [
-                left + 3,
-                ...(chip ? [left + 2 + chipWidth + labelGap] : []),
-            ]
-                .filter(
-                    (x) => (marked || onStride) && x < left + measureWidth - 2,
-                )
+            // a measure with a chip: its number goes first, the chip after it
+            priority: chip && numbered ? 0 : marked ? 1 : 2,
+            // at the measure's start, never starting past the measure's end
+            boxes: [left + 3]
+                .filter((x) => numbered && x < left + measureWidth - 2)
                 .map((x) => ({
                     x,
                     y: MEASURES.top + 4,
@@ -2967,6 +3148,38 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 </span>
             ),
         });
+        if (chip)
+            candidates.push({
+                // a chip wider than its measure (a pickup) gives way to the next measure's
+                priority: measureWidth >= chipWidth + 4 ? 0 : 1,
+                // after the number, or on the bar line when the number isn't drawn
+                boxes: [...new Set([chipX, left + 2])].map((x) => ({
+                    x,
+                    y: MEASURES.top + 3,
+                    w: chipWidth,
+                    h: 16,
+                })),
+                render: (_, box) => (
+                    <button
+                        key={`sig-${m.start}`}
+                        type="button"
+                        data-meter-start={m.start}
+                        className="bg-fg-1 border-stroke text-text hover:border-accent absolute rounded-full border px-4 text-[10px] leading-[14px] whitespace-nowrap"
+                        style={{ left: box.x, top: box.y }}
+                        title={`Time signature ${meterLabel(meterOfMeasure(m), true)}: click to change it from here to the next change`}
+                        // A press goes on to the lane, so a drag from the chip selects measures
+                        // and a click without a drag opens the menu there (priya, jo); this is
+                        // for Enter and Space on the focused chip
+                        onClick={(e) => {
+                            if (e.detail !== 0) return;
+                            const r = e.currentTarget.getBoundingClientRect();
+                            setMenu(signatureMenu(r.left, r.bottom, m.start));
+                        }}
+                    >
+                        {meterLabel(meterOfMeasure(m))}
+                    </button>
+                ),
+            });
         if (m.mark) {
             const mark = m.mark;
             candidates.push({
@@ -3112,8 +3325,13 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                     }}
                 />,
             );
-            const full = `${rangeLabel(st.from, st.to)}: ${bpmText(st.before)} → ${bpmText(st.after)}`;
-            const short = `${bpmText(st.before)} → ${bpmText(st.after)}`;
+            // named as the tempo lane will label it (jo: one ramp, two numbers)
+            const was = stretchTempo(data.durations, st.from, st.to);
+            const now = result
+                ? stretchTempo(result.durations, st.from, st.to)
+                : bpmText(st.after);
+            const full = `${rangeLabel(st.from, st.to)}: now ${now} (was ${was})`;
+            const short = `now ${now} (was ${was})`;
             const text =
                 textWidth(full, `11px ${fontFamily}`) + 12 < w ? full : short;
             const tw = textWidth(text, `11px ${fontFamily}`) + 10;
@@ -3374,9 +3592,7 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                         }}
                         onCheckTapping={() => setTapCheck({ thenTap: false })}
                         onApplyDraft={applyDraft}
-                        onDiscardDraft={() =>
-                            useTempoUi.getState().setDraft(null)
-                        }
+                        onDiscardDraft={discardDraft}
                         onClearPins={() =>
                             void run("Pins", () =>
                                 saveMarks({ locks: new Set() }),
@@ -3465,7 +3681,9 @@ function TempoToolbar(props: {
         ? `Fit to the music: ${props.rangeText}`
         : "Fit to the music";
     return (
-        <TransportTooltipProvider>
+        // A tooltip closes as soon as the pointer leaves its button or presses it, so none stays
+        // up over a menu or the help card opened next (dana, priya)
+        <TransportTooltipProvider disableHoverableContent>
             <div
                 className="@container flex min-w-0 flex-1 items-center gap-6 px-8"
                 // In a portal: the band's own pointer handling mustn't see these
@@ -3493,6 +3711,7 @@ function TempoToolbar(props: {
                             </span>
                         </span>
                         <ShortcutTooltip
+                            closeOnPress
                             label="Apply the taps"
                             shortcut="Enter"
                         >
@@ -3510,6 +3729,7 @@ function TempoToolbar(props: {
                             </button>
                         </ShortcutTooltip>
                         <ShortcutTooltip
+                            closeOnPress
                             label="Discard the taps"
                             shortcut="Esc"
                         >
@@ -3525,8 +3745,13 @@ function TempoToolbar(props: {
                 ) : (
                     <>
                         <ShortcutTooltip
+                            closeOnPress
                             label={fitName}
-                            hint="Moves counts onto hits in the music between pins, from the playhead or across the selected counts. Pinned counts never move."
+                            hint={
+                                props.range
+                                    ? `Lines up just the selected counts (${props.rangeText}) with the hits in the music. Counts you dragged onto the music stay where they are.`
+                                    : "Lines up the counts with the hits in the music, across the whole show. To fit only some counts, drag along Measures to select them first. Counts you dragged onto the music stay where they are."
+                            }
                         >
                             <button
                                 type="button"
@@ -3544,6 +3769,7 @@ function TempoToolbar(props: {
                             </button>
                         </ShortcutTooltip>
                         <ShortcutTooltip
+                            closeOnPress
                             label={
                                 props.tapping
                                     ? "Tapping: stop to review"
@@ -3573,6 +3799,7 @@ function TempoToolbar(props: {
                     </>
                 )}
                 <ShortcutTooltip
+                    closeOnPress
                     label={click ? "Click: on" : "Click: off"}
                     hint="A click on every count, to hear whether the counts sit on the music"
                 >
@@ -3588,6 +3815,7 @@ function TempoToolbar(props: {
                     </button>
                 </ShortcutTooltip>
                 <ShortcutTooltip
+                    closeOnPress
                     label={ui.snap ? "Snap to hits: on" : "Snap to hits: off"}
                     hint="Dragged counts and taps land on hits in the music. Hold Alt while dragging to place freely."
                 >
@@ -3604,6 +3832,7 @@ function TempoToolbar(props: {
                 </ShortcutTooltip>
                 {props.lockCount > 0 && (
                     <ShortcutTooltip
+                        closeOnPress
                         label={`Unpin all ${props.lockCount} pinned counts`}
                         hint="Pinned counts stay where they are when you fit or drag"
                     >
@@ -3630,6 +3859,7 @@ function TempoToolbar(props: {
                     {props.status ?? DRAG_HINT}
                 </span>
                 <ShortcutTooltip
+                    closeOnPress
                     label="Check tapping"
                     hint="Tap along to a click for 10 seconds: measures how late your taps land on this computer, and how even they are"
                 >
@@ -3646,7 +3876,11 @@ function TempoToolbar(props: {
                     </button>
                 </ShortcutTooltip>
                 <TempoHelp />
-                <ShortcutTooltip label="Done: leave tempo mode" shortcut="Esc">
+                <ShortcutTooltip
+                    closeOnPress
+                    label="Done: leave tempo mode"
+                    shortcut="Esc"
+                >
                     <button
                         type="button"
                         aria-label="Done"
@@ -3702,7 +3936,7 @@ function TempoHelp() {
     ];
     return (
         <Popover.Root>
-            <ShortcutTooltip label="How tempo mode works">
+            <ShortcutTooltip closeOnPress label="How tempo mode works">
                 <Popover.Trigger asChild>
                     <button
                         type="button"
@@ -3791,6 +4025,9 @@ function CountAskPopover({
         if (choice === "keep" && "run" in ask.keep) ask.keep.run();
         else ask.shift.run();
     };
+    // The picked card is the one Enter takes: it starts on the preferred answer and follows the
+    // keyboard focus, never the pointer (marcus, priya: a hovered card looked picked too)
+    const [picked, setPicked] = useState<CountAnswer>(preferred);
     const ref = useRef<HTMLButtonElement>(null);
     useEffect(() => ref.current?.focus(), []);
     const boxRef = useRef<HTMLDivElement>(null);
@@ -3816,11 +4053,33 @@ function CountAskPopover({
             ref={choice === preferred ? ref : undefined}
             type="button"
             disabled={!!disabled}
-            className={`rounded-6 border p-8 text-left disabled:opacity-50 ${choice === preferred ? "border-accent" : "border-stroke"} hover:border-accent`}
+            aria-pressed={choice === picked}
+            data-picked={choice === picked ? "true" : undefined}
+            className={clsx(
+                "rounded-6 flex gap-8 border p-8 text-left outline-hidden disabled:opacity-50",
+                choice === picked
+                    ? "border-accent bg-accent/10 border-2"
+                    : "border-stroke hover:bg-fg-2 m-px",
+            )}
+            onFocus={() => setPicked(choice)}
             onClick={() => choose(choice)}
         >
-            <div className="text-[12px] font-bold">{title}</div>
-            <div className="text-text-subtitle text-[11px]">{text}</div>
+            {/* a radio mark: filled on the picked card only */}
+            <span
+                aria-hidden
+                className={clsx(
+                    "mt-2 flex size-12 shrink-0 items-center justify-center rounded-full border",
+                    choice === picked ? "border-accent" : "border-stroke",
+                )}
+            >
+                {choice === picked && (
+                    <span className="bg-accent size-6 rounded-full" />
+                )}
+            </span>
+            <span className="flex flex-col">
+                <span className="text-[12px] font-bold">{title}</span>
+                <span className="text-text-subtitle text-[11px]">{text}</span>
+            </span>
         </button>
     );
     return (
@@ -3859,8 +4118,8 @@ function CountAskPopover({
                 </>
             )}
             <div className="text-text-subtitle text-[10px]">
-                Your last choice is picked to start with. Esc cancels; Undo
-                takes any of them back.
+                Your last choice is picked to start with: Enter takes the picked
+                one, or click any. Esc cancels; Undo takes any of them back.
             </div>
         </div>
     );
