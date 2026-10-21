@@ -402,21 +402,28 @@ function useTempoData(beatCount: number): TempoData {
             meter: (m as { meter?: string | null }).meter ?? null,
             grouping: (m as { grouping?: string | null }).grouping ?? null,
         }));
-        // The endless measures carry on the last one's length
+        // The endless measures: where the timeline's count grid puts downbeats past the stored
+        // counts (a short last measure is finished first, then its meter carries on)
         const last = ms[ms.length - 1];
-        if (last && last.counts > 0) {
-            let start = last.start + last.counts;
+        if (last) {
+            const storedEnd = beats.length;
+            // the last stored measure runs on to the grid's next downbeat
+            let b = storedEnd;
+            while (b < n && !countGrid.isDownbeat(b)) b++;
+            last.counts = Math.max(last.counts, b - last.start);
             let number = last.number + 1;
-            while (start < n) {
+            while (b < n) {
+                let e = b + 1;
+                while (e < n && !countGrid.isDownbeat(e)) e++;
                 ms.push({
-                    start,
+                    start: b,
                     number: number++,
                     mark: null,
-                    counts: last.counts,
+                    counts: e - b,
                     id: null,
                     overridden: false,
                 });
-                start += last.counts;
+                b = e;
             }
         }
         return {
@@ -1400,19 +1407,37 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 .filter((m) => m.id !== null)
                 .map((m) => m.start),
         });
+        if (plan.refused === "start-off-music") {
+            toast.error(
+                `${measureLabel(from)} isn't on a hit in the music, so fitting from there would follow the wrong beats. Fit the whole show, or drag a hit onto ${measureLabel(from)} first.`,
+                { id: NOTE_TOAST },
+            );
+            return;
+        }
         useTempoUi.getState().setUnsure(plan.unsure);
+        const last = plan.stoppedAt ?? end;
+        const fitted = Math.max(1, last - from);
+        // say plainly how well it went: most counts on hits, or not
+        const onHits = 1 - plan.unsure.size / fitted;
         const parts: string[] = [];
         if (plan.moveMusic !== 0)
             parts.push(
-                `Moved the music ${Math.abs(plan.moveMusic).toFixed(2)} s ${plan.moveMusic > 0 ? "earlier" : "later"} so its first hit is on count 1`,
+                `Started the music ${Math.abs(plan.moveMusic).toFixed(2)} s ${plan.moveMusic > 0 ? "earlier" : "later"}, so its first hit is on count 1 (the recording isn't changed; Undo puts it back)`,
             );
-        const last = plan.stoppedAt ?? end;
-        parts.push(`Lined up ${rangeLabel(from, last)} with the music`);
+        parts.push(
+            onHits >= 0.8
+                ? `Lined up ${rangeLabel(from, last)} with the music`
+                : `Tried to line up ${rangeLabel(from, last)}, but only ${Math.round(onHits * 100)}% of the counts found a hit: check it, or Undo`,
+        );
         if (plan.stoppedAt !== null)
             parts.push(
-                `It lost the music at ${measureLabel(plan.stoppedAt)}: a hold, a meter change or a cut there? Fix it, then Fit again from there`,
+                `It stopped at ${measureLabel(plan.stoppedAt)}, where it lost the music (a hold, a meter change or a cut?). ${measureLabel(plan.stoppedAt)} to ${measureLabel(end)} weren't changed: fix that spot, then right-click it and Fit from there`,
             );
-        if (plan.unsure.size)
+        if (plan.downbeat)
+            parts.push(
+                `The strongest hits land on count ${plan.downbeat.count} of the measures, not count 1: the counts may be a beat or two off the bars. Drag a strong hit onto count 1 of its measure`,
+            );
+        if (plan.unsure.size && onHits >= 0.8)
             parts.push(
                 `${plan.unsure.size} count(s) found no hit (dashed red)`,
             );
@@ -2321,7 +2346,12 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 setPreview(result);
                 setBlocked(null);
             } else {
-                const lim = moveLimits(data.durations, data.locks, beat);
+                const lim = moveLimits(
+                    data.durations,
+                    data.locks,
+                    beat,
+                    data.holds,
+                );
                 setBlocked({
                     x: xOf(beat, ppb),
                     text: `Can't put it on count ${beat}: ${gesture.seconds < lim.min ? lim.minReason : lim.maxReason}`,
@@ -2338,7 +2368,12 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 });
                 return;
             }
-            const lim = moveLimits(data.durations, data.locks, gesture.beat);
+            const lim = moveLimits(
+                data.durations,
+                data.locks,
+                gesture.beat,
+                data.holds,
+            );
             let reason: string | null = null;
             if (seconds < lim.min) {
                 seconds = lim.min;
@@ -2628,14 +2663,16 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                 },
             );
         else {
-            // from the count clicked: what's before it stays as it is
+            // from the count clicked: what's before it stays as it is (nothing to fit past the
+            // end of the music)
             const from = Math.max(1, beat);
             const end = lockAfter(data.locks, from) ?? musicEndBeat();
-            items.push({
-                label: `Fit ${rangeLabel(from, end)} to the music`,
-                onSelect: () => fitToMusic(from, end),
-                range: { from, to: end },
-            });
+            if (end > from)
+                items.push({
+                    label: `Fit ${rangeLabel(from, end)} to the music`,
+                    onSelect: () => fitToMusic(from, end),
+                    range: { from, to: end },
+                });
         }
         items.push(
             {
@@ -3309,17 +3346,14 @@ function TempoLanes({ geometry }: { geometry: TimelineBandGeometry }) {
                         onFit={() => {
                             const r = ui.range;
                             if (r) return fitToMusic(r.from, r.to);
-                            // from the playhead: what's before it stays as it is
-                            const from = Math.max(1, Math.floor(playheadBeat));
-                            fitToMusic(
-                                from,
-                                lockAfter(data.locks, from) ?? musicEndBeat(),
-                            );
+                            // the whole show (owner, 2026-10-21): what's already on the music is
+                            // only nudged, so running it again is safe
+                            // (fitted between any pins on the way, which never move)
+                            fitToMusic(1, musicEndBeat());
                         }}
                         onTap={() => {
                             if (!playing) return;
-                            if (isPlaying)
-                                stopTimelinePlayback(playing.setIsPlaying);
+                            if (isPlaying) stopTapping(false);
                             else startTapping();
                         }}
                         onCheckTapping={() => setTapCheck({ thenTap: false })}
