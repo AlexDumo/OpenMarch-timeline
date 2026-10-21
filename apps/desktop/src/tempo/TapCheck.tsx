@@ -90,8 +90,12 @@ type Phase =
 
 export function TapCheckPanel({
     onClose,
+    beforeTapping = false,
 }: {
-    onClose: (result: TapCheckResult | null) => void;
+    /** `tapAnyway`: tap along without a check (taps aren't moved to make up for lateness) */
+    onClose: (result: TapCheckResult | null, tapAnyway?: boolean) => void;
+    /** Offered before tapping along: the check is optional, and tapping can go ahead without it */
+    beforeTapping?: boolean;
 }) {
     const [phase, setPhase] = useState<Phase>({ kind: "ready" });
     const ctxRef = useRef<AudioContext | null>(null);
@@ -171,6 +175,15 @@ export function TapCheckPanel({
     }, [onClose]);
 
     const ms = (s: number) => `${Math.round(s * 1000)} ms`;
+    const tapAnyway = beforeTapping ? (
+        <button
+            type="button"
+            className="rounded-6 border-stroke border px-10 py-3 text-[12px]"
+            onClick={() => onClose(null, true)}
+        >
+            Tap without it
+        </button>
+    ) : null;
     const describe = (r: TapCheckResult) => {
         const when =
             Math.abs(r.latency) < 0.015
@@ -195,6 +208,12 @@ export function TapCheckPanel({
                         seconds, and measures how late your taps land on this
                         computer, so taps on the music can be moved to match.
                     </div>
+                    {beforeTapping && (
+                        <div className="text-text-subtitle text-[12px]">
+                            The check is optional: you can tap along without it,
+                            and your taps are used as they land.
+                        </div>
+                    )}
                     {previous && (
                         <div className="text-text-subtitle text-[11px]">
                             Last check: {describe(previous)}
@@ -208,6 +227,7 @@ export function TapCheckPanel({
                         >
                             Start
                         </button>
+                        {tapAnyway}
                         <button
                             type="button"
                             className="rounded-6 border-stroke border px-10 py-3 text-[12px]"
@@ -265,6 +285,7 @@ export function TapCheckPanel({
                         >
                             Again
                         </button>
+                        {!phase.result && tapAnyway}
                     </div>
                 </>
             )}
