@@ -3,18 +3,21 @@
 # Keep `id` stable: feedback is filed under it.
 id: shapes-tab
 title: Pick a shape from the Shapes tab
-summary: The Shapes tab now shows each shape as a small picture of its own dots, with the name on hover, so many shapes fit.
+summary: The Shapes tab shows each shape as a small picture, with the name on hover, so many shapes fit. The pictures now lead with the shape's outline, with its dots faint inside.
 status: open
 questions:
   - Could you tell which shape each picture is without hovering? Which ones did you have to hover?
+  - Do the pictures read as shapes first, with the dots as a hint, in both light and dark themes?
+  - Is the shape you picked obvious from its stronger fill?
   - Does a saved shape's picture look like that shape (a wide box looking wide)?
   - When the shapes were greyed out, did you still understand why and what to do?
   - Do the pictures in the ring, the library and the command bar read as the same shapes as the tab's?
 ---
 
 The Shapes tab used to show each shape as an icon and a name. It now shows
-**pictures only**: each shape is drawn from its own dots, and from its
-outline where it has one. The name is in the tooltip, and screen readers
+**pictures only**: each shape is drawn from its own outline, with a faint
+fill and its dots small and light inside it. A shape with no outline is
+drawn from stronger dots. The name is in the tooltip, and screen readers
 read it out. Saved shapes get a picture of themselves too, at their own
 spacing, so nobody has to draw an icon for a new shape.
 
@@ -39,4 +42,5 @@ The shape ring (hold **R** on the field), the shape library (the
 - Only the box exists for now, so there are just one or two pictures to
   tell apart. Lines, arcs and circles join it later, each with its own
   picture.
-- The picture you picked is drawn bolder in the tab while it's open.
+- The picture you picked gets the accent color and a stronger fill while it's
+  open, in the tab and in the ring.

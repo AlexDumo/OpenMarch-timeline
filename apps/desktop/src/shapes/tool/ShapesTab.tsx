@@ -66,7 +66,7 @@ export default function ShapesTab() {
                                 <ShapePreviewIcon
                                     kind={kind}
                                     size={PREVIEW_SIZE}
-                                    bold={on}
+                                    picked={on}
                                 />
                             </ActionButton>
                         </span>
@@ -99,7 +99,7 @@ export default function ShapesTab() {
                                 <ShapePreviewIcon
                                     kind={shape.kind}
                                     size={PREVIEW_SIZE}
-                                    bold={on}
+                                    picked={on}
                                 />
                             </button>
                         </span>
