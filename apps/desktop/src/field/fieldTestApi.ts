@@ -181,6 +181,8 @@ export type FieldTestShapeOverlay = {
     /** The rotate knob and the center dot, in the viewport; null when not drawn. */
     knob: ScreenPoint | null;
     centerDot: ScreenPoint | null;
+    /** The pivot's crosshair once it's out of the center (#350), or null at the center */
+    pivotMark: ScreenPoint | null;
     /** Who will stand on each spot, as labeled. */
     labels: string[];
     /** The readout by the pointer during a gesture ("7½ × 2 steps · ↔ 2½ ↕ 2 apart"), or null. */

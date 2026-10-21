@@ -1,6 +1,8 @@
 import { formatSteps } from "../editor/format";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
-import { pivotPoint, type PivotKey } from "./frame";
+import { pivotPoint, samePivot, type Pivot } from "./frame";
+import { settled } from "./gestures";
+import { carryPivot, pivotOf } from "./pivot";
 
 /**
  * Scaling a shape (spec #344, #349): by interval, in half steps, never by a percentage, because
@@ -25,7 +27,7 @@ export function scaleShape(
     params: unknown,
     n: number,
     by: -1 | 1,
-    pivot: PivotKey,
+    pivot: Pivot,
     env: ToolEnv,
 ): unknown {
     // Every spacing changes by the same half step: the lock that keeps their ratio would not
@@ -35,8 +37,17 @@ export function scaleShape(
             ? widened(kind, params, n, by * SCALE_STEP, plain)
             : grown(kind, params, n, by * SCALE_STEP, plain);
     if (scaled === null) return null;
-    const anchored = keepPivot(kind, params, scaled, n, pivot);
-    return kind.settle ? kind.settle(anchored, n, plain) : anchored;
+    const anchored = keepPivot(
+        kind,
+        params,
+        carryPivot(params, scaled),
+        n,
+        pivot,
+    );
+    const around = samePivot(pivotOf(params), pivot)
+        ? pivotPoint(kind.frameOf(params, n), pivot)
+        : null;
+    return settled(kind, anchored, n, plain, around);
 }
 
 /** Each interval the shape shows, `by` steps wider; null when one can't go there */
@@ -89,20 +100,23 @@ function keepPivot(
     before: unknown,
     after: unknown,
     n: number,
-    pivot: PivotKey,
+    pivot: Pivot,
 ): unknown {
     const was = pivotPoint(kind.frameOf(before, n), pivot);
     const frame = kind.frameOf(after, n);
     const now = pivotPoint(frame, pivot);
     if (Math.abs(was.x - now.x) < 1e-9 && Math.abs(was.y - now.y) < 1e-9)
         return after;
-    return kind.withFrame(after, n, {
-        ...frame,
-        center: {
-            x: frame.center.x + was.x - now.x,
-            y: frame.center.y + was.y - now.y,
-        },
-    });
+    return carryPivot(
+        after,
+        kind.withFrame(after, n, {
+            ...frame,
+            center: {
+                x: frame.center.x + was.x - now.x,
+                y: frame.center.y + was.y - now.y,
+            },
+        }),
+    );
 }
 
 /**

@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { DEGREE, rotationDegrees } from "../frame/frame";
+import { pivotOf } from "../frame/pivot";
 import {
     flipShape,
     scrubTurn,
@@ -96,8 +97,8 @@ function ShapeEditorBar({
 }) {
     const { kind, params, spots } = target;
     const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
-    // The Transform section's pivot, the same in Basic and Expert (spec #344)
-    const pivot = useShapeEditorStore((s) => s.pivot);
+    // The shape's own pivot (#350), the same in Basic and Expert (spec #344)
+    const pivot = pivotOf(params);
     const [more, setMore] = useState(false);
     const place = usePlacement(kind, params, spots);
     // The shape at the press of a number's drag

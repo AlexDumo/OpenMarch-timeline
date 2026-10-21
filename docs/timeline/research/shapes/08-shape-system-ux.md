@@ -230,9 +230,11 @@ Guardrails for shapes with unassigned spots later (#358):
 - **The pivot.** A 3 × 3 grid in the inspector, the center by default. On the field, Cmd/Ctrl-drag
   from the center dot pulls the pivot out into its own yellow crosshair, which can then be
   dragged directly; double-click sends it back to the center. It snaps to marchers, the frame's 9
-  points and half steps; Alt turns snapping off. Turning, flipping and scaling all go around it.
-  It is saved with the shape; new shapes start centered. A plain drag on the center dot still
-  moves the shape.
+  points and half steps; Alt turns snapping off. Turning, flipping and scaling all go around it,
+  and it stays where it is on the field: flipping twice puts the shape back (flipped around its
+  right edge, the grid then lights the left edge). It is saved with the shape; new shapes start
+  centered. A plain drag on the center dot still moves the shape. The crosshair is drawn over the
+  handles, so a pivot on a corner marcher is grabbed before that corner's handle.
 - A shape remembers its rotation, flip and pivot when selected again. The rotate knob turns with
   the shape.
 

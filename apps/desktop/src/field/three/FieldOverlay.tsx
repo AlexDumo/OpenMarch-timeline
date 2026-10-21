@@ -52,6 +52,9 @@ const CENTER_DOT_RADIUS = 5;
 const CENTER_DOT_RING = 2.5;
 const PIVOT_RADIUS = 4;
 const PIVOT_COLOR = "#facc15";
+/** The pivot's crosshair once it's out of the center (#350): its arms and ring, in CSS px */
+const PIVOT_MARK_ARM = 9;
+const PIVOT_MARK_RING = 5;
 /** Spot labels and the pointer tip, in CSS px. */
 const SPOT_LABEL_PX = 10;
 const TIP_PX = 12;
@@ -436,6 +439,39 @@ function ModeDrawing({
                             strokeWidth={CENTER_DOT_RING}
                             data-testid="fieldShapeCenterDot"
                         />
+                    );
+                })()}
+            {drawing.pivotMark &&
+                (() => {
+                    const p = at(drawing.pivotMark);
+                    const r = PIVOT_MARK_ARM;
+                    const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
+                    return (
+                        <g data-testid="fieldShapePivotMark">
+                            {/* A dark edge under the yellow, so it reads on grass and on white */}
+                            <path d={cross} stroke="black" strokeWidth={3.5} />
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={PIVOT_MARK_RING}
+                                fill="none"
+                                stroke="black"
+                                strokeWidth={3.5}
+                            />
+                            <path
+                                d={cross}
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={1.5}
+                            />
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={PIVOT_MARK_RING}
+                                fill="none"
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={1.5}
+                            />
+                        </g>
                     );
                 })()}
             {drawing.pivot &&
