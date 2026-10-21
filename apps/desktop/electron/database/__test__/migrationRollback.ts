@@ -91,6 +91,8 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
             "timeline_shape_recipe_marchers",
             "timeline_shape_recipes",
         ]),
+    // Saved shapes, the show's copies (ADR 0006, saved shapes)
+    28: (db) => dropTables(db, ["saved_shapes"]),
 };
 
 /**

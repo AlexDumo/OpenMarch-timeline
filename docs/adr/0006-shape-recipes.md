@@ -99,3 +99,32 @@ The shape host (spec #344, owner grilling 2026-10-20) adds two points. Neither c
 Verification: the shape host's unit tests save a shape through `placementOf` and read it back
 through `boxesAt` with its pivot (`shapePivot.test.ts`), and a browser scenario places a box with
 a pivot of its own and finds it there when the box is selected again (`box-tool.spec.mts`).
+
+## Amendment, 2026-10-20: saved shapes
+
+Saved shapes (#353, spec #344) are named shapes a user keeps to use again. They need storage
+beside recipes, following the Assets pattern of a user library ("My Library") with a copy in
+each show that uses one ("This show"), so a show opens with its shapes on another computer.
+
+1. **A saved shape is a kind and its intervals, under a name.** It stores the kind's id and
+   version and each interval parameter's value in steps, by the parameter's key. It stores no
+   size, count, center, rotation, flip or pivot, so it fits any selection. Picking it opens its
+   kind; drawing it, or turning an open shape into it, lays the spots out the saved distance
+   apart. A shape placed from it is an ordinary recipe of its kind, with no reference to the
+   saved shape, so it reopens without it.
+2. **The user's library is per-user app storage**, like shape stars: a JSON list in the
+   renderer's localStorage (`openmarch:savedShapes`). The Assets Library's content-addressed
+   store in the main process was not reused: a saved shape is a few numbers, not bytes, it has
+   no versions or license, and the web editor has no Assets Library but does have shapes.
+3. **The show's copy is the `saved_shapes` table** (migration 0028): `id` (the same id as in
+   the user's library), `name`, `kind`, `kind_version` and `intervals` (JSON). Like
+   `library_items` it has no history triggers: saving a shape isn't a drill edit, so undo
+   doesn't change it. Saving writes the copy, and placing a shape picked from a saved one writes
+   or refreshes it. The library lists the user's saved shapes, then copies the user's library
+   doesn't have, which can be added to it. Deleting a saved shape deletes it from the user's
+   library and the open show; other shows keep their copies.
+
+Verification: `savedShapes.test.ts` saves a shape through the shape session and applies it to
+other counts with the box and a fake kind; the migration test checks 0028 adds only its table;
+a browser scenario in `box-tool.spec.mts` saves a box, draws it on another selection at its
+spacing, and finds it listed from the show's copy after the user's library is cleared.

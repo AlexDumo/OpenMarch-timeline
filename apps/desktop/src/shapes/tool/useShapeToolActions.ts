@@ -12,6 +12,7 @@ import { kindPickGate, pickShapeKind } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
 import type { ToolState } from "./toolMachine";
 import { useShapePaletteSource } from "../command/useShapePaletteSource";
+import { keepSavedShapeInShow } from "../library/saveShape";
 import { leaveShapeTool } from "./shapeLeave";
 import { closeShapeTool, useShapeToolStore } from "./shapeToolStore";
 
@@ -31,12 +32,15 @@ export async function placeShape(
     if (!field) return false;
     const placement = placementOf(tool, shapeContextFor(field));
     if (!placement) return false;
-    return writePlacement(
+    const placed = await writePlacement(
         placement,
         queryClient,
         "Error placing the shape",
         plan,
     );
+    // A show that uses a saved shape keeps a copy of it (#353)
+    if (placed) await keepSavedShapeInShow(tool.kind, queryClient);
+    return placed;
 }
 
 /** Place (Enter): places the open shape at the edit window now, then closes the tool */

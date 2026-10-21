@@ -70,6 +70,11 @@ export interface ToolParam<P> {
     shown?(params: P, n: number): boolean;
     /** The number as shown: "6 × 2", "2" */
     display(params: P, n: number, stepPx: number): string;
+    /**
+     * The number in `unit`. Intervals declare it: a saved shape keeps its intervals by it (#353)
+     * and sets them back through {@link type}.
+     */
+    value?(params: P, n: number, stepPx: number): number;
     /** A note after the number, such as "1 short"; null for none */
     note?(params: P, n: number): string | null;
     /** The params with `text` typed over the number; null when the text isn't understood */

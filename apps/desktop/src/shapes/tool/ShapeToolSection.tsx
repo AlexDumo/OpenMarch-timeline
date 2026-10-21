@@ -5,14 +5,22 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import ActionButton from "@/shortcuts/ActionButton";
 import { useShapeToolStore } from "./shapeToolStore";
 import { PlacedBoxSection } from "../placed/PlacedBoxSection";
+import { usePlacedEditTarget, useToolEditTarget } from "../editor/editTargets";
+import { currentShapeField } from "../field/shapeFieldContext";
+import { SaveShapeButton } from "../library/SaveShapeButton";
 
 /**
  * The inspector's way into the shape tool: with marchers selected, a Box button (also B). While
- * the tool is open, what the keys do.
+ * the tool is open, what the keys do. With a shape open or a placed one selected, ☆ Save.
  */
 export function ShapeToolSection() {
     const selected = useSelectedMarchers()?.selectedMarchers ?? [];
     const tool = useShapeToolStore((s) => s.tool);
+    // The open shape, or the selected placed one, which ☆ Save keeps (#353)
+    const open = useToolEditTarget();
+    const placed = usePlacedEditTarget();
+    const target = tool ? open : placed;
+    const field = currentShapeField();
     if (selected.length === 0 && !tool) return null;
     return (
         <div className="flex flex-col gap-8" data-testid="shape-tool-section">
@@ -41,6 +49,20 @@ export function ShapeToolSection() {
                         Box
                     </ActionButton>
                 </div>
+            )}
+            {target && field && (
+                <SaveShapeButton
+                    shape={target}
+                    stepPx={field.fieldProperties.pixelsPerStep}
+                    className={clsx(
+                        getButtonClassName({
+                            variant: "secondary",
+                            size: "compact",
+                        }),
+                        "self-start",
+                    )}
+                    testId="shape-section-save"
+                />
             )}
         </div>
     );
