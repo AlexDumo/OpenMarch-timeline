@@ -1695,3 +1695,158 @@ test.describe("another show, with a shape saved in my library", () => {
             ]);
     });
 });
+
+// The circle (#389, spec #385): a closed kind with no corners, filled in
+// Outline by the host's distributor. It comes after Box in the Shapes tab, the
+// ring and the command bar, is drawn from its center out, and its one handle
+// sets the interval between neighbors (the chord), which sets its size.
+
+const circleInterval = (page: Page) =>
+    page
+        .getByTestId("shape-tool-readout")
+        .getByTestId("shape-editor-interval")
+        .innerText();
+
+/** Each spot's distance to the next one round `center` */
+function chords(spots: readonly Point[], center: Point): number[] {
+    const round = [...spots].sort(
+        (a, b) =>
+            Math.atan2(a.y - center.y, a.x - center.x) -
+            Math.atan2(b.y - center.y, b.x - center.x),
+    );
+    return round.map((p, i) => {
+        const next = round[(i + 1) % round.length];
+        return Math.hypot(next.x - p.x, next.y - p.y);
+    });
+}
+
+test("change: O opens the circle tool; a drag from the center draws it, its handle sets the interval, and Enter places everyone one interval apart", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    const steps = await undoSteps(show);
+    await selectAll(page);
+    await page.keyboard.press("o");
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    await expect(page.getByTestId("shape-tool-section")).toContainText(
+        "draw a circle",
+    );
+
+    // From the center out to a rim 8 steps away: 8 marchers, a chord of 6.1,
+    // so 6 steps apart
+    const center = { x: cf.x - 10 * S, y: cf.y - 22 * S };
+    await drag(
+        page,
+        await toScreen(page, center),
+        await toScreen(page, { x: center.x + 8 * S, y: center.y }),
+    );
+    await expect.poll(() => circleInterval(page)).toBe("6");
+    const drawn = (await shapeOverlay(page))!;
+    expect(drawn.spots).toHaveLength(ALL.length);
+    for (const chord of chords(drawn.spots, center))
+        expect(Math.abs(chord - 6 * S)).toBeLessThan(CLOSE);
+    // The first marcher stands front-center
+    const r = (6 * S) / (2 * Math.sin(Math.PI / 8));
+    expect(
+        drawn.spots.some(
+            (p) =>
+                Math.abs(p.x - center.x) < CLOSE &&
+                Math.abs(p.y - (center.y + r)) < CLOSE,
+        ),
+    ).toBe(true);
+    // Outline is its only mode for now, so no switch shows (and never Files)
+    await expect(page.getByTestId("shape-tool-section")).toBeVisible();
+    await expect(page.getByTestId("shape-mode-switch")).toHaveCount(0);
+
+    // One handle, on the rim: dragged out to 12 steps it makes the marchers 9
+    // steps apart, the center kept
+    expect(drawn.handles).toHaveLength(1);
+    await drag(
+        page,
+        drawn.handles[0],
+        await toScreen(page, { x: center.x + 12 * S, y: center.y }),
+    );
+    await expect.poll(() => circleInterval(page)).toBe("9");
+    const resized = (await shapeOverlay(page))!;
+    for (const chord of chords(resized.spots, center))
+        expect(Math.abs(chord - 9 * S)).toBeLessThan(CLOSE);
+
+    // Enter places everyone on the spots as one undo step, and the recipe is
+    // the circle's, in Outline
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(() => onSpots(show, resized.spots)).toBe(true);
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 1);
+    const [recipe] = await show.query<{
+        kind: string;
+        kind_version: number;
+        params: string;
+    }>("SELECT kind, kind_version, params FROM timeline_shape_recipes");
+    expect([recipe.kind, recipe.kind_version]).toEqual(["circle", 2]);
+    const stored = JSON.parse(recipe.params);
+    expect(stored.distribution).toEqual({ mode: "outline" });
+    expect(stored.interval).toBeCloseTo(9 * S);
+});
+
+test("change: the circle comes after Box in the Shapes tab, the ring and the command bar, which asks its interval", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+
+    // The Shapes tab: a picture of itself, named on hover, right after Box
+    await page.getByRole("tab", { name: "Shapes" }).click();
+    const tabKinds = page.locator(
+        '[data-testid="shapes-tab-block"], [data-testid="shapes-tab-circle"]',
+    );
+    await expect(tabKinds).toHaveCount(2);
+    expect(
+        await tabKinds.evaluateAll((els) =>
+            els.map((el) => el.getAttribute("data-testid")),
+        ),
+    ).toEqual(["shapes-tab-block", "shapes-tab-circle"]);
+    const circle = page.getByTestId("shapes-tab-circle");
+    await expect(circle).toHaveAccessibleName("Circle");
+    await expect(circle.getByTestId("shape-preview")).toHaveAttribute(
+        "data-spots",
+        "9",
+    );
+
+    // The ring: the basic kinds in the same order
+    await pointAtField(show);
+    await page.keyboard.down("r");
+    await expect(ring(page)).toBeVisible();
+    const slots = await page
+        .locator('[data-testid^="shape-ring-slot-"]')
+        .evaluateAll((els) => els.map((el) => el.getAttribute("data-testid")));
+    expect(slots.slice(0, 2)).toEqual([
+        "shape-ring-slot-block",
+        "shape-ring-slot-circle",
+    ]);
+    await expect(ringSlot(page, "circle")).toHaveText("Circle");
+    await page.keyboard.up("r");
+    await page.keyboard.press("Escape");
+    await expect(ring(page)).toBeHidden();
+
+    // The command bar: Shape › Circle asks its one number and places it
+    await page.keyboard.press("/");
+    await page.getByRole("combobox").fill("circle");
+    await expect(page.getByRole("option").first()).toHaveText(
+        /^Shape › Circle/,
+    );
+    await page.keyboard.press("Enter");
+    await expect(bar(page)).toBeVisible();
+    await expect(question(page)).toHaveText(/^Spacing between neighbors/);
+    await expect(answer(page)).toHaveValue("2");
+    expect((await shapeOverlay(page))!.spots).toHaveLength(ALL.length);
+    await answer(page).fill("3");
+    await expect.poll(() => circleInterval(page)).toBe("3");
+    const spots = (await shapeOverlay(page))!.spots;
+    await page.keyboard.press("Enter");
+    await expect(bar(page)).toBeHidden();
+    await expect.poll(() => onSpots(show, spots)).toBe(true);
+});

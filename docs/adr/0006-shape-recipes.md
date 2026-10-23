@@ -160,9 +160,17 @@ region, and one shared distributor lays out the spots. This needs no schema chan
    stored as a generator change.
 5. **The spots stay the kind's to generate**, through the distributor, in a fixed order, so the
    `slot` numbers of `timeline_shape_recipe_marchers` keep meaning the same spot.
+6. **The circle tool's recipes are `circle`, version 2** (#389). Version 1 is the path circle of
+   the old shapes panel (a radius and a spacing along the path); version 2's params are
+   `center`, `interval` (the chord between neighbors), `rotation`, `flipX`, `flipY` and the
+   distribution. Its radius follows the count, r = interval / (2 sin(π/n)), so it isn't stored.
+   A circle is filled in Outline (Even spread joins it); a distribution it can't be filled in
+   reads as Outline.
 
 Verification: `distributor.test.ts` checks the box's Files spots against the block generator for
 every count from 1 to 120 and every file count, turned and flipped, as old and new recipes;
 `distributionSession.test.ts` saves a staggered box through `placementOf` and reads it back
 through `boxesAt`, reads an old `pattern: "grid"` recipe unchanged, and fills a fake closed kind;
 a browser scenario in `box-tool.spec.mts` places a box and finds its distribution in the recipe.
+`circleTool.test.ts` checks a circle's neighbors are one interval apart at every count from 2 to
+120, and a browser scenario places a circle and finds `circle` version 2 in Outline in its recipe.
