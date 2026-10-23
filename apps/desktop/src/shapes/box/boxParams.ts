@@ -31,14 +31,7 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
             const field = onField(p, n);
             return `${field.across} × ${field.deep}`;
         },
-        note(p, n) {
-            // Short back standing in for a layout that can't make the count says so (#387)
-            const block = boxBlock(p, n);
-            if (block.fellBack) return fallbackNote(block.fellBack, n);
-            if (block.layout.family !== "shortBack") return null;
-            const short = shortBy(p, n);
-            return short > 0 ? `${short} short` : null;
-        },
+        note: sizeNote,
         type(p, n, text, env) {
             const size = parseSize(text);
             if (!size) return null;
@@ -64,6 +57,19 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
     spacing("across"),
     spacing("deep"),
 ];
+
+/**
+ * The note after the box's size: "1 short" for Short back, or for Short back standing in for a
+ * layout that can't make the count, what would (#387): "Full needs 1 more or 2 fewer". Other
+ * layouts leave nothing out of their block by accident, so they have none.
+ */
+export function sizeNote(p: BoxParams, n: number): string | null {
+    const block = boxBlock(p, n);
+    if (block.fellBack) return fallbackNote(block.fellBack, n);
+    if (block.layout.family !== "shortBack") return null;
+    const short = shortBy(p, n);
+    return short > 0 ? `${short} short` : null;
+}
 
 /** A spacing on the field: side to side (across) or front to back (deep) */
 function spacing(way: "across" | "deep"): ToolParam<BoxParams> {

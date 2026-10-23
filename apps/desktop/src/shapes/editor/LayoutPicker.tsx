@@ -197,7 +197,8 @@ function Thumbnail({
     const dots = versionDots(version.lines, version.layout.byFile);
     // Half an interval per unit; a box of the most spots that are listed stays a thumbnail
     const most = Math.max(version.across, version.deep);
-    const unit = Math.min(small ? 1.75 : 3, (small ? 18 : 36) / (2 * most));
+    // Big enough in the inspector to tell a version from its turned twin (sims L387)
+    const unit = Math.min(small ? 1.75 : 4, (small ? 18 : 48) / (2 * most));
     const w = version.across * 2 * unit;
     const h = version.deep * 2 * unit;
     return (

@@ -15,6 +15,7 @@ import { beginShapeCommand } from "./shapeCommand";
 import ShapePreviewIcon from "../preview/ShapePreviewIcon";
 import type { ShapeLibraryRow } from "../library/shapeLibrary";
 import { useShapeLibraryRows } from "../library/shapeStars";
+import { LAYOUT_FAMILIES, LAYOUT_LABELS } from "../distribute/distribution";
 
 /** The Shape branch's id in the command tree */
 export const SHAPE_BRANCH = "shape";
@@ -94,7 +95,11 @@ function kindItem(
         label,
         group: t("commandPalette.shape"),
         icon: <ShapePreviewIcon kind={kind} size={18} />,
-        keywords: named ? [kind.shape.id, kind.shape.label] : [kind.shape.id],
+        keywords: [
+            ...(named ? [kind.shape.id, kind.shape.label] : [kind.shape.id]),
+            // "stagger" finds Box, whose layout step takes it (#387)
+            ...layoutKeywords(kind),
+        ],
         disabled: !ready || offHere || !pick.ok,
         disabledReason: offHere
             ? t(
@@ -115,4 +120,13 @@ function kindItem(
                 ),
         },
     };
+}
+
+/** The names of a kind's layouts, to find it by (the box's Stagger, Rounded …) */
+function layoutKeywords(kind: AnyToolKind): string[] {
+    if (!kind.closed?.layouts) return [];
+    return [
+        "layout",
+        ...LAYOUT_FAMILIES.map((f) => LAYOUT_LABELS[f].toLowerCase()),
+    ];
 }

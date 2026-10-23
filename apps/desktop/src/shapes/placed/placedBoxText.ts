@@ -2,7 +2,9 @@ import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { onField, shortBy } from "../box/boxGeometry";
+import { boxBlock, onField } from "../box/boxGeometry";
+import { sizeNote } from "../box/boxParams";
+import { LAYOUT_LABELS } from "../distribute/distribution";
 import { formatSteps } from "../editor/format";
 import type { PlacedBox } from "./placedBox";
 
@@ -17,7 +19,8 @@ export function useDrawnOnPage(box: PlacedBox | null): string | null {
 
 /**
  * The numbers of a placed box: "5 × 4 · 2 steps · 1 short · 1 empty", across × deep (short: spots
- * the back rank never had; empty: holes members left)
+ * the back rank never had; empty: holes members left). A layout other than Short back is named
+ * first, as the picker names it: "Stagger 3 × 3 · 2 steps" (#387).
  */
 export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
     // As the field shows it, like the floating editor: across is side to side
@@ -25,11 +28,13 @@ export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
     const across = formatSteps(field.acrossSpacing / stepPx);
     const deep = formatSteps(field.deepSpacing / stepPx);
     const empty = box.spots - box.recipe.members.length;
-    const short = shortBy(box.params, box.spots);
+    const note = sizeNote(box.params, box.spots);
+    const family = boxBlock(box.params, box.spots).layout.family;
+    const named = family === "shortBack" ? "" : `${LAYOUT_LABELS[family]} `;
     return [
-        `${field.across} × ${field.deep}`,
+        `${named}${field.across} × ${field.deep}`,
         `${across === deep ? across : `${across} × ${deep}`} steps`,
-        ...(short > 0 ? [`${short} short`] : []),
+        ...(note ? [note] : []),
         ...(empty > 0 ? [`${empty} empty`] : []),
     ].join(" · ");
 }
