@@ -1,13 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+    act,
+    cleanup,
+    fireEvent,
+    render,
+    screen,
+    within,
+} from "@testing-library/react";
 import { boxTool } from "../../box/boxTool";
 import { boxBlock, drawBox, type BoxParams } from "../../box/boxGeometry";
 import { padTool, type PadParams } from "../../__test__/fakeRowKind";
 import { useLastLayoutStore } from "../../tool/lastLayout";
 import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
-import { CompactLayoutPicker, LayoutPicker } from "../LayoutPicker";
+import { quarterTurn } from "../chip";
+import { LayoutMenu, LayoutPicker } from "../LayoutPicker";
 
-/** The box's layout picker (#387): rows, labels, what's on, and what picking does */
+/**
+ * The box's layout picker (#387) and the chip's layout menu (owner lab feedback, 2026-10-23):
+ * every layout in its place, the ones the count can't make greyed with what they need, what's
+ * on, and what picking does.
+ */
 
 afterEach(cleanup);
 beforeEach(() => useLastLayoutStore.setState({ family: "shortBack" }));
@@ -20,18 +32,25 @@ const env: ToolEnv = {
     hitRadius: 3,
 };
 
-/** A box of `n`, drawn about square: Short back */
+/** A box of `n`, drawn about square: Short back (6 × 4, 1 short, for 23) */
 const boxOf = (n: number) => drawBox({ x: 0, y: 0 }, { x: 80, y: 80 }, n, env)!;
 
-const shown = (
-    kind: AnyToolKind,
+const target = (
     params: unknown,
     spots: number,
     apply = vi.fn(),
+    kind: AnyToolKind = boxTool,
+) => ({ kind, params, spots, apply });
+
+const shown = (
+    params: unknown,
+    spots: number,
+    apply = vi.fn(),
+    kind: AnyToolKind = boxTool,
 ) =>
     render(
         <LayoutPicker
-            target={{ kind, params, spots, apply }}
+            target={target(params, spots, apply, kind)}
             envFor={() => env}
         />,
     );
@@ -44,32 +63,38 @@ const labelsIn = (family: string) =>
     ].map((b) => b.textContent);
 
 describe("the layout picker", () => {
-    it("shows the rows the count makes, in order, and lists the rest on one line", () => {
-        shown(boxTool, boxOf(23), 23);
+    it("keeps every layout in its place, in the fixed order", () => {
+        shown(boxOf(23), 23);
         const rows = [
             ...screen
                 .getByTestId("shape-layout-picker")
                 .querySelectorAll("[data-testid^=shape-layout-row-]"),
         ].map((r) => r.getAttribute("data-testid"));
         expect(rows).toEqual([
+            "shape-layout-row-full",
             "shape-layout-row-stagger",
             "shape-layout-row-rounded",
             "shape-layout-row-shortBack",
             "shape-layout-row-notched",
         ]);
-        expect(labelsIn("stagger")).toEqual([
-            "8 × 3",
-            "5 × 5",
-            "5 × 5",
-            "3 × 8",
-        ]);
-        expect(screen.getByTestId("shape-layout-missing")).toHaveTextContent(
-            "Not for 23: Full (add 1 or remove 2)",
+        expect(labelsIn("stagger")).toEqual(["8 × 3", "5 × 5"]);
+        expect(screen.queryByText(/Not for/)).toBeNull();
+    });
+
+    it("greys out a layout the count can't make, as a picture with what it needs", () => {
+        shown(boxOf(23), 23);
+        const full = screen.getByTestId("shape-layout-full-missing");
+        expect(full).toBeDisabled();
+        expect(full).toHaveTextContent("add 1 / remove 2");
+        expect(full).toHaveAttribute(
+            "title",
+            "Full needs 24 or 21 marchers: add 1 / remove 2",
         );
+        expect(full.querySelector("svg")).not.toBeNull();
     });
 
     it("puts the counts in the tooltip and marks the shape's own version", () => {
-        shown(boxTool, boxOf(23), 23);
+        shown(boxOf(23), 23);
         const stagger = screen.getByTestId("shape-layout-stagger-1");
         expect(stagger).toHaveAttribute(
             "title",
@@ -83,9 +108,27 @@ describe("the layout picker", () => {
         expect(stagger).toHaveAttribute("aria-pressed", "false");
     });
 
+    it("marks a version turned a quarter as that version", () => {
+        const full = boxTool.closed!.withDistribution(
+            boxOf(24),
+            24,
+            {
+                mode: "files",
+                layout: { family: "full", files: 8, byFile: false },
+                stagger: [0, 1],
+            },
+            env,
+        );
+        shown(quarterTurn(boxTool, full, 24, env), 24);
+        expect(screen.getByTestId("shape-layout-full-0")).toHaveAttribute(
+            "aria-pressed",
+            "true",
+        );
+    });
+
     it("lays the shape out in the version picked, and remembers its layout", () => {
         const apply = vi.fn();
-        shown(boxTool, boxOf(23), 23, apply);
+        shown(boxOf(23), 23, apply);
         fireEvent.click(screen.getByTestId("shape-layout-stagger-1"));
         expect(apply).toHaveBeenCalledTimes(1);
         const next = apply.mock.calls[0]![0] as BoxParams;
@@ -93,50 +136,119 @@ describe("the layout picker", () => {
         expect(useLastLayoutStore.getState().family).toBe("stagger");
     });
 
-    it("shows Full first when the count makes one", () => {
-        shown(boxTool, boxOf(24), 24);
-        expect(labelsIn("full")).toEqual(["8 × 3", "6 × 4", "4 × 6", "3 × 8"]);
-        expect(screen.queryByTestId("shape-layout-missing")).toBeNull();
-    });
-
     it("is hidden for a kind without layouts", () => {
         const pad: PadParams = { center: { x: 0, y: 0 }, gap: 20, rotation: 0 };
-        const { container } = shown(padTool, pad, 5);
+        const { container } = shown(pad, 5, vi.fn(), padTool);
         expect(container).toBeEmptyDOMElement();
     });
 });
 
-describe("the compact picker under the chip", () => {
-    it("offers one version per layout, nearest the shape's proportions, its own on", () => {
-        const apply = vi.fn();
+describe("the chip's layout menu", () => {
+    const menu = (params: unknown, spots: number, apply = vi.fn()) =>
         render(
-            <CompactLayoutPicker
-                target={{
-                    kind: boxTool,
-                    params: boxOf(23),
-                    spots: 23,
-                    apply,
-                }}
+            <LayoutMenu
+                target={target(params, spots, apply)}
                 envFor={() => env}
             />,
         );
-        const buttons = [
-            ...screen
-                .getByTestId("shape-layout-compact")
-                .querySelectorAll("button"),
+    const open = () => {
+        act(() => {
+            fireEvent.click(screen.getByTestId("shape-layout-menu"));
+        });
+        return screen.getByTestId("shape-layout-menu-content");
+    };
+
+    it("shows the box's layout on its button", () => {
+        menu(boxOf(23), 23);
+        expect(screen.getByTestId("shape-layout-menu")).toHaveTextContent(
+            "Short back",
+        );
+        expect(screen.queryByTestId("shape-layout-menu-wanted")).toBeNull();
+    });
+
+    it("lists every layout, greying out those the count can't make with what they need", () => {
+        menu(boxOf(23), 23);
+        const content = open();
+        const rows = [
+            ...content.querySelectorAll(
+                "[data-testid^=shape-layout-menu-row-]",
+            ),
         ];
-        expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
-            "Stagger 5 × 5",
-            "Rounded 5 × 5 staggered",
-            "Short back 6 × 4, 1 short",
-            "Notched 5 × 5 straight",
+        expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual([
+            "shape-layout-menu-row-full",
+            "shape-layout-menu-row-stagger",
+            "shape-layout-menu-row-rounded",
+            "shape-layout-menu-row-shortBack",
+            "shape-layout-menu-row-notched",
         ]);
+        const full = within(content).getByTestId("shape-layout-menu-row-full");
+        expect(full).toBeDisabled();
+        expect(full).toHaveTextContent("add 1 / remove 2");
+    });
+
+    it("shows the box's own layout's versions, and another's on hover or its arrow", () => {
+        menu(boxOf(23), 23);
+        const content = open();
+        const versions = () =>
+            [
+                ...within(content)
+                    .getByTestId("shape-layout-menu-versions")
+                    .querySelectorAll("button"),
+            ].map((b) => b.getAttribute("aria-label"));
+        expect(versions()[0]).toMatch(/^Short back /);
+        fireEvent.pointerEnter(
+            within(content).getByTestId("shape-layout-menu-row-stagger"),
+        );
+        expect(versions()).toEqual(["Stagger 8 × 3", "Stagger 5 × 5"]);
+        fireEvent.click(
+            within(content).getByTestId("shape-layout-menu-expand-rounded"),
+        );
+        expect(versions()).toEqual(["Rounded 5 × 5 staggered"]);
+    });
+
+    it("lays the box out in a version picked, and closes", () => {
+        const apply = vi.fn();
+        menu(boxOf(23), 23, apply);
+        const content = open();
+        fireEvent.pointerEnter(
+            within(content).getByTestId("shape-layout-menu-row-stagger"),
+        );
+        fireEvent.click(
+            within(content).getByTestId("shape-layout-menu-version-stagger-1"),
+        );
         expect(
-            buttons.map((b) => b.getAttribute("aria-pressed") === "true"),
-        ).toEqual([false, false, true, false]);
-        fireEvent.click(buttons[0]!);
+            boxBlock(apply.mock.calls[0]![0] as BoxParams, 23).lines,
+        ).toEqual([5, 4, 5, 4, 5]);
+        expect(screen.queryByTestId("shape-layout-menu-content")).toBeNull();
+        expect(useLastLayoutStore.getState().family).toBe("stagger");
+    });
+
+    it("picks a layout's version nearest the box's proportions from its row", () => {
+        const apply = vi.fn();
+        menu(boxOf(23), 23, apply);
+        const content = open();
+        fireEvent.click(
+            within(content).getByTestId("shape-layout-menu-row-notched"),
+        );
         expect(
             boxBlock(apply.mock.calls[0]![0] as BoxParams, 23).layout.family,
-        ).toBe("stagger");
+        ).toBe("notched");
+    });
+
+    it("shows a layout the count can't make greyed on its button, with what it needs", () => {
+        const wanted = boxTool.closed!.withDistribution(
+            boxOf(23),
+            23,
+            {
+                mode: "files",
+                layout: { family: "full", files: 6, byFile: false },
+                stagger: [0, 1],
+            },
+            env,
+        );
+        menu(wanted, 23);
+        const tag = screen.getByTestId("shape-layout-menu-wanted");
+        expect(tag).toHaveTextContent("Full");
+        expect(tag).toHaveTextContent("add 1 / remove 2");
     });
 });

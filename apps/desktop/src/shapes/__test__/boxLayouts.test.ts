@@ -8,7 +8,8 @@ import {
 } from "../box/boxGeometry";
 import type { FilesLayout, LayoutFamily } from "../distribute/distribution";
 import { layoutRowsOf, layoutOf, withLayout } from "../distribute/modes";
-import { chipLayout } from "../editor/chip";
+import { layoutOrientations } from "../distribute/layouts";
+import { chipLayout, quarterTurn } from "../editor/chip";
 import { boxesAt, type PlacedRecipe } from "../placed/placedBox";
 import { placementOf } from "../tool/shapePlacement";
 import type { ToolEnv } from "../tool/toolKind";
@@ -113,8 +114,10 @@ describe("picking a layout", () => {
     });
 
     it("lays out a turned version by file", () => {
-        const turned = versionOf(23, "stagger", "5 × 5", 1).layout;
-        expect(turned.byFile).toBe(true);
+        // Not listed (it's a quarter turn of 5 × 5), but drawn deep or typed it's there
+        const turned = layoutOrientations(23, "stagger").find(
+            (v) => v.layout.byFile && v.label === "5 × 5",
+        )!.layout;
         const slots = slotsOf(pick(start(), turned), ctx);
         expect(fileCounts(slots)).toEqual([5, 4, 5, 4, 5]);
         expect(slots).toHaveLength(23);
@@ -214,7 +217,9 @@ describe("keeping the layout", () => {
             layout: { family: "full", files: 6 },
         });
         expect(boxTool.shape.generate(p, 23, ctx)).toHaveLength(23);
-        expect(sizeOf(p, 23).note).toBe("Full needs 1 more or 2 fewer");
+        // The chip's layout menu shows Full greyed with what it needs; no text note
+        expect(boxBlock(p, 23).fellBack).toBe("full");
+        expect(sizeOf(p, 23).note).toBeNull();
     });
 
     it("steps the size between versions of the chosen layout", () => {
@@ -229,7 +234,11 @@ describe("keeping the layout", () => {
                 boxBlock(size.more as BoxParams, 24).layout.family,
         ).toBe("full");
         // 3 × 8 is the deepest Full for 24: nothing narrower
-        const deepest = pick(t, versionOf(24, "full", "3 × 8").layout);
+        const deepest = pick(
+            t,
+            layoutOrientations(24, "full").find((v) => v.label === "3 × 8")!
+                .layout,
+        );
         expect(sizeOf(deepest.params as BoxParams, 24).less).toBeNull();
     });
 
@@ -284,9 +293,25 @@ describe("keeping the layout", () => {
         const p = t.params as BoxParams;
         expect(boxBlock(p, 23).layout.family).toBe("shortBack");
         expect(boxTool.shape.generate(p, 23, ctx)).toHaveLength(23);
-        expect(sizeOf(p, 23).note).toBe("Full needs 1 more or 2 fewer");
+        // The chip's layout menu shows Full greyed with what it needs; no text note
+        expect(boxBlock(p, 23).fellBack).toBe("full");
+        expect(sizeOf(p, 23).note).toBeNull();
         // and it comes back when the count does
         expect(boxBlock(p, 24).layout.family).toBe("full");
+    });
+});
+
+describe("the chip's turn button", () => {
+    it("turns the box a quarter, so the deep version is one click from the wide one", () => {
+        let t = drawn(24, { x: 0, y: 0 }, { x: 100, y: 60 });
+        t = pick(t, versionOf(24, "full", "8 × 3").layout);
+        const turned = quarterTurn(boxTool, t.params, 24, env) as BoxParams;
+        expect(sizeOf(turned, 24).display).toBe("3 × 8");
+        const slots = boxTool.shape.generate(turned, 24, ctx);
+        expect(slots).toHaveLength(24);
+        expect(fileCounts(slots)).toEqual([8, 8, 8]);
+        // The picker still finds its version, turned
+        expect(boxBlock(turned, 24).layout.family).toBe("full");
     });
 });
 
@@ -314,7 +339,9 @@ describe("the layout a new box starts in", () => {
         const p = t.params as BoxParams;
         expect(boxBlock(p, 23).layout.family).toBe("shortBack");
         expect(slotsOf(t, ctx)).toHaveLength(23);
-        expect(sizeOf(p, 23).note).toBe("Full needs 1 more or 2 fewer");
+        // The chip's layout menu shows Full greyed with what it needs; no text note
+        expect(boxBlock(p, 23).fellBack).toBe("full");
+        expect(sizeOf(p, 23).note).toBeNull();
     });
 
     it("is Short back with nothing remembered, exactly as before", () => {

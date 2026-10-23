@@ -3,7 +3,11 @@ import {
     LAYOUT_LABELS,
     MODE_LABELS,
 } from "../distribute/distribution";
-import { parseLayout, shapeKey } from "../distribute/layouts";
+import {
+    layoutOrientations,
+    parseLayout,
+    shapeKey,
+} from "../distribute/layouts";
 import {
     distributionOf,
     layoutOf,
@@ -115,7 +119,7 @@ export function layoutStep(kind: AnyToolKind): ToolParam<unknown> | null {
         // As the picker lists it: a Short back with no short rank is a Full block
         const key = shapeKey(now.lines, now.layout.byFile);
         for (const row of kind.closed!.layouts!.catalogue(n))
-            for (const v of row.versions)
+            for (const v of layoutOrientations(n, row.family))
                 if (shapeKey(v.lines, v.layout.byFile) === key)
                     return `${row.label} ${v.label}`;
         // Outside the catalogue (past 3:1, say): its block, a full one called Full

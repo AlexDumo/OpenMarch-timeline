@@ -28,7 +28,7 @@ import {
 
 import type { ToolEnv } from "../tool/toolKind";
 import { filesDistribution } from "../distribute/distribution";
-import { layoutCatalogue, type LayoutVersion } from "../distribute/layouts";
+import { layoutOrientations, type LayoutVersion } from "../distribute/layouts";
 import {
     COUNT_RATE,
     SPACING_FINE_STEP,
@@ -115,13 +115,12 @@ function layoutVersions(p: BoxParams, spots: number): FieldVersion[] | null {
     if (block.fellBack !== null || block.layout.family === "shortBack")
         return null;
     const swap = acrossIsDeep(p.rotation);
-    return layoutCatalogue(spots)
-        .find((r) => r.family === block.layout.family)!
-        .versions.map((version) => ({
-            version,
-            across: swap ? version.deep : version.across,
-            deep: swap ? version.across : version.deep,
-        }));
+    // Quarter turns included: − on 6 × 4 goes on to 4 × 6
+    return layoutOrientations(spots, block.layout.family).map((version) => ({
+        version,
+        across: swap ? version.deep : version.across,
+        deep: swap ? version.across : version.deep,
+    }));
 }
 
 /** The box laid out in `version`: same intervals and stagger, grown from the pivot */

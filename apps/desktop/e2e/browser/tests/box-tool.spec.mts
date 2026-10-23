@@ -1075,10 +1075,12 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     await expect.poll(() => onSpots(show, second)).toBe(false);
 });
 
-// The box's layouts (#387, spec #385): the inspector lists Full · Stagger ·
-// Rounded · Short back · Notched with live thumbnails, the rows the count
-// can't make on one line; a compact row sits under the chip. Picking a version
-// lays the box out in it, the recipe keeps it, and the next box starts in it.
+// The box's layouts (#387, spec #385; owner lab feedback 2026-10-23): the
+// inspector lists Full · Stagger · Rounded · Short back · Notched with live
+// thumbnails, a layout the count can't make greyed in its place with what it
+// needs; a layout menu sits under the chip, and ↻ beside the size turns the box
+// a quarter. Picking a version lays the box out in it, the recipe keeps it, and
+// the next box starts in it.
 
 /** How many spots stand on each line across, back first */
 const rankCounts = (spots: readonly Point[]) => {
@@ -1100,11 +1102,14 @@ test("change: the layout picker lays the box out in the version picked, the reci
     await drawBox(show);
     const picker = page.getByTestId("shape-layout-picker");
     await expect(picker).toBeVisible();
-    // 8 marchers: every layout but Notched, which says what would make it
+    // 8 marchers: every layout but Notched, which stays in its place greyed
+    // with what would make it
     await expect(page.getByTestId("shape-layout-row-full")).toBeVisible();
-    await expect(page.getByTestId("shape-layout-row-notched")).toHaveCount(0);
-    await expect(page.getByTestId("shape-layout-missing")).toHaveText(
-        "Not for 8: Notched (add 2)",
+    await expect(
+        page.getByTestId("shape-layout-notched-missing"),
+    ).toBeDisabled();
+    await expect(page.getByTestId("shape-layout-notched-missing")).toHaveText(
+        "add 2",
     );
     const stagger = page.getByTestId("shape-layout-stagger-0");
     await expect(stagger).toHaveText("3 × 3");
@@ -1118,9 +1123,7 @@ test("change: the layout picker lays the box out in the version picked, the reci
     await expect(stagger).toHaveAttribute("aria-pressed", "true");
     const bar = page.getByTestId("shape-tool-readout");
     await expect(bar.getByTestId("shape-editor-size")).toHaveText("3 × 3");
-    await expect(
-        bar.getByTestId("shape-layout-compact-stagger"),
-    ).toHaveAttribute("aria-pressed", "true");
+    await expect(bar.getByTestId("shape-layout-menu")).toHaveText(/Stagger/);
     const spots = (await shapeOverlay(page))!.spots;
     expect(spots).toHaveLength(8);
     expect(rankCounts(spots)).toEqual([3, 2, 3]);
@@ -1155,7 +1158,7 @@ test("change: the layout picker lays the box out in the version picked, the reci
     expect(rankCounts((await shapeOverlay(page))!.spots)).toEqual([3, 2, 3]);
 });
 
-test("change: the compact picker under the chip switches layout, and undo puts the layout back", async ({
+test("change: the layout menu under the chip switches layout, ↻ turns the box a quarter, and undo puts each back", async ({
     show,
 }) => {
     const { page } = show;
@@ -1165,13 +1168,31 @@ test("change: the compact picker under the chip switches layout, and undo puts t
     await drawBox(show);
     const bar = page.getByTestId("shape-tool-readout");
     const before = (await shapeOverlay(page))!.spots;
-    const rounded = bar.getByTestId("shape-layout-compact-rounded");
-    await expect(rounded).toHaveAttribute("aria-label", /^Rounded /);
-    await rounded.click();
-    await expect(rounded).toHaveAttribute("aria-pressed", "true");
+    await bar.getByTestId("shape-layout-menu").click();
+    const menu = page.getByTestId("shape-layout-menu-content");
+    await expect(menu).toBeVisible();
+    // Every layout in its place; Notched greyed with what it needs for 8
+    await expect(
+        menu.getByTestId("shape-layout-menu-row-notched"),
+    ).toBeDisabled();
+    await expect(menu.getByTestId("shape-layout-menu-row-notched")).toHaveText(
+        /add 2/,
+    );
+    // Hovering a layout shows its versions beside the list
+    await menu.getByTestId("shape-layout-menu-row-rounded").hover();
+    await menu.getByTestId("shape-layout-menu-version-rounded-0").click();
+    await expect(menu).toBeHidden();
+    await expect(bar.getByTestId("shape-layout-menu")).toHaveText(/Rounded/);
     expect(rankCounts((await shapeOverlay(page))!.spots)).toEqual([2, 4, 2]);
     await expect(bar.getByTestId("shape-editor-size")).toHaveText("4 × 3");
 
+    // ↻ turns it a quarter: the deep version, without the ⋯ row
+    await bar.getByTestId("shape-editor-quarter-turn").click();
+    await expect(bar.getByTestId("shape-editor-size")).toHaveText("3 × 4");
+    expect(rankCounts((await shapeOverlay(page))!.spots)).toEqual([1, 3, 3, 1]);
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(bar.getByTestId("shape-editor-size")).toHaveText("4 × 3");
     await page.keyboard.press("ControlOrMeta+z");
     await expect
         .poll(async () => (await shapeOverlay(page))!.spots)

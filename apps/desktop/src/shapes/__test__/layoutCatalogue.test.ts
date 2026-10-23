@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
     familyHint,
+    hintText,
     layoutCatalogue,
-    missingLine,
+    layoutOrientations,
     nearestVersion,
     resolveLayout,
+    shapeKey,
+    turnedKey,
     type LayoutVersion,
 } from "../distribute/layouts";
 import { distribute } from "../distribute/distribute";
@@ -13,7 +16,9 @@ import type { FilesLayout } from "../distribute/distribution";
 
 /**
  * The box's layout catalogue (#387, spec #385): every layout is a full block minus a pattern, its
- * versions run wide to deep, and a shape two layouts can make lists under the more specific one.
+ * versions run wide to deep, a shape two layouts can make lists under the more specific one, and
+ * a version that is a quarter turn of one listed before it isn't listed (owner lab feedback,
+ * 2026-10-23: the chip's turn button makes it).
  */
 
 const labelsOf = (n: number, family: string) =>
@@ -44,35 +49,31 @@ describe("the layout catalogue", () => {
         ]);
     });
 
-    it("for 23: Stagger offers 8 × 3 and 5 × 5 plus their turned versions; Full is hidden", () => {
-        expect(labelsOf(23, "stagger")).toEqual([
-            "8 × 3",
-            "5 × 5",
-            "5 × 5",
-            "3 × 8",
-        ]);
+    it("for 23: Stagger offers 8 × 3 and 5 × 5, no quarter turns; Full is greyed with what it needs", () => {
+        expect(labelsOf(23, "stagger")).toEqual(["8 × 3", "5 × 5"]);
         const stagger = layoutCatalogue(23).find(
             (r) => r.family === "stagger",
         )!;
         expect(stagger.versions[1]!.lines).toEqual([5, 4, 5, 4, 5]);
-        expect(stagger.versions.map((v) => v.layout.byFile)).toEqual([
-            false,
-            false,
-            true,
-            true,
-        ]);
+        expect(stagger.versions.every((v) => !v.layout.byFile)).toBe(true);
         const full = layoutCatalogue(23).find((r) => r.family === "full")!;
         expect(full.versions).toEqual([]);
         expect(full.hint).toEqual({ more: 1, fewer: 2 });
-        expect(missingLine(23, layoutCatalogue(23))).toBe(
-            "Not for 23: Full (add 1 or remove 2)",
-        );
+        expect(hintText(full.hint!)).toBe("add 1 / remove 2");
+        // A picture of the layout at the nearest count it makes: 24 as 6 × 4
+        expect(full.preview).toMatchObject({ count: 24 });
+        expect(full.preview!.version.label).toBe("6 × 4");
     });
 
-    it("for 24: Full offers 8 × 3, 6 × 4, 4 × 6 and 3 × 8, first", () => {
+    it("for 24: Full offers 8 × 3 and 6 × 4, first; 4 × 6 and 3 × 8 are their quarter turns", () => {
         const rows = layoutCatalogue(24);
         expect(rows[0]!.family).toBe("full");
         expect(rows[0]!.versions.map((v) => v.label)).toEqual([
+            "8 × 3",
+            "6 × 4",
+        ]);
+        // Drawn deep or stepped, the turns are still there
+        expect(layoutOrientations(24, "full").map((v) => v.label)).toEqual([
             "8 × 3",
             "6 × 4",
             "4 × 6",
@@ -88,18 +89,9 @@ describe("the layout catalogue", () => {
             "4 × 6, 1 short",
             "3 × 8, 1 short",
         ]);
-        expect(labelsOf(23, "rounded")).toEqual([
-            "5 × 5 staggered",
-            "5 × 5 staggered",
-        ]);
-        expect(labelsOf(23, "notched")).toEqual([
-            "5 × 5 straight",
-            "5 × 5 straight",
-        ]);
-        expect(labelsOf(24, "notched")).toEqual([
-            "5 × 5 staggered",
-            "5 × 5 staggered",
-        ]);
+        expect(labelsOf(23, "rounded")).toEqual(["5 × 5 staggered"]);
+        expect(labelsOf(23, "notched")).toEqual(["5 × 5 straight"]);
+        expect(labelsOf(24, "notched")).toEqual(["5 × 5 staggered"]);
     });
 
     it("never says files, ranks, by file or ends in a label; the counts go in the tooltip", () => {
@@ -112,23 +104,29 @@ describe("the layout catalogue", () => {
                     : [...v.lines].reverse();
                 expect(v.tooltip).toContain(counts.join(" / "));
             }
-        const turned = layoutCatalogue(23)
-            .find((r) => r.family === "stagger")!
-            .versions.find((v) => v.layout.byFile)!;
-        expect(turned.tooltip).toMatch(/left to right/);
+        expect(
+            layoutOrientations(23, "stagger").find((v) => v.layout.byFile)!
+                .tooltip,
+        ).toMatch(/left to right/);
     });
 
-    it("hides a row the count can't make and says how many would unlock it", () => {
+    it("keeps a row the count can't make in its place, with how many would make it and a picture", () => {
         const rows = layoutCatalogue(26);
+        expect(rows.map((r) => r.family)).toEqual([
+            "full",
+            "stagger",
+            "rounded",
+            "shortBack",
+            "notched",
+        ]);
         // 27 would be 9 × 3, which is 3:1, not within it
-        expect(rows.find((r) => r.family === "full")!.hint).toEqual({
-            more: 2,
-            fewer: 1,
-        });
-        expect(missingLine(26, rows)).toBe(
-            "Not for 26: Full (add 2 or remove 1) · Stagger (add 1 or remove 1)",
-        );
-        expect(missingLine(24, layoutCatalogue(24))).toBeNull();
+        const full = rows.find((r) => r.family === "full")!;
+        expect(full.hint).toEqual({ more: 2, fewer: 1 });
+        expect(full.preview!.count).toBe(28);
+        expect(hintText({ more: 3, fewer: null })).toBe("add 3");
+        expect(hintText({ more: null, fewer: 2 })).toBe("remove 2");
+        for (const row of layoutCatalogue(24))
+            expect(row.preview).toBeUndefined();
     });
 
     it("places exactly n for every version from 1 to 120 marchers, with no short rank under 2", () => {
@@ -208,23 +206,21 @@ describe("the layout catalogue", () => {
             );
             expect(new Set(keys).size).toBe(keys.length);
         }
-        // A block with its corners off is the same shape by rank or by file: listed once
-        const rounded = layoutCatalogue(24).find(
-            (r) => r.family === "rounded",
-        )!;
-        expect(rounded.versions.map((v) => v.label)).toEqual([
-            "7 × 4 straight",
-            "4 × 7 straight",
-        ]);
     });
 
-    it("turns Stagger, Rounded and Notched only", () => {
-        for (let n = 1; n <= 120; n++)
-            for (const row of layoutCatalogue(n))
-                if (row.family === "full" || row.family === "shortBack")
-                    expect(row.versions.every((v) => !v.layout.byFile)).toBe(
-                        true,
-                    );
+    it("never lists a quarter turn of a version listed before it", () => {
+        for (let n = 1; n <= 120; n++) {
+            const seen = new Set<string>();
+            for (const v of versionsOf(n)) {
+                expect(seen.has(turnedKey(v.lines, v.layout.byFile))).toBe(
+                    false,
+                );
+                expect(v.layout.byFile).toBe(false);
+                seen.add(shapeKey(v.lines, v.layout.byFile));
+            }
+        }
+        // A block with its corners off, 7 × 4, and its turn 4 × 7: one listed
+        expect(labelsOf(24, "rounded")).toEqual(["7 × 4 straight"]);
     });
 });
 
@@ -266,6 +262,13 @@ describe("resolving a layout for a count", () => {
     it("finds the version nearest a drawn proportion", () => {
         expect(nearestVersion("full", 24, 1)!.label).toBe("6 × 4");
         expect(nearestVersion("full", 24, 3)!.label).toBe("8 × 3");
+        // Deep: a quarter turn of a listed version
+        expect(nearestVersion("full", 24, 0.6)!.label).toBe("4 × 6");
+        expect(nearestVersion("stagger", 23, 0.4)!.layout).toMatchObject({
+            family: "stagger",
+            files: 8,
+            byFile: true,
+        });
         expect(nearestVersion("full", 23, 1)).toBeNull();
     });
 });

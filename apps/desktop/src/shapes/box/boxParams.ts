@@ -6,7 +6,6 @@ import {
     withFieldCount,
     withSpacing,
 } from "../editor/boxEdits";
-import { fallbackNote } from "../distribute/layouts";
 import { formatSteps } from "../editor/format";
 import { parseSize, parseSteps, scrubDistance } from "../editor/scrub";
 import type { ToolParam } from "../tool/toolKind";
@@ -61,15 +60,16 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
 ];
 
 /**
- * The note after the box's size: "1 short" for Short back, or for Short back standing in for a
- * layout that can't make the count, what would (#387): "Full needs 1 more or 2 fewer". Other
- * layouts leave nothing out of their block by accident, so they have none.
+ * The note after the box's size: "1 short" for Short back. Other layouts leave nothing out of
+ * their block by accident, so they have none; Short back standing in for a layout that can't make
+ * the count shows that layout greyed in the chip's layout menu instead (owner lab feedback,
+ * 2026-10-23).
  */
 export function sizeNote(p: BoxParams, n: number): string | null {
     // A spread has no ranks to be short
     if (isSpread(p)) return null;
     const block = boxBlock(p, n);
-    if (block.fellBack) return fallbackNote(block.fellBack, n);
+    if (block.fellBack) return null;
     if (block.layout.family !== "shortBack") return null;
     const short = shortBy(p, n);
     return short > 0 ? `${short} short` : null;

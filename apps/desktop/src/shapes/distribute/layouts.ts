@@ -23,13 +23,6 @@ const SPECIFICITY: readonly LayoutFamily[] = [
     "shortBack",
 ];
 
-/** The layouts that also come turned, running by file */
-const TURNS: ReadonlySet<LayoutFamily> = new Set([
-    "stagger",
-    "rounded",
-    "notched",
-]);
-
 /** Short back's lines: full lines of `width`, the back one short (all in one under `width`) */
 export function shortBackLines(width: number, n: number): number[] {
     const w = Math.max(1, Math.round(width));
@@ -114,6 +107,14 @@ export interface LayoutRow {
     readonly versions: readonly LayoutVersion[];
     /** Present when `versions` is empty */
     readonly hint?: LayoutHint;
+    /**
+     * When `versions` is empty: the layout at the nearest count it makes (more first), its
+     * version nearest square, for a greyed picture
+     */
+    readonly preview?: {
+        readonly version: LayoutVersion;
+        readonly count: number;
+    };
 }
 
 /** The block's size on the box's axes */
@@ -178,12 +179,30 @@ export function versionDots(
     return dots;
 }
 
-/** Two layouts that make the same key are the same shape */
-export function shapeKey(lines: readonly number[], byFile: boolean): string {
-    return versionDots(lines, byFile)
+const keyOf = (dots: readonly { x: number; y: number }[]) =>
+    dots
         .map((d) => `${d.x},${d.y}`)
         .sort()
         .join(" ");
+
+/** Two layouts that make the same key are the same shape */
+export function shapeKey(lines: readonly number[], byFile: boolean): string {
+    return keyOf(versionDots(lines, byFile));
+}
+
+/** The key of the shape turned a quarter: a layout that makes it is the same shape, turned */
+export function turnedKey(lines: readonly number[], byFile: boolean): string {
+    return keyOf(versionDots(lines, byFile).map((d) => ({ x: -d.y, y: d.x })));
+}
+
+/** Whether `lines` make `version`'s shape, as it is or turned a quarter */
+export function isVersionAnyTurn(
+    version: LayoutVersion,
+    lines: readonly number[],
+    byFile: boolean,
+): boolean {
+    const key = shapeKey(version.lines, version.layout.byFile);
+    return shapeKey(lines, byFile) === key || turnedKey(lines, byFile) === key;
 }
 
 /** Within 3:1 of square: the long side under three times the short one */
@@ -206,41 +225,81 @@ const noLonely = (family: LayoutFamily, lines: readonly number[]) => {
 const cache = new Map<number, readonly LayoutRow[]>();
 const CACHE_LIMIT = 400;
 
-/** Each layout's versions for exactly `n`, before hints */
+/**
+ * Each layout's versions for exactly `n`, before hints. A version that is the same shape as one
+ * listed before it, as it is or turned a quarter, isn't listed again: the more specific layout
+ * keeps a shape two can make, and the wider version keeps a shape and its turn (the chip's turn
+ * button makes the other; owner lab feedback, 2026-10-23).
+ */
 function versionsFor(n: number): Map<LayoutFamily, LayoutVersion[]> {
     const seen = new Set<string>();
     const by = new Map<LayoutFamily, LayoutVersion[]>();
     for (const family of SPECIFICITY) {
-        const flat: LayoutVersion[] = [];
-        const turned: LayoutVersion[] = [];
+        const versions: LayoutVersion[] = [];
         for (let width = 1; width <= n; width++) {
             const lines = familyLines(family, width, n);
             if (!lines || !noLonely(family, lines)) continue;
-            flat.push(
+            versions.push(
                 versionOf({ family, files: width, byFile: false }, lines),
             );
-            if (TURNS.has(family))
-                turned.push(
-                    versionOf({ family, files: width, byFile: true }, lines),
-                );
         }
-        // By rank first, so a shape both ways keeps the plainer one
-        const kept = [...flat, ...turned].filter((v) => {
-            if (!nearSquare(v)) return false;
-            const key = shapeKey(v.lines, v.layout.byFile);
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-        // Wide to deep; by rank before turned at the same proportions
-        kept.sort(
-            (a, b) =>
-                b.across / b.deep - a.across / a.deep ||
-                Number(a.layout.byFile) - Number(b.layout.byFile),
+        // Wide to deep, so a shape and its turn keep the wider
+        versions.sort((a, b) => b.across / b.deep - a.across / a.deep);
+        by.set(
+            family,
+            versions.filter((v) => {
+                if (!nearSquare(v)) return false;
+                const key = shapeKey(v.lines, false);
+                if (seen.has(key)) return false;
+                seen.add(key);
+                seen.add(turnedKey(v.lines, false));
+                return true;
+            }),
         );
-        by.set(family, kept);
     }
     return by;
+}
+
+/**
+ * `version` turned a quarter, as a layout of its family: a Full block the other way, or the same
+ * lines by file (every family but Short back is symmetric, so that is its turn). Null for Short
+ * back, whose turn no layout makes, and for a shape its turn leaves the same.
+ */
+function turnOf(version: LayoutVersion): LayoutVersion | null {
+    const { layout, lines } = version;
+    if (layout.family === "shortBack") return null;
+    if (shapeKey(lines, layout.byFile) === turnedKey(lines, layout.byFile))
+        return null;
+    if (layout.family === "full") {
+        const files = lines.length;
+        const n = lines.reduce((a, b) => a + b, 0);
+        return versionOf(
+            { family: "full", files, byFile: false },
+            familyLines("full", files, n)!,
+        );
+    }
+    return versionOf({ ...layout, byFile: !layout.byFile }, lines);
+}
+
+/**
+ * Every way `family` lays out `n`: its listed versions and their quarter turns, wide to deep. A
+ * drawn box, the size number's − and +, and a count change pick from these, so a box drawn deep
+ * comes out deep though the picker lists only the wider of a shape and its turn.
+ */
+export function layoutOrientations(
+    n: number,
+    family: LayoutFamily,
+): LayoutVersion[] {
+    const row = layoutCatalogue(n).find((r) => r.family === family)!;
+    const all = row.versions.flatMap((v) => {
+        const turned = turnOf(v);
+        return turned ? [v, turned] : [v];
+    });
+    return all.sort(
+        (a, b) =>
+            b.across / b.deep - a.across / a.deep ||
+            Number(a.layout.byFile) - Number(b.layout.byFile),
+    );
 }
 
 /** How near a count is that `family` makes: add `more`, or remove `fewer`, within 12 */
@@ -271,58 +330,53 @@ export function layoutCatalogue(n: number): readonly LayoutRow[] {
     const by = versionsFor(count);
     const rows = LAYOUT_FAMILIES.map((family): LayoutRow => {
         const versions = by.get(family)!;
-        return versions.length > 0
-            ? { family, label: LAYOUT_LABELS[family], versions }
-            : {
-                  family,
-                  label: LAYOUT_LABELS[family],
-                  versions,
-                  hint: familyHint(family, count),
-              };
+        if (versions.length > 0)
+            return { family, label: LAYOUT_LABELS[family], versions };
+        const hint = familyHint(family, count);
+        const near =
+            hint.more !== null
+                ? count + hint.more
+                : hint.fewer !== null
+                  ? count - hint.fewer
+                  : null;
+        const version =
+            near === null ? undefined : nearestOf(by4(near, family), 1);
+        return {
+            family,
+            label: LAYOUT_LABELS[family],
+            versions,
+            hint,
+            ...(near !== null && version
+                ? { preview: { version, count: near } }
+                : {}),
+        };
     });
     if (cache.size >= CACHE_LIMIT) cache.clear();
     cache.set(count, rows);
     return rows;
 }
 
-/** "add 1 or remove 2" */
+/** "add 1 / remove 2" */
 export function hintText(hint: LayoutHint): string {
     return [
         hint.more !== null && `add ${hint.more}`,
         hint.fewer !== null && `remove ${hint.fewer}`,
     ]
         .filter(Boolean)
-        .join(" or ");
+        .join(" / ");
 }
 
-/** The rows the count can't make, on one line: "Not for 23: Full (add 1 or remove 2)" */
-export function missingLine(
-    n: number,
-    rows: readonly LayoutRow[],
-): string | null {
-    const missing = rows.filter((r) => r.versions.length === 0);
-    if (missing.length === 0) return null;
-    return `Not for ${n}: ${missing
-        .map((r) => {
-            const text = r.hint ? hintText(r.hint) : "";
-            return text ? `${r.label} (${text})` : r.label;
-        })
-        .join(" · ")}`;
-}
+/** A count's listed versions of `family`, without its own hint (which would recurse) */
+const by4 = (n: number, family: LayoutFamily) => versionsFor(n).get(family)!;
 
-/**
- * The version of `family` for `n` nearest `aspect` (across ÷ deep, in spots), the first of
- * equals; null when the family can't make `n`
- */
-export function nearestVersion(
-    family: LayoutFamily,
-    n: number,
+/** Of `versions`, the one nearest `aspect` (across ÷ deep), the first of equals */
+function nearestOf(
+    versions: readonly LayoutVersion[],
     aspect: number,
-): LayoutVersion | null {
-    const row = layoutCatalogue(n).find((r) => r.family === family)!;
-    let best: LayoutVersion | null = null;
+): LayoutVersion | undefined {
+    let best: LayoutVersion | undefined;
     let bestScore = Infinity;
-    for (const v of row.versions) {
+    for (const v of versions) {
         const score = Math.abs(Math.log(v.across / v.deep / aspect));
         if (score < bestScore - 1e-9) {
             best = v;
@@ -330,6 +384,18 @@ export function nearestVersion(
         }
     }
     return best;
+}
+
+/**
+ * The version of `family` for `n` nearest `aspect` (across ÷ deep, in spots), quarter turns
+ * included, the first of equals; null when the family can't make `n`
+ */
+export function nearestVersion(
+    family: LayoutFamily,
+    n: number,
+    aspect: number,
+): LayoutVersion | null {
+    return nearestOf(layoutOrientations(n, family), aspect) ?? null;
 }
 
 /** A layout as laid out for a count: the version it is, or Short back when its family can't */
@@ -381,18 +447,6 @@ export function resolveLayout(layout: FilesLayout, n: number): ResolvedLayout {
     );
 }
 
-/** The chip's note for a layout standing in: "Stagger needs 1 more or 1 fewer" */
-export function fallbackNote(family: LayoutFamily, n: number): string {
-    const hint = familyHint(family, Math.max(1, n));
-    const parts = [
-        hint.more !== null && `${hint.more} more`,
-        hint.fewer !== null && `${hint.fewer} fewer`,
-    ].filter(Boolean);
-    return parts.length > 0
-        ? `${LAYOUT_LABELS[family]} needs ${parts.join(" or ")}`
-        : `${LAYOUT_LABELS[family]} can't make ${n}`;
-}
-
 /** "Stagger", "short" or "short back" names a layout: the start of its name, spaces ignored */
 function familyNamed(words: string): LayoutFamily | null {
     const typed = words.replace(/\s+/g, "").toLowerCase();
@@ -432,9 +486,9 @@ export function parseLayout(
     if (!size) return named ? nearestVersion(pick, n, aspect) : null;
     const across = Number(size[1]);
     const deep = size[2] === undefined ? undefined : Number(size[2]);
-    const row = layoutCatalogue(n).find((r) => r.family === pick)!;
+    // Its turns too: "stagger 3x8" is 8 × 3 turned
     return (
-        row.versions.find(
+        layoutOrientations(n, pick).find(
             (v) =>
                 v.across === across && (deep === undefined || v.deep === deep),
         ) ?? null

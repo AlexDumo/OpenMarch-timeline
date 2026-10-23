@@ -1,10 +1,18 @@
+import { useState } from "react";
 import clsx from "clsx";
+import * as Popover from "@radix-ui/react-popover";
+import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
+import { LAYOUT_LABELS, type LayoutFamily } from "../distribute/distribution";
 import {
-    missingLine,
+    hintText,
+    isVersionAnyTurn,
     nearestVersion,
-    shapeKey,
     versionDots,
+    versionOf,
+    type LayoutHint,
+    type LayoutRow,
     type LayoutVersion,
+    type ResolvedLayout,
 } from "../distribute/layouts";
 import { layoutOf, layoutRowsOf, withLayout } from "../distribute/modes";
 import { useLastLayoutStore } from "../tool/lastLayout";
@@ -13,10 +21,13 @@ import type { ShapeEditTarget } from "./editTargets";
 import { keepFocus } from "./keepFocus";
 
 /**
- * The box's layout picker (#387, spec #385): Full · Stagger · Rounded · Short back · Notched, each
- * version a live thumbnail labelled by its block ("5 × 5"), the counts in its tooltip. Rows the
- * count can't make are listed on one line with how many would make them. Picking a version is
- * one change of the shape and becomes the layout a new box starts in.
+ * The box's layout picker (#387, spec #385) and the chip's layout menu (owner lab feedback,
+ * 2026-10-23). Full · Stagger · Rounded · Short back · Notched always keep their places: a layout
+ * the count can't make shows greyed, as a picture of it at the nearest count it makes, with what
+ * it needs ("add 1 / remove 2"). Each version is a live thumbnail labelled by its block
+ * ("5 × 5"), the counts in its tooltip. A shape and its quarter turn are one version: the chip's
+ * turn button makes the other. Picking a version is one change of the shape and becomes the
+ * layout a new box starts in.
  */
 
 type Target = Pick<ShapeEditTarget, "kind" | "params" | "spots" | "apply">;
@@ -45,104 +56,299 @@ function usePick({ target, envFor }: PickerProps) {
     };
 }
 
-/** The shape's layout now, as a key to compare versions with; null without layouts */
-function currentKey(target: Target): string | null {
-    const now = layoutOf(target.kind, target.params, target.spots);
-    return now ? shapeKey(now.lines, now.layout.byFile) : null;
-}
+/** Whether `version` is the shape's own, as it is or turned a quarter */
+const isOwn = (version: LayoutVersion, now: ResolvedLayout) =>
+    isVersionAnyTurn(version, now.lines, now.layout.byFile);
 
-const keyOf = (v: LayoutVersion) => shapeKey(v.lines, v.layout.byFile);
+/** "Full needs 24 or 21 marchers: add 1 / remove 2" */
+function needsTitle(label: string, hint: LayoutHint, n: number): string {
+    const counts = [
+        hint.more !== null && n + hint.more,
+        hint.fewer !== null && n - hint.fewer,
+    ].filter((c): c is number => c !== false);
+    return counts.length > 0
+        ? `${label} needs ${counts.join(" or ")} marchers: ${hintText(hint)}`
+        : `${label} can't make ${n}`;
+}
 
 /** The inspector's picker, in the shape section under the mode switch */
 export function LayoutPicker(props: PickerProps) {
     const { target } = props;
     const pick = usePick(props);
-    const current = currentKey(target);
+    const now = layoutOf(target.kind, target.params, target.spots);
     const rows = layoutRowsOf(target.kind, target.spots);
-    if (current === null || rows.length === 0) return null;
-    const missing = missingLine(target.spots, rows);
+    if (now === null || rows.length === 0) return null;
     return (
         <div
-            className="flex flex-col gap-6"
+            className="flex flex-col gap-4"
             role="group"
             aria-label="Layout"
             data-testid="shape-layout-picker"
         >
-            {rows
-                .filter((row) => row.versions.length > 0)
-                .map((row) => (
-                    <div
-                        key={row.family}
-                        className="flex flex-col gap-2"
-                        data-testid={`shape-layout-row-${row.family}`}
+            {rows.map((row) => (
+                <div
+                    key={row.family}
+                    className="flex items-start gap-8"
+                    data-testid={`shape-layout-row-${row.family}`}
+                >
+                    <span
+                        className={clsx(
+                            "text-sub w-[4.5rem] shrink-0 pt-6",
+                            row.versions.length > 0
+                                ? "text-text/70"
+                                : "text-text/40",
+                        )}
                     >
-                        <span className="text-sub text-text/80">
-                            {row.label}
-                        </span>
-                        <div className="flex flex-wrap gap-4">
-                            {row.versions.map((version, i) => (
+                        {row.label}
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                        {row.versions.length > 0 ? (
+                            row.versions.map((version, i) => (
                                 <VersionButton
                                     key={i}
                                     name={`${row.label} ${version.label}`}
                                     version={version}
-                                    on={keyOf(version) === current}
+                                    on={isOwn(version, now)}
                                     onPick={() => pick(version)}
                                     testId={`shape-layout-${row.family}-${i}`}
-                                    showLabel
+                                    caption={version.label}
                                 />
-                            ))}
-                        </div>
+                            ))
+                        ) : (
+                            <MissingButton
+                                row={row}
+                                n={target.spots}
+                                testId={`shape-layout-${row.family}-missing`}
+                            />
+                        )}
                     </div>
-                ))}
-            {missing && (
-                <p
-                    className="text-sub text-text/60"
-                    data-testid="shape-layout-missing"
-                >
-                    {missing}
-                </p>
-            )}
+                </div>
+            ))}
         </div>
     );
 }
 
+/** A layout the count can't make: its picture greyed, with what it needs, which can't be picked */
+function MissingButton({
+    row,
+    n,
+    testId,
+}: {
+    row: LayoutRow;
+    n: number;
+    testId: string;
+}) {
+    const hint = row.hint ?? { more: null, fewer: null };
+    return (
+        <button
+            type="button"
+            disabled
+            title={needsTitle(row.label, hint, n)}
+            data-testid={testId}
+            className="rounded-4 text-text/40 flex flex-col items-center gap-2 p-4"
+        >
+            {row.preview && (
+                <span className="opacity-40">
+                    <Thumbnail version={row.preview.version} />
+                </span>
+            )}
+            <span className="text-xs">{hintText(hint)}</span>
+        </button>
+    );
+}
+
 /**
- * The picker under the floating chip: one thumbnail per layout the count makes, its version
- * nearest the shape's proportions (the shape's own for its layout). Versions of the chosen
- * layout are the size number's − and +.
+ * The chip's layout menu: the layout on its button (and, when the count can't make the one
+ * picked, that one greyed with what it needs). Open, it lists every layout, greyed where the count
+ * can't make it; hovering a layout or clicking its arrow shows its versions beside the list.
  */
-export function CompactLayoutPicker(props: PickerProps) {
+export function LayoutMenu(props: PickerProps) {
     const { target } = props;
     const pick = usePick(props);
+    const [open, setOpen] = useState(false);
+    const [active, setActive] = useState<LayoutFamily | null>(null);
     const now = layoutOf(target.kind, target.params, target.spots);
-    if (!now) return null;
-    const current = shapeKey(now.lines, now.layout.byFile);
+    const rows = layoutRowsOf(target.kind, target.spots);
+    if (now === null || rows.length === 0) return null;
+    const n = target.spots;
     const aspect = now.across / now.deep;
-    const choices = layoutRowsOf(target.kind, target.spots).flatMap((row) => {
-        const own = row.versions.find((v) => keyOf(v) === current);
-        const version = own ?? nearestVersion(row.family, target.spots, aspect);
-        return version ? [{ row, version, on: own !== undefined }] : [];
-    });
-    if (choices.length === 0) return null;
+    const showing = active ?? now.layout.family;
+    const wanted = now.fellBack
+        ? rows.find((r) => r.family === now.fellBack)
+        : undefined;
+    const choose = (version: LayoutVersion) => {
+        pick(version);
+        setOpen(false);
+        setActive(null);
+    };
+    /** A layout's row picture: the shape's own version, or the one nearest its proportions */
+    const pictureOf = (row: LayoutRow) =>
+        row.versions.find((v) => isOwn(v, now)) ??
+        nearestVersion(row.family, n, aspect) ??
+        undefined;
+    const shownRow = rows.find((r) => r.family === showing);
     return (
-        <div
-            className="flex items-center gap-2"
-            role="group"
-            aria-label="Layout"
-            data-testid="shape-layout-compact"
+        <Popover.Root
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+                if (!next) setActive(null);
+            }}
         >
-            {choices.map(({ row, version, on }) => (
-                <VersionButton
-                    key={row.family}
-                    name={`${row.label} ${version.label}`}
-                    version={version}
-                    on={on}
-                    onPick={() => pick(version)}
-                    testId={`shape-layout-compact-${row.family}`}
-                    small
-                />
-            ))}
-        </div>
+            <span className="flex items-center gap-4">
+                <Popover.Trigger asChild>
+                    <button
+                        type="button"
+                        aria-label={`Layout: ${LAYOUT_LABELS[now.layout.family]}`}
+                        title="Layout"
+                        onPointerDown={keepFocus}
+                        data-testid="shape-layout-menu"
+                        className="rounded-4 hover:bg-fg-2 flex items-center gap-4 px-4 py-2"
+                    >
+                        <Thumbnail
+                            version={versionOf(now.layout, now.lines)}
+                            small
+                        />
+                        <span>{LAYOUT_LABELS[now.layout.family]}</span>
+                        <CaretDownIcon size={10} />
+                    </button>
+                </Popover.Trigger>
+                {wanted?.hint && (
+                    <span
+                        className="text-text/40 flex items-center gap-2"
+                        title={needsTitle(wanted.label, wanted.hint, n)}
+                        data-testid="shape-layout-menu-wanted"
+                    >
+                        {wanted.preview && (
+                            <span className="opacity-40">
+                                <Thumbnail
+                                    version={wanted.preview.version}
+                                    small
+                                />
+                            </span>
+                        )}
+                        {wanted.label} · {hintText(wanted.hint)}
+                    </span>
+                )}
+            </span>
+            <Popover.Portal>
+                <Popover.Content
+                    side="bottom"
+                    align="start"
+                    sideOffset={6}
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal z-50 flex gap-8 border p-6"
+                    data-testid="shape-layout-menu-content"
+                >
+                    <div className="flex flex-col gap-1" role="menu">
+                        {rows.map((row) => {
+                            const missing = row.versions.length === 0;
+                            const picture = missing
+                                ? row.preview?.version
+                                : pictureOf(row);
+                            return (
+                                <div
+                                    key={row.family}
+                                    className={clsx(
+                                        "rounded-4 flex items-center",
+                                        showing === row.family &&
+                                            !missing &&
+                                            "bg-fg-2",
+                                    )}
+                                >
+                                    <button
+                                        type="button"
+                                        role="menuitem"
+                                        disabled={missing}
+                                        title={
+                                            missing && row.hint
+                                                ? needsTitle(
+                                                      row.label,
+                                                      row.hint,
+                                                      n,
+                                                  )
+                                                : undefined
+                                        }
+                                        onPointerEnter={() => {
+                                            if (!missing) setActive(row.family);
+                                        }}
+                                        onClick={() => {
+                                            if (picture && !missing)
+                                                choose(picture);
+                                        }}
+                                        data-testid={`shape-layout-menu-row-${row.family}`}
+                                        className={clsx(
+                                            "flex min-w-40 items-center gap-6 px-4 py-2 text-left",
+                                            missing
+                                                ? "text-text/40"
+                                                : now.layout.family ===
+                                                    row.family
+                                                  ? "text-accent"
+                                                  : "hover:text-accent",
+                                        )}
+                                    >
+                                        <span
+                                            className={clsx(
+                                                "flex w-24 justify-center",
+                                                missing && "opacity-40",
+                                            )}
+                                        >
+                                            {picture && (
+                                                <Thumbnail
+                                                    version={picture}
+                                                    small
+                                                />
+                                            )}
+                                        </span>
+                                        <span className="grow">
+                                            {row.label}
+                                        </span>
+                                        {missing && row.hint && (
+                                            <span className="text-xs">
+                                                {hintText(row.hint)}
+                                            </span>
+                                        )}
+                                    </button>
+                                    {!missing && (
+                                        <button
+                                            type="button"
+                                            aria-label={`Show the ${row.label} versions`}
+                                            onPointerDown={keepFocus}
+                                            onClick={() =>
+                                                setActive(row.family)
+                                            }
+                                            data-testid={`shape-layout-menu-expand-${row.family}`}
+                                            className="hover:text-accent px-4 py-2"
+                                        >
+                                            <CaretRightIcon size={10} />
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {shownRow && shownRow.versions.length > 0 && (
+                        <div
+                            className="border-stroke flex max-w-64 flex-wrap content-start gap-2 border-l pl-8"
+                            data-testid="shape-layout-menu-versions"
+                        >
+                            {shownRow.versions.map((version, i) => (
+                                <VersionButton
+                                    key={i}
+                                    name={`${shownRow.label} ${version.label}`}
+                                    version={version}
+                                    on={isOwn(version, now)}
+                                    onPick={() => choose(version)}
+                                    testId={`shape-layout-menu-version-${shownRow.family}-${i}`}
+                                    caption={version.label}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </Popover.Content>
+            </Popover.Portal>
+        </Popover.Root>
     );
 }
 
@@ -152,8 +358,7 @@ function VersionButton({
     on,
     onPick,
     testId,
-    showLabel,
-    small,
+    caption,
 }: {
     /** "Stagger 5 × 5" */
     name: string;
@@ -161,8 +366,7 @@ function VersionButton({
     on: boolean;
     onPick: () => void;
     testId: string;
-    showLabel?: boolean;
-    small?: boolean;
+    caption?: string;
 }) {
     return (
         <button
@@ -174,14 +378,18 @@ function VersionButton({
             onClick={onPick}
             data-testid={testId}
             className={clsx(
-                "rounded-4 flex flex-col items-center gap-2 border p-2",
+                "rounded-4 flex flex-col items-center gap-2 border p-4",
                 on
                     ? "border-accent bg-accent/10 text-accent"
-                    : "border-stroke hover:border-accent text-text",
+                    : "hover:bg-fg-2 text-text border-transparent",
             )}
         >
-            <Thumbnail version={version} small={small} />
-            {showLabel && <span className="text-xs">{version.label}</span>}
+            <Thumbnail version={version} />
+            {caption && (
+                <span className={clsx("text-xs", !on && "text-text/60")}>
+                    {caption}
+                </span>
+            )}
         </button>
     );
 }
@@ -195,9 +403,8 @@ function Thumbnail({
     small?: boolean;
 }) {
     const dots = versionDots(version.lines, version.layout.byFile);
-    // Half an interval per unit; a box of the most spots that are listed stays a thumbnail
+    // Half an interval per unit; big enough in the inspector to read a version at a glance
     const most = Math.max(version.across, version.deep);
-    // Big enough in the inspector to tell a version from its turned twin (sims L387)
     const unit = Math.min(small ? 1.75 : 4, (small ? 18 : 48) / (2 * most));
     const w = version.across * 2 * unit;
     const h = version.deep * 2 * unit;

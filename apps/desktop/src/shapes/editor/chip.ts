@@ -1,3 +1,5 @@
+import { turnShape } from "../frame/gestures";
+import { pivotOf } from "../frame/pivot";
 import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
 
 /** One number in the floating chip, worked out from its kind's declaration */
@@ -46,4 +48,25 @@ export function chipLayout(
         intervals,
         ratioLock: kind.ratioLock === true && intervals.length > 1,
     };
+}
+
+/**
+ * The chip's turn button (owner lab feedback, 2026-10-23): the shape turned a quarter clockwise
+ * about its pivot, so a box's deep versions are a click away without the ⋯ row
+ */
+export function quarterTurn(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    env: ToolEnv,
+): unknown {
+    const { rotation } = kind.frameOf(params, n);
+    return turnShape(
+        kind,
+        params,
+        n,
+        rotation + Math.PI / 2,
+        pivotOf(params),
+        env,
+    );
 }
