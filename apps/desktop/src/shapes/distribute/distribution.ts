@@ -26,15 +26,37 @@ export type Fraction = readonly [number, number];
 export const NO_STAGGER: Fraction = [0, 1];
 
 /**
- * Which rows of a full block a Files layout keeps (#387 adds the rest of the catalogue: Full,
- * Stagger, Rounded, Notched). Short back is today's box: full ranks, the back one short and
- * centered.
+ * Which rows of a full block a Files layout keeps (#387): every layout is a full block minus a
+ * pattern, each line centered. Full removes nothing; Stagger one from every other line (an odd
+ * count of lines); Rounded one or two from the front and back lines; Short back one or more from
+ * the back line (today's box); Notched one or two from the middle line (an odd count of lines).
+ * In the picker's order.
  */
-export type LayoutFamily = "shortBack";
+export const LAYOUT_FAMILIES = [
+    "full",
+    "stagger",
+    "rounded",
+    "shortBack",
+    "notched",
+] as const;
+
+export type LayoutFamily = (typeof LAYOUT_FAMILIES)[number];
+
+/** What the picker and the command bar call each layout */
+export const LAYOUT_LABELS: Readonly<Record<LayoutFamily, string>> = {
+    full: "Full",
+    stagger: "Stagger",
+    rounded: "Rounded",
+    shortBack: "Short back",
+    notched: "Notched",
+};
 
 export interface FilesLayout {
     readonly family: LayoutFamily;
-    /** Marchers across a full rank (a full file when `byFile`) */
+    /**
+     * Marchers in a full line: across a full rank, or down a full file when `byFile`. With the
+     * family and the count it names one version.
+     */
     readonly files: number;
     /** Turned: the rows run front to back, as files, instead of side to side */
     readonly byFile: boolean;
@@ -47,7 +69,8 @@ export interface FilesDistribution {
     /**
      * The signed stagger offset, a fraction of the across interval: rank r (0 the front) moves
      * r·s, wrapped to ±½. + is toward the audience's right (screen right with the front at the
-     * bottom).
+     * bottom). Only Full and Short back are offset: Stagger is a ½ stagger already, and Rounded
+     * and Notched center their lines.
      */
     readonly stagger: Fraction;
 }
@@ -103,10 +126,15 @@ export function storedDistribution(
     if (mode === "outline" || mode === "spread") return { mode };
     if (mode !== "files") return undefined;
     const layout = (d as { layout?: Partial<FilesLayout> }).layout;
+    const family = layout?.family;
     return {
         mode: "files",
         layout: {
-            family: "shortBack",
+            family:
+                typeof family === "string" &&
+                (LAYOUT_FAMILIES as readonly string[]).includes(family)
+                    ? family
+                    : "shortBack",
             files:
                 isWhole(layout?.files) && layout.files >= 1
                     ? layout.files
@@ -137,3 +165,7 @@ export function rankOffset(r: number, [p, q]: Fraction): number {
     if (2 * Math.abs(w) === q) w = (Math.sign(p) * q) / 2;
     return w / q;
 }
+
+/** Whether `family` takes the stagger offset: Full and Short back do, the rest center lines */
+export const takesStagger = (family: LayoutFamily): boolean =>
+    family === "full" || family === "shortBack";

@@ -2,13 +2,15 @@ import {
     onField,
     scrubSize,
     scrubSpacing,
+    stepSize,
     withFieldCount,
     withSpacing,
 } from "../editor/boxEdits";
+import { fallbackNote } from "../distribute/layouts";
 import { formatSteps } from "../editor/format";
 import { parseSize, parseSteps, scrubDistance } from "../editor/scrub";
 import type { ToolParam } from "../tool/toolKind";
-import { shortBy, type BoxParams } from "./boxGeometry";
+import { boxBlock, shortBy, type BoxParams } from "./boxGeometry";
 
 /**
  * The box's numbers (#344, "The kind contract"; 08-shape-system-ux.md, "The floating editor"):
@@ -30,6 +32,10 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
             return `${field.across} × ${field.deep}`;
         },
         note(p, n) {
+            // Short back standing in for a layout that can't make the count says so (#387)
+            const block = boxBlock(p, n);
+            if (block.fellBack) return fallbackNote(block.fellBack, n);
+            if (block.layout.family !== "shortBack") return null;
             const short = shortBy(p, n);
             return short > 0 ? `${short} short` : null;
         },
@@ -52,11 +58,7 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
         stepper: {
             less: "One fewer across",
             more: "One more across",
-            by(p, n, by, env) {
-                const across = onField(p, n).across + by;
-                if (across < 1 || across > n) return null;
-                return withFieldCount(p, n, "across", across, env);
-            },
+            by: stepSize,
         },
     },
     spacing("across"),

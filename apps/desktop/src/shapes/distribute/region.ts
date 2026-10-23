@@ -1,6 +1,7 @@
 import type { ToolEnv } from "../tool/toolKind";
 import type { XY } from "../types";
 import type { Distribution, DistributionMode } from "./distribution";
+import type { LayoutRow, ResolvedLayout } from "./layouts";
 
 /**
  * A closed kind's region (spec #385), in the kind's own frame: x across, y deep (back to front),
@@ -47,6 +48,15 @@ export interface ClosedShape<P> {
         distribution: Distribution,
         env: ToolEnv,
     ): P;
+    /**
+     * A kind whose Files mode offers the layout picker (#387, the box): the catalogue for a
+     * count, and the layout the shape is laid out in now. Absent for kinds without layouts.
+     */
+    readonly layouts?: {
+        catalogue(n: number): readonly LayoutRow[];
+        /** The layout as laid out for `n`; null outside Files */
+        resolved(params: P, n: number): ResolvedLayout | null;
+    };
 }
 
 /** A rectangle `halfWidth` × `halfDepth` either side of the center, its four corners */

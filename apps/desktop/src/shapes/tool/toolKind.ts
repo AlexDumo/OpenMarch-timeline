@@ -1,6 +1,7 @@
 import type { Pivot, ShapeFrame } from "../frame/frame";
 import type { ScrubMove } from "../editor/scrub";
 import type { ClosedShape } from "../distribute/region";
+import type { LayoutFamily } from "../distribute/distribution";
 import type { AnyShapeKind, XY } from "../types";
 
 /**
@@ -28,6 +29,11 @@ export interface ToolEnv {
     readonly pivotSnaps?: () => readonly XY[];
     /** The box's ratio lock: changing one spacing changes the other in proportion */
     readonly ratioLocked?: boolean;
+    /**
+     * The user's last-used Files layout (#387), which a new box starts in; Short back when
+     * absent
+     */
+    readonly layout?: LayoutFamily;
 }
 
 /** A handle the canvas draws, and the cursor it shows on hover */

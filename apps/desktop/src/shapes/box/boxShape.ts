@@ -23,7 +23,7 @@ const isPreBox = (p: BoxParams): boolean =>
         p.pattern === "offset");
 
 /** The rectangle through the box's edge marchers, in its own axes */
-export function boxRegion(p: BoxSize, n: number): Region {
+export function boxRegion(p: BoxParams, n: number): Region {
     const frame = boxFrame(p, n);
     return rectRegion(frame.halfWidth, frame.halfDepth);
 }

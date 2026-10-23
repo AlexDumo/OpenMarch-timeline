@@ -1,4 +1,6 @@
 import {
+    boxBlock,
+    boxDistribution,
     filesOf,
     keepRatio,
     ranksOf,
@@ -25,6 +27,8 @@ import {
 } from "../frame/frame";
 
 import type { ToolEnv } from "../tool/toolKind";
+import { filesDistribution } from "../distribute/distribution";
+import { layoutCatalogue, type LayoutVersion } from "../distribute/layouts";
 import {
     COUNT_RATE,
     SPACING_FINE_STEP,
@@ -95,6 +99,92 @@ export function withSpacing(
     return grownFromPivot(p, { ...p, across, deep }, spots, env);
 }
 
+/** A version of the box's layout, with its size as the field shows it */
+interface FieldVersion {
+    readonly version: LayoutVersion;
+    readonly across: number;
+    readonly deep: number;
+}
+
+/**
+ * The versions of the box's chosen layout (#387), sized on the field, for the size number to move
+ * between; null for Short back (or Short back standing in), whose size is any count across
+ */
+function layoutVersions(p: BoxParams, spots: number): FieldVersion[] | null {
+    const block = boxBlock(p, spots);
+    if (block.fellBack !== null || block.layout.family === "shortBack")
+        return null;
+    const swap = acrossIsDeep(p.rotation);
+    return layoutCatalogue(spots)
+        .find((r) => r.family === block.layout.family)!
+        .versions.map((version) => ({
+            version,
+            across: swap ? version.deep : version.across,
+            deep: swap ? version.across : version.deep,
+        }));
+}
+
+/** The box laid out in `version`: same intervals and stagger, grown from the pivot */
+const inVersion = (
+    p: BoxParams,
+    spots: number,
+    version: LayoutVersion,
+    env: ToolEnv,
+): BoxParams => {
+    const d = boxDistribution(p);
+    if (d.mode !== "files") return p;
+    return boxTool.closed!.withDistribution(
+        p,
+        spots,
+        { ...d, layout: version.layout },
+        env,
+    );
+};
+
+/** Of `candidates`, the one most like the box now: turned the same way, then nearest in depth */
+function likeNow(
+    p: BoxParams,
+    spots: number,
+    candidates: readonly FieldVersion[],
+): FieldVersion | undefined {
+    const now = boxBlock(p, spots);
+    const deep = onField(p, spots).deep;
+    return [...candidates].sort(
+        (a, b) =>
+            Number(a.version.layout.byFile !== now.layout.byFile) -
+                Number(b.version.layout.byFile !== now.layout.byFile) ||
+            Math.abs(a.deep - deep) - Math.abs(b.deep - deep),
+    )[0];
+}
+
+/**
+ * The size number's − and + (#387): one more or fewer across, or for a layout other than Short
+ * back, its next version wider or narrower on the field; null where there is none
+ */
+export function stepSize(
+    p: BoxParams,
+    spots: number,
+    by: -1 | 1,
+    env: ToolEnv,
+): BoxParams | null {
+    const versions = layoutVersions(p, spots);
+    const across = onField(p, spots).across;
+    if (!versions) {
+        const next = across + by;
+        if (next < 1 || next > spots) return null;
+        return withFieldCount(p, spots, "across", next, env);
+    }
+    const ahead = versions.filter((v) => (v.across - across) * by > 0);
+    if (ahead.length === 0) return null;
+    const nearest = Math.min(...ahead.map((v) => Math.abs(v.across - across)));
+    const next = likeNow(
+        p,
+        spots,
+        ahead.filter((v) => Math.abs(v.across - across) === nearest),
+    )!;
+    return inVersion(p, spots, next.version, env);
+}
+
 /** The box with `count` across (or deep) on the field */
 export function withFieldCount(
     p: BoxParams,
@@ -103,6 +193,19 @@ export function withFieldCount(
     count: number,
     env: ToolEnv,
 ): BoxParams {
+    const versions = layoutVersions(p, spots);
+    if (versions) {
+        const now = onField(p, spots);
+        if (count === (axis === "across" ? now.across : now.deep)) return p;
+        // A size the layout makes keeps the layout; any other is Short back at that size
+        const match = likeNow(
+            p,
+            spots,
+            versions.filter((v) => v[axis] === count),
+        );
+        if (match) return inVersion(p, spots, match.version, env);
+        return withFieldCount(asShortBack(p, spots), spots, axis, count, env);
+    }
     const swapped = acrossIsDeep(p.rotation);
     if (axis === "across" && swapped) {
         // Side to side on the field is the box's own deep, where only some counts fit (8 in 5
@@ -116,6 +219,21 @@ export function withFieldCount(
     return ownFiles
         ? withFiles(p, spots, count, env)
         : withRanks(p, spots, count, env);
+}
+
+/**
+ * The box as Short back, as many across on its own axes as its block now, ready for a size its
+ * layout doesn't make
+ */
+function asShortBack(p: BoxParams, spots: number): BoxParams {
+    const d = boxDistribution(p);
+    if (d.mode !== "files") return p;
+    const across = boxBlock(p, spots).across;
+    return {
+        ...p,
+        files: across,
+        distribution: { ...d, layout: filesDistribution(across).layout },
+    };
 }
 
 /**
@@ -170,7 +288,20 @@ export function scrubSize(
     const field = onField(base, spots);
     const was = axis === "across" ? field.across : field.deep;
     const count = scrubValue(was, distance, 0, { axis: "x", ...COUNT_RATE });
-    return count === was ? base : withFieldCount(base, spots, axis, count, env);
+    if (count === was) return base;
+    const versions = layoutVersions(base, spots);
+    if (!versions) return withFieldCount(base, spots, axis, count, env);
+    // A layout other than Short back moves between its versions: the one nearest the count
+    // dragged to, that way from where it started
+    const ahead = versions.filter((v) => (v[axis] - was) * (count - was) > 0);
+    if (ahead.length === 0) return base;
+    const nearest = Math.min(...ahead.map((v) => Math.abs(v[axis] - count)));
+    const next = likeNow(
+        base,
+        spots,
+        ahead.filter((v) => Math.abs(v[axis] - count) === nearest),
+    )!;
+    return inVersion(base, spots, next.version, env);
 }
 
 /** The rotation dragged `distance` px clockwise: 1° per 2 px, 15° with Shift, free with Alt */

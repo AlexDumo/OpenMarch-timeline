@@ -1,9 +1,11 @@
 import { resizeCursor } from "../frame/frame";
 import type { ToolKind } from "../tool/toolKind";
 import { distributionFor } from "../distribute/distribution";
+import { layoutCatalogue } from "../distribute/layouts";
 import { BOX_PARAMS } from "./boxParams";
 import { boxRegion, boxShape } from "./boxShape";
 import {
+    boxBlock,
     boxDistribution,
     filesOf,
     grownFromPivot,
@@ -60,6 +62,13 @@ export const boxTool: ToolKind<BoxParams> = {
         modes: ["files"],
         region: boxRegion,
         distribution: boxDistribution,
+        layouts: {
+            catalogue: layoutCatalogue,
+            resolved: (params, n) =>
+                boxDistribution(params).mode === "files"
+                    ? boxBlock(params, n)
+                    : null,
+        },
         startMode: (params, _n, mode) => distributionFor(mode, filesOf(params)),
         withDistribution(params, n, distribution, env) {
             // How recipes said it before the distributor goes: the distribution says it now
