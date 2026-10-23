@@ -149,7 +149,8 @@ region, and one shared distributor lays out the spots. This needs no schema chan
      sides), or its middle when `at` is null. `style` `"gap"` leaves the spot empty; `"spread"`
      spreads that side's spots evenly between its corners instead. A missing or broken `oddGap`
      reads as the back's middle, leaving a gap, and an `at` the count no longer has reads as the
-     middle of its side.
+     middle of its side. A region with no corners (the circle) has no gap to leave and ignores
+     `oddGap`.
    - `{ "mode": "spread", "seed", "generator" }`, whose settings its ticket defines.
 2. **No `distribution` reads as Files, Short back, no stagger.** That is how every box recipe
    stored before this amendment reads, `pattern: "grid"` ones included, and it lays out exactly
@@ -168,6 +169,12 @@ region, and one shared distributor lays out the spots. This needs no schema chan
    stored as a generator change.
 5. **The spots stay the kind's to generate**, through the distributor, in a fixed order, so the
    `slot` numbers of `timeline_shape_recipe_marchers` keep meaning the same spot.
+6. **The circle tool's recipes are `circle`, version 2** (#389). Version 1 is the path circle of
+   the old shapes panel (a radius and a spacing along the path); version 2's params are
+   `center`, `interval` (the chord between neighbors), `rotation`, `flipX`, `flipY` and the
+   distribution. Its radius follows the count, r = interval / (2 sin(π/n)), so it isn't stored.
+   A circle is filled in Outline (Even spread joins it); a distribution it can't be filled in
+   reads as Outline.
 
 Verification: `distributor.test.ts` checks the box's Files spots against the block generator for
 every count from 1 to 120 and every file count, turned and flipped, as old and new recipes;
@@ -177,3 +184,5 @@ a browser scenario in `box-tool.spec.mts` places a box and finds its distributio
 `outlineMode.test.ts` (#390) round-trips an outline's gap through a recipe, checks it goes back to
 its side's middle when its spot is gone, and reads a broken `oddGap` as the default; a browser
 scenario places an outline on an odd count with its gap moved and finds it in the recipe.
+`circleTool.test.ts` checks a circle's neighbors are one interval apart at every count from 2 to
+120, and a browser scenario places a circle and finds `circle` version 2 in Outline in its recipe.

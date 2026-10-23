@@ -104,8 +104,8 @@ export function modeStep(kind: AnyToolKind): ToolParam<unknown> | null {
 }
 
 /**
- * The shape the bar starts from when no shape of this kind is open: drawn by the kind itself
- * across a rectangle around where the marchers start, about one default interval apart, then set to
+ * The shape the bar starts from when no shape of this kind is open: the kind filling a
+ * rectangle around where the marchers start, about one default interval apart, then set to
  * each parameter's declared default. Kind-agnostic, so a new kind needs nothing extra.
  */
 export function startingParams(
@@ -123,13 +123,20 @@ export function startingParams(
     const deep = Math.ceil(Math.max(1, n) / across);
     const halfWidth = Math.max(env.stepPx, ((across - 1) * interval) / 2);
     const halfDepth = Math.max(env.stepPx, ((deep - 1) * interval) / 2);
-    let params: unknown = kind.draw(
-        { x: center.x - halfWidth, y: center.y - halfDepth },
-        { x: center.x + halfWidth, y: center.y + halfDepth },
+    // Filling a frame, not drawing: kinds draw differently (a box corner to corner, a circle
+    // from its center out), but every kind fills a frame the same way
+    let params: unknown = kind.fromFrame(
+        {
+            center,
+            halfWidth,
+            halfDepth,
+            rotation: 0,
+            flipX: false,
+            flipY: false,
+        },
         n,
         env,
     );
-    if (params === undefined) return null;
     for (const param of kind.params as readonly ToolParam<unknown>[]) {
         if (param.default === undefined) continue;
         if (param.shown && !param.shown(params, n)) continue;
