@@ -1,5 +1,10 @@
 import { assignSlots, type OrderMode } from "../assign";
-import { changeFiles, filesOf, type BoxParams } from "../box/boxGeometry";
+import {
+    changeFiles,
+    filesOf,
+    sameLayout,
+    type BoxParams,
+} from "../box/boxGeometry";
 import { boxTool } from "../box/boxTool";
 import { samePivot } from "../frame/frame";
 import { pivotOf } from "../frame/pivot";
@@ -67,7 +72,8 @@ const sameParams = (a: BoxParams, b: BoxParams) =>
     (a.flipX ?? false) === (b.flipX ?? false) &&
     (a.flipY ?? false) === (b.flipY ?? false) &&
     samePivot(pivotOf(a), pivotOf(b)) &&
-    filesOf(a) === filesOf(b);
+    filesOf(a) === filesOf(b) &&
+    sameLayout(a, b);
 
 /**
  * Ends the gesture: `changed` when there is something to save. A double click on the pivot sends
@@ -113,7 +119,11 @@ export function liveTargets(
     spots: number;
 } {
     const members = box.recipe.members;
-    if (!layOutAgain && filesOf(params) === filesOf(box.params)) {
+    if (
+        !layOutAgain &&
+        filesOf(params) === filesOf(box.params) &&
+        sameLayout(params, box.params)
+    ) {
         const slots = boxShape.generate(params, box.spots, ctx);
         return {
             members: members.map((m) => ({

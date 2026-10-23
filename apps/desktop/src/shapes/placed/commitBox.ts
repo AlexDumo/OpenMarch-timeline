@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { OrderMode } from "../assign";
-import { filesOf, type BoxParams } from "../box/boxGeometry";
+import { filesOf, sameLayout, type BoxParams } from "../box/boxGeometry";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { writePlacement } from "../tool/shapePlacement";
 import { liveTargets } from "./liveBox";
@@ -21,7 +21,9 @@ function orderAfter(
         params.rotation !== box.params.rotation ||
         (params.flipX ?? false) !== (box.params.flipX ?? false) ||
         (params.flipY ?? false) !== (box.params.flipY ?? false);
-    return turned && filesOf(params) === filesOf(box.params)
+    return turned &&
+        filesOf(params) === filesOf(box.params) &&
+        sameLayout(params, box.params)
         ? "kept"
         : box.recipe.orderMode;
 }

@@ -161,8 +161,22 @@ region, and one shared distributor lays out the spots. This needs no schema chan
 5. **The spots stay the kind's to generate**, through the distributor, in a fixed order, so the
    `slot` numbers of `timeline_shape_recipe_marchers` keep meaning the same spot.
 
+6. **Box layouts (#387, 2026-10-23).** `family` is one of `"full"`, `"stagger"`, `"rounded"`,
+   `"shortBack"` and `"notched"`; one this version doesn't know reads as `"shortBack"`. Each is a
+   full block with a pattern of spots left out, every line centered. `files` is the count of a
+   full line: across a full rank, or down a full file when `byFile`. With the family and the spot
+   count it names one version. When the count changes, a recipe keeps its layout: it lays out as
+   the family's version nearest its proportions, or, when the family can't make the count, as
+   Short back as wide. Neither is written back, so the layout returns with the count. Only Full
+   and Short back take `stagger`; the other families center their lines and ignore it. The
+   last-used family is the user's, kept in localStorage (`openmarch:shapeLastLayout`) like stars,
+   not in the show.
+
 Verification: `distributor.test.ts` checks the box's Files spots against the block generator for
 every count from 1 to 120 and every file count, turned and flipped, as old and new recipes;
 `distributionSession.test.ts` saves a staggered box through `placementOf` and reads it back
 through `boxesAt`, reads an old `pattern: "grid"` recipe unchanged, and fills a fake closed kind;
 a browser scenario in `box-tool.spec.mts` places a box and finds its distribution in the recipe.
+For layouts, `layoutCatalogue.test.ts` checks every version from 1 to 120 marchers against the
+full-block-minus-pattern rule, `boxLayouts.test.ts` saves a Stagger box and reads it back, and a
+browser scenario finds the picked layout in the recipe.
