@@ -5,7 +5,6 @@ import type {
 } from "@/field/editor/fieldEditor";
 import { ReadableCoords } from "@/global/classes/ReadableCoords";
 import type { XY } from "../types";
-import { boxCorners, type BoxParams } from "../box/boxGeometry";
 import {
     frameControls,
     type ShapeGesture,
@@ -26,11 +25,6 @@ export const keysOf = (pointer: FieldPointer) => ({
 
 /** A handle's cursor from a shape kind, as the field shows it */
 export const asCursor = (cursor: string): FieldCursor => cursor as FieldCursor;
-
-/** The outline through a box's edge marchers, turned with it */
-export function boxOutline(params: BoxParams, spots: number): XY[] {
-    return boxCorners(params, spots);
-}
 
 /** The cursor over what a press would grab on a shape */
 export function shapeCursor(

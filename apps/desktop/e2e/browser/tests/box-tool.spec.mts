@@ -1850,3 +1850,94 @@ test("change: the circle comes after Box in the Shapes tab, the ring and the com
     await expect(bar(page)).toBeHidden();
     await expect.poll(() => onSpots(show, spots)).toBe(true);
 });
+
+// Placed shapes of any kind (#397): a placed circle is selected by a click on
+// a member and edited in place through its kind, like a placed box.
+
+test("change: a click on a placed circle's member selects it whole, its handle changes the interval and saves at once, and inside it the outline says Circle", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await selectAll(page);
+    await page.keyboard.press("o");
+    const center = { x: cf.x - 10 * S, y: cf.y - 22 * S };
+    await drag(
+        page,
+        await toScreen(page, center),
+        await toScreen(page, { x: center.x + 8 * S, y: center.y }),
+    );
+    await expect.poll(() => circleInterval(page)).toBe("6");
+    const spots = (await shapeOverlay(page))!.spots;
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(() => onSpots(show, spots)).toBe(true);
+    await waitForIdle(page);
+    await page.keyboard.press("Escape");
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([]);
+
+    // A click on a member selects the whole circle, which draws its own
+    // outline and one handle, and shows its numbers
+    const t3 = await marcherScreen(page, 3);
+    await page.mouse.click(t3.x, t3.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await expect
+        .poll(async () => (await shapeOverlay(page))?.handles.length)
+        .toBe(1);
+    expect((await readField(page)).handles).toBeNull();
+    await expect(page.getByTestId("placed-box-summary")).toHaveText(
+        "Circle · 6 steps",
+    );
+    // A circle has no count across to step
+    await expect(
+        page.getByTestId("placed-box-summary").getByRole("button"),
+    ).toHaveCount(0);
+    await expect(
+        page
+            .getByTestId("placed-box-readout")
+            .getByTestId("shape-editor-interval"),
+    ).toHaveText("6");
+
+    // Its handle, dragged out to 12 steps, saves at once as one undo step:
+    // everyone 9 steps from the next, round the same center
+    const steps = await undoSteps(show);
+    const [handle] = (await shapeOverlay(page))!.handles;
+    await drag(
+        page,
+        handle,
+        await toScreen(page, { x: center.x + 12 * S, y: center.y }),
+    );
+    await expect
+        .poll(async () => {
+            const [row] = await show.query<{ params: string }>(
+                "SELECT params FROM timeline_shape_recipes ORDER BY id DESC LIMIT 1",
+            );
+            return JSON.parse(row.params).interval / S;
+        })
+        .toBeCloseTo(9);
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 1);
+    const after = await savedPositions(show, 0);
+    for (const chord of chords(after, center))
+        expect(Math.abs(chord - 9 * S)).toBeLessThan(CLOSE);
+    expect((await readField(page)).selection).toEqual(ALL);
+    await expect(page.getByTestId("placed-box-summary")).toHaveText(
+        "Circle · 9 steps",
+    );
+    await expectCanvasMatchesShow(show);
+
+    // Inside it, the outline of the rest is drawn and labelled
+    await page.mouse.dblclick(t3.x, t3.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toHaveLength(1);
+    await expect
+        .poll(async () => (await placedBoxes(page)).map((b) => b.label))
+        .toEqual(["Circle · 9 steps"]);
+});

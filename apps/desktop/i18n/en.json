@@ -1955,7 +1955,6 @@
                 "message": "Box discarded",
                 "undo": "Undo"
             },
-            "label": "Box {files} × {ranks} · {interval} steps",
             "left": {
                 "closeUp": "Close up",
                 "hint": "Their spots stay empty. Undo puts them back.",
@@ -1965,6 +1964,13 @@
             }
         },
         "circle": "Circle",
+        "placed": {
+            "label": "{name} · {interval} steps",
+            "left": {
+                "many": "{count} left the {shape}",
+                "one": "{name} left the {shape}"
+            }
+        },
         "saved": {
             "copyFailed": "Couldn't copy the saved shape into the show",
             "deleteFailed": "Couldn't delete the saved shape from the show"
