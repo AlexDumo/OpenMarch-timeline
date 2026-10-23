@@ -52,20 +52,21 @@ describe("the mode switch", () => {
         });
     });
 
-    it("offers the box Files and Outline", () => {
+    it("offers the box Files, Outline and Spread", () => {
         const box = drawBox({ x: 0, y: 0 }, { x: 40, y: 20 }, 6, env);
         shown(boxTool, box);
         const group = screen.getByRole("group", { name: "Fill" });
         expect(
             [...group.querySelectorAll("button")].map((b) => b.textContent),
-        ).toEqual(["Files", "Outline"]);
+        ).toEqual(["Files", "Outline", "Spread"]);
     });
 
-    it("is hidden while a kind has one mode", () => {
-        const { container } = shown(
-            { ...padTool, closed: { ...padTool.closed!, modes: ["files"] } },
-            pad,
-        );
+    it("is hidden while the kind has one mode", () => {
+        const filesOnly: AnyToolKind = {
+            ...padTool,
+            closed: { ...padTool.closed!, modes: ["files"] },
+        };
+        const { container } = shown(filesOnly, pad);
         expect(container).toBeEmptyDOMElement();
     });
 });

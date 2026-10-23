@@ -277,11 +277,12 @@ describe("a saved shape's distribution, description and dates (#393)", () => {
         });
     });
 
-    it("keeps a spread's mode but not its seed", () => {
+    it("keeps a spread's mode but not its seed or the count it was laid out for", () => {
         const spread = {
             mode: "spread",
             seed: 7,
             generator: 1,
+            count: 9,
         } as unknown as Distribution;
         const params = spreadPad.closed.withDistribution(
             drawn(padTool, 9, { x: 0, y: 0 }, { x: 40, y: 0 }).params as never,
@@ -292,6 +293,7 @@ describe("a saved shape's distribution, description and dates (#393)", () => {
         const saved = savedShapeOf(spreadPad, params, 9, STEP, SAVED);
         expect(saved.distribution).toMatchObject({ mode: "spread" });
         expect(saved.distribution).not.toHaveProperty("seed");
+        expect(saved.distribution).not.toHaveProperty("count");
     });
 
     it("keeps no distribution for an open kind", () => {
@@ -413,7 +415,7 @@ describe("a saved shape's distribution, description and dates (#393)", () => {
             params: spreadPad.closed.withDistribution(
                 pad.params as never,
                 9,
-                { mode: "spread" } as Distribution,
+                { mode: "spread", seed: 1, generator: 1 } as Distribution,
                 env(),
             ),
         };
@@ -451,7 +453,7 @@ describe("the library's notes with a distribution and description (#393)", () =>
                     name: "Scatter",
                     kind: padTool.shape.id,
                     intervals: { gap: 2 },
-                    distribution: { mode: "spread" },
+                    distribution: { mode: "spread", generator: 1 },
                 },
             ],
             [],

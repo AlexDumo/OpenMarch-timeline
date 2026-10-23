@@ -111,6 +111,25 @@ describe("a kind the host has never heard of gets its steps too", () => {
     });
 });
 
+describe("the box's steps in Spread (#391)", () => {
+    const N = 12;
+
+    it("asks the mode, then only the spacing: a spread has no files or ranks", () => {
+        const base = startingParams(boxTool, starts(N), N, env) as BoxParams;
+        const { params, steps } = shapeSteps(boxTool, base, N, env, [
+            "spr",
+            "3",
+        ]);
+        expect(steps.map((s) => [s.param.key, s.invalid])).toEqual([
+            ["mode", false],
+            ["across", false],
+        ]);
+        const p = params as BoxParams;
+        expect(p.distribution?.mode).toBe("spread");
+        expect(p.across).toBeCloseTo(3 * STEP);
+    });
+});
+
 describe("the mode step (#386)", () => {
     const N = 5;
     const start = () => startingParams(padTool, starts(N), N, env) as PadParams;
@@ -147,7 +166,14 @@ describe("the mode step (#386)", () => {
         expect(fillAhead(rowTool, ["3"])).toEqual(["3"]);
     });
 
-    it("is hidden for open kinds", () => {
+    it("is hidden for a kind with one mode and for open kinds", () => {
+        const filesOnly: AnyToolKind = {
+            ...padTool,
+            closed: { ...padTool.closed!, modes: ["files"] },
+        };
+        expect(
+            keys(filesOnly, startingParams(filesOnly, starts(N), N, env), N),
+        ).not.toContain("mode");
         expect(
             keys(rowTool, startingParams(rowTool, starts(4), 4, env), 4),
         ).not.toContain("mode");

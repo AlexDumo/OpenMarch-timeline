@@ -5,7 +5,11 @@ import {
     type ShapeFrame,
 } from "../frame/frame";
 import { pivotOf } from "../frame/pivot";
-import { distribute, type FrameSpot } from "../distribute/distribute";
+import {
+    distribute,
+    spreadScale,
+    type FrameSpot,
+} from "../distribute/distribute";
 import {
     DEFAULT_ODD_GAP,
     storedDistribution,
@@ -19,8 +23,9 @@ import type { Slot, XY } from "../types";
 
 /**
  * A circle as the circle tool draws it (#389, spec #385): a closed region with no corners. Its
- * size follows the count: its marchers stand `interval` apart (the chord between neighbors), so
- * the radius is worked out from the interval and the count, never stored. The first marcher
+ * size follows the count: in Outline its marchers stand `interval` apart (the chord between
+ * neighbors), in Spread the closest pair does, so the radius is worked out from the interval and
+ * the count, never stored. The first marcher
  * stands front-center; turning the circle turns where it stands, flipping it across runs the
  * marchers the other way round. Everything here is pure.
  */
@@ -34,8 +39,11 @@ export interface CircleParams {
     readonly distribution?: Distribution;
 }
 
-/** The ways a circle can be filled: Even spread joins in #391; Files waits for #394 */
-export const CIRCLE_MODES: readonly DistributionMode[] = ["outline"];
+/** The ways a circle can be filled; Files waits for #394 */
+export const CIRCLE_MODES: readonly DistributionMode[] = ["outline", "spread"];
+
+/** The shape a spread fills: its size comes from the count and the interval */
+const UNIT_CIRCLE = circleRegion(1);
 
 /** How a new circle is filled */
 const OUTLINE: Distribution = { mode: "outline", oddGap: DEFAULT_ODD_GAP };
@@ -62,8 +70,21 @@ export function radiusFor(interval: number, n: number): number {
 export const intervalFor = (r: number, n: number): number =>
     n <= 1 ? 2 * r : 2 * r * Math.sin(Math.PI / n);
 
-export const radiusOf = (p: CircleParams, n: number): number =>
-    radiusFor(p.interval, Math.max(1, n));
+/** The circle's radius: through its marchers in Outline, its edge in Spread */
+export function radiusOf(p: CircleParams, n: number): number {
+    const d = circleDistribution(p);
+    return d.mode === "spread"
+        ? spreadScale(UNIT_CIRCLE, n, d, p.interval)
+        : radiusFor(p.interval, Math.max(1, n));
+}
+
+/** The interval that gives `p`'s circle (in its mode) a radius of `r` */
+function intervalAt(p: CircleParams, r: number, n: number): number {
+    const d = circleDistribution(p);
+    return d.mode === "spread"
+        ? r / spreadScale(UNIT_CIRCLE, n, d, 1)
+        : intervalFor(r, Math.max(1, n));
+}
 
 /** The circle's frame: its center, the radius both ways, its turn and flip */
 export function circleFrame(p: CircleParams, n: number): ShapeFrame {
@@ -84,7 +105,10 @@ export const circleRegionOf = (p: CircleParams, n: number): Region =>
 /** The circle's spots in its own axes, from the distributor */
 const localSpots = (p: CircleParams, n: number): FrameSpot[] =>
     distribute({
-        region: circleRegionOf(p, n),
+        region:
+            circleDistribution(p).mode === "spread"
+                ? UNIT_CIRCLE
+                : circleRegionOf(p, n),
         n,
         distribution: circleDistribution(p),
         across: p.interval,
@@ -202,7 +226,7 @@ export function dragRadius(
     env: ToolEnv,
 ): CircleParams {
     const r = Math.hypot(to.x - base.center.x, to.y - base.center.y);
-    const interval = snapInterval(intervalFor(r, Math.max(1, n)), env);
+    const interval = snapInterval(intervalAt(base, r, n), env);
     return interval === base.interval ? base : { ...base, interval };
 }
 

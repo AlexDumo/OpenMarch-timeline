@@ -923,9 +923,9 @@ test("change: a placed box comes back turned and flipped when selected again", a
 
 // How a shape is filled (#386, spec #385): the host's distributor lays the
 // box out in Files, Short back, as it always was, and the recipe keeps the
-// distribution. The inspector's mode switch offers Files and Outline (#390).
+// distribution. The inspector's mode switch offers Files, Outline and Spread.
 
-test("change: a placed box keeps its distribution, Files with the short rank at the back, and the switch offers Files and Outline", async ({
+test("change: a placed box keeps its distribution, Files with the short rank at the back, and the mode switch shows Files", async ({
     show,
 }) => {
     const { page } = show;
@@ -1105,6 +1105,108 @@ test("change: Outline on 7 leaves the back's middle out, a click on a spot betwe
             spots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < CLOSE),
         ),
     ).toBe(true);
+});
+
+// Even spread (#391, spec #385): a scatter with no visible files, the closest
+// pair one interval apart. Reshuffle in the chip and the inspector moves to the
+// next seed as one undo step, and the recipe keeps the seed and generator.
+
+/** The closest distance between any two spots */
+const closestPair = (spots: readonly Point[]) =>
+    Math.min(
+        ...spots.flatMap((p, i) =>
+            spots.slice(i + 1).map((q) => Math.hypot(q.x - p.x, q.y - p.y)),
+        ),
+    );
+
+const sameSpots = (a: readonly Point[], b: readonly Point[]) =>
+    a.length === b.length &&
+    a.every((p, i) => Math.hypot(p.x - b[i].x, p.y - b[i].y) < CLOSE);
+
+test("change: Spread scatters the box one interval apart, Reshuffle gives a new layout as one undo step, and the placed box reshuffles again", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { grid } = await drawBox(show);
+    const S = grid.pixelsPerStep;
+    const steps = await undoSteps(show);
+    const bar = page.getByTestId("shape-tool-readout");
+    await expect(page.getByTestId("shape-editor-reshuffle")).toHaveCount(0);
+
+    await page.getByTestId("shape-mode-spread").click();
+    await expect(page.getByTestId("shape-mode-spread")).toHaveAttribute(
+        "data-state",
+        "on",
+    );
+    // A spread has no files or ranks: the chip shows its one spacing
+    await expect(bar.getByTestId("shape-editor-size")).toHaveCount(0);
+    await expect(bar.getByTestId("shape-editor-deep")).toHaveCount(0);
+    // Steps as the chip writes them: "2", "1½", "½"
+    const text = await bar.getByTestId("shape-editor-across").innerText();
+    const across =
+        Number(text.replace("½", "") || 0) + (text.includes("½") ? 0.5 : 0);
+    const first = (await shapeOverlay(page))!.spots;
+    expect(first).toHaveLength(ALL.length);
+    expect(Math.abs(closestPair(first) - across * S)).toBeLessThan(CLOSE);
+
+    // Reshuffle in the chip: a new layout, still one interval apart
+    const reshuffle = bar.getByTestId("shape-editor-reshuffle");
+    await expect(reshuffle).toHaveAttribute("data-seed", "1");
+    await reshuffle.click();
+    await expect(reshuffle).toHaveAttribute("data-seed", "2");
+    const second = (await shapeOverlay(page))!.spots;
+    expect(sameSpots(first, second)).toBe(false);
+    expect(Math.abs(closestPair(second) - across * S)).toBeLessThan(CLOSE);
+
+    // One undo step brings the first layout back, redo the second
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(reshuffle).toHaveAttribute("data-seed", "1");
+    expect(sameSpots((await shapeOverlay(page))!.spots, first)).toBe(true);
+    await page.keyboard.press("ControlOrMeta+Shift+z");
+    await expect(reshuffle).toHaveAttribute("data-seed", "2");
+    expect(sameSpots((await shapeOverlay(page))!.spots, second)).toBe(true);
+
+    // Enter places everyone on the spread as one undo step, its seed kept
+    await page.keyboard.press("Enter");
+    await expect(bar).toBeHidden();
+    await expect.poll(() => onSpots(show, second)).toBe(true);
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 1);
+    const recipeParams = async () => {
+        const [recipe] = await show.query<{ params: string }>(
+            "SELECT params FROM timeline_shape_recipes",
+        );
+        return JSON.parse(recipe.params);
+    };
+    expect((await recipeParams()).distribution).toEqual({
+        mode: "spread",
+        seed: 2,
+        generator: 1,
+        count: ALL.length,
+    });
+
+    // Selected again, it reopens in Spread at its seed; the inspector's
+    // Reshuffle saves the next layout as one undo step
+    await page.keyboard.press("Escape");
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await expect(page.getByTestId("shape-mode-spread")).toHaveAttribute(
+        "data-state",
+        "on",
+    );
+    const again = page.getByTestId("shape-section-reshuffle");
+    await expect(again).toHaveAttribute("data-seed", "2");
+    await again.click();
+    await expect
+        .poll(async () => (await recipeParams()).distribution.seed)
+        .toBe(3);
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 2);
+    // The marchers moved to the new layout
+    await expect.poll(() => onSpots(show, second)).toBe(false);
 });
 
 // The pivot on the field (#350): Cmd/Ctrl-drag from the center dot pulls it
@@ -1982,9 +2084,14 @@ test("change: O opens the circle tool; a drag from the center draws it, its hand
                 Math.abs(p.y - (center.y + r)) < CLOSE,
         ),
     ).toBe(true);
-    // Outline is its only mode for now, so no switch shows (and never Files)
+    // Outline and Spread, Outline on (and never Files)
     await expect(page.getByTestId("shape-tool-section")).toBeVisible();
-    await expect(page.getByTestId("shape-mode-switch")).toHaveCount(0);
+    await expect(page.getByTestId("shape-mode-outline")).toHaveAttribute(
+        "data-state",
+        "on",
+    );
+    await expect(page.getByTestId("shape-mode-spread")).toBeVisible();
+    await expect(page.getByTestId("shape-mode-files")).toHaveCount(0);
 
     // One handle, on the rim: dragged out to 12 steps it makes the marchers 9
     // steps apart, the center kept
@@ -2060,7 +2167,8 @@ test("change: the circle comes after Box in the Shapes tab, the ring and the com
     await page.keyboard.press("Escape");
     await expect(ring(page)).toBeHidden();
 
-    // The command bar: Shape › Circle asks its one number and places it
+    // The command bar: Shape › Circle asks how it's filled (Enter keeps
+    // Outline), then its one number, and places it
     await page.keyboard.press("/");
     await page.getByRole("combobox").fill("circle");
     await expect(page.getByRole("option").first()).toHaveText(
@@ -2068,6 +2176,9 @@ test("change: the circle comes after Box in the Shapes tab, the ring and the com
     );
     await page.keyboard.press("Enter");
     await expect(bar(page)).toBeVisible();
+    await expect(question(page)).toHaveText(/^Fill/);
+    await expect(answer(page)).toHaveValue("Outline");
+    await page.keyboard.press("Enter");
     await expect(question(page)).toHaveText(/^Spacing between neighbors/);
     await expect(answer(page)).toHaveValue("2");
     expect((await shapeOverlay(page))!.spots).toHaveLength(ALL.length);

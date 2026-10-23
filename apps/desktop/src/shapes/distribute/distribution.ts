@@ -1,3 +1,5 @@
+import { SPREAD_GENERATOR } from "../geometry/naturalFill";
+
 /**
  * How a closed shape is filled (spec #385): one host-owned object in a recipe's `params`, beside
  * the kind's own numbers (ADR 0006, 2026-10-22 amendment). A closed kind only describes its region
@@ -79,9 +81,22 @@ export interface OutlineDistribution {
     readonly oddGap: OddGap;
 }
 
-/** Even spread (#391) is declared so kinds and the mode switch can name it; it lays out as Files */
+/**
+ * Even spread (#391): a seeded scatter with no visible files, the closest pair one interval
+ * apart. Reshuffle moves to the next seed.
+ */
 export interface SpreadDistribution {
     readonly mode: "spread";
+    /** Which layout: a whole number from 1; the same one gives the same spots */
+    readonly seed: number;
+    /** The algorithm that laid it out (`SPREAD_GENERATOR`); another reads as plain positions */
+    readonly generator: number;
+    /**
+     * The count the seed was laid out for. At another count the spots relax from that layout
+     * rather than reshuffle, so adding or removing a marcher nudges the spread. Absent: the
+     * count it's laid out at.
+     */
+    readonly count?: number;
 }
 
 export type Distribution =
@@ -125,7 +140,7 @@ export function storedDistribution(
             mode,
             oddGap: readOddGap((d as { oddGap?: unknown }).oddGap),
         };
-    if (mode === "spread") return { mode };
+    if (mode === "spread") return readSpread(d);
     if (mode !== "files") return undefined;
     const layout = (d as { layout?: Partial<FilesLayout> }).layout;
     return {
@@ -154,14 +169,63 @@ function readOddGap(v: unknown): OddGap {
     };
 }
 
-/** The distribution a shape switched to `mode` starts with; Files takes `files` across */
+/**
+ * A stored spread, or undefined when this app doesn't have its generator (a newer app's), which
+ * then can't be laid out: see {@link canLayOut}
+ */
+function readSpread(d: object): SpreadDistribution | undefined {
+    const { seed, generator, count } = d as Partial<Record<string, unknown>>;
+    if (generator !== SPREAD_GENERATOR) return undefined;
+    return {
+        mode: "spread",
+        seed: isWhole(seed) && seed >= 1 ? seed : 1,
+        generator,
+        ...(isWhole(count) && count >= 1 && { count }),
+    };
+}
+
+/**
+ * Whether `params` can be laid out again: false for a spread from a generator this app doesn't
+ * have (ADR 0006, 2026-10-22 amendment, point 4), whose recipe shows as plain positions
+ */
+export function canLayOut(params: unknown): boolean {
+    const d = (params as { distribution?: unknown } | null)?.distribution;
+    if (!d || typeof d !== "object") return true;
+    return (
+        (d as { mode?: unknown }).mode !== "spread" ||
+        readSpread(d) !== undefined
+    );
+}
+
+/** A spread of `n` spots at `seed` */
+export const spreadDistribution = (
+    seed: number,
+    n: number,
+): SpreadDistribution => ({
+    mode: "spread",
+    seed,
+    generator: SPREAD_GENERATOR,
+    count: Math.max(1, n),
+});
+
+/** Reshuffle: the next seed, laid out for the `n` spots there are now */
+export const reshuffled = (
+    d: SpreadDistribution,
+    n: number,
+): SpreadDistribution => spreadDistribution(d.seed + 1, n);
+
+/**
+ * The distribution a shape of `n` spots switched to `mode` starts with: Files takes `files`
+ * across, a spread starts at seed 1
+ */
 export function distributionFor(
     mode: DistributionMode,
     files: number,
+    n: number,
 ): Distribution {
     if (mode === "files") return filesDistribution(files);
     if (mode === "outline") return { mode, oddGap: DEFAULT_ODD_GAP };
-    return { mode };
+    return spreadDistribution(1, n);
 }
 
 /**

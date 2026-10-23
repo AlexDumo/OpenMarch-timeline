@@ -57,12 +57,12 @@ export const boxTool: ToolKind<BoxParams> = {
     fromFrame: boxInFrame,
     settle: snapToGrid,
     closed: {
-        // Even spread (#391) joins in its ticket
-        modes: ["files", "outline"],
+        modes: ["files", "outline", "spread"],
         region: boxRegion,
         intervals: (params) => ({ across: params.across, deep: params.deep }),
         distribution: boxDistribution,
-        startMode: (params, _n, mode) => distributionFor(mode, filesOf(params)),
+        startMode: (params, n, mode) =>
+            distributionFor(mode, filesOf(params), n),
         withDistribution(params, n, distribution, env) {
             // How recipes said it before the distributor goes: the distribution says it now
             const {
@@ -72,21 +72,20 @@ export const boxTool: ToolKind<BoxParams> = {
                 ...rest
             } = params;
             const next: BoxParams = { ...rest, distribution };
-            if (distribution.mode === "files")
-                return grownFromPivot(
-                    params,
-                    withFileCount(next, distribution.layout.files),
-                    n,
-                    env,
-                );
-            if (distribution.mode === "outline")
-                return grownFromPivot(
-                    params,
-                    withFileCount(next, outlineFiles(params, n, distribution)),
-                    n,
-                    env,
-                );
-            return next;
+            // A new mode resizes the shape: it grows from the pivot
+            return grownFromPivot(
+                params,
+                distribution.mode === "files"
+                    ? withFileCount(next, distribution.layout.files)
+                    : distribution.mode === "outline"
+                      ? withFileCount(
+                            next,
+                            outlineFiles(params, n, distribution),
+                        )
+                      : next,
+                n,
+                env,
+            );
         },
     },
 };

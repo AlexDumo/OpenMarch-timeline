@@ -522,7 +522,7 @@ export const padTool: ToolKind<PadParams> = {
         },
         distribution: padDistribution,
         intervals: (p) => ({ across: p.gap, deep: p.gap }),
-        startMode: (_p, n, mode) => distributionFor(mode, padFiles(n)),
+        startMode: (_p, n, mode) => distributionFor(mode, padFiles(n), n),
         withDistribution: (p, _n, distribution) => ({ ...p, distribution }),
     },
 };

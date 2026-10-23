@@ -99,9 +99,9 @@ describe("a fake closed kind fills through the distributor", () => {
         ]);
     });
 
-    it("offers its own modes, the box Files and Outline, and open kinds none", () => {
+    it("offers its own modes, the box Files, Outline and Spread, and open kinds none", () => {
         expect(switchModes(padTool)).toEqual(["files", "outline"]);
-        expect(switchModes(boxTool)).toEqual(["files", "outline"]);
+        expect(switchModes(boxTool)).toEqual(["files", "outline", "spread"]);
         expect(switchModes(rowTool)).toEqual([]);
     });
 
@@ -125,9 +125,7 @@ describe("a fake closed kind fills through the distributor", () => {
         expect(withMode(padTool, t.params, 5, "files", env)).toBe(t.params);
         expect(withMode(padTool, t.params, 5, "spread", env)).toBe(t.params);
         const box = drawn(boxTool, 6, { x: 0, y: 0 }, { x: 20, y: 10 });
-        expect(withMode(boxTool, box.params, 6, "spread", env)).toBe(
-            box.params,
-        );
+        expect(withMode(boxTool, box.params, 6, "files", env)).toBe(box.params);
     });
 
     it("reads a typed mode by its name or the start of it", () => {
