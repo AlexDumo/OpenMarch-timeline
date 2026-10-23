@@ -39,8 +39,8 @@ export function ShapeToolSection() {
             {tool ? (
                 <p className="text-sub text-text/80">
                     {tool.params === null
-                        ? "Drag on the field to draw a box."
-                        : "Drag a corner or side to stretch it, the knob to turn it, or inside to move it. Enter places the marchers, Esc cancels."}
+                        ? `Drag on the field to draw a ${tool.kind.shape.label.toLowerCase()}.`
+                        : "Drag a handle to resize it, the knob to turn it, or inside to move it. Enter places the marchers, Esc cancels."}
                 </p>
             ) : (
                 <div className="flex flex-wrap gap-8">

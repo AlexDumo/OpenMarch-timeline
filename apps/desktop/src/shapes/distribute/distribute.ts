@@ -34,7 +34,12 @@ export interface DistributeInput {
 export function distribute(input: DistributeInput): FrameSpot[] {
     if (input.n <= 0) return [];
     const { distribution } = input;
-    // Outline (#390) and Even spread (#391) arrive in their tickets; until then they fill as Files
+    if (distribution.mode === "outline") {
+        // A region with corners (a box) gets its outline in #390; until then it fills as Files
+        if (input.region.corners.length === 0)
+            return roundOutlineSpots(input.n, input.across);
+    }
+    // Even spread arrives in #391; until then it fills as Files
     return filesSpots(
         distribution.mode === "files"
             ? distribution
@@ -112,4 +117,20 @@ function filesSpots(
         }
     }
     return spots;
+}
+
+/**
+ * Outline around a region with no corners (a circle): `n` spots with neighbors `interval` apart
+ * straight across (the chord), so the radius is i / (2 sin(π/n)). The first spot stands
+ * front-center and the rest go round clockwise on the field (toward the audience's left first,
+ * with the front at the bottom). One spot stands on the center.
+ */
+function roundOutlineSpots(n: number, interval: number): FrameSpot[] {
+    if (n === 1) return [{ x: 0, y: 0, row: 0, col: 0 }];
+    const r = interval / (2 * Math.sin(Math.PI / n));
+    return Array.from({ length: n }, (_, k) => {
+        // k/n of the way round from the front, so the first spot is exactly front-center
+        const a = (2 * Math.PI * k) / n;
+        return { x: -r * Math.sin(a), y: r * Math.cos(a), row: 0, col: k };
+    });
 }

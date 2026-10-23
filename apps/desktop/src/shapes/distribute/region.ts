@@ -76,3 +76,22 @@ export function rectRegion(halfWidth: number, halfDepth: number): Region {
         corners: [0, 1, 2, 3],
     };
 }
+
+/** How many points the circle's outline polygon has: smooth enough to draw and to test against */
+const CIRCLE_SIDES = 64;
+
+/** A circle of radius `r` around the center: no corners */
+export function circleRegion(radius: number): Region {
+    const r = Math.abs(radius);
+    return {
+        contains: (p) => Math.hypot(p.x, p.y) <= r + 1e-9,
+        area: Math.PI * r * r,
+        bounds: { left: -r, top: -r, right: r, bottom: r },
+        // From the back, clockwise on the field (toward +x first)
+        outline: Array.from({ length: CIRCLE_SIDES }, (_, i) => {
+            const a = -Math.PI / 2 + (2 * Math.PI * i) / CIRCLE_SIDES;
+            return { x: r * Math.cos(a), y: r * Math.sin(a) };
+        }),
+        corners: [],
+    };
+}
