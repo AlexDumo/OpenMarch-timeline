@@ -12,34 +12,54 @@ import {
     type BoxParams,
 } from "../box/boxGeometry";
 import { boxShape } from "../box/boxShape";
-import type { ToolEnv } from "../tool/toolKind";
+import { boxTool } from "../box/boxTool";
+import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
+import { SHAPE_TOOLS } from "../tool/shapeTools";
 import type { ShapeContext, XY } from "../types";
 import { frameToField } from "../frame/frame";
 
 /**
- * Placed boxes (docs/timeline/research/shapes/07-placed-boxes.md): a box's recipe, read back.
+ * Placed shapes (docs/timeline/research/shapes/07-placed-boxes.md): a shape's recipe, read back.
+ * The box came first, so the names say box; a placed shape of any kind the shape tool draws works
+ * the same way (#397), through its tool kind, which the recipe's kind and version name.
  *
- * A box is shown at the end of the move it was placed in, and at every later moment while each of
- * its members still stands on its spot (the form is held). Its members are exactly the marchers on
- * its spots: one that moves away leaves the box, leaving a hole, and moving every member the same
- * way moves the box. Everything here is pure.
+ * A shape is shown at the end of the move it was placed in, and at every later moment while each
+ * of its members still stands on its spot (the form is held). Its members are exactly the marchers
+ * on its spots: one that moves away leaves the shape, leaving a hole, and moving every member the
+ * same way moves the shape. Everything here is pure.
  */
 
 export type PlacedRecipe = Omit<StoredShapeRecipe, "members"> & {
     readonly members: readonly ShapeRecipeMember[];
 };
 
-/** A box recipe's params as stored: the box, plus how many spots it has (members + holes) */
-export type StoredBoxParams = BoxParams & { readonly spots?: number };
+/** A recipe's params as stored: the shape, plus how many spots it has (members + holes) */
+export type StoredParams<P = unknown> = P & { readonly spots?: number };
 
-export interface PlacedBox {
+/** A box recipe's params as stored */
+export type StoredBoxParams = StoredParams<BoxParams>;
+
+/** A placed shape: its recipe, its tool kind and its params (`P` for a known kind) */
+export interface PlacedBox<P = unknown> {
     readonly recipe: PlacedRecipe;
-    readonly params: BoxParams;
-    /** Spots in the box, holes included */
+    /** The tool kind that draws and edits it */
+    readonly kind: AnyToolKind;
+    readonly params: P;
+    /** Spots in the shape, holes included */
     readonly spots: number;
-    /** The beat the box was placed at: its move's end (0 for homes) */
+    /** The beat the shape was placed at: its move's end (0 for homes) */
     readonly endBeat: number;
 }
+
+/** Whether `placed` is a box, for what only a box has (its file count, Close up, Re-split) */
+export const isPlacedBox = (
+    placed: PlacedBox,
+): placed is PlacedBox<BoxParams> => placed.kind === boxTool;
+
+/** The kinds a recipe can be read back as: every kind the shape tool draws */
+export const PLACED_KINDS: readonly AnyToolKind[] = SHAPE_TOOLS.map(
+    (entry) => entry.kind,
+);
 
 /** How close a marcher must stand to its spot to be on it, in field units */
 const ON_SPOT = 0.01;
@@ -47,42 +67,55 @@ const ON_SPOT = 0.01;
 const same = (a: XY, b: XY) =>
     Math.abs(a.x - b.x) <= ON_SPOT && Math.abs(a.y - b.y) <= ON_SPOT;
 
-/** The box a recipe describes, or null for another kind (or a newer version) */
-function boxOf(
+/**
+ * The shape a recipe describes, or null for a kind (or version) none of `kinds` draws, such as
+ * one from a newer app
+ */
+function placedOf(
     recipe: PlacedRecipe,
-): { params: BoxParams; spots: number } | null {
-    if (recipe.kind !== boxShape.id || recipe.kindVersion !== boxShape.version)
-        return null;
-    const stored = recipe.params as StoredBoxParams | null;
+    kinds: readonly AnyToolKind[],
+): { kind: AnyToolKind; params: unknown; spots: number } | null {
+    const kind = kinds.find(
+        (k) =>
+            k.shape.id === recipe.kind &&
+            k.shape.version === recipe.kindVersion,
+    );
+    if (!kind) return null;
+    const stored = recipe.params as StoredParams<{ center?: XY }> | null;
+    // Every shape's frame has a center, which recipes store (ADR 0006)
     if (!stored || typeof stored !== "object" || !stored.center) return null;
     const { spots, ...params } = stored;
     return {
-        params: params as BoxParams,
+        kind,
+        params,
         spots: Math.max(spots ?? 0, recipe.members.length),
     };
 }
 
 /**
- * The placed boxes to show at `beat`: placed at or before it, with every member on its spot. A
- * marcher is in one box at a time, the latest placed.
+ * The placed shapes to show at `beat`: placed at or before it, with every member on its spot. A
+ * marcher is in one shape at a time, the latest placed.
  *
  * @param endBeatOf the end beat of a move (`null`: homes, beat 0), undefined for a move that's gone
  * @param positionOf where a marcher stands at `beat`
+ * @param kinds the kinds recipes are read back as: every kind the shape tool draws
  */
 export function boxesAt({
     recipes,
     endBeatOf,
     beat,
     positionOf,
+    kinds = PLACED_KINDS,
 }: {
     recipes: readonly PlacedRecipe[];
     endBeatOf: (timelineId: number | null) => number | undefined;
     beat: number;
     positionOf: (marcherId: number) => XY | undefined;
+    kinds?: readonly AnyToolKind[];
 }): PlacedBox[] {
     const candidates: PlacedBox[] = [];
     for (const recipe of recipes) {
-        const box = boxOf(recipe);
+        const box = placedOf(recipe, kinds);
         const endBeat = endBeatOf(recipe.timelineId);
         if (!box || endBeat === undefined || endBeat > beat + 1e-9) continue;
         if (recipe.members.length === 0) continue;
@@ -133,24 +166,22 @@ export function membershipAfter(
     return { type: "leave", left: off.map((m) => m.marcherId) };
 }
 
-/** What a box's recipe saves */
-export interface BoxRecipe {
-    readonly params: StoredBoxParams;
+/** What a shape's recipe saves */
+export interface BoxRecipe<P = unknown> {
+    readonly params: StoredParams<P>;
     readonly spots: number;
     readonly members: readonly ShapeRecipeMember[];
 }
 
-/** `box` moved by `delta`, members and all */
+/** `box` moved by `delta`, members and all: its frame's center moves, through its kind */
 export function movedBox(box: PlacedBox, delta: XY): BoxRecipe {
+    const frame = box.kind.frameOf(box.params, box.spots);
+    const moved = box.kind.withFrame(box.params, box.spots, {
+        ...frame,
+        center: { x: frame.center.x + delta.x, y: frame.center.y + delta.y },
+    }) as object;
     return {
-        params: {
-            ...box.params,
-            center: {
-                x: box.params.center.x + delta.x,
-                y: box.params.center.y + delta.y,
-            },
-            spots: box.spots,
-        },
+        params: { ...moved, spots: box.spots },
         spots: box.spots,
         members: box.recipe.members.map((m) => ({
             ...m,
@@ -167,8 +198,7 @@ export function withoutMembers(
 ): PlacedRecipe {
     const gone = new Set(left);
     const spots =
-        (recipe.params as StoredBoxParams | null)?.spots ??
-        recipe.members.length;
+        (recipe.params as StoredParams | null)?.spots ?? recipe.members.length;
     return {
         ...recipe,
         params: { ...(recipe.params as object), spots },
@@ -181,7 +211,7 @@ function placeOn(
     params: BoxParams,
     marchers: readonly AssignMarcher[],
     ctx: ShapeContext,
-): BoxRecipe {
+): BoxRecipe<BoxParams> {
     const n = marchers.length;
     const slots = boxShape.generate(params, n, ctx);
     const assignment = assignSlots({
@@ -217,7 +247,7 @@ export function closeUp(
     spots: number,
     marchers: readonly AssignMarcher[],
     ctx: ShapeContext,
-): BoxRecipe {
+): BoxRecipe<BoxParams> {
     // In the box's own axes, however it's turned: the front rank is local +y
     const frame = boxFrame(params, spots);
     const ranks = ranksOf(params, marchers.length);
@@ -241,7 +271,7 @@ export function resplit(
     marchers: readonly AssignMarcher[],
     env: ToolEnv,
     ctx: ShapeContext,
-): BoxRecipe {
+): BoxRecipe<BoxParams> {
     // Drawn again in the box's own axes, then turned and flipped back as it was
     const frame = boxFrame(params, spots);
     const flat = drawBox(

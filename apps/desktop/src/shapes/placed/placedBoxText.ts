@@ -2,11 +2,10 @@ import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { onField, shortBy } from "../box/boxGeometry";
 import { formatSteps } from "../editor/format";
 import type { PlacedBox } from "./placedBox";
 
-/** "Page 3" for the page a box was placed at the end of, when that is before `beat` */
+/** "Page 3" for the page a shape was placed at the end of, when that is before `beat` */
 export function useDrawnOnPage(box: PlacedBox | null): string | null {
     const beat = useTimelineSelectionStore(displayedBeat);
     const pages = useTimelineSelectionStore((s) => s.pageBoxes);
@@ -16,20 +15,42 @@ export function useDrawnOnPage(box: PlacedBox | null): string | null {
 }
 
 /**
- * The numbers of a placed box: "5 × 4 · 2 steps · 1 short · 1 empty", across × deep (short: spots
- * the back rank never had; empty: holes members left)
+ * A placed shape's numbers, from those its kind declares, as the floating editor shows them
+ * (across is side to side however it's turned): its counts ("5 × 4"), its intervals ("2", or
+ * "2 × 1½" when they differ; null for a kind without), its notes ("1 short") and how many of its
+ * spots are holes members left
+ */
+export function placedNumbers(box: PlacedBox, stepPx: number) {
+    const { kind, params, spots } = box;
+    const counts = kind.params
+        .filter((p) => p.unit === "count")
+        .map((p) => p.display(params, spots, stepPx));
+    const intervals = kind.params
+        .filter((p) => p.interval && p.value)
+        .map((p) => formatSteps(p.value!(params, spots, stepPx)));
+    return {
+        counts: counts.length > 0 ? counts.join(" · ") : null,
+        intervals:
+            intervals.length === 0
+                ? null
+                : intervals.every((i) => i === intervals[0])
+                  ? intervals[0]!
+                  : intervals.join(" × "),
+        notes: kind.params.flatMap((p) => p.note?.(params, spots) ?? []),
+        empty: spots - box.recipe.members.length,
+    };
+}
+
+/**
+ * The numbers of a placed shape: "5 × 4 · 2 steps · 1 short · 1 empty" for a box, across × deep
+ * (short: spots the back rank never had; empty: holes members left), "2 steps" for a circle
  */
 export function placedBoxSummary(box: PlacedBox, stepPx: number): string {
-    // As the field shows it, like the floating editor: across is side to side
-    const field = onField(box.params, box.spots);
-    const across = formatSteps(field.acrossSpacing / stepPx);
-    const deep = formatSteps(field.deepSpacing / stepPx);
-    const empty = box.spots - box.recipe.members.length;
-    const short = shortBy(box.params, box.spots);
+    const { counts, intervals, notes, empty } = placedNumbers(box, stepPx);
     return [
-        `${field.across} × ${field.deep}`,
-        `${across === deep ? across : `${across} × ${deep}`} steps`,
-        ...(short > 0 ? [`${short} short`] : []),
+        ...(counts ? [counts] : []),
+        ...(intervals ? [`${intervals} steps`] : []),
+        ...notes,
         ...(empty > 0 ? [`${empty} empty`] : []),
     ].join(" · ");
 }

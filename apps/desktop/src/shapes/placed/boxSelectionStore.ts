@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import type { BoxParams } from "../box/boxGeometry";
 import type { PlacedBox } from "./placedBox";
 
 /**
@@ -23,8 +22,8 @@ export const setInsideBox = (inside: number | null): void =>
  * release; null otherwise. The field draws it live.
  */
 export const usePlacedBoxPreviewStore = create<{
-    readonly params: BoxParams | null;
+    readonly params: unknown;
 }>(() => ({ params: null }));
 
-export const previewPlacedBox = (params: BoxParams | null): void =>
+export const previewPlacedBox = (params: unknown): void =>
     usePlacedBoxPreviewStore.setState({ params });

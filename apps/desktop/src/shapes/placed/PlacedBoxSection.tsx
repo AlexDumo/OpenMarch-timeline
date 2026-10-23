@@ -9,18 +9,18 @@ import {
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { currentShapeField } from "../field/shapeFieldContext";
+import { toolEnvFor } from "../tool/toolEnv";
 import { useBoxSelectionStore } from "./boxSelectionStore";
 import { placedBoxSummary, useDrawnOnPage } from "./placedBoxText";
 import { placedBoxesAt, usePlacedBoxStore } from "./placedBoxStore";
 import { selectOnField } from "./boxSelection";
-import { stepPlacedBoxFiles } from "./PlacedBoxKeys";
-import { onField } from "../box/boxGeometry";
+import { stepPlacedBoxFiles, steppedParam } from "./PlacedBoxKeys";
 import { setInsideBox } from "./boxSelectionStore";
 
 /**
- * The inspector's view of placed boxes (07-placed-boxes.md): the selected box's numbers with one
- * fewer or more across, or
- * **Select box** when some of a box's marchers are selected but not all of it.
+ * The inspector's view of placed shapes (07-placed-boxes.md): the selected shape's numbers, with
+ * − and + for the number its kind steps (a box: one fewer or more across), or **Select box**
+ * (**Select circle**…) when some of a shape's marchers are selected but not all of it.
  */
 export function PlacedBoxSection() {
     const box = useBoxSelectionStore((s) => s.selected);
@@ -35,8 +35,10 @@ export function PlacedBoxSection() {
     if (!field) return null;
 
     if (box) {
-        // Across as the field shows it, like the floating editor
-        const files = onField(box.params, box.spots).across;
+        const stepper = steppedParam(box.kind)?.stepper;
+        const env = toolEnvFor(field, { shift: false, alt: false });
+        const can = (by: -1 | 1) =>
+            stepper?.by(box.params, box.spots, by, env) != null;
         const button = getButtonClassName({
             variant: "secondary",
             size: "compact",
@@ -46,33 +48,37 @@ export function PlacedBoxSection() {
                 className="flex w-full items-center gap-8"
                 data-testid="placed-box-summary"
             >
-                <button
-                    type="button"
-                    aria-label="One fewer across"
-                    title="One fewer across"
-                    className={button}
-                    disabled={files <= 1}
-                    onClick={() => stepPlacedBoxFiles(-1, queryClient)}
-                >
-                    <MinusIcon size={14} />
-                </button>
+                {stepper && (
+                    <button
+                        type="button"
+                        aria-label={stepper.less}
+                        title={stepper.less}
+                        className={button}
+                        disabled={!can(-1)}
+                        onClick={() => stepPlacedBoxFiles(-1, queryClient)}
+                    >
+                        <MinusIcon size={14} />
+                    </button>
+                )}
                 <p className="text-sub text-text/80">
-                    Box ·{" "}
+                    {box.kind.shape.label} ·{" "}
                     {placedBoxSummary(box, field.fieldProperties.pixelsPerStep)}
                     {drawnOn && (
                         <span className="text-text/50"> · from {drawnOn}</span>
                     )}
                 </p>
-                <button
-                    type="button"
-                    aria-label="One more across"
-                    title="One more across"
-                    className={button}
-                    disabled={files >= box.spots}
-                    onClick={() => stepPlacedBoxFiles(1, queryClient)}
-                >
-                    <PlusIcon size={14} />
-                </button>
+                {stepper && (
+                    <button
+                        type="button"
+                        aria-label={stepper.more}
+                        title={stepper.more}
+                        className={button}
+                        disabled={!can(1)}
+                        onClick={() => stepPlacedBoxFiles(1, queryClient)}
+                    >
+                        <PlusIcon size={14} />
+                    </button>
+                )}
             </div>
         );
     }
@@ -96,7 +102,7 @@ export function PlacedBoxSection() {
             data-testid="placed-box-select"
         >
             <BoundingBoxIcon size={16} weight="bold" />
-            Select box
+            Select {partOf.kind.shape.label.toLowerCase()}
         </button>
     );
 }
