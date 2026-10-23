@@ -923,7 +923,7 @@ test("change: a placed box comes back turned and flipped when selected again", a
 
 // How a shape is filled (#386, spec #385): the host's distributor lays the
 // box out in Files, Short back, as it always was, and the recipe keeps the
-// distribution. The inspector's mode switch shows Files on (Spread is #391).
+// distribution. The inspector's mode switch offers Files, Outline and Spread.
 
 test("change: a placed box keeps its distribution, Files with the short rank at the back, and the mode switch shows Files", async ({
     show,
@@ -935,6 +935,7 @@ test("change: a placed box keeps its distribution, Files with the short rank at 
         "data-state",
         "on",
     );
+    await expect(page.getByTestId("shape-mode-outline")).toBeVisible();
     const spots = (await shapeOverlay(page))!.spots;
 
     await page.keyboard.press("Enter");
@@ -959,8 +960,7 @@ test("change: a placed box keeps its distribution, Files with the short rank at 
     });
     expect(stored).not.toHaveProperty("pattern");
 
-    // Selected again, the placed box is read back from its recipe, still in
-    // Files
+    // Selected again, the placed box is read back from its recipe, in Files
     await page.keyboard.press("Escape");
     const t1 = await marcherScreen(page, 1);
     await page.mouse.click(t1.x, t1.y);
@@ -971,6 +971,149 @@ test("change: a placed box keeps its distribution, Files with the short rank at 
         "data-state",
         "on",
     );
+});
+
+// Outline (#390): spots round the edge at the interval with one on every
+// corner, in the space the box took up. An odd count takes one spot out of a
+// side: by default the back spreads evenly; "Leaves a gap" shows the gap as a
+// dashed ring, and a click on another spot between corners moves it there.
+
+/**
+ * Opens the box tool on T1–T7 (an odd count), draws a box, switches it to
+ * Outline and picks "Leaves a gap". Checks its corners and that the gap starts
+ * on the back, near its middle; returns the open outline, its edges and the
+ * undo steps before.
+ */
+async function outlineOnSeven(show: Show) {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await selectAll(page);
+    await clickMarcher(page, "T8", { add: true });
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL.slice(0, 7));
+    await page.keyboard.press("b");
+    await drag(
+        page,
+        await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+        await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
+    );
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    const steps = await undoSteps(show);
+    await page.getByTestId("shape-mode-outline").click();
+    // The short side spreads evenly by default, with no gap to show; "Leaves
+    // a gap" shows the gap
+    await expect(page.getByTestId("outline-gap-spread")).toHaveAttribute(
+        "data-state",
+        "on",
+    );
+    expect((await shapeOverlay(page))!.gaps).toEqual([]);
+    await page.getByTestId("outline-gap-gap").click();
+    await expect
+        .poll(async () => (await shapeOverlay(page))?.gaps.length)
+        .toBe(1);
+
+    const open = (await shapeOverlay(page))!;
+    expect(open.spots).toHaveLength(7);
+    const xs = open.outline!.map((p) => p.x);
+    const ys = open.outline!.map((p) => p.y);
+    const [left, right] = [Math.min(...xs), Math.max(...xs)];
+    const [back, front] = [Math.min(...ys), Math.max(...ys)];
+    const isCorner = (p: Point) =>
+        (Math.abs(p.x - left) < CLOSE || Math.abs(p.x - right) < CLOSE) &&
+        (Math.abs(p.y - back) < CLOSE || Math.abs(p.y - front) < CLOSE);
+    // Every corner has a marcher; the gap is on the back, near its middle
+    for (const x of [left, right])
+        for (const y of [back, front])
+            expect(
+                open.spots.some((s) => Math.hypot(s.x - x, s.y - y) < CLOSE),
+            ).toBe(true);
+    const [gap] = open.gaps;
+    expect(gap!.y).toBeCloseTo(back, 3);
+    const across = Math.min(
+        ...open.spots
+            .filter((s) => Math.abs(s.y - front) < CLOSE)
+            .map((s, _, row) =>
+                Math.min(
+                    ...row
+                        .filter((o) => o !== s)
+                        .map((o) => Math.abs(o.x - s.x)),
+                ),
+            ),
+    );
+    expect(Math.abs(gap!.x - (left + right) / 2)).toBeLessThanOrEqual(
+        across / 2 + CLOSE,
+    );
+    await expect(page.getByTestId("outline-gap-back")).toHaveAttribute(
+        "data-state",
+        "on",
+    );
+    return { open, gap: gap!, back, isCorner, steps };
+}
+
+test("change: Outline on 7 spreads the back by default, leaves its middle out on request, a click on a spot between corners moves the gap, and the placed box keeps it", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { open, gap, back, isCorner, steps } = await outlineOnSeven(show);
+
+    // A click on a spot between corners off the back moves the gap there
+    const target = open.spots.find(
+        (s) => !isCorner(s) && Math.abs(s.y - back) > CLOSE,
+    )!;
+    const at = await toScreen(page, target);
+    await page.mouse.click(at.x, at.y);
+    await expect
+        .poll(async () => {
+            const moved = (await shapeOverlay(page))!.gaps[0];
+            return moved && Math.hypot(moved.x - target.x, moved.y - target.y);
+        })
+        .toBeLessThan(CLOSE);
+    const moved = (await shapeOverlay(page))!;
+    expect(moved.spots).toHaveLength(7);
+    expect(
+        moved.spots.some(
+            (s) => Math.hypot(s.x - target.x, s.y - target.y) < CLOSE,
+        ),
+    ).toBe(false);
+    // The old gap has a marcher again
+    expect(
+        moved.spots.some((s) => Math.hypot(s.x - gap!.x, s.y - gap!.y) < CLOSE),
+    ).toBe(true);
+
+    // "Spreads evenly" spreads that side and leaves no gap to show
+    await page.getByTestId("outline-gap-spread").click();
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.gaps.length)
+        .toBe(0);
+    expect((await shapeOverlay(page))!.spots).toHaveLength(7);
+    // Undo brings the gap back
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.gaps.length)
+        .toBe(1);
+
+    // Placed, the recipe keeps the gap, and everyone stands on a spot
+    const spots = (await shapeOverlay(page))!.spots;
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(() => undoSteps(show)).toBe(steps + 1);
+    await waitForIdle(page);
+    const [recipe] = await show.query<{ params: string }>(
+        "SELECT params FROM timeline_shape_recipes",
+    );
+    const stored = JSON.parse(recipe.params);
+    expect(stored.distribution.mode).toBe("outline");
+    expect(stored.distribution.oddGap.style).toBe("gap");
+    expect(stored.distribution.oddGap.side).not.toBe("back");
+    const placed = (await savedPositions(show, 0)).filter((p) => p.id !== 8);
+    expect(
+        placed.every((p) =>
+            spots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < CLOSE),
+        ),
+    ).toBe(true);
 });
 
 // Even spread (#391, spec #385): a scatter with no visible files, the closest
@@ -1178,9 +1321,13 @@ test("change: / opens the command bar, and Shape › Box asks each number with a
     await expect(page.getByRole("option").first()).toHaveText(/^Shape › Box/);
     await page.keyboard.press("Enter");
 
-    // Docked, not the centered palette, and the box is already on the field
+    // Docked, not the centered palette, and the box is already on the field.
+    // How it's filled comes first (#390): Enter keeps Files
     await expect(bar(page)).toBeVisible();
     await expect(page.getByRole("listbox")).toBeHidden();
+    await expect(question(page)).toHaveText(/^Fill/);
+    await expect(answer(page)).toHaveValue("Files");
+    await page.keyboard.press("Enter");
     await expect(question(page)).toHaveText(/^Size/);
     const size = await answer(page).inputValue();
     expect(size).toMatch(/^\d+ × \d+$/);
@@ -1982,7 +2129,10 @@ test("change: O opens the circle tool; a drag from the center draws it, its hand
     }>("SELECT kind, kind_version, params FROM timeline_shape_recipes");
     expect([recipe.kind, recipe.kind_version]).toEqual(["circle", 2]);
     const stored = JSON.parse(recipe.params);
-    expect(stored.distribution).toEqual({ mode: "outline" });
+    expect(stored.distribution).toEqual({
+        mode: "outline",
+        oddGap: { side: "back", at: null, style: "spread" },
+    });
     expect(stored.interval).toBeCloseTo(9 * S);
 });
 
@@ -2026,7 +2176,8 @@ test("change: the circle comes after Box in the Shapes tab, the ring and the com
     await page.keyboard.press("Escape");
     await expect(ring(page)).toBeHidden();
 
-    // The command bar: Shape › Circle asks its one number and places it
+    // The command bar: Shape › Circle asks how it's filled (Enter keeps
+    // Outline), then its one number, and places it
     await page.keyboard.press("/");
     await page.getByRole("combobox").fill("circle");
     await expect(page.getByRole("option").first()).toHaveText(
@@ -2034,6 +2185,9 @@ test("change: the circle comes after Box in the Shapes tab, the ring and the com
     );
     await page.keyboard.press("Enter");
     await expect(bar(page)).toBeVisible();
+    await expect(question(page)).toHaveText(/^Fill/);
+    await expect(answer(page)).toHaveValue("Outline");
+    await page.keyboard.press("Enter");
     await expect(question(page)).toHaveText(/^Spacing between neighbors/);
     await expect(answer(page)).toHaveValue("2");
     expect((await shapeOverlay(page))!.spots).toHaveLength(ALL.length);

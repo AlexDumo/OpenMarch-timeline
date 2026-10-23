@@ -54,12 +54,38 @@ export interface FilesDistribution {
     readonly stagger: Fraction;
 }
 
+/** A side of a shape with corners, in its own frame: the back is away from the audience */
+export type GapSide = "back" | "front" | "left" | "right";
+
+export const GAP_SIDES: readonly GapSide[] = ["back", "front", "left", "right"];
+
 /**
- * Outline (#390) is declared so kinds and the mode switch can name it; its ticket adds its
- * settings
+ * Where an odd-count outline leaves its one spot out (#390): a spot between the corners of
+ * `side`, `at` intervals from its start (left to right on the back and front, front to back on
+ * the left and right), or the middle when null. With `style` "spread" that side's spots spread
+ * evenly between its corners instead of leaving a gap.
  */
+export interface OddGap {
+    readonly side: GapSide;
+    readonly at: number | null;
+    readonly style: "gap" | "spread";
+}
+
+/**
+ * The back, spread evenly: leaving a gap is the rare case (owner, lab feedback on box-outline,
+ * 2026-10-23)
+ */
+export const DEFAULT_ODD_GAP: OddGap = {
+    side: "back",
+    at: null,
+    style: "spread",
+};
+
+/** Spots around the edge at the interval, one on every corner */
 export interface OutlineDistribution {
     readonly mode: "outline";
+    /** Which spot an odd count leaves out; an even count leaves none */
+    readonly oddGap: OddGap;
 }
 
 /**
@@ -116,7 +142,11 @@ export function storedDistribution(
     const d = (params as { distribution?: unknown } | null)?.distribution;
     if (!d || typeof d !== "object") return undefined;
     const mode = (d as { mode?: unknown }).mode;
-    if (mode === "outline") return { mode };
+    if (mode === "outline")
+        return {
+            mode,
+            oddGap: readOddGap((d as { oddGap?: unknown }).oddGap),
+        };
     if (mode === "spread") return readSpread(d);
     if (mode !== "files") return undefined;
     const layout = (d as { layout?: Partial<FilesLayout> }).layout;
@@ -131,6 +161,18 @@ export function storedDistribution(
             byFile: layout?.byFile === true,
         },
         stagger: readFraction((d as { stagger?: unknown }).stagger),
+    };
+}
+
+/** An outline's gap as stored, each part that isn't one read as the default's */
+function readOddGap(v: unknown): OddGap {
+    const g = (v ?? {}) as Partial<Record<keyof OddGap, unknown>>;
+    return {
+        side: GAP_SIDES.includes(g.side as GapSide)
+            ? (g.side as GapSide)
+            : DEFAULT_ODD_GAP.side,
+        at: isWhole(g.at) && g.at >= 1 ? g.at : null,
+        style: g.style === "gap" ? "gap" : DEFAULT_ODD_GAP.style,
     };
 }
 
@@ -189,8 +231,8 @@ export function distributionFor(
     n: number,
 ): Distribution {
     if (mode === "files") return filesDistribution(files);
-    if (mode === "spread") return spreadDistribution(1, n);
-    return { mode };
+    if (mode === "outline") return { mode, oddGap: DEFAULT_ODD_GAP };
+    return spreadDistribution(1, n);
 }
 
 /**

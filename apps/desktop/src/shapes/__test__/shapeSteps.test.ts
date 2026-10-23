@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
 import { filesOf, ranksOf, type BoxParams } from "../box/boxGeometry";
-import { shapeSteps, startingParams } from "../command/shapeSteps";
+import { fillAhead, shapeSteps, startingParams } from "../command/shapeSteps";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { XY } from "../types";
 import {
@@ -158,6 +158,12 @@ describe("the mode step (#386)", () => {
         const { params, steps } = shapeSteps(padTool, base, N, env, ["spread"]);
         expect(params).toBe(base);
         expect(steps[0]!.invalid).toBe(true);
+    });
+
+    it("is left as it is by a one-liner that starts with a number, and set by one that names a mode", () => {
+        expect(fillAhead(boxTool, ["4x2", "3"])).toEqual(["", "4x2", "3"]);
+        expect(fillAhead(boxTool, ["out", "4x2"])).toEqual(["out", "4x2"]);
+        expect(fillAhead(rowTool, ["3"])).toEqual(["3"]);
     });
 
     it("is hidden for a kind with one mode and for open kinds", () => {

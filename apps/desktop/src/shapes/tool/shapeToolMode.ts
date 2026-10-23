@@ -3,6 +3,7 @@ import type { FieldMode, FieldPointer } from "@/field/editor/fieldEditor";
 import type { ShapeField } from "../field/shapeField";
 import type { XY } from "../types";
 import { shapeOutline } from "../frame/gestures";
+import { outlineGapAt } from "../distribute/outlineGap";
 import {
     drillNumbers,
     frameDrawing,
@@ -88,6 +89,7 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
     const targets = drawing ? [] : targetsOf(tool, ctx);
     const names = drillNumbers(field);
     const env = toolEnvFor(field, { shift: false, alt: false });
+    const gap = drawing ? null : outlineGapAt(tool.kind, tool.params, n);
     const g =
         tool.gesture &&
         tool.gesture.type !== "draw" &&
@@ -100,6 +102,7 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
         spots,
         walks: targets.map((t) => ({ from: t.from, to: t.to })),
         rings,
+        gaps: gap ? [gap] : [],
         labels:
             n <= SPOT_LABEL_LIMIT
                 ? targets.map((t) => ({

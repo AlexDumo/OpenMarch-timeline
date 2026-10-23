@@ -269,12 +269,16 @@ describe("the circle and the host", () => {
         expect(circleTool.closed!.modes).toEqual(["outline", "spread"]);
         expect(switchModes(circleTool)).toEqual(["outline", "spread"]);
         const p = circle(20);
-        expect(distributionOf(circleTool, p, 6)).toEqual({ mode: "outline" });
+        expect(distributionOf(circleTool, p, 6)).toEqual({
+            mode: "outline",
+            oddGap: { side: "back", at: null, style: "spread" },
+        });
         expect(withMode(circleTool, p, 6, "files", env)).toBe(p);
         // A recipe that says Files (from another kind, or a broken file) still reads as Outline
         const files = { ...p, distribution: filesDistribution(3) };
         expect(distributionOf(circleTool, files, 6)).toEqual({
             mode: "outline",
+            oddGap: { side: "back", at: null, style: "spread" },
         });
         expect(spotsOf(files, 6)).toEqual(spotsOf(p, 6));
     });
@@ -308,7 +312,10 @@ describe("the circle and the host", () => {
         expect(placement.recipe.kind).toBe("circle");
         expect(placement.recipe.kindVersion).toBe(2);
         const stored = JSON.parse(JSON.stringify(placement.recipe.params));
-        expect(stored.distribution).toEqual({ mode: "outline" });
+        expect(stored.distribution).toEqual({
+            mode: "outline",
+            oddGap: { side: "back", at: null, style: "spread" },
+        });
         expect(spotsOf(stored, 6)).toEqual(
             slotsOf(t, ctx).map((s) => ({
                 x: s.x,

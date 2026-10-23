@@ -219,6 +219,11 @@ export type FieldModeDrawing = {
      */
     rings?: readonly FieldPoint[];
     /**
+     * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
+     * (#390), which a click on another spot between corners moves
+     */
+    gaps?: readonly FieldPoint[];
+    /**
      * The shape's look at this stage (docs/timeline/research/shapes/08-shape-system-ux.md,
      * "Marcher styling"): while it's drawn, a dashed outline and solid spots; once open, a solid
      * outline with a faint fill. Dashed rings when absent.

@@ -108,7 +108,10 @@ describe("a placed circle", () => {
         expect(placed.params).toEqual(
             JSON.parse(JSON.stringify(t.params)) as CircleParams,
         );
-        expect(placed.params.distribution).toEqual({ mode: "outline" });
+        expect(placed.params.distribution).toEqual({
+            mode: "outline",
+            oddGap: { side: "back", at: null, style: "spread" },
+        });
         expect(placedBoxSummary(placed, STEP)).toBe("2 steps");
     });
 

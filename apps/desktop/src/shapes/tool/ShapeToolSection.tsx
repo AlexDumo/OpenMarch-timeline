@@ -9,6 +9,7 @@ import { usePlacedEditTarget, useToolEditTarget } from "../editor/editTargets";
 import { currentShapeField } from "../field/shapeFieldContext";
 import { SaveShapeButton } from "../library/SaveShapeButton";
 import { ModeSwitch } from "../editor/ModeSwitch";
+import { OutlineGap } from "../editor/OutlineGap";
 import { ReshuffleButton } from "../editor/ReshuffleButton";
 import { toolEnvFor } from "./toolEnv";
 
@@ -61,6 +62,7 @@ export function ShapeToolSection() {
                 </div>
             )}
             {target && <ModeSwitch target={target} envFor={inspectorEnv} />}
+            {target && <OutlineGap target={target} envFor={inspectorEnv} />}
             {target && (
                 <ReshuffleButton
                     target={target}
