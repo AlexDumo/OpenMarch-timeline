@@ -1009,7 +1009,8 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     await expect(bar.getByTestId("shape-editor-deep")).toHaveCount(0);
     // Steps as the chip writes them: "2", "1½", "½"
     const text = await bar.getByTestId("shape-editor-across").innerText();
-    const across = Number(text.replace("½", "") || 0) + (text.includes("½") ? 0.5 : 0);
+    const across =
+        Number(text.replace("½", "") || 0) + (text.includes("½") ? 0.5 : 0);
     const first = (await shapeOverlay(page))!.spots;
     expect(first).toHaveLength(ALL.length);
     expect(Math.abs(closestPair(first) - across * S)).toBeLessThan(CLOSE);

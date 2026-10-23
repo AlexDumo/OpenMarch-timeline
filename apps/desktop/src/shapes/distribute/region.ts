@@ -125,12 +125,15 @@ export function polygonRegion(
     const contains = (p: XY) => {
         // Even-odd crossings of a ray toward +x
         let inside = false;
-        for (const [a, b] of edges)
+        for (const [a, b] of edges) {
+            const aAbove = a.y > p.y;
+            const bAbove = b.y > p.y;
             if (
-                a.y > p.y !== b.y > p.y &&
+                aAbove !== bAbove &&
                 p.x < a.x + ((p.y - a.y) * (b.x - a.x)) / (b.y - a.y)
             )
                 inside = !inside;
+        }
         return inside;
     };
     const toEdge = (p: XY) => {
