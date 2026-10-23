@@ -176,6 +176,47 @@ describe("picking a layout", () => {
 });
 
 describe("keeping the layout", () => {
+    it("stores a layout given at a width it can't make the count with as its nearest version", () => {
+        // A saved Stagger applied at the drawn file count (#393): 6 across can't make 23
+        const t = drawn(23, { x: 0, y: 0 }, { x: 80, y: 80 });
+        const p = boxTool.closed!.withDistribution(
+            t.params as BoxParams,
+            23,
+            {
+                mode: "files",
+                layout: { family: "stagger", files: 6, byFile: false },
+                stagger: [0, 1],
+            },
+            env,
+        );
+        expect(boxDistribution(p)).toMatchObject({
+            layout: { family: "stagger", files: 5, byFile: false },
+        });
+        expect(p.files).toBe(5);
+        expect(rankCounts(boxTool.shape.generate(p, 23, ctx))).toEqual([
+            5, 4, 5, 4, 5,
+        ]);
+    });
+
+    it("keeps a layout whose family can't make the count as asked, Short back standing in", () => {
+        const t = drawn(23, { x: 0, y: 0 }, { x: 80, y: 80 });
+        const p = boxTool.closed!.withDistribution(
+            t.params as BoxParams,
+            23,
+            {
+                mode: "files",
+                layout: { family: "full", files: 6, byFile: false },
+                stagger: [0, 1],
+            },
+            env,
+        );
+        expect(boxDistribution(p)).toMatchObject({
+            layout: { family: "full", files: 6 },
+        });
+        expect(boxTool.shape.generate(p, 23, ctx)).toHaveLength(23);
+        expect(sizeOf(p, 23).note).toBe("Full needs 1 more or 2 fewer");
+    });
+
     it("steps the size between versions of the chosen layout", () => {
         // 24 as Full 6 × 4
         let t = drawn(24, { x: 0, y: 0 }, { x: 100, y: 60 });

@@ -18,6 +18,23 @@ import {
 } from "../tool/toolMachine";
 import { useShapeToolStore } from "../tool/shapeToolStore";
 import { shapeSteps, startingParams } from "./shapeSteps";
+import { useLastLayoutStore } from "../tool/lastLayout";
+
+/** A layout typed in the bar becomes the one a new box starts in, as picking one does (#387) */
+function rememberLayout(
+    kind: AnyToolKind,
+    base: unknown,
+    n: number,
+    env: ToolEnv,
+    answers: readonly string[],
+) {
+    const { params, steps } = shapeSteps(kind, base, n, env, answers);
+    const at = steps.findIndex((s) => s.param.key === "layout");
+    if (at < 0 || steps[at]!.invalid || !answers[at]?.trim()) return;
+    const d = kind.closed?.distribution(params, n);
+    if (d?.mode === "files")
+        useLastLayoutStore.getState().remember(d.layout.family);
+}
 
 /**
  * What the command starts from: the open shape (switched to `kind` keeping its frame if it's
@@ -109,6 +126,7 @@ export function beginShapeCommand(
         finish(answers) {
             unsubscribe();
             run.preview(answers);
+            rememberLayout(kind, base, start.spots, env, answers);
             void place();
         },
         cancel() {

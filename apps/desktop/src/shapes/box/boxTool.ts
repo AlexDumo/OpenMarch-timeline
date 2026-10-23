@@ -1,7 +1,7 @@
 import { resizeCursor } from "../frame/frame";
 import type { ToolKind } from "../tool/toolKind";
 import { distributionFor } from "../distribute/distribution";
-import { layoutCatalogue } from "../distribute/layouts";
+import { layoutCatalogue, resolveLayout } from "../distribute/layouts";
 import { BOX_PARAMS } from "./boxParams";
 import { boxRegion, boxShape } from "./boxShape";
 import {
@@ -78,15 +78,25 @@ export const boxTool: ToolKind<BoxParams> = {
                 shortRankAt: _shortRankAt,
                 ...rest
             } = params;
-            const next: BoxParams = { ...rest, distribution };
-            return distribution.mode === "files"
-                ? grownFromPivot(
-                      params,
-                      withFileCount(next, distribution.layout.files),
-                      n,
-                      env,
-                  )
-                : next;
+            if (distribution.mode !== "files") return { ...rest, distribution };
+            // A layout at a width it can't make the count with (a saved shape's family at the
+            // drawn file count) is stored as its nearest version; one whose family can't make
+            // the count at all is kept as asked, Short back standing in (#387)
+            const resolved = resolveLayout(distribution.layout, n);
+            const layout =
+                resolved.fellBack === null
+                    ? resolved.layout
+                    : distribution.layout;
+            const next: BoxParams = {
+                ...rest,
+                distribution: { ...distribution, layout },
+            };
+            return grownFromPivot(
+                params,
+                withFileCount(next, layout.files),
+                n,
+                env,
+            );
         },
     },
 };

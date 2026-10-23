@@ -158,21 +158,32 @@ export function versionOf(
 }
 
 /**
- * Which spots the lines make, at one interval both ways, in half intervals: two layouts that make
- * the same key are the same shape
+ * The spots the lines make, one interval apart both ways, in half intervals from the block's
+ * middle: x side to side, y back (−) to front. For thumbnails, and to tell shapes apart.
  */
-export function shapeKey(lines: readonly number[], byFile: boolean): string {
+export function versionDots(
+    lines: readonly number[],
+    byFile: boolean,
+): { x: number; y: number }[] {
     const width = Math.max(...lines);
     const R = lines.length;
-    const spots: string[] = [];
+    const dots: { x: number; y: number }[] = [];
     lines.forEach((m, i) => {
         for (let j = 0; j < m; j++) {
             const u = 2 * j + width - m - (width - 1);
             const v = 2 * i - (R - 1);
-            spots.push(byFile ? `${v},${u}` : `${u},${v}`);
+            dots.push(byFile ? { x: v, y: u } : { x: u, y: v });
         }
     });
-    return spots.sort().join(" ");
+    return dots;
+}
+
+/** Two layouts that make the same key are the same shape */
+export function shapeKey(lines: readonly number[], byFile: boolean): string {
+    return versionDots(lines, byFile)
+        .map((d) => `${d.x},${d.y}`)
+        .sort()
+        .join(" ");
 }
 
 /** Within 3:1 of square: the long side under three times the short one */
@@ -380,4 +391,52 @@ export function fallbackNote(family: LayoutFamily, n: number): string {
     return parts.length > 0
         ? `${LAYOUT_LABELS[family]} needs ${parts.join(" or ")}`
         : `${LAYOUT_LABELS[family]} can't make ${n}`;
+}
+
+/** "Stagger", "short" or "short back" names a layout: the start of its name, spaces ignored */
+function familyNamed(words: string): LayoutFamily | null {
+    const typed = words.replace(/\s+/g, "").toLowerCase();
+    if (typed === "") return null;
+    return (
+        LAYOUT_FAMILIES.find((f) =>
+            LAYOUT_LABELS[f]
+                .replace(/\s+/g, "")
+                .toLowerCase()
+                .startsWith(typed),
+        ) ?? null
+    );
+}
+
+/**
+ * The version a typed answer names for `n` (the command bar's layout step): a layout by the start
+ * of its name, a block ("5x5", "8 × 3", or just "8" across), or both ("stagger 5x5"). Without a
+ * layout it's `family`'s; without a block, the version nearest `aspect` (across ÷ deep). Null when
+ * nothing matches.
+ */
+export function parseLayout(
+    text: string,
+    n: number,
+    family: LayoutFamily,
+    aspect: number,
+): LayoutVersion | null {
+    // As the picker labels versions: "Short back 6 × 4, 1 short", "Rounded 5 × 5 staggered"
+    const plain = text
+        .replace(/,?\s*\d+\s*short\b/i, " ")
+        .replace(/\b(staggered|straight)\b/gi, " ")
+        .replace(/,/g, " ");
+    const size = /(\d+)\s*(?:(?:×|x|\*|by)\s*(\d+))?/i.exec(plain);
+    const words = size ? plain.replace(size[0], " ") : plain;
+    const named = familyNamed(words);
+    if (words.trim() !== "" && named === null) return null;
+    const pick = named ?? family;
+    if (!size) return named ? nearestVersion(pick, n, aspect) : null;
+    const across = Number(size[1]);
+    const deep = size[2] === undefined ? undefined : Number(size[2]);
+    const row = layoutCatalogue(n).find((r) => r.family === pick)!;
+    return (
+        row.versions.find(
+            (v) =>
+                v.across === across && (deep === undefined || v.deep === deep),
+        ) ?? null
+    );
 }

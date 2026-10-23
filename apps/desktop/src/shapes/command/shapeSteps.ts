@@ -1,8 +1,15 @@
-import { MODE_LABELS } from "../distribute/distribution";
+import {
+    LAYOUT_FAMILIES,
+    LAYOUT_LABELS,
+    MODE_LABELS,
+} from "../distribute/distribution";
+import { parseLayout, shapeKey } from "../distribute/layouts";
 import {
     distributionOf,
+    layoutOf,
     parseMode,
     switchModes,
+    withLayout,
     withMode,
 } from "../distribute/modes";
 import { formatSteps } from "../editor/format";
@@ -45,9 +52,12 @@ export function shapeSteps(
     let params = base;
     const steps: ShapeStep[] = [];
     const mode = modeStep(kind);
+    const layout = layoutStep(kind);
     for (const param of [
         ...(mode ? [mode] : []),
         ...(kind.params as readonly ToolParam<unknown>[]),
+        // Last, so one-liners such as "box 4x3 2" still fill the size and spacing
+        ...(layout ? [layout] : []),
     ]) {
         if (param.shown && !param.shown(params, n)) continue;
         const initial = param.display(params, n, env.stepPx);
@@ -85,6 +95,57 @@ export function modeStep(kind: AnyToolKind): ToolParam<unknown> | null {
         type(params, n, text, env) {
             const mode = parseMode(text, modes);
             return mode === null ? null : withMode(kind, params, n, mode, env);
+        },
+        scrub: (base) => base,
+    };
+}
+
+/**
+ * The host's layout step for a kind with layouts (#387, the box), only while the shape is in
+ * Files: the layout and its block, typed by name ("stagger 5x5", "full", "8x3"); a layout alone
+ * takes the version nearest the shape's proportions. It comes after the mode step and the kind's
+ * own numbers, so one-liners written before it ("box 4x3 2") mean what they did. Shows as the
+ * picker labels it ("Stagger 5 × 5"). None for a kind without layouts.
+ */
+export function layoutStep(kind: AnyToolKind): ToolParam<unknown> | null {
+    if (!kind.closed?.layouts) return null;
+    const display = (params: unknown, n: number): string => {
+        const now = layoutOf(kind, params, n);
+        if (!now) return "";
+        // As the picker lists it: a Short back with no short rank is a Full block
+        const key = shapeKey(now.lines, now.layout.byFile);
+        for (const row of kind.closed!.layouts!.catalogue(n))
+            for (const v of row.versions)
+                if (shapeKey(v.lines, v.layout.byFile) === key)
+                    return `${row.label} ${v.label}`;
+        // Outside the catalogue (past 3:1, say): its block, a full one called Full
+        const full = now.lines.every((l) => l === now.lines[0]);
+        return `${LAYOUT_LABELS[full ? "full" : now.layout.family]} ${now.across} × ${now.deep}`;
+    };
+    return {
+        key: "layout",
+        label: `Layout: ${LAYOUT_FAMILIES.map((f) => LAYOUT_LABELS[f]).join(", ")}`,
+        unit: "choice",
+        primary: false,
+        drag: "x",
+        interval: false,
+        blends: false,
+        shown: (params, n) => layoutOf(kind, params, n) !== null,
+        display,
+        type(params, n, text, env) {
+            const now = layoutOf(kind, params, n);
+            if (!now) return null;
+            // The step's own answer keeps the layout (a turned version reads like its plain one)
+            if (text.trim() === display(params, n)) return params;
+            const version = parseLayout(
+                text,
+                n,
+                now.layout.family,
+                now.across / now.deep,
+            );
+            return version
+                ? withLayout(kind, params, n, version.layout, env)
+                : null;
         },
         scrub: (base) => base,
     };
