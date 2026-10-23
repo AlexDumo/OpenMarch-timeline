@@ -1,6 +1,7 @@
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import {
     MODE_LABELS,
+    reshuffled,
     type Distribution,
     type DistributionMode,
 } from "./distribution";
@@ -48,6 +49,22 @@ export function withMode(
         closed.startMode(params, n, mode),
         env,
     );
+}
+
+/**
+ * Reshuffle (spec #385): a spread's next seed, laid out for the `n` spots there are now; null
+ * when the shape isn't a spread. One change, so one undo step.
+ */
+export function reshuffle(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    env: ToolEnv,
+): unknown {
+    const closed = kind.closed;
+    const d = closed?.distribution(params, n);
+    if (!closed || d?.mode !== "spread") return null;
+    return closed.withDistribution(params, n, reshuffled(d, n), env);
 }
 
 /** The mode a typed answer names among `modes`: its label or the start of it ("out") */
