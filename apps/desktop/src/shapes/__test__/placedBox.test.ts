@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { boxShape } from "../box/boxShape";
+import { boxTool } from "../box/boxTool";
 import { drawBox, filesOf, ranksOf, shortBy } from "../box/boxGeometry";
 import {
     boxesAt,
@@ -138,7 +139,7 @@ describe("what moving marchers does to a box", () => {
     const box = (): PlacedBox => {
         const r = recipe(4, { x: 40, y: 40 }, 10);
         const p = r.params as PlacedBox["params"];
-        return { recipe: r, params: p, spots: 4, endBeat: 8 };
+        return { recipe: r, kind: boxTool, params: p, spots: 4, endBeat: 8 };
     };
 
     it("nothing when no member moves off its spot", () => {
