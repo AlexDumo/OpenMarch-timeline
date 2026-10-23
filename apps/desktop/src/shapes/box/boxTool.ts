@@ -58,8 +58,8 @@ export const boxTool: ToolKind<BoxParams> = {
     fromFrame: boxInFrame,
     settle: snapToGrid,
     closed: {
-        // Outline (#390) and Even spread (#391) join in their tickets
-        modes: ["files"],
+        // Outline joins in #390
+        modes: ["files", "spread"],
         region: boxRegion,
         distribution: boxDistribution,
         layouts: {
@@ -69,7 +69,8 @@ export const boxTool: ToolKind<BoxParams> = {
                     ? boxBlock(params, n)
                     : null,
         },
-        startMode: (params, _n, mode) => distributionFor(mode, filesOf(params)),
+        startMode: (params, n, mode) =>
+            distributionFor(mode, filesOf(params), n),
         withDistribution(params, n, distribution, env) {
             // How recipes said it before the distributor goes: the distribution says it now
             const {
@@ -78,22 +79,24 @@ export const boxTool: ToolKind<BoxParams> = {
                 shortRankAt: _shortRankAt,
                 ...rest
             } = params;
-            if (distribution.mode !== "files") return { ...rest, distribution };
             // A layout at a width it can't make the count with (a saved shape's family at the
             // drawn file count) is stored as its nearest version; one whose family can't make
             // the count at all is kept as asked, Short back standing in (#387)
-            const resolved = resolveLayout(distribution.layout, n);
-            const layout =
-                resolved.fellBack === null
-                    ? resolved.layout
-                    : distribution.layout;
-            const next: BoxParams = {
-                ...rest,
-                distribution: { ...distribution, layout },
-            };
+            const resolved =
+                distribution.mode === "files"
+                    ? resolveLayout(distribution.layout, n)
+                    : null;
+            const filled =
+                distribution.mode === "files" && resolved?.fellBack === null
+                    ? { ...distribution, layout: resolved.layout }
+                    : distribution;
+            const next: BoxParams = { ...rest, distribution: filled };
+            // A new mode resizes the shape: it grows from the pivot
             return grownFromPivot(
                 params,
-                withFileCount(next, layout.files),
+                filled.mode === "files"
+                    ? withFileCount(next, filled.layout.files)
+                    : next,
                 n,
                 env,
             );

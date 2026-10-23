@@ -37,6 +37,7 @@ import { parseDegrees, scrubDistance } from "./scrub";
 import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
 import { SaveShapeButton } from "../library/SaveShapeButton";
 import { CompactLayoutPicker } from "./LayoutPicker";
+import { ReshuffleButton } from "./ReshuffleButton";
 
 /** The gap between the shape's outline and the editor, in CSS px */
 const GAP_PX = 14;
@@ -48,7 +49,8 @@ const GAP_PX = 14;
  * shape is drawn, a hint at the top of the field says how to draw one.
  *
  * Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
- * For a box: `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`. Every number can be typed or dragged,
+ * For a box: `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`, and in Spread `↔ 2 steps Reshuffle
+ * │ ⋯ │ Place`. Every number can be typed or dragged,
  * and follows the field: across is side to side however the box is turned. ⋯ opens a second row:
  * the rotation (typed or dragged), flips, who goes where and ☆ Save. Under the numbers, a box in
  * Files shows its layouts small (#387). Place shows only for a new shape; a selected placed
@@ -248,6 +250,12 @@ function ShapeEditorBar({
                         </span>
                     </>
                 )}
+                <ReshuffleButton
+                    target={target}
+                    envFor={() => envFor(PLAIN)}
+                    className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
+                    testId="shape-editor-reshuffle"
+                />
                 {target.drawnOn && (
                     <span className="text-text/50">from {target.drawnOn}</span>
                 )}

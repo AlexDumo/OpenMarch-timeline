@@ -19,6 +19,7 @@ import {
     circleRegionOf,
     dragRadius,
     drawCircle,
+    grownFromPivot,
     insideCircle,
     moveCircle,
     RADIUS_HANDLE,
@@ -70,8 +71,8 @@ const INTERVAL: ToolParam<CircleParams> = {
 /**
  * The circle tool (#389, spec #385): drawn from its center out, its size set by one radius handle
  * that changes the interval, moved from inside, and turned and flipped through its frame like
- * every kind. Turning it turns where the first marcher stands. It is filled by the host's
- * distributor: Outline now, Even spread in #391.
+X
+ * distributor, in Outline or Even spread.
  */
 export const circleTool: ToolKind<CircleParams> = {
     shape: circleShape,
@@ -100,10 +101,9 @@ export const circleTool: ToolKind<CircleParams> = {
         modes: CIRCLE_MODES,
         region: circleRegionOf,
         distribution: (params) => circleDistribution(params),
-        startMode: (_params, _n, mode) => distributionFor(mode, 1),
-        withDistribution: (params, _n, distribution) => ({
-            ...params,
-            distribution,
-        }),
+        startMode: (_params, n, mode) => distributionFor(mode, 1, n),
+        // A new mode resizes the circle: it grows from the pivot
+        withDistribution: (params, n, distribution, env) =>
+            grownFromPivot(params, { ...params, distribution }, n, env),
     },
 };

@@ -10,7 +10,7 @@ import { fallbackNote } from "../distribute/layouts";
 import { formatSteps } from "../editor/format";
 import { parseSize, parseSteps, scrubDistance } from "../editor/scrub";
 import type { ToolParam } from "../tool/toolKind";
-import { boxBlock, shortBy, type BoxParams } from "./boxGeometry";
+import { boxBlock, isSpread, shortBy, type BoxParams } from "./boxGeometry";
 
 /**
  * The box's numbers (#344, "The kind contract"; 08-shape-system-ux.md, "The floating editor"):
@@ -27,6 +27,8 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
         interval: false,
         blends: false,
         range: { min: 1 },
+        // A spread has no files or ranks: its handles shape it
+        shown: (p) => !isSpread(p),
         display(p, n) {
             const field = onField(p, n);
             return `${field.across} × ${field.deep}`;
@@ -64,6 +66,8 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
  * layouts leave nothing out of their block by accident, so they have none.
  */
 export function sizeNote(p: BoxParams, n: number): string | null {
+    // A spread has no ranks to be short
+    if (isSpread(p)) return null;
     const block = boxBlock(p, n);
     if (block.fellBack) return fallbackNote(block.fellBack, n);
     if (block.layout.family !== "shortBack") return null;
@@ -74,13 +78,15 @@ export function sizeNote(p: BoxParams, n: number): string | null {
 /** A spacing on the field: side to side (across) or front to back (deep) */
 function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
     const across = way === "across";
-    /** Which of the box's own spacings runs this way on the field */
+    /** Which of the box's own spacings runs this way on the field (a spread's is `across`) */
     const ownKey = (p: BoxParams, n: number) => {
+        if (isSpread(p)) return "across";
         const field = onField(p, n);
         return across ? field.acrossKey : field.deepKey;
     };
     /** The spacing this way, in steps */
     const stepsOf = (p: BoxParams, n: number, stepPx: number) => {
+        if (isSpread(p)) return p.across / stepPx;
         const field = onField(p, n);
         return (across ? field.acrossSpacing : field.deepSpacing) / stepPx;
     };
@@ -98,6 +104,8 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         range: { min: 0.5 },
         glyph: across ? "↔" : "↕",
         shown(p, n) {
+            // A spread has one interval, the closest pair: the across one
+            if (isSpread(p)) return across && n > 1;
             const field = onField(p, n);
             return (across ? field.across : field.deep) > 1;
         },
@@ -117,11 +125,7 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
                 env,
             ),
         widen(p, n, by, env) {
-            const field = onField(p, n);
-            const steps =
-                (across ? field.acrossSpacing : field.deepSpacing) /
-                    env.stepPx +
-                by;
+            const steps = stepsOf(p, n, env.stepPx) + by;
             if (steps < 0.5 - 1e-9) return null;
             const next = withSpacing(p, ownKey(p, n), steps, n, env);
             return next === p ? null : next;

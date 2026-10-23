@@ -35,6 +35,7 @@ describe("the box's steps", () => {
     it("asks each declared parameter in order, starting from its default", () => {
         const { steps } = shapeSteps(boxTool, start(), N, env, []);
         expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
+            ["mode", "Files"],
             ["size", "4 × 3"],
             ["across", "2"],
             ["deep", "2"],
@@ -50,6 +51,7 @@ describe("the box's steps", () => {
 
     it("answers change the shape, and a later step starts from the earlier answers", () => {
         const { params, steps } = shapeSteps(boxTool, start(), N, env, [
+            "",
             "6x2",
             "3",
         ]);
@@ -57,6 +59,7 @@ describe("the box's steps", () => {
         expect([filesOf(p), ranksOf(p, N)]).toEqual([6, 2]);
         expect(p.across).toBeCloseTo(3 * STEP);
         expect(steps.map((s) => s.initial)).toEqual([
+            "Files",
             "4 × 3",
             "2",
             "2",
@@ -66,26 +69,31 @@ describe("the box's steps", () => {
 
     it("an answer that isn't understood is marked and changes nothing", () => {
         const { params, steps } = shapeSteps(boxTool, start(), N, env, [
+            "",
             "lots",
         ]);
-        expect(steps[0]!.invalid).toBe(true);
+        expect(steps[1]!.invalid).toBe(true);
         expect(filesOf(params as BoxParams)).toBe(4);
     });
 
     it("an empty answer keeps the number", () => {
         const base = start();
-        expect(shapeSteps(boxTool, base, N, env, ["", ""]).params).toBe(base);
+        expect(shapeSteps(boxTool, base, N, env, ["", "", ""]).params).toBe(
+            base,
+        );
     });
 
     it("a spacing with one marcher that way isn't asked", () => {
         expect(keys(boxTool, start(), N)).toEqual([
+            "mode",
             "size",
             "across",
             "deep",
             "layout",
         ]);
-        const oneRank = shapeSteps(boxTool, start(), N, env, ["12x1"]);
+        const oneRank = shapeSteps(boxTool, start(), N, env, ["", "12x1"]);
         expect(oneRank.steps.map((s) => s.param.key)).toEqual([
+            "mode",
             "size",
             "across",
             "layout",
@@ -104,6 +112,25 @@ describe("a kind the host has never heard of gets its steps too", () => {
             ["gap", "2"],
         ]);
         expect((params as RowParams).gap).toBeCloseTo(3.5 * STEP);
+    });
+});
+
+describe("the box's steps in Spread (#391)", () => {
+    const N = 12;
+
+    it("asks the mode, then only the spacing: a spread has no files or ranks", () => {
+        const base = startingParams(boxTool, starts(N), N, env) as BoxParams;
+        const { params, steps } = shapeSteps(boxTool, base, N, env, [
+            "spr",
+            "3",
+        ]);
+        expect(steps.map((s) => [s.param.key, s.invalid])).toEqual([
+            ["mode", false],
+            ["across", false],
+        ]);
+        const p = params as BoxParams;
+        expect(p.distribution?.mode).toBe("spread");
+        expect(p.across).toBeCloseTo(3 * STEP);
     });
 });
 
@@ -138,8 +165,12 @@ describe("the mode step (#386)", () => {
     });
 
     it("is hidden for a kind with one mode and for open kinds", () => {
+        const filesOnly: AnyToolKind = {
+            ...padTool,
+            closed: { ...padTool.closed!, modes: ["files"] },
+        };
         expect(
-            keys(boxTool, startingParams(boxTool, starts(12), 12, env), 12),
+            keys(filesOnly, startingParams(filesOnly, starts(N), N, env), N),
         ).not.toContain("mode");
         expect(
             keys(rowTool, startingParams(rowTool, starts(4), 4, env), 4),
@@ -154,12 +185,13 @@ describe("the layout step (#387)", () => {
     it("comes after the box's numbers, shown as the picker labels it", () => {
         const { steps } = shapeSteps(boxTool, start(), N, env, []);
         expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
+            ["mode", "Files"],
             ["size", "6 × 4"],
             ["across", "2"],
             ["deep", "2"],
             ["layout", "Short back 6 × 4, 1 short"],
         ]);
-        expect(steps[3]!.param.label).toBe(
+        expect(steps[4]!.param.label).toBe(
             "Layout: Full, Stagger, Rounded, Short back, Notched",
         );
     });
@@ -169,15 +201,16 @@ describe("the layout step (#387)", () => {
             "",
             "",
             "",
+            "",
             "stag",
         ]);
-        expect(steps[3]!.invalid).toBe(false);
+        expect(steps[4]!.invalid).toBe(false);
         expect(boxBlock(params as BoxParams, N).lines).toEqual([5, 4, 5, 4, 5]);
     });
 
     it("takes a layout with its block, or a block of the box's layout", () => {
         const typed = (answer: string) =>
-            shapeSteps(boxTool, start(), N, env, ["", "", "", answer]);
+            shapeSteps(boxTool, start(), N, env, ["", "", "", "", answer]);
         const wide = typed("stagger 8x3").params as BoxParams;
         expect(boxBlock(wide, N).lines).toEqual([8, 7, 8]);
         const short = typed("6 × 4").params as BoxParams;
@@ -185,7 +218,7 @@ describe("the layout step (#387)", () => {
             family: "shortBack",
             files: 6,
         });
-        expect(typed("short back").steps[3]!.invalid).toBe(false);
+        expect(typed("short back").steps[4]!.invalid).toBe(false);
     });
 
     it("marks a layout the count can't make, or a block it has no version of, as not understood", () => {
@@ -195,19 +228,23 @@ describe("the layout step (#387)", () => {
                 "",
                 "",
                 "",
+                "",
                 answer,
             ]);
-            expect(steps[3]!.invalid).toBe(true);
+            expect(steps[4]!.invalid).toBe(true);
             expect(params).toBe(base);
         }
     });
 
     it("leaves a one-liner's size and spacing where they were", () => {
+        // The mode step left as it is
         const { params, steps } = shapeSteps(boxTool, start(), N, env, [
+            "",
             "6x4",
             "2½",
         ]);
         expect(steps.map((s) => s.invalid)).toEqual([
+            false,
             false,
             false,
             false,

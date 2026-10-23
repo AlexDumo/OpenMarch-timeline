@@ -110,7 +110,7 @@ each show that uses one ("This show"), so a show opens with its shapes on anothe
    kind's id and version, each interval parameter's value in steps by the parameter's key, and,
    for a closed kind, its **distribution** (updated 2026-10-22, spec #385, #393): the recipe's
    `params.distribution` (amendment of 2026-10-22, below) without a Files layout's `files` or a
-   spread's `seed`. It stores no size, count, center, rotation, flip, pivot or seed, so it fits any
+   spread's `seed` and `count`. It stores no size, count, center, rotation, flip, pivot or seed, so it fits any
    selection. Picking it opens its kind; drawing it, or turning an open shape into it, lays the
    spots out the saved distance apart in the saved mode, layout, stagger and outline gap. The
    kind reads the saved distribution as it reads a recipe's, at the size it's drawn, and an even
@@ -159,8 +159,14 @@ region, and one shared distributor lays out the spots. This needs no schema chan
      the box's layout picker adds the others), `files` is the full rank's count and `byFile` turns
      the rows to run front to back. `stagger` is the signed offset of each rank as the fraction
      p/q of the across interval, so ⅓ round-trips exactly.
-   - `{ "mode": "outline", "oddGap": … }` and `{ "mode": "spread", "seed", "generator" }`, whose
-     settings their tickets define.
+   - `{ "mode": "outline", "oddGap": … }`, whose settings its ticket defines.
+   - `{ "mode": "spread", "seed", "generator", "count" }` (#391): a seeded scatter whose closest
+     pair is the kind's interval. `seed` is a whole number from 1 (Reshuffle stores the next
+     one), `generator` the algorithm (decision 4), and `count` the spot count the seed was laid
+     out for. At another count the spots relax from that layout (new ones placed by best
+     candidate, extra ones taken from the most crowded spots) instead of reshuffling, so adding
+     or removing a marcher nudges the spread; reshuffling stores the count there is now. Without
+     `count` the seed is laid out for whatever count there is.
 2. **No `distribution` reads as Files, Short back, no stagger.** That is how every box recipe
    stored before this amendment reads, `pattern: "grid"` ones included, and it lays out exactly
    the spots they had, so the box's `kind_version` stays 1. `pattern`, `shortRank` and
@@ -181,8 +187,31 @@ region, and one shared distributor lays out the spots. This needs no schema chan
    the old shapes panel (a radius and a spacing along the path); version 2's params are
    `center`, `interval` (the chord between neighbors), `rotation`, `flipX`, `flipY` and the
    distribution. Its radius follows the count, r = interval / (2 sin(π/n)), so it isn't stored.
-   A circle is filled in Outline (Even spread joins it); a distribution it can't be filled in
-   reads as Outline.
+   A circle is filled in Outline or Even spread; a distribution it can't be filled in reads as
+   Outline. In Even spread its radius follows the spread instead, which fills the circle at the
+   size its count and interval give.
+7. **A spread keeps a box's proportions in files and ranks** (#391): a box in Spread keeps its
+   `files`, and the spread fills a rectangle `files` by `ranks` cells, at the box's `across`
+   interval (its one spacing in Spread). Switching back to Files gives the block it was, and a
+   handle drag in Spread picks the file count nearest the dragged shape.
+8. **Generator 1** (#391): Mitchell's best candidate from mulberry32, then a push-apart
+   relaxation, then pairs closer than 95% of the median neighbor distance parted, scaled so the
+   closest pair is exactly one interval. Each marcher keeps a seeded distance from the edge of
+   0.15–0.85 of a spacing, so no rows form along straight edges. Up to 80 marchers, a layout is
+   the most even of four tries of its seed. The layout reads the region only through its edge
+   distance, area, perimeter and bounds, so it fills any closed region, and uses only + − × ÷ and
+   `Math.sqrt` (which ECMAScript defines exactly; `Math.sin` and the like are approximated), so a
+   seed gives the same spots in every engine. Any change to the spots a seed gives is a new
+   generator.
+
+Verification (#391): `spread.test.ts` checks the same spots for the same shape, count and seed;
+the closest pair at the interval; neighbor distances within 10% of each other at 12–300 marchers
+in boxes, a circle and an L; no row of 4 along a box edge; 300 marchers in under 300 ms; no
+approximated `Math` function called; and a count change moving most marchers less than half an
+interval. `spreadSession.test.ts` switches the box and the circle to Spread, reshuffles as one
+undo step, reopens a placed spread exactly, and shows one from an unknown generator as plain
+positions. A browser scenario in `box-tool.spec.mts` reshuffles with undo and redo, places the
+spread and reshuffles the placed box.
 
 7. **Box layouts (#387, 2026-10-23).** `family` is one of `"full"`, `"stagger"`, `"rounded"`,
    `"shortBack"` and `"notched"`; one this version doesn't know reads as `"shortBack"`. Each is a

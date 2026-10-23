@@ -12,7 +12,16 @@ import type { LayoutRow, ResolvedLayout } from "./layouts";
 export interface Region {
     /** Whether a frame point is inside or on the edge */
     contains(p: XY): boolean;
+    /**
+     * How far a frame point is inside the edge (negative outside). Worked out with + − × ÷ and
+     * `Math.sqrt` only, so a seeded layout that reads it is the same in every engine.
+     */
+    edgeDistance(p: XY): number;
     readonly area: number;
+    /** How far it is round the edge */
+    readonly perimeter: number;
+    /** The region's shape and size, the same for the same region: what a layout is cached by */
+    readonly key: string;
     readonly bounds: {
         readonly left: number;
         readonly top: number;
@@ -65,7 +74,10 @@ export function rectRegion(halfWidth: number, halfDepth: number): Region {
     const d = Math.abs(halfDepth);
     return {
         contains: (p) => Math.abs(p.x) <= w + 1e-9 && Math.abs(p.y) <= d + 1e-9,
+        edgeDistance: (p) => Math.min(w - Math.abs(p.x), d - Math.abs(p.y)),
         area: 4 * w * d,
+        perimeter: 4 * (w + d),
+        key: `rect ${w} ${d}`,
         bounds: { left: -w, top: -d, right: w, bottom: d },
         outline: [
             { x: -w, y: -d },
@@ -84,8 +96,11 @@ const CIRCLE_SIDES = 64;
 export function circleRegion(radius: number): Region {
     const r = Math.abs(radius);
     return {
-        contains: (p) => Math.hypot(p.x, p.y) <= r + 1e-9,
+        contains: (p) => Math.sqrt(p.x * p.x + p.y * p.y) <= r + 1e-9,
+        edgeDistance: (p) => r - Math.sqrt(p.x * p.x + p.y * p.y),
         area: Math.PI * r * r,
+        perimeter: 2 * Math.PI * r,
+        key: `circle ${r}`,
         bounds: { left: -r, top: -r, right: r, bottom: r },
         // From the back, clockwise on the field (toward +x first)
         outline: Array.from({ length: CIRCLE_SIDES }, (_, i) => {
@@ -93,5 +108,81 @@ export function circleRegion(radius: number): Region {
             return { x: r * Math.cos(a), y: r * Math.sin(a) };
         }),
         corners: [],
+    };
+}
+
+/**
+ * Any closed polygon `outline` (frame points, not repeated at the end), with `corners` the
+ * indices Outline puts a spot on: an L, a band, whatever a kind draws. The distributor's Spread
+ * fills any of them.
+ */
+export function polygonRegion(
+    outline: readonly XY[],
+    corners: readonly number[] = outline.map((_, i) => i),
+): Region {
+    const count = outline.length;
+    const edges = outline.map(
+        (a, i) => [a, outline[(i + 1) % count]!] as const,
+    );
+    let twiceArea = 0;
+    let perimeter = 0;
+    for (const [a, b] of edges) {
+        twiceArea += a.x * b.y - b.x * a.y;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        perimeter += Math.sqrt(dx * dx + dy * dy);
+    }
+    const contains = (p: XY) => {
+        // Even-odd crossings of a ray toward +x
+        let inside = false;
+        for (const [a, b] of edges) {
+            const aAbove = a.y > p.y;
+            const bAbove = b.y > p.y;
+            if (
+                aAbove !== bAbove &&
+                p.x < a.x + ((p.y - a.y) * (b.x - a.x)) / (b.y - a.y)
+            )
+                inside = !inside;
+        }
+        return inside;
+    };
+    const toEdge = (p: XY) => {
+        let best = Infinity;
+        for (const [a, b] of edges) {
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const len = dx * dx + dy * dy;
+            const t =
+                len > 0
+                    ? Math.max(
+                          0,
+                          Math.min(
+                              1,
+                              ((p.x - a.x) * dx + (p.y - a.y) * dy) / len,
+                          ),
+                      )
+                    : 0;
+            const ex = a.x + t * dx - p.x;
+            const ey = a.y + t * dy - p.y;
+            best = Math.min(best, ex * ex + ey * ey);
+        }
+        return Math.sqrt(best);
+    };
+    const xs = outline.map((p) => p.x);
+    const ys = outline.map((p) => p.y);
+    return {
+        contains: (p) => contains(p) || toEdge(p) <= 1e-9,
+        edgeDistance: (p) => (contains(p) ? toEdge(p) : -toEdge(p)),
+        area: Math.abs(twiceArea) / 2,
+        perimeter,
+        key: `polygon ${outline.map((p) => `${p.x},${p.y}`).join(" ")}`,
+        bounds: {
+            left: Math.min(...xs),
+            top: Math.min(...ys),
+            right: Math.max(...xs),
+            bottom: Math.max(...ys),
+        },
+        outline,
+        corners,
     };
 }

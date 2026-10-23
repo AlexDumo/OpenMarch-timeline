@@ -139,6 +139,8 @@ describe("the command bar's layout step", () => {
         withBox();
         renderBar();
         await choose("box");
+        // Fill (the mode), size, and both spacings
+        key("Enter");
         key("Enter");
         key("Enter");
         key("Enter");
@@ -152,6 +154,8 @@ describe("the command bar's layout step", () => {
         const box = withBox();
         renderBar();
         await choose("box");
+        // Fill (the mode), size, and both spacings
+        key("Enter");
         key("Enter");
         key("Enter");
         key("Enter");
@@ -159,6 +163,7 @@ describe("the command bar's layout step", () => {
         expect(boxBlock(box.shape, N).lines).toEqual([5, 4, 5, 4, 5]);
         key("Enter");
         expect(box.finish).toHaveBeenCalledWith([
+            "Files",
             "6 × 4",
             "2",
             "2",
@@ -170,6 +175,8 @@ describe("the command bar's layout step", () => {
         const box = withBox();
         renderBar();
         await choose("box");
+        // Fill (the mode), size, and both spacings
+        key("Enter");
         key("Enter");
         key("Enter");
         key("Enter");
@@ -179,15 +186,17 @@ describe("the command bar's layout step", () => {
         expect(box.finish).not.toHaveBeenCalled();
     });
 
-    it('a one-liner such as "box 6x4 2" still fills the size and spacing', async () => {
+    // The box's mode step comes first; #399's fillAhead lets a one-liner skip it
+    it('a one-liner such as "box files 6x4 2" still fills the size and spacing', async () => {
         const box = withBox();
         renderBar();
-        await choose("box 6x4 2");
+        await choose("box files 6x4 2");
         expect(question()).toBe("Front-to-back spacing, in steps");
         key("Enter");
         expect(question()).toMatch(/^Layout/);
         key("Enter");
         expect(box.finish).toHaveBeenCalledWith([
+            "files",
             "6x4",
             "2",
             "2",

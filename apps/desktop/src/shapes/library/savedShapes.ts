@@ -54,10 +54,15 @@ export function intervalsOf(
 
 /**
  * What a saved shape keeps of how a shape is filled: the distribution without its size (a Files
- * layout's `files`, which the count decides) or a spread's `seed` (a new placement starts at 1)
+ * layout's `files`, which the count decides) or a spread's `seed` and the `count` it was laid out
+ * for (a new placement starts at seed 1, laid out for its own count)
  */
 export function savedDistributionOf(d: Distribution): SavedDistribution {
-    const { seed: _seed, ...rest } = d as Distribution & { seed?: unknown };
+    const {
+        seed: _seed,
+        count: _count,
+        ...rest
+    } = d as Distribution & { seed?: unknown; count?: unknown };
     if (rest.mode !== "files") return rest;
     const { files: _files, ...layout } = rest.layout;
     return { ...rest, layout };

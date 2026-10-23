@@ -11,6 +11,8 @@ import {
     resolveLayout,
     type ResolvedLayout,
 } from "../distribute/layouts";
+import { spreadScale } from "../distribute/distribute";
+import { rectRegion, type Region } from "../distribute/region";
 import type { ToolEnv } from "../tool/toolKind";
 import { pivotOf } from "../frame/pivot";
 import {
@@ -34,9 +36,10 @@ export type BoxSize = Pick<
  * drawn square to the field; turning and flipping it are the shape frame's
  * (08-shape-system-ux.md), so every function here works in the box's own axes.
  *
- * How it is filled is the host's `distribution` (spec #385), Files only for now. `files` stays
- * the box's own file count, as recipes have always stored it, and the Files layout's `files`
- * follows it ({@link withFileCount}); read the layout through {@link boxDistribution}.
+ * How it is filled is the host's `distribution` (spec #385): Files or Spread. `files` stays the
+ * box's own file count, as recipes have always stored it, and the Files layout's `files` follows
+ * it ({@link withFileCount}); read the layout through {@link boxDistribution}. A spread keeps the
+ * block's proportions, files by ranks, at the `across` interval.
  */
 export type BoxParams = BoxSize & {
     readonly distribution?: Distribution;
@@ -133,6 +136,29 @@ export function sameLayout(a: BoxParams, b: BoxParams): boolean {
     );
 }
 
+/** Whether the box is an even spread, whose frame is the spread's edge rather than its marchers */
+export const isSpread = (p: BoxParams): boolean =>
+    boxDistribution(p).mode === "spread";
+
+/**
+ * The shape a spread box fills: the block's proportions, files by ranks (its cells square), so
+ * switching between Files and Spread keeps how wide and deep the shape is
+ */
+export function spreadShapeOf(p: BoxParams, n: number): Region {
+    return rectRegion(filesOf(p) / 2, ranksOf(p, n) / 2);
+}
+
+/** How far a spread box reaches either side of its center, and front to back */
+function spreadHalves(p: BoxParams, n: number) {
+    const d = boxDistribution(p);
+    if (d.mode !== "spread") throw new Error("Not a spread");
+    const scale = spreadScale(spreadShapeOf(p, n), n, d, p.across);
+    return {
+        halfWidth: (filesOf(p) / 2) * scale,
+        halfDepth: (ranksOf(p, n) / 2) * scale,
+    };
+}
+
 export function footprintOf(p: BoxParams, n: number): Footprint {
     const halfW = ((acrossOf(p, n) - 1) * p.across) / 2;
     const halfH = ((ranksOf(p, n) - 1) * p.deep) / 2;
@@ -144,13 +170,21 @@ export function footprintOf(p: BoxParams, n: number): Footprint {
     };
 }
 
-/** The box's frame: its center, the half sizes through its edge marchers, its turn and flip */
+/**
+ * The box's frame: its center, the half sizes through its edge marchers (a spread's edge, which
+ * its marchers keep their distance from), its turn and flip
+ */
 export function boxFrame(p: BoxParams, n: number): ShapeFrame {
     const block = boxBlock(p, n);
+    const half = isSpread(p)
+        ? spreadHalves(p, n)
+        : {
+              halfWidth: ((block.across - 1) * p.across) / 2,
+              halfDepth: ((block.deep - 1) * p.deep) / 2,
+          };
     return {
         center: p.center,
-        halfWidth: ((block.across - 1) * p.across) / 2,
-        halfDepth: ((block.deep - 1) * p.deep) / 2,
+        ...half,
         rotation: p.rotation,
         flipX: p.flipX === true,
         flipY: p.flipY === true,
@@ -225,6 +259,9 @@ export function splitFor(
  * axes, whose marchers can't all stand on the grid.
  */
 export function snapToGrid(p: BoxParams, n: number, env: ToolEnv): BoxParams {
+    // A spread has no corner marcher: its center goes on the grid, as a circle's does
+    if (env.snap && isSpread(p))
+        return { ...p, center: env.gridSnap(p.center) };
     if (!env.snap || !squareToField(p.rotation)) return p;
     const frame = boxFrame(p, n);
     const first = frameToField(frame, {
@@ -416,6 +453,8 @@ export const BOX_HANDLE_KEYS: readonly BoxHandleKey[] = [
  * to stretch deep, so those handles go (both: none)
  */
 export function handleKeysOf(p: BoxParams, n: number): BoxHandleKey[] {
+    // A spread always has an area to reshape
+    if (isSpread(p)) return [...BOX_HANDLE_KEYS];
     const block = boxBlock(p, n);
     const across = block.across > 1;
     const deep = block.deep > 1;
@@ -476,6 +515,10 @@ export function stretchBox(
     to: XY,
     env: ToolEnv,
 ): BoxParams {
+    if (isSpread(base))
+        return inBoxAxes(base, n, env, (flat) =>
+            reshapeSpread(flat, n, key, fieldToFrame(boxFrame(base, n), to)),
+        );
     return inBoxAxes(base, n, env, (flat, flatEnv) =>
         stretchSquare(
             flat,
@@ -564,6 +607,60 @@ function stretchSquare(
         env,
         boxDistribution(base),
     );
+}
+
+/**
+ * {@link stretchBox} for a spread square to the field, `to` in its axes: the interval stays and
+ * the size follows the count, so a handle reshapes it. The opposite corner or side stays put and
+ * the file count (which sets the proportions) is the one nearest the shape the drag asks for: a
+ * side handle keeps the other side's length as asked.
+ */
+function reshapeSpread(
+    base: BoxParams,
+    n: number,
+    key: BoxHandleKey,
+    to: XY,
+): BoxParams {
+    const frame = boxFrame(base, n);
+    const movesX = key.includes("e") || key.includes("w");
+    const movesY = key.includes("n") || key.includes("s");
+    const anchor = {
+        x: key.includes("e") ? -frame.halfWidth : frame.halfWidth,
+        y: key.includes("s") ? -frame.halfDepth : frame.halfDepth,
+    };
+    const width = movesX ? Math.abs(to.x - anchor.x) : 2 * frame.halfWidth;
+    const depth = movesY ? Math.abs(to.y - anchor.y) : 2 * frame.halfDepth;
+    const files = filesFor(width, depth, n);
+    if (files === filesOf(base)) return base;
+    const next = withFileCount(base, files);
+    const half = boxFrame(next, n);
+    // Grown away from the fixed corner or side, toward the handle (past it, the other way)
+    return {
+        ...next,
+        center: {
+            x: movesX ? anchor.x + signOf(to.x - anchor.x) * half.halfWidth : 0,
+            y: movesY ? anchor.y + signOf(to.y - anchor.y) * half.halfDepth : 0,
+        },
+    };
+}
+
+/**
+ * The file count whose block, files by ranks, is nearest the shape of a `width` × `depth`
+ * rectangle: what a spread box is reshaped to
+ */
+export function filesFor(width: number, depth: number, n: number): number {
+    const count = Math.max(1, n);
+    const want = Math.log(Math.max(width, 1e-6) / Math.max(depth, 1e-6));
+    let best = 1;
+    let bestFit = Infinity;
+    for (let files = 1; files <= count; files++) {
+        const fit = Math.abs(Math.log(files / Math.ceil(count / files)) - want);
+        if (fit < bestFit - 1e-9) {
+            bestFit = fit;
+            best = files;
+        }
+    }
+    return best;
 }
 
 /**

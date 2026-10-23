@@ -1,3 +1,4 @@
+import { canLayOut } from "../distribute/distribution";
 import type {
     ShapeRecipeMember,
     StoredShapeRecipe,
@@ -68,8 +69,8 @@ const same = (a: XY, b: XY) =>
     Math.abs(a.x - b.x) <= ON_SPOT && Math.abs(a.y - b.y) <= ON_SPOT;
 
 /**
- * The shape a recipe describes, or null for a kind (or version) none of `kinds` draws, such as
- * one from a newer app
+ * The shape a recipe describes, or null for a kind (or version) none of `kinds` draws, or a
+ * spread generator this app doesn't have, such as one from a newer app
  */
 function placedOf(
     recipe: PlacedRecipe,
@@ -85,6 +86,8 @@ function placedOf(
     // Every shape's frame has a center, which recipes store (ADR 0006)
     if (!stored || typeof stored !== "object" || !stored.center) return null;
     const { spots, ...params } = stored;
+    // A spread from a generator this app doesn't have can't be laid out again
+    if (!canLayOut(params)) return null;
     return {
         kind,
         params,

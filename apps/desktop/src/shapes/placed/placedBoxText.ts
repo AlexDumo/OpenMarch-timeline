@@ -24,7 +24,9 @@ export function useDrawnOnPage(box: PlacedBox | null): string | null {
  */
 export function placedNumbers(box: PlacedBox, stepPx: number) {
     const { kind, params, spots } = box;
-    const counts = kind.params
+    // A count the kind hides says nothing (a spread box has no files or ranks)
+    const shown = kind.params.filter((p) => p.shown?.(params, spots) ?? true);
+    const counts = shown
         .filter((p) => p.unit === "count")
         .map((p) => p.display(params, spots, stepPx));
     // A layout other than Short back is named first, as the picker names it (#387)
@@ -42,7 +44,7 @@ export function placedNumbers(box: PlacedBox, stepPx: number) {
                 : intervals.every((i) => i === intervals[0])
                   ? intervals[0]!
                   : intervals.join(" × "),
-        notes: kind.params.flatMap((p) => p.note?.(params, spots) ?? []),
+        notes: shown.flatMap((p) => p.note?.(params, spots) ?? []),
         empty: spots - box.recipe.members.length,
     };
 }
