@@ -80,7 +80,7 @@ describe(`Migration ${SAVED_SHAPES_MIGRATION}`, () => {
         );
         expect(
             all(
-                "SELECT id, name, kind, kind_version, intervals FROM saved_shapes",
+                "SELECT id, name, kind, kind_version, intervals, description, distribution FROM saved_shapes",
             ),
         ).toEqual([
             {
@@ -89,6 +89,8 @@ describe(`Migration ${SAVED_SHAPES_MIGRATION}`, () => {
                 kind: "block",
                 kind_version: 1,
                 intervals: '{"across":3,"deep":2}',
+                description: null,
+                distribution: null,
             },
         ]);
         expect(() =>
@@ -96,5 +98,41 @@ describe(`Migration ${SAVED_SHAPES_MIGRATION}`, () => {
                 "INSERT INTO saved_shapes (id, name, kind, kind_version, intervals) VALUES ('b', 'Bad', 'block', 1, 'nope')",
             ),
         ).toThrow(/constraint failed/);
+    });
+
+    it("keeps a description, a JSON distribution and the created and updated dates", () => {
+        runMigration(db, SAVED_SHAPES_MIGRATION);
+        db.exec(
+            `INSERT INTO saved_shapes (id, name, kind, kind_version, intervals, description, distribution, created_at, updated_at)
+             VALUES ('a', 'Block', 'block', 1, '{"across":2,"deep":2}', 'Opener', '{"mode":"files","layout":{"family":"shortBack","byFile":false},"stagger":[1,2]}', '2026-10-01T10:00:00.000Z', '2026-10-02T10:00:00.000Z')`,
+        );
+        expect(
+            all(
+                "SELECT description, distribution, created_at, updated_at FROM saved_shapes",
+            ),
+        ).toEqual([
+            {
+                description: "Opener",
+                distribution:
+                    '{"mode":"files","layout":{"family":"shortBack","byFile":false},"stagger":[1,2]}',
+                created_at: "2026-10-01T10:00:00.000Z",
+                updated_at: "2026-10-02T10:00:00.000Z",
+            },
+        ]);
+        expect(() =>
+            db.exec(
+                "INSERT INTO saved_shapes (id, name, kind, kind_version, intervals, distribution) VALUES ('b', 'Bad', 'block', 1, '{}', 'nope')",
+            ),
+        ).toThrow(/constraint failed/);
+    });
+
+    it("dates a saved shape written without dates", () => {
+        runMigration(db, SAVED_SHAPES_MIGRATION);
+        db.exec(
+            `INSERT INTO saved_shapes (id, name, kind, kind_version, intervals) VALUES ('a', 'Box', 'block', 1, '{}')`,
+        );
+        const [row] = all("SELECT created_at, updated_at FROM saved_shapes");
+        expect(row!.created_at).toMatch(/^\d{4}-\d{2}-\d{2} /);
+        expect(row!.updated_at).toBe(row!.created_at);
     });
 });

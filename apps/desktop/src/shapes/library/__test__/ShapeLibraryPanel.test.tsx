@@ -45,6 +45,22 @@ const wide: SavedShape = {
     kind: boxTool.shape.id,
     kindVersion: 1,
     intervals: { across: 3, deep: 2 },
+    createdAt: "2026-10-01T09:00:00.000Z",
+    updatedAt: "2026-10-01T09:00:00.000Z",
+};
+
+const described: SavedShape = {
+    ...wide,
+    id: "described",
+    name: "Opener block",
+    description:
+        "Company front at the 40 for the opener, then the drill moves into the arc",
+    distribution: {
+        mode: "files",
+        layout: { family: "shortBack", byFile: false },
+        stagger: [1, 2],
+    },
+    updatedAt: "2026-10-03T12:00:00.000Z",
 };
 
 const saved = (id: string): ShapeLibraryRow => ({
@@ -148,6 +164,39 @@ describeDbTests("the shape library", (it) => {
             screen.getByTestId("shape-library-row-wide"),
         ).not.toHaveTextContent("this show only");
         expect(screen.queryByTestId("shape-library-add-wide")).toBeNull();
+    });
+
+    it("shows a saved shape's description on one line, the whole of it in a tooltip, and its stagger in the note", ({
+        wrapper,
+    }) => {
+        useSavedShapeLibrary.getState().put(described);
+        render(<ShapeLibraryContents />, wrapper);
+        const row = screen.getByTestId("shape-library-row-described");
+        expect(row).toHaveTextContent("Box · 3 × 2 apart, stagger ½");
+        const description = screen.getByTestId(
+            "shape-library-description-described",
+        );
+        expect(description).toHaveTextContent(described.description!);
+        expect(description).toHaveClass("truncate");
+        expect(description).toHaveAttribute("title", described.description);
+        expect(
+            screen.queryByTestId("shape-library-description-wide"),
+        ).toBeNull();
+    });
+
+    it("a show's copy brings its description, distribution and dates into my library", async ({
+        db,
+        wrapper,
+    }) => {
+        await copyIntoShow(db, described);
+        render(<ShapeLibraryContents />, wrapper);
+        await userEvent.click(
+            await screen.findByTestId("shape-library-add-described"),
+        );
+        expect(useSavedShapeLibrary.getState().shapes).toEqual([described]);
+        expect(
+            JSON.parse(localStorage.getItem(SAVED_SHAPES_STORAGE_KEY)!),
+        ).toEqual([described]);
     });
 
     it("greys out picking a shape with nobody selected", ({ wrapper }) => {

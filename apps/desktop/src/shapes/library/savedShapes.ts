@@ -1,18 +1,24 @@
-import type { SavedShape } from "@/db-functions/savedShapes";
+import type { SavedDistribution, SavedShape } from "@/db-functions/savedShapes";
+import {
+    storedDistribution,
+    type Distribution,
+    type DistributionMode,
+} from "../distribute/distribution";
 import type { ShapeFrame } from "../frame/frame";
 import { typedValue } from "../command/shapeSteps";
 import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
 import type { ShapeToolEntry } from "../tool/shapeTools";
 import type { XY } from "../types";
-import { intervalNote, type ShapeLibraryRow } from "./shapeLibrary";
+import { spacingNote, type ShapeLibraryRow } from "./shapeLibrary";
 
 /**
- * A saved shape (#353, spec #344): a kind and its intervals, under a name. It keeps no size and
+ * A saved shape (#353, spec #344): a kind, its intervals and how it's filled (#393), under a
+ * name, with an optional description and the dates it was saved and changed. It keeps no size and
  * no marcher count, so it fits any selection: applied to another count, the kind lays out that
- * many spots the saved distance apart. It lives in the user's library across shows, with a copy
- * in each show that uses one (ADR 0006, saved shapes). Everything here is pure.
+ * many spots the saved distance apart, filled the saved way. It lives in the user's library across
+ * shows, with a copy in each show that uses one (ADR 0006, saved shapes). Everything here is pure.
  */
-export type { SavedShape };
+export type { SavedDistribution, SavedShape };
 
 /** A kind a saved shape opens: its own kind, set to the saved intervals as it's drawn */
 export interface SavedToolKind extends AnyToolKind {
@@ -46,25 +52,56 @@ export function intervalsOf(
     );
 }
 
-/** What saving a shape of `kind` keeps: the kind and its intervals, under `name` */
+/**
+ * What a saved shape keeps of how a shape is filled: the distribution without its size (a Files
+ * layout's `files`, which the count decides) or a spread's `seed` (a new placement starts at 1)
+ */
+export function savedDistributionOf(d: Distribution): SavedDistribution {
+    const { seed: _seed, ...rest } = d as Distribution & { seed?: unknown };
+    if (rest.mode !== "files") return rest;
+    const { files: _files, ...layout } = rest.layout;
+    return { ...rest, layout };
+}
+
+/**
+ * What saving a shape of `kind` keeps: the kind, its intervals and how it's filled, under `name`,
+ * with `description` when there is one, dated `at`
+ */
 export function savedShapeOf(
     kind: AnyToolKind,
     params: unknown,
     n: number,
     stepPx: number,
-    named: { readonly id: string; readonly name: string },
+    named: {
+        readonly id: string;
+        readonly name: string;
+        readonly description?: string;
+        /** Now, ISO 8601 */
+        readonly at: string;
+    },
 ): SavedShape {
     const base = baseKindOf(kind);
+    const description = named.description?.trim();
+    const distribution = base.closed?.distribution(params, n);
     return {
         id: named.id,
         name: named.name.trim(),
         kind: base.shape.id,
         kindVersion: base.shape.version,
         intervals: intervalsOf(base, params, n, stepPx),
+        ...(description && { description }),
+        ...(distribution && {
+            distribution: savedDistributionOf(distribution),
+        }),
+        createdAt: named.at,
+        updatedAt: named.at,
     };
 }
 
-/** The name saving offers: the kind and its spacing, "Box 2 apart" */
+/**
+ * The name saving offers: the kind and its spacing, with the stagger for Files ("Box 2 apart,
+ * stagger ½"), or the mode and its spacing ("Spread 2 apart")
+ */
 export function suggestedName(
     kind: AnyToolKind,
     params: unknown,
@@ -72,10 +109,46 @@ export function suggestedName(
     stepPx: number,
 ): string {
     const base = baseKindOf(kind);
-    const note = intervalNote(
+    const distribution = base.closed?.distribution(params, n);
+    const note = spacingNote(
         Object.values(intervalsOf(base, params, n, stepPx)),
+        distribution,
     );
+    if (distribution && distribution.mode !== "files" && note) return note;
     return note ? `${base.shape.label} ${note}` : base.shape.label;
+}
+
+/**
+ * `params` filled the way `saved` says, read by the kind as it reads a recipe's: a Files layout
+ * takes the size the shape has now, and a spread starts at seed 1. A mode the kind can't take, or
+ * doesn't know, leaves `params` as they are.
+ */
+export function withSavedDistribution(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    saved: SavedDistribution | undefined,
+    env: ToolEnv,
+): unknown {
+    const closed = kind.closed;
+    const mode = saved?.mode as DistributionMode | undefined;
+    if (!closed || !saved || !mode || !closed.modes.includes(mode))
+        return params;
+    const start = closed.startMode(params, n, mode);
+    const files = start.mode === "files" ? start.layout.files : 1;
+    const merged =
+        start.mode === "files"
+            ? {
+                  ...start,
+                  ...saved,
+                  layout: { ...start.layout, ...(saved.layout as object) },
+              }
+            : { ...start, ...saved };
+    const read = storedDistribution({ distribution: merged }, files);
+    if (!read || read.mode !== mode) return params;
+    const distribution =
+        read.mode === "spread" ? ({ ...read, seed: 1 } as Distribution) : read;
+    return closed.withDistribution(params, n, distribution, env);
 }
 
 /**
@@ -129,7 +202,7 @@ const KINDS = new Map<string, SavedToolKind>();
 /**
  * The kind `saved` opens, made from its own kind `base`: everything is the base kind's, except
  * that drawing, turning another shape into it and the command bar's starting numbers lay the
- * spots out the saved intervals apart.
+ * spots out the saved intervals apart, filled the saved way.
  * A drawn shape keeps the corner the drag started from. The same saved shape gives the same
  * kind object, so pickers can tell which one is armed.
  */
@@ -154,15 +227,27 @@ export function savedToolKind(
             const drawn = base.draw(from, to, n, env, previous);
             if (drawn === undefined) return undefined;
             const was = base.frameOf(drawn, n);
-            const set = withIntervals(base, drawn, n, saved.intervals, env);
+            const set = withSavedDistribution(
+                base,
+                withIntervals(base, drawn, n, saved.intervals, env),
+                n,
+                saved.distribution,
+                env,
+            );
             return keepCorner(base, set, n, was, from, env);
         },
         fromFrame(frame: ShapeFrame, n: number, env: ToolEnv) {
-            return withIntervals(
+            return withSavedDistribution(
                 base,
-                base.fromFrame(frame, n, env),
+                withIntervals(
+                    base,
+                    base.fromFrame(frame, n, env),
+                    n,
+                    saved.intervals,
+                    env,
+                ),
                 n,
-                saved.intervals,
+                saved.distribution,
                 env,
             );
         },
@@ -173,8 +258,9 @@ export function savedToolKind(
 
 /**
  * The library's Saved group: the user's saved shapes, then the ones only the open show has (a
- * show from another computer), noted as such. Each note starts with the kind: "Box · 2 apart". A saved shape whose kind this app doesn't have is
- * left out.
+ * show from another computer), noted as such. Each note starts with the kind, then how it's
+ * spaced and filled: "Box · 2 apart, stagger ½", "Circle · Spread 2 apart". A saved shape whose
+ * kind this app doesn't have is left out.
  */
 export function savedShapeRows(
     library: readonly SavedShape[],
@@ -191,7 +277,7 @@ export function savedShapeRows(
             // A saved shape has its own name, so its note says which kind it is (story 22)
             const note = [
                 base.shape.label,
-                intervalNote(Object.values(saved.intervals)),
+                spacingNote(Object.values(saved.intervals), saved.distribution),
                 inLibrary ? null : "this show only",
             ]
                 .filter(Boolean)

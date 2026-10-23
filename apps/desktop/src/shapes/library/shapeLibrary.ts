@@ -1,3 +1,9 @@
+import {
+    MODE_LABELS,
+    storedDistribution,
+    type DistributionMode,
+    type Fraction,
+} from "../distribute/distribution";
 import { formatSteps } from "../editor/format";
 import { RING_SLOTS, type RingShape } from "../tool/ringMachine";
 import type { ShapeToolEntry } from "../tool/shapeTools";
@@ -30,6 +36,47 @@ export function intervalNote(steps: readonly number[]): string | null {
     const shown = steps.map(formatSteps);
     const same = shown.every((s) => s === shown[0]);
     return `${same ? shown[0] : shown.join(" × ")} apart`;
+}
+
+const FRACTIONS: Readonly<Record<string, string>> = {
+    "1/2": "½",
+    "1/3": "⅓",
+    "2/3": "⅔",
+    "1/4": "¼",
+    "3/4": "¾",
+    "1/6": "⅙",
+    "5/6": "⅚",
+};
+
+const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+
+/** A stagger as words: "stagger ½", "stagger ⅓ left"; null for none */
+function staggerNote([p, q]: Fraction): string | null {
+    if (p === 0) return null;
+    const d = gcd(Math.abs(p), q);
+    const plain = `${Math.abs(p) / d}/${q / d}`;
+    return `stagger ${FRACTIONS[plain] ?? plain}${p < 0 ? " left" : ""}`;
+}
+
+/**
+ * How a shape is spaced and filled: the spacing, then a Files stagger ("2 apart, stagger ½"), or
+ * the mode first for Outline and Spread ("Spread 2 apart"). `distribution` is a recipe's or a
+ * saved shape's; none, or one this version doesn't read, is plain Files.
+ */
+export function spacingNote(
+    steps: readonly number[],
+    distribution?: { readonly mode: string } | null,
+): string | null {
+    const spacing = intervalNote(steps);
+    const d = distribution
+        ? storedDistribution({ distribution }, 1)
+        : undefined;
+    if (!d) return spacing;
+    if (d.mode !== "files") {
+        const mode = MODE_LABELS[d.mode as DistributionMode];
+        return spacing ? `${mode} ${spacing}` : mode;
+    }
+    return [spacing, staggerNote(d.stagger)].filter(Boolean).join(", ") || null;
 }
 
 /** Every basic kind, in the Shapes tab's order, noted with its default spacing */

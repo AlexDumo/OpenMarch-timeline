@@ -1633,6 +1633,87 @@ test("change: ☆ Save at the bottom of the inspector's shape section saves a se
     );
 });
 
+// Saved shapes keep a description, how they're filled and their dates (#393):
+// saved with a description, the show's copy has them all, and on a machine
+// whose library doesn't have it the library lists it with its description and
+// can take it in, dates and all.
+test("change: a box saved with a description reopens from the show's copy with its description, distribution and dates", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const t3 = await marcherScreen(page, 3);
+    await page.mouse.click(t3.x, t3.y);
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+
+    const section = page.getByTestId("shape-tool-section");
+    await section.getByTestId("shape-section-save").click();
+    const name = section.getByTestId("shape-section-save-name");
+    await expect(name).toBeFocused();
+    await name.fill("Opener block");
+    const description = "Company front for the opener, then into the arc";
+    await section
+        .getByTestId("shape-section-save-description")
+        .fill(description);
+    await page.keyboard.press("Enter");
+    await expect(section.getByTestId("shape-section-save")).toHaveText(
+        "Saved as Opener block",
+    );
+
+    type Row = {
+        id: string;
+        description: string | null;
+        distribution: string | null;
+        created_at: string;
+        updated_at: string;
+    };
+    await expect
+        .poll(
+            async () =>
+                (await show.query<Row>("SELECT * FROM saved_shapes")).length,
+        )
+        .toBe(1);
+    const [copy] = await show.query<Row>("SELECT * FROM saved_shapes");
+    expect(copy.description).toBe(description);
+    // Files, Short back: the layout without its size
+    expect(JSON.parse(copy.distribution!)).toEqual({
+        mode: "files",
+        layout: { family: "shortBack", byFile: false },
+        stagger: [0, 1],
+    });
+    expect(copy.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(copy.updated_at).toBe(copy.created_at);
+
+    // Another machine: my library doesn't have it, the show's copy does
+    await page.evaluate(() => localStorage.removeItem("openmarch:savedShapes"));
+    await page.reload();
+    await waitForField(page);
+    await page.getByTestId("shape-library-tab").click();
+    const row = page.getByTestId(`shape-library-row-${copy.id}`);
+    await expect(row).toContainText("Opener block");
+    await expect(row).toContainText("this show only");
+    const shown = page.getByTestId(`shape-library-description-${copy.id}`);
+    await expect(shown).toHaveText(description);
+    await expect(shown).toHaveAttribute("title", description);
+
+    // Taken into my library, it keeps the description and dates
+    await page.getByTestId(`shape-library-add-${copy.id}`).click();
+    await expect(row).not.toContainText("this show only");
+    const library = await page.evaluate(() =>
+        JSON.parse(localStorage.getItem("openmarch:savedShapes") ?? "[]"),
+    );
+    expect(library).toEqual([
+        expect.objectContaining({
+            id: copy.id,
+            name: "Opener block",
+            description,
+            distribution: JSON.parse(copy.distribution!),
+            createdAt: copy.created_at,
+            updatedAt: copy.updated_at,
+        }),
+    ]);
+});
+
 // Another show, with my library from the show a shape was saved in: the
 // harness opens one show per test, so this show starts with the user's
 // library as the app keeps it (#353 "saved shapes appear in another show").
