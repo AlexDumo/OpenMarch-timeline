@@ -8,10 +8,19 @@ import { PlacedBoxSection } from "../placed/PlacedBoxSection";
 import { usePlacedEditTarget, useToolEditTarget } from "../editor/editTargets";
 import { currentShapeField } from "../field/shapeFieldContext";
 import { SaveShapeButton } from "../library/SaveShapeButton";
+import { ModeSwitch } from "../editor/ModeSwitch";
+import { toolEnvFor } from "./toolEnv";
+
+/** The field's tool environment with no keys held, for a change made from the inspector */
+const inspectorEnv = () => {
+    const field = currentShapeField();
+    return field ? toolEnvFor(field, { shift: false, alt: false }) : null;
+};
 
 /**
  * The inspector's way into the shape tool: with marchers selected, a Box button (also B). While
- * the tool is open, what the keys do. With a shape open or a placed one selected, ☆ Save.
+ * the tool is open, what the keys do. With a shape open or a placed one selected, how it is
+ * filled (the mode switch, for kinds with more than one mode) and ☆ Save.
  */
 export function ShapeToolSection() {
     const selected = useSelectedMarchers()?.selectedMarchers ?? [];
@@ -50,6 +59,7 @@ export function ShapeToolSection() {
                     </ActionButton>
                 </div>
             )}
+            {target && <ModeSwitch target={target} envFor={inspectorEnv} />}
             {target && field && (
                 <SaveShapeButton
                     shape={target}

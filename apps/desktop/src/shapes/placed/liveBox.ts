@@ -9,7 +9,7 @@ import {
     startShapeGesture,
     type ShapeGesture,
 } from "../frame/gestures";
-import { blockKind } from "../kinds/block";
+import { boxShape } from "../box/boxShape";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeContext, XY } from "../types";
 import type { PlacedBox } from "./placedBox";
@@ -114,7 +114,7 @@ export function liveTargets(
 } {
     const members = box.recipe.members;
     if (!layOutAgain && filesOf(params) === filesOf(box.params)) {
-        const slots = blockKind.generate(params, box.spots, ctx);
+        const slots = boxShape.generate(params, box.spots, ctx);
         return {
             members: members.map((m) => ({
                 marcherId: m.marcherId,
@@ -124,9 +124,9 @@ export function liveTargets(
             spots: box.spots,
         };
     }
-    const slots = blockKind.generate(params, members.length, ctx);
+    const slots = boxShape.generate(params, members.length, ctx);
     const assignment = assignSlots({
-        kind: blockKind,
+        kind: boxShape,
         params,
         slots,
         marchers: members.map((m, i) => ({

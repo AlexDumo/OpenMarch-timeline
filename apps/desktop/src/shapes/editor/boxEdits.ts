@@ -7,6 +7,7 @@ import {
     resizeFiles,
     acrossIsDeep,
     onField,
+    withFileCount,
     type BoxParams,
 } from "../box/boxGeometry";
 import {
@@ -123,15 +124,17 @@ export function withFieldCount(
  * the count change that follows.
  */
 export function reoriented(p: BoxParams, spots: number): BoxParams {
-    return {
-        ...p,
-        rotation: normalizeAngle(p.rotation - Math.PI / 2),
-        files: ranksOf(p, spots),
-        across: p.deep,
-        deep: p.across,
-        flipX: undefined,
-        flipY: undefined,
-    };
+    return withFileCount(
+        {
+            ...p,
+            rotation: normalizeAngle(p.rotation - Math.PI / 2),
+            across: p.deep,
+            deep: p.across,
+            flipX: undefined,
+            flipY: undefined,
+        },
+        ranksOf(p, spots),
+    );
 }
 
 /**

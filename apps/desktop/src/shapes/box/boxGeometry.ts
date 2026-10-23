@@ -1,5 +1,11 @@
 import type { BlockParams } from "../kinds/block";
 import type { XY } from "../types";
+import {
+    filesDistribution,
+    storedDistribution,
+    type Distribution,
+} from "../distribute/distribution";
+import { layoutLines } from "../distribute/distribute";
 import type { ToolEnv } from "../tool/toolKind";
 import { pivotOf } from "../frame/pivot";
 import {
@@ -11,17 +17,32 @@ import {
     type ShapeFrame,
 } from "../frame/frame";
 
+/** What every box has: where it is, its file count and intervals, its turn and flips */
+export type BoxSize = Pick<
+    BlockParams,
+    "center" | "rotation" | "files" | "across" | "deep" | "flipX" | "flipY"
+>;
+
 /**
  * A box as the box tool draws it (docs/timeline/research/shapes/06-box-v1.md): a block, its
- * rectangle reaching from marcher to marcher (the edge files and ranks stand on its edges), a
- * short rank at the back and centered. It is drawn square to the field; turning and flipping it
- * are the shape frame's (08-shape-system-ux.md), so every function here works in the box's own
- * axes.
+ * rectangle reaching from marcher to marcher (the edge files and ranks stand on its edges). It is
+ * drawn square to the field; turning and flipping it are the shape frame's
+ * (08-shape-system-ux.md), so every function here works in the box's own axes.
+ *
+ * How it is filled is the host's `distribution` (spec #385), Files only for now. `files` stays
+ * the box's own file count, as recipes have always stored it, and the Files layout's `files`
+ * follows it ({@link withFileCount}); read the layout through {@link boxDistribution}.
  */
-export type BoxParams = BlockParams & {
-    readonly pattern: "grid";
-    readonly shortRank: "center";
-    readonly shortRankAt: "back";
+export type BoxParams = BoxSize & {
+    readonly distribution?: Distribution;
+    /**
+     * Recipes stored before the distributor (#386) say how the box was filled this way: always
+     * a grid with the short rank at the back, centered, which reads as Files, Short back. A box
+     * no longer writes them.
+     */
+    readonly pattern?: BlockParams["pattern"];
+    readonly shortRank?: BlockParams["shortRank"];
+    readonly shortRankAt?: BlockParams["shortRankAt"];
 };
 
 /**
@@ -45,17 +66,44 @@ const SPLIT_HYSTERESIS = 0.15;
  */
 const SPLIT_BAND = Math.log(2);
 
-export const filesOf = (p: BlockParams): number =>
-    Math.max(1, Math.round(p.files));
+export const filesOf = (p: BoxSize): number => Math.max(1, Math.round(p.files));
 
-export const ranksOf = (p: BlockParams, n: number): number =>
-    Math.max(1, Math.ceil(Math.max(1, n) / filesOf(p)));
+/**
+ * How the box is filled: its stored distribution, or Files, Short back with no stagger (a recipe
+ * from before #386). A Files layout always has the box's own file count.
+ */
+export function boxDistribution(p: BoxParams): Distribution {
+    const d = storedDistribution(p, filesOf(p));
+    if (d === undefined) return filesDistribution(filesOf(p));
+    if (d.mode !== "files" || d.layout.files === filesOf(p)) return d;
+    return { ...d, layout: { ...d.layout, files: filesOf(p) } };
+}
+
+/** `p` with `files` across, its Files layout too */
+export function withFileCount<P extends BoxParams>(p: P, files: number): P {
+    const d = p.distribution;
+    return {
+        ...p,
+        files,
+        ...(d?.mode === "files"
+            ? { distribution: { ...d, layout: { ...d.layout, files } } }
+            : {}),
+    };
+}
+
+/** The box's ranks: the lines of its Files layout */
+export function ranksOf(p: BoxParams, n: number): number {
+    const d = boxDistribution(p);
+    const layout =
+        d.mode === "files" ? d.layout : filesDistribution(filesOf(p)).layout;
+    return layoutLines(layout, n).lines.length;
+}
 
 /** How many spots the short rank leaves empty: 0 when every rank is full */
-export const shortBy = (p: BlockParams, n: number): number =>
+export const shortBy = (p: BoxSize, n: number): number =>
     filesOf(p) * ranksOf(p, n) - Math.max(1, n);
 
-export function footprintOf(p: BlockParams, n: number): Footprint {
+export function footprintOf(p: BoxSize, n: number): Footprint {
     const halfW = ((filesOf(p) - 1) * p.across) / 2;
     const halfH = ((ranksOf(p, n) - 1) * p.deep) / 2;
     return {
@@ -67,7 +115,7 @@ export function footprintOf(p: BlockParams, n: number): Footprint {
 }
 
 /** The box's frame: its center, the half sizes through its edge marchers, its turn and flip */
-export function boxFrame(p: BlockParams, n: number): ShapeFrame {
+export function boxFrame(p: BoxSize, n: number): ShapeFrame {
     return {
         center: p.center,
         halfWidth: ((filesOf(p) - 1) * p.across) / 2,
@@ -79,10 +127,7 @@ export function boxFrame(p: BlockParams, n: number): ShapeFrame {
 }
 
 /** The box with `frame`'s center, turn and flip; its size is its own */
-export function withBoxFrame<P extends BlockParams>(
-    p: P,
-    frame: ShapeFrame,
-): P {
+export function withBoxFrame<P extends BoxSize>(p: P, frame: ShapeFrame): P {
     return {
         ...p,
         center: frame.center,
@@ -165,7 +210,10 @@ export function snapToGrid(p: BoxParams, n: number, env: ToolEnv): BoxParams {
     };
 }
 
-/** A box from its file count and intervals, its edge marchers reaching from `anchor` toward `sign` */
+/**
+ * A box from its file count and intervals, its edge marchers reaching from `anchor` toward
+ * `sign`, filled as `like` is (Files, Short back for a new box)
+ */
 function boxFrom(
     anchor: XY,
     sign: XY,
@@ -174,20 +222,28 @@ function boxFrom(
     deep: number,
     n: number,
     env: ToolEnv,
+    like?: BoxParams,
 ): BoxParams {
-    const ranks = Math.ceil(Math.max(1, n) / files);
+    const sized = withFileCount(
+        {
+            center: { x: 0, y: 0 },
+            rotation: 0,
+            files,
+            across,
+            deep,
+            distribution: like
+                ? boxDistribution(like)
+                : filesDistribution(files),
+        },
+        files,
+    );
+    const ranks = ranksOf(sized, n);
     const box: BoxParams = {
+        ...sized,
         center: {
             x: anchor.x + (sign.x * (files - 1) * across) / 2,
             y: anchor.y + (sign.y * (ranks - 1) * deep) / 2,
         },
-        rotation: 0,
-        files,
-        across,
-        deep,
-        pattern: "grid",
-        shortRank: "center",
-        shortRankAt: "back",
     };
     return snapToGrid(box, n, env);
 }
@@ -229,9 +285,7 @@ export function boxInFrame(
         files,
         across,
         deep: d ?? across,
-        pattern: "grid",
-        shortRank: "center",
-        shortRankAt: "back",
+        distribution: filesDistribution(files),
     };
     return snapToGrid(withBoxFrame(box, frame), n, env);
 }
@@ -296,7 +350,7 @@ export const BOX_HANDLE_KEYS: readonly BoxHandleKey[] = [
  * The handles a box shows: a single file has nothing to stretch across and a single rank nothing
  * to stretch deep, so those handles go (both: none)
  */
-export function handleKeysOf(p: BlockParams, n: number): BoxHandleKey[] {
+export function handleKeysOf(p: BoxSize, n: number): BoxHandleKey[] {
     const across = filesOf(p) > 1;
     const deep = ranksOf(p, n) > 1;
     return BOX_HANDLE_KEYS.filter((key) => {
@@ -307,11 +361,7 @@ export function handleKeysOf(p: BlockParams, n: number): BoxHandleKey[] {
 }
 
 /** Where handle `key` is on the field, on the box's corner or edge marchers, turned with it */
-export function boxHandlePoint(
-    p: BlockParams,
-    n: number,
-    key: BoxHandleKey,
-): XY {
+export function boxHandlePoint(p: BoxSize, n: number, key: BoxHandleKey): XY {
     const frame = boxFrame(p, n);
     return frameToField(frame, handleDirection(key, frame));
 }
@@ -438,7 +488,7 @@ function stretchSquare(
         x: movesX ? anchor.x : f.left,
         y: movesY ? anchor.y : f.top,
     };
-    return boxFrom(start, sign, files, across, deep, n, env);
+    return boxFrom(start, sign, files, across, deep, n, env, base);
 }
 
 /**
@@ -447,7 +497,7 @@ function stretchSquare(
  * 2026-10-16), so the ratio is as near as half steps allow. A side handle changes only its own.
  */
 export function keepRatio(
-    base: Pick<BlockParams, "across" | "deep">,
+    base: Pick<BoxSize, "across" | "deep">,
     across: number,
     deep: number,
     movesX: boolean,
@@ -516,7 +566,7 @@ export function resizeFiles(
 ): BoxParams {
     const clamped = Math.min(Math.max(1, n), Math.max(1, Math.round(files)));
     if (clamped === filesOf(p)) return p;
-    return grownFromPivot(p, { ...p, files: clamped }, n, env);
+    return grownFromPivot(p, withFileCount(p, clamped), n, env);
 }
 
 /**
@@ -549,7 +599,7 @@ export function grownFromPivot(
  * Whether `at` grabs the box to move it: inside its edge marchers, or within half an interval
  * of them, so a single rank or file can be grabbed too
  */
-export function insideBox(p: BlockParams, n: number, at: XY): boolean {
+export function insideBox(p: BoxSize, n: number, at: XY): boolean {
     const frame = boxFrame(p, n);
     const local = fieldToFrame(frame, at);
     return (
@@ -559,7 +609,7 @@ export function insideBox(p: BlockParams, n: number, at: XY): boolean {
 }
 
 /** The outline through the box's edge marchers, turned with it: back-left first */
-export function boxCorners(p: BlockParams, n: number): XY[] {
+export function boxCorners(p: BoxSize, n: number): XY[] {
     const frame = boxFrame(p, n);
     const { halfWidth: w, halfDepth: d } = frame;
     return [
@@ -571,7 +621,7 @@ export function boxCorners(p: BlockParams, n: number): XY[] {
 }
 
 /** The field-aligned rectangle around the box's edge marchers, however it's turned */
-export function boxBounds(p: BlockParams, n: number): Footprint {
+export function boxBounds(p: BoxSize, n: number): Footprint {
     const corners = boxCorners(p, n);
     const xs = corners.map((c) => c.x);
     const ys = corners.map((c) => c.y);
@@ -594,7 +644,7 @@ export function acrossIsDeep(rotation: number): boolean {
 }
 
 /** The box's counts and spacings as the field shows them: across is side to side */
-export function onField(p: BlockParams, spots: number) {
+export function onField(p: BoxSize, spots: number) {
     const swap = acrossIsDeep(p.rotation);
     const files = filesOf(p);
     const ranks = ranksOf(p, spots);

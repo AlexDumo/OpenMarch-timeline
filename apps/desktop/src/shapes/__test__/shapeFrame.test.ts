@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockKind } from "../kinds/block";
+import { boxShape } from "../box/boxShape";
 import {
     boxFrame,
     drawBox,
@@ -158,7 +158,7 @@ describe("a turned box", () => {
     });
 
     it("lands on the grid again at a quarter turn", () => {
-        const spots = blockKind.generate(turned(90), 8, ctx);
+        const spots = boxShape.generate(turned(90), 8, ctx);
         for (const s of spots) {
             expect(s.x).toBeCloseTo(snapHalf(s.x), 6);
             expect(s.y).toBeCloseTo(snapHalf(s.y), 6);

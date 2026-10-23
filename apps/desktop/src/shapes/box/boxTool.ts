@@ -1,8 +1,13 @@
-import { blockKind } from "../kinds/block";
 import { resizeCursor } from "../frame/frame";
 import type { ToolKind } from "../tool/toolKind";
+import { distributionFor } from "../distribute/distribution";
 import { BOX_PARAMS } from "./boxParams";
+import { boxRegion, boxShape } from "./boxShape";
 import {
+    boxDistribution,
+    filesOf,
+    grownFromPivot,
+    withFileCount,
     type BoxHandleKey,
     type BoxParams,
     boxCorners,
@@ -24,7 +29,7 @@ import {
  * edge marchers), moved from inside, and turned and flipped through its frame like every kind
  */
 export const boxTool: ToolKind<BoxParams> = {
-    shape: blockKind,
+    shape: boxShape,
     params: BOX_PARAMS,
     scaling: "interval",
     ratioLock: true,
@@ -50,4 +55,29 @@ export const boxTool: ToolKind<BoxParams> = {
     withFrame: (params, _n, frame) => withBoxFrame(params, frame),
     fromFrame: boxInFrame,
     settle: snapToGrid,
+    closed: {
+        // Outline (#390) and Even spread (#391) join in their tickets
+        modes: ["files"],
+        region: boxRegion,
+        distribution: boxDistribution,
+        startMode: (params, _n, mode) => distributionFor(mode, filesOf(params)),
+        withDistribution(params, n, distribution, env) {
+            // How recipes said it before the distributor goes: the distribution says it now
+            const {
+                pattern: _pattern,
+                shortRank: _shortRank,
+                shortRankAt: _shortRankAt,
+                ...rest
+            } = params;
+            const next: BoxParams = { ...rest, distribution };
+            return distribution.mode === "files"
+                ? grownFromPivot(
+                      params,
+                      withFileCount(next, distribution.layout.files),
+                      n,
+                      env,
+                  )
+                : next;
+        },
+    },
 };

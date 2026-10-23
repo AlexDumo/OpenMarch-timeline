@@ -128,3 +128,41 @@ Verification: `savedShapes.test.ts` saves a shape through the shape session and 
 other counts with the box and a fake kind; the migration test checks 0028 adds only its table;
 a browser scenario in `box-tool.spec.mts` saves a box, draws it on another selection at its
 spacing, and finds it listed from the show's copy after the user's library is cleared.
+
+## Amendment, 2026-10-22: how a closed shape is filled
+
+Distribution modes (spec #385, owner grilling 2026-10-21/22) let a closed shape be filled in
+Files, Outline or Even spread. The shape host owns the fill: a closed kind describes only its
+region, and one shared distributor lays out the spots. This needs no schema change.
+
+1. **The distribution is a host-owned object in `params`**, beside the kind's own numbers, as
+   the frame and pivot are (amendment of 2026-10-20). Every closed kind stores it the same way:
+   - `{ "mode": "files", "layout": { "family", "files", "byFile" }, "stagger": [p, q] }`: ranks
+     and files at the kind's intervals. `family` names the layout (`"shortBack"`, today's box;
+     the box's layout picker adds the others), `files` is the full rank's count and `byFile` turns
+     the rows to run front to back. `stagger` is the signed offset of each rank as the fraction
+     p/q of the across interval, so ⅓ round-trips exactly.
+   - `{ "mode": "outline", "oddGap": … }` and `{ "mode": "spread", "seed", "generator" }`, whose
+     settings their tickets define.
+2. **No `distribution` reads as Files, Short back, no stagger.** That is how every box recipe
+   stored before this amendment reads, `pattern: "grid"` ones included, and it lays out exactly
+   the spots they had, so the box's `kind_version` stays 1. `pattern`, `shortRank` and
+   `shortRankAt` retire: a box no longer writes them. Recipes from before box v1 (short rank at
+   the front or off center) still read by them. A distribution this version can't read (an
+   unknown mode or broken fields) reads as the default too.
+3. **The box's file count stays `params.files`**, as recipes have always stored it. Its Files
+   layout's `files` is written beside it to match, and readers take the box's own when they
+   differ.
+4. **An even spread is versioned by its `generator`**, apart from the kind's version, because its
+   spots come from a seeded algorithm that may be improved later. A recipe whose generator this
+   app doesn't have is shown as a plain group of positions, as decision 5 does for an unknown
+   kind or version: it can't be reopened, but nothing is lost. A count or layout change is never
+   stored as a generator change.
+5. **The spots stay the kind's to generate**, through the distributor, in a fixed order, so the
+   `slot` numbers of `timeline_shape_recipe_marchers` keep meaning the same spot.
+
+Verification: `distributor.test.ts` checks the box's Files spots against the block generator for
+every count from 1 to 120 and every file count, turned and flipped, as old and new recipes;
+`distributionSession.test.ts` saves a staggered box through `placementOf` and reads it back
+through `boxesAt`, reads an old `pattern: "grid"` recipe unchanged, and fills a fake closed kind;
+a browser scenario in `box-tool.spec.mts` places a box and finds its distribution in the recipe.
