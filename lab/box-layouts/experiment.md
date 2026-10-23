@@ -3,49 +3,54 @@
 # Keep `id` stable: feedback is filed under it.
 id: box-layouts
 title: Pick a layout for a box
-summary: A box can now be a full block, a stagger, rounded, short at the back or notched. The inspector lists each layout's versions as small pictures, wide to deep, and a compact row sits under the box's editor.
+summary: A box can be a full block, a stagger, rounded, short at the back or notched. This build follows your last round. Turned copies are gone and ↻ on the box's editor turns the box instead. The row under the editor is now a layout menu. Layouts the count can't make show greyed with what they need, in place of the "Not for 23" line.
 status: open
 questions:
-  - Could you tell what each layout looks like from its picture before clicking it?
-  - Do the labels make sense ("5 × 5", "6 × 4, 1 short", "5 × 5 staggered")? Did you miss knowing which version is turned?
-  - 'When a layout was missing, did the line "Not for 23: Full (add 1 or remove 2)" tell you enough?'
-  - Did − and + on the size keep the layout you picked? Was that what you wanted?
-  - Did a new box start in the layout you picked last? Did you expect it to?
-  - Which did you use more, the list in the inspector or the small row under the box's editor? Is one of them unnecessary?
-  - With a count your layout can't make, was the note in the box's editor (for example "Full needs 1 more or 2 fewer") clear?
+  - Is ↻ next to the size where you expected to turn the box? Do you miss the turned versions in the lists?
+  - Does the layout menu under the box's editor work for you? Is hovering a layout (or clicking its arrow) the right way to see its versions?
+  - 'Do the greyed layouts with "add 1 / remove 2" tell you what you need, in the menu and in the inspector?'
+  - Does the inspector list feel calmer now, with nothing missing?
+  - When a layout can't make your count, is the greyed layout next to the menu clear?
+  - Anything else about picking a layout?
 ---
 
-A box used to have one layout: full ranks, with the back rank short and
-centered. Now it has five, each a full block with a pattern of spots left
-out, and every rank centered:
+A box has five layouts, each a full block with a pattern of spots left out,
+and every rank centered: **Full**, **Stagger** (every other rank one
+shorter), **Rounded** (front and back ranks shorter), **Short back** (the
+box as it was) and **Notched** (the middle rank shorter). They always keep
+that order.
 
-- **Full**: nothing left out (only for counts that divide evenly).
-- **Stagger**: every other rank one shorter, so it sits between the files
-  (23 as 5 / 4 / 5 / 4 / 5).
-- **Rounded**: one or two left out of the front and back ranks.
-- **Short back**: the box as it was.
-- **Notched**: one or two left out of the middle rank.
+**What changed since the last build (your feedback)**
 
-Each layout lists its versions from wide to deep, and Stagger, Rounded and
-Notched also come turned, running front to back. A version is named by
-the full block it's cut from, across × deep. The counts are in its
-tooltip.
+- A version that is just a quarter turn of another is gone from the lists,
+  so there are no more two "3 × 3"s. **↻** next to the size on the box's
+  editor turns the box a quarter. Drawing a tall box or pressing − still
+  gives the tall versions.
+- The small row under the box's editor is now a **layout menu**. It lists
+  every layout. Hover a layout, or click its arrow, to see its versions,
+  then click one. Clicking the layout itself picks its version nearest
+  your box's proportions.
+- Layouts your count can't make stay in their place, **greyed**, as a
+  picture at the nearest count they make, with what they need ("add 1 /
+  remove 2"). This replaces the "Not for 23" line, in the menu and in the
+  inspector.
+- When your box's layout can't make the count (say you picked Full and then
+  selected 23), Short back stands in, and the editor shows Full greyed next
+  to the menu with what it needs.
+- The inspector list is calmer: labels on the left, no frames around
+  unpicked versions.
+- A new box still starts in the layout you picked last.
 
 **What to try**
 
-- Select 23 marchers (or any count), press **B** and draw a box. Look at
-  the **Shapes** section of the inspector and click a few versions.
-- Use the small row of pictures under the box's editor to switch layouts.
-- Press − and + next to the size. Then type a size the layout can't make.
-- Place the box, then select everyone again and draw a new one: it starts
-  in the layout you picked last.
-- Select a count that your layout can't make (one more or one fewer) and
-  look at the note next to the size.
-- Open the command bar (**/** or **⌘K**), pick **Shape › Box** and type a
-  layout at the last step, for example "stagger" or "rounded 5x5".
+- Select 23 marchers (or any count), press **B** and draw a box. Pick
+  versions in the inspector and from the menu under the editor.
+- Press **↻**, then − and + next to the size.
+- Select a count your layout can't make (one more or one fewer) and look
+  at the menu and the inspector.
 
 **Good to know**
 
-- Picking a version keeps the box's spacing.
-- The stagger slider (leaning ranks by a third, a sixth and so on) comes
-  next, in the same section.
+- − and + still move between versions of the layout. We're looking at what
+  makes that feel jumpy separately; this build doesn't change it yet.
+- The stagger slider comes next, in the same section.
