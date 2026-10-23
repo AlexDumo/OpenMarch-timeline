@@ -12,7 +12,7 @@ import {
     movedBox,
     withoutMembers,
     type PlacedBox,
-    type StoredBoxParams,
+    type StoredParams,
 } from "./placedBox";
 
 /** Marchers that left a box in an edit, and the box as it was saved without them */
@@ -87,7 +87,7 @@ export function boxMembershipEdit({
                 if (change.type === "none") continue;
                 const own = box.recipe.timelineId === timelineId;
                 const save = (
-                    params: StoredBoxParams,
+                    params: StoredParams,
                     members: readonly ShapeRecipeMember[],
                 ) =>
                     saveShapeRecipeInTransaction({
@@ -103,7 +103,7 @@ export function boxMembershipEdit({
                 } else {
                     const kept = withoutMembers(box.recipe, change.left);
                     const recipeId = await save(
-                        kept.params as StoredBoxParams,
+                        kept.params as StoredParams,
                         kept.members,
                     );
                     if (kept.members.length > 0)

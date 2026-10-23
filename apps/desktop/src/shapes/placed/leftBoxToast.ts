@@ -9,7 +9,7 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { BoxLeave } from "./boxMembership";
-import { closeUp, resplit, type BoxRecipe } from "./placedBox";
+import { closeUp, isPlacedBox, resplit, type BoxRecipe } from "./placedBox";
 
 /** One toast per box, so marchers leaving two boxes in one edit can fill either */
 const leftBoxToastId = (recipeId: number) => `shape-left-box-${recipeId}`;
@@ -89,6 +89,36 @@ function showOne(leave: BoxLeave, rewrite: BoxRewrite): void {
     if (!field) return;
     const ctx = shapeContextFor(field);
     const names = leave.left.map(nameOf);
+    const { box } = leave;
+    if (!isPlacedBox(box)) {
+        // Close up for every kind is #392; until then the holes stay, and undo puts them back
+        const shape = box.kind.shape.label.toLowerCase();
+        toast.info(
+            names.length === 1
+                ? tolgee.t(
+                      "shapes.placed.left.one",
+                      "{name} left the {shape}",
+                      {
+                          name: names[0]!,
+                          shape,
+                      },
+                  )
+                : tolgee.t(
+                      "shapes.placed.left.many",
+                      "{count} left the {shape}",
+                      { count: names.length, shape },
+                  ),
+            {
+                id: leftBoxToastId(leave.recipeId),
+                duration: LEFT_BOX_TOAST_MS,
+                description: tolgee.t(
+                    "shapes.box.left.hint",
+                    "Their spots stay empty. Undo puts them back.",
+                ),
+            },
+        );
+        return;
+    }
     const message =
         names.length === 1
             ? tolgee.t("shapes.box.left.one", "{name} left the box", {
@@ -104,7 +134,7 @@ function showOne(leave: BoxLeave, rewrite: BoxRewrite): void {
             label: tolgee.t("shapes.box.left.closeUp", "Close up"),
             onClick: () =>
                 void refill(leave, rewrite, (marchers) =>
-                    closeUp(leave.box.params, leave.box.spots, marchers, ctx),
+                    closeUp(box.params, box.spots, marchers, ctx),
                 ),
         },
         cancel: {
@@ -112,8 +142,8 @@ function showOne(leave: BoxLeave, rewrite: BoxRewrite): void {
             onClick: () =>
                 void refill(leave, rewrite, (marchers) =>
                     resplit(
-                        leave.box.params,
-                        leave.box.spots,
+                        box.params,
+                        box.spots,
                         marchers,
                         toolEnvFor(field, { shift: false, alt: false }),
                         ctx,

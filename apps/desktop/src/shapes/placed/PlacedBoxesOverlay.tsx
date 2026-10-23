@@ -9,29 +9,30 @@ import {
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
-import { boxBounds, boxFrame, onField } from "../box/boxGeometry";
 import { frameCorners } from "../frame/frame";
-import { formatSteps } from "../editor/format";
+import { shapeOutline } from "../frame/gestures";
 import { useShapeToolStore } from "../tool/shapeToolStore";
+import type { XY } from "../types";
 import { useBoxSelectionStore } from "./boxSelectionStore";
 import type { PlacedBox } from "./placedBox";
+import { placedNumbers } from "./placedBoxText";
 import {
     invalidatePlacedBoxes,
     placedBoxesAt,
     usePlacedBoxStore,
 } from "./placedBoxStore";
 
-/** One placed box as the field outlines it, in field units */
+/** One placed shape as the field outlines it, in field units */
 export interface PlacedBoxDrawing {
     readonly id: number;
-    /** The rectangle through its edge marchers, half a step out so it doesn't cut the dots */
+    /** The rectangle around its outline, half a step out so it doesn't cut the dots */
     readonly rect: {
         readonly left: number;
         readonly top: number;
         readonly right: number;
         readonly bottom: number;
     };
-    /** Its outline as drawn, half a step out, turned with it: back-left first */
+    /** Its outline as drawn, half a step out, turned with it: a box's back-left corner first */
     readonly corners: readonly { readonly x: number; readonly y: number }[];
     readonly label: string;
 }
@@ -40,21 +41,58 @@ export interface PlacedBoxDrawing {
 const LABEL_PX = 11;
 const LABEL_GAP_PX = 30;
 
-/** "Box 5 × 4 · 2 steps", or "· 2 × 1½ steps" when the intervals differ */
+/**
+ * "Box 5 × 4 · 2 steps" (or "· 2 × 1½ steps" when the intervals differ), "Circle · 2 steps": the
+ * kind and the numbers it declares, as the field shows them
+ */
 export function boxLabel(box: PlacedBox, stepPx: number): string {
-    // As the field shows it: across is side to side however the box is turned
-    const field = onField(box.params, box.spots);
-    const across = formatSteps(field.acrossSpacing / stepPx);
-    const deep = formatSteps(field.deepSpacing / stepPx);
-    return tolgee.t(
-        "shapes.box.label",
-        "Box {files} × {ranks} · {interval} steps",
-        {
-            files: field.across,
-            ranks: field.deep,
-            interval: across === deep ? across : `${across} × ${deep}`,
-        },
-    );
+    const { counts, intervals } = placedNumbers(box, stepPx);
+    const name = counts
+        ? `${box.kind.shape.label} ${counts}`
+        : box.kind.shape.label;
+    return intervals === null
+        ? name
+        : tolgee.t("shapes.placed.label", "{name} · {interval} steps", {
+              name,
+              interval: intervals,
+          });
+}
+
+/**
+ * The shape's outline `pad` further out. A shape with corners (or none of its own) grows its
+ * frame, so every edge moves out the same; a round one grows from its center.
+ */
+function outlineOut(box: PlacedBox, pad: number): XY[] {
+    const { kind, params, spots } = box;
+    const frame = kind.frameOf(params, spots);
+    const round =
+        kind.outline !== undefined &&
+        kind.closed?.region(params, spots).corners.length === 0;
+    if (!round)
+        return frameCorners({
+            ...frame,
+            halfWidth: frame.halfWidth + pad,
+            halfDepth: frame.halfDepth + pad,
+        });
+    const c = frame.center;
+    return shapeOutline(kind, params, spots).map((p) => {
+        const d = Math.hypot(p.x - c.x, p.y - c.y);
+        const k = d > 0 ? (d + pad) / d : 1;
+        return { x: c.x + (p.x - c.x) * k, y: c.y + (p.y - c.y) * k };
+    });
+}
+
+/** The field-aligned rectangle around the shape's outline, however it's turned */
+function boundsOf(box: PlacedBox) {
+    const outline = shapeOutline(box.kind, box.params, box.spots);
+    const xs = outline.map((p) => p.x);
+    const ys = outline.map((p) => p.y);
+    return {
+        left: Math.min(...xs),
+        right: Math.max(...xs),
+        top: Math.min(...ys),
+        bottom: Math.max(...ys),
+    };
 }
 
 let drawn: readonly PlacedBoxDrawing[] = [];
@@ -63,9 +101,9 @@ let drawn: readonly PlacedBoxDrawing[] = [];
 export const drawnPlacedBoxes = (): readonly PlacedBoxDrawing[] => drawn;
 
 /**
- * Placed boxes on the field (docs/timeline/research/shapes/07-placed-boxes.md), by the View tab's
+ * Placed shapes on the field (docs/timeline/research/shapes/07-placed-boxes.md), by the View tab's
  * **Shapes** setting: while any member is selected (the default), always, or never. A thin
- * outline through each box's edge marchers, half a step out, and its label above it, in the
+ * outline through each shape's edge marchers, half a step out, and its label above it, in the
  * theme's shape color. Hidden during playback and while the Shape tool is open, which draws its
  * own; the selected box draws its own outline and handles (`LiveBoxMode`). Few boxes, so SVG
  * over the field, like the editor's overlay. It takes no pointer events, and exports don't draw
@@ -107,13 +145,8 @@ export function PlacedBoxesOverlay({
                         box.recipe.members.some((m) => ids.has(m.marcherId))),
             )
             .map((box): PlacedBoxDrawing => {
-                const frame = boxFrame(box.params, box.spots);
-                const corners = frameCorners({
-                    ...frame,
-                    halfWidth: frame.halfWidth + pad,
-                    halfDepth: frame.halfDepth + pad,
-                });
-                const f = boxBounds(box.params, box.spots);
+                const corners = outlineOut(box, pad);
+                const f = boundsOf(box);
                 return {
                     id: box.recipe.id,
                     rect: {

@@ -106,18 +106,31 @@ Saved shapes (#353, spec #344) are named shapes a user keeps to use again. They 
 beside recipes, following the Assets pattern of a user library ("My Library") with a copy in
 each show that uses one ("This show"), so a show opens with its shapes on another computer.
 
-1. **A saved shape is a kind and its intervals, under a name.** It stores the kind's id and
-   version and each interval parameter's value in steps, by the parameter's key. It stores no
-   size, count, center, rotation, flip or pivot, so it fits any selection. Picking it opens its
-   kind; drawing it, or turning an open shape into it, lays the spots out the saved distance
-   apart. A shape placed from it is an ordinary recipe of its kind, with no reference to the
-   saved shape, so it reopens without it.
+1. **A saved shape is a kind, its intervals and how it's filled, under a name.** It stores the
+   kind's id and version, each interval parameter's value in steps by the parameter's key, and,
+   for a closed kind, its **distribution** (updated 2026-10-22, spec #385, #393): the recipe's
+   `params.distribution` (amendment of 2026-10-22, below) without a Files layout's `files` or a
+   spread's `seed`. It stores no size, count, center, rotation, flip, pivot or seed, so it fits any
+   selection. Picking it opens its kind; drawing it, or turning an open shape into it, lays the
+   spots out the saved distance apart in the saved mode, layout, stagger and outline gap. The
+   kind reads the saved distribution as it reads a recipe's, at the size it's drawn, and an even
+   spread starts at seed 1. A mode the kind can't take or doesn't know leaves the kind's own
+   fill. A shape placed from it is an ordinary recipe of its kind, with no reference to the saved
+   shape, so it reopens without it.
+   - It also keeps an optional **description** and the dates it was **created** and last
+     **updated** (ISO 8601). Changing a saved shape sets its updated date. Library entries saved
+     before these fields read without them.
+   - Its preview is still generated from the kind's geometry, never stored (#378).
 2. **The user's library is per-user app storage**, like shape stars: a JSON list in the
    renderer's localStorage (`openmarch:savedShapes`). The Assets Library's content-addressed
    store in the main process was not reused: a saved shape is a few numbers, not bytes, it has
    no versions or license, and the web editor has no Assets Library but does have shapes.
 3. **The show's copy is the `saved_shapes` table** (migration 0028): `id` (the same id as in
-   the user's library), `name`, `kind`, `kind_version` and `intervals` (JSON). Like
+   the user's library), `name`, `kind`, `kind_version`, `intervals` (JSON), `description`
+   (NULL for none), `distribution` (JSON, NULL for an open kind) and `created_at` /
+   `updated_at`. The copy takes the library entry's dates; an entry with none is dated when it's
+   copied, and refreshing a copy keeps its created date. Migration 0028 hadn't reached `main`
+   when these columns came, so it was regenerated with them rather than followed by another. Like
    `library_items` it has no history triggers: saving a shape isn't a drill edit, so undo
    doesn't change it. Saving writes the copy, and placing a shape picked from a saved one writes
    or refreshes it. The library lists the user's saved shapes, then copies the user's library
@@ -125,9 +138,13 @@ each show that uses one ("This show"), so a show opens with its shapes on anothe
    library and the open show; other shows keep their copies.
 
 Verification: `savedShapes.test.ts` saves a shape through the shape session and applies it to
-other counts with the box and a fake kind; the migration test checks 0028 adds only its table;
-a browser scenario in `box-tool.spec.mts` saves a box, draws it on another selection at its
-spacing, and finds it listed from the show's copy after the user's library is cleared.
+other counts with the box and a fake kind, including a staggered box that keeps its layout
+family and stagger, and a spread that keeps its mode but not its seed; the db-function
+`savedShapes.test.ts` round-trips the description, distribution and dates through the show's
+copy, and the library panel test through the user's library; the migration test checks 0028
+adds only its table, with the new columns; a browser scenario in `box-tool.spec.mts` saves a box,
+draws it on another selection at its spacing, and finds it listed from the show's copy after the
+user's library is cleared, and another saves one with a description and finds it there.
 
 ## Amendment, 2026-10-22: how a closed shape is filled
 

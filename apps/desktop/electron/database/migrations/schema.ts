@@ -629,12 +629,26 @@ export const saved_shapes = sqliteTable(
         kind_version: integer().notNull(),
         /** JSON object, each interval parameter's key to its value in steps */
         intervals: text().notNull(),
+        /** What the user wrote about it; NULL for nothing */
+        description: text(),
+        /**
+         * JSON object, how a closed kind is filled, as in a recipe's `params.distribution` but
+         * without its size or seed (ADR 0006); NULL for an open kind
+         */
+        distribution: text(),
         created_at: text()
+            .notNull()
+            .default(sql`(CURRENT_TIMESTAMP)`),
+        updated_at: text()
             .notNull()
             .default(sql`(CURRENT_TIMESTAMP)`),
     },
     (_table) => [
         check("saved_shapes_intervals_check", sql`json_valid(intervals)`),
+        check(
+            "saved_shapes_distribution_check",
+            sql`distribution IS NULL OR json_valid(distribution)`,
+        ),
     ],
 );
 

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as z from "zod";
 import { schema } from "@/global/database/db";
 import type { DbConnection, DbTransaction } from "./types";
@@ -13,6 +13,16 @@ import type { DbConnection, DbTransaction } from "./types";
 const { saved_shapes } = schema;
 
 /**
+ * How a saved shape of a closed kind is filled: a recipe's `params.distribution` without its size
+ * (a Files layout's `files`) or a spread's `seed` (ADR 0006, saved shapes). Kept as stored and read
+ * by the kind when it's applied, so a mode this version doesn't know is kept, not lost.
+ */
+export type SavedDistribution = {
+    readonly mode: string;
+    readonly [setting: string]: unknown;
+};
+
+/**
  * A saved shape: a kind and its intervals, under a name. The same record is the user's library
  * entry and the show's copy, by its id.
  */
@@ -25,6 +35,16 @@ export interface SavedShape {
     readonly kindVersion: number;
     /** Each interval parameter's key to its value, in steps */
     readonly intervals: Readonly<Record<string, number>>;
+    /** What the user wrote about it; absent for nothing */
+    readonly description?: string;
+    /** How it's filled, for a closed kind; absent for an open kind */
+    readonly distribution?: SavedDistribution;
+    /**
+     * When it was saved and last changed, ISO 8601. Library entries saved before shapes kept
+     * dates have none; the show's copy always has them.
+     */
+    readonly createdAt?: string;
+    readonly updatedAt?: string;
 }
 
 /** A saved shape's intervals as stored, here and in the user's library */
@@ -33,38 +53,65 @@ export const SavedShapeIntervalsSchema = z.record(
     z.number().finite(),
 );
 
-/** A whole saved shape as stored in the user's library */
+/** A saved shape's distribution as stored: any object naming its mode */
+export const SavedDistributionSchema = z.looseObject({ mode: z.string() });
+
+/**
+ * A whole saved shape as stored in the user's library. Everything after the intervals is
+ * optional, so entries saved before it still read; a distribution that doesn't read is dropped,
+ * not the entry.
+ */
 export const SavedShapeSchema = z.object({
     id: z.string().min(1),
     name: z.string(),
     kind: z.string(),
     kindVersion: z.number().int(),
     intervals: SavedShapeIntervalsSchema,
+    description: z.string().optional().catch(undefined),
+    distribution: SavedDistributionSchema.optional().catch(undefined),
+    createdAt: z.string().optional().catch(undefined),
+    updatedAt: z.string().optional().catch(undefined),
 });
 
 type RealDatabaseSavedShape = typeof saved_shapes.$inferSelect;
 
-/** The row as a saved shape; undefined when its intervals don't read */
+const parseJson = (text: string): unknown => {
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+};
+
+/**
+ * The row as a saved shape; undefined when its intervals don't read. A distribution that doesn't
+ * read is left out, so the shape fills the kind's default way.
+ */
 function realDatabaseSavedShapeToSavedShape(
     row: RealDatabaseSavedShape,
 ): SavedShape | undefined {
-    let intervals: unknown;
-    try {
-        intervals = JSON.parse(row.intervals);
-    } catch {
-        intervals = null;
-    }
-    const parsed = SavedShapeIntervalsSchema.safeParse(intervals);
+    const parsed = SavedShapeIntervalsSchema.safeParse(
+        parseJson(row.intervals),
+    );
     if (!parsed.success) {
         console.warn(`Skipping saved shape ${row.id}`, parsed.error);
         return undefined;
     }
+    const distribution =
+        row.distribution === null
+            ? undefined
+            : SavedDistributionSchema.safeParse(parseJson(row.distribution))
+                  .data;
     return {
         id: row.id,
         name: row.name,
         kind: row.kind,
         kindVersion: row.kind_version,
         intervals: parsed.data,
+        ...(row.description !== null && { description: row.description }),
+        ...(distribution && { distribution }),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
     };
 }
 
@@ -85,7 +132,11 @@ export async function getSavedShapes({
     return rows.flatMap((row) => realDatabaseSavedShapeToSavedShape(row) ?? []);
 }
 
-/** Creates the show's copy of `shape`, or brings an existing copy up to date with it */
+/**
+ * Creates the show's copy of `shape`, or brings an existing copy up to date with it. The copy
+ * takes the shape's own dates; one without dates (an old library entry) is dated now, and an
+ * existing copy keeps the day it was created.
+ */
 export async function createSavedShapeInTransaction({
     tx,
     shape,
@@ -98,10 +149,19 @@ export async function createSavedShapeInTransaction({
         kind: shape.kind,
         kind_version: shape.kindVersion,
         intervals: JSON.stringify(shape.intervals),
+        description: shape.description ?? null,
+        distribution: shape.distribution
+            ? JSON.stringify(shape.distribution)
+            : null,
+        updated_at: shape.updatedAt ?? sql`(CURRENT_TIMESTAMP)`,
     };
     await tx
         .insert(saved_shapes)
-        .values({ id: shape.id, ...values })
+        .values({
+            id: shape.id,
+            ...values,
+            ...(shape.createdAt && { created_at: shape.createdAt }),
+        })
         .onConflictDoUpdate({ target: saved_shapes.id, set: values })
         .run();
 }
