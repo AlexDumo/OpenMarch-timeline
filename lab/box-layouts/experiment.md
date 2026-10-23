@@ -8,7 +8,7 @@ status: open
 questions:
   - Could you tell what each layout looks like from its picture before clicking it?
   - Do the labels make sense ("5 × 5", "6 × 4, 1 short", "5 × 5 staggered")? Did you miss knowing which version is turned?
-  - When a layout wasn't offered, did the "Not for 23: Full (add 1 or remove 2)" line tell you enough?
+  - 'When a layout was missing, did the line "Not for 23: Full (add 1 or remove 2)" tell you enough?'
   - Did − and + on the size keep the layout you picked? Was that what you wanted?
   - Did a new box start in the layout you picked last? Did you expect it to?
   - Which did you use more, the list in the inspector or the small row under the box's editor? Is one of them unnecessary?
