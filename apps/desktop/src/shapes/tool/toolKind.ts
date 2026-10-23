@@ -1,5 +1,6 @@
 import type { Pivot, ShapeFrame } from "../frame/frame";
 import type { ScrubMove } from "../editor/scrub";
+import type { ClosedShape } from "../distribute/region";
 import type { AnyShapeKind, XY } from "../types";
 
 /**
@@ -47,8 +48,11 @@ export interface ToolParam<P> {
     readonly key: string;
     /** What it is, for tooltips and screen readers: "Side-to-side spacing, in steps" */
     readonly label: string;
-    /** Counts are whole numbers; steps and degrees are typed and shown as such */
-    readonly unit: "count" | "steps" | "degrees";
+    /**
+     * Counts are whole numbers; steps and degrees are typed and shown as such; a choice is typed
+     * by name (the host's mode step)
+     */
+    readonly unit: "count" | "steps" | "degrees" | "choice";
     /** Shown in the floating chip */
     readonly primary: boolean;
     /** Which way a drag changes it: right for more, up for more, or the first way moved */
@@ -163,6 +167,12 @@ export interface ToolKind<P> {
     fromFrame(frame: ShapeFrame, n: number, env: ToolEnv): P;
     /** After a turn or flip: the shape put back on the grid, if it snaps to one */
     settle?(params: P, n: number, env: ToolEnv): P;
+    /**
+     * A closed kind (spec #385): its region and the modes it can be filled in. Its shape's
+     * `generate` lays its spots out through the host's distributor (`distribute/distribute.ts`).
+     * Absent for open kinds (a line, an arc).
+     */
+    readonly closed?: ClosedShape<P>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

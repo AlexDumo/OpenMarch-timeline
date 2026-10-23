@@ -11,7 +11,7 @@ import {
     ranksOf,
     type BoxParams,
 } from "../box/boxGeometry";
-import { blockKind } from "../kinds/block";
+import { boxShape } from "../box/boxShape";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeContext, XY } from "../types";
 import { frameToField } from "../frame/frame";
@@ -51,10 +51,7 @@ const same = (a: XY, b: XY) =>
 function boxOf(
     recipe: PlacedRecipe,
 ): { params: BoxParams; spots: number } | null {
-    if (
-        recipe.kind !== blockKind.id ||
-        recipe.kindVersion !== blockKind.version
-    )
+    if (recipe.kind !== boxShape.id || recipe.kindVersion !== boxShape.version)
         return null;
     const stored = recipe.params as StoredBoxParams | null;
     if (!stored || typeof stored !== "object" || !stored.center) return null;
@@ -186,9 +183,9 @@ function placeOn(
     ctx: ShapeContext,
 ): BoxRecipe {
     const n = marchers.length;
-    const slots = blockKind.generate(params, n, ctx);
+    const slots = boxShape.generate(params, n, ctx);
     const assignment = assignSlots({
-        kind: blockKind,
+        kind: boxShape,
         params,
         slots,
         marchers,

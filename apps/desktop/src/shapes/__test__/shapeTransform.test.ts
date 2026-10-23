@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
-import { blockKind } from "../kinds/block";
+import { boxShape } from "../box/boxShape";
 import { type BoxParams } from "../box/boxGeometry";
 import { frameDrawing } from "../field/fieldModeBase";
 import { DEGREE, pivotPoint, type PivotKey } from "../frame/frame";
@@ -315,7 +315,7 @@ describe("a placed shape remembers its turn and flip", () => {
             members: placement.members,
             params: JSON.parse(JSON.stringify(placement.recipe.params)),
         };
-        expect(recipe.kind).toBe(blockKind.id);
+        expect(recipe.kind).toBe(boxShape.id);
         const at = new Map(
             placement.members.map((m) => [m.marcherId, { x: m.x, y: m.y }]),
         );

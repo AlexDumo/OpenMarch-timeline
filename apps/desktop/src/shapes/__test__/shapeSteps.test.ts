@@ -4,7 +4,12 @@ import { filesOf, ranksOf, type BoxParams } from "../box/boxGeometry";
 import { shapeSteps, startingParams } from "../command/shapeSteps";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { XY } from "../types";
-import { rowTool, type RowParams } from "./fakeRowKind";
+import {
+    padTool,
+    rowTool,
+    type PadParams,
+    type RowParams,
+} from "./fakeRowKind";
 
 /** The command bar's steps (#354): Shape › kind asks the kind's declared parameters */
 
@@ -87,5 +92,45 @@ describe("a kind the host has never heard of gets its steps too", () => {
             ["gap", "2"],
         ]);
         expect((params as RowParams).gap).toBeCloseTo(3.5 * STEP);
+    });
+});
+
+describe("the mode step (#386)", () => {
+    const N = 5;
+    const start = () => startingParams(padTool, starts(N), N, env) as PadParams;
+
+    it("comes first for a closed kind with more than one mode, typed by name", () => {
+        const { steps } = shapeSteps(padTool, start(), N, env, []);
+        expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
+            ["mode", "Files"],
+            ["gap", "2"],
+        ]);
+        expect(steps[0]!.param.label).toBe("Fill: Files, Outline");
+    });
+
+    it("fills the shape in the mode typed, and later steps follow it", () => {
+        const { params, steps } = shapeSteps(padTool, start(), N, env, [
+            "out",
+            "3",
+        ]);
+        expect((params as PadParams).distribution?.mode).toBe("outline");
+        expect((params as PadParams).gap).toBe(30);
+        expect(steps.map((s) => s.invalid)).toEqual([false, false]);
+    });
+
+    it("marks a mode the kind doesn't have as not understood", () => {
+        const base = start();
+        const { params, steps } = shapeSteps(padTool, base, N, env, ["spread"]);
+        expect(params).toBe(base);
+        expect(steps[0]!.invalid).toBe(true);
+    });
+
+    it("is hidden for a kind with one mode and for open kinds", () => {
+        expect(
+            keys(boxTool, startingParams(boxTool, starts(12), 12, env), 12),
+        ).not.toContain("mode");
+        expect(
+            keys(rowTool, startingParams(rowTool, starts(4), 4, env), 4),
+        ).not.toContain("mode");
     });
 });

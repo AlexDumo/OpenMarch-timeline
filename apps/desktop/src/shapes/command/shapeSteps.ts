@@ -1,3 +1,10 @@
+import { MODE_LABELS } from "../distribute/distribution";
+import {
+    distributionOf,
+    parseMode,
+    switchModes,
+    withMode,
+} from "../distribute/modes";
 import { formatSteps } from "../editor/format";
 import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
 import type { XY } from "../types";
@@ -37,7 +44,11 @@ export function shapeSteps(
 ): { params: unknown; steps: ShapeStep[] } {
     let params = base;
     const steps: ShapeStep[] = [];
-    for (const param of kind.params as readonly ToolParam<unknown>[]) {
+    const mode = modeStep(kind);
+    for (const param of [
+        ...(mode ? [mode] : []),
+        ...(kind.params as readonly ToolParam<unknown>[]),
+    ]) {
         if (param.shown && !param.shown(params, n)) continue;
         const initial = param.display(params, n, env.stepPx);
         const answer = answers[steps.length];
@@ -50,6 +61,33 @@ export function shapeSteps(
         steps.push({ param, initial, invalid });
     }
     return { params, steps };
+}
+
+/**
+ * The host's first step for a closed kind with more than one mode (spec #385): how it is filled,
+ * typed by name ("Outline", or "out"). None for a kind with one mode, or an open kind.
+ */
+export function modeStep(kind: AnyToolKind): ToolParam<unknown> | null {
+    const modes = switchModes(kind);
+    if (modes.length === 0) return null;
+    return {
+        key: "mode",
+        label: `Fill: ${modes.map((m) => MODE_LABELS[m]).join(", ")}`,
+        unit: "choice",
+        primary: false,
+        drag: "x",
+        interval: false,
+        blends: false,
+        display(params, n) {
+            const d = distributionOf(kind, params, n);
+            return d ? MODE_LABELS[d.mode] : "";
+        },
+        type(params, n, text, env) {
+            const mode = parseMode(text, modes);
+            return mode === null ? null : withMode(kind, params, n, mode, env);
+        },
+        scrub: (base) => base,
+    };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockKind } from "../kinds/block";
+import { boxShape } from "../box/boxShape";
 import { drawBox, filesOf, ranksOf, shortBy } from "../box/boxGeometry";
 import {
     boxesAt,
@@ -34,7 +34,7 @@ function recipe(
     id = 1,
 ): PlacedRecipe {
     const params = drawBox({ x: 0, y: 0 }, to, n, env)!;
-    const slots = blockKind.generate(params, n, ctx);
+    const slots = boxShape.generate(params, n, ctx);
     return {
         id,
         timelineId,

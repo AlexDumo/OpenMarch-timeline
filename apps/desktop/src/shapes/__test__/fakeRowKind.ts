@@ -2,6 +2,14 @@ import { fieldToFrame, frameToField, type ShapeFrame } from "../frame/frame";
 import { formatSteps } from "../editor/format";
 import { parseSteps, scrubDistance, scrubValue } from "../editor/scrub";
 import type { ToolKind } from "../tool/toolKind";
+import {
+    distributionFor,
+    filesDistribution,
+    storedDistribution,
+    type Distribution,
+} from "../distribute/distribution";
+import { distribute, layoutLines } from "../distribute/distribute";
+import { rectRegion } from "../distribute/region";
 import type { ShapeKind, XY } from "../types";
 
 /**
@@ -393,4 +401,127 @@ export const gapListTool: ToolKind<GapListParams> = {
         center: frame.center,
         rotation: frame.rotation,
     }),
+};
+
+/**
+ * A fourth test kind (#386, spec #385): a closed square pad that declares only its region and two
+ * modes, Files and Outline, and leaves laying out its spots to the host's distributor. It shows
+ * the distributor and the mode switch don't depend on the box.
+ */
+export interface PadParams {
+    readonly center: XY;
+    /** Field units between neighbors, both ways */
+    readonly gap: number;
+    readonly rotation: number;
+    readonly distribution?: Distribution;
+}
+
+/** About square: the pad's own file count for `n` */
+const padFiles = (n: number) =>
+    Math.max(1, Math.ceil(Math.sqrt(Math.max(1, n))));
+
+const padDistribution = (p: PadParams, n: number): Distribution =>
+    storedDistribution(p, padFiles(n)) ?? filesDistribution(padFiles(n));
+
+function padFrame(p: PadParams, n: number): ShapeFrame {
+    const d = padDistribution(p, n);
+    const { width, lines } = layoutLines(
+        d.mode === "files" ? d.layout : filesDistribution(padFiles(n)).layout,
+        n,
+    );
+    return {
+        center: p.center,
+        halfWidth: ((width - 1) * p.gap) / 2,
+        halfDepth: ((lines.length - 1) * p.gap) / 2,
+        rotation: p.rotation,
+        flipX: false,
+        flipY: false,
+    };
+}
+
+function padSpots(p: PadParams, n: number) {
+    const frame = padFrame(p, n);
+    return distribute({
+        region: rectRegion(frame.halfWidth, frame.halfDepth),
+        n,
+        distribution: padDistribution(p, n),
+        across: p.gap,
+        deep: p.gap,
+    }).map((s) => ({ ...frameToField(frame, s), row: s.row, col: s.col }));
+}
+
+const padShape: ShapeKind<PadParams> = {
+    ...(rowShape as unknown as ShapeKind<PadParams>),
+    id: "test-pad",
+    label: "Pad",
+    family: "fill",
+    fit: () => ({ center: { x: 0, y: 0 }, gap: 10, rotation: 0 }),
+    outline: (p, n) => [padSpots(p, n).map(({ x, y }) => ({ x, y }))],
+    generate: (p, n) => (n <= 0 ? [] : padSpots(p, n)),
+    orderKey: (p, point, _ctx, n) => {
+        const local = fieldToFrame(padFrame(p, n), point);
+        return [local.y, local.x];
+    },
+};
+
+export const padTool: ToolKind<PadParams> = {
+    shape: padShape,
+    params: rowTool.params as unknown as ToolKind<PadParams>["params"],
+    scaling: "interval",
+    draw(from, to, n, env) {
+        const length = Math.abs(to.x - from.x);
+        if (length < env.stepPx / 2) return undefined;
+        return {
+            center: env.gridSnap({
+                x: (from.x + to.x) / 2,
+                y: (from.y + to.y) / 2,
+            }),
+            gap: gapOf(
+                length / Math.max(1, padFiles(n) - 1) / env.stepPx,
+                env.stepPx,
+            ),
+            rotation: 0,
+        };
+    },
+    handles: () => [],
+    dragHandle: (base) => base,
+    contains(p, n, at) {
+        const frame = padFrame(p, n);
+        const local = fieldToFrame(frame, at);
+        return (
+            Math.abs(local.x) <= frame.halfWidth + p.gap / 2 &&
+            Math.abs(local.y) <= frame.halfDepth + p.gap / 2
+        );
+    },
+    move: (base, _n, delta, env) => ({
+        ...base,
+        center: env.gridSnap({
+            x: base.center.x + delta.x,
+            y: base.center.y + delta.y,
+        }),
+    }),
+    frameOf: padFrame,
+    fromFrame: (frame, n, env) => ({
+        center: frame.center,
+        gap: gapOf(
+            (2 * frame.halfWidth) / Math.max(1, padFiles(n) - 1) / env.stepPx,
+            env.stepPx,
+        ),
+        rotation: frame.rotation,
+    }),
+    withFrame: (p, _n, frame) => ({
+        ...p,
+        center: frame.center,
+        rotation: frame.rotation,
+    }),
+    closed: {
+        modes: ["files", "outline"],
+        region: (p, n) => {
+            const frame = padFrame(p, n);
+            return rectRegion(frame.halfWidth, frame.halfDepth);
+        },
+        distribution: padDistribution,
+        startMode: (_p, n, mode) => distributionFor(mode, padFiles(n)),
+        withDistribution: (p, _n, distribution) => ({ ...p, distribution }),
+    },
 };

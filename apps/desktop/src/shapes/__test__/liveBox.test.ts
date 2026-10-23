@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockKind } from "../kinds/block";
+import { boxShape } from "../box/boxShape";
 import { drawBox, filesOf } from "../box/boxGeometry";
 import {
     liveFiles,
@@ -28,7 +28,7 @@ const ctx: ShapeContext = { stepPx: STEP, snapPoint: (p) => p };
 /** A placed 2 × 2 box, 20 apart, from (0,0) to (20,20); marchers 1..4 */
 function placed(): PlacedBox {
     const params = drawBox({ x: 0, y: 0 }, { x: 20, y: 20 }, 4, env)!;
-    const slots = blockKind.generate(params, 4, ctx);
+    const slots = boxShape.generate(params, 4, ctx);
     return {
         recipe: {
             id: 7,

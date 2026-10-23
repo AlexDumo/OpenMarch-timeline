@@ -921,6 +921,52 @@ test("change: a placed box comes back turned and flipped when selected again", a
     await expect(section.getByTestId("transform-rotation")).toHaveText(turned);
 });
 
+// How a shape is filled (#386, spec #385): the host's distributor lays the
+// box out in Files, Short back, as it always was, and the recipe keeps the
+// distribution. The box has one mode, so the inspector shows no mode switch.
+
+test("change: a placed box keeps its distribution, Files with the short rank at the back, and shows no mode switch", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    await expect(page.getByTestId("shape-tool-section")).toBeVisible();
+    await expect(page.getByTestId("shape-mode-switch")).toHaveCount(0);
+    const spots = (await shapeOverlay(page))!.spots;
+
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    // Everyone stands on a spot the open box showed
+    await expect
+        .poll(async () =>
+            (await savedPositions(show, 0)).every((p) =>
+                spots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < CLOSE),
+            ),
+        )
+        .toBe(true);
+    await waitForIdle(page);
+    const [recipe] = await show.query<{ params: string }>(
+        "SELECT params FROM timeline_shape_recipes",
+    );
+    const stored = JSON.parse(recipe.params);
+    expect(stored.distribution).toEqual({
+        mode: "files",
+        layout: { family: "shortBack", files: stored.files, byFile: false },
+        stagger: [0, 1],
+    });
+    expect(stored).not.toHaveProperty("pattern");
+
+    // Selected again, the placed box is read back from its recipe, still with
+    // no mode switch
+    await page.keyboard.press("Escape");
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await expect(page.getByTestId("shape-mode-switch")).toHaveCount(0);
+});
+
 // The pivot on the field (#350): Cmd/Ctrl-drag from the center dot pulls it
 // out into a yellow crosshair, it snaps to marchers, turns go around it, it is
 // saved with the box, and a double click sends it back to the center.
