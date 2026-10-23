@@ -8,12 +8,22 @@ import type { CarrySpan } from "./timelineCarryForward";
  * ends where it began (Only Page N, unlink) or a kept spot (keep later pages). Read from the
  * marcher's resolver spans, as the inspector's hold line is.
  *
+ * "Ends there" means the move's own end: a span that stops because a later move takes the marcher
+ * over partway (spec R-2) is a point along the way, not a coordinate anyone set, and no row ends
+ * on it for Remove keyframe to take back.
+ *
  * The field asks per playhead move, so each marcher's Set beats are worked out once per resolver
  * version (`marcherSetBeats`) and looked up per beat (`isSetAt`, `followingAt`).
  */
 
-/** A resolver span, with its assignment for telling kept spots apart. */
-export type SetSpan = CarrySpan & { readonly assignmentId?: number | null };
+/**
+ * A resolver span, with its assignment for telling kept spots apart and its assignment's end for
+ * telling a move's end from the count a later move cuts in (`SpanInfo.assignmentEnd`).
+ */
+export type SetSpan = CarrySpan & {
+    readonly assignmentId?: number | null;
+    readonly assignmentEnd?: number | null;
+};
 
 const NO_KEPT: ReadonlySet<number> = new Set();
 
@@ -33,6 +43,8 @@ export function marcherSetBeats(
     for (const span of spans) {
         if (span.kind === "hold" || !Number.isFinite(span.end)) continue;
         if (span.assignmentId != null && kept.has(span.assignmentId)) continue;
+        if (span.assignmentEnd != null && span.assignmentEnd !== span.end)
+            continue;
         if (!Number.isFinite(span.start) || moved(span, positionAt))
             beats.add(span.end);
     }

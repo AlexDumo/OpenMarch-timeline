@@ -386,6 +386,11 @@ export function createTimelineOracleForTesting(host: TimelineSnapshot): Oracle;
   many marchers on each edit; walking `explain()` span by span would pull
   origins, FTL entries and diagnostics for each one. The reference oracle is
   unchanged.
+- **Amendment (2026-10-22, project owner): `SpanInfo.assignmentEnd`.** Each span
+  also carries its assignment's `end_beat` (null for holds), from the resolver
+  and the reference oracle alike. Additive. A span stops before its row's end
+  where a higher layer cuts in (R-2); the timeline's keyframes (fork #332) count
+  only a span that ends where its row does, since no row ends at a cut.
 
 ### 5. Change-log listener contract (desktop)
 
