@@ -10,6 +10,7 @@ import { currentShapeField } from "../field/shapeFieldContext";
 import { SaveShapeButton } from "../library/SaveShapeButton";
 import { ModeSwitch } from "../editor/ModeSwitch";
 import { LayoutPicker } from "../editor/LayoutPicker";
+import { OutlineGap } from "../editor/OutlineGap";
 import { ReshuffleButton } from "../editor/ReshuffleButton";
 import { toolEnvFor } from "./toolEnv";
 
@@ -64,6 +65,7 @@ export function ShapeToolSection() {
             )}
             {target && <ModeSwitch target={target} envFor={inspectorEnv} />}
             {target && <LayoutPicker target={target} envFor={inspectorEnv} />}
+            {target && <OutlineGap target={target} envFor={inspectorEnv} />}
             {target && (
                 <ReshuffleButton
                     target={target}

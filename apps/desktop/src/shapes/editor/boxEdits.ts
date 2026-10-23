@@ -1,6 +1,7 @@
 import {
     boxBlock,
     boxDistribution,
+    boxOutlineSides,
     filesOf,
     keepRatio,
     ranksOf,
@@ -19,6 +20,7 @@ import {
     turnShape,
 } from "../frame/gestures";
 import { boxTool } from "../box/boxTool";
+import { gapAsSeen } from "../distribute/outline";
 import {
     DEGREE,
     normalizeAngle,
@@ -66,6 +68,10 @@ export function withRanks(
     const now = ranksOf(p, spots);
     const want = Math.min(n, Math.max(1, Math.round(ranks)));
     if (want === now) return p;
+    // An outline's spots down a side and across its back always go round the count: a + b is
+    // half the loop
+    if (boxDistribution(p).mode === "outline")
+        return withFiles(p, spots, Math.ceil(n / 2) - want + 2, env);
     // Not every count deep fits: 64 in 9 ranks is still 8 across. Go on until the count changes.
     const step = want > now ? 1 : -1;
     for (let r = want; r >= 1 && r <= n; r += step) {
@@ -249,9 +255,42 @@ export function reoriented(p: BoxParams, spots: number): BoxParams {
             deep: p.across,
             flipX: undefined,
             flipY: undefined,
+            ...reorientedGap(p, spots),
         },
         ranksOf(p, spots),
     );
+}
+
+/** A quarter turn back takes an outline's back to its right, and its left to its back */
+const QUARTER_BACK = {
+    back: "right",
+    right: "front",
+    front: "left",
+    left: "back",
+} as const;
+
+/**
+ * An outline's gap where {@link reoriented} puts it: the same spot on the field, with no flip and
+ * named by the box's new sides
+ */
+function reorientedGap(p: BoxParams, spots: number): Partial<BoxParams> {
+    const d = boxDistribution(p);
+    if (d.mode !== "outline") return {};
+    const sides = boxOutlineSides(p, Math.max(1, spots), d.oddGap.side);
+    const seen = gapAsSeen(d.oddGap, sides, p.flipX === true, p.flipY === true);
+    const len =
+        seen.side === "back" || seen.side === "front" ? sides.a : sides.b;
+    // The back and front now run front to back, the other way round
+    const at =
+        seen.at === null || seen.side === "left" || seen.side === "right"
+            ? seen.at
+            : len - seen.at;
+    return {
+        distribution: {
+            ...d,
+            oddGap: { ...seen, side: QUARTER_BACK[seen.side], at },
+        },
+    };
 }
 
 /**

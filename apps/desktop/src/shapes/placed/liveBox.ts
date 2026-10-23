@@ -141,8 +141,13 @@ export function liveTargets(
 } {
     const members = box.recipe.members;
     const shape = box.kind.shape;
-    if (!layOutAgain && !newLayout(box, params)) {
-        const slots = shape.generate(params, box.spots, ctx);
+    const slots = shape.generate(params, box.spots, ctx);
+    // An outline's count across isn't in its distribution, so the spots are compared too (#390)
+    if (
+        !layOutAgain &&
+        !newLayout(box, params) &&
+        sameLattice(box, slots, ctx)
+    ) {
         return {
             members: members.map((m) => ({
                 marcherId: m.marcherId,
@@ -152,11 +157,11 @@ export function liveTargets(
             spots: box.spots,
         };
     }
-    const slots = shape.generate(params, members.length, ctx);
+    const laidOut = shape.generate(params, members.length, ctx);
     const assignment = assignSlots({
         kind: shape,
         params,
-        slots,
+        slots: laidOut,
         marchers: members.map((m, i) => ({
             id: m.marcherId,
             at: { x: m.x, y: m.y },
@@ -168,13 +173,30 @@ export function liveTargets(
     return {
         members: members.map((m, i) => {
             const slot = assignment[i]!;
-            return { marcherId: m.marcherId, slot, ...xyOf(slots[slot]!) };
+            return { marcherId: m.marcherId, slot, ...xyOf(laidOut[slot]!) };
         }),
         spots: members.length,
     };
 }
 
 const xyOf = (p: XY): XY => ({ x: p.x, y: p.y });
+
+/**
+ * Whether `slots` are the box's own spots moved (each keeps its row and file, or its place round
+ * an outline), so members can keep theirs: not after a new count across, a new mode, or an
+ * outline's gap moved (#390)
+ */
+function sameLattice(
+    box: PlacedBox,
+    slots: readonly { readonly row?: number; readonly col?: number }[],
+    ctx: ShapeContext,
+): boolean {
+    const was = box.kind.shape.generate(box.params, box.spots, ctx);
+    return (
+        was.length === slots.length &&
+        was.every((s, i) => s.row === slots[i]!.row && s.col === slots[i]!.col)
+    );
+}
 
 /** Whether a turn or flip kept the members on their spots, so it's neither order any more */
 export const keptOf = (box: PlacedBox): boolean =>

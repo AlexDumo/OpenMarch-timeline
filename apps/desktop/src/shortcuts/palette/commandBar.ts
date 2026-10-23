@@ -33,6 +33,11 @@ export interface CommandRun {
     preview(answers: readonly string[]): readonly CommandStep[];
     /** The last step was answered */
     finish(answers: readonly string[]): void;
+    /**
+     * A one-liner's answers placed on the steps, for a command whose steps a one-liner may skip
+     * (a shape's mode: "box 4x2 3" keeps it as it is); as typed when absent
+     */
+    fillAhead?(answers: readonly string[]): readonly string[];
     /** What answering the last step does, for its key hint ("Place"); "Done" when absent */
     readonly finishLabel?: string;
     /** Escape: everything as it was before the command began */

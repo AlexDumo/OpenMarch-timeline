@@ -11,6 +11,7 @@ import {
     type FrameSpot,
 } from "../distribute/distribute";
 import {
+    DEFAULT_ODD_GAP,
     storedDistribution,
     type Distribution,
     type DistributionMode,
@@ -45,7 +46,7 @@ export const CIRCLE_MODES: readonly DistributionMode[] = ["outline", "spread"];
 const UNIT_CIRCLE = circleRegion(1);
 
 /** How a new circle is filled */
-const OUTLINE: Distribution = { mode: "outline" };
+const OUTLINE: Distribution = { mode: "outline", oddGap: DEFAULT_ODD_GAP };
 
 /**
  * How the circle is filled: its stored distribution when it's one of the circle's modes, else

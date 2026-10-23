@@ -78,6 +78,19 @@ export function shapeSteps(
 }
 
 /**
+ * A one-liner's answers on the kind's steps: one that doesn't name a mode leaves the mode step as
+ * it is, so "box 4x2 3" still sizes the box and "box outline 4x2" fills it in Outline
+ */
+export function fillAhead(
+    kind: AnyToolKind,
+    answers: readonly string[],
+): readonly string[] {
+    const modes = switchModes(kind);
+    if (modes.length === 0 || answers.length === 0) return answers;
+    return parseMode(answers[0]!, modes) === null ? ["", ...answers] : answers;
+}
+
+/**
  * The host's first step for a closed kind with more than one mode (spec #385): how it is filled,
  * typed by name ("Outline", or "out"). None for a kind with one mode, or an open kind.
  */

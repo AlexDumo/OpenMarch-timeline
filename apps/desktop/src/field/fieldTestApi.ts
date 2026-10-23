@@ -174,6 +174,8 @@ export type FieldTestShapeOverlay = {
     walks: { from: { x: number; y: number }; to: { x: number; y: number } }[];
     /** The hollow rings where its marchers start (at the start flag), field units. */
     rings: { x: number; y: number }[];
+    /** Spots it leaves empty on purpose (an odd-count outline's gap), field units. */
+    gaps: { x: number; y: number }[];
     /** Its handles, in the viewport. */
     handles: ScreenPoint[];
     /** Drawing (a drag draws it) or open; null for a mode that doesn't say. */

@@ -166,6 +166,7 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         })),
         handles: drawing.handles.map(screen),
         rings: (drawing.rings ?? []).map(copy),
+        gaps: (drawing.gaps ?? []).map(copy),
         stage: drawing.stage ?? null,
         knob: drawing.knob ? screen(drawing.knob.at) : null,
         centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,

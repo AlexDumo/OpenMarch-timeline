@@ -159,7 +159,15 @@ region, and one shared distributor lays out the spots. This needs no schema chan
      the box's layout picker adds the others), `files` is the full rank's count and `byFile` turns
      the rows to run front to back. `stagger` is the signed offset of each rank as the fraction
      p/q of the across interval, so ⅓ round-trips exactly.
-   - `{ "mode": "outline", "oddGap": … }`, whose settings its ticket defines.
+   - `{ "mode": "outline", "oddGap": { "side", "at", "style" } }`: spots around the edge at the
+     intervals, one on every corner. An odd count leaves one spot between corners out: on `side`
+     (`"back"`, `"front"`, `"left"` or `"right"`, the kind's own sides before any flip), `at`
+     intervals from that side's start (left to right on the back and front, front to back on the
+     sides), or its middle when `at` is null. `style` `"spread"` (the default, owner 2026-10-23)
+     spreads that side's spots evenly between its corners; `"gap"` leaves the spot empty instead.
+     A missing or broken `oddGap` reads as the back spread evenly, and an `at` the count no longer
+     has reads as the middle of its side. A region with no corners (the circle) has no gap to leave and ignores
+     `oddGap`.
    - `{ "mode": "spread", "seed", "generator", "count" }` (#391): a seeded scatter whose closest
      pair is the kind's interval. `seed` is a whole number from 1 (Reshuffle stores the next
      one), `generator` the algorithm (decision 4), and `count` the spot count the seed was laid
@@ -175,7 +183,8 @@ region, and one shared distributor lays out the spots. This needs no schema chan
    unknown mode or broken fields) reads as the default too.
 3. **The box's file count stays `params.files`**, as recipes have always stored it. Its Files
    layout's `files` is written beside it to match, and readers take the box's own when they
-   differ.
+   differ. In Outline it is the spots across the back and front, which set the outline's
+   proportions; the spots down each side follow from the count.
 4. **An even spread is versioned by its `generator`**, apart from the kind's version, because its
    spots come from a seeded algorithm that may be improved later. A recipe whose generator this
    app doesn't have is shown as a plain group of positions, as decision 5 does for an unknown
@@ -229,6 +238,9 @@ every count from 1 to 120 and every file count, turned and flipped, as old and n
 `distributionSession.test.ts` saves a staggered box through `placementOf` and reads it back
 through `boxesAt`, reads an old `pattern: "grid"` recipe unchanged, and fills a fake closed kind;
 a browser scenario in `box-tool.spec.mts` places a box and finds its distribution in the recipe.
+`outlineMode.test.ts` (#390) round-trips an outline's gap through a recipe, checks it goes back to
+its side's middle when its spot is gone, and reads a broken `oddGap` as the default; a browser
+scenario places an outline on an odd count with its gap moved and finds it in the recipe.
 `circleTool.test.ts` checks a circle's neighbors are one interval apart at every count from 2 to
 120, and a browser scenario places a circle and finds `circle` version 2 in Outline in its recipe.
 For layouts, `layoutCatalogue.test.ts` checks every version from 1 to 120 marchers against the

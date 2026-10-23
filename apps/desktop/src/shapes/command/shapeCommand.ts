@@ -17,7 +17,7 @@ import {
     type ToolState,
 } from "../tool/toolMachine";
 import { useShapeToolStore } from "../tool/shapeToolStore";
-import { shapeSteps, startingParams } from "./shapeSteps";
+import { fillAhead, shapeSteps, startingParams } from "./shapeSteps";
 import { useLastLayoutStore } from "../tool/lastLayout";
 
 /** A layout typed in the bar becomes the one a new box starts in, as picking one does (#387) */
@@ -123,6 +123,7 @@ export function beginShapeCommand(
         // The last answer places the shape, through the host's place function (sims B354: a
         // "Done" that left it open read as a trap)
         finishLabel: "Place",
+        fillAhead: (answers) => fillAhead(kind, answers),
         finish(answers) {
             unsubscribe();
             run.preview(answers);

@@ -19,7 +19,7 @@ import { runAction } from "@/shortcuts/registry";
 import { boxTool } from "../../box/boxTool";
 import { boxBlock, type BoxParams } from "../../box/boxGeometry";
 import type { ToolEnv } from "../../tool/toolKind";
-import { shapeSteps, startingParams } from "../shapeSteps";
+import { fillAhead, shapeSteps, startingParams } from "../shapeSteps";
 
 /**
  * The layout step (#387) in the command bar: Shape › Box asks it after the box's numbers, from
@@ -69,6 +69,7 @@ function withBox() {
                 invalid: s.invalid,
             }));
         },
+        fillAhead: (answers) => fillAhead(boxTool, answers),
         finish: box.finish,
         cancel: vi.fn(),
     });
@@ -186,17 +187,18 @@ describe("the command bar's layout step", () => {
         expect(box.finish).not.toHaveBeenCalled();
     });
 
-    // The box's mode step comes first; #399's fillAhead lets a one-liner skip it
-    it('a one-liner such as "box files 6x4 2" still fills the size and spacing', async () => {
+    // The box's mode step comes first; a one-liner that names no mode skips it (fillAhead, #399)
+    it('a one-liner such as "box 6x4 2" still fills the size and spacing', async () => {
         const box = withBox();
         renderBar();
-        await choose("box files 6x4 2");
+        await choose("box 6x4 2");
         expect(question()).toBe("Front-to-back spacing, in steps");
         key("Enter");
         expect(question()).toMatch(/^Layout/);
         key("Enter");
+        // The mode step left as it is
         expect(box.finish).toHaveBeenCalledWith([
-            "files",
+            "",
             "6x4",
             "2",
             "2",
