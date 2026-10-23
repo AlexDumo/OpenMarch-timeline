@@ -56,11 +56,12 @@ export const boxTool: ToolKind<BoxParams> = {
     fromFrame: boxInFrame,
     settle: snapToGrid,
     closed: {
-        // Outline (#390) and Even spread (#391) join in their tickets
-        modes: ["files"],
+        // Outline joins in #390
+        modes: ["files", "spread"],
         region: boxRegion,
         distribution: boxDistribution,
-        startMode: (params, _n, mode) => distributionFor(mode, filesOf(params)),
+        startMode: (params, n, mode) =>
+            distributionFor(mode, filesOf(params), n),
         withDistribution(params, n, distribution, env) {
             // How recipes said it before the distributor goes: the distribution says it now
             const {
@@ -70,14 +71,15 @@ export const boxTool: ToolKind<BoxParams> = {
                 ...rest
             } = params;
             const next: BoxParams = { ...rest, distribution };
-            return distribution.mode === "files"
-                ? grownFromPivot(
-                      params,
-                      withFileCount(next, distribution.layout.files),
-                      n,
-                      env,
-                  )
-                : next;
+            // A new mode resizes the shape: it grows from the pivot
+            return grownFromPivot(
+                params,
+                distribution.mode === "files"
+                    ? withFileCount(next, distribution.layout.files)
+                    : next,
+                n,
+                env,
+            );
         },
     },
 };

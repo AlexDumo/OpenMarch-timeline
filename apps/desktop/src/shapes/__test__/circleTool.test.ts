@@ -265,9 +265,9 @@ describe("the circle and the host", () => {
         ]);
     });
 
-    it("fills in Outline only, so no mode switch shows and Files never does", () => {
-        expect(circleTool.closed!.modes).toEqual(["outline"]);
-        expect(switchModes(circleTool)).toEqual([]);
+    it("fills in Outline or Spread (#391), never Files", () => {
+        expect(circleTool.closed!.modes).toEqual(["outline", "spread"]);
+        expect(switchModes(circleTool)).toEqual(["outline", "spread"]);
         const p = circle(20);
         expect(distributionOf(circleTool, p, 6)).toEqual({ mode: "outline" });
         expect(withMode(circleTool, p, 6, "files", env)).toBe(p);
@@ -347,8 +347,9 @@ describe("the circle and the host", () => {
             env.gridSnap({ x: 300 + (7 * 7) / 2, y: 300 }),
         );
         expect(p.interval).toBe(20);
-        const { steps } = shapeSteps(circleTool, p, 8, env, ["3"]);
+        const { steps } = shapeSteps(circleTool, p, 8, env, ["outline", "3"]);
         expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
+            ["mode", "Outline"],
             ["interval", "2"],
         ]);
     });

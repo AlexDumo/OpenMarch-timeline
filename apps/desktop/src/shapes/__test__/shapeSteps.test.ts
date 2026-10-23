@@ -35,6 +35,7 @@ describe("the box's steps", () => {
     it("asks each declared parameter in order, starting from its default", () => {
         const { steps } = shapeSteps(boxTool, start(), N, env, []);
         expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
+            ["mode", "Files"],
             ["size", "4 × 3"],
             ["across", "2"],
             ["deep", "2"],
@@ -49,32 +50,47 @@ describe("the box's steps", () => {
 
     it("answers change the shape, and a later step starts from the earlier answers", () => {
         const { params, steps } = shapeSteps(boxTool, start(), N, env, [
+            "",
             "6x2",
             "3",
         ]);
         const p = params as BoxParams;
         expect([filesOf(p), ranksOf(p, N)]).toEqual([6, 2]);
         expect(p.across).toBeCloseTo(3 * STEP);
-        expect(steps.map((s) => s.initial)).toEqual(["4 × 3", "2", "2"]);
+        expect(steps.map((s) => s.initial)).toEqual([
+            "Files",
+            "4 × 3",
+            "2",
+            "2",
+        ]);
     });
 
     it("an answer that isn't understood is marked and changes nothing", () => {
         const { params, steps } = shapeSteps(boxTool, start(), N, env, [
+            "",
             "lots",
         ]);
-        expect(steps[0]!.invalid).toBe(true);
+        expect(steps[1]!.invalid).toBe(true);
         expect(filesOf(params as BoxParams)).toBe(4);
     });
 
     it("an empty answer keeps the number", () => {
         const base = start();
-        expect(shapeSteps(boxTool, base, N, env, ["", ""]).params).toBe(base);
+        expect(shapeSteps(boxTool, base, N, env, ["", "", ""]).params).toBe(
+            base,
+        );
     });
 
     it("a spacing with one marcher that way isn't asked", () => {
-        expect(keys(boxTool, start(), N)).toEqual(["size", "across", "deep"]);
-        const oneRank = shapeSteps(boxTool, start(), N, env, ["12x1"]);
+        expect(keys(boxTool, start(), N)).toEqual([
+            "mode",
+            "size",
+            "across",
+            "deep",
+        ]);
+        const oneRank = shapeSteps(boxTool, start(), N, env, ["", "12x1"]);
         expect(oneRank.steps.map((s) => s.param.key)).toEqual([
+            "mode",
             "size",
             "across",
         ]);
@@ -92,6 +108,25 @@ describe("a kind the host has never heard of gets its steps too", () => {
             ["gap", "2"],
         ]);
         expect((params as RowParams).gap).toBeCloseTo(3.5 * STEP);
+    });
+});
+
+describe("the box's steps in Spread (#391)", () => {
+    const N = 12;
+
+    it("asks the mode, then only the spacing: a spread has no files or ranks", () => {
+        const base = startingParams(boxTool, starts(N), N, env) as BoxParams;
+        const { params, steps } = shapeSteps(boxTool, base, N, env, [
+            "spr",
+            "3",
+        ]);
+        expect(steps.map((s) => [s.param.key, s.invalid])).toEqual([
+            ["mode", false],
+            ["across", false],
+        ]);
+        const p = params as BoxParams;
+        expect(p.distribution?.mode).toBe("spread");
+        expect(p.across).toBeCloseTo(3 * STEP);
     });
 });
 
@@ -126,8 +161,12 @@ describe("the mode step (#386)", () => {
     });
 
     it("is hidden for a kind with one mode and for open kinds", () => {
+        const filesOnly: AnyToolKind = {
+            ...padTool,
+            closed: { ...padTool.closed!, modes: ["files"] },
+        };
         expect(
-            keys(boxTool, startingParams(boxTool, starts(12), 12, env), 12),
+            keys(filesOnly, startingParams(filesOnly, starts(N), N, env), N),
         ).not.toContain("mode");
         expect(
             keys(rowTool, startingParams(rowTool, starts(4), 4, env), 4),

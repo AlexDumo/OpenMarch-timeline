@@ -51,9 +51,21 @@ describe("the mode switch", () => {
         });
     });
 
-    it("is hidden while the kind has one mode (the box, Files only)", () => {
+    it("offers the box Files and Spread (#391)", () => {
         const box = drawBox({ x: 0, y: 0 }, { x: 40, y: 20 }, 6, env);
-        const { container } = shown(boxTool, box);
+        shown(boxTool, box);
+        const group = screen.getByRole("group", { name: "Fill" });
+        expect(
+            [...group.querySelectorAll("button")].map((b) => b.textContent),
+        ).toEqual(["Files", "Spread"]);
+    });
+
+    it("is hidden while the kind has one mode", () => {
+        const filesOnly: AnyToolKind = {
+            ...padTool,
+            closed: { ...padTool.closed!, modes: ["files"] },
+        };
+        const { container } = shown(filesOnly, pad);
         expect(container).toBeEmptyDOMElement();
     });
 });

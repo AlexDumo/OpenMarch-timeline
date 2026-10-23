@@ -3,10 +3,12 @@ import { distribute } from "../distribute/distribute";
 import { rectRegion, type Region } from "../distribute/region";
 import type { ShapeKind, Slot, XY } from "../types";
 import {
+    boxCorners,
     boxDistribution,
     boxFrame,
+    isSpread,
+    spreadShapeOf,
     type BoxParams,
-    type BoxSize,
 } from "./boxGeometry";
 
 /**
@@ -22,14 +24,14 @@ const isPreBox = (p: BoxParams): boolean =>
         (p.shortRank ?? "center") !== "center" ||
         p.pattern === "offset");
 
-/** The rectangle through the box's edge marchers, in its own axes */
-export function boxRegion(p: BoxSize, n: number): Region {
+/** The rectangle through the box's edge marchers (a spread's edge), in its own axes */
+export function boxRegion(p: BoxParams, n: number): Region {
     const frame = boxFrame(p, n);
     return rectRegion(frame.halfWidth, frame.halfDepth);
 }
 
 /** A point in the box's own axes, flipped, then turned and placed as the block always did */
-function toField(p: BoxSize, x: number, y: number): XY {
+function toField(p: BoxParams, x: number, y: number): XY {
     const lx = p.flipX ? -x : x;
     const ly = p.flipY ? -y : y;
     const c = Math.cos(p.rotation);
@@ -44,7 +46,8 @@ function toField(p: BoxSize, x: number, y: number): XY {
 /** The box's spots in its own axes, from the distributor */
 const localSpots = (p: BoxParams, n: number) =>
     distribute({
-        region: boxRegion(p, n),
+        // A spread fills the block's shape at the size its count and interval give
+        region: isSpread(p) ? spreadShapeOf(p, n) : boxRegion(p, n),
         n,
         distribution: boxDistribution(p),
         across: p.across,
@@ -67,9 +70,13 @@ export const boxShape: ShapeKind<BoxParams> = {
             ? blockKind.generate(p as BlockParams, n, ctx)
             : boxSpots(p, n);
     },
-    /** The rectangle around the spots, as the block drew it */
+    /** The rectangle around the spots, as the block drew it; a spread's edge */
     outline(p, n, ctx) {
         if (isPreBox(p)) return blockKind.outline(p as BlockParams, n, ctx);
+        if (isSpread(p)) {
+            const corners = boxCorners(p, n);
+            return [[...corners, corners[0]!]];
+        }
         const spots = localSpots(p, n);
         if (spots.length === 0) return [];
         const xs = spots.map((s) => s.x);

@@ -99,9 +99,9 @@ describe("a fake closed kind fills through the distributor", () => {
         ]);
     });
 
-    it("offers its own modes, and the box (Files only) and open kinds none", () => {
+    it("offers its own modes, the box Files and Spread, and open kinds none", () => {
         expect(switchModes(padTool)).toEqual(["files", "outline"]);
-        expect(switchModes(boxTool)).toEqual([]);
+        expect(switchModes(boxTool)).toEqual(["files", "spread"]);
         expect(switchModes(rowTool)).toEqual([]);
     });
 

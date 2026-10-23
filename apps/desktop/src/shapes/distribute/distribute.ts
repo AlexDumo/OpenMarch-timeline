@@ -1,4 +1,9 @@
-import type { Distribution, FilesDistribution } from "./distribution";
+import { evenSpread, type SpreadLayout } from "../geometry/naturalFill";
+import type {
+    Distribution,
+    FilesDistribution,
+    SpreadDistribution,
+} from "./distribution";
 import { rankOffset } from "./distribution";
 import type { Region } from "./region";
 
@@ -28,7 +33,9 @@ export interface DistributeInput {
 
 /**
  * The spots, in a fixed order that recipes store slot numbers by: Files goes line by line from
- * the back rank (the left file when turned), along each from left (back) to right (front)
+ * the back rank (the left file when turned), along each from left (back) to right (front);
+ * Spread from the back, left to right. A spread's spots are `across` apart at the closest pair,
+ * filling `region`'s shape at the size {@link spreadScale} gives (its own size doesn't count).
  */
 export function distribute(input: DistributeInput): FrameSpot[] {
     if (input.n <= 0) return [];
@@ -38,7 +45,17 @@ export function distribute(input: DistributeInput): FrameSpot[] {
         if (input.region.corners.length === 0)
             return roundOutlineSpots(input.n, input.across);
     }
-    // Even spread arrives in #391; until then it fills as Files
+    if (distribution.mode === "spread")
+        return spreadLayout(input.region, input.n, distribution).spots.map(
+            (s, k) => ({
+                x: s.x * input.across,
+                y: s.y * input.across,
+                // One layout's spots: a new seed is a new layout, so who goes where is worked out
+                // again rather than kept by spot number
+                row: distribution.seed,
+                col: k,
+            }),
+        );
     return filesSpots(
         distribution.mode === "files"
             ? distribution
@@ -55,6 +72,45 @@ export function distribute(input: DistributeInput): FrameSpot[] {
         input.across,
         input.deep,
     );
+}
+
+/** Spread layouts recently worked out: a shape asks for its spots, frame and outline in turn */
+const spreads = new Map<string, SpreadLayout>();
+const SPREADS_KEPT = 24;
+
+/** The spread for `n` spots over `region`'s shape at an interval of 1, worked out once */
+function spreadLayout(
+    region: Region,
+    n: number,
+    d: SpreadDistribution,
+): SpreadLayout {
+    const from = d.count ?? n;
+    const key = `${d.generator} ${region.key} ${n} ${d.seed} ${from}`;
+    const known = spreads.get(key);
+    if (known) {
+        // Most recently used last, so the oldest goes first
+        spreads.delete(key);
+        spreads.set(key, known);
+        return known;
+    }
+    const layout = evenSpread(region, n, d.seed, from);
+    spreads.set(key, layout);
+    if (spreads.size > SPREADS_KEPT)
+        spreads.delete(spreads.keys().next().value!);
+    return layout;
+}
+
+/**
+ * How big a Spread of `n` spots `interval` apart is: `region`'s shape times this. A spread's size
+ * follows its count and interval, never the region's own size, so a kind sizes its frame by it.
+ */
+export function spreadScale(
+    region: Region,
+    n: number,
+    d: SpreadDistribution,
+    interval: number,
+): number {
+    return spreadLayout(region, Math.max(1, n), d).scale * interval;
 }
 
 /** A Files layout as lines of marchers: how wide a full line is, and how many stand in each */
