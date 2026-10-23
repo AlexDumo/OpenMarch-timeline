@@ -42,19 +42,21 @@ async function mutate<V>(
 }
 
 /**
- * Saves `shape` under `name`: its kind and intervals join the user's library and the open show,
- * and it's starred so it shows up in the Shapes tab and the ring straight away. With every star
- * taken the library opens, asking to unstar one first.
+ * Saves `shape` under `name`, with `description` when there is one: its kind, intervals and
+ * distribution join the user's library and the open show, dated now, and it's starred so it shows
+ * up in the Shapes tab and the ring straight away. With every star taken the library opens,
+ * asking to unstar one first.
  */
 export async function saveShape(
     shape: SavableShape,
-    name: string,
+    named: { readonly name: string; readonly description?: string },
     stepPx: number,
     queryClient: QueryClient,
 ): Promise<SavedShape> {
     const saved = savedShapeOf(shape.kind, shape.params, shape.spots, stepPx, {
+        ...named,
         id: crypto.randomUUID(),
-        name,
+        at: new Date().toISOString(),
     });
     const library = useSavedShapeLibrary.getState();
     library.put(saved);

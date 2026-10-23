@@ -8,8 +8,9 @@ import { suggestedName } from "./savedShapes";
 
 /**
  * ☆ Save (#353, spec #344 story 26–27): in the chip's ⋯ row and at the bottom of the inspector's
- * shape section. It asks for a name in place, offering the kind and its spacing, then keeps the
- * shape's kind and intervals in the user's library and the show, starred.
+ * shape section. It asks for a name in place, offering the kind, its spacing and how it's filled,
+ * and an optional description (#393), then keeps the shape's kind, intervals and distribution in
+ * the user's library and the show, starred.
  */
 export function SaveShapeButton({
     shape,
@@ -25,6 +26,7 @@ export function SaveShapeButton({
 }) {
     const queryClient = useQueryClient();
     const [name, setName] = useState<string | null>(null);
+    const [description, setDescription] = useState("");
     const [saved, setSaved] = useState<string | null>(null);
 
     if (name === null)
@@ -36,6 +38,7 @@ export function SaveShapeButton({
                 onPointerDown={keepFocus}
                 onClick={() => {
                     setSaved(null);
+                    setDescription("");
                     setName(
                         suggestedName(
                             shape.kind,
@@ -57,12 +60,17 @@ export function SaveShapeButton({
         const trimmed = name.trim();
         if (trimmed === "") return;
         setName(null);
-        const done = await saveShape(shape, trimmed, stepPx, queryClient);
+        const done = await saveShape(
+            shape,
+            { name: trimmed, description },
+            stepPx,
+            queryClient,
+        );
         setSaved(done.name);
     };
     return (
         <form
-            className="flex items-center gap-4"
+            className="flex flex-col gap-4"
             onSubmit={(e) => {
                 e.preventDefault();
                 void finish();
@@ -83,21 +91,36 @@ export function SaveShapeButton({
                 className="rounded-4 border-stroke bg-fg-1 text-body text-text w-[12rem] border px-4 py-1"
                 data-testid={`${testId}-name`}
             />
-            <button
-                type="submit"
-                disabled={name.trim() === ""}
-                className="bg-accent text-text-invert rounded-4 px-8 py-1 font-medium hover:opacity-90 disabled:opacity-50"
-                data-testid={`${testId}-confirm`}
-            >
-                Save
-            </button>
-            <button
-                type="button"
-                onClick={() => setName(null)}
-                className="rounded-4 hover:bg-fg-2 px-4 py-1"
-            >
-                Cancel
-            </button>
+            <input
+                aria-label="Description of the saved shape (optional)"
+                placeholder="Description (optional)"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onKeyDown={(e) => {
+                    // Enter and Escape answer the description, not the shape: Escape keeps it open
+                    e.stopPropagation();
+                    if (e.key === "Escape") setName(null);
+                }}
+                className="rounded-4 border-stroke bg-fg-1 text-body text-text w-[12rem] border px-4 py-1"
+                data-testid={`${testId}-description`}
+            />
+            <div className="flex items-center gap-4">
+                <button
+                    type="submit"
+                    disabled={name.trim() === ""}
+                    className="bg-accent text-text-invert rounded-4 px-8 py-1 font-medium hover:opacity-90 disabled:opacity-50"
+                    data-testid={`${testId}-confirm`}
+                >
+                    Save
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setName(null)}
+                    className="rounded-4 hover:bg-fg-2 px-4 py-1"
+                >
+                    Cancel
+                </button>
+            </div>
         </form>
     );
 }

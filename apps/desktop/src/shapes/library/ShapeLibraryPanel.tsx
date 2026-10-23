@@ -45,8 +45,8 @@ export function showShapeLibrary() {
  * The shape library: every shape by group, each with a star, an icon, a name and a note. One star
  * puts a shape in both the ring and the Shapes tab; with all {@link MAX_STARS} taken, starring
  * another asks to unstar one first. Clicking a shape picks it, as the Shapes tab does. Saved
- * shapes (#353) come as a Saved group after Basic, each with a delete button; one only the open
- * show has can be added to the user's library.
+ * shapes (#353) come as a Saved group after Basic, each with a delete button and its description
+ * (#393); one only the open show has can be added to the user's library.
  */
 export function ShapeLibraryContents({
     rows: rowsProp,
@@ -193,6 +193,7 @@ function LibraryRow({
     /** Adds a saved shape only the open show has to the user's library */
     onAddToLibrary?: () => void;
 }) {
+    const description = row.saved?.shape.description;
     return (
         <li
             className="rounded-6 hover:bg-fg-2 group flex items-center gap-8 px-4 py-4"
@@ -225,12 +226,26 @@ function LibraryRow({
                     size={22}
                     className="shrink-0"
                 />
-                <span className="text-body truncate">{row.label}</span>
-                {row.note && (
-                    <span className="text-sub text-text-subtitle truncate">
-                        {row.note}
+                <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex min-w-0 items-center gap-8">
+                        <span className="text-body truncate">{row.label}</span>
+                        {row.note && (
+                            <span className="text-sub text-text-subtitle truncate">
+                                {row.note}
+                            </span>
+                        )}
                     </span>
-                )}
+                    {description && (
+                        // One line here; the whole of it in the tooltip
+                        <span
+                            className="text-sub text-text-subtitle truncate"
+                            title={description}
+                            data-testid={`shape-library-description-${row.id}`}
+                        >
+                            {description}
+                        </span>
+                    )}
+                </span>
             </button>
             {onAddToLibrary && (
                 <button
