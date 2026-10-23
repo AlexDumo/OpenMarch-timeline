@@ -368,6 +368,22 @@ function ModeDrawing({
                     />
                 );
             })}
+            {drawing.gaps?.map((point, i) => {
+                const p = at(point);
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={SPOT_RADIUS * z}
+                        fill="none"
+                        stroke={shape}
+                        strokeWidth={SPOT_WIDTH * z}
+                        strokeDasharray={`${1.5 * z} ${1.5 * z}`}
+                        data-testid="fieldShapeGap"
+                    />
+                );
+            })}
             {drawing.labels?.map(({ at: point, text }, i) => {
                 const p = at(point);
                 return (

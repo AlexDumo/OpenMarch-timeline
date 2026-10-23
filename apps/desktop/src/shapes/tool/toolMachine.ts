@@ -8,6 +8,7 @@ import {
     type ShapeGesture,
     type ShapeTarget,
 } from "../frame/gestures";
+import { gapPickAt } from "../distribute/outlineGap";
 import type { ShapeContext, Slot, XY } from "../types";
 import type { AnyToolKind, ToolEnv } from "./toolKind";
 
@@ -56,7 +57,14 @@ export type Gesture =
       }
     /** A number in the floating editor being dragged: the shape follows it live */
     | { readonly type: "edit"; readonly before: ToolSnapshot }
-    | (ShapeGesture & { readonly before: ToolSnapshot });
+    | (ShapeGesture & {
+          readonly before: ToolSnapshot;
+          /**
+           * What a click here does instead of nothing: on an outline's spot between corners, the
+           * shape with its gap moved there (#390)
+           */
+          readonly click?: unknown;
+      });
 
 export interface ToolState extends ToolSnapshot {
     /** In selection order, with where they stand when the tool opened */
@@ -153,8 +161,12 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
         state.params === null
             ? null
             : startShapeGesture(state.kind, state.params, state.spots, at, env);
+    const click =
+        onShape && (onShape.type === "move" || onShape.type === "handle")
+            ? gapPickAt(state.kind, state.params, state.spots, at, env)
+            : null;
     const gesture: Gesture = onShape
-        ? { ...onShape, before }
+        ? { ...onShape, before, ...(click !== null ? { click } : {}) }
         : { type: "draw", from: env.gridSnap(at), before };
     return { ...state, gesture, pointer: at };
 }
@@ -179,7 +191,8 @@ export function pointerMove(state: ToolState, at: XY, env: ToolEnv): ToolState {
 
 /**
  * Ends the gesture: one undo step if it changed anything, and who goes where worked out again. A
- * double click on the pivot sends it back to the center (#350).
+ * double click on the pivot sends it back to the center (#350); a click on an outline's spot
+ * between corners moves its gap there (#390).
  */
 export function release(
     state: ToolState,
@@ -191,7 +204,9 @@ export function release(
     if (click?.double && g.type !== "draw" && g.type !== "edit") {
         const centered = centerPivot(g);
         if (centered !== null) state = { ...state, params: centered };
-    }
+    } else if (click && "click" in g && g.click !== undefined)
+        // A click moves nothing else, even if the pointer slipped a little
+        state = { ...state, params: g.click };
     const ended = { ...state, gesture: null };
     if (state.params === g.before.params) return ended;
     const next = pushHistory(ended, g.before);

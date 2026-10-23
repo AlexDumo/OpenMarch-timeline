@@ -26,6 +26,13 @@ import type { PlacedBox } from "./placedBox";
 import type { BoxParams } from "../box/boxGeometry";
 import { enterBox } from "./boxSelection";
 import { usePlacedBoxPreviewStore } from "./boxSelectionStore";
+import { outlineGapAt } from "../distribute/outlineGap";
+
+/** An odd-count outline's gap, the spot nobody stands on by design (#390) */
+function gapsOf(params: BoxParams, n: number) {
+    const gap = outlineGapAt(boxTool, params, n);
+    return gap ? [gap] : [];
+}
 
 /** The box as drawn: mid-gesture, or as a number dragged in its floating editor has it */
 interface Shown {
@@ -60,6 +67,7 @@ const drawingOf = memoDrawing(({ live: saved, preview }: Shown) => {
                   }))
                 : [],
         handles: boxTool.handles(live.params, n).map((h) => h.at),
+        gaps: gapsOf(live.params, n),
         ...frameDrawing(
             boxTool,
             live.params,

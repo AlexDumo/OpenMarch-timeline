@@ -9,6 +9,7 @@ import { usePlacedEditTarget, useToolEditTarget } from "../editor/editTargets";
 import { currentShapeField } from "../field/shapeFieldContext";
 import { SaveShapeButton } from "../library/SaveShapeButton";
 import { ModeSwitch } from "../editor/ModeSwitch";
+import { OutlineGap } from "../editor/OutlineGap";
 import { toolEnvFor } from "./toolEnv";
 
 /** The field's tool environment with no keys held, for a change made from the inspector */
@@ -60,6 +61,7 @@ export function ShapeToolSection() {
                 </div>
             )}
             {target && <ModeSwitch target={target} envFor={inspectorEnv} />}
+            {target && <OutlineGap target={target} envFor={inspectorEnv} />}
             {target && field && (
                 <SaveShapeButton
                     shape={target}

@@ -45,13 +45,15 @@ const commandKey = (run: CommandRun): number => {
 
 function DockedSteps({
     run,
-    prefill,
+    prefill: typed,
     from,
 }: {
     run: CommandRun;
     prefill: readonly string[];
     from: readonly string[];
 }) {
+    // The one-liner's answers on the steps they answer
+    const [prefill] = useState(() => run.fillAhead?.(typed) ?? typed);
     const { t: tolgeeT } = useTolgee();
     const t: Translate = (key, params) => tolgeeT(key, params as never);
     // A one-liner opens at the first step it didn't fill, or the last one, so one Enter finishes

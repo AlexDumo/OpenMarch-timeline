@@ -1,5 +1,16 @@
-import type { Distribution, FilesDistribution } from "./distribution";
+import type {
+    Distribution,
+    FilesDistribution,
+    OutlineDistribution,
+} from "./distribution";
 import { rankOffset } from "./distribution";
+import {
+    nearestSides,
+    OUTLINE_MIN,
+    outlineLine,
+    outlineSpots,
+    type OutlineSides,
+} from "./outline";
 import type { Region } from "./region";
 
 /**
@@ -28,12 +39,14 @@ export interface DistributeInput {
 
 /**
  * The spots, in a fixed order that recipes store slot numbers by: Files goes line by line from
- * the back rank (the left file when turned), along each from left (back) to right (front)
+ * the back rank (the left file when turned), along each from left (back) to right (front);
+ * Outline clockwise from the back-left corner
  */
 export function distribute(input: DistributeInput): FrameSpot[] {
     if (input.n <= 0) return [];
     const { distribution } = input;
-    // Outline (#390) and Even spread (#391) arrive in their tickets; until then they fill as Files
+    if (distribution.mode === "outline") return outlineOf(input, distribution);
+    // Even spread (#391) arrives in its ticket; until then it fills as Files
     return filesSpots(
         distribution.mode === "files"
             ? distribution
@@ -50,6 +63,34 @@ export function distribute(input: DistributeInput): FrameSpot[] {
         input.across,
         input.deep,
     );
+}
+
+/**
+ * The sides an outline of `n` (4 or more) takes in `region`: whole intervals, with the region's
+ * proportions as near as they allow. A kind sizes its region from these sides, so they come back
+ * the same.
+ */
+export function regionSides(
+    region: Region,
+    n: number,
+    d: OutlineDistribution,
+    across: number,
+    deep: number,
+): OutlineSides {
+    const { left, top, right, bottom } = region.bounds;
+    const aspect = (right - left) / across / ((bottom - top) / deep);
+    return nearestSides(n, aspect, d.oddGap.side);
+}
+
+/** Outline: around the region's edge at the intervals, a spot on every corner (`outline.ts`) */
+function outlineOf(
+    input: DistributeInput,
+    d: OutlineDistribution,
+): FrameSpot[] {
+    const { n, across, deep } = input;
+    if (n < OUTLINE_MIN) return outlineLine(n, across);
+    const sides = regionSides(input.region, n, d, across, deep);
+    return outlineSpots(n, sides, d.oddGap, across, deep);
 }
 
 /** A Files layout as lines of marchers: how wide a full line is, and how many stand in each */

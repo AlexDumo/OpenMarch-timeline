@@ -1,6 +1,7 @@
 import { resizeCursor } from "../frame/frame";
 import type { ToolKind } from "../tool/toolKind";
-import { distributionFor } from "../distribute/distribution";
+import { distributionFor, type Distribution } from "../distribute/distribution";
+import { nearestSides, OUTLINE_MIN } from "../distribute/outline";
 import { BOX_PARAMS } from "./boxParams";
 import { boxRegion, boxShape } from "./boxShape";
 import {
@@ -56,9 +57,10 @@ export const boxTool: ToolKind<BoxParams> = {
     fromFrame: boxInFrame,
     settle: snapToGrid,
     closed: {
-        // Outline (#390) and Even spread (#391) join in their tickets
-        modes: ["files"],
+        // Even spread (#391) joins in its ticket
+        modes: ["files", "outline"],
         region: boxRegion,
+        intervals: (params) => ({ across: params.across, deep: params.deep }),
         distribution: boxDistribution,
         startMode: (params, _n, mode) => distributionFor(mode, filesOf(params)),
         withDistribution(params, n, distribution, env) {
@@ -70,14 +72,38 @@ export const boxTool: ToolKind<BoxParams> = {
                 ...rest
             } = params;
             const next: BoxParams = { ...rest, distribution };
-            return distribution.mode === "files"
-                ? grownFromPivot(
-                      params,
-                      withFileCount(next, distribution.layout.files),
-                      n,
-                      env,
-                  )
-                : next;
+            if (distribution.mode === "files")
+                return grownFromPivot(
+                    params,
+                    withFileCount(next, distribution.layout.files),
+                    n,
+                    env,
+                );
+            if (distribution.mode === "outline")
+                return grownFromPivot(
+                    params,
+                    withFileCount(next, outlineFiles(params, n, distribution)),
+                    n,
+                    env,
+                );
+            return next;
         },
     },
 };
+
+/**
+ * Spots across a box going into Outline: kept by one already in Outline; otherwise the outline's
+ * proportions are the nearest to the box's as it stands (#390)
+ */
+function outlineFiles(
+    params: BoxParams,
+    n: number,
+    distribution: Extract<Distribution, { mode: "outline" }>,
+): number {
+    if (boxDistribution(params).mode === "outline") return filesOf(params);
+    if (n < OUTLINE_MIN) return Math.max(1, n);
+    const frame = boxFrame(params, n);
+    const aspect =
+        frame.halfWidth / params.across / (frame.halfDepth / params.deep);
+    return nearestSides(n, aspect, distribution.oddGap.side).a + 1;
+}

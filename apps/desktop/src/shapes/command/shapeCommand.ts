@@ -17,7 +17,7 @@ import {
     type ToolState,
 } from "../tool/toolMachine";
 import { useShapeToolStore } from "../tool/shapeToolStore";
-import { shapeSteps, startingParams } from "./shapeSteps";
+import { fillAhead, shapeSteps, startingParams } from "./shapeSteps";
 
 /**
  * What the command starts from: the open shape (switched to `kind` keeping its frame if it's
@@ -106,6 +106,7 @@ export function beginShapeCommand(
         // The last answer places the shape, through the host's place function (sims B354: a
         // "Done" that left it open read as a trap)
         finishLabel: "Place",
+        fillAhead: (answers) => fillAhead(kind, answers),
         finish(answers) {
             unsubscribe();
             run.preview(answers);

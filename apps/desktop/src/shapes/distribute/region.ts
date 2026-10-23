@@ -35,6 +35,12 @@ export interface ClosedShape<P> {
      * distribution reads as Files)
      */
     distribution(params: P, n: number): Distribution;
+    /**
+     * Its intervals side to side and front to back, in field units, as the distributor spaces
+     * it. The host reads them to find an outline's spots between corners, so the gap can be
+     * picked on the field (#390); a kind without corners can leave it out.
+     */
+    intervals?(params: P): { readonly across: number; readonly deep: number };
     /** The distribution switching to `mode` starts with (a box's Files keeps its file count) */
     startMode(params: P, n: number, mode: DistributionMode): Distribution;
     /**

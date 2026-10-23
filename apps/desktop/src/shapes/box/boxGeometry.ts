@@ -4,8 +4,15 @@ import {
     filesDistribution,
     storedDistribution,
     type Distribution,
+    type GapSide,
 } from "../distribute/distribution";
 import { layoutLines } from "../distribute/distribute";
+import {
+    acrossRange,
+    OUTLINE_MIN,
+    outlineSides,
+    type OutlineSides,
+} from "../distribute/outline";
 import type { ToolEnv } from "../tool/toolKind";
 import { pivotOf } from "../frame/pivot";
 import {
@@ -29,9 +36,11 @@ export type BoxSize = Pick<
  * drawn square to the field; turning and flipping it are the shape frame's
  * (08-shape-system-ux.md), so every function here works in the box's own axes.
  *
- * How it is filled is the host's `distribution` (spec #385), Files only for now. `files` stays
+ * How it is filled is the host's `distribution` (spec #385): Files or Outline. `files` stays
  * the box's own file count, as recipes have always stored it, and the Files layout's `files`
- * follows it ({@link withFileCount}); read the layout through {@link boxDistribution}.
+ * follows it ({@link withFileCount}); read the layout through {@link boxDistribution}. In Outline
+ * `files` is the spots across the back and front, which set the outline's proportions
+ * ({@link spanOf}).
  */
 export type BoxParams = BoxSize & {
     readonly distribution?: Distribution;
@@ -91,20 +100,67 @@ export function withFileCount<P extends BoxParams>(p: P, files: number): P {
     };
 }
 
-/** The box's ranks: the lines of its Files layout */
-export function ranksOf(p: BoxParams, n: number): number {
-    const d = boxDistribution(p);
-    const layout =
-        d.mode === "files" ? d.layout : filesDistribution(filesOf(p)).layout;
-    return layoutLines(layout, n).lines.length;
+/**
+ * An outline box's sides for `n` (4 or more): `files` − 1 intervals across, as near as the count
+ * allows (#390)
+ */
+export function boxOutlineSides(
+    p: BoxParams,
+    n: number,
+    side: GapSide,
+): OutlineSides {
+    return outlineSides(n, filesOf(p) - 1, side);
 }
 
-/** How many spots the short rank leaves empty: 0 when every rank is full */
-export const shortBy = (p: BoxSize, n: number): number =>
-    filesOf(p) * ranksOf(p, n) - Math.max(1, n);
+/**
+ * How many spots the box has across and deep, edge marcher to edge marcher: Files' file count
+ * and its lines; an outline's sides, or a line of all of them under 4
+ */
+export function spanOf(
+    p: BoxParams,
+    n: number,
+): { readonly files: number; readonly ranks: number } {
+    const d = boxDistribution(p);
+    if (d.mode === "outline") {
+        const count = Math.max(1, n);
+        if (count < OUTLINE_MIN) return { files: count, ranks: 1 };
+        const sides = boxOutlineSides(p, count, d.oddGap.side);
+        return { files: sides.a + 1, ranks: sides.b + 1 };
+    }
+    const layout =
+        d.mode === "files" ? d.layout : filesDistribution(filesOf(p)).layout;
+    return {
+        files: filesOf(p),
+        ranks: layoutLines(layout, n).lines.length,
+    };
+}
 
-export function footprintOf(p: BoxSize, n: number): Footprint {
-    const halfW = ((filesOf(p) - 1) * p.across) / 2;
+/** The box's ranks: the lines of its Files layout, or spots down an outline's sides */
+export const ranksOf = (p: BoxParams, n: number): number => spanOf(p, n).ranks;
+
+/** Spots across the box: its file count, or spots along an outline's back */
+export const acrossOf = (p: BoxParams, n: number): number => spanOf(p, n).files;
+
+/** How many spots the short rank leaves empty: 0 when every rank is full, and in an outline */
+export const shortBy = (p: BoxParams, n: number): number =>
+    boxDistribution(p).mode === "outline"
+        ? 0
+        : filesOf(p) * ranksOf(p, n) - Math.max(1, n);
+
+/**
+ * The file counts an outline of `n` can have, from its sides' range; just `n` (a line) under 4
+ */
+export function outlineFilesRange(
+    n: number,
+    side: GapSide,
+): { readonly min: number; readonly max: number } {
+    if (n < OUTLINE_MIN) return { min: n, max: n };
+    const { min, max } = acrossRange(n, side);
+    return { min: min + 1, max: max + 1 };
+}
+
+export function footprintOf(p: BoxParams, n: number): Footprint {
+    const halfW = ((acrossOf(p, n) - 1) * p.across) / 2;
     const halfH = ((ranksOf(p, n) - 1) * p.deep) / 2;
     return {
         left: p.center.x - halfW,
@@ -115,10 +171,10 @@ export function footprintOf(p: BoxSize, n: number): Footprint {
 }
 
 /** The box's frame: its center, the half sizes through its edge marchers, its turn and flip */
-export function boxFrame(p: BoxSize, n: number): ShapeFrame {
+export function boxFrame(p: BoxParams, n: number): ShapeFrame {
     return {
         center: p.center,
-        halfWidth: ((filesOf(p) - 1) * p.across) / 2,
+        halfWidth: ((acrossOf(p, n) - 1) * p.across) / 2,
         halfDepth: ((ranksOf(p, n) - 1) * p.deep) / 2,
         rotation: p.rotation,
         flipX: p.flipX === true,
@@ -237,12 +293,12 @@ function boxFrom(
         },
         files,
     );
-    const ranks = ranksOf(sized, n);
+    const span = spanOf(sized, n);
     const box: BoxParams = {
         ...sized,
         center: {
-            x: anchor.x + (sign.x * (files - 1) * across) / 2,
-            y: anchor.y + (sign.y * (ranks - 1) * deep) / 2,
+            x: anchor.x + (sign.x * (span.files - 1) * across) / 2,
+            y: anchor.y + (sign.y * (span.ranks - 1) * deep) / 2,
         },
     };
     return snapToGrid(box, n, env);
@@ -350,8 +406,8 @@ export const BOX_HANDLE_KEYS: readonly BoxHandleKey[] = [
  * The handles a box shows: a single file has nothing to stretch across and a single rank nothing
  * to stretch deep, so those handles go (both: none)
  */
-export function handleKeysOf(p: BoxSize, n: number): BoxHandleKey[] {
-    const across = filesOf(p) > 1;
+export function handleKeysOf(p: BoxParams, n: number): BoxHandleKey[] {
+    const across = acrossOf(p, n) > 1;
     const deep = ranksOf(p, n) > 1;
     return BOX_HANDLE_KEYS.filter((key) => {
         const movesX = key.includes("e") || key.includes("w");
@@ -361,7 +417,7 @@ export function handleKeysOf(p: BoxSize, n: number): BoxHandleKey[] {
 }
 
 /** Where handle `key` is on the field, on the box's corner or edge marchers, turned with it */
-export function boxHandlePoint(p: BoxSize, n: number, key: BoxHandleKey): XY {
+export function boxHandlePoint(p: BoxParams, n: number, key: BoxHandleKey): XY {
     const frame = boxFrame(p, n);
     return frameToField(frame, handleDirection(key, frame));
 }
@@ -461,8 +517,7 @@ function stretchSquare(
     env: ToolEnv,
 ): BoxParams {
     const f = footprintOf(base, n);
-    const files = filesOf(base);
-    const ranks = ranksOf(base, n);
+    const { files: across0, ranks } = spanOf(base, n);
     const movesX = key.includes("e") || key.includes("w");
     const movesY = key.includes("n") || key.includes("s");
     // The fixed edge on each axis: the one opposite the handle (left for an east handle)
@@ -471,7 +526,7 @@ function stretchSquare(
         y: key.includes("s") ? f.top : f.bottom,
     };
     let across =
-        (movesX && spread(Math.abs(to.x - anchor.x), files, env)) ||
+        (movesX && spread(Math.abs(to.x - anchor.x), across0, env)) ||
         base.across;
     let deep =
         (movesY && spread(Math.abs(to.y - anchor.y), ranks, env)) || base.deep;
@@ -488,7 +543,7 @@ function stretchSquare(
         x: movesX ? anchor.x : f.left,
         y: movesY ? anchor.y : f.top,
     };
-    return boxFrom(start, sign, files, across, deep, n, env, base);
+    return boxFrom(start, sign, filesOf(base), across, deep, n, env, base);
 }
 
 /**
@@ -564,8 +619,14 @@ export function resizeFiles(
     files: number,
     env: ToolEnv,
 ): BoxParams {
-    const clamped = Math.min(Math.max(1, n), Math.max(1, Math.round(files)));
-    if (clamped === filesOf(p)) return p;
+    const d = boxDistribution(p);
+    // An outline's spots across stay within what its count can go round
+    const { min, max } =
+        d.mode === "outline"
+            ? outlineFilesRange(Math.max(1, n), d.oddGap.side)
+            : { min: 1, max: Math.max(1, n) };
+    const clamped = Math.min(max, Math.max(min, Math.round(files)));
+    if (clamped === acrossOf(p, n)) return p;
     return grownFromPivot(p, withFileCount(p, clamped), n, env);
 }
 
@@ -599,7 +660,7 @@ export function grownFromPivot(
  * Whether `at` grabs the box to move it: inside its edge marchers, or within half an interval
  * of them, so a single rank or file can be grabbed too
  */
-export function insideBox(p: BoxSize, n: number, at: XY): boolean {
+export function insideBox(p: BoxParams, n: number, at: XY): boolean {
     const frame = boxFrame(p, n);
     const local = fieldToFrame(frame, at);
     return (
@@ -609,7 +670,7 @@ export function insideBox(p: BoxSize, n: number, at: XY): boolean {
 }
 
 /** The outline through the box's edge marchers, turned with it: back-left first */
-export function boxCorners(p: BoxSize, n: number): XY[] {
+export function boxCorners(p: BoxParams, n: number): XY[] {
     const frame = boxFrame(p, n);
     const { halfWidth: w, halfDepth: d } = frame;
     return [
@@ -621,7 +682,7 @@ export function boxCorners(p: BoxSize, n: number): XY[] {
 }
 
 /** The field-aligned rectangle around the box's edge marchers, however it's turned */
-export function boxBounds(p: BoxSize, n: number): Footprint {
+export function boxBounds(p: BoxParams, n: number): Footprint {
     const corners = boxCorners(p, n);
     const xs = corners.map((c) => c.x);
     const ys = corners.map((c) => c.y);
@@ -644,10 +705,9 @@ export function acrossIsDeep(rotation: number): boolean {
 }
 
 /** The box's counts and spacings as the field shows them: across is side to side */
-export function onField(p: BoxSize, spots: number) {
+export function onField(p: BoxParams, spots: number) {
     const swap = acrossIsDeep(p.rotation);
-    const files = filesOf(p);
-    const ranks = ranksOf(p, spots);
+    const { files, ranks } = spanOf(p, spots);
     return {
         swap,
         across: swap ? ranks : files,

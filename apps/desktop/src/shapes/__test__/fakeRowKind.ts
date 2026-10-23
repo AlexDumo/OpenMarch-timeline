@@ -521,6 +521,7 @@ export const padTool: ToolKind<PadParams> = {
             return rectRegion(frame.halfWidth, frame.halfDepth);
         },
         distribution: padDistribution,
+        intervals: (p) => ({ across: p.gap, deep: p.gap }),
         startMode: (_p, n, mode) => distributionFor(mode, padFiles(n)),
         withDistribution: (p, _n, distribution) => ({ ...p, distribution }),
     },

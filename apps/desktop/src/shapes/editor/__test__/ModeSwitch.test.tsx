@@ -5,6 +5,7 @@ import { drawBox } from "../../box/boxGeometry";
 import { padTool, type PadParams } from "../../__test__/fakeRowKind";
 import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
 import { ModeSwitch } from "../ModeSwitch";
+import { DEFAULT_ODD_GAP } from "../../distribute/distribution";
 
 /** The inspector's mode switch (#386): only the kind's modes, hidden with one */
 
@@ -47,13 +48,24 @@ describe("the mode switch", () => {
         expect(apply).toHaveBeenCalledTimes(1);
         expect(apply.mock.calls[0]![0]).toEqual({
             ...pad,
-            distribution: { mode: "outline" },
+            distribution: { mode: "outline", oddGap: DEFAULT_ODD_GAP },
         });
     });
 
-    it("is hidden while the kind has one mode (the box, Files only)", () => {
+    it("offers the box Files and Outline", () => {
         const box = drawBox({ x: 0, y: 0 }, { x: 40, y: 20 }, 6, env);
-        const { container } = shown(boxTool, box);
+        shown(boxTool, box);
+        const group = screen.getByRole("group", { name: "Fill" });
+        expect(
+            [...group.querySelectorAll("button")].map((b) => b.textContent),
+        ).toEqual(["Files", "Outline"]);
+    });
+
+    it("is hidden while a kind has one mode", () => {
+        const { container } = shown(
+            { ...padTool, closed: { ...padTool.closed!, modes: ["files"] } },
+            pad,
+        );
         expect(container).toBeEmptyDOMElement();
     });
 });
