@@ -74,6 +74,10 @@ function outlined(n: number, w = 60, d = 40): ToolState {
     return edit(t, withMode(boxTool, t.params, n, "outline", env), ctx);
 }
 
+/** {@link outlined}, its odd count leaving a gap rather than spreading evenly */
+const gapped = (n: number, w = 60, d = 40): ToolState =>
+    withGap(outlined(n, w, d), { style: "gap" });
+
 /** The box's outline with its gap set */
 function withGap(t: ToolState, gap: Partial<OddGap>): ToolState {
     const d = boxDistribution(t.params as BoxParams) as OutlineDistribution;
@@ -127,10 +131,10 @@ describe("Outline for the box", () => {
     });
 
     it("spaces the spots by the interval around the edge, 2(a + b) = n for an even count", () => {
-        // 1½ steps across, 2 deep between marchers
-        const t = outlined(14, 60, 40);
+        // 6 × 4 steps go round 5 × 4 spots, 1½ steps apart both ways
+        const t = gapped(14, 60, 40);
         const p = t.params as BoxParams;
-        expect([p.across, p.deep]).toEqual([15, 20]);
+        expect([p.across, p.deep]).toEqual([15, 15]);
         const [across, deep] = size(t);
         expect(2 * (across! - 1 + deep! - 1)).toBe(14);
         // Round the loop in slot order, each spot is an interval on from the last
@@ -146,43 +150,93 @@ describe("Outline for the box", () => {
         });
     });
 
-    it("takes the proportions nearest the box's as drawn", () => {
-        // 16 marchers drawn in one rank go round as wide as they can; drawn 2 × 8, 2 × 8; drawn
-        // square, square
-        expect(size(outlined(16, 140, 10))).toEqual([8, 2]);
-        expect(size(outlined(16, 20, 60))).toEqual([2, 8]);
-        expect(size(outlined(16, 40, 40))).toEqual([5, 5]);
+    it("keeps the space the box took up, its intervals refitted in half steps (owner, lab)", () => {
+        for (const [n, w, d] of [
+            [12, 60, 40],
+            [16, 40, 40],
+            [13, 60, 40],
+            [20, 90, 30],
+            [24, 50, 80],
+            [31, 120, 60],
+        ] as const) {
+            const files = drawBox({ x: 0, y: 0 }, { x: w, y: d }, n, env)!;
+            const before = boxTool.frameOf(files, n);
+            const p = withMode(boxTool, files, n, "outline", env) as BoxParams;
+            const after = boxTool.frameOf(p, n);
+            const { across: a1, deep: b1 } = onField(p, n);
+            const [a, b] = [a1 - 1, b1 - 1];
+            // Each interval is on half steps, so a side can miss by a quarter step per interval
+            expect(
+                Math.abs(after.halfWidth - before.halfWidth) * 2,
+            ).toBeLessThanOrEqual((a * STEP) / 4 + 1e-9);
+            expect(
+                Math.abs(after.halfDepth - before.halfDepth) * 2,
+            ).toBeLessThanOrEqual((b * STEP) / 4 + 1e-9);
+            expect(p.across % half).toBe(0);
+            expect(p.deep % half).toBe(0);
+            // The center stays, but for the box's step back onto the half-step grid
+            expect(
+                Math.abs(after.center.x - before.center.x),
+            ).toBeLessThanOrEqual(half / 2);
+            expect(
+                Math.abs(after.center.y - before.center.y),
+            ).toBeLessThanOrEqual(half / 2);
+        }
+    });
+
+    it("takes the proportions of the space: a 4 × 3 box of 12 (6 × 4 steps) goes round 5 × 3", () => {
+        const t = gapped(12, 60, 40);
+        expect(size(t)).toEqual([5, 3]);
+        const p = t.params as BoxParams;
+        expect([p.across, p.deep]).toEqual([15, 20]);
+    });
+
+    it("keeps the interval for a single rank or file, which has no space to keep, and goes round as wide as it can", () => {
+        expect(size(gapped(16, 140, 10))).toEqual([8, 2]);
+        expect(size(gapped(16, 10, 150))).toEqual([2, 8]);
+    });
+
+    it("spreads the short side evenly by default, with no gap to show (owner, lab)", () => {
+        const t = outlined(13, 60, 40);
+        expect(outlineGapOf(boxTool, t.params, 13)!.stored).toEqual({
+            side: "back",
+            at: null,
+            style: "spread",
+        });
+        expect(outlineGapAt(boxTool, t.params, 13)).toBeNull();
+        const xs = backRow(t);
+        const gaps = xs.slice(1).map((x, i) => x - xs[i]!);
+        for (const g of gaps) expect(g).toBeCloseTo(gaps[0]!);
     });
 
     it("leaves one spot out of the back, in the middle, for an odd count", () => {
-        // 13: round 6 × 3 (14 spots), one short of the back's 6
-        const t = outlined(13, 60, 40);
-        expect(size(t)).toEqual([6, 3]);
+        // 13: round 5 × 4 (14 spots), one short of the back's 5
+        const t = gapped(13, 60, 40);
+        expect(size(t)).toEqual([5, 4]);
         const p = t.params as BoxParams;
-        expect(backRow(t)).toHaveLength(5);
-        // The gap, drawn on the field, is the back spot nearest its middle (5 intervals: 3 in)
+        expect(backRow(t)).toHaveLength(4);
+        // The gap, drawn on the field, is the back's middle spot (4 intervals: 2 in)
         const [backLeft, backRight] = boxCorners(p, 13);
         const gap = outlineGapAt(boxTool, p, 13)!;
         expect(gap.y).toBeCloseTo(backLeft!.y);
-        expect(gap.x).toBeCloseTo(backLeft!.x + 3 * p.across);
-        expect(
-            Math.abs(gap.x - (backLeft!.x + backRight!.x) / 2),
-        ).toBeLessThanOrEqual(p.across / 2);
+        expect(gap.x).toBeCloseTo((backLeft!.x + backRight!.x) / 2);
         expect(has(slotsOf(t, ctx), gap)).toBe(false);
-        // 4 intervals: the very middle
-        const even = withFieldCount(p, 13, "across", 5, env);
-        const [l5, r5] = boxCorners(even, 13);
-        expect(onField(even, 13).across).toBe(5);
-        expect(outlineGapAt(boxTool, even, 13)!.x).toBeCloseTo(
-            (l5!.x + r5!.x) / 2,
+        // 5 intervals have no middle spot: the one 3 in, half an interval off
+        const odd = withFieldCount(p, 13, "across", 6, env);
+        const [l6, r6] = boxCorners(odd, 13);
+        expect(onField(odd, 13).across).toBe(6);
+        const oddGap = outlineGapAt(boxTool, odd, 13)!;
+        expect(oddGap.x).toBeCloseTo(l6!.x + 3 * odd.across);
+        expect(Math.abs(oddGap.x - (l6!.x + r6!.x) / 2)).toBeLessThanOrEqual(
+            odd.across / 2,
         );
         // An even count has none
-        expect(outlineGapAt(boxTool, outlined(14).params, 14)).toBeNull();
+        expect(outlineGapAt(boxTool, gapped(14).params, 14)).toBeNull();
     });
 
     it("makes a line across the front with fewer than 4", () => {
         for (const n of [1, 2, 3]) {
-            const t = outlined(n);
+            const t = gapped(n);
             const spots = slotsOf(t, ctx);
             expect(spots).toHaveLength(n);
             expect(new Set(spots.map((s) => s.y)).size).toBe(1);
@@ -209,7 +263,7 @@ describe("Outline for the box", () => {
     });
 
     it("keeps Outline through a change of spots across, and the count goes round", () => {
-        const t = outlined(14, 60, 40);
+        const t = gapped(14, 60, 40);
         const wider = withFieldCount(
             t.params as BoxParams,
             14,
@@ -232,7 +286,7 @@ describe("Outline for the box", () => {
     });
 
     it("keeps its gap's spot through a quarter turn back (the across count on a turned box)", () => {
-        let t = outlined(13, 60, 40);
+        let t = gapped(13, 60, 40);
         t = withGap(t, { side: "left", at: 1 });
         const before = outlineGapAt(boxTool, t.params, 13)!;
         const turned = reoriented(t.params as BoxParams, 13);
@@ -245,7 +299,7 @@ describe("Outline for the box", () => {
 
 describe("picking the gap", () => {
     it("a click on a spot between corners moves the gap there, as one undo step", () => {
-        const t = outlined(13, 60, 40);
+        const t = gapped(13, 60, 40);
         const p = t.params as BoxParams;
         const was = outlineGapAt(boxTool, p, 13)!;
         const [, , frontRight] = boxCorners(p, 13);
@@ -264,24 +318,24 @@ describe("picking the gap", () => {
     });
 
     it("a click on a spot on a side handle moves the gap too", () => {
-        // 6 × 3: the right side's one spot is under its handle
-        const t = outlined(13, 60, 40);
+        // 5 × 4: the front's middle spot is under its handle
+        const t = gapped(13, 60, 40);
         const p = t.params as BoxParams;
-        const [, backRight, frontRight] = boxCorners(p, 13);
-        const rightMiddle = {
-            x: backRight!.x,
-            y: (backRight!.y + frontRight!.y) / 2,
+        const [backLeft, backRight, frontRight] = boxCorners(p, 13);
+        const frontMiddle = {
+            x: (backLeft!.x + backRight!.x) / 2,
+            y: frontRight!.y,
         };
-        let u = press(t, rightMiddle, env);
+        let u = press(t, frontMiddle, env);
         expect(u.gesture?.type).toBe("handle");
         u = release(u, ctx, { double: false });
-        expect(near(outlineGapAt(boxTool, u.params, 13)!, rightMiddle)).toBe(
+        expect(near(outlineGapAt(boxTool, u.params, 13)!, frontMiddle)).toBe(
             true,
         );
     });
 
     it("a click on a corner, inside, or on the gap itself changes nothing", () => {
-        const t = outlined(13, 60, 40);
+        const t = gapped(13, 60, 40);
         const p = t.params as BoxParams;
         const corners = boxCorners(p, 13);
         const gap = outlineGapAt(boxTool, p, 13)!;
@@ -298,7 +352,7 @@ describe("picking the gap", () => {
     });
 
     it("a drag on a spot still moves the box", () => {
-        const t = outlined(13, 60, 40);
+        const t = gapped(13, 60, 40);
         const p = t.params as BoxParams;
         const [, , frontRight] = boxCorners(p, 13);
         const spot = { x: frontRight!.x - p.across, y: frontRight!.y };
@@ -312,10 +366,11 @@ describe("picking the gap", () => {
     });
 
     it("picks a side in the inspector at its middle, as seen on a flipped box", () => {
-        let t = outlined(13, 60, 40);
+        let t = gapped(13, 60, 40);
         t = withGap(t, { side: "left", at: null });
         const left = outlineGapOf(boxTool, t.params, 13)!;
-        expect(left.gap).toMatchObject({ side: "left", at: 1 });
+        // 3 intervals deep: the spot 2 in from the front
+        expect(left.gap).toMatchObject({ side: "left", at: 2 });
         // Flipped side to side, the shape's left is on the field's right
         const flipped = flipBox(t.params as BoxParams, 13, "across", "c", env);
         const gapAt = outlineGapAt(boxTool, flipped, 13)!;
@@ -325,7 +380,7 @@ describe("picking the gap", () => {
 
     it("a side picked on a box too short that way lengthens it", () => {
         // 13 round 6 × 3: 1 interval deep has nothing between its corners
-        let t = outlined(13, 100, 10);
+        let t = gapped(13, 100, 10);
         expect(size(t)).toEqual([7, 2]);
         t = withGap(t, { side: "right", at: null });
         expect(size(t)[1]).toBe(3);
@@ -334,7 +389,13 @@ describe("picking the gap", () => {
     });
 
     it("spreads the gap's side evenly, off the half steps, with no gap to show", () => {
-        let t = outlined(13, 60, 40);
+        let t = gapped(13, 60, 40);
+        // 6 across: 5 intervals on the back
+        t = edit(
+            t,
+            withFieldCount(t.params as BoxParams, 13, "across", 6, env),
+            ctx,
+        );
         t = withGap(t, { style: "spread" });
         const xs = backRow(t);
         expect(xs).toHaveLength(5);
@@ -362,7 +423,18 @@ describe("picking the gap", () => {
 
     it("works the same on a kind the host has never heard of", () => {
         const t = drawn(padTool, 9, { x: 100, y: 100 }, { x: 140, y: 100 });
-        const o = edit(t, withMode(padTool, t.params, 9, "outline", env), ctx);
+        const outline = withMode(padTool, t.params, 9, "outline", env);
+        const o = edit(
+            t,
+            withOddGap(
+                padTool,
+                outline,
+                9,
+                { ...DEFAULT_ODD_GAP, style: "gap" },
+                env,
+            ),
+            ctx,
+        );
         const gap = outlineGapAt(padTool, o.params, 9);
         expect(gap).not.toBeNull();
         expect(has(slotsOf(o, ctx), gap!)).toBe(false);
@@ -397,7 +469,7 @@ function reopened(t: ToolState) {
 
 describe("the gap in recipes", () => {
     it("round-trips through the recipe", () => {
-        let t = outlined(13, 60, 40);
+        let t = gapped(13, 60, 40);
         t = withGap(t, { side: "right", at: 1, style: "gap" });
         const { box, stored } = reopened(t);
         expect(stored.distribution).toEqual({
@@ -410,18 +482,18 @@ describe("the gap in recipes", () => {
     });
 
     it("goes back to the middle of its side when the count changes and its spot is gone", () => {
-        // 6 × 3 has spots 1–4 along the back; picking 4, then 7 marchers (4 × 2) have 1–2
-        let t = outlined(13, 60, 40);
-        t = withGap(t, { side: "back", at: 4 });
-        expect(outlineGapOf(boxTool, t.params, 13)!.gap.at).toBe(4);
+        // 5 × 4 has spots 1–3 along the back; picking 3, then 7 marchers (4 × 2) have 1–2
+        let t = gapped(13, 60, 40);
+        t = withGap(t, { side: "back", at: 3 });
+        expect(outlineGapOf(boxTool, t.params, 13)!.gap.at).toBe(3);
         const fewer = outlineGapOf(boxTool, t.params, 7)!;
         expect(fewer.gap).toMatchObject({ side: "back", at: 2 });
         // A spot that still exists stays
-        expect(outlineGapOf(boxTool, t.params, 15)!.gap.at).toBe(4);
+        expect(outlineGapOf(boxTool, t.params, 15)!.gap.at).toBe(3);
     });
 
     it("reads a missing or broken gap as the back's middle, leaving a gap", () => {
-        const t = outlined(13, 60, 40);
+        const t = gapped(13, 60, 40);
         for (const oddGap of [
             undefined,
             { side: "top", at: -2, style: "zigzag" },
@@ -438,7 +510,7 @@ describe("the gap in recipes", () => {
     });
 
     it("a placed box whose gap moves lays its members out on the new spots", () => {
-        const t = outlined(13, 60, 40);
+        const t = gapped(13, 60, 40);
         const { box } = reopened(t);
         const p = box.params;
         const [, , frontRight] = boxCorners(p, 13);

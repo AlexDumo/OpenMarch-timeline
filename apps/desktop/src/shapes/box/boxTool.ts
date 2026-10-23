@@ -1,5 +1,5 @@
 import { resizeCursor } from "../frame/frame";
-import type { ToolKind } from "../tool/toolKind";
+import type { ToolEnv, ToolKind } from "../tool/toolKind";
 import { distributionFor, type Distribution } from "../distribute/distribution";
 import { nearestSides, OUTLINE_MIN } from "../distribute/outline";
 import { BOX_PARAMS } from "./boxParams";
@@ -20,6 +20,7 @@ import {
     handleKeysOf,
     insideBox,
     moveBox,
+    snapInterval,
     snapToGrid,
     stretchBox,
     withBoxFrame,
@@ -78,10 +79,7 @@ export const boxTool: ToolKind<BoxParams> = {
                 distribution.mode === "files"
                     ? withFileCount(next, distribution.layout.files)
                     : distribution.mode === "outline"
-                      ? withFileCount(
-                            next,
-                            outlineFiles(params, n, distribution),
-                        )
+                      ? outlineIn(params, next, n, distribution, env)
                       : next,
                 n,
                 env,
@@ -91,18 +89,31 @@ export const boxTool: ToolKind<BoxParams> = {
 };
 
 /**
- * Spots across a box going into Outline: kept by one already in Outline; otherwise the outline's
- * proportions are the nearest to the box's as it stands (#390)
+ * `next` (the box with its new distribution) sized for Outline. One already in Outline keeps its
+ * spots across. Otherwise it keeps the space the box takes up (owner, lab feedback 2026-10-23:
+ * designers care about the space, then adjust the interval): the sides with the space's
+ * proportions, each interval refitted to it in half steps. A single rank or file has no space
+ * to keep, so it keeps its intervals and goes round as wide (or deep) as it can.
  */
-function outlineFiles(
+function outlineIn(
     params: BoxParams,
+    next: BoxParams,
     n: number,
     distribution: Extract<Distribution, { mode: "outline" }>,
-): number {
-    if (boxDistribution(params).mode === "outline") return filesOf(params);
-    if (n < OUTLINE_MIN) return Math.max(1, n);
-    const frame = boxFrame(params, n);
-    const aspect =
-        frame.halfWidth / params.across / (frame.halfDepth / params.deep);
-    return nearestSides(n, aspect, distribution.oddGap.side).a + 1;
+    env: ToolEnv,
+): BoxParams {
+    if (boxDistribution(params).mode === "outline") return next;
+    if (n < OUTLINE_MIN) return withFileCount(next, Math.max(1, n));
+    const { halfWidth, halfDepth } = boxFrame(params, n);
+    const side = distribution.oddGap.side;
+    if (!(halfWidth > 0) || !(halfDepth > 0)) {
+        const aspect = halfWidth / params.across / (halfDepth / params.deep);
+        return withFileCount(next, nearestSides(n, aspect, side).a + 1);
+    }
+    const { a, b } = nearestSides(n, halfWidth / halfDepth, side);
+    return {
+        ...withFileCount(next, a + 1),
+        across: snapInterval((2 * halfWidth) / a, env),
+        deep: snapInterval((2 * halfDepth) / b, env),
+    };
 }

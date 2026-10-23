@@ -71,8 +71,15 @@ export interface OddGap {
     readonly style: "gap" | "spread";
 }
 
-/** The middle of the back, leaving a gap */
-export const DEFAULT_ODD_GAP: OddGap = { side: "back", at: null, style: "gap" };
+/**
+ * The back, spread evenly: leaving a gap is the rare case (owner, lab feedback on box-outline,
+ * 2026-10-23)
+ */
+export const DEFAULT_ODD_GAP: OddGap = {
+    side: "back",
+    at: null,
+    style: "spread",
+};
 
 /** Spots around the edge at the interval, one on every corner */
 export interface OutlineDistribution {
@@ -165,7 +172,7 @@ function readOddGap(v: unknown): OddGap {
             ? (g.side as GapSide)
             : DEFAULT_ODD_GAP.side,
         at: isWhole(g.at) && g.at >= 1 ? g.at : null,
-        style: g.style === "spread" ? "spread" : "gap",
+        style: g.style === "gap" ? "gap" : DEFAULT_ODD_GAP.style,
     };
 }
 

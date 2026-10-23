@@ -974,14 +974,15 @@ test("change: a placed box keeps its distribution, Files with the short rank at 
 });
 
 // Outline (#390): spots round the edge at the interval with one on every
-// corner. An odd count leaves one spot between corners out, the back's middle
-// by default, drawn as a dashed ring; a click on another spot between corners
-// moves it there, and the inspector picks a side and whether it spreads.
+// corner, in the space the box took up. An odd count takes one spot out of a
+// side: by default the back spreads evenly; "Leaves a gap" shows the gap as a
+// dashed ring, and a click on another spot between corners moves it there.
 
 /**
- * Opens the box tool on T1–T7 (an odd count), draws a box and switches it to
- * Outline. Checks its corners and that the gap starts on the back, near its
- * middle; returns the open outline, its edges and the undo steps before.
+ * Opens the box tool on T1–T7 (an odd count), draws a box, switches it to
+ * Outline and picks "Leaves a gap". Checks its corners and that the gap starts
+ * on the back, near its middle; returns the open outline, its edges and the
+ * undo steps before.
  */
 async function outlineOnSeven(show: Show) {
     const { page } = show;
@@ -1002,6 +1003,14 @@ async function outlineOnSeven(show: Show) {
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
     const steps = await undoSteps(show);
     await page.getByTestId("shape-mode-outline").click();
+    // The short side spreads evenly by default, with no gap to show; "Leaves
+    // a gap" shows the gap
+    await expect(page.getByTestId("outline-gap-spread")).toHaveAttribute(
+        "data-state",
+        "on",
+    );
+    expect((await shapeOverlay(page))!.gaps).toEqual([]);
+    await page.getByTestId("outline-gap-gap").click();
     await expect
         .poll(async () => (await shapeOverlay(page))?.gaps.length)
         .toBe(1);
@@ -1044,7 +1053,7 @@ async function outlineOnSeven(show: Show) {
     return { open, gap: gap!, back, isCorner, steps };
 }
 
-test("change: Outline on 7 leaves the back's middle out, a click on a spot between corners moves the gap, and the placed box keeps it", async ({
+test("change: Outline on 7 spreads the back by default, leaves its middle out on request, a click on a spot between corners moves the gap, and the placed box keeps it", async ({
     show,
 }) => {
     const { page } = show;
@@ -2122,7 +2131,7 @@ test("change: O opens the circle tool; a drag from the center draws it, its hand
     const stored = JSON.parse(recipe.params);
     expect(stored.distribution).toEqual({
         mode: "outline",
-        oddGap: { side: "back", at: null, style: "gap" },
+        oddGap: { side: "back", at: null, style: "spread" },
     });
     expect(stored.interval).toBeCloseTo(9 * S);
 });

@@ -42,14 +42,14 @@ const on = (testId: string) =>
     expect(screen.getByTestId(testId)).toHaveAttribute("data-state", "on");
 
 describe("the outline gap", () => {
-    it("shows the gap's side and style for an odd count, the back leaving a gap by default", () => {
+    it("shows the gap's side and style for an odd count, the back spread evenly by default", () => {
         shown(outline(13), 13);
         const sides = screen.getByRole("group", { name: "Gap side" });
         expect(
             [...sides.querySelectorAll("button")].map((b) => b.textContent),
         ).toEqual(["Back", "Front", "Left", "Right"]);
         on("outline-gap-back");
-        on("outline-gap-gap");
+        on("outline-gap-spread");
     });
 
     it("is hidden with no gap: an even count, or Files", () => {
@@ -66,16 +66,16 @@ describe("the outline gap", () => {
         expect(apply).toHaveBeenCalledTimes(1);
         expect(
             outlineGapOf(boxTool, apply.mock.calls[0]![0], 13)!.stored,
-        ).toEqual({ side: "front", at: null, style: "gap" });
+        ).toEqual({ side: "front", at: null, style: "spread" });
     });
 
-    it("spreads that side evenly", () => {
+    it("leaves a gap on that side", () => {
         const apply = vi.fn();
         shown(outline(13), 13, apply);
-        fireEvent.click(screen.getByTestId("outline-gap-spread"));
+        fireEvent.click(screen.getByTestId("outline-gap-gap"));
         expect(
             outlineGapOf(boxTool, apply.mock.calls[0]![0], 13)!.stored,
-        ).toMatchObject({ side: "back", style: "spread" });
+        ).toMatchObject({ side: "back", style: "gap" });
     });
 
     it("names the sides as the field shows them on a flipped box", () => {

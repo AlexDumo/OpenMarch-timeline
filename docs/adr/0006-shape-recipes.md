@@ -163,10 +163,10 @@ region, and one shared distributor lays out the spots. This needs no schema chan
      intervals, one on every corner. An odd count leaves one spot between corners out: on `side`
      (`"back"`, `"front"`, `"left"` or `"right"`, the kind's own sides before any flip), `at`
      intervals from that side's start (left to right on the back and front, front to back on the
-     sides), or its middle when `at` is null. `style` `"gap"` leaves the spot empty; `"spread"`
-     spreads that side's spots evenly between its corners instead. A missing or broken `oddGap`
-     reads as the back's middle, leaving a gap, and an `at` the count no longer has reads as the
-     middle of its side. A region with no corners (the circle) has no gap to leave and ignores
+     sides), or its middle when `at` is null. `style` `"spread"` (the default, owner 2026-10-23)
+     spreads that side's spots evenly between its corners; `"gap"` leaves the spot empty instead.
+     A missing or broken `oddGap` reads as the back spread evenly, and an `at` the count no longer
+     has reads as the middle of its side. A region with no corners (the circle) has no gap to leave and ignores
      `oddGap`.
    - `{ "mode": "spread", "seed", "generator", "count" }` (#391): a seeded scatter whose closest
      pair is the kind's interval. `seed` is a whole number from 1 (Reshuffle stores the next

@@ -115,7 +115,7 @@ describe("a fake closed kind fills through the distributor", () => {
         );
         expect((outline.params as PadParams).distribution).toEqual({
             mode: "outline",
-            oddGap: { side: "back", at: null, style: "gap" },
+            oddGap: { side: "back", at: null, style: "spread" },
         });
         expect(undo(outline).params).toBe(t.params);
     });

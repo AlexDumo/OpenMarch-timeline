@@ -110,7 +110,7 @@ describe("a placed circle", () => {
         );
         expect(placed.params.distribution).toEqual({
             mode: "outline",
-            oddGap: { side: "back", at: null, style: "gap" },
+            oddGap: { side: "back", at: null, style: "spread" },
         });
         expect(placedBoxSummary(placed, STEP)).toBe("2 steps");
     });
