@@ -247,11 +247,18 @@ describe("keeping the layout", () => {
         t = pick(t, versionOf(23, "stagger", "5 × 5").layout);
         const more = sizeOf(t.params as BoxParams, 23).more as BoxParams;
         expect(sizeOf(more, 23).display).toBe("8 × 3");
-        const less = sizeOf(t.params as BoxParams, 23).less as BoxParams;
-        expect(sizeOf(less, 23).display).toBe("3 × 8");
-        expect(boxBlock(less, 23).layout).toMatchObject({
+        // 9 × 3 is 3 × 9 turned a quarter
+        const wider = sizeOf(more, 23).more as BoxParams;
+        expect(sizeOf(wider, 23).display).toBe("9 × 3");
+        expect(boxBlock(wider, 23).layout).toMatchObject({
             family: "stagger",
             byFile: true,
+        });
+        const less = sizeOf(t.params as BoxParams, 23).less as BoxParams;
+        expect(sizeOf(less, 23).display).toBe("3 × 9");
+        expect(boxBlock(less, 23).layout).toMatchObject({
+            family: "stagger",
+            byFile: false,
         });
     });
 
@@ -331,7 +338,8 @@ describe("the layout a new box starts in", () => {
             { x: 140, y: 40 },
             envWith("stagger"),
         );
-        expect(sizeOf(wide.params as BoxParams, 23).display).toBe("8 × 3");
+        // 3½ : 1 drawn: 9 × 3 is exactly 3:1, within it
+        expect(sizeOf(wide.params as BoxParams, 23).display).toBe("9 × 3");
     });
 
     it("falls back to Short back, noting the layout it stands in for", () => {

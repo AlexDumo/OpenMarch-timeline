@@ -112,7 +112,8 @@ each show that uses one ("This show"), so a show opens with its shapes on anothe
    `params.distribution` (amendment of 2026-10-22, below) without a Files layout's `files` or a
    spread's `seed` and `count`. It stores no size, count, center, rotation, flip, pivot or seed, so it fits any
    selection. Picking it opens its kind; drawing it, or turning an open shape into it, lays the
-   spots out the saved distance apart in the saved mode, layout, stagger and outline gap. The
+   spots out the saved distance apart in the saved mode, layout, stagger (when one is stored;
+   nothing in the UI sets it since #408) and outline gap. The
    kind reads the saved distribution as it reads a recipe's, at the size it's drawn, and an even
    spread starts at seed 1. A mode the kind can't take or doesn't know leaves the kind's own
    fill. A shape placed from it is an ordinary recipe of its kind, with no reference to the saved
@@ -158,7 +159,8 @@ region, and one shared distributor lays out the spots. This needs no schema chan
      and files at the kind's intervals. `family` names the layout (`"shortBack"`, today's box;
      the box's layout picker adds the others), `files` is the full rank's count and `byFile` turns
      the rows to run front to back. `stagger` is the signed offset of each rank as the fraction
-     p/q of the across interval, so ⅓ round-trips exactly.
+     p/q of the across interval, so ⅓ round-trips exactly. It is stored and read, but since the
+     stagger slider was removed (#408) nothing in the UI sets it, so new shapes store `[0, 1]`.
    - `{ "mode": "outline", "oddGap": { "side", "at", "style" } }`: spots around the edge at the
      intervals, one on every corner. An odd count leaves one spot between corners out: on `side`
      (`"back"`, `"front"`, `"left"` or `"right"`, the kind's own sides before any flip), `at`
@@ -222,14 +224,15 @@ undo step, reopens a placed spread exactly, and shows one from an unknown genera
 positions. A browser scenario in `box-tool.spec.mts` reshuffles with undo and redo, places the
 spread and reshuffles the placed box.
 
-7. **Box layouts (#387, 2026-10-23).** `family` is one of `"full"`, `"stagger"`, `"rounded"`,
+9. **Box layouts (#387, 2026-10-23).** `family` is one of `"full"`, `"stagger"`, `"rounded"`,
    `"shortBack"` and `"notched"`; one this version doesn't know reads as `"shortBack"`. Each is a
    full block with a pattern of spots left out, every line centered. `files` is the count of a
    full line: across a full rank, or down a full file when `byFile`. With the family and the spot
    count it names one version. When the count changes, a recipe keeps its layout: it lays out as
    the family's version nearest its proportions, or, when the family can't make the count, as
    Short back as wide. Neither is written back, so the layout returns with the count. Only Full
-   and Short back take `stagger`; the other families center their lines and ignore it. The
+   and Short back take `stagger` (a stored value; nothing in the UI sets it since #408); the
+   other families center their lines and ignore it. The
    last-used family is the user's, kept in localStorage (`openmarch:shapeLastLayout`) like stars,
    not in the show.
 

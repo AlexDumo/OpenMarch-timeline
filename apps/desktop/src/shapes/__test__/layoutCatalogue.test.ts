@@ -49,8 +49,8 @@ describe("the layout catalogue", () => {
         ]);
     });
 
-    it("for 23: Stagger offers 8 × 3 and 5 × 5, no quarter turns; Full is greyed with what it needs", () => {
-        expect(labelsOf(23, "stagger")).toEqual(["8 × 3", "5 × 5"]);
+    it("for 23: Stagger offers 8 × 3, 5 × 5 and 3 × 9, no quarter turns; Full is greyed with what it needs", () => {
+        expect(labelsOf(23, "stagger")).toEqual(["8 × 3", "5 × 5", "3 × 9"]);
         const stagger = layoutCatalogue(23).find(
             (r) => r.family === "stagger",
         )!;
@@ -81,15 +81,24 @@ describe("the layout catalogue", () => {
         ]);
     });
 
+    it("counts exactly 3:1 as within 3:1 of square: Full offers 6 × 2 for 12 and 9 × 3 for 27", () => {
+        expect(labelsOf(12, "full")).toEqual(["6 × 2", "4 × 3"]);
+        expect(labelsOf(27, "full")).toEqual(["9 × 3"]);
+    });
+
     it("labels Short back with how many short, Rounded and Notched with staggered or straight", () => {
         expect(labelsOf(23, "shortBack")).toEqual([
+            "9 × 3, 4 short",
             "8 × 3, 1 short",
             "6 × 4, 1 short",
             "5 × 5, 2 short",
             "4 × 6, 1 short",
             "3 × 8, 1 short",
         ]);
-        expect(labelsOf(23, "rounded")).toEqual(["5 × 5 staggered"]);
+        expect(labelsOf(23, "rounded")).toEqual([
+            "9 × 3 straight",
+            "5 × 5 staggered",
+        ]);
         expect(labelsOf(23, "notched")).toEqual(["5 × 5 straight"]);
         expect(labelsOf(24, "notched")).toEqual(["5 × 5 staggered"]);
     });
@@ -119,10 +128,10 @@ describe("the layout catalogue", () => {
             "shortBack",
             "notched",
         ]);
-        // 27 would be 9 × 3, which is 3:1, not within it
+        // 27 is 9 × 3 (exactly 3:1) and 25 is 5 × 5
         const full = rows.find((r) => r.family === "full")!;
-        expect(full.hint).toEqual({ more: 2, fewer: 1 });
-        expect(full.preview!.count).toBe(28);
+        expect(full.hint).toEqual({ more: 1, fewer: 1 });
+        expect(full.preview!.count).toBe(27);
         expect(hintText({ more: 3, fewer: null })).toBe("add 3");
         expect(hintText({ more: null, fewer: 2 })).toBe("remove 2");
         for (const row of layoutCatalogue(24))
@@ -144,7 +153,7 @@ describe("the layout catalogue", () => {
         for (let n = 1; n <= 120; n++)
             for (const row of layoutCatalogue(n)) {
                 for (const v of row.versions)
-                    expect(Math.max(v.across, v.deep)).toBeLessThan(
+                    expect(Math.max(v.across, v.deep)).toBeLessThanOrEqual(
                         3 * Math.min(v.across, v.deep),
                     );
                 const aspects = row.versions.map((v) => v.across / v.deep);
