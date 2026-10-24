@@ -128,11 +128,28 @@ export interface TemplateStore {
     destinations: TemplateDestination[];
     list(): Promise<TemplateSummary[]>;
     load(id: string): Promise<SketchTemplate>;
+    /** Saves a new template; `render.thumbnail` is a small PNG for the host's lists */
     save(
         template: SketchTemplate,
         destination: TemplateDestination["id"],
+        render?: TemplateRender,
+    ): Promise<void>;
+    /**
+     * Saves a template edited in a tab back where it came from (`key` is its id from `list()`).
+     * Hosts without it can't open templates for editing.
+     */
+    update?(
+        key: string,
+        template: SketchTemplate,
+        render: TemplateRender,
     ): Promise<void>;
     remove?(id: string): Promise<void>;
+}
+
+/** What the package renders when it saves a template */
+export interface TemplateRender {
+    /** A small PNG of the first page on the host's field, or null */
+    thumbnail: Blob | null;
 }
 
 /** Everything the package needs from its host */

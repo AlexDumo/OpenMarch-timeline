@@ -223,3 +223,32 @@ export function docFromTemplate(
         })),
     });
 }
+
+/**
+ * A template as a sketch, to edit it in a tab: its pages (ids kept) and field style on the
+ * host's current field. Saving it back goes through `templateFromDoc` with the template's id, so
+ * the layout never gets into the template (ADR 0006 D-6).
+ */
+export function docForTemplateEdit(
+    template: SketchTemplate,
+    fieldProperties: FieldPropertiesJson,
+): SketchDoc {
+    return {
+        id: template.id,
+        name: template.name,
+        field: createFieldSnapshot(fieldProperties, template.style),
+        pages:
+            template.pages.length > 0
+                ? template.pages.map((p) => ({ ...p }))
+                : [createPage("Page 1")],
+        schemaVersion: SKETCH_SCHEMA_VERSION,
+    };
+}
+
+/** An edited template tab's doc as the template it saves back to, under the same id */
+export function templateFromEditedDoc(doc: SketchDoc): SketchTemplate {
+    return {
+        ...templateFromDoc(doc, { name: doc.name }),
+        id: doc.id,
+    };
+}

@@ -44,3 +44,4 @@ export {
     renderPage,
     renderThumbnail,
 } from "./export/exportPage";
+export { thumbnailBounds } from "./export/thumbnailBounds";

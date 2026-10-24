@@ -10,7 +10,11 @@ import {
 import clsx from "clsx";
 import { FolderOpenIcon, PlusIcon, XIcon } from "@phosphor-icons/react";
 import { FieldProperties } from "@openmarch/core";
-import { docFromTemplate, nextSketchName } from "../doc/sketchDoc";
+import {
+    docForTemplateEdit,
+    docFromTemplate,
+    nextSketchName,
+} from "../doc/sketchDoc";
 import type { SnapMode } from "../drill/snap";
 import { registerOmFillers } from "../fills/roughFiller";
 import type {
@@ -62,6 +66,11 @@ export interface SketchpadHandle {
     rename(id: string, name: string): void;
     /** Closes a sketch's tab without saving it (the host deleted the sketch) */
     discard(id: string): void;
+    /**
+     * Opens a template in a tab to edit it, or focuses its tab (`key` is its id from
+     * `store.templates.list()`). It's drawn on `initialField` and saves back to the template.
+     */
+    editTemplate(key: string): Promise<void>;
     /** The active tab's sketch as it is now */
     activeDoc(): SketchDoc | null;
 }
@@ -104,6 +113,8 @@ export function downloadBlob(blob: Blob, filename: string) {
 interface Tab {
     doc: SketchDoc;
     isNew: boolean;
+    /** Set for a tab that edits a template */
+    templateKey?: string;
 }
 
 /**
@@ -158,12 +169,17 @@ export const Sketchpad = forwardRef<SketchpadHandle, SketchpadProps>(
             );
         }, []);
 
-        const addTab = useCallback((doc: SketchDoc, isNew: boolean) => {
-            setTabs((t) =>
-                t.some((x) => x.doc.id === doc.id) ? t : [...t, { doc, isNew }],
-            );
-            setActiveId(doc.id);
-        }, []);
+        const addTab = useCallback(
+            (doc: SketchDoc, isNew: boolean, templateKey?: string) => {
+                setTabs((t) =>
+                    t.some((x) => x.doc.id === doc.id)
+                        ? t
+                        : [...t, { doc, isNew, templateKey }],
+                );
+                setActiveId(doc.id);
+            },
+            [],
+        );
 
         const open = useCallback(
             async (id: string) => {
@@ -235,6 +251,18 @@ export const Sketchpad = forwardRef<SketchpadHandle, SketchpadProps>(
             [builtIns, store, createFrom, showNew],
         );
 
+        const editTemplate = useCallback(
+            async (key: string) => {
+                const template = await store.templates.load(key);
+                if (tabsRef.current.some((t) => t.doc.id === template.id)) {
+                    setActiveId(template.id);
+                    return;
+                }
+                addTab(docForTemplateEdit(template, initialField), false, key);
+            },
+            [store, initialField, addTab],
+        );
+
         const discard = useCallback((id: string) => {
             handles.current.delete(id);
             setTabs((t) => {
@@ -260,12 +288,13 @@ export const Sketchpad = forwardRef<SketchpadHandle, SketchpadProps>(
                 rename: (id: string, name: string) =>
                     handles.current.get(id)?.rename(name),
                 discard,
+                editTemplate,
                 activeDoc: () =>
                     activeId
                         ? (handles.current.get(activeId)?.getDoc() ?? null)
                         : null,
             }),
-            [flush, open, openDoc, newSketch, discard, activeId],
+            [flush, open, openDoc, newSketch, discard, editTemplate, activeId],
         );
 
         // Open something right away: paper first (UX spec principle 1)
@@ -379,6 +408,14 @@ export const Sketchpad = forwardRef<SketchpadHandle, SketchpadProps>(
                                     className="text-body min-w-0 flex-1 truncate text-left"
                                     onClick={() => setActiveId(t.doc.id)}
                                 >
+                                    {t.templateKey && (
+                                        <span
+                                            className="text-accent mr-4 font-medium"
+                                            data-testid="tab-template-badge"
+                                        >
+                                            Template ·
+                                        </span>
+                                    )}
                                     {m?.name ?? t.doc.name}
                                     {m?.status === "unsaved" ||
                                     m?.status === "saving"
@@ -465,6 +502,22 @@ export const Sketchpad = forwardRef<SketchpadHandle, SketchpadProps>(
                             menuItems={menuItems}
                             saveOnMount={t.isNew}
                             hostName={hostName}
+                            templateKey={t.templateKey}
+                            onNewFromTemplate={
+                                t.templateKey
+                                    ? () =>
+                                          // From the template as it is now
+                                          void (
+                                              handles.current
+                                                  .get(t.doc.id)
+                                                  ?.flush() ?? Promise.resolve()
+                                          ).then(() =>
+                                              newSketch({
+                                                  templateId: t.templateKey,
+                                              }),
+                                          )
+                                    : undefined
+                            }
                         />
                     ))}
                 </div>

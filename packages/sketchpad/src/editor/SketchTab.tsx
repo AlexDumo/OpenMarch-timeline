@@ -29,7 +29,12 @@ import {
     PlusIcon,
     SquaresFourIcon,
 } from "@phosphor-icons/react";
-import { createPage, nextPageName, templateFromDoc } from "../doc/sketchDoc";
+import {
+    createPage,
+    nextPageName,
+    templateFromDoc,
+    templateFromEditedDoc,
+} from "../doc/sketchDoc";
 import {
     drillPosition,
     formatDrillPosition,
@@ -114,6 +119,13 @@ export interface SketchTabProps {
     saveOnMount?: boolean;
     /** Shown before the sketch name in export file names */
     hostName?: string;
+    /**
+     * The template this tab edits (its key from `store.templates.list()`): saves go back to
+     * the template through `store.templates.update`, not to the sketches
+     */
+    templateKey?: string;
+    /** "New sketch from this template", for a template tab */
+    onNewFromTemplate?: () => void;
 }
 
 const EMPTY: readonly ExcalidrawElement[] = [];
@@ -226,6 +238,8 @@ export const SketchTab = forwardRef<SketchTabHandle, SketchTabProps>(
             menuItems,
             saveOnMount,
             hostName,
+            templateKey,
+            onNewFromTemplate,
         },
         ref,
     ) {
@@ -405,10 +419,17 @@ export const SketchTab = forwardRef<SketchTabHandle, SketchTabProps>(
                         }).catch(() => null);
                         thumb.current = { key, blob };
                     }
-                    await store.save(doc, {
-                        pages: pagesRender,
-                        thumbnail: thumb.current.blob,
-                    });
+                    if (templateKey && store.templates.update)
+                        await store.templates.update(
+                            templateKey,
+                            templateFromEditedDoc(doc),
+                            { thumbnail: thumb.current.blob },
+                        );
+                    else
+                        await store.save(doc, {
+                            pages: pagesRender,
+                            thumbnail: thumb.current.blob,
+                        });
                     setStatus(
                         dirtySince.current === null ? "saved" : "unsaved",
                     );
@@ -425,7 +446,7 @@ export const SketchTab = forwardRef<SketchTabHandle, SketchTabProps>(
                 again.current = false;
                 await saveNow();
             }
-        }, [buildDoc, ensureFiles, pageFiles, store]);
+        }, [buildDoc, ensureFiles, pageFiles, store, templateKey]);
 
         const markDirty = useCallback(() => {
             const now = Date.now();
@@ -947,6 +968,14 @@ export const SketchTab = forwardRef<SketchTabHandle, SketchTabProps>(
                                 {name}
                             </button>
                         )}
+                        {templateKey && (
+                            <span
+                                className="bg-accent/15 text-accent rounded-4 text-sub shrink-0 px-6 py-1 font-medium"
+                                data-testid="template-badge"
+                            >
+                                Template
+                            </span>
+                        )}
                         <span
                             className={clsx(
                                 "text-sub pr-6",
@@ -970,6 +999,13 @@ export const SketchTab = forwardRef<SketchTabHandle, SketchTabProps>(
                                 onNewSketch,
                                 "menu-new-sketch",
                             )}
+                            {templateKey &&
+                                onNewFromTemplate &&
+                                menuButton(
+                                    "New sketch from this template",
+                                    onNewFromTemplate,
+                                    "menu-new-from-template",
+                                )}
                             {menuButton("Rename", () => setRenaming(true))}
                             {menuButton(
                                 "Save as template…",
@@ -1314,12 +1350,26 @@ export const SketchTab = forwardRef<SketchTabHandle, SketchTabProps>(
                         includeDrawing,
                         includeFieldStyle,
                     }) => {
-                        const template = templateFromDoc(buildDoc(), {
+                        const doc = buildDoc();
+                        const template = templateFromDoc(doc, {
                             name: tName,
                             includeDrawing,
                             includeFieldStyle,
                         });
-                        await store.templates.save(template, destination);
+                        const first = template.pages[0]!;
+                        const thumbnail = await renderThumbnail(
+                            { ...doc.field, style: template.style },
+                            {
+                                elements: first.elements,
+                                files: await pageFiles(
+                                    first.id,
+                                    first.elements,
+                                ),
+                            },
+                        ).catch(() => null);
+                        await store.templates.save(template, destination, {
+                            thumbnail,
+                        });
                     }}
                 />
             </div>

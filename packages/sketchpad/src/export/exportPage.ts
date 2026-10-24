@@ -10,6 +10,7 @@ import type {
 } from "@excalidraw/excalidraw/element/types";
 import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types";
 import { fieldSceneBounds } from "../drill/coordinates";
+import { thumbnailBounds } from "./thumbnailBounds";
 import {
     fieldSvgDocument,
     fieldUnderlayMarkup,
@@ -276,6 +277,10 @@ export async function renderThumbnail(
     scene: SceneInput,
     width = 320,
 ): Promise<Blob> {
-    const bounds = exportBounds(snapshot, scene.elements, 8);
+    // Cropped to the drawing; the field is drawn only within the crop (`exportPagePng`)
+    const bounds = thumbnailBounds(
+        drawingBounds(scene.elements),
+        exportBounds(snapshot, scene.elements, 8),
+    );
     return exportPagePng(snapshot, scene, width / bounds.width, bounds);
 }

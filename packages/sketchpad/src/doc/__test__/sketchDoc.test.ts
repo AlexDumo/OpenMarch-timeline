@@ -11,6 +11,8 @@ import {
     serializeSketchDoc,
     SketchDocError,
     templateFromDoc,
+    docForTemplateEdit,
+    templateFromEditedDoc,
 } from "../sketchDoc";
 import { toFieldPropertiesJson } from "../../field/fieldStyle";
 
@@ -219,5 +221,25 @@ describe("templates", () => {
         });
         expect(t.pages[0]!.elements).toEqual([]);
         expect(t.style.preset).toBe("show");
+    });
+});
+
+describe("editing a template", () => {
+    it("draws it on the host's field and saves it back without the layout, under its id", () => {
+        const doc = createSketchDoc({ name: "Opener", fieldProperties: hs });
+        const template = templateFromDoc(doc, { name: "Grid" });
+        const editing = docForTemplateEdit(template, college);
+        expect(editing.id).toBe(template.id);
+        expect(editing.name).toBe("Grid");
+        expect(editing.field.fieldProperties).toEqual(college);
+        expect(editing.field.style).toEqual(template.style);
+        expect(editing.pages.map((p) => p.id)).toEqual(
+            template.pages.map((p) => p.id),
+        );
+        const saved = templateFromEditedDoc({ ...editing, name: "Grid 2" });
+        expect(saved.id).toBe(template.id);
+        expect(saved.name).toBe("Grid 2");
+        expect(saved).not.toHaveProperty("field");
+        expect(saved.style).toEqual(template.style);
     });
 });
