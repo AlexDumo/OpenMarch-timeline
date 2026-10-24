@@ -1348,11 +1348,9 @@ test("change: the layout menu under the chip switches layout, ↻ turns the box 
 // new spots).
 
 const sizeButton = (page: Page, more: boolean) =>
-    page
-        .getByTestId("shape-tool-readout")
-        .getByRole("button", {
-            name: more ? "One more across" : "One fewer across",
-        });
+    page.getByTestId("shape-tool-readout").getByRole("button", {
+        name: more ? "One more across" : "One fewer across",
+    });
 
 test("change: − and + come back to the same spots, so the box doesn't creep", async ({
     show,
