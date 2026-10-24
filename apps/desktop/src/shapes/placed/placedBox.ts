@@ -1,4 +1,4 @@
-import { canLayOut } from "../distribute/distribution";
+import { canLayOut, type Distribution } from "../distribute/distribution";
 import type {
     ShapeRecipeMember,
     StoredShapeRecipe,
@@ -9,15 +9,14 @@ import {
     boxFrame,
     snapToGrid,
     withBoxFrame,
-    ranksOf,
     type BoxParams,
 } from "../box/boxGeometry";
-import { boxShape } from "../box/boxShape";
 import { boxTool } from "../box/boxTool";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { SHAPE_TOOLS } from "../tool/shapeTools";
 import type { ShapeContext, XY } from "../types";
-import { frameToField } from "../frame/frame";
+import { frameToField, pivotPoint } from "../frame/frame";
+import { pivotOf } from "../frame/pivot";
 
 /**
  * Placed shapes (docs/timeline/research/shapes/07-placed-boxes.md): a shape's recipe, read back.
@@ -52,7 +51,7 @@ export interface PlacedBox<P = unknown> {
     readonly endBeat: number;
 }
 
-/** Whether `placed` is a box, for what only a box has (its file count, Close up, Re-split) */
+/** Whether `placed` is a box, for what only a box has (its file count, Re-split) */
 export const isPlacedBox = (
     placed: PlacedBox,
 ): placed is PlacedBox<BoxParams> => placed.kind === boxTool;
@@ -209,16 +208,17 @@ export function withoutMembers(
     };
 }
 
-/** `params`' spots for `marchers`, who goes where by Nearest */
-function placeOn(
-    params: BoxParams,
+/** `params`' spots for `marchers` in a shape of `kind`, who goes where by Nearest */
+function placeOn<P>(
+    kind: AnyToolKind,
+    params: P,
     marchers: readonly AssignMarcher[],
     ctx: ShapeContext,
-): BoxRecipe<BoxParams> {
+): BoxRecipe<P> {
     const n = marchers.length;
-    const slots = boxShape.generate(params, n, ctx);
+    const slots = kind.shape.generate(params, n, ctx);
     const assignment = assignSlots({
-        kind: boxShape,
+        kind: kind.shape,
         params,
         slots,
         marchers,
@@ -241,27 +241,60 @@ function placeOn(
 }
 
 /**
- * **Close up**: `marchers` (the box's members after some left) fill the box from the front, at
- * the same files and intervals. The front rank stays where it was with all `spots` filled, and the
- * back rank goes short.
+ * Whether `box` can **Close up**: a closed kind with holes, some members left (spec #385, ADR 0006
+ * 2026-10-14 revision). An open kind (a line, an arc) keeps its holes.
+ */
+export const canCloseUp = (box: PlacedBox): boolean =>
+    box.kind.closed !== undefined &&
+    box.recipe.members.length > 0 &&
+    box.recipe.members.length < box.spots;
+
+/**
+ * The params `box` closes up to for `n` members (fewer than its spots), in its mode and settings
+ * (spec #385, "Close up"): Files takes its layout's version for the new count, or Short back
+ * standing in (which the chip notes); Outline spreads round again; a spread keeps the count it was
+ * laid out for, so it relaxes into the gap rather than reshuffles. The pivot stays where it was
+ * with every spot filled. Null for an open kind or no holes.
+ */
+export function closedUpParams(
+    box: PlacedBox,
+    n: number,
+    env: ToolEnv,
+): unknown {
+    const { kind, params, spots } = box;
+    const closed = kind.closed;
+    if (!closed || n <= 0 || n >= spots) return null;
+    const d = closed.distribution(params, spots);
+    const kept: Distribution =
+        d.mode === "spread" ? { ...d, count: d.count ?? spots } : d;
+    const next = closed.withDistribution(params, n, kept, env);
+    // Grown from the pivot as it stood with all its spots, whatever the kind does with a count
+    const key = env.pivot ?? pivotOf(params);
+    const was = pivotPoint(kind.frameOf(params, spots), key);
+    const frame = kind.frameOf(next, n);
+    const now = pivotPoint(frame, key);
+    const moved = kind.withFrame(next, n, {
+        ...frame,
+        center: {
+            x: frame.center.x + was.x - now.x,
+            y: frame.center.y + was.y - now.y,
+        },
+    });
+    return kind.settle ? kind.settle(moved, n, env) : moved;
+}
+
+/**
+ * **Close up**: `marchers` (the shape's members after some left) laid out again in the shape as
+ * {@link closedUpParams} has it, by least travel. Null when the shape can't close up.
  */
 export function closeUp(
-    params: BoxParams,
-    spots: number,
+    box: PlacedBox,
     marchers: readonly AssignMarcher[],
+    env: ToolEnv,
     ctx: ShapeContext,
-): BoxRecipe<BoxParams> {
-    // In the box's own axes, however it's turned: the front rank is local +y
-    const frame = boxFrame(params, spots);
-    const ranks = ranksOf(params, marchers.length);
-    const closed: BoxParams = {
-        ...params,
-        center: frameToField(frame, {
-            x: 0,
-            y: frame.halfDepth - ((ranks - 1) / 2) * params.deep,
-        }),
-    };
-    return placeOn(closed, marchers, ctx);
+): BoxRecipe | null {
+    const params = closedUpParams(box, marchers.length, env);
+    return params === null ? null : placeOn(box.kind, params, marchers, ctx);
 }
 
 /**
@@ -293,5 +326,5 @@ export function resplit(
               env,
           )
         : params;
-    return placeOn(redrawn, marchers, ctx);
+    return placeOn(boxTool, redrawn, marchers, ctx);
 }

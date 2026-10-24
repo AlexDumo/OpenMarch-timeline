@@ -650,6 +650,121 @@ test("a selected box's handle stretches it and saves at once, as one undo step",
     await expectCanvasMatchesShow(show);
 });
 
+/** The latest recipe saved: its params and how many members it has */
+async function latestRecipe(show: Show) {
+    const [row] = await show.query<{ params: string; members: number }>(
+        `SELECT r.params AS params,
+            (SELECT COUNT(*) FROM timeline_shape_recipe_marchers m WHERE m.recipe_id = r.id) AS members
+         FROM timeline_shape_recipes r ORDER BY r.id DESC LIMIT 1`,
+    );
+    return { params: JSON.parse(row.params), members: row.members };
+}
+
+/** Goes inside the placed box at marcher `id` and drags it `by` screen pixels, out of the box */
+async function dragOutOfBox(page: Page, id: number, by: Point) {
+    const at = await marcherScreen(page, id);
+    // A click selects the box whole, then a double click goes inside it
+    await page.mouse.click(at.x, at.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toContain(id);
+    await page.mouse.dblclick(at.x, at.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([id]);
+    await drag(page, at, { x: at.x + by.x, y: at.y + by.y });
+    await waitForIdle(page);
+}
+
+// Close up (#392, spec #385): a placed shape that lost members keeps its holes
+// until Close up, in the chip's ⋯ row and the inspector, lays it out again for
+// the members left by least travel, as one undo step.
+test("change: Close up shows only with holes, lays a box that lost two out for six as one undo step, and undo brings the holes back", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+
+    // No holes: no Close up
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    await page.getByTestId("shape-editor-more").click();
+    await expect(page.getByTestId("shape-editor-more-row")).toBeVisible();
+    await expect(page.getByTestId("shape-editor-close-up")).toHaveCount(0);
+    await expect(page.getByTestId("shape-section-close-up")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    // Two leave: their spots stay empty, and the toast offers Close up
+    await dragOutOfBox(page, 7, { x: 0, y: 160 });
+    await expect(
+        toasts(page).filter({ hasText: "left the box" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await dragOutOfBox(page, 8, { x: 0, y: 160 });
+    await page.keyboard.press("Escape");
+    await expect.poll(async () => (await latestRecipe(show)).members).toBe(6);
+    expect((await latestRecipe(show)).params.spots).toBe(8);
+    const holed = await savedPositions(show, 0);
+
+    const t2 = await marcherScreen(page, 2);
+    await page.mouse.click(t2.x, t2.y);
+    const members = ALL.filter((id) => id !== 7 && id !== 8);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(members);
+    await expect(page.getByTestId("placed-box-readout")).toContainText(
+        "2 empty",
+    );
+    await expect(page.getByTestId("shape-section-close-up")).toBeVisible();
+    const steps = await undoSteps(show);
+    await page.getByTestId("shape-editor-more").click();
+    await page.getByTestId("shape-editor-close-up").click();
+
+    // Laid out for six: no holes left, everyone on a spot of the box
+    await expect
+        .poll(async () => (await latestRecipe(show)).params.spots)
+        .toBe(6);
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 1);
+    expect((await latestRecipe(show)).members).toBe(6);
+    await expect(page.getByTestId("placed-box-readout")).not.toContainText(
+        "empty",
+    );
+    await expect(page.getByTestId("shape-section-close-up")).toHaveCount(0);
+    const closed = await savedPositions(show, 0);
+    // Each member stands on a spot of its own in the recipe saved
+    const placed = await show.query<{
+        marcher_id: number;
+        slot: number;
+        x: number;
+        y: number;
+    }>(
+        `SELECT marcher_id, slot, x, y FROM timeline_shape_recipe_marchers
+         WHERE recipe_id = (SELECT MAX(id) FROM timeline_shape_recipes)`,
+    );
+    expect(placed.map((m) => m.slot).sort()).toEqual([0, 1, 2, 3, 4, 5]);
+    for (const m of placed) {
+        const p = closed.find((c) => c.id === m.marcher_id)!;
+        expect(Math.hypot(p.x - m.x, p.y - m.y)).toBeLessThan(CLOSE);
+    }
+    // The two who left stay where they went
+    for (const id of [7, 8])
+        expect(closed.find((p) => p.id === id)).toEqual(
+            holed.find((p) => p.id === id),
+        );
+
+    // One undo puts the holes back
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect
+        .poll(async () => (await latestRecipe(show)).params.spots)
+        .toBe(8);
+    await expect.poll(() => savedPositions(show, 0)).toEqual(holed);
+    await expectCanvasMatchesShow(show);
+});
+
 test("the View tab's numbers-only labels draw drill order, not drill numbers", async ({
     show,
 }) => {

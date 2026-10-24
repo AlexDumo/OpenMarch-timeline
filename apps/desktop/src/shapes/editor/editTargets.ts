@@ -9,6 +9,8 @@ import {
 } from "../placed/boxSelectionStore";
 import { commitBox } from "../placed/commitBox";
 import { keptOf, orderOf } from "../placed/liveBox";
+import { canCloseUp, closedUpParams } from "../placed/placedBox";
+import { toolEnvFor } from "../tool/toolEnv";
 import { useDrawnOnPage } from "../placed/placedBoxText";
 import {
     beginEdit,
@@ -50,6 +52,11 @@ export interface ShapeEditTarget {
     /** One change at once: a typed number, a button */
     apply(params: unknown): void;
     setOrder(order: ToolOrder): void;
+    /**
+     * Close up (#392): a placed closed shape with holes laid out again for its members, as one
+     * change. Absent for a new shape, and for a placed one with no holes or an open kind.
+     */
+    readonly closeUp?: () => void;
 }
 
 const withField = (run: (ctx: ReturnType<typeof shapeContextFor>) => void) => {
@@ -123,6 +130,20 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
             },
             setOrder: (order) =>
                 void commitBox(box, box.params, queryClient, order),
+            ...(canCloseUp(box) && {
+                closeUp: () => {
+                    const field = currentShapeField();
+                    if (!field) return;
+                    const params = closedUpParams(
+                        box,
+                        box.recipe.members.length,
+                        toolEnvFor(field, { shift: false, alt: false }),
+                    );
+                    // Least travel, whatever order it was laid out in (spec #385)
+                    if (params !== null)
+                        void commitBox(box, params, queryClient, "nearest");
+                },
+            }),
         };
     }, [box, queryClient, drawnOn]);
 }
