@@ -1,12 +1,74 @@
-import { rmSync } from "node:fs";
+import { cpSync, existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import electron from "vite-plugin-electron";
 import renderer from "vite-plugin-electron-renderer";
 import pkg from "./package.json";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
+
+const require = createRequire(import.meta.url);
+
+/** Where the Sketchpad window loads Excalidraw's fonts from (`SKETCHPAD_ASSET_DIR`) */
+const SKETCHPAD_ASSET_BASE = "sketchpad-assets";
+
+/**
+ * Serves `@openmarch/sketchpad`'s Excalidraw fonts in dev and copies them into the renderer
+ * build, so the Sketchpad window loads them from the app itself, never a CDN (ADR 0006 D-1).
+ */
+function sketchpadFonts(): Plugin {
+    const fontsDir = () => {
+        const dir = path.join(
+            path.dirname(require.resolve("@openmarch/sketchpad")),
+            "fonts",
+        );
+        if (!existsSync(dir))
+            throw new Error(
+                `Build @openmarch/sketchpad first: ${dir} is missing`,
+            );
+        return dir;
+    };
+    let outDir = "dist";
+    return {
+        name: "openmarch-sketchpad-fonts",
+        configResolved(config) {
+            outDir = path.resolve(config.root, config.build.outDir);
+        },
+        configureServer(server) {
+            const dir = fontsDir();
+            server.middlewares.use(
+                `/${SKETCHPAD_ASSET_BASE}/fonts`,
+                (req, res, next) => {
+                    const file = path.normalize(
+                        path.join(
+                            dir,
+                            decodeURIComponent((req.url ?? "").split("?")[0]!),
+                        ),
+                    );
+                    if (
+                        !file.startsWith(dir) ||
+                        !existsSync(file) ||
+                        !statSync(file).isFile()
+                    )
+                        return next();
+                    res.setHeader("Content-Type", "font/woff2");
+                    res.end(readFileSync(file));
+                },
+            );
+        },
+        closeBundle() {
+            cpSync(
+                fontsDir(),
+                path.join(outDir, SKETCHPAD_ASSET_BASE, "fonts"),
+                {
+                    recursive: true,
+                },
+            );
+        },
+    };
+}
 
 // https://vitejs.dev/config/
 // eslint-disable-next-line max-lines-per-function
@@ -30,6 +92,7 @@ export default defineConfig(({ command }) => {
             // Keep tailwindcss here for the main renderer process
             tailwindcss(),
             react(),
+            sketchpadFonts(),
             sentryVitePlugin({
                 authToken: process.env.SENTRY_AUTH_TOKEN,
                 org: "openmarch-llc",
@@ -134,12 +197,13 @@ export default defineConfig(({ command }) => {
                     },
                 },
                 {
-                    // The editor's preload, and the 3D View window's. The 3D
-                    // View preload runs sandboxed, so it must import only
+                    // The editor's preload, and the 3D View and Sketchpad
+                    // windows'. Those run sandboxed, so each must import only
                     // `electron` and share no chunk with the editor's.
                     entry: {
                         index: "electron/preload/index.ts",
                         view3d: "electron/preload/view3d.ts",
+                        sketchpad: "electron/preload/sketchpad.ts",
                     },
                     onstart(options) {
                         // Notify the Renderer-Process to reload the page when the Preload-Scripts build is complete,
@@ -177,6 +241,10 @@ export default defineConfig(({ command }) => {
                     port: +url.port,
                 };
             })(),
+        define: {
+            // Excalidraw, in the Sketchpad window, reads this at module load
+            "process.env.IS_PREACT": JSON.stringify("false"),
+        },
         clearScreen: false,
     };
 });

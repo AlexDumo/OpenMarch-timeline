@@ -31,6 +31,7 @@ import {
     PartRoleSchema,
     SizePresetFileSchema,
     CameraProfileFileSchema,
+    SketchTemplateEntrySchema,
     VersionHashSchema,
     type DerivedFrom,
     type LibraryIndexEntry,
@@ -42,6 +43,8 @@ import {
     type LicenseFields,
     type SizePreset,
     type CameraProfileEntry,
+    type SketchTemplateEntry,
+    type SketchTemplateEntrySummary,
 } from "./types";
 
 export type LibraryErrorCode =
@@ -166,6 +169,17 @@ export interface LibraryStore {
         data: CameraProfileEntry["data"];
     }): Promise<CameraProfileEntry>;
     deleteCameraProfile(id: string): Promise<void>;
+    /** Sketchpad templates (ADR 0006 D-6), newest first; unreadable files are skipped */
+    listSketchTemplates(): Promise<SketchTemplateEntrySummary[]>;
+    readSketchTemplate(id: string): Promise<SketchTemplateEntry>;
+    /** Saves a new template without `id`; with one, replaces or adds that id. */
+    saveSketchTemplate(input: {
+        id?: string;
+        name: string;
+        data: SketchTemplateEntry["data"];
+        files: SketchTemplateEntry["files"];
+    }): Promise<SketchTemplateEntrySummary>;
+    deleteSketchTemplate(id: string): Promise<void>;
 }
 
 const ITEMS_DIR = "items";
@@ -174,6 +188,7 @@ const TMP_DIR = "tmp";
 const INDEX_FILE = "index.json";
 const SIZE_PRESETS_FILE = "size-presets.json";
 const CAMERA_PROFILES_FILE = "camera-profiles.json";
+const SKETCH_TEMPLATES_DIR = "sketch-templates";
 
 export function blobRelativePath(hash: string): string {
     return path.join(BLOBS_DIR, hash.slice(0, 2), hash);
@@ -609,6 +624,119 @@ class LocalLibrary implements LibraryStore {
                 throw new LibraryError("not-found", `No camera profile ${id}`);
             }
             await this.writeCameraProfiles(profiles.filter((p) => p.id !== id));
+        });
+    }
+
+    // Sketch templates
+
+    private sketchTemplatePath(id: string): string {
+        checkItemId(id);
+        return path.join(this.root, SKETCH_TEMPLATES_DIR, `${id}.json`);
+    }
+
+    async listSketchTemplates(): Promise<SketchTemplateEntrySummary[]> {
+        let names: string[];
+        try {
+            names = await readdir(path.join(this.root, SKETCH_TEMPLATES_DIR));
+        } catch (error) {
+            if (isMissing(error)) return [];
+            throw error;
+        }
+        const summaries: SketchTemplateEntrySummary[] = [];
+        for (const name of names) {
+            if (!name.endsWith(".json")) continue;
+            try {
+                const {
+                    id,
+                    createdAt,
+                    updatedAt,
+                    name: n,
+                } = await this.readSketchTemplate(name.slice(0, -5));
+                summaries.push({ id, name: n, createdAt, updatedAt });
+            } catch {
+                // A file a newer app wrote, or a broken one: leave it out
+            }
+        }
+        return summaries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    }
+
+    async readSketchTemplate(id: string): Promise<SketchTemplateEntry> {
+        let raw: string;
+        try {
+            raw = await readFile(this.sketchTemplatePath(id), "utf8");
+        } catch (error) {
+            if (isMissing(error))
+                throw new LibraryError("not-found", `No sketch template ${id}`);
+            throw error;
+        }
+        let parsed;
+        try {
+            parsed = SketchTemplateEntrySchema.safeParse(JSON.parse(raw));
+        } catch (error) {
+            throw new LibraryError(
+                "corrupt",
+                `Sketch template ${id} is unreadable: ${String(error)}`,
+            );
+        }
+        if (!parsed.success || parsed.data.id !== id) {
+            throw new LibraryError(
+                "corrupt",
+                `Sketch template ${id} is unreadable`,
+            );
+        }
+        return parsed.data;
+    }
+
+    saveSketchTemplate(input: {
+        id?: string;
+        name: string;
+        data: SketchTemplateEntry["data"];
+        files: SketchTemplateEntry["files"];
+    }): Promise<SketchTemplateEntrySummary> {
+        if (input.id !== undefined) checkItemId(input.id);
+        const name = cleanName(input.name);
+        return this.exclusive(async () => {
+            const id = input.id ?? this.newUUID();
+            const at = this.now().toISOString();
+            let createdAt = at;
+            try {
+                createdAt = (await this.readSketchTemplate(id)).createdAt;
+            } catch {
+                // A new template
+            }
+            const entry: SketchTemplateEntry = {
+                schemaVersion: LIBRARY_SCHEMA_VERSION,
+                id,
+                name,
+                createdAt,
+                updatedAt: at,
+                data: input.data,
+                files: input.files,
+            };
+            await mkdir(path.join(this.root, SKETCH_TEMPLATES_DIR), {
+                recursive: true,
+            });
+            await this.writeAtomic(
+                this.sketchTemplatePath(id),
+                JSON.stringify(entry),
+            );
+            return { id, name, createdAt, updatedAt: at };
+        });
+    }
+
+    deleteSketchTemplate(id: string): Promise<void> {
+        const file = this.sketchTemplatePath(id);
+        return this.exclusive(async () => {
+            try {
+                await rm(file);
+            } catch (error) {
+                if (isMissing(error))
+                    throw new LibraryError(
+                        "not-found",
+                        `No sketch template ${id}`,
+                    );
+                throw error;
+            }
         });
     }
 
