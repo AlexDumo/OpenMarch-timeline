@@ -325,7 +325,8 @@ function ModeDrawing({
                             return `${p.x},${p.y}`;
                         })
                         .join(" ")}
-                    fill={open ? fill : "none"}
+                    // The faint fill shows with the controls, on hover (#403)
+                    fill={open && !drawing.calm ? fill : "none"}
                     stroke={shape}
                     strokeWidth={SHAPE_OUTLINE_WIDTH}
                     strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
@@ -369,8 +370,10 @@ function ModeDrawing({
                         cx={p.x}
                         cy={p.y}
                         r={SPOT_RADIUS * z}
-                        fill={dots ? shape : "none"}
-                        stroke={dots ? "white" : shape}
+                        // Solid while drawn and once open (#403): the spots are where everyone will
+                        // stand, unlike the hollow start rings
+                        fill={dots || open ? shape : "none"}
+                        stroke={dots || open ? "white" : shape}
                         strokeWidth={SPOT_WIDTH * z}
                     />
                 );

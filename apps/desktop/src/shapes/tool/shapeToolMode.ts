@@ -54,7 +54,7 @@ const shownNow = (): Shown | null => {
     const { tool } = useShapeToolStore.getState();
     if (!tool) return null;
     const { hover, over } = useSpotHover.getState();
-    const walks = useUiSettingsStore.getState().uiSettings.shapeWalks ?? true;
+    const walks = useUiSettingsStore.getState().uiSettings.shapeWalks ?? false;
     if (
         shown?.tool !== tool ||
         shown.hover !== hover ||

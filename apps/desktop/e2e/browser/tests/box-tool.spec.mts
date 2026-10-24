@@ -162,6 +162,9 @@ async function drawBox(show: Show) {
     return { grid, pressed, released };
 }
 
+/** Turns on the open shape's pathways, off by default (#403), for scenarios that read the walks */
+const showPathways = (page: Page) => setUiSettings(page, { shapeWalks: true });
+
 test.beforeEach(async ({ show }) => {
     await expectCanvasMatchesShow(show);
 });
@@ -170,6 +173,7 @@ test("B opens the box tool, and a drag draws a box edge to edge on half steps, m
     show,
 }) => {
     const { page } = show;
+    await showPathways(page);
     const grid = await fieldGrid(show);
     const S = grid.pixelsPerStep;
     const cf = grid.centerFront;
@@ -264,6 +268,7 @@ test("change: the knob turns the box and ⋯ flips it, each marcher keeping thei
     show,
 }) => {
     const { page } = show;
+    await showPathways(page);
     const { grid } = await drawBox(show);
     let overlay = (await shapeOverlay(page))!;
     expect(overlay.stage).toBe("open");
@@ -386,12 +391,19 @@ test("change: the open box's controls fade while the pointer is away from it, an
             .getByTestId("fieldShapeHandle")
             .first()
             .evaluate((el) => getComputedStyle(el).opacity);
+    const boxFill = () =>
+        page
+            .getByTestId("fieldShapeMode")
+            .locator("polygon")
+            .first()
+            .getAttribute("fill");
 
-    // Away from the box, on empty field: faint controls, the spots as they were
+    // Away from the box, on empty field: faint controls and no fill, the spots as they were
     const away = await toScreen(page, { x: cf.x + 20 * S, y: cf.y - 5 * S });
     await page.mouse.move(away.x, away.y);
     await expect.poll(calm).toBe(true);
     await expect.poll(handleOpacity).toBe("0.25");
+    await expect.poll(boxFill).toBe("none");
     expect((await shapeOverlay(page))!.spots).toHaveLength(ALL.length);
 
     // Over the box: full strength
@@ -405,6 +417,7 @@ test("change: the open box's controls fade while the pointer is away from it, an
     await page.mouse.move(inside.x, inside.y);
     await expect.poll(calm).toBe(false);
     await expect.poll(handleOpacity).toBe("1");
+    await expect.poll(boxFill).not.toBe("none");
 
     // Away again, then over a handle
     await page.mouse.move(away.x, away.y);
@@ -419,23 +432,14 @@ test("change: the open box's controls fade while the pointer is away from it, an
     await expect.poll(calm).toBe(true);
 });
 
-test("change: the transport's Pathways button hides and shows the open box's walks and start rings, and goes once it closes", async ({
+test("change: the open box starts with no pathways; the floating editor's Pathways toggle shows and hides its walks and start rings", async ({
     show,
 }) => {
     const { page } = show;
-    const pathways = page.getByTestId("timeline-shape-pathways");
-    await expect(pathways).toHaveCount(0);
+    const pathways = page.getByTestId("shape-editor-pathways");
     await drawBox(show);
     let overlay = (await shapeOverlay(page))!;
-    expect(overlay.walks).toHaveLength(ALL.length);
-    expect(overlay.rings).toHaveLength(ALL.length);
-    await expect(pathways).toHaveAttribute("aria-pressed", "true");
-
-    await pathways.click();
-    await expect
-        .poll(async () => (await shapeOverlay(page))!.walks)
-        .toEqual([]);
-    overlay = (await shapeOverlay(page))!;
+    expect(overlay.walks).toEqual([]);
     expect(overlay.rings).toEqual([]);
     expect(overlay.spots).toHaveLength(ALL.length);
     await expect(pathways).toHaveAttribute("aria-pressed", "false");
@@ -447,9 +451,13 @@ test("change: the transport's Pathways button hides and shows the open box's wal
     expect((await shapeOverlay(page))!.rings).toHaveLength(ALL.length);
     await expect(pathways).toHaveAttribute("aria-pressed", "true");
 
-    // Closed, the button goes
-    await page.keyboard.press("Escape");
-    await expect(pathways).toHaveCount(0);
+    await pathways.click();
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.walks)
+        .toEqual([]);
+    overlay = (await shapeOverlay(page))!;
+    expect(overlay.rings).toEqual([]);
+    await expect(pathways).toHaveAttribute("aria-pressed", "false");
 });
 
 const screenOf = async (page: Page, id: number): Promise<[number, number]> => {
@@ -907,6 +915,7 @@ for (const editorMode of ["expert", "basic"] as const) {
             show,
         }) => {
             const { page } = show;
+            await showPathways(page);
             await selectPage(show, "Page 2");
             // The field shows the playhead: page 2's positions
             await expect
@@ -927,6 +936,7 @@ for (const editorMode of ["expert", "basic"] as const) {
             show,
         }) => {
             const { page } = show;
+            await showPathways(page);
             await selectPage(show, "Page 2");
             await page.keyboard.press("Home");
             await expect
@@ -1848,6 +1858,7 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
     show,
 }) => {
     const { page } = show;
+    await showPathways(page);
     const grid = await fieldGrid(show);
     const S = grid.pixelsPerStep;
     const cf = grid.centerFront;

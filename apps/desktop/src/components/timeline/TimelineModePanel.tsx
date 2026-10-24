@@ -41,7 +41,6 @@ import { AudioClock } from "./Clock";
 import {
     TimelineCompactButton,
     TimelineLoopButton,
-    ShapePathwaysButton,
     TimelineSoundButton,
     TimelineSpeedButton,
 } from "./TimelineControls";
@@ -143,16 +142,9 @@ const LOOP_BUTTONS = (
     <>
         <TimelineLoopButton />
         <TimelineSpeedButton />
-        <ShapePathwaysButton />
     </>
 );
-// Basic has no loop, but an open shape's pathways toggle all the same (#403)
-const SPEED_BUTTON = (
-    <>
-        <TimelineSpeedButton />
-        <ShapePathwaysButton />
-    </>
-);
+const SPEED_BUTTON = <TimelineSpeedButton />;
 /** First on the transport's right in both modes, before Fit: start flag positions (fork #331) */
 const LEADING_VIEW_CONTROLS = <StartFlagPositionsButton />;
 const EXPERT_VIEW_CONTROLS = <TimelineCompactButton />;
