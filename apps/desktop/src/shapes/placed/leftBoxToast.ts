@@ -9,7 +9,7 @@ import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { BoxLeave } from "./boxMembership";
-import { closeUp, resplit, type BoxRecipe } from "./placedBox";
+import { closeUp, isPlacedBox, resplit, type BoxRecipe } from "./placedBox";
 
 /** One toast per box, so marchers leaving two boxes in one edit can fill either */
 const leftBoxToastId = (recipeId: number) => `shape-left-box-${recipeId}`;
@@ -39,7 +39,7 @@ async function refill(
             at: { x: number; y: number };
             drillRank: number;
         }[],
-    ) => BoxRecipe,
+    ) => BoxRecipe | null,
 ): Promise<void> {
     const out = fill(
         leave.members.map((m: ShapeRecipeMember, i) => ({
@@ -48,6 +48,7 @@ async function refill(
             drillRank: i,
         })),
     );
+    if (!out) return;
     try {
         await rewrite(
             out.members.map((m) => ({
@@ -69,13 +70,13 @@ async function refill(
             },
         );
     } catch (e) {
-        toastTimelineError(e, "Error filling the box");
+        toastTimelineError(e, "Error filling the shape");
     }
 }
 
 /**
- * After marchers leave a box: "OT3 left the box", with **Close up** and **Re-split** to fill the
- * holes. Ignoring it leaves the holes, and undo puts the marchers back (docs/timeline/research/shapes/07-placed-boxes.md).
+ * After marchers leave a shape: "OT3 left the box", with **Close up** (any closed kind) and, for a
+ * box, **Re-split** to fill the holes. Ignoring it leaves the holes, and undo puts the marchers back (docs/timeline/research/shapes/07-placed-boxes.md).
  */
 export function showLeftBoxToast(
     leaves: readonly BoxLeave[],
@@ -88,38 +89,56 @@ function showOne(leave: BoxLeave, rewrite: BoxRewrite): void {
     const field = currentShapeField();
     if (!field) return;
     const ctx = shapeContextFor(field);
+    const env = () => toolEnvFor(field, { shift: false, alt: false });
     const names = leave.left.map(nameOf);
-    const message =
-        names.length === 1
+    const { box } = leave;
+    const message = isPlacedBox(box)
+        ? names.length === 1
             ? tolgee.t("shapes.box.left.one", "{name} left the box", {
                   name: names[0]!,
               })
             : tolgee.t("shapes.box.left.many", "{count} left the box", {
                   count: names.length,
-              });
+              })
+        : names.length === 1
+          ? tolgee.t("shapes.placed.left.one", "{name} left the {shape}", {
+                name: names[0]!,
+                shape: box.kind.shape.label.toLowerCase(),
+            })
+          : tolgee.t("shapes.placed.left.many", "{count} left the {shape}", {
+                count: names.length,
+                shape: box.kind.shape.label.toLowerCase(),
+            });
+    // Every closed kind closes up (#392); an open one (a line, an arc) keeps its holes
+    const closesUp = box.kind.closed !== undefined && leave.members.length > 0;
     toast.info(message, {
         id: leftBoxToastId(leave.recipeId),
         duration: LEFT_BOX_TOAST_MS,
-        action: {
-            label: tolgee.t("shapes.box.left.closeUp", "Close up"),
-            onClick: () =>
-                void refill(leave, rewrite, (marchers) =>
-                    closeUp(leave.box.params, leave.box.spots, marchers, ctx),
-                ),
-        },
-        cancel: {
-            label: tolgee.t("shapes.box.left.resplit", "Re-split"),
-            onClick: () =>
-                void refill(leave, rewrite, (marchers) =>
-                    resplit(
-                        leave.box.params,
-                        leave.box.spots,
-                        marchers,
-                        toolEnvFor(field, { shift: false, alt: false }),
-                        ctx,
+        ...(closesUp && {
+            action: {
+                label: tolgee.t("shapes.box.left.closeUp", "Close up"),
+                onClick: () =>
+                    void refill(leave, rewrite, (marchers) =>
+                        closeUp(box, marchers, env(), ctx),
                     ),
-                ),
-        },
+            },
+        }),
+        ...(isPlacedBox(box) &&
+            leave.members.length > 0 && {
+                cancel: {
+                    label: tolgee.t("shapes.box.left.resplit", "Re-split"),
+                    onClick: () =>
+                        void refill(leave, rewrite, (marchers) =>
+                            resplit(
+                                box.params,
+                                box.spots,
+                                marchers,
+                                env(),
+                                ctx,
+                            ),
+                        ),
+                },
+            }),
         // A toast has two buttons; Undo is the app's own
         description: tolgee.t(
             "shapes.box.left.hint",

@@ -214,6 +214,16 @@ export type FieldModeDrawing = {
     walks: readonly { from: FieldPoint; to: FieldPoint }[];
     handles: readonly FieldPoint[];
     /**
+     * Hollow rings where the shape's marchers start the move (08-shape-system-ux.md, "Marcher
+     * styling"): at the start flag, the same points the walks leave from
+     */
+    rings?: readonly FieldPoint[];
+    /**
+     * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
+     * (#390), which a click on another spot between corners moves
+     */
+    gaps?: readonly FieldPoint[];
+    /**
      * The shape's look at this stage (docs/timeline/research/shapes/08-shape-system-ux.md,
      * "Marcher styling"): while it's drawn, a dashed outline and solid spots; once open, a solid
      * outline with a faint fill. Dashed rings when absent.
@@ -225,10 +235,17 @@ export type FieldModeDrawing = {
     knob?: { at: FieldPoint; stem: FieldPoint };
     /** The dot that moves the whole shape */
     centerDot?: FieldPoint;
+    /**
+     * The shape's pivot once it's out of the center (#350): a yellow crosshair that drags on its
+     * own. At the center the center dot is the pivot.
+     */
+    pivotMark?: FieldPoint;
     /** While turning: what it turns around, and the pointer */
     pivot?: { at: FieldPoint; to: FieldPoint };
     /** A note by the pointer: the angle, or where the shape is in drill terms */
     tip?: { at: FieldPoint; text: string };
+    /** The spots are part way to where they're going: a glide is running (#387) */
+    gliding?: boolean;
 };
 
 /**
@@ -657,20 +674,24 @@ export class FieldEditor {
     }
 
     /**
-     * Turns the selection `degrees` clockwise about its box's center, from
+     * Turns the selection `degrees` clockwise about its box's center (or the
+     * point `around` picks on that box, the Transform section's pivot), from
      * where it was when the typing started, as the rotate handle does (user
      * story 54). Drawn until {@link endRotation} saves it. Refused during a
      * drag and while a mode that locks the selection is on. Over a drop still
      * saving it starts from where that drop is drawn, and is dropped if that
      * drop is refused.
      */
-    rotateSelection(degrees: number): void {
+    rotateSelection(
+        degrees: number,
+        around: (box: FieldRect) => FieldPoint = centerOf,
+    ): void {
         if (this.gesture || this.modePress || this.mode?.locksSelection) return;
         if (!this.typed) {
             const starts = this.drawnPositions(this.ports.selection.get());
             const box = boundsOf(starts);
             if (starts.length < 2 || !box) return;
-            this.typed = { starts, center: centerOf(box), degrees: 0 };
+            this.typed = { starts, center: around(box), degrees: 0 };
         }
         this.typed.degrees = degrees;
         this.showLive(

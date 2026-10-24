@@ -1,4 +1,7 @@
 import {
+    boxBlock,
+    boxDistribution,
+    boxOutlineSides,
     filesOf,
     keepRatio,
     ranksOf,
@@ -7,24 +10,28 @@ import {
     resizeFiles,
     acrossIsDeep,
     onField,
+    withFileCount,
     type BoxParams,
 } from "../box/boxGeometry";
-import { turnShape, flipShape } from "../frame/gestures";
+import {
+    flipShape,
+    ROTATION_PX_PER_DEGREE,
+    scrubTurn,
+    turnShape,
+} from "../frame/gestures";
 import { boxTool } from "../box/boxTool";
+import { gapAsSeen } from "../distribute/outline";
 import {
     DEGREE,
     normalizeAngle,
-    rotationDegrees,
-    type PivotKey,
+    type FlipAxis,
+    type Pivot,
 } from "../frame/frame";
 
 import type { ToolEnv } from "../tool/toolKind";
-import {
-    COUNT_RATE,
-    SPACING_FINE_STEP,
-    SPACING_RATE,
-    scrubValue,
-} from "./scrub";
+import { filesDistribution } from "../distribute/distribution";
+import { layoutOrientations, type LayoutVersion } from "../distribute/layouts";
+import { COUNT_RATE, spacingRate, scrubValue } from "./scrub";
 
 /**
  * What the floating editor's numbers and buttons do to a box (08-shape-system-ux.md, "The floating
@@ -56,6 +63,10 @@ export function withRanks(
     const now = ranksOf(p, spots);
     const want = Math.min(n, Math.max(1, Math.round(ranks)));
     if (want === now) return p;
+    // An outline's spots down a side and across its back always go round the count: a + b is
+    // half the loop
+    if (boxDistribution(p).mode === "outline")
+        return withFiles(p, spots, Math.ceil(n / 2) - want + 2, env);
     // Not every count deep fits: 64 in 9 ranks is still 8 across. Go on until the count changes.
     const step = want > now ? 1 : -1;
     for (let r = want; r >= 1 && r <= n; r += step) {
@@ -89,6 +100,91 @@ export function withSpacing(
     return grownFromPivot(p, { ...p, across, deep }, spots, env);
 }
 
+/** A version of the box's layout, with its size as the field shows it */
+interface FieldVersion {
+    readonly version: LayoutVersion;
+    readonly across: number;
+    readonly deep: number;
+}
+
+/**
+ * The versions of the box's chosen layout (#387), sized on the field, for the size number to move
+ * between; null for Short back (or Short back standing in), whose size is any count across
+ */
+function layoutVersions(p: BoxParams, spots: number): FieldVersion[] | null {
+    const block = boxBlock(p, spots);
+    if (block.fellBack !== null || block.layout.family === "shortBack")
+        return null;
+    const swap = acrossIsDeep(p.rotation);
+    // Quarter turns included: − on 6 × 4 goes on to 4 × 6
+    return layoutOrientations(spots, block.layout.family).map((version) => ({
+        version,
+        across: swap ? version.deep : version.across,
+        deep: swap ? version.across : version.deep,
+    }));
+}
+
+/** The box laid out in `version`: same intervals and stagger, grown from the pivot */
+const inVersion = (
+    p: BoxParams,
+    spots: number,
+    version: LayoutVersion,
+    env: ToolEnv,
+): BoxParams => {
+    const d = boxDistribution(p);
+    if (d.mode !== "files") return p;
+    return boxTool.closed!.withDistribution(
+        p,
+        spots,
+        { ...d, layout: version.layout },
+        env,
+    );
+};
+
+/** Of `candidates`, the one most like the box now: turned the same way, then nearest in depth */
+function likeNow(
+    p: BoxParams,
+    spots: number,
+    candidates: readonly FieldVersion[],
+): FieldVersion | undefined {
+    const now = boxBlock(p, spots);
+    const deep = onField(p, spots).deep;
+    return [...candidates].sort(
+        (a, b) =>
+            Number(a.version.layout.byFile !== now.layout.byFile) -
+                Number(b.version.layout.byFile !== now.layout.byFile) ||
+            Math.abs(a.deep - deep) - Math.abs(b.deep - deep),
+    )[0];
+}
+
+/**
+ * The size number's − and + (#387): one more or fewer across, or for a layout other than Short
+ * back, its next version wider or narrower on the field; null where there is none
+ */
+export function stepSize(
+    p: BoxParams,
+    spots: number,
+    by: -1 | 1,
+    env: ToolEnv,
+): BoxParams | null {
+    const versions = layoutVersions(p, spots);
+    const across = onField(p, spots).across;
+    if (!versions) {
+        const next = across + by;
+        if (next < 1 || next > spots) return null;
+        return withFieldCount(p, spots, "across", next, env);
+    }
+    const ahead = versions.filter((v) => (v.across - across) * by > 0);
+    if (ahead.length === 0) return null;
+    const nearest = Math.min(...ahead.map((v) => Math.abs(v.across - across)));
+    const next = likeNow(
+        p,
+        spots,
+        ahead.filter((v) => Math.abs(v.across - across) === nearest),
+    )!;
+    return inVersion(p, spots, next.version, env);
+}
+
 /** The box with `count` across (or deep) on the field */
 export function withFieldCount(
     p: BoxParams,
@@ -97,6 +193,19 @@ export function withFieldCount(
     count: number,
     env: ToolEnv,
 ): BoxParams {
+    const versions = layoutVersions(p, spots);
+    if (versions) {
+        const now = onField(p, spots);
+        if (count === (axis === "across" ? now.across : now.deep)) return p;
+        // A size the layout makes keeps the layout; any other is Short back at that size
+        const match = likeNow(
+            p,
+            spots,
+            versions.filter((v) => v[axis] === count),
+        );
+        if (match) return inVersion(p, spots, match.version, env);
+        return withFieldCount(asShortBack(p, spots), spots, axis, count, env);
+    }
     const swapped = acrossIsDeep(p.rotation);
     if (axis === "across" && swapped) {
         // Side to side on the field is the box's own deep, where only some counts fit (8 in 5
@@ -113,25 +222,75 @@ export function withFieldCount(
 }
 
 /**
+ * The box as Short back, as many across on its own axes as its block now, ready for a size its
+ * layout doesn't make
+ */
+function asShortBack(p: BoxParams, spots: number): BoxParams {
+    const d = boxDistribution(p);
+    if (d.mode !== "files") return p;
+    const across = boxBlock(p, spots).across;
+    return {
+        ...p,
+        files: across,
+        distribution: { ...d, layout: filesDistribution(across).layout },
+    };
+}
+
+/**
  * The same grid of spots described a quarter turn the other way: its ranks become its files and
  * its two spacings swap. A short rank moves to the new back; who goes where is worked out again by
  * the count change that follows.
  */
 export function reoriented(p: BoxParams, spots: number): BoxParams {
+    return withFileCount(
+        {
+            ...p,
+            rotation: normalizeAngle(p.rotation - Math.PI / 2),
+            across: p.deep,
+            deep: p.across,
+            flipX: undefined,
+            flipY: undefined,
+            ...reorientedGap(p, spots),
+        },
+        ranksOf(p, spots),
+    );
+}
+
+/** A quarter turn back takes an outline's back to its right, and its left to its back */
+const QUARTER_BACK = {
+    back: "right",
+    right: "front",
+    front: "left",
+    left: "back",
+} as const;
+
+/**
+ * An outline's gap where {@link reoriented} puts it: the same spot on the field, with no flip and
+ * named by the box's new sides
+ */
+function reorientedGap(p: BoxParams, spots: number): Partial<BoxParams> {
+    const d = boxDistribution(p);
+    if (d.mode !== "outline") return {};
+    const sides = boxOutlineSides(p, Math.max(1, spots), d.oddGap.side);
+    const seen = gapAsSeen(d.oddGap, sides, p.flipX === true, p.flipY === true);
+    const len =
+        seen.side === "back" || seen.side === "front" ? sides.a : sides.b;
+    // The back and front now run front to back, the other way round
+    const at =
+        seen.at === null || seen.side === "left" || seen.side === "right"
+            ? seen.at
+            : len - seen.at;
     return {
-        ...p,
-        rotation: normalizeAngle(p.rotation - Math.PI / 2),
-        files: ranksOf(p, spots),
-        across: p.deep,
-        deep: p.across,
-        flipX: undefined,
-        flipY: undefined,
+        distribution: {
+            ...d,
+            oddGap: { ...seen, side: QUARTER_BACK[seen.side], at },
+        },
     };
 }
 
 /**
- * A spacing (the box's own `which`) dragged `distance` px for more: ½ step per 8 px, tenths with
- * Alt, from where it started
+ * A spacing (the box's own `which`) dragged `distance` px for more: ½ step per 8 px, hundredths
+ * with Alt, from where it started
  */
 export function scrubSpacing(
     base: BoxParams,
@@ -141,11 +300,7 @@ export function scrubSpacing(
     env: ToolEnv,
 ): BoxParams {
     const was = (which === "across" ? base.across : base.deep) / env.stepPx;
-    const steps = scrubValue(was, distance, 0, {
-        axis: "x",
-        px: SPACING_RATE.px,
-        step: env.snap ? SPACING_RATE.step : SPACING_FINE_STEP,
-    });
+    const steps = scrubValue(was, distance, 0, spacingRate(env.snap, "x"));
     // A drag that ends where it started changes nothing; it doesn't round the value
     if (steps === was) return base;
     return withSpacing(base, which, steps, spots, env);
@@ -162,37 +317,40 @@ export function scrubSize(
     const field = onField(base, spots);
     const was = axis === "across" ? field.across : field.deep;
     const count = scrubValue(was, distance, 0, { axis: "x", ...COUNT_RATE });
-    return count === was ? base : withFieldCount(base, spots, axis, count, env);
+    if (count === was) return base;
+    const versions = layoutVersions(base, spots);
+    if (!versions) return withFieldCount(base, spots, axis, count, env);
+    // A layout other than Short back moves between its versions: the one nearest the count
+    // dragged to, that way from where it started
+    const ahead = versions.filter((v) => (v[axis] - was) * (count - was) > 0);
+    if (ahead.length === 0) return base;
+    const nearest = Math.min(...ahead.map((v) => Math.abs(v[axis] - count)));
+    const next = likeNow(
+        base,
+        spots,
+        ahead.filter((v) => Math.abs(v[axis] - count) === nearest),
+    )!;
+    return inVersion(base, spots, next.version, env);
 }
 
 /** The rotation dragged `distance` px clockwise: 1° per 2 px, 15° with Shift, free with Alt */
-export function scrubRotation(
+export const scrubRotation = (
     base: BoxParams,
     distance: number,
     spots: number,
-    pivot: PivotKey,
+    pivot: Pivot,
     env: ToolEnv,
-): BoxParams {
-    const turn = distance / ROTATION_PX_PER_DEGREE;
-    if (Math.trunc(turn) === 0 && env.snap) return base;
-    const degrees = rotationDegrees(base.rotation) + turn;
-    const snapped = !env.snap
-        ? degrees
-        : env.shift
-          ? Math.round(degrees / 15) * 15
-          : Math.round(degrees);
-    return turnTo(base, spots, snapped, pivot, env);
-}
+): BoxParams =>
+    scrubTurn(boxTool, base, spots, distance, pivot, env) as BoxParams;
 
-/** Pixels of drag per degree on the rotation number */
-export const ROTATION_PX_PER_DEGREE = 2;
+export { ROTATION_PX_PER_DEGREE };
 
 /** The box turned by `degrees` (clockwise on the field) about the pivot */
 export function turnBy(
     p: BoxParams,
     spots: number,
     degrees: number,
-    pivot: PivotKey,
+    pivot: Pivot,
     env: ToolEnv,
 ): BoxParams {
     return turnShape(
@@ -210,7 +368,7 @@ export function turnTo(
     p: BoxParams,
     spots: number,
     degrees: number,
-    pivot: PivotKey,
+    pivot: Pivot,
     env: ToolEnv,
 ): BoxParams {
     return turnShape(
@@ -227,8 +385,8 @@ export function turnTo(
 export const flipBox = (
     p: BoxParams,
     spots: number,
-    axis: "across" | "deep",
-    pivot: PivotKey,
+    axis: FlipAxis,
+    pivot: Pivot,
     env: ToolEnv,
 ): BoxParams => flipShape(boxTool, p, spots, axis, pivot, env) as BoxParams;
 

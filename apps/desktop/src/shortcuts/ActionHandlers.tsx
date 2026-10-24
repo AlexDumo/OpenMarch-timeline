@@ -10,7 +10,7 @@ import { useNudgeActionHandlers } from "./handlers/useNudgeActionHandlers";
 import { useTimelineActionEffects } from "./handlers/useTimelineActionEffects";
 import { useUiActionHandlers } from "./handlers/useUiActionHandlers";
 import { useShapeToolActions } from "@/shapes/tool/useShapeToolActions";
-import { ShapeToolKeys } from "@/shapes/tool/ShapeToolKeys";
+import { DiscardedShapeKeys, ShapeToolKeys } from "@/shapes/tool/ShapeToolKeys";
 import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
 import { PlacedBoxKeys } from "@/shapes/placed/PlacedBoxKeys";
 import { useBoxSelectionStore } from "@/shapes/placed/boxSelectionStore";
@@ -40,6 +40,13 @@ export function EditorActionHandlers() {
     const boxSelected = useBoxSelectionStore(
         (s) => s.selected !== null || s.inside !== null,
     );
+    const shapeDiscarded = useShapeToolStore((s) => s.discarded !== null);
     if (shapeToolOpen) return <ShapeToolKeys />;
-    return boxSelected ? <PlacedBoxKeys /> : null;
+    return (
+        <>
+            {boxSelected && <PlacedBoxKeys />}
+            {/* Undo right after Escape brings the shape back, over a placed box's keys too */}
+            {shapeDiscarded && <DiscardedShapeKeys />}
+        </>
+    );
 }

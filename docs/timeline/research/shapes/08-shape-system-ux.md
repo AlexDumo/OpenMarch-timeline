@@ -3,8 +3,11 @@
 # The shape system: UX spec
 
 Status: owner decisions, 2026-10-15 and 2026-10-16, from two rounds of clickable prototypes,
-and a grilling on 2026-10-16 about bringing it into the app ([Decisions, 2026-10-16](#decisions-2026-10-16)). This
-spec covers how every shape is reached, drawn, edited, transformed and shown. Each kind's own
+a grilling on 2026-10-16 about bringing it into the app ([Decisions, 2026-10-16](#decisions-2026-10-16)),
+and a grilling on 2026-10-20 about the shape **host** ([Decisions, 2026-10-20](#decisions-2026-10-20)),
+published as fork issue #344 with tickets #345 to #354. Where #344 and this spec disagree, #344
+wins; this spec was brought in line with it on 2026-10-20 (#345). This spec covers how every
+shape is reached, drawn, edited, transformed and shown. Each kind's own
 geometry and parameters are specified separately, shape by shape, like
 [06-box-v1.md](06-box-v1.md).
 
@@ -31,9 +34,16 @@ Both are single HTML files on the fork branch `proto/shape-ui-ideas`, in
 - Placing writes ordinary positions through the same path as a canvas drag, and saves a recipe
   beside them (ADR 0006), so a placed shape can be selected and edited again
   ([07-placed-boxes.md](07-placed-boxes.md)).
-- **Every kind shares one frame**: a center, a size (width and depth), a rotation and a flip.
-  Moving, rotating, flipping and resizing work the same way on every kind. A kind decides only
-  what its own parameters are and how its spots sit inside the frame.
+- **Every kind shares one frame**: a center, a size (width and depth), a rotation, a flip and a
+  pivot. Moving, rotating, flipping and scaling work the same way on every kind. A kind decides
+  only what its own parameters are and how its spots sit inside the frame
+  ([The kind contract](#the-kind-contract)).
+- **The host and kinds.** One shape host owns the session (drawing, gestures, history, who goes
+  where, placing), every way in, the floating chip, the inspector's Transform section and the
+  field styling. A kind owns only its parameters and its geometry.
+- The frame is the record: every kind's recipe stores the center, size, rotation, flip and pivot.
+  Scaling isn't stored as a factor; it becomes the new size and intervals. A shape's numbers are
+  stored at the keyframe where it is placed.
 
 ## Lifecycle
 
@@ -50,73 +60,78 @@ A shape session moves through these states. The field styling for each is in
 | **Placed**           | Enter or Place                                            | Marchers on their spots. The shape stays selectable as a placed shape                      |
 | **Placed, selected** | Clicking a member of a placed shape (07)                  | The outline, handles and floating editor again; every edit saves on release, with no Place |
 
-- **Enter** or **Place** places an open shape as one undo step. **Esc** cancels it.
-- Esc closes the innermost thing first: a number being typed, then the typed-steps box or the
+- **Enter** or **Place** places an open shape as one undo step. **Esc** discards it, and is an
+  undo step itself: Cmd/Ctrl+Z right after Esc brings the shape back. There is no Esc toast
+  (2026-10-20; it replaces the toast with Undo of 2026-10-17).
+- Esc closes the innermost thing first: a number being typed, then the command bar or the
   favorites ring, then the open shape.
 - A press on the empty field outside an open shape draws a new one that replaces it (06).
-- Changing the selection, or scrubbing the playhead, while a shape is open drops the open shape.
-  A toast offers to bring it back. (The first shape tool had this toast; box v1 doesn't yet.)
+- Changing the selection, or scrubbing the playhead, while a new shape is open **places** it as
+  one undo step, silently: no toast (owner, 2026-10-20: no unnecessary toasts).
+- With no marchers selected, the kinds are greyed out with the reason "Select marchers first".
+  The rule lives in one place in the host.
+- Picking another kind while a shape is open converts it and keeps its frame (center, size,
+  turn, flip).
+- The open shape is measured from the **start flag** ([Focus](#focus-the-start-flag)).
+- Shapes behave the same in Basic and Expert mode (owner, 2026-10-20: Basic is only about the
+  timeline).
 
 ## Getting a shape
 
-There are five ways in, all opening the same tool session. They differ only in how the kind and
-its first size are chosen.
+There are several ways in, all opening the same shape session. They differ only in how the kind
+and its first size are chosen. (Reworked 2026-10-20.)
 
 ### 1. The Shapes tab
 
-- A **Shapes** tab in the top toolbar, next to the other tabs.
+- A **Shapes** tab in the top bar, next to Alignment (which is unchanged).
 - Its ribbon, left to right:
-  1. **Type**, **Sketch** and **Library**.
-  2. Every basic kind, each with an icon and its name.
-  3. The user's starred saved and custom shapes, after a divider.
+  1. every registered kind, as a picture only, its name in the tooltip and the accessible label
+     (only the box today). The picture is drawn from the shape's own spots and outline (#378),
+     never a hand-drawn icon, and the ring, library and command bar show the same one;
+  2. a divider, then the user's starred shapes;
+  3. a **Library** button, which opens the library in the left sidebar.
+- **Sketch** joins it when sketch exists.
 - Picking a kind arms it. Then drag on the field to draw. If a shape is already open, picking
   another kind converts it and keeps its frame.
 - Box keeps its existing **B** key.
 
 ### 2. The favorites ring
 
-- Holding a key, or pressing and holding the right mouse button on the field, opens a ring of
-  the user's starred shapes around the cursor. Slide toward one and release to arm it.
-- The ring holds up to 8 shapes. Starring a ninth asks the user to unstar one first.
-- **Key:** the prototype used S, but S is the nudge-down key. **F** (for favorites) is unbound
-  and is the proposed default. It goes through the shortcut system, so it can be rebound.
+- **Hold R** to open a ring of shapes around the cursor; slide toward one and release to pick it.
+  **Tap R** to latch it open until a click.
+- No mouse trigger: the right button pans the field, and F is "Create page at playhead" (#340).
+- 8 slots: starred shapes first, then basic kinds in the tab's order to fill empty slots.
+- The key goes through the shortcut system, so it can be rebound.
 
-### 3. The library (the inspector's Library tab)
+### 3. The library (left sidebar)
 
-- **Changed 2026-10-16:** not an inspector tab. The list is an in-app window (a modal, like
-  Assets) called **Shapes**, opened from the ribbon's **All shapes…**, from **☆ Save**, and from
-  the ⋯ row. "Library" already names the asset Library, so the shape list never uses that word.
-  Saved and custom shapes, and stars, belong to the user across shows for now (app settings).
-- Shapes are grouped as **Basic**, **Saved** and **Custom**. Each row has a star, an icon, a name
-  and a note ("Line · 1.5 apart"). Saved and custom rows can be deleted.
-- A star puts the shape in the favorites ring and the Shapes tab.
-- **+ Save current shape** saves the open shape's kind and spacing as a saved shape, already
-  starred.
-- **+ New custom shape** opens an editor in the panel:
-  - a square grid; each click adds a corner, and clicking the first corner closes the outline;
-  - Undo corner, Clear, and an Open/Closed switch;
-  - a live preview of the selected marchers spread evenly along the outline;
-  - a name, then **Save to library**, which stars it and arms it.
-- A custom shape draws, resizes and transforms like any other kind, inside the same frame.
+- **Changed 2026-10-20:** the library is its own entry in the left sidebar, beside the show's
+  other resources (Marchers, Props, Music, Assets), not a modal.
+- Groups: **Basic** and **Saved**. Each row has a star, a picture, a name and a note ("Box · 2
+  apart"). Saved rows can be deleted.
+- One star puts a shape in both the ring and the Shapes tab. At most 8; starring a ninth asks the
+  user to unstar one first. Stars are a per-user preference, so they follow the user across
+  shows.
+- **☆ Save** (in the chip's ⋯ row and the inspector) asks for a name and stars the shape. A saved
+  shape keeps its kind and intervals, not its size or marcher count, so it fits any selection.
+- Saved shapes live in the user's library across shows, with a copy in each show that uses one,
+  following the Assets **This show** / **My Library** pattern.
+- Custom shapes ("+ New custom shape") are out of scope (#356).
 
-### 4. Typed steps (/)
+### 4. The command bar (/ and ⌘K)
 
-- **/** opens a box at the top of the field that asks one question at a time:
-  1. **What shape?** A list filters as you type (↑ and ↓ move through it). It includes saved and
-     custom shapes.
-  2. Then each of the kind's primary parameters, for example for a box: how many across, steps
-     apart side to side, then front to back.
-  3. Last, **Rotate how many degrees?**
-- Each step opens with a sensible default already typed, so pressing Enter accepts it.
-- A breadcrumb shows the answers so far ("Box › 6 across › 1.5 apart › ? deep › ?°").
-- A small preview of the shape with the selected marchers updates as you type. The field updates
-  too.
-- **Enter** goes to the next step. **Backspace** in an empty answer goes back one step. **Esc**
-  cancels and restores whatever was open before.
-- A one-liner fills later answers: "box 4x3 2" chooses Box and fills 4 across and 2 apart, so the
-  user just presses Enter through them.
-- The questions come from the kind's declared parameters, so a new kind gets typed steps for
-  free.
+- **/** and **⌘K** open the same bar. It extends the existing action registry and command palette
+  rather than replacing them: commands can declare typed parameters, and entries can nest.
+- **Shape › kind › parameters.** After picking a kind, the bar asks each of its declared
+  parameters in turn, each starting with a sensible default already typed, so Enter accepts it.
+- Plain actions keep the centered palette. Parameter steps dock at the top of the field without
+  covering it, with a live preview on the field.
+- Typing "box" lands on Shape › Box. A one-liner such as "box 4x3 2" fills answers ahead.
+- **Backspace** in an empty answer goes back one step. **Esc** cancels the whole command and
+  restores whatever shape was open before.
+- Saved shapes are listed in the Shape branch by name.
+- Only the Shape branch is built now. Moving the rest of the app onto the tree, and an outside
+  API, need their own ADR (#357).
 
 ### 5. Sketch
 
@@ -140,8 +155,9 @@ editing a shape. Owner choice, 2026-10-15.
   shape when there's no room below.
 - For a box: `6 × 2 │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`.
 - For a path kind (line, arc and others): `Line │ 2 steps apart │ ⋯ │ Place`.
-- What appears is the kind's **primary** parameters, declared by the kind. Sizes read as across ×
-  deep ("8 × 4"), never as files and ranks.
+- What appears is the kind's **primary** parameters, declared by the kind
+  ([The kind contract](#the-kind-contract)); the chip knows nothing else about the kind. Sizes
+  read as across × deep ("8 × 4"), never as files and ranks.
 - **⋯** opens a second row with the less common actions: rotate 90° each way, flip, who goes
   where, and "More in inspector →" (once the inspector's Shape tab exists).
 - A press on the editor's buttons and numbers doesn't take the keyboard focus, so Enter still
@@ -165,7 +181,7 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   | A box's size (6 × 2)        | Sideways for more or fewer across, up or down for more or fewer deep. It locks to the first direction moved | 1 per 16 px     |
   | Rotation (in the inspector) | Right turns clockwise                                                                                       | 1° per 2 px     |
 
-- **Alt** while dragging a spacing gives tenths of a step. **Shift** while dragging a rotation
+- **Alt** while dragging a spacing gives hundredths of a step (#411). **Shift** while dragging a rotation
   snaps to 15°.
 - A number lights up while it's being dragged, and its cursor shows its drag direction.
 - A drag that ends where it started changes nothing; it doesn't round the value.
@@ -181,6 +197,57 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   dragging, typing or a handle.
 - Both spacings stay on half steps, so the ratio is as near as half steps allow (4.5 makes 5, not
   5.14). Owner, 2026-10-16. Alt still gives exact values.
+
+## The kind contract
+
+Built in #345. A kind has two parts: the **shape** part (its parameters and a count give its
+spots) and the **tool** part (draw, handles, move, get and set the frame, settle). On top of
+that, each kind declares:
+
+- **Its parameters, once.** Each has a unit, a default (the command bar's first answer), a range,
+  whether it is **primary** (shown in the chip), its **drag direction**, whether it is an
+  **interval** (a spacing), and whether it **can blend over time**. The blend flag is recorded
+  only; nothing reads it until transforms over time are built (#355). The chip, the inspector,
+  the command bar's steps and a later API all come from this one list.
+- **How it scales:** by **interval** (its spacings change in half steps) or by **footprint** (no
+  regular spacing, such as a natural fill: its size changes in steps).
+
+Guardrails for shapes with unassigned spots later (#358):
+
+- **The count comes from the host.** Kinds receive the spot count and never read the selection.
+- **Spots and who goes where stay separate steps.** Least travel stays behind its replaceable
+  solver.
+- **All placing goes through one host function**, for new shapes and edits of placed ones.
+- **The "needs marchers selected" rule lives in one place.**
+
+## Transforms
+
+- **The Transform section** in the inspector shows whenever marchers are selected: the pivot,
+  rotation, flips and, for shapes, scale. A plain selection (not a shape) can be turned and
+  flipped too; that writes positions only, with no recipe, and has no scale control.
+- **Scale by interval**, never by percentage: − and + change the spacing by half a step. A shape
+  with uneven gaps (4, 4, 2) changes every gap by half a step. Footprint kinds scale their
+  footprint in half steps. Resize handles snap the spacing to half steps (Alt for hundredths), with a
+  length readout while dragging a long shape. There are no percentage scale buttons anywhere.
+- **The pivot.** A 3 × 3 grid in the inspector, the center by default. On the field, Cmd/Ctrl-drag
+  from the center dot pulls the pivot out into its own yellow crosshair, which can then be
+  dragged directly; double-click sends it back to the center. It snaps to marchers, the frame's 9
+  points and half steps; Alt turns snapping off. Turning, flipping and scaling all go around it,
+  and it stays where it is on the field: flipping twice puts the shape back (flipped around its
+  right edge, the grid then lights the left edge). It is saved with the shape; new shapes start
+  centered. A plain drag on the center dot still moves the shape. The crosshair is drawn over the
+  handles, so a pivot on a corner marcher is grabbed before that corner's handle.
+- A shape remembers its rotation, flip and pivot when selected again. The rotate knob turns with
+  the shape.
+
+## Focus: the start flag
+
+The open shape's hollow rings, walk lines and least travel start where each marcher stands at
+the **start flag**, not where they stood on this page, so the shape shows the move being written.
+
+- Expert: the start flag's position.
+- Basic: the hidden start flag at the start of the page holding the playhead.
+- At home (playhead at 0): the marchers' home spots.
 
 ## On the field
 
@@ -227,6 +294,10 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   so it can change later without touching kinds or the tool.
 
 ## The inspector
+
+**Changed 2026-10-20:** the inspector shows the open shape and a **Transform** section for any
+selection ([Transforms](#transforms)). The 2026-10-16 tab plan below is kept for history; scale
+is back, by interval.
 
 **Changed 2026-10-16:** the inspector gets two tabs, **Inspector** (what it shows today) and
 **Shape**. The Shape tab switches on by itself when a shape opens or a placed shape is
@@ -297,15 +368,15 @@ Every kind must work, and be checked, from 1 marcher to a full band.
 
 ## Keys
 
-| Key                        | Does                                                   | Status                                                 |
-| -------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
-| **B**                      | Box                                                    | Existing                                               |
-| **Enter** / **Esc**        | Place / cancel (innermost first)                       | Existing                                               |
-| `[` / `]`                  | ~~One fewer / one more across~~                        | Dropped: they hold for playback speed (#216)           |
-| **/**                      | Typed steps                                            | Unbound today; proposed                                |
-| Hold **F**, or right-press | Favorites ring                                         | Unbound today; proposed (S is nudge down)              |
-| Nudge keys (WASD, arrows)  | Move the whole open or selected shape                  | 07                                                     |
-| Kind letters               | Pick a kind, only inside the ring or the Shapes ribbon | Needs shortcut contexts; deferred (README decision 10) |
+| Key                       | Does                                                   | Status                                                 |
+| ------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
+| **B**                     | Box                                                    | Existing                                               |
+| **Enter** / **Esc**       | Place / discard (innermost first; Esc is undoable)     | Existing; Esc becomes an undo step (#347)              |
+| `[` / `]`                 | ~~One fewer / one more across~~                        | Dropped: they hold for playback speed (#216)           |
+| **/** and **⌘K**          | The command bar                                        | ⌘K existing; / proposed (#353)                         |
+| Hold or tap **R**         | Favorites ring                                         | Proposed (#351); F is taken (#340)                     |
+| Nudge keys (WASD, arrows) | Move the whole open or selected shape                  | 07                                                     |
+| Kind letters              | Pick a kind, only inside the ring or the Shapes ribbon | Needs shortcut contexts; deferred (README decision 10) |
 
 All of these go through the shortcut system and are rebindable.
 
@@ -315,6 +386,17 @@ All of these go through the shortcut system and are rebindable.
 - Filled shapes, staggers and interval locks beyond the box's ratio lock.
 - Follow the leader.
 - Copying a placed shape to other marchers.
+- The custom-shape editor and the custom-outline kind; Freeze as shape (#356).
+- Transforms over time: a shape tied to its move, rotating or growing (#355).
+- The app-wide command API (#357).
+- Sketch-to-recognize.
+
+## Later
+
+- **Shapes with unassigned spots** (#358): a recipe is spots with marchers assigned to them, and
+  an empty spot is planned but not built. The guardrails in
+  [The kind contract](#the-kind-contract) keep this a host change: kinds already take the count
+  from the host, and the "needs marchers selected" rule and placing each have one home.
 
 ## Decisions, 2026-10-16
 
@@ -384,13 +466,29 @@ and flipping to 2.5, all from the back-left pivot):
 - **The floating editor holds still while the pointer is on it**, and stays inside the field, so
   a button doesn't slide away between two clicks.
 
+## Decisions, 2026-10-20
+
+From grilling the shape host (Q1 to Q41), published as #344. The sections above were updated to
+match. In short:
+
+- One host for every kind; kinds declare their parameters (with primary, drag direction,
+  interval and blend flags) and whether they scale by interval or footprint.
+- Ways in: the Shapes tab next to Alignment, the favorites ring on R, the library in the left
+  sidebar, and one command bar on / and ⌘K walking Shape › kind › parameters.
+- The frame (center, size, rotation, flip, pivot) is the record. Scaling is by interval in half
+  steps. The pivot is draggable on the field (answers open question 1 below).
+- The open shape is measured from the start flag.
+- Leaving an open shape places it silently; Esc discards and is undoable, with no toast.
+- Same in Basic and Expert.
+- Shapes with unassigned spots come later (#358); the host keeps the guardrails for them now.
+
 ## Open questions for the owner
 
 Answered 2026-10-16 (see above): the ratio lock's rounding, the knob, where saved shapes live,
 stars, the ⋯ row and scale buttons, and Basic mode. Still open:
 
-1. **Pivot on the field:** should the pivot dot be draggable onto any marcher (for example a
-   pinwheel on T1), perhaps by Alt-dragging the center dot?
+1. ~~**Pivot on the field**~~: answered 2026-10-20: Cmd/Ctrl-drag from the center dot, snapping
+   to marchers ([Transforms](#transforms)).
 2. **Custom shapes:** marchers spread evenly along the outline (as built), so a corner gets a
    marcher only if the spacing lands on it. Should corners always get one?
 3. **Flip on the field's axes** (as built in A): "side to side" swaps side 1 and side 2 however

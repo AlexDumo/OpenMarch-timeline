@@ -140,7 +140,8 @@ jobs:
         env:
           WEB_CHANNEL: lab
           LAB_TEST_ID: ${{ steps.test.outputs.id }}
-          # Its show and editor mode, if it names them (apps/desktop/web/LAB.md)
+          # Its show, editor mode and versions to compare, if it names them
+          # (apps/desktop/web/LAB.md)
           LAB_MANIFEST: ${{ steps.test.outputs.manifest }}
         run: |
           pnpm turbo run build --filter="@openmarch/desktop^..."

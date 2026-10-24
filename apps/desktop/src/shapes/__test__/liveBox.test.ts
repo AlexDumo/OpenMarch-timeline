@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { blockKind } from "../kinds/block";
-import { drawBox, filesOf } from "../box/boxGeometry";
+import { boxShape } from "../box/boxShape";
+import { drawBox, filesOf, type BoxParams } from "../box/boxGeometry";
+import { boxTool } from "../box/boxTool";
 import {
     liveFiles,
     liveTargets,
@@ -26,9 +27,9 @@ const env: ToolEnv = {
 const ctx: ShapeContext = { stepPx: STEP, snapPoint: (p) => p };
 
 /** A placed 2 × 2 box, 20 apart, from (0,0) to (20,20); marchers 1..4 */
-function placed(): PlacedBox {
+function placed(): PlacedBox<BoxParams> {
     const params = drawBox({ x: 0, y: 0 }, { x: 20, y: 20 }, 4, env)!;
-    const slots = blockKind.generate(params, 4, ctx);
+    const slots = boxShape.generate(params, 4, ctx);
     return {
         recipe: {
             id: 7,
@@ -45,6 +46,7 @@ function placed(): PlacedBox {
                 y: s.y,
             })),
         },
+        kind: boxTool,
         params,
         spots: 4,
         endBeat: 8,
@@ -97,7 +99,7 @@ describe("a selected placed box", () => {
 
     it("keeps holes where they are", () => {
         const box = placed();
-        const holed: PlacedBox = {
+        const holed: PlacedBox<BoxParams> = {
             ...box,
             recipe: withoutMembers(box.recipe, [2]),
         };
@@ -121,7 +123,7 @@ describe("a selected placed box", () => {
 
     it("a file change with holes closes them up, Nearest, instead of scattering the members", () => {
         const box = placed();
-        const holed: PlacedBox = {
+        const holed: PlacedBox<BoxParams> = {
             ...box,
             recipe: withoutMembers(box.recipe, [2]),
         };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockKind } from "../kinds/block";
+import { boxShape } from "../box/boxShape";
 import {
     changeFiles,
     drawBox,
@@ -70,7 +70,7 @@ describe("drawing a box", () => {
             right: 40,
             bottom: 40,
         });
-        const slots = blockKind.generate(box, 4, ctx);
+        const slots = boxShape.generate(box, 4, ctx);
         expect(slots.map((s) => [s.x, s.y])).toEqual([
             [0, 0],
             [40, 0],
@@ -81,7 +81,7 @@ describe("drawing a box", () => {
 
     it("stands a marcher on the corner the drag starts from, snapped to the grid", () => {
         const at = (box: BoxParams, n: number) =>
-            blockKind.generate(box, n, ctx).map((s) => `${s.x},${s.y}`);
+            boxShape.generate(box, n, ctx).map((s) => `${s.x},${s.y}`);
         const a = drawBox({ x: 1.3, y: 2.2 }, { x: 93, y: 71 }, 12, env())!;
         expect(at(a, 12)).toContain("0,0");
         const b = drawBox({ x: 81, y: 59 }, { x: 0, y: 0 }, 12, env())!;
@@ -106,7 +106,7 @@ describe("drawing a box", () => {
 
     it("puts every marcher on the half-step grid", () => {
         const box = drawBox({ x: 1.3, y: 2.2 }, { x: 93, y: 71 }, 12, env())!;
-        const slots = blockKind.generate(box, 12, ctx);
+        const slots = boxShape.generate(box, 12, ctx);
         expect(slots.every(onGrid)).toBe(true);
     });
 
@@ -137,7 +137,7 @@ describe("drawing a box", () => {
         const box = drawBox({ x: 0, y: 0 }, { x: 30, y: 60 }, 5, env())!;
         expect(filesOf(box)).toBe(2);
         expect(shortBy(box, 5)).toBe(1);
-        const slots = blockKind.generate(box, 5, ctx);
+        const slots = boxShape.generate(box, 5, ctx);
         const back = Math.min(...slots.map((s) => s.y));
         const backRank = slots.filter((s) => s.y === back);
         expect(backRank).toHaveLength(1);
@@ -154,14 +154,15 @@ describe("drawing a box", () => {
         expect(box.across).toBe(box.deep);
     });
 
-    it("Alt doesn't round", () => {
+    it("Alt rounds to hundredths of a step, not half steps (#411)", () => {
         const box = drawBox(
             { x: 0, y: 0 },
             { x: 83, y: 83 },
             16,
             env({ snap: false }),
         )!;
-        expect(box.across).toBeCloseTo(83 / 3);
+        // 2.7666 steps is 2.77
+        expect(box.across).toBeCloseTo(27.7);
     });
 
     it("keeps the file count until another fits clearly better", () => {

@@ -70,23 +70,99 @@ export function fieldToFrame(frame: ShapeFrame, p: XY): XY {
     return { x: d.x * ux.x + d.y * ux.y, y: d.x * uy.x + d.y * uy.y };
 }
 
-/** Where `key` is in the frame's local coordinates */
-export function pivotLocal(frame: ShapeFrame, key: PivotKey): XY {
-    const x = key.includes("w")
+/**
+ * A pivot dragged anywhere on the field (#350), in the frame's own terms so it moves, turns and
+ * stretches with the shape: across and deep, a multiple of the frame's half size (−1 and 1 are its
+ * edges, 0 its center). On an axis with no size (a line's depth) it is in field units from the
+ * center instead.
+ */
+export interface FreePivot {
+    readonly x: number;
+    readonly y: number;
+}
+
+/** What a shape turns, flips and scales around: one of its 9 points, or anywhere (#350) */
+export type Pivot = PivotKey | FreePivot;
+
+export const isPivotKey = (pivot: unknown): pivot is PivotKey =>
+    typeof pivot === "string" &&
+    (PIVOT_KEYS as readonly string[]).includes(pivot);
+
+export const isPivot = (pivot: unknown): pivot is Pivot =>
+    isPivotKey(pivot) ||
+    (typeof pivot === "object" &&
+        pivot !== null &&
+        Number.isFinite((pivot as FreePivot).x) &&
+        Number.isFinite((pivot as FreePivot).y));
+
+const keyLocal = (frame: ShapeFrame, key: PivotKey): XY => ({
+    x: key.includes("w")
         ? -frame.halfWidth
         : key.includes("e")
           ? frame.halfWidth
-          : 0;
-    const y = key.includes("n")
+          : 0,
+    y: key.includes("n")
         ? -frame.halfDepth
         : key.includes("s")
           ? frame.halfDepth
-          : 0;
-    return { x, y };
+          : 0,
+});
+
+/** A half size, or 1 on an axis with none: what a free pivot's number is a multiple of */
+const unitOf = (half: number) => (half > 1e-9 ? half : 1);
+
+/** Where `pivot` is in the frame's local coordinates */
+export function pivotLocal(frame: ShapeFrame, pivot: Pivot): XY {
+    if (isPivotKey(pivot)) return keyLocal(frame, pivot);
+    return {
+        x: pivot.x * unitOf(frame.halfWidth),
+        y: pivot.y * unitOf(frame.halfDepth),
+    };
 }
 
-export const pivotPoint = (frame: ShapeFrame, key: PivotKey): XY =>
-    frameToField(frame, pivotLocal(frame, key));
+export const pivotPoint = (frame: ShapeFrame, pivot: Pivot): XY =>
+    frameToField(frame, pivotLocal(frame, pivot));
+
+/**
+ * The 9 points, the center first, then the edges' middles: on a line, which has no depth, its
+ * right end is both "e" and "ne", and reads as "e"
+ */
+export const PIVOT_KEYS_SIMPLEST_FIRST: readonly PivotKey[] = [
+    "c",
+    "n",
+    "e",
+    "s",
+    "w",
+    "nw",
+    "ne",
+    "sw",
+    "se",
+];
+
+/** How close to one of the 9 points a pivot reads as that point, in field units */
+const ON_POINT = 1e-6;
+
+/** The pivot at field point `p` on `frame`: one of its 9 points when it's on one */
+export function pivotAt(frame: ShapeFrame, p: XY): Pivot {
+    const local = fieldToFrame(frame, p);
+    const key = PIVOT_KEYS_SIMPLEST_FIRST.find((k) => {
+        const at = keyLocal(frame, k);
+        return (
+            Math.abs(at.x - local.x) <= ON_POINT &&
+            Math.abs(at.y - local.y) <= ON_POINT
+        );
+    });
+    if (key) return key;
+    return {
+        x: local.x / unitOf(frame.halfWidth),
+        y: local.y / unitOf(frame.halfDepth),
+    };
+}
+
+export const samePivot = (a: Pivot, b: Pivot): boolean =>
+    isPivotKey(a) || isPivotKey(b)
+        ? a === b
+        : Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.y - b.y) < 1e-9;
 
 /** The frame turned to `rotation`, `pivot` (a field point) staying put */
 export function rotateFrame(
@@ -108,17 +184,20 @@ export function rotateFrame(
     };
 }
 
+/** Side to side on the field (`across`) or front to back (`deep`): which way a flip mirrors */
+export type FlipAxis = "across" | "deep";
+
 /**
  * The frame mirrored side to side (`across`: side 1 and side 2 swap) or front to back (`deep`)
- * on the field, about a line through the pivot `key`. Mirroring a turned frame turns it the other
+ * on the field, about a line through `around`. Mirroring a turned frame turns it the other
  * way and mirrors it inside, so its spots land on their mirror images.
  */
 export function flipFrame(
     frame: ShapeFrame,
-    axis: "across" | "deep",
-    key: PivotKey,
+    axis: FlipAxis,
+    around: Pivot,
 ): ShapeFrame {
-    const pivot = pivotPoint(frame, key);
+    const pivot = pivotPoint(frame, around);
     const center =
         axis === "across"
             ? { x: 2 * pivot.x - frame.center.x, y: frame.center.y }

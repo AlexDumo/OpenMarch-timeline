@@ -172,6 +172,10 @@ export type FieldTestShapeOverlay = {
     spots: { x: number; y: number }[];
     /** From each marcher to its spot; empty during a gesture. */
     walks: { from: { x: number; y: number }; to: { x: number; y: number } }[];
+    /** The hollow rings where its marchers start (at the start flag), field units. */
+    rings: { x: number; y: number }[];
+    /** Spots it leaves empty on purpose (an odd-count outline's gap), field units. */
+    gaps: { x: number; y: number }[];
     /** Its handles, in the viewport. */
     handles: ScreenPoint[];
     /** Drawing (a drag draws it) or open; null for a mode that doesn't say. */
@@ -179,8 +183,14 @@ export type FieldTestShapeOverlay = {
     /** The rotate knob and the center dot, in the viewport; null when not drawn. */
     knob: ScreenPoint | null;
     centerDot: ScreenPoint | null;
+    /** The pivot's crosshair once it's out of the center (#350), or null at the center */
+    pivotMark: ScreenPoint | null;
     /** Who will stand on each spot, as labeled. */
     labels: string[];
+    /** The readout by the pointer during a gesture ("7½ × 2 steps · ↔ 2½ ↕ 2 apart"), or null. */
+    tip: string | null;
+    /** The spots are still gliding to where they're going after a change (#387). */
+    gliding: boolean;
 };
 
 /** A placed box outlined on the field. */

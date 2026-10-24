@@ -1,8 +1,28 @@
 import type { BlockParams } from "../kinds/block";
 import type { XY } from "../types";
-import type { ToolEnv } from "../tool/toolKind";
 import {
-    DEFAULT_PIVOT,
+    filesDistribution,
+    storedDistribution,
+    type Distribution,
+    type FilesDistribution,
+    type GapSide,
+} from "../distribute/distribution";
+import {
+    nearestVersion,
+    resolveLayout,
+    type ResolvedLayout,
+} from "../distribute/layouts";
+import { spreadScale } from "../distribute/distribute";
+import { rectRegion, type Region } from "../distribute/region";
+import {
+    acrossRange,
+    OUTLINE_MIN,
+    outlineSides,
+    type OutlineSides,
+} from "../distribute/outline";
+import type { ToolEnv } from "../tool/toolKind";
+import { pivotOf } from "../frame/pivot";
+import {
     fieldToFrame,
     frameToField,
     pivotPoint,
@@ -11,17 +31,35 @@ import {
     type ShapeFrame,
 } from "../frame/frame";
 
+/** What every box has: where it is, its file count and intervals, its turn and flips */
+export type BoxSize = Pick<
+    BlockParams,
+    "center" | "rotation" | "files" | "across" | "deep" | "flipX" | "flipY"
+>;
+
 /**
  * A box as the box tool draws it (docs/timeline/research/shapes/06-box-v1.md): a block, its
- * rectangle reaching from marcher to marcher (the edge files and ranks stand on its edges), a
- * short rank at the back and centered. It is drawn square to the field; turning and flipping it
- * are the shape frame's (08-shape-system-ux.md), so every function here works in the box's own
- * axes.
+ * rectangle reaching from marcher to marcher (the edge files and ranks stand on its edges). It is
+ * drawn square to the field; turning and flipping it are the shape frame's
+ * (08-shape-system-ux.md), so every function here works in the box's own axes.
+ *
+ * How it is filled is the host's `distribution` (spec #385): Files, Outline or Spread. `files`
+ * stays the box's own file count, as recipes have always stored it, and the Files layout's `files`
+ * follows it ({@link withFileCount}); read the layout through {@link boxDistribution}. In Outline
+ * `files` is the spots across the back and front, which set the outline's proportions
+ * ({@link spanOf}). A spread keeps the block's proportions, files by ranks, at the `across`
+ * interval.
  */
-export type BoxParams = BlockParams & {
-    readonly pattern: "grid";
-    readonly shortRank: "center";
-    readonly shortRankAt: "back";
+export type BoxParams = BoxSize & {
+    readonly distribution?: Distribution;
+    /**
+     * Recipes stored before the distributor (#386) say how the box was filled this way: always
+     * a grid with the short rank at the back, centered, which reads as Files, Short back. A box
+     * no longer writes them.
+     */
+    readonly pattern?: BlockParams["pattern"];
+    readonly shortRank?: BlockParams["shortRank"];
+    readonly shortRankAt?: BlockParams["shortRankAt"];
 };
 
 /**
@@ -45,18 +83,135 @@ const SPLIT_HYSTERESIS = 0.15;
  */
 const SPLIT_BAND = Math.log(2);
 
-export const filesOf = (p: BlockParams): number =>
-    Math.max(1, Math.round(p.files));
+export const filesOf = (p: BoxSize): number => Math.max(1, Math.round(p.files));
 
-export const ranksOf = (p: BlockParams, n: number): number =>
-    Math.max(1, Math.ceil(Math.max(1, n) / filesOf(p)));
+/**
+ * How the box is filled: its stored distribution, or Files, Short back with no stagger (a recipe
+ * from before #386). A Files layout always has the box's own file count.
+ */
+export function boxDistribution(p: BoxParams): Distribution {
+    const d = storedDistribution(p, filesOf(p));
+    if (d === undefined) return filesDistribution(filesOf(p));
+    if (d.mode !== "files" || d.layout.files === filesOf(p)) return d;
+    return { ...d, layout: { ...d.layout, files: filesOf(p) } };
+}
 
-/** How many spots the short rank leaves empty: 0 when every rank is full */
-export const shortBy = (p: BlockParams, n: number): number =>
-    filesOf(p) * ranksOf(p, n) - Math.max(1, n);
+/** `p` with `files` across, its Files layout too */
+export function withFileCount<P extends BoxParams>(p: P, files: number): P {
+    const d = p.distribution;
+    return {
+        ...p,
+        files,
+        ...(d?.mode === "files"
+            ? { distribution: { ...d, layout: { ...d.layout, files } } }
+            : {}),
+    };
+}
 
-export function footprintOf(p: BlockParams, n: number): Footprint {
-    const halfW = ((filesOf(p) - 1) * p.across) / 2;
+/**
+ * The box's block for `n` (#387): its Files layout as laid out for the count (the version it
+ * names, its family's nearest, or Short back standing in), and the full block's size on the
+ * box's own axes. A box in another mode is sized as Files, Short back.
+ */
+export function boxBlock(p: BoxParams, n: number): ResolvedLayout {
+    const d = boxDistribution(p);
+    const layout =
+        d.mode === "files" ? d.layout : filesDistribution(filesOf(p)).layout;
+    return resolveLayout(layout, n);
+}
+
+/**
+ * An outline box's sides for `n` (4 or more): `files` − 1 intervals across, as near as the count
+ * allows (#390)
+ */
+export function boxOutlineSides(
+    p: BoxParams,
+    n: number,
+    side: GapSide,
+): OutlineSides {
+    return outlineSides(n, filesOf(p) - 1, side);
+}
+
+/**
+ * How many spots the box has across and deep, edge marcher to edge marcher: its Files layout's
+ * block (#387); an outline's sides, or a line of all of them under 4 (#390)
+ */
+export function spanOf(
+    p: BoxParams,
+    n: number,
+): { readonly files: number; readonly ranks: number } {
+    const d = boxDistribution(p);
+    if (d.mode === "outline") {
+        const count = Math.max(1, n);
+        if (count < OUTLINE_MIN) return { files: count, ranks: 1 };
+        const sides = boxOutlineSides(p, count, d.oddGap.side);
+        return { files: sides.a + 1, ranks: sides.b + 1 };
+    }
+    const block = boxBlock(p, n);
+    return { files: block.across, ranks: block.deep };
+}
+
+/** The box's ranks: its layout's block front to back, or spots down an outline's sides */
+export const ranksOf = (p: BoxParams, n: number): number => spanOf(p, n).ranks;
+
+/** Spots across the box: its layout's block, or spots along an outline's back */
+export const acrossOf = (p: BoxParams, n: number): number => spanOf(p, n).files;
+
+/** How many spots of the full block the layout leaves empty: 0 for a full block, and in an outline */
+export const shortBy = (p: BoxParams, n: number): number =>
+    boxDistribution(p).mode === "outline"
+        ? 0
+        : acrossOf(p, n) * ranksOf(p, n) - Math.max(1, n);
+
+/** The same layout: family, line width and turn */
+export function sameLayout(a: BoxParams, b: BoxParams): boolean {
+    const x = boxDistribution(a);
+    const y = boxDistribution(b);
+    if (x.mode !== "files" || y.mode !== "files") return x.mode === y.mode;
+    return (
+        x.layout.family === y.layout.family &&
+        x.layout.files === y.layout.files &&
+        x.layout.byFile === y.layout.byFile
+    );
+}
+
+/**
+ * The file counts an outline of `n` can have, from its sides' range; just `n` (a line) under 4
+ */
+export function outlineFilesRange(
+    n: number,
+    side: GapSide,
+): { readonly min: number; readonly max: number } {
+    if (n < OUTLINE_MIN) return { min: n, max: n };
+    const { min, max } = acrossRange(n, side);
+    return { min: min + 1, max: max + 1 };
+}
+
+/** Whether the box is an even spread, whose frame is the spread's edge rather than its marchers */
+export const isSpread = (p: BoxParams): boolean =>
+    boxDistribution(p).mode === "spread";
+
+/**
+ * The shape a spread box fills: the block's proportions, files by ranks (its cells square), so
+ * switching between Files and Spread keeps how wide and deep the shape is
+ */
+export function spreadShapeOf(p: BoxParams, n: number): Region {
+    return rectRegion(filesOf(p) / 2, ranksOf(p, n) / 2);
+}
+
+/** How far a spread box reaches either side of its center, and front to back */
+function spreadHalves(p: BoxParams, n: number) {
+    const d = boxDistribution(p);
+    if (d.mode !== "spread") throw new Error("Not a spread");
+    const scale = spreadScale(spreadShapeOf(p, n), n, d, p.across);
+    return {
+        halfWidth: (filesOf(p) / 2) * scale,
+        halfDepth: (ranksOf(p, n) / 2) * scale,
+    };
+}
+
+export function footprintOf(p: BoxParams, n: number): Footprint {
+    const halfW = ((acrossOf(p, n) - 1) * p.across) / 2;
     const halfH = ((ranksOf(p, n) - 1) * p.deep) / 2;
     return {
         left: p.center.x - halfW,
@@ -66,12 +221,20 @@ export function footprintOf(p: BlockParams, n: number): Footprint {
     };
 }
 
-/** The box's frame: its center, the half sizes through its edge marchers, its turn and flip */
-export function boxFrame(p: BlockParams, n: number): ShapeFrame {
+/**
+ * The box's frame: its center, the half sizes through its edge marchers (a spread's edge, which
+ * its marchers keep their distance from), its turn and flip
+ */
+export function boxFrame(p: BoxParams, n: number): ShapeFrame {
+    const half = isSpread(p)
+        ? spreadHalves(p, n)
+        : {
+              halfWidth: ((acrossOf(p, n) - 1) * p.across) / 2,
+              halfDepth: ((ranksOf(p, n) - 1) * p.deep) / 2,
+          };
     return {
         center: p.center,
-        halfWidth: ((filesOf(p) - 1) * p.across) / 2,
-        halfDepth: ((ranksOf(p, n) - 1) * p.deep) / 2,
+        ...half,
         rotation: p.rotation,
         flipX: p.flipX === true,
         flipY: p.flipY === true,
@@ -79,10 +242,7 @@ export function boxFrame(p: BlockParams, n: number): ShapeFrame {
 }
 
 /** The box with `frame`'s center, turn and flip; its size is its own */
-export function withBoxFrame<P extends BlockParams>(
-    p: P,
-    frame: ShapeFrame,
-): P {
+export function withBoxFrame<P extends BoxSize>(p: P, frame: ShapeFrame): P {
     return {
         ...p,
         center: frame.center,
@@ -95,11 +255,14 @@ export function withBoxFrame<P extends BlockParams>(
 
 export const halfStep = (env: ToolEnv): number => env.stepPx / 2;
 
-/** An interval as drawn: half steps when snapping, never under half a step */
+/**
+ * An interval as drawn, stretched or typed: half steps, hundredths of a step with Alt (spec #344,
+ * #411) or typed, never under half a step
+ */
 export function snapInterval(v: number, env: ToolEnv): number {
     const half = halfStep(env);
-    const snapped = env.snap ? Math.round(v / half) * half : v;
-    return Math.max(half, snapped);
+    const unit = env.snap ? half : env.stepPx / 100;
+    return Math.max(half, Math.round(v / unit) * unit);
 }
 
 /**
@@ -145,14 +308,25 @@ export function splitFor(
  * intervals being whole half steps. Unchanged without snap, and for a box turned off the field's
  * axes, whose marchers can't all stand on the grid.
  */
-export function snapToGrid(p: BoxParams, n: number, env: ToolEnv): BoxParams {
+export function snapToGrid(
+    p: BoxParams,
+    n: number,
+    env: ToolEnv,
+    /** Which way a corner exactly between two half steps goes; the field's rounding when absent */
+    tie?: XY,
+): BoxParams {
+    // A spread has no corner marcher: its center goes on the grid, as a circle's does
+    if (env.snap && isSpread(p))
+        return { ...p, center: env.gridSnap(p.center) };
     if (!env.snap || !squareToField(p.rotation)) return p;
     const frame = boxFrame(p, n);
     const first = frameToField(frame, {
         x: -frame.halfWidth,
         y: -frame.halfDepth,
     });
-    const snapped = env.gridSnap(first);
+    const snapped = tie
+        ? breakTies(first, env.gridSnap(first), tie, halfStep(env))
+        : env.gridSnap(first);
     return {
         ...p,
         center: {
@@ -162,7 +336,25 @@ export function snapToGrid(p: BoxParams, n: number, env: ToolEnv): BoxParams {
     };
 }
 
-/** A box from its file count and intervals, its edge marchers reaching from `anchor` toward `sign` */
+/**
+ * `snapped`, the grid point the field rounded `at` to, with each axis where `at` was exactly
+ * between two grid points taken the way `tie` points instead (left alone where `tie` is 0)
+ */
+function breakTies(at: XY, snapped: XY, tie: XY, unit: number): XY {
+    const axis = (a: number, s: number, t: number) => {
+        const d = a - s;
+        if (t === 0 || Math.abs(Math.abs(d) - unit / 2) > 1e-6) return s;
+        const other = s + 2 * d;
+        // The candidate on `t`'s side of `at`
+        return Math.sign(other - a) === Math.sign(t) ? other : s;
+    };
+    return { x: axis(at.x, snapped.x, tie.x), y: axis(at.y, snapped.y, tie.y) };
+}
+
+/**
+ * A box from its file count and intervals, its edge marchers reaching from `anchor` toward
+ * `sign`, filled in `distribution` (Files, Short back when absent)
+ */
 function boxFrom(
     anchor: XY,
     sign: XY,
@@ -171,20 +363,26 @@ function boxFrom(
     deep: number,
     n: number,
     env: ToolEnv,
+    distribution?: Distribution,
 ): BoxParams {
-    const ranks = Math.ceil(Math.max(1, n) / files);
-    const box: BoxParams = {
-        center: {
-            x: anchor.x + (sign.x * (files - 1) * across) / 2,
-            y: anchor.y + (sign.y * (ranks - 1) * deep) / 2,
+    const sized = withFileCount(
+        {
+            center: { x: 0, y: 0 },
+            rotation: 0,
+            files,
+            across,
+            deep,
+            distribution: distribution ?? filesDistribution(files),
         },
-        rotation: 0,
         files,
-        across,
-        deep,
-        pattern: "grid",
-        shortRank: "center",
-        shortRankAt: "back",
+    );
+    const span = spanOf(sized, n);
+    const box: BoxParams = {
+        ...sized,
+        center: {
+            x: anchor.x + (sign.x * (span.files - 1) * across) / 2,
+            y: anchor.y + (sign.y * (span.ranks - 1) * deep) / 2,
+        },
     };
     return snapToGrid(box, n, env);
 }
@@ -205,6 +403,74 @@ const spread = (extent: number, count: number, env: ToolEnv) =>
     count > 1 ? snapInterval(extent / (count - 1), env) : undefined;
 
 /**
+ * The layout a `width` × `depth` drag draws for `n` (#387): the layout this drag drew a moment
+ * ago (`previous`), else the user's last used (`env.layout`), else Short back. Of its versions,
+ * the one nearest the drawn proportions, kept until another fits clearly better; Short back
+ * picks its file count as it always has ({@link splitFor}). A layout that can't make `n` is kept
+ * as asked, and Short back stands in for it (with the chip's note).
+ */
+function drawnLayout(
+    width: number,
+    depth: number,
+    n: number,
+    env: ToolEnv,
+    previous?: BoxParams,
+): { distribution: FilesDistribution; block: ResolvedLayout } {
+    const was = previous ? boxDistribution(previous) : undefined;
+    const family =
+        was?.mode === "files" ? was.layout.family : (env.layout ?? "shortBack");
+    const files = (layout: FilesDistribution["layout"]) => {
+        const distribution = { ...filesDistribution(layout.files), layout };
+        return { distribution, block: resolveLayout(layout, n) };
+    };
+    const split = () =>
+        splitFor(width, depth, n, previous ? filesOf(previous) : undefined);
+    if (family === "shortBack")
+        return files({ family, files: split(), byFile: false });
+    const aspect = Math.max(width, 1e-6) / Math.max(depth, 1e-6);
+    const best = nearestVersion(family, n, aspect);
+    if (!best) return files({ family, files: split(), byFile: false });
+    const fit = (b: { across: number; deep: number }) =>
+        Math.abs(Math.log(b.across / b.deep / aspect));
+    if (previous && was?.mode === "files") {
+        const held = resolveLayout(was.layout, n);
+        if (
+            held.fellBack === null &&
+            held.layout.family === family &&
+            fit(held) - fit(best) < SPLIT_HYSTERESIS
+        )
+            return files(held.layout);
+    }
+    return files(best.layout);
+}
+
+/**
+ * A box filling `frame`, as if drawn over it: the files suit the frame's proportions and the
+ * intervals spread the marchers edge to edge in half steps, turned and flipped like the frame
+ */
+export function boxInFrame(
+    frame: ShapeFrame,
+    n: number,
+    env: ToolEnv,
+): BoxParams {
+    const width = 2 * frame.halfWidth;
+    const depth = 2 * frame.halfDepth;
+    const drawn = drawnLayout(width, depth, n, env);
+    const a = spread(width, drawn.block.across, env);
+    const d = spread(depth, drawn.block.deep, env);
+    const across = a ?? d ?? snapInterval(Math.max(width, depth), env);
+    const box: BoxParams = {
+        center: frame.center,
+        rotation: 0,
+        files: drawn.distribution.layout.files,
+        across,
+        deep: d ?? across,
+        distribution: drawn.distribution,
+    };
+    return snapToGrid(withBoxFrame(box, frame), n, env);
+}
+
+/**
  * The box a drag from `from` to `to` draws for `n` marchers: the files suit the rectangle's
  * proportions, a marcher stands on the corner pressed, and the intervals spread the rest to the
  * opposite edges, in half steps (so the far edge lands near the cursor, not always on it).
@@ -221,28 +487,23 @@ export function drawBox(
     const width = Math.abs(to.x - from.x);
     const depth = Math.abs(to.y - from.y);
     if (Math.max(width, depth) < halfStep(env)) return undefined;
-    const files = splitFor(
-        width,
-        depth,
-        n,
-        previous ? filesOf(previous) : undefined,
-    );
-    const ranks = Math.ceil(Math.max(1, n) / files);
+    const drawn = drawnLayout(width, depth, n, env, previous);
     // One file or one rank has no interval on that axis: it takes the other's, for a later
     // stretch or file change
-    const a = spread(width, files, env);
-    const d = spread(depth, ranks, env);
+    const a = spread(width, drawn.block.across, env);
+    const d = spread(depth, drawn.block.deep, env);
     let across = a ?? d ?? snapInterval(Math.max(width, depth), env);
     let deep = d ?? across;
     if (env.shift) ({ across, deep } = equalized(across, deep, env));
     return boxFrom(
         env.snap ? env.gridSnap(from) : from,
         { x: signOf(to.x - from.x), y: signOf(to.y - from.y) },
-        files,
+        drawn.distribution.layout.files,
         across,
         deep,
         n,
         env,
+        drawn.distribution,
     );
 }
 
@@ -264,8 +525,10 @@ export const BOX_HANDLE_KEYS: readonly BoxHandleKey[] = [
  * The handles a box shows: a single file has nothing to stretch across and a single rank nothing
  * to stretch deep, so those handles go (both: none)
  */
-export function handleKeysOf(p: BlockParams, n: number): BoxHandleKey[] {
-    const across = filesOf(p) > 1;
+export function handleKeysOf(p: BoxParams, n: number): BoxHandleKey[] {
+    // A spread always has an area to reshape
+    if (isSpread(p)) return [...BOX_HANDLE_KEYS];
+    const across = acrossOf(p, n) > 1;
     const deep = ranksOf(p, n) > 1;
     return BOX_HANDLE_KEYS.filter((key) => {
         const movesX = key.includes("e") || key.includes("w");
@@ -275,11 +538,7 @@ export function handleKeysOf(p: BlockParams, n: number): BoxHandleKey[] {
 }
 
 /** Where handle `key` is on the field, on the box's corner or edge marchers, turned with it */
-export function boxHandlePoint(
-    p: BlockParams,
-    n: number,
-    key: BoxHandleKey,
-): XY {
+export function boxHandlePoint(p: BoxParams, n: number, key: BoxHandleKey): XY {
     const frame = boxFrame(p, n);
     return frameToField(frame, handleDirection(key, frame));
 }
@@ -328,6 +587,10 @@ export function stretchBox(
     to: XY,
     env: ToolEnv,
 ): BoxParams {
+    if (isSpread(base))
+        return inBoxAxes(base, n, env, (flat) =>
+            reshapeSpread(flat, n, key, fieldToFrame(boxFrame(base, n), to)),
+        );
     return inBoxAxes(base, n, env, (flat, flatEnv) =>
         stretchSquare(
             flat,
@@ -379,8 +642,7 @@ function stretchSquare(
     env: ToolEnv,
 ): BoxParams {
     const f = footprintOf(base, n);
-    const files = filesOf(base);
-    const ranks = ranksOf(base, n);
+    const { files: across0, ranks } = spanOf(base, n);
     const movesX = key.includes("e") || key.includes("w");
     const movesY = key.includes("n") || key.includes("s");
     // The fixed edge on each axis: the one opposite the handle (left for an east handle)
@@ -389,7 +651,7 @@ function stretchSquare(
         y: key.includes("s") ? f.top : f.bottom,
     };
     let across =
-        (movesX && spread(Math.abs(to.x - anchor.x), files, env)) ||
+        (movesX && spread(Math.abs(to.x - anchor.x), across0, env)) ||
         base.across;
     let deep =
         (movesY && spread(Math.abs(to.y - anchor.y), ranks, env)) || base.deep;
@@ -406,7 +668,70 @@ function stretchSquare(
         x: movesX ? anchor.x : f.left,
         y: movesY ? anchor.y : f.top,
     };
-    return boxFrom(start, sign, files, across, deep, n, env);
+    return boxFrom(
+        start,
+        sign,
+        filesOf(base),
+        across,
+        deep,
+        n,
+        env,
+        boxDistribution(base),
+    );
+}
+
+/**
+ * {@link stretchBox} for a spread square to the field, `to` in its axes: the interval stays and
+ * the size follows the count, so a handle reshapes it. The opposite corner or side stays put and
+ * the file count (which sets the proportions) is the one nearest the shape the drag asks for: a
+ * side handle keeps the other side's length as asked.
+ */
+function reshapeSpread(
+    base: BoxParams,
+    n: number,
+    key: BoxHandleKey,
+    to: XY,
+): BoxParams {
+    const frame = boxFrame(base, n);
+    const movesX = key.includes("e") || key.includes("w");
+    const movesY = key.includes("n") || key.includes("s");
+    const anchor = {
+        x: key.includes("e") ? -frame.halfWidth : frame.halfWidth,
+        y: key.includes("s") ? -frame.halfDepth : frame.halfDepth,
+    };
+    const width = movesX ? Math.abs(to.x - anchor.x) : 2 * frame.halfWidth;
+    const depth = movesY ? Math.abs(to.y - anchor.y) : 2 * frame.halfDepth;
+    const files = filesFor(width, depth, n);
+    if (files === filesOf(base)) return base;
+    const next = withFileCount(base, files);
+    const half = boxFrame(next, n);
+    // Grown away from the fixed corner or side, toward the handle (past it, the other way)
+    return {
+        ...next,
+        center: {
+            x: movesX ? anchor.x + signOf(to.x - anchor.x) * half.halfWidth : 0,
+            y: movesY ? anchor.y + signOf(to.y - anchor.y) * half.halfDepth : 0,
+        },
+    };
+}
+
+/**
+ * The file count whose block, files by ranks, is nearest the shape of a `width` × `depth`
+ * rectangle: what a spread box is reshaped to
+ */
+export function filesFor(width: number, depth: number, n: number): number {
+    const count = Math.max(1, n);
+    const want = Math.log(Math.max(width, 1e-6) / Math.max(depth, 1e-6));
+    let best = 1;
+    let bestFit = Infinity;
+    for (let files = 1; files <= count; files++) {
+        const fit = Math.abs(Math.log(files / Math.ceil(count / files)) - want);
+        if (fit < bestFit - 1e-9) {
+            bestFit = fit;
+            best = files;
+        }
+    }
+    return best;
 }
 
 /**
@@ -415,7 +740,7 @@ function stretchSquare(
  * 2026-10-16), so the ratio is as near as half steps allow. A side handle changes only its own.
  */
 export function keepRatio(
-    base: Pick<BlockParams, "across" | "deep">,
+    base: Pick<BoxSize, "across" | "deep">,
     across: number,
     deep: number,
     movesX: boolean,
@@ -482,14 +807,26 @@ export function resizeFiles(
     files: number,
     env: ToolEnv,
 ): BoxParams {
-    const clamped = Math.min(Math.max(1, n), Math.max(1, Math.round(files)));
-    if (clamped === filesOf(p)) return p;
-    return grownFromPivot(p, { ...p, files: clamped }, n, env);
+    const d = boxDistribution(p);
+    // An outline's spots across stay within what its count can go round
+    const { min, max } =
+        d.mode === "outline"
+            ? outlineFilesRange(Math.max(1, n), d.oddGap.side)
+            : { min: 1, max: Math.max(1, n) };
+    const clamped = Math.min(max, Math.max(min, Math.round(files)));
+    if (clamped === acrossOf(p, n)) return p;
+    return grownFromPivot(p, withFileCount(p, clamped), n, env);
 }
 
 /**
  * `after`, a resize of `before` (a new count or spacing), moved so the pivot stays where it was:
- * by default the center (2026-10-18). Then back on the grid.
+ * the shape's own, the center by default (2026-10-18), or where a run of size presses began
+ * (`env.anchor`). Then back on the grid.
+ *
+ * A new count can leave the box's corner exactly between two half steps (4 ranks 2½ apart about
+ * a center on the grid, then 3). Rounding that tie the same way every time made the box creep a
+ * quarter step per press (owner lab feedback on #387, 2026-10-23), so the tie goes against the
+ * way the box grew on that axis: + then − comes back to the same place.
  */
 export function grownFromPivot(
     before: BoxParams,
@@ -497,27 +834,42 @@ export function grownFromPivot(
     n: number,
     env: ToolEnv,
 ): BoxParams {
-    const key = env.pivot ?? DEFAULT_PIVOT;
-    const was = pivotPoint(boxFrame(before, n), key);
+    const key = env.pivot ?? pivotOf(before);
+    const was = env.anchor ?? pivotPoint(boxFrame(before, n), key);
     const now = pivotPoint(boxFrame(after, n), key);
-    return snapToGrid(
-        {
-            ...after,
-            center: {
-                x: after.center.x + was.x - now.x,
-                y: after.center.y + was.y - now.y,
-            },
+    const moved: BoxParams = {
+        ...after,
+        center: {
+            x: after.center.x + was.x - now.x,
+            y: after.center.y + was.y - now.y,
         },
-        n,
-        env,
-    );
+    };
+    return snapToGrid(moved, n, env, growthBias(before, moved, n));
+}
+
+/**
+ * Which way a tie on the grid goes after `before` became `after`, on the field: against the
+ * growth on each of the box's own axes (a box that got deeper rounds toward its back)
+ */
+function growthBias(before: BoxParams, after: BoxParams, n: number): XY {
+    const a = boxFrame(before, n);
+    const b = boxFrame(after, n);
+    const gx = Math.sign(b.halfWidth - a.halfWidth);
+    const gy = Math.sign(b.halfDepth - a.halfDepth);
+    const o = frameToField(b, { x: 0, y: 0 });
+    const u = frameToField(b, { x: 1, y: 0 });
+    const v = frameToField(b, { x: 0, y: 1 });
+    return {
+        x: -gx * (u.x - o.x) - gy * (v.x - o.x),
+        y: -gx * (u.y - o.y) - gy * (v.y - o.y),
+    };
 }
 
 /**
  * Whether `at` grabs the box to move it: inside its edge marchers, or within half an interval
  * of them, so a single rank or file can be grabbed too
  */
-export function insideBox(p: BlockParams, n: number, at: XY): boolean {
+export function insideBox(p: BoxParams, n: number, at: XY): boolean {
     const frame = boxFrame(p, n);
     const local = fieldToFrame(frame, at);
     return (
@@ -527,7 +879,7 @@ export function insideBox(p: BlockParams, n: number, at: XY): boolean {
 }
 
 /** The outline through the box's edge marchers, turned with it: back-left first */
-export function boxCorners(p: BlockParams, n: number): XY[] {
+export function boxCorners(p: BoxParams, n: number): XY[] {
     const frame = boxFrame(p, n);
     const { halfWidth: w, halfDepth: d } = frame;
     return [
@@ -539,7 +891,7 @@ export function boxCorners(p: BlockParams, n: number): XY[] {
 }
 
 /** The field-aligned rectangle around the box's edge marchers, however it's turned */
-export function boxBounds(p: BlockParams, n: number): Footprint {
+export function boxBounds(p: BoxParams, n: number): Footprint {
     const corners = boxCorners(p, n);
     const xs = corners.map((c) => c.x);
     const ys = corners.map((c) => c.y);
@@ -562,10 +914,9 @@ export function acrossIsDeep(rotation: number): boolean {
 }
 
 /** The box's counts and spacings as the field shows them: across is side to side */
-export function onField(p: BlockParams, spots: number) {
+export function onField(p: BoxParams, spots: number) {
     const swap = acrossIsDeep(p.rotation);
-    const files = filesOf(p);
-    const ranks = ranksOf(p, spots);
+    const { files, ranks } = spanOf(p, spots);
     return {
         swap,
         across: swap ? ranks : files,

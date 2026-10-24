@@ -1,11 +1,14 @@
 import { assignSlots, type AssignMarcher } from "../assign";
+import { carryPivot } from "../frame/pivot";
 import {
+    centerPivot,
     dragShape,
     shapeTargetAt,
     startShapeGesture,
     type ShapeGesture,
     type ShapeTarget,
 } from "../frame/gestures";
+import { gapPickAt } from "../distribute/outlineGap";
 import type { ShapeContext, Slot, XY } from "../types";
 import type { AnyToolKind, ToolEnv } from "./toolKind";
 
@@ -28,6 +31,8 @@ import type { AnyToolKind, ToolEnv } from "./toolKind";
 
 /** What undo steps between */
 export interface ToolSnapshot {
+    /** The kind of shape: picking another kind is a step too */
+    readonly kind: AnyToolKind;
     /** Null until a shape is drawn */
     readonly params: unknown;
     /** The slot index for each marcher, in `marchers` order; null with no shape */
@@ -52,12 +57,24 @@ export type Gesture =
       }
     /** A number in the floating editor being dragged: the shape follows it live */
     | { readonly type: "edit"; readonly before: ToolSnapshot }
-    | (ShapeGesture & { readonly before: ToolSnapshot });
+    | (ShapeGesture & {
+          readonly before: ToolSnapshot;
+          /**
+           * What a click here does instead of nothing: on an outline's spot between corners, the
+           * shape with its gap moved there (#390)
+           */
+          readonly click?: unknown;
+      });
 
 export interface ToolState extends ToolSnapshot {
-    readonly kind: AnyToolKind;
     /** In selection order, with where they stand when the tool opened */
     readonly marchers: readonly AssignMarcher[];
+    /**
+     * How many spots the shape has, which the host gives every kind function as `n`: a kind
+     * never reads the selection. One per marcher for now; spots and who goes where stay separate
+     * steps so a shape can later have spots nobody stands on (#358).
+     */
+    readonly spots: number;
     readonly gesture: Gesture | null;
     /** Where the pointer is during a gesture, for the guides drawn by it */
     readonly pointer?: XY;
@@ -74,6 +91,7 @@ export function openTool(
     return {
         kind,
         marchers,
+        spots: marchers.length,
         params: null,
         assignment: null,
         order: "nearest",
@@ -85,6 +103,7 @@ export function openTool(
 }
 
 const snapshot = (s: ToolState): ToolSnapshot => ({
+    kind: s.kind,
     params: s.params,
     assignment: s.assignment,
     order: s.order,
@@ -94,7 +113,7 @@ const snapshot = (s: ToolState): ToolSnapshot => ({
 /** The spots for the open shape, in the kind's order; empty before one is drawn */
 export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {
     if (state.params === null) return [];
-    return state.kind.shape.generate(state.params, state.marchers.length, ctx);
+    return state.kind.shape.generate(state.params, state.spots, ctx);
 }
 
 /** Who goes where on the current shape, worked out again from where the marchers start */
@@ -129,13 +148,9 @@ export function pressTarget(
 ): ShapeTarget | { type: "draw" } {
     if (state.params === null) return { type: "draw" };
     return (
-        shapeTargetAt(
-            state.kind,
-            state.params,
-            state.marchers.length,
-            at,
-            env,
-        ) ?? { type: "draw" }
+        shapeTargetAt(state.kind, state.params, state.spots, at, env) ?? {
+            type: "draw",
+        }
     );
 }
 
@@ -145,15 +160,13 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
     const onShape =
         state.params === null
             ? null
-            : startShapeGesture(
-                  state.kind,
-                  state.params,
-                  state.marchers.length,
-                  at,
-                  env,
-              );
+            : startShapeGesture(state.kind, state.params, state.spots, at, env);
+    const click =
+        onShape && (onShape.type === "move" || onShape.type === "handle")
+            ? gapPickAt(state.kind, state.params, state.spots, at, env)
+            : null;
     const gesture: Gesture = onShape
-        ? { ...onShape, before }
+        ? { ...onShape, before, ...(click !== null ? { click } : {}) }
         : { type: "draw", from: env.gridSnap(at), before };
     return { ...state, gesture, pointer: at };
 }
@@ -161,7 +174,7 @@ export function press(state: ToolState, at: XY, env: ToolEnv): ToolState {
 export function pointerMove(state: ToolState, at: XY, env: ToolEnv): ToolState {
     const g = state.gesture;
     if (!g || g.type === "edit") return state;
-    const n = state.marchers.length;
+    const n = state.spots;
     state = { ...state, pointer: at };
     if (g.type === "draw") {
         // What this drag drew a moment ago, not the shape it replaces
@@ -176,10 +189,24 @@ export function pointerMove(state: ToolState, at: XY, env: ToolEnv): ToolState {
     return { ...state, params: dragShape(state.kind, n, g, at, env) };
 }
 
-/** Ends the gesture: one undo step if it changed anything, and who goes where worked out again */
-export function release(state: ToolState, ctx: ShapeContext): ToolState {
+/**
+ * Ends the gesture: one undo step if it changed anything, and who goes where worked out again. A
+ * double click on the pivot sends it back to the center (#350); a click on an outline's spot
+ * between corners moves its gap there (#390).
+ */
+export function release(
+    state: ToolState,
+    ctx: ShapeContext,
+    click?: { readonly double: boolean } | null,
+): ToolState {
     const g = state.gesture;
     if (!g) return state;
+    if (click?.double && g.type !== "draw" && g.type !== "edit") {
+        const centered = centerPivot(g);
+        if (centered !== null) state = { ...state, params: centered };
+    } else if (click && "click" in g && g.click !== undefined)
+        // A click moves nothing else, even if the pointer slipped a little
+        state = { ...state, params: g.click };
     const ended = { ...state, gesture: null };
     if (state.params === g.before.params) return ended;
     const next = pushHistory(ended, g.before);
@@ -191,7 +218,7 @@ export function release(state: ToolState, ctx: ShapeContext): ToolState {
 /** `state` holding its spots after a change from `before`: kept, if it turned or flipped */
 function keptThrough(state: ToolState, before: unknown): ToolState {
     if (state.kept || before === null || state.params === null) return state;
-    const n = state.marchers.length;
+    const n = state.spots;
     const a = state.kind.frameOf(before, n);
     const b = state.kind.frameOf(state.params, n);
     const turned =
@@ -212,7 +239,7 @@ function holdsSpots(
 ): boolean {
     if (!state.assignment || before === null || state.params === null)
         return false;
-    const n = state.marchers.length;
+    const n = state.spots;
     const was = state.kind.shape.generate(before, n, ctx);
     const now = slotsOf(state, ctx);
     if (was.length !== now.length) return false;
@@ -238,6 +265,7 @@ export function edit(
     ctx: ShapeContext,
 ): ToolState {
     if (state.gesture || params === state.params) return state;
+    params = carryPivot(state.params, params);
     const next = pushHistory({ ...state, params }, snapshot(state));
     return holdsSpots(next, state.params, ctx)
         ? keptThrough(next, state.params)
@@ -253,7 +281,33 @@ export function beginEdit(state: ToolState): ToolState {
 /** The shape as the dragged number has it, who goes where held */
 export function previewEdit(state: ToolState, params: unknown): ToolState {
     if (state.gesture?.type !== "edit" || params === state.params) return state;
-    return { ...state, params };
+    return { ...state, params: carryPivot(state.params, params) };
+}
+
+/**
+ * Picking `kind` with the tool open (#344): before anything is drawn it is simply the kind drawn
+ * next. A drawn shape turns into `kind` keeping its frame (center, size, turn, flip and pivot),
+ * so forms can be compared in place, and who goes where is worked out again on the new spots. One
+ * undo step.
+ */
+export function switchKind(
+    state: ToolState,
+    kind: AnyToolKind,
+    ctx: ShapeContext,
+    env: ToolEnv,
+): ToolState {
+    if (state.gesture || kind === state.kind) return state;
+    if (state.params === null) return { ...state, kind };
+    const n = state.spots;
+    // The pivot too: it sits on the frame
+    const params = carryPivot(
+        state.params,
+        kind.fromFrame(state.kind.frameOf(state.params, n), n, env),
+    );
+    return reassign(
+        pushHistory({ ...state, kind, params }, snapshot(state)),
+        ctx,
+    );
 }
 
 /** Least travel or drill order, worked out at once: one undo step */
@@ -288,7 +342,21 @@ export function redo(state: ToolState): ToolState {
     };
 }
 
-/** Where each marcher goes, in `marchers` order; empty until a shape is drawn and released */
+/**
+ * Where each marcher starts the move, in `marchers` order: their position at the start flag, or
+ * where they stand when that's the same (at home, beat 0, the home spots). The open shape is
+ * measured from here (spec #344): the hollow rings, the walks and least travel all start here.
+ */
+export function startsOf(state: ToolState): XY[] {
+    return state.marchers.map(startOf);
+}
+
+const startOf = (m: AssignMarcher): XY => m.from ?? m.at;
+
+/**
+ * Where each marcher goes, from their start (`startsOf`), in `marchers` order; empty until a
+ * shape is drawn and released
+ */
 export function targetsOf(
     state: ToolState,
     ctx: ShapeContext,
@@ -297,6 +365,6 @@ export function targetsOf(
     const slots = slotsOf(state, ctx);
     return state.marchers.map((m, i) => {
         const slot = state.assignment![i]!;
-        return { id: m.id, from: m.at, to: slots[slot]!, slot };
+        return { id: m.id, from: startOf(m), to: slots[slot]!, slot };
     });
 }

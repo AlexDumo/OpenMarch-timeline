@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { keepFocus } from "./keepFocus";
 import {
     DotsThreeIcon,
     FlipHorizontalIcon,
@@ -8,37 +9,43 @@ import {
     LinkSimpleIcon,
     MinusIcon,
     PlusIcon,
+    ArrowClockwiseIcon,
 } from "@phosphor-icons/react";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
-import { boxBounds, shortBy, type BoxParams } from "../box/boxGeometry";
-import { DEFAULT_PIVOT, rotationDegrees } from "../frame/frame";
+import { DEGREE, rotationDegrees } from "../frame/frame";
+import { pivotOf } from "../frame/pivot";
+import {
+    flipShape,
+    scrubTurn,
+    shapeOutline,
+    turnShape,
+} from "../frame/gestures";
 import { currentShapeField } from "../field/shapeFieldContext";
 import {
     toggleRatioLock,
     useShapeEditorStore,
 } from "../frame/shapeEditorStore";
 import { toolEnvFor } from "../tool/toolEnv";
-import type { ToolEnv } from "../tool/toolKind";
+import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { useShapeToolStore } from "../tool/shapeToolStore";
 import {
-    flipBox,
-    onField,
-    scrubRotation,
-    scrubSize,
-    scrubSpacing,
-    turnTo,
-    withFieldCount,
-    withSpacing,
-} from "./boxEdits";
+    chipLayout,
+    quarterTurn,
+    sizeRun,
+    type ChipNumber,
+    type SizeRun,
+} from "./chip";
 import {
     usePlacedEditTarget,
     useToolEditTarget,
     type ShapeEditTarget,
 } from "./editTargets";
-import { formatSteps } from "./format";
-import { parseDegrees, parseSize, parseSteps, scrubDistance } from "./scrub";
+import { parseDegrees, scrubDistance } from "./scrub";
 import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
-import { isBasicMode } from "@/stores/EditorModeStore";
+import { SaveShapeButton } from "../library/SaveShapeButton";
+import { LayoutMenu } from "./LayoutPicker";
+import { ReshuffleButton } from "./ReshuffleButton";
+import { CloseUpButton } from "./CloseUpButton";
 
 /** The gap between the shape's outline and the editor, in CSS px */
 const GAP_PX = 14;
@@ -49,23 +56,31 @@ const GAP_PX = 14;
  * change most. It moves with the shape and flips above it when there's no room below. Before a
  * shape is drawn, a hint at the top of the field says how to draw one.
  *
- * For a box: `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`. Every number can be typed or dragged,
+ * Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
+ * For a box: `− 6 × 2 + ↻ │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`, and in Spread `↔ 2 steps Reshuffle
+ * │ ⋯ │ Place`. Every number can be typed or dragged,
  * and follows the field: across is side to side however the box is turned. ⋯ opens a second row:
- * the rotation (typed or dragged), flips, and who goes where. Place shows only for a new
- * shape; a selected placed shape saves each edit on release.
+ * the rotation (typed or dragged), flips, who goes where, Close up (a placed shape with holes,
+ * #392) and ☆ Save. ↻ beside the numbers turns
+ * the shape a quarter (owner lab feedback, 2026-10-23: few people open ⋯). Under the numbers, a
+ * box in Files has its layout menu (#387). Place shows only for a new shape; a selected placed
+ * shape saves each edit on release.
  */
 export function ShapeEditor({ stepPx }: { stepPx: number }) {
+    const armed = useShapeToolStore((s) =>
+        s.tool !== null && s.tool.params === null ? s.tool.kind : null,
+    );
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
-    const drawn = useShapeToolStore((s) => s.tool?.params != null);
     const tool = useToolEditTarget();
     const placed = usePlacedEditTarget();
-    if (toolOpen && !drawn)
+    if (armed)
         return (
             <div
                 className="rounded-6 border-stroke bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
                 data-testid="shape-tool-hint"
             >
-                Drag on the field to draw a box · Esc to cancel
+                Drag on the field to draw a {armed.shape.label.toLowerCase()} ·
+                Esc to cancel
             </div>
         );
     const target = toolOpen ? tool : placed;
@@ -96,30 +111,32 @@ function ShapeEditorBar({
     stepPx: number;
     testId: string;
 }) {
-    const { params, spots } = target;
+    const { kind, params, spots } = target;
     const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
-    const pivot = useShapeEditorStore((s) => s.pivot);
+    // The shape's own pivot (#350), the same in Basic and Expert (spec #344)
+    const pivot = pivotOf(params);
     const [more, setMore] = useState(false);
-    const place = usePlacement(params, spots);
-    // The box at the press of a number's drag
-    const base = useRef<BoxParams>(params);
+    const place = usePlacement(kind, params, spots);
+    // The shape at the press of a number's drag
+    const base = useRef<unknown>(params);
 
-    // Across is side to side on the field, however the box is turned (owner, 2026-10-17)
-    const field = onField(params, spots);
-    const short = shortBy(params, spots);
-    const across = formatSteps(field.acrossSpacing / stepPx);
-    const deep = formatSteps(field.deepSpacing / stepPx);
-    const degrees = rotationDegrees(params.rotation);
-    const turnPivot = isBasicMode() ? DEFAULT_PIVOT : pivot;
+    // A run of − and + presses grows from where it began, so the shape doesn't creep (#387)
+    const run = useRef<SizeRun | null>(null);
+    const anchor = sizeRun(run.current, kind, params, spots);
+    const env = envFor(PLAIN);
+    const layout = env
+        ? chipLayout(kind, params, spots, { ...env, stepPx, anchor })
+        : { values: [], intervals: [], ratioLock: false };
+    const degrees = rotationDegrees(kind.frameOf(params, spots).rotation);
 
     /** One change at once, worked out with no keys held */
-    const apply = (change: (env: ToolEnv) => BoxParams) => {
+    const apply = (change: (env: ToolEnv) => unknown) => {
         const env = envFor(PLAIN);
         if (env) target.apply(change(env));
     };
-    /** A number's drag: the change from the box at the press, previewed live */
+    /** A number's drag: the change from the shape at the press, previewed live */
     const scrub = (
-        change: (b: BoxParams, m: ScrubMove, env: ToolEnv) => BoxParams,
+        change: (b: unknown, m: ScrubMove, env: ToolEnv) => unknown,
     ) => ({
         onScrubStart: () => {
             base.current = params;
@@ -131,13 +148,23 @@ function ShapeEditorBar({
         },
         onScrubEnd: (keep: boolean) => target.end(keep),
     });
-    /** A spacing as typed: steps, the field's across or deep */
-    const typeSpacing = (key: "across" | "deep") => (text: string) => {
-        const steps = parseSteps(text);
-        if (steps === null) return false;
-        apply((env) => withSpacing(params, key, steps, spots, env));
-        return true;
-    };
+    /** A declared number, typed or dragged */
+    const number = ({ param, display }: ChipNumber) => (
+        <ScrubNumber
+            display={display}
+            axis={param.drag}
+            label={param.label}
+            testId={`shape-editor-${param.key}`}
+            {...scrub((b, m, env) => param.scrub(b, spots, m, env))}
+            onType={(text) => {
+                const env = envFor(PLAIN);
+                const next = env && param.type(params, spots, text, env);
+                if (next == null) return false;
+                target.apply(next);
+                return true;
+            }}
+        />
+    );
 
     return (
         <div
@@ -155,139 +182,88 @@ function ShapeEditorBar({
                     className="flex items-center gap-2"
                     data-testid={`${testId}-text`}
                 >
+                    {layout.values.map((x) => (
+                        <span
+                            key={x.param.key}
+                            className="flex items-center gap-2"
+                        >
+                            {x.param.stepper && (
+                                <IconButton
+                                    label={x.param.stepper.less}
+                                    disabled={x.less === null}
+                                    onClick={() => {
+                                        if (x.less === null) return;
+                                        run.current = {
+                                            params: x.less,
+                                            anchor,
+                                        };
+                                        target.apply(x.less);
+                                    }}
+                                >
+                                    <MinusIcon size={12} />
+                                </IconButton>
+                            )}
+                            {number(x)}
+                            {x.param.stepper && (
+                                <IconButton
+                                    label={x.param.stepper.more}
+                                    disabled={x.more === null}
+                                    onClick={() => {
+                                        if (x.more === null) return;
+                                        run.current = {
+                                            params: x.more,
+                                            anchor,
+                                        };
+                                        target.apply(x.more);
+                                    }}
+                                >
+                                    <PlusIcon size={12} />
+                                </IconButton>
+                            )}
+                            {x.note && (
+                                <span className="text-text/60">· {x.note}</span>
+                            )}
+                        </span>
+                    ))}
                     <IconButton
-                        label="One fewer across"
-                        disabled={field.across <= 1}
+                        label="Turn a quarter clockwise"
                         onClick={() =>
                             apply((env) =>
-                                withFieldCount(
-                                    params,
-                                    spots,
-                                    "across",
-                                    field.across - 1,
-                                    env,
-                                ),
+                                quarterTurn(kind, params, spots, env),
                             )
                         }
+                        testId="shape-editor-quarter-turn"
                     >
-                        <MinusIcon size={12} />
+                        <ArrowClockwiseIcon size={14} />
                     </IconButton>
-                    <ScrubNumber
-                        display={`${field.across} × ${field.deep}`}
-                        axis="both"
-                        label="Size, across × deep"
-                        testId="shape-editor-size"
-                        {...scrub((b, m, env) =>
-                            scrubSize(
-                                b,
-                                m.axis === "x" ? "across" : "deep",
-                                scrubDistance(m.axis, m.dx, m.dy),
-                                spots,
-                                env,
-                            ),
-                        )}
-                        onType={(text) => {
-                            const size = parseSize(text);
-                            if (!size) return false;
-                            apply((env) =>
-                                size.across !== field.across ||
-                                size.deep === undefined
-                                    ? withFieldCount(
-                                          params,
-                                          spots,
-                                          "across",
-                                          size.across,
-                                          env,
-                                      )
-                                    : withFieldCount(
-                                          params,
-                                          spots,
-                                          "deep",
-                                          size.deep,
-                                          env,
-                                      ),
-                            );
-                            return true;
-                        }}
-                    />
-                    <IconButton
-                        label="One more across"
-                        disabled={field.across >= spots}
-                        onClick={() =>
-                            apply((env) =>
-                                withFieldCount(
-                                    params,
-                                    spots,
-                                    "across",
-                                    field.across + 1,
-                                    env,
-                                ),
-                            )
-                        }
-                    >
-                        <PlusIcon size={12} />
-                    </IconButton>
-                    {short > 0 && (
-                        <span className="text-text/60">· {short} short</span>
-                    )}
                     {target.empty > 0 && (
                         <span className="text-text/60">
                             · {target.empty} empty
                         </span>
                     )}
                 </span>
-                {spots > 1 && (
+                {layout.intervals.length > 0 && (
                     <>
                         <Divider />
                         <span className="flex items-center gap-2">
-                            {field.across > 1 && (
-                                <>
-                                    <span className="text-text/60" aria-hidden>
-                                        ↔
-                                    </span>
-                                    <ScrubNumber
-                                        display={across}
-                                        axis="x"
-                                        label="Side-to-side spacing, in steps"
-                                        testId="shape-editor-across"
-                                        {...scrub((b, m, env) =>
-                                            scrubSpacing(
-                                                b,
-                                                field.acrossKey,
-                                                scrubDistance("x", m.dx, m.dy),
-                                                spots,
-                                                env,
-                                            ),
-                                        )}
-                                        onType={typeSpacing(field.acrossKey)}
-                                    />
-                                </>
-                            )}
-                            {field.deep > 1 && (
-                                <>
-                                    <span className="text-text/60" aria-hidden>
-                                        ↕
-                                    </span>
-                                    <ScrubNumber
-                                        display={deep}
-                                        axis="y"
-                                        label="Front-to-back spacing, in steps"
-                                        testId="shape-editor-deep"
-                                        {...scrub((b, m, env) =>
-                                            scrubSpacing(
-                                                b,
-                                                field.deepKey,
-                                                scrubDistance("y", m.dx, m.dy),
-                                                spots,
-                                                env,
-                                            ),
-                                        )}
-                                        onType={typeSpacing(field.deepKey)}
-                                    />
-                                </>
-                            )}
+                            {layout.intervals.map((x) => (
+                                <span
+                                    key={x.param.key}
+                                    className="flex items-center gap-2"
+                                >
+                                    {x.param.glyph && (
+                                        <span
+                                            className="text-text/60"
+                                            aria-hidden
+                                        >
+                                            {x.param.glyph}
+                                        </span>
+                                    )}
+                                    {number(x)}
+                                </span>
+                            ))}
                             <span className="text-text/60">steps</span>
-                            {field.across > 1 && field.deep > 1 && (
+                            {layout.ratioLock && (
                                 <IconButton
                                     label={
                                         ratioLocked
@@ -308,6 +284,12 @@ function ShapeEditorBar({
                         </span>
                     </>
                 )}
+                <ReshuffleButton
+                    target={target}
+                    envFor={() => envFor(PLAIN)}
+                    className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
+                    testId="shape-editor-reshuffle"
+                />
                 {target.drawnOn && (
                     <span className="text-text/50">from {target.drawnOn}</span>
                 )}
@@ -335,6 +317,7 @@ function ShapeEditorBar({
                     </>
                 )}
             </div>
+            <LayoutMenu target={target} envFor={() => envFor(PLAIN)} />
             {more && (
                 <div
                     className="flex items-center gap-6"
@@ -349,11 +332,12 @@ function ShapeEditorBar({
                             label="Rotation, in degrees clockwise"
                             testId="shape-editor-rotation"
                             {...scrub((b, m, env) =>
-                                scrubRotation(
+                                scrubTurn(
+                                    kind,
                                     b,
-                                    scrubDistance("x", m.dx, m.dy),
                                     spots,
-                                    turnPivot,
+                                    scrubDistance("x", m.dx, m.dy),
+                                    pivot,
                                     env,
                                 ),
                             )}
@@ -361,11 +345,12 @@ function ShapeEditorBar({
                                 const typed = parseDegrees(text);
                                 if (typed === null) return false;
                                 apply((env) =>
-                                    turnTo(
+                                    turnShape(
+                                        kind,
                                         params,
                                         spots,
-                                        typed,
-                                        turnPivot,
+                                        typed * DEGREE,
+                                        pivot,
                                         env,
                                     ),
                                 );
@@ -378,11 +363,12 @@ function ShapeEditorBar({
                         label="Flip side to side"
                         onClick={() =>
                             apply((env) =>
-                                flipBox(
+                                flipShape(
+                                    kind,
                                     params,
                                     spots,
                                     "across",
-                                    turnPivot,
+                                    pivot,
                                     env,
                                 ),
                             )
@@ -396,7 +382,14 @@ function ShapeEditorBar({
                         label="Flip front to back"
                         onClick={() =>
                             apply((env) =>
-                                flipBox(params, spots, "deep", turnPivot, env),
+                                flipShape(
+                                    kind,
+                                    params,
+                                    spots,
+                                    "deep",
+                                    pivot,
+                                    env,
+                                ),
                             )
                         }
                         testId="shape-editor-flip-deep"
@@ -426,6 +419,23 @@ function ShapeEditorBar({
                             </span>
                         )}
                     </span>
+                    {target.closeUp && (
+                        <>
+                            <Divider />
+                            <CloseUpButton
+                                target={target}
+                                className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
+                                testId="shape-editor-close-up"
+                            />
+                        </>
+                    )}
+                    <Divider />
+                    <SaveShapeButton
+                        shape={{ kind, params, spots }}
+                        stepPx={stepPx}
+                        className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
+                        testId="shape-editor-save"
+                    />
                 </div>
             )}
         </div>
@@ -438,7 +448,7 @@ function ShapeEditorBar({
  * but holds still while the pointer is on it, so a button doesn't slide away between two clicks
  * as the numbers change (sims, F3: 5 of 8 clicked the wrong thing).
  */
-function usePlacement(params: BoxParams, spots: number) {
+function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     const view = useFieldViewStore();
     const ref = useRef<HTMLDivElement>(null);
     const [room, setRoom] = useState({
@@ -450,7 +460,7 @@ function usePlacement(params: BoxParams, spots: number) {
     const [held, setHeld] = useState<{ left: number; top: number } | null>(
         null,
     );
-    const b = boxBounds(params, spots);
+    const b = boundsOf(shapeOutline(kind, params, spots));
     const bottom = fieldToElement(view, (b.left + b.right) / 2, b.bottom);
     const top = fieldToElement(view, (b.left + b.right) / 2, b.top);
     // The outline's spots have a radius and the handles stick out: clear them
@@ -500,11 +510,17 @@ function usePlacement(params: BoxParams, spots: number) {
     };
 }
 
-/**
- * A press on the editor's buttons doesn't move focus to them, so Enter still places the shape and
- * Escape still cancels it, rather than pressing the last button clicked again
- */
-const keepFocus = (e: { preventDefault(): void }) => e.preventDefault();
+/** The field-square rectangle around an outline */
+function boundsOf(points: readonly { x: number; y: number }[]) {
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    return {
+        left: Math.min(...xs),
+        right: Math.max(...xs),
+        top: Math.min(...ys),
+        bottom: Math.max(...ys),
+    };
+}
 
 /** A button in the ⋯ row: an icon and a word, so nobody has to guess (sims, F1) */
 function TextButton({

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { blockKind } from "../kinds/block";
-import { drawBox, filesOf, ranksOf, shortBy } from "../box/boxGeometry";
+import { boxShape } from "../box/boxShape";
+import { boxTool } from "../box/boxTool";
+import { drawBox, filesOf, ranksOf } from "../box/boxGeometry";
 import {
     boxesAt,
-    closeUp,
     membershipAfter,
     movedBox,
     resplit,
@@ -34,7 +34,7 @@ function recipe(
     id = 1,
 ): PlacedRecipe {
     const params = drawBox({ x: 0, y: 0 }, to, n, env)!;
-    const slots = blockKind.generate(params, n, ctx);
+    const slots = boxShape.generate(params, n, ctx);
     return {
         id,
         timelineId,
@@ -138,7 +138,7 @@ describe("what moving marchers does to a box", () => {
     const box = (): PlacedBox => {
         const r = recipe(4, { x: 40, y: 40 }, 10);
         const p = r.params as PlacedBox["params"];
-        return { recipe: r, params: p, spots: 4, endBeat: 8 };
+        return { recipe: r, kind: boxTool, params: p, spots: 4, endBeat: 8 };
     };
 
     it("nothing when no member moves off its spot", () => {
@@ -199,24 +199,6 @@ describe("filling a hole", () => {
         at: { x: m.x, y: m.y },
         drillRank: m.marcherId,
     }));
-
-    it("close up keeps the files and intervals and the front rank, the back rank going short", () => {
-        expect(filesOf(params)).toBe(5);
-        const out = closeUp(params, 20, remaining, ctx);
-        expect(filesOf(out.params)).toBe(5);
-        expect(out.params.across).toBe(params.across);
-        expect(out.params.deep).toBe(params.deep);
-        expect(shortBy(out.params, 19)).toBe(1);
-        expect(out.members).toHaveLength(19);
-        const front = Math.max(...r.members.map((m) => m.y));
-        expect(Math.max(...out.members.map((m) => m.y))).toBe(front);
-        // Everyone but the back rank stays put
-        const moved = out.members.filter((m) => {
-            const was = r.members.find((o) => o.marcherId === m.marcherId)!;
-            return was.x !== m.x || was.y !== m.y;
-        });
-        expect(moved.length).toBeLessThanOrEqual(5);
-    });
 
     it("re-split splits the remaining marchers again inside the same edges", () => {
         const out = resplit(params, 20, remaining, env, ctx);

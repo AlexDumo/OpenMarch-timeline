@@ -65,19 +65,28 @@ export function actionIgnoresRepeat(id: ActionId): boolean {
     return top(id)?.ignoresRepeat?.() ?? false;
 }
 
-/** Runs the action's handler (its `press` for a key press, when it has one); null if it can't run */
-function runHandler(id: ActionId, byKey: boolean): ActionHandler | null {
+/**
+ * Runs the action's handler (its `press` for a key press, when it has one) with its definition's
+ * `args`, and `args` (a command's answers) over them; null if it can't run
+ */
+function runHandler(
+    id: ActionId,
+    byKey: boolean,
+    args?: ActionArgs,
+): ActionHandler | null {
     const handler = top(id);
     if (!handler || !handler.isEnabled() || isActionOffInWorkspace(id))
         return null;
     runListeners.forEach((listener) => listener(id));
     const run = byKey && handler.press ? handler.press : handler.run;
-    run(getActionDefinition(id).args);
+    const own = getActionDefinition(id).args;
+    run(args ? { ...own, ...args } : own);
     return handler;
 }
 
-export function runAction(id: ActionId): boolean {
-    return runHandler(id, false) !== null;
+/** Runs the action with its definition's `args`, and `args` (a command's answers) over them */
+export function runAction(id: ActionId, args?: ActionArgs): boolean {
+    return runHandler(id, false, args) !== null;
 }
 
 /**

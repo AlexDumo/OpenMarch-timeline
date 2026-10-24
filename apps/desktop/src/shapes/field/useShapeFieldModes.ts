@@ -9,7 +9,11 @@ import {
     useBoxSelectionStore,
 } from "../placed/boxSelectionStore";
 import { LiveBoxMode } from "../placed/liveBoxMode";
-import { closeShapeTool, useShapeToolStore } from "../tool/shapeToolStore";
+import { useShapeToolStore } from "../tool/shapeToolStore";
+import { forgetDiscardedShape } from "../tool/shapeLeave";
+import { useLeaveShapeTool } from "../tool/useShapeToolActions";
+import type { ToolState } from "../tool/toolMachine";
+import { subscribeHistoryChanges } from "@/db-functions/history";
 import { shapeToolMode } from "../tool/shapeToolMode";
 
 /**
@@ -17,8 +21,8 @@ import { shapeToolMode } from "../tool/shapeToolMode";
  * (`shapeToolMode`), and otherwise a selected placed box takes the presses on its handles and
  * inside it (`LiveBoxMode`). Also keeps placed boxes in the selection (`useBoxSelection`).
  *
- * The tool is about one moment and one group of marchers, so it closes, placing nothing, when
- * playback starts, the edit window moves or the selection changes.
+ * The tool is about one moment and one group of marchers, so it is placed where it was drawn and
+ * closes when playback starts, the edit window moves or the selection changes (spec #344).
  */
 export function useShapeFieldModes(
     editor: FieldEditor,
@@ -48,23 +52,34 @@ export function useShapeFieldModes(
     }, [editor, toolOpen, live]);
     useEffect(() => () => editor.setMode(null), [editor]);
 
-    useCloseWhenTheMomentChanges(isPlaying, toolOpen);
+    useLeaveWhenTheMomentChanges(isPlaying, toolOpen);
 }
 
-function useCloseWhenTheMomentChanges(isPlaying: boolean, open: boolean): void {
+function useLeaveWhenTheMomentChanges(isPlaying: boolean, open: boolean): void {
+    const leave = useLeaveShapeTool();
+    const leaveRef = useRef(leave);
+    leaveRef.current = leave;
+    // A discarded shape comes back only on the undo right after Escape: any edit to the show
+    // in between takes undo back
+    useEffect(() => subscribeHistoryChanges(forgetDiscardedShape), []);
+
     useEffect(() => {
-        if (isPlaying) closeShapeTool();
+        if (!isPlaying) return;
+        leaveRef.current();
+        forgetDiscardedShape();
     }, [isPlaying]);
 
     const selected = useSelectedMarchers()?.selectedMarchers;
     useEffect(() => {
-        const tool = useShapeToolStore.getState().tool;
-        if (!tool || !selected) return;
+        if (!selected) return;
         const ids = new Set(selected.map((m) => m.id));
-        const same =
+        const sameAs = (tool: ToolState | undefined) =>
+            !!tool &&
             ids.size === tool.marchers.length &&
             tool.marchers.every((m) => ids.has(m.id));
-        if (!same) closeShapeTool();
+        const { tool, discarded } = useShapeToolStore.getState();
+        if (tool && !sameAs(tool)) leaveRef.current();
+        if (discarded && !sameAs(discarded.tool)) forgetDiscardedShape();
     }, [selected]);
 
     const windowKey = useTimelineSelectionStore((s) => {
@@ -83,6 +98,18 @@ function useCloseWhenTheMomentChanges(isPlaying: boolean, open: boolean): void {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
     useEffect(() => {
-        if (open && windowKey !== openedAt.current) closeShapeTool();
+        if (open && windowKey !== openedAt.current) leaveRef.current();
     }, [windowKey, open]);
+    // Undo after Escape opens the shape at the moment it was discarded, so a new moment ends it
+    const discardedAt = useRef(windowKey);
+    const discarded = useShapeToolStore((s) => s.discarded !== null);
+    useEffect(() => {
+        if (discarded) discardedAt.current = windowKey;
+        // Only the discarding: a later change of window is handled below
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [discarded]);
+    useEffect(() => {
+        if (discarded && windowKey !== discardedAt.current)
+            forgetDiscardedShape();
+    }, [windowKey, discarded]);
 }

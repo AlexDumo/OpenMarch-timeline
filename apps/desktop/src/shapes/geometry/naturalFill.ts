@@ -119,8 +119,11 @@ export function autoEdgeCount(outline: FillOutline, n: number): number {
     return Math.max(Math.min(3, most), Math.min(most, k));
 }
 
-/** A small seeded random generator (mulberry32), so a layout repeats */
-function seeded(seed: number): () => number {
+/**
+ * A small seeded random generator (mulberry32), so a layout repeats. Integer arithmetic and one
+ * division, so every engine gives the same numbers.
+ */
+export function seeded(seed: number): () => number {
     let a = (Math.floor(seed) * 0x9e3779b1) >>> 0;
     return () => {
         a = (a + 0x6d2b79f5) >>> 0;

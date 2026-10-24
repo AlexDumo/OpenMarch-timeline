@@ -33,7 +33,7 @@ const CUE_MIGRATION = migrationAt(22);
 
 /**
  * Tables later migrations add (0023's cameras, 0024's items, 0025's Placement, 0026's slots,
- * 0027's shape recipes), gone from a file from before 0022 too
+ * 0027's shape recipes, 0028's saved shapes), gone from a file from before 0022 too
  */
 const LATER_TABLES = [
     "view3d_cameras",
@@ -44,6 +44,7 @@ const LATER_TABLES = [
     "item_artwork_slots",
     "timeline_shape_recipes",
     "timeline_shape_recipe_marchers",
+    "saved_shapes",
 ];
 
 const CUE_TABLES = [

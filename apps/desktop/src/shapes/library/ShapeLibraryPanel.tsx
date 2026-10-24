@@ -1,0 +1,276 @@
+import clsx from "clsx";
+import { useEffect } from "react";
+import {
+    DownloadSimpleIcon,
+    ShapesIcon,
+    StarIcon,
+    TrashIcon,
+    XIcon,
+} from "@phosphor-icons/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
+import { SidebarModalLauncher } from "@/components/sidebar/SidebarModal";
+import ShapePreviewIcon from "../preview/ShapePreviewIcon";
+import { useSidebarModalStore } from "@/stores/SidebarModalStore";
+import { MAX_STARS, type ShapeLibraryRow } from "./shapeLibrary";
+import { useShapeLibraryRows, useShapeStarsStore } from "./shapeStars";
+import { kindPickGate, pickShapeKind } from "../tool/pickKind";
+import { useShapeToolStore } from "../tool/shapeToolStore";
+import { addSavedShapeToLibrary, deleteSavedShape } from "./saveShape";
+
+export const SHAPE_LIBRARY_CONTENT_ID = "shapes";
+
+/** The left sidebar's Shapes entry (#352, spec #344): the shape library */
+export default function ShapeLibraryModal() {
+    return (
+        <SidebarModalLauncher
+            contents={<ShapeLibraryContents />}
+            newContentId={SHAPE_LIBRARY_CONTENT_ID}
+            buttonLabel={<ShapesIcon size={24} />}
+            ariaLabel="Shapes"
+            testId="shape-library-tab"
+        />
+    );
+}
+
+/** Opens the sidebar on the shape library, as the Shapes tab's Library button does */
+export function showShapeLibrary() {
+    const sidebar = useSidebarModalStore.getState();
+    if (sidebar.contentId !== SHAPE_LIBRARY_CONTENT_ID)
+        sidebar.setContent(<ShapeLibraryContents />, SHAPE_LIBRARY_CONTENT_ID);
+    sidebar.setOpen(true);
+}
+
+/**
+ * The shape library: every shape by group, each with a star, an icon, a name and a note. One star
+ * puts a shape in both the ring and the Shapes tab; with all {@link MAX_STARS} taken, starring
+ * another asks to unstar one first. Clicking a shape picks it, as the Shapes tab does. Saved
+ * shapes (#353) come as a Saved group after Basic, each with a delete button and its description
+ * (#393); one only the open show has can be added to the user's library.
+ */
+export function ShapeLibraryContents({
+    rows: rowsProp,
+}: {
+    /** Tests pass their own; every shape the library lists by default */
+    rows?: readonly ShapeLibraryRow[];
+}) {
+    const { setOpen } = useSidebarModalStore();
+    const libraryRows = useShapeLibraryRows();
+    const rows = rowsProp ?? libraryRows;
+    const stars = useShapeStarsStore((s) => s.stars);
+    const asking = useShapeStarsStore((s) => s.asking);
+    const toggle = useShapeStarsStore((s) => s.toggle);
+    const dismissAsk = useShapeStarsStore((s) => s.dismissAsk);
+    const asked = rows.find((r) => r.id === asking);
+    const queryClient = useQueryClient();
+    const selected = useSelectedMarchers()?.selectedMarchers ?? [];
+    const shapeOpen = useShapeToolStore((s) => s.tool !== null);
+    const pick = kindPickGate(shapeOpen, selected);
+    // The question is about this visit to the library
+    useEffect(() => dismissAsk, [dismissAsk]);
+
+    const groups = [
+        { id: "basic", title: "Basic" },
+        { id: "saved", title: "Saved" },
+    ] as const;
+
+    return (
+        <div
+            className="animate-scale-in text-text flex h-full w-[22rem] flex-col gap-16"
+            data-testid="shape-library"
+        >
+            <header className="flex items-center justify-between gap-24">
+                <h4 className="text-h4 leading-none">Shapes</h4>
+                <button
+                    onClick={() => setOpen(false)}
+                    className="hover:text-red duration-150 ease-out"
+                    aria-label="Close"
+                >
+                    <XIcon size={24} />
+                </button>
+            </header>
+            <p className="text-sub text-text-subtitle">
+                Star a shape to keep it in the Shapes tab and the shape ring, up
+                to {MAX_STARS}.
+            </p>
+            {asked && (
+                <div
+                    role="alert"
+                    className="rounded-6 border-stroke bg-fg-2 text-body flex items-start justify-between gap-8 border p-8"
+                    data-testid="shape-library-full"
+                >
+                    <span>
+                        {MAX_STARS} shapes are starred, as many as the ring
+                        holds. Unstar one first to star {asked.label}.
+                    </span>
+                    <button
+                        onClick={dismissAsk}
+                        className="hover:text-red duration-150 ease-out"
+                        aria-label="Dismiss"
+                    >
+                        <XIcon size={16} />
+                    </button>
+                </div>
+            )}
+            <div className="flex min-h-0 flex-1 flex-col gap-16 overflow-y-auto">
+                {groups.map(({ id, title }) => {
+                    const inGroup = rows.filter((r) => r.group === id);
+                    if (inGroup.length === 0 && id !== "saved") return null;
+                    return (
+                        <section
+                            key={id}
+                            className="flex flex-col gap-8"
+                            data-testid={`shape-library-${id}`}
+                        >
+                            <h5 className="text-sub text-text-subtitle font-mono uppercase">
+                                {title}
+                            </h5>
+                            {inGroup.length === 0 && (
+                                <p
+                                    className="text-sub text-text-subtitle"
+                                    data-testid="shape-library-saved-empty"
+                                >
+                                    Save a shape from its ⋯ row or the inspector
+                                    to keep it here, for every show.
+                                </p>
+                            )}
+                            <ul className="flex flex-col gap-4">
+                                {inGroup.map((row) => (
+                                    <LibraryRow
+                                        key={row.id}
+                                        row={row}
+                                        starred={stars.includes(row.id)}
+                                        onStar={() => toggle(row.id, rows)}
+                                        canPick={pick}
+                                        onPick={() =>
+                                            pickShapeKind(row.kind, selected)
+                                        }
+                                        onDelete={
+                                            row.saved
+                                                ? () =>
+                                                      void deleteSavedShape(
+                                                          row.saved!.shape,
+                                                          queryClient,
+                                                      )
+                                                : undefined
+                                        }
+                                        onAddToLibrary={
+                                            row.saved && !row.saved.inLibrary
+                                                ? () =>
+                                                      addSavedShapeToLibrary(
+                                                          row.saved!.shape,
+                                                      )
+                                                : undefined
+                                        }
+                                    />
+                                ))}
+                            </ul>
+                        </section>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function LibraryRow({
+    row,
+    starred,
+    onStar,
+    canPick,
+    onPick,
+    onDelete,
+    onAddToLibrary,
+}: {
+    row: ShapeLibraryRow;
+    starred: boolean;
+    onStar: () => void;
+    /** Whether clicking the shape picks it now, and why not */
+    canPick: ReturnType<typeof kindPickGate>;
+    onPick: () => void;
+    /** Deletes a saved shape; absent for basic kinds */
+    onDelete?: () => void;
+    /** Adds a saved shape only the open show has to the user's library */
+    onAddToLibrary?: () => void;
+}) {
+    const description = row.saved?.shape.description;
+    return (
+        <li
+            className="rounded-6 hover:bg-fg-2 group flex items-center gap-8 px-4 py-4"
+            data-testid={`shape-library-row-${row.id}`}
+        >
+            <button
+                type="button"
+                onClick={onStar}
+                aria-pressed={starred}
+                aria-label={`${starred ? "Unstar" : "Star"} ${row.label}`}
+                title={starred ? "Unstar" : "Star"}
+                className={clsx(
+                    "hover:text-accent duration-150 ease-out",
+                    starred ? "text-accent" : "text-text-subtitle",
+                )}
+                data-testid={`shape-library-star-${row.id}`}
+            >
+                <StarIcon size={18} weight={starred ? "fill" : "regular"} />
+            </button>
+            <button
+                type="button"
+                onClick={onPick}
+                disabled={!canPick.ok}
+                title={canPick.ok ? `Draw a ${row.label}` : canPick.reason}
+                className="flex min-w-0 flex-1 items-center gap-8 text-left disabled:opacity-60"
+                data-testid={`shape-library-pick-${row.id}`}
+            >
+                <ShapePreviewIcon
+                    kind={row.kind}
+                    size={22}
+                    className="shrink-0"
+                />
+                <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex min-w-0 items-center gap-8">
+                        <span className="text-body truncate">{row.label}</span>
+                        {row.note && (
+                            <span className="text-sub text-text-subtitle truncate">
+                                {row.note}
+                            </span>
+                        )}
+                    </span>
+                    {description && (
+                        // One line here; the whole of it in the tooltip
+                        <span
+                            className="text-sub text-text-subtitle truncate"
+                            title={description}
+                            data-testid={`shape-library-description-${row.id}`}
+                        >
+                            {description}
+                        </span>
+                    )}
+                </span>
+            </button>
+            {onAddToLibrary && (
+                <button
+                    type="button"
+                    onClick={onAddToLibrary}
+                    aria-label={`Add ${row.label} to my Library`}
+                    title="Add to my Library, for every show"
+                    className="text-text-subtitle hover:text-accent duration-150 ease-out"
+                    data-testid={`shape-library-add-${row.id}`}
+                >
+                    <DownloadSimpleIcon size={16} />
+                </button>
+            )}
+            {onDelete && (
+                <button
+                    type="button"
+                    onClick={onDelete}
+                    aria-label={`Delete ${row.label}`}
+                    title="Delete this saved shape"
+                    className="text-text-subtitle hover:text-red duration-150 ease-out"
+                    data-testid={`shape-library-delete-${row.id}`}
+                >
+                    <TrashIcon size={16} />
+                </button>
+            )}
+        </li>
+    );
+}

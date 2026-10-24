@@ -6,10 +6,9 @@ import {
     useActionHandlerGroup,
 } from "@/shortcuts/useActionHandler";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { moveBox, onField } from "../box/boxGeometry";
-import { withFieldCount } from "../editor/boxEdits";
 import { currentShapeField } from "../field/shapeFieldContext";
 import { toolEnvFor } from "../tool/toolEnv";
+import type { AnyToolKind } from "../tool/toolKind";
 import { useBoxSelectionStore } from "./boxSelectionStore";
 import { commitBox } from "./commitBox";
 import { leaveBox, selectOnField } from "./boxSelection";
@@ -21,31 +20,39 @@ const DIRECTIONS = {
     right: { x: 1, y: 0 },
 } as const;
 
-/** One fewer or more across in the selected placed box, saved at once */
+/** The number a kind's − and + step (a box's count across), if it has one */
+export const steppedParam = (kind: AnyToolKind) =>
+    kind.params.find((p) => p.primary && p.stepper);
+
+/**
+ * One less or more of the selected placed shape's stepped number (a box: one fewer or more
+ * across the field, however it's turned), saved at once
+ */
 export function stepPlacedBoxFiles(
-    delta: number,
+    delta: -1 | 1,
     queryClient: ReturnType<typeof useQueryClient>,
 ): void {
     const field = currentShapeField();
     const box = useBoxSelectionStore.getState().selected;
-    if (!field || !box) return;
-    // One more or fewer across the field, however the box is turned
-    const params = withFieldCount(
+    const stepper = box && steppedParam(box.kind)?.stepper;
+    if (!field || !box || !stepper) return;
+    const params = stepper.by(
         box.params,
         box.spots,
-        "across",
-        onField(box.params, box.spots).across + delta,
+        delta,
         toolEnvFor(field, { shift: false, alt: false }),
     );
-    if (params !== box.params) void commitBox(box, params, queryClient);
+    if (params !== null && params !== box.params)
+        void commitBox(box, params, queryClient);
 }
 
 /**
- * The keys a selected placed box takes over (07-placed-boxes.md). Mounted only while a box is
+ * The keys a selected placed shape takes over (07-placed-boxes.md). Mounted only while a shape is
  * selected or you're inside one, on top of the editor's handlers.
  *
- * - The nudge keys move the whole box, every member the same distance, so it stays a box (the
- *   plain nudge rounds each marcher on its own, which bends a box on half steps).
+ * - The nudge keys move the whole shape through its kind, every member the same distance, so it
+ *   keeps its form (the plain nudge rounds each marcher on its own, which bends a box on half
+ *   steps).
  * - Escape inside a box selects the whole box again, and on a box selected whole deselects it.
  */
 export function PlacedBoxKeys(): null {
@@ -64,7 +71,7 @@ export function PlacedBoxKeys(): null {
             const steps = resolveNudgeDistance(nudge, rounding);
             const d = DIRECTIONS[nudge.direction];
             const px = steps * field.fieldProperties.pixelsPerStep;
-            const params = moveBox(
+            const params = box.kind.move(
                 box.params,
                 box.spots,
                 { x: d.x * px, y: d.y * px },

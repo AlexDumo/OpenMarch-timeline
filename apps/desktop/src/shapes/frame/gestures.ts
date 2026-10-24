@@ -1,23 +1,31 @@
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { XY } from "../types";
 import {
+    DEGREE,
     fieldToFrame,
     flipFrame,
     frameCorners,
     frameToField,
     DEFAULT_PIVOT,
+    isPivotKey,
     normalizeAngle,
+    pivotAt,
     pivotPoint,
     rotateFrame,
+    rotationDegrees,
+    samePivot,
     snapRotation,
-    type PivotKey,
+    type FlipAxis,
+    type Pivot,
 } from "./frame";
+import { carryPivot, pivotOf, snapPivot, withPivot } from "./pivot";
 
 /**
  * The gestures every open or selected shape has, whatever its kind
  * (08-shape-system-ux.md, "Handles and gestures"): its own handles, the rotate knob, turning
- * from just outside a corner, the center dot, and a drag on its body. The new shape tool and a
- * selected placed shape both use these, so they behave the same. Everything here is pure.
+ * from just outside a corner, the center dot, its pivot (#350), and a drag on its body. The new
+ * shape tool and a selected placed shape both use these, so they behave the same. Everything
+ * here is pure.
  */
 
 /** What a press on a shape grabs */
@@ -27,6 +35,11 @@ export type ShapeTarget =
     | { readonly type: "rotate"; readonly from: "knob" | "corner" }
     /** The center dot: the shape's center follows the pointer */
     | { readonly type: "center" }
+    /**
+     * The pivot (#350): its crosshair once it's out of the center, or Cmd/Ctrl on the center dot,
+     * which pulls it out
+     */
+    | { readonly type: "pivot" }
     /** The shape's body */
     | { readonly type: "move" };
 
@@ -42,6 +55,7 @@ export type ShapeGesture =
           readonly startAngle: number;
       }
     | { readonly type: "center"; readonly base: unknown }
+    | { readonly type: "pivot"; readonly base: unknown }
     | { readonly type: "move"; readonly base: unknown; readonly grab: XY };
 
 /** How far the knob stands above the shape's back edge, in handle reaches */
@@ -49,16 +63,21 @@ const KNOB_STEM = 2.4;
 /** How far outside a corner still turns the shape, in handle reaches */
 const CORNER_ROTATE_REACH = 2.6;
 
-/** The knob, its stem's foot on the back edge, and the center dot, in field units */
+/**
+ * The knob, its stem's foot on the back edge, the center dot, and the pivot's crosshair when it's
+ * out of the center (null at the center, where the dot is the pivot), in field units
+ */
 export function frameControls(
     kind: AnyToolKind,
     params: unknown,
     n: number,
     env: Pick<ToolEnv, "hitRadius">,
-): { knob: XY; stem: XY; center: XY } {
+): { knob: XY; stem: XY; center: XY; pivot: XY | null } {
     const frame = kind.frameOf(params, n);
     const back = -frame.halfDepth;
+    const pivot = pivotOf(params);
     return {
+        pivot: pivot === DEFAULT_PIVOT ? null : pivotPoint(frame, pivot),
         stem: frameToField(frame, { x: 0, y: back }),
         knob: frameToField(frame, {
             x: 0,
@@ -71,8 +90,9 @@ export function frameControls(
 const near = (a: XY, b: XY, r: number) => Math.hypot(a.x - b.x, a.y - b.y) <= r;
 
 /**
- * What a press at `at` grabs on the shape, nearest the front of what's drawn first: a handle,
- * the knob, the center dot, the ring just outside a corner, then the body. Null when it misses.
+ * What a press at `at` grabs on the shape, nearest the front of what's drawn first: the pivot's
+ * crosshair, a handle, the knob, the center dot (the pivot with Cmd/Ctrl), the ring just outside
+ * a corner, then the body. Null when it misses.
  */
 export function shapeTargetAt(
     kind: AnyToolKind,
@@ -81,6 +101,10 @@ export function shapeTargetAt(
     at: XY,
     env: ToolEnv,
 ): ShapeTarget | null {
+    const controls = frameControls(kind, params, n, env);
+    // Drawn over everything, so it wins over a handle on the marcher it sits on
+    if (controls.pivot && near(controls.pivot, at, env.hitRadius))
+        return { type: "pivot" };
     let best: { key: string; d: number } | undefined;
     for (const h of kind.handles(params, n)) {
         const d = Math.hypot(h.at.x - at.x, h.at.y - at.y);
@@ -88,10 +112,10 @@ export function shapeTargetAt(
             best = { key: h.key, d };
     }
     if (best) return { type: "handle", key: best.key };
-    const controls = frameControls(kind, params, n, env);
     if (near(controls.knob, at, env.hitRadius))
         return { type: "rotate", from: "knob" };
-    if (near(controls.center, at, env.hitRadius)) return { type: "center" };
+    if (near(controls.center, at, env.hitRadius))
+        return env.mod ? { type: "pivot" } : { type: "center" };
     const frame = kind.frameOf(params, n);
     const local = fieldToFrame(frame, at);
     // Diagonally past a corner, as in design apps; past an edge is the body (it has a margin)
@@ -127,13 +151,12 @@ export function startShapeGesture(
             return { type: "handle", key: target.key, base: params };
         case "center":
             return { type: "center", base: params };
+        case "pivot":
+            return { type: "pivot", base: params };
         case "move":
             return { type: "move", base: params, grab: at };
         case "rotate": {
-            const pivot = pivotPoint(
-                kind.frameOf(params, n),
-                env.pivot ?? DEFAULT_PIVOT,
-            );
+            const pivot = pivotPoint(kind.frameOf(params, n), pivotOf(params));
             return {
                 type: "rotate",
                 from: target.from,
@@ -145,11 +168,24 @@ export function startShapeGesture(
     }
 }
 
-/** The shape as `gesture` has it with the pointer at `at` */
+/** The shape as `gesture` has it with the pointer at `at`, its pivot kept */
 export function dragShape(
     kind: AnyToolKind,
     n: number,
     gesture: ShapeGesture,
+    at: XY,
+    env: ToolEnv,
+): unknown {
+    const base = gesture.base;
+    if (gesture.type === "pivot")
+        return withPivot(base, snapPivot(kind.frameOf(base, n), at, env));
+    return carryPivot(base, dragged(kind, n, gesture, at, env));
+}
+
+function dragged(
+    kind: AnyToolKind,
+    n: number,
+    gesture: Exclude<ShapeGesture, { type: "pivot" }>,
     at: XY,
     env: ToolEnv,
 ): unknown {
@@ -178,47 +214,134 @@ export function dragShape(
             if (near(at, gesture.pivot, 1e-9)) return base;
             const turn = angleFrom(gesture.pivot, at) - gesture.startAngle;
             const rotation = snapRotation(frame.rotation + turn, env);
-            const turned = kind.withFrame(
+            const turned = carryPivot(
                 base,
-                n,
-                rotateFrame(frame, rotation, gesture.pivot),
+                kind.withFrame(
+                    base,
+                    n,
+                    rotateFrame(frame, rotation, gesture.pivot),
+                ),
             );
-            return kind.settle ? kind.settle(turned, n, env) : turned;
+            return settled(kind, turned, n, env, gesture.pivot);
         }
     }
 }
 
-/** The shape turned to `rotation` (radians) about `pivot` */
+/**
+ * The shape after a double click on its pivot (#350): the pivot back at the center. Null when the
+ * press wasn't on the pivot, or it already was there.
+ */
+export function centerPivot(gesture: ShapeGesture): unknown {
+    return gesture.type === "pivot" && pivotOf(gesture.base) !== DEFAULT_PIVOT
+        ? withPivot(gesture.base, DEFAULT_PIVOT)
+        : null;
+}
+
+/** The shape turned to `rotation` (radians) about `pivot` (the shape's own, normally) */
 export function turnShape(
     kind: AnyToolKind,
     params: unknown,
     n: number,
     rotation: number,
-    pivot: PivotKey,
+    pivot: Pivot,
     env: ToolEnv,
 ): unknown {
     const frame = kind.frameOf(params, n);
-    const turned = kind.withFrame(
+    const turned = carryPivot(
         params,
-        n,
-        rotateFrame(frame, normalizeAngle(rotation), pivotPoint(frame, pivot)),
+        kind.withFrame(
+            params,
+            n,
+            rotateFrame(
+                frame,
+                normalizeAngle(rotation),
+                pivotPoint(frame, pivot),
+            ),
+        ),
     );
-    return kind.settle ? kind.settle(turned, n, env) : turned;
+    return settled(
+        kind,
+        turned,
+        n,
+        env,
+        samePivot(pivotOf(params), pivot) ? pivotPoint(frame, pivot) : null,
+    );
 }
 
-/** The shape mirrored along its own axis about `pivot` */
+/**
+ * The shape mirrored along its own axis about `pivot` (the shape's own, normally). Its own pivot
+ * stays where it is on the field, so flipping twice puts the shape back: flipped around its right
+ * edge, that point is its left edge afterwards.
+ */
 export function flipShape(
     kind: AnyToolKind,
     params: unknown,
     n: number,
-    axis: "across" | "deep",
-    pivot: PivotKey,
+    axis: FlipAxis,
+    pivot: Pivot,
     env: ToolEnv,
 ): unknown {
-    const flipped = kind.withFrame(
+    const frame = kind.frameOf(params, n);
+    let flipped = carryPivot(
         params,
-        n,
-        flipFrame(kind.frameOf(params, n), axis, pivot),
+        kind.withFrame(params, n, flipFrame(frame, axis, pivot)),
     );
-    return kind.settle ? kind.settle(flipped, n, env) : flipped;
+    if (!samePivot(pivotOf(params), pivot))
+        return settled(kind, flipped, n, env, null);
+    const around = pivotPoint(frame, pivot);
+    flipped = withPivot(flipped, pivotAt(kind.frameOf(flipped, n), around));
+    return settled(kind, flipped, n, env, around);
+}
+
+/**
+ * After a turn, flip or scale: the shape put back on the grid by its kind, its pivot kept. A
+ * pivot dragged somewhere of its own (onto a marcher, say) stays at `around`, the field point the
+ * change went around, rather than shifting with the shape's small step back onto the grid.
+ */
+export function settled(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    env: ToolEnv,
+    around: XY | null,
+): unknown {
+    if (!kind.settle) return params;
+    const out = carryPivot(params, kind.settle(params, n, env));
+    if (!around || isPivotKey(pivotOf(out))) return out;
+    return withPivot(out, pivotAt(kind.frameOf(out, n), around));
+}
+
+/** The shape's outline on the field: the kind's own, or its frame's four corners */
+export function shapeOutline(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+): readonly XY[] {
+    return kind.outline?.(params, n) ?? frameCorners(kind.frameOf(params, n));
+}
+
+/** Pixels of drag per degree on a rotation number */
+export const ROTATION_PX_PER_DEGREE = 2;
+
+/**
+ * The shape's rotation dragged `distance` px clockwise: 1° per 2 px, 15° with Shift, free with
+ * Alt, from where it started
+ */
+export function scrubTurn(
+    kind: AnyToolKind,
+    base: unknown,
+    n: number,
+    distance: number,
+    pivot: Pivot,
+    env: ToolEnv,
+): unknown {
+    const turn = distance / ROTATION_PX_PER_DEGREE;
+    if (Math.trunc(turn) === 0 && env.snap) return base;
+    const degrees = rotationDegrees(kind.frameOf(base, n).rotation) + turn;
+    const snapped = !env.snap
+        ? degrees
+        : env.shift
+          ? Math.round(degrees / 15) * 15
+          : Math.round(degrees);
+    return turnShape(kind, base, n, snapped * DEGREE, pivot, env);
 }

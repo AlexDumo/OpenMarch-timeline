@@ -1,16 +1,13 @@
 import clsx from "clsx";
 import { useRef, useState, type PointerEvent } from "react";
-import { lockedAxis, SCRUB_SLOP_PX, type ScrubAxis } from "./scrub";
+import {
+    lockedAxis,
+    SCRUB_SLOP_PX,
+    type ScrubAxis,
+    type ScrubMove,
+} from "./scrub";
 
-/** What a drag on a number reports, from where the press was */
-export interface ScrubMove {
-    readonly dx: number;
-    readonly dy: number;
-    /** The direction a two-way number locked to */
-    readonly axis: ScrubAxis;
-    readonly alt: boolean;
-    readonly shift: boolean;
-}
+export type { ScrubMove };
 
 const CURSORS: Record<ScrubAxis | "both", string> = {
     x: "ew-resize",

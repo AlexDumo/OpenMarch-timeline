@@ -165,10 +165,15 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
             to: copy(to),
         })),
         handles: drawing.handles.map(screen),
+        rings: (drawing.rings ?? []).map(copy),
+        gaps: (drawing.gaps ?? []).map(copy),
         stage: drawing.stage ?? null,
         knob: drawing.knob ? screen(drawing.knob.at) : null,
         centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,
+        pivotMark: drawing.pivotMark ? screen(drawing.pivotMark) : null,
         labels: (drawing.labels ?? []).map((l) => l.text),
+        tip: drawing.tip?.text ?? null,
+        gliding: drawing.gliding === true,
     };
     function screen(at: FieldPoint) {
         const { x, y } = fieldToElement(view, at.x, at.y);

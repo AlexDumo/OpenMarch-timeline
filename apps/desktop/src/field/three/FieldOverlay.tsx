@@ -13,7 +13,7 @@ import {
     selectionHandles,
     type DrawnSelectionBox,
 } from "./selectionFrame";
-import { SELECTION_COLOR } from "./selectionRing";
+import { ringReach, SELECTION_COLOR } from "./selectionRing";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -32,6 +32,12 @@ const SHAPE_OUTLINE_DASH = "6 4";
 const SPOT_RADIUS = 4;
 const SPOT_WIDTH = 1.5;
 const WALK_WIDTH = 1;
+/**
+ * The hollow ring where each of the shape's marchers starts, in CSS px: just outside a selected
+ * marcher's ring, so a marcher standing on its start shows both.
+ */
+const START_RING_GAP = 2;
+const START_RING_WIDTH = 1.5;
 const SHAPE_HANDLE_SIZE = 9;
 const SHAPE_HANDLE_WIDTH = 1.5;
 
@@ -46,6 +52,9 @@ const CENTER_DOT_RADIUS = 5;
 const CENTER_DOT_RING = 2.5;
 const PIVOT_RADIUS = 4;
 const PIVOT_COLOR = "#facc15";
+/** The pivot's crosshair once it's out of the center (#350): its arms and ring, in CSS px */
+const PIVOT_MARK_ARM = 9;
+const PIVOT_MARK_RING = 5;
 /** Spot labels and the pointer tip, in CSS px. */
 const SPOT_LABEL_PX = 10;
 const TIP_PX = 12;
@@ -315,6 +324,21 @@ function ModeDrawing({
                     strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
                 />
             )}
+            {drawing.rings?.map((point, i) => {
+                const p = at(point);
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={ringReach(z) * z + START_RING_GAP}
+                        fill="none"
+                        stroke={shape}
+                        strokeWidth={START_RING_WIDTH}
+                        data-testid="fieldShapeStartRing"
+                    />
+                );
+            })}
             {drawing.walks.map(({ from, to }, i) => {
                 const a = at(from);
                 const b = at(to);
@@ -341,6 +365,22 @@ function ModeDrawing({
                         fill={dots ? shape : "none"}
                         stroke={dots ? "white" : shape}
                         strokeWidth={SPOT_WIDTH * z}
+                    />
+                );
+            })}
+            {drawing.gaps?.map((point, i) => {
+                const p = at(point);
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={SPOT_RADIUS * z}
+                        fill="none"
+                        stroke={shape}
+                        strokeWidth={SPOT_WIDTH * z}
+                        strokeDasharray={`${1.5 * z} ${1.5 * z}`}
+                        data-testid="fieldShapeGap"
                     />
                 );
             })}
@@ -415,6 +455,39 @@ function ModeDrawing({
                             strokeWidth={CENTER_DOT_RING}
                             data-testid="fieldShapeCenterDot"
                         />
+                    );
+                })()}
+            {drawing.pivotMark &&
+                (() => {
+                    const p = at(drawing.pivotMark);
+                    const r = PIVOT_MARK_ARM;
+                    const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
+                    return (
+                        <g data-testid="fieldShapePivotMark">
+                            {/* A dark edge under the yellow, so it reads on grass and on white */}
+                            <path d={cross} stroke="black" strokeWidth={3.5} />
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={PIVOT_MARK_RING}
+                                fill="none"
+                                stroke="black"
+                                strokeWidth={3.5}
+                            />
+                            <path
+                                d={cross}
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={1.5}
+                            />
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={PIVOT_MARK_RING}
+                                fill="none"
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={1.5}
+                            />
+                        </g>
                     );
                 })()}
             {drawing.pivot &&

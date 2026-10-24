@@ -40,6 +40,7 @@ adds what is specific to the Electron + React app.
 ## Fork-only Code
 
 - `apps/desktop/view3d-web/` (the 3D View web preview, with real demo shows) and the `view3d-web:*` scripts in `package.json` are fork-only. They may sit on the fork's `main`, but delete them from any branch before opening a PR to `OpenMarch/OpenMarch`; `view3d-web/README.md` lists everything to remove.
+- Lab test versions are fork-only: `src/lab/labVariant.ts`, `web/variants.ts`, the `labVariants()` / `__LAB_VARIANTS__` wiring in `web/vite.config.mts` (with its `yaml` devDependency), `LAB_MANIFEST` in `.github/workflows/lab-deploy.yaml`, and the `lab/*/experiment.md` manifests. Delete them, and the `initVariants`/`variantSwitch` calls in `web/main.ts`, from any branch before opening a PR to `OpenMarch/OpenMarch`.
 
 ## Generated Or Derived Files
 

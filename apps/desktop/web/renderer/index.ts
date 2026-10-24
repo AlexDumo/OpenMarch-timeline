@@ -21,6 +21,7 @@ import { useWebWelcomeStore } from "../../src/stores/WebWelcomeStore";
 import { storageKey } from "./channel";
 import { invokeWorker, ipcRenderer, startWorker } from "./ipc";
 import { installView3dApi, registerView3dHost } from "./view3d";
+import { initVariants, mountVariantSwitch } from "../variants";
 import { isLabBuild, startLabBuild } from "./lab";
 import { WEB_CHANNELS, WEB_EVENTS, type WorkerStatus } from "../protocol";
 
@@ -157,6 +158,9 @@ async function start() {
     registerPageHandlers({ isSettingsTab });
 
     if (!isSettingsTab) {
+        // A lab test comparing versions (../LAB.md); nothing otherwise
+        initVariants();
+        mountVariantSwitch();
         ipcRenderer.on(WEB_EVENTS.changed, markChanged);
         ipcRenderer.on(WEB_EVENTS.storageLost, () => {
             storageLost();

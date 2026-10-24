@@ -15,6 +15,24 @@ export type ActionCategory =
     | "timeline";
 export type ActionArgs = Readonly<Record<string, string | number | boolean>>;
 
+/**
+ * A number an action asks for before it runs (#354, spec #344 "The command bar"). Chosen from the
+ * palette, an action that declares params docks the command bar and asks them one at a time,
+ * then runs with the answers in its `args`, by `key`. The Shape branch asks its kinds' params the
+ * same way through the palette tree.
+ */
+export interface ActionParam {
+    /** Stable for the action: the answer's key in `args` */
+    readonly key: string;
+    /** i18n key of what it asks, e.g. "actions.timeline.pageCounts" */
+    readonly labelKey: string;
+    /** Counts are whole numbers; steps take halves ("2½"); degrees any number */
+    readonly unit: "count" | "steps" | "degrees";
+    /** The answer the bar starts from */
+    readonly default?: number;
+    readonly range?: { readonly min?: number; readonly max?: number };
+}
+
 export interface ActionDefinition {
     /** i18n key, e.g. "actions.alignment.lockX" */
     labelKey: string;
@@ -40,10 +58,19 @@ export interface ActionDefinition {
     defaultBindings: readonly string[];
     allowInInputs?: boolean;
     allowInModals?: boolean;
+    /**
+     * Left out of the command palette. Every action with a default shortcut is listed (#411)
+     * unless it can't work without its key held, or the palette reaches it another way; the
+     * definitions test lists those with why.
+     */
     hiddenFromPalette?: boolean;
     /** A held key runs the action once, not again on each repeat (for toggles) */
     ignoreRepeat?: boolean;
     args?: ActionArgs;
+    /** Joins `args` when the action is run from the command palette, which has no key to let go */
+    paletteArgs?: ActionArgs;
+    /** Asked in the command bar when chosen from the palette; the answers join `args` */
+    params?: readonly ActionParam[];
 }
 
 export type NudgeDirection = "up" | "down" | "left" | "right";
@@ -124,7 +151,6 @@ function buildNudgeActions(): Record<NudgeActionId, ActionDefinition> {
                 editsDrill: true,
                 scope: "canvas",
                 defaultBindings: variant.bindings(dir.letter, dir.arrow),
-                hiddenFromPalette: true,
                 args: {
                     direction: dir.direction,
                     step: variant.step,
@@ -148,7 +174,6 @@ function buildTapBeatsActions(): Record<TapBeatsActionId, ActionDefinition> {
             editsDrill: false,
             scope: "timeline",
             defaultBindings: [String(count)],
-            hiddenFromPalette: true,
             args: { count },
         };
     }
@@ -603,6 +628,16 @@ const STATIC_ACTIONS = {
         allowInInputs: true,
         hiddenFromPalette: true,
     },
+    // #354: `/` opens the same bar as ⌘K. Its own action so it isn't taken from inputs, where a
+    // slash is typed
+    openCommandBar: {
+        labelKey: "actions.ui.openCommandBar",
+        category: "ui",
+        editsDrill: false,
+        scope: "global",
+        defaultBindings: ["Slash"],
+        hiddenFromPalette: true,
+    },
     exitTimelineFocus: {
         labelKey: "actions.ui.exitTimelineFocus",
         category: "ui",
@@ -624,6 +659,32 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["B"],
         args: { kind: "block" },
+        // The command bar lists Shape › Box instead (#354), which asks the box's numbers
+        hiddenFromPalette: true,
+    },
+    shapeCircle: {
+        labelKey: "actions.shape.circle",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["O"],
+        args: { kind: "circle" },
+        // The command bar lists Shape › Circle instead, which asks the circle's numbers
+        hiddenFromPalette: true,
+    },
+    // The favorites ring (#351): hold to aim and let go to pick a shape, tap to keep it open.
+    // The ring takes the key's release, so a held key doesn't repeat it. From the palette it opens
+    // latched, as a tap does (#411).
+    openShapeRing: {
+        labelKey: "actions.shape.ring",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["R"],
+        ignoreRepeat: true,
+        paletteArgs: { latched: true },
     },
     applyShape: {
         labelKey: "actions.shape.apply",

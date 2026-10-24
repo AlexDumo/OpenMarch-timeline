@@ -1,9 +1,10 @@
 import { create } from "zustand";
-import type { FieldMode } from "@/field/editor/fieldEditor";
+import type { FieldMode, FieldPointer } from "@/field/editor/fieldEditor";
+import type { ShapeField } from "../field/shapeField";
 import type { XY } from "../types";
-import type { BoxParams } from "../box/boxGeometry";
+import { shapeOutline } from "../frame/gestures";
+import { outlineGapAt } from "../distribute/outlineGap";
 import {
-    boxOutline,
     drillNumbers,
     frameDrawing,
     keysOf,
@@ -20,10 +21,12 @@ import {
     pressTarget,
     release,
     slotsOf,
+    startsOf,
     targetsOf,
     type ToolState,
 } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
+import { SpotGlide } from "./spotGlide";
 
 /**
  * The spot the pointer rests on, with who will stand there, on shapes too big to label every spot
@@ -75,16 +78,19 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
     const field = currentShapeField();
     if (!field) return null;
     const ctx = shapeContextFor(field);
-    const n = tool.marchers.length;
+    const n = tool.spots;
     const spots = slotsOf(tool, ctx);
+    // The marchers' hollow rings stand where they start the move: at the start flag (#346)
+    const rings = startsOf(tool);
     if (tool.params === null)
-        return { outline: null, spots, walks: [], handles: [] };
+        return { outline: null, spots, walks: [], handles: [], rings };
     // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every
     // other gesture holds who goes where, so the walks follow it live.
     const drawing = tool.gesture?.type === "draw";
     const targets = drawing ? [] : targetsOf(tool, ctx);
     const names = drillNumbers(field);
     const env = toolEnvFor(field, { shift: false, alt: false });
+    const gap = drawing ? null : outlineGapAt(tool.kind, tool.params, n);
     const g =
         tool.gesture &&
         tool.gesture.type !== "draw" &&
@@ -93,9 +99,11 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
             : null;
     return {
         stage: drawing ? ("drawing" as const) : ("open" as const),
-        outline: boxOutline(tool.params as BoxParams, n),
+        outline: shapeOutline(tool.kind, tool.params, n),
         spots,
         walks: targets.map((t) => ({ from: t.from, to: t.to })),
+        rings,
+        gaps: gap ? [gap] : [],
         labels:
             n <= SPOT_LABEL_LIMIT
                 ? targets.map((t) => ({
@@ -123,6 +131,96 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
 });
 
 /**
+ * The open shape's marchers glide to their new spots when it changes without a gesture (a press
+ * of − or +, a layout picked, a quarter turn): the owner picked it in the lab (#387)
+ */
+const glide = new SpotGlide();
+const glideListeners = new Set<() => void>();
+let gliding = false;
+/** Counts the glide's frames: the overlay reads the drawing as a snapshot, so one per frame */
+let glideStamp = 0;
+let glideCache: {
+    shown: Shown | null;
+    stamp: number;
+    drawing: ReturnType<typeof drawingOf>;
+} | null = null;
+
+/** Redraws every frame while a glide runs, then once more where it lands */
+function glideFrame() {
+    glideStamp++;
+    glideListeners.forEach((listener) => listener());
+    if (glide.active(performance.now())) requestAnimationFrame(glideFrame);
+    else {
+        gliding = false;
+        glideStamp++;
+        glideListeners.forEach((listener) => listener());
+    }
+}
+
+/** {@link glidingDrawing}, worked out once per state and glide frame */
+function glidingSnapshot(shown: Shown | null) {
+    if (glideCache?.shown !== shown || glideCache.stamp !== glideStamp)
+        glideCache = {
+            shown,
+            stamp: glideStamp,
+            drawing: glidingDrawing(shown),
+        };
+    return glideCache.drawing;
+}
+
+/** People who ask their system for less motion get no glide, as the timeline's follow does */
+const reducedMotion = () =>
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+
+/**
+ * The drawing, with each marcher's spot, walk and label part way to where it's going while a
+ * glide runs: a change without a gesture slides, not jumps
+ */
+function glidingDrawing(shown: Shown | null) {
+    const drawing = drawingOf(shown);
+    if (!shown) return drawing;
+    const { tool } = shown;
+    const field = currentShapeField();
+    if (!drawing || tool.params === null || !field || reducedMotion())
+        return drawing;
+    const targets = targetsOf(tool, shapeContextFor(field));
+    const now = performance.now();
+    glide.update(
+        tool.params,
+        tool.gesture !== null && tool.gesture !== undefined,
+        targets,
+        now,
+    );
+    const at = glide.positions(now);
+    if (!at) return drawing;
+    if (!gliding) {
+        gliding = true;
+        requestAnimationFrame(glideFrame);
+    }
+    const shownAt = (t: { id: number; to: XY }) => at.get(t.id) ?? t.to;
+    const labels = drawing.labels ?? [];
+    return {
+        ...drawing,
+        gliding: true,
+        spots:
+            drawing.spots.length === targets.length
+                ? targets.map(shownAt)
+                : drawing.spots,
+        walks: targets.map((t) => ({ from: t.from, to: shownAt(t) })),
+        labels:
+            labels.length === targets.length
+                ? labels.map((l, i) => ({ ...l, at: shownAt(targets[i]!) }))
+                : labels,
+    };
+}
+
+/** The env for a pointer event: a dragged pivot also snaps to the open shape's spots (#350) */
+const envOf = (field: ShapeField, tool: ToolState, pointer: FieldPointer) =>
+    toolEnvFor(field, keysOf(pointer), () =>
+        slotsOf(tool, shapeContextFor(field)),
+    );
+
+/**
  * The open shape tool on the field (docs/timeline/research/shapes/06-box-v1.md): a field editor
  * mode that takes every edit press while the tool is open and hands it to the tool's state
  * machine, so nothing selects, drags or lassos underneath. Navigation keeps its presses (right and
@@ -133,21 +231,19 @@ export const shapeToolMode: FieldMode = {
     press(pointer) {
         const field = currentShapeField();
         if (!field) return;
-        updateTool((t) =>
-            press(t, pointer.field, toolEnvFor(field, keysOf(pointer))),
-        );
+        updateTool((t) => press(t, pointer.field, envOf(field, t, pointer)));
     },
     move(pointer) {
         const field = currentShapeField();
         if (!field) return;
         updateTool((t) =>
-            pointerMove(t, pointer.field, toolEnvFor(field, keysOf(pointer))),
+            pointerMove(t, pointer.field, envOf(field, t, pointer)),
         );
     },
-    release() {
+    release(_pointer, click) {
         const field = currentShapeField();
         if (!field) return;
-        updateTool((t) => release(t, shapeContextFor(field)));
+        updateTool((t) => release(t, shapeContextFor(field), click));
     },
     cancel() {
         updateTool(cancelGesture);
@@ -156,25 +252,22 @@ export const shapeToolMode: FieldMode = {
         const tool = useShapeToolStore.getState().tool;
         const field = currentShapeField();
         if (!tool || !field) return null;
-        const env = toolEnvFor(field, keysOf(pointer));
+        const env = envOf(field, tool, pointer);
         // The editor asks for the cursor as the pointer moves, so this is where hovering is seen
         hoverAt(tool, pointer.field, env.hitRadius);
         const target = pressTarget(tool, pointer.field, env);
         if (target.type === "draw") return "crosshair";
-        return shapeCursor(
-            tool.kind,
-            tool.params,
-            tool.marchers.length,
-            target,
-        );
+        return shapeCursor(tool.kind, tool.params, tool.spots, target);
     },
-    drawing: () => drawingOf(shownNow()),
+    drawing: () => glidingSnapshot(shownNow()),
     subscribe: (listener) => {
         const offTool = useShapeToolStore.subscribe(listener);
         const offHover = useSpotHover.subscribe(listener);
+        glideListeners.add(listener);
         return () => {
             offTool();
             offHover();
+            glideListeners.delete(listener);
         };
     },
     // The tool's handles move the shape; the marchers stay put until Place

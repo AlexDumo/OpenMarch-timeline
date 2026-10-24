@@ -1,5 +1,4 @@
 // cspell:words Catmull Yuksel Schaefer Keyser
-import { BezierCurveIcon } from "@phosphor-icons/react";
 import { principalExtremes } from "../geometry/fit";
 import { makePath, type Path, type Segment } from "../geometry/path";
 import {
@@ -103,7 +102,6 @@ export const curveKind: ShapeKind<CurveParams> = {
     id: "curve",
     version: 1,
     label: "Curve",
-    icon: BezierCurveIcon,
     family: "path",
     groups: [SPACING_GROUP],
 
