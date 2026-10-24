@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
-import {
-    boxBlock,
-    boxDistribution,
-    filesOf,
-    ranksOf,
-    type BoxParams,
-} from "../box/boxGeometry";
+import { boxBlock, filesOf, ranksOf, type BoxParams } from "../box/boxGeometry";
 import { fillAhead, shapeSteps, startingParams } from "../command/shapeSteps";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { XY } from "../types";
@@ -46,7 +40,6 @@ describe("the box's steps", () => {
             ["across", "2"],
             ["deep", "2"],
             ["layout", "Full 4 × 3"],
-            ["stagger", "0"],
         ]);
     });
 
@@ -71,7 +64,6 @@ describe("the box's steps", () => {
             "2",
             "2",
             "Full 6 × 2",
-            "0",
         ]);
     });
 
@@ -98,7 +90,6 @@ describe("the box's steps", () => {
             "across",
             "deep",
             "layout",
-            "stagger",
         ]);
         const oneRank = shapeSteps(boxTool, start(), N, env, ["", "12x1"]);
         expect(oneRank.steps.map((s) => s.param.key)).toEqual([
@@ -106,7 +97,6 @@ describe("the box's steps", () => {
             "size",
             "across",
             "layout",
-            "stagger",
         ]);
     });
 });
@@ -206,7 +196,6 @@ describe("the layout step (#387)", () => {
             ["across", "2"],
             ["deep", "2"],
             ["layout", "Short back 6 × 4, 1 short"],
-            ["stagger", "0"],
         ]);
         expect(steps[4]!.param.label).toBe(
             "Layout: Full, Stagger, Rounded, Short back, Notched",
@@ -266,7 +255,6 @@ describe("the layout step (#387)", () => {
             false,
             false,
             false,
-            false,
         ]);
         expect(filesOf(params as BoxParams)).toBe(6);
     });
@@ -275,41 +263,5 @@ describe("the layout step (#387)", () => {
         expect(
             keys(padTool, startingParams(padTool, starts(5), 5, env), 5),
         ).not.toContain("layout");
-    });
-});
-
-describe("the stagger step (#388)", () => {
-    const N = 23;
-    const start = () => startingParams(boxTool, starts(N), N, env) as BoxParams;
-    const typed = (...answers: string[]) =>
-        shapeSteps(boxTool, start(), N, env, ["", "", "", "", "", ...answers]);
-
-    it("comes last, as the signed fraction, and stores it as [p, q]", () => {
-        const { params, steps } = typed("-1/3");
-        expect(steps[5]!.param.key).toBe("stagger");
-        expect(steps[5]!.invalid).toBe(false);
-        expect(boxDistribution(params as BoxParams)).toMatchObject({
-            stagger: [-1, 3],
-        });
-        const again = shapeSteps(boxTool, params, N, env, []).steps;
-        expect(again[5]!.initial).toBe("⅓ left");
-    });
-
-    it("marks more than ½ as not understood", () => {
-        const { params, steps } = typed("2/3");
-        expect(steps[5]!.invalid).toBe(true);
-        expect(boxDistribution(params as BoxParams)).toMatchObject({
-            stagger: [0, 1],
-        });
-    });
-
-    it("isn't asked for Stagger, Rounded or Notched, nor outside Files", () => {
-        const at = (answers: string[]) =>
-            keys(boxTool, start(), N, answers as never);
-        expect(at(["", "", "", "", "stagger 5x5"])).not.toContain("stagger");
-        expect(at(["out"])).not.toContain("stagger");
-        expect(
-            keys(padTool, startingParams(padTool, starts(5), 5, env), 5),
-        ).not.toContain("stagger");
     });
 });

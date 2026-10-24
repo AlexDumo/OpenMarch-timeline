@@ -10,7 +10,6 @@ import { currentShapeField } from "../field/shapeFieldContext";
 import { SaveShapeButton } from "../library/SaveShapeButton";
 import { ModeSwitch } from "../editor/ModeSwitch";
 import { LayoutPicker } from "../editor/LayoutPicker";
-import { StaggerSlider } from "../editor/StaggerSlider";
 import { OutlineGap } from "../editor/OutlineGap";
 import { ReshuffleButton } from "../editor/ReshuffleButton";
 import { CloseUpButton } from "../editor/CloseUpButton";
@@ -25,8 +24,8 @@ const inspectorEnv = () => {
 /**
  * The inspector's way into the shape tool: with marchers selected, a Box button (also B). While
  * the tool is open, what the keys do. With a shape open or a placed one selected, how it is
- * filled (the mode switch, for kinds with more than one mode; the layout picker and the stagger,
- * for a box in Files; Reshuffle for a spread), Close up for a placed shape with holes, and ☆ Save.
+ * filled (the mode switch, for kinds with more than one mode; the layout picker, for a box in
+ * Files; Reshuffle for a spread), Close up for a placed shape with holes, and ☆ Save.
  */
 export function ShapeToolSection() {
     const selected = useSelectedMarchers()?.selectedMarchers ?? [];
@@ -67,7 +66,6 @@ export function ShapeToolSection() {
             )}
             {target && <ModeSwitch target={target} envFor={inspectorEnv} />}
             {target && <LayoutPicker target={target} envFor={inspectorEnv} />}
-            {target && <StaggerSlider target={target} envFor={inspectorEnv} />}
             {target && <OutlineGap target={target} envFor={inspectorEnv} />}
             {target && (
                 <ReshuffleButton
