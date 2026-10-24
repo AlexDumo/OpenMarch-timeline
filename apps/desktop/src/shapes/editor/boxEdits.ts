@@ -31,12 +31,7 @@ import {
 import type { ToolEnv } from "../tool/toolKind";
 import { filesDistribution } from "../distribute/distribution";
 import { layoutOrientations, type LayoutVersion } from "../distribute/layouts";
-import {
-    COUNT_RATE,
-    SPACING_FINE_STEP,
-    SPACING_RATE,
-    scrubValue,
-} from "./scrub";
+import { COUNT_RATE, spacingRate, scrubValue } from "./scrub";
 
 /**
  * What the floating editor's numbers and buttons do to a box (08-shape-system-ux.md, "The floating
@@ -294,8 +289,8 @@ function reorientedGap(p: BoxParams, spots: number): Partial<BoxParams> {
 }
 
 /**
- * A spacing (the box's own `which`) dragged `distance` px for more: ½ step per 8 px, tenths with
- * Alt, from where it started
+ * A spacing (the box's own `which`) dragged `distance` px for more: ½ step per 8 px, hundredths
+ * with Alt, from where it started
  */
 export function scrubSpacing(
     base: BoxParams,
@@ -305,11 +300,7 @@ export function scrubSpacing(
     env: ToolEnv,
 ): BoxParams {
     const was = (which === "across" ? base.across : base.deep) / env.stepPx;
-    const steps = scrubValue(was, distance, 0, {
-        axis: "x",
-        px: SPACING_RATE.px,
-        step: env.snap ? SPACING_RATE.step : SPACING_FINE_STEP,
-    });
+    const steps = scrubValue(was, distance, 0, spacingRate(env.snap, "x"));
     // A drag that ends where it started changes nothing; it doesn't round the value
     if (steps === was) return base;
     return withSpacing(base, which, steps, spots, env);

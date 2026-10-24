@@ -10,6 +10,7 @@ import { useEditorReadiness } from "@/shortcuts/handlers/useEditorReadiness";
 import ShapePreviewIcon from "../preview/ShapePreviewIcon";
 import {
     clickRing,
+    latchRing,
     openRing,
     pointRing,
     releaseRingKey,
@@ -85,17 +86,19 @@ export default function FavoritesRing() {
 
     useActionHandler(
         "openShapeRing",
-        () => {
+        (args) => {
             // R again closes a latched ring
-            if (useRingStore.getState().ring) setRing(null);
-            else
-                setRing(
-                    openRing(
-                        ringCenter(),
-                        performance.now(),
-                        pointer ?? undefined,
-                    ),
-                );
+            if (useRingStore.getState().ring) {
+                setRing(null);
+                return;
+            }
+            const opened = openRing(
+                ringCenter(),
+                performance.now(),
+                pointer ?? undefined,
+            );
+            // From the command palette: latched, as a tap leaves it (#411)
+            setRing(args?.latched === true ? latchRing(opened) : opened);
         },
         {
             enabled: ready,

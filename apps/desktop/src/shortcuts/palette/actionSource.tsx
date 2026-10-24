@@ -119,7 +119,7 @@ export function getActionPaletteItems(
                               (values) => runAction(id, values),
                           ),
                       }
-                    : { run: () => runAction(id) }),
+                    : { run: () => runAction(id, def.paletteArgs) }),
             };
         });
 }
