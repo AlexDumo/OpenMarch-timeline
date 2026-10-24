@@ -4,7 +4,9 @@ import {
     reshuffled,
     type Distribution,
     type DistributionMode,
+    type FilesLayout,
 } from "./distribution";
+import type { LayoutRow, ResolvedLayout } from "./layouts";
 
 /**
  * The mode switch's rules (spec #385), the same for the inspector and the command bar, without
@@ -77,4 +79,42 @@ export function parseMode(
     return (
         modes.find((m) => MODE_LABELS[m].toLowerCase().startsWith(t)) ?? null
     );
+}
+
+/** The layout picker's rows for `kind` at `n` (#387); none for a kind without layouts */
+export function layoutRowsOf(
+    kind: AnyToolKind,
+    n: number,
+): readonly LayoutRow[] {
+    return kind.closed?.layouts?.catalogue(n) ?? [];
+}
+
+/**
+ * The layout a shape is laid out in now, for the picker to mark: null for a kind without layouts
+ * or a shape outside Files
+ */
+export function layoutOf(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+): ResolvedLayout | null {
+    return kind.closed?.layouts?.resolved(params, n) ?? null;
+}
+
+/**
+ * `params` laid out in `layout`, its stagger kept; `params` itself for a kind without layouts or
+ * a shape outside Files
+ */
+export function withLayout(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    layout: FilesLayout,
+    env: ToolEnv,
+): unknown {
+    const closed = kind.closed;
+    if (!closed?.layouts) return params;
+    const d = closed.distribution(params, n);
+    if (d.mode !== "files") return params;
+    return closed.withDistribution(params, n, { ...d, layout }, env);
 }

@@ -190,6 +190,7 @@ describe("applying a saved shape to another selection", () => {
             ["size", expect.any(String)],
             ["across", "3"],
             ["deep", "1½"],
+            ["layout", expect.any(String)],
         ]);
     });
 

@@ -3,6 +3,7 @@ import type { ShapeField } from "../field/shapeField";
 import { useShapeEditorStore } from "../frame/shapeEditorStore";
 import type { XY } from "../types";
 import type { ToolEnv } from "./toolKind";
+import { useLastLayoutStore } from "./lastLayout";
 
 /** How far from a handle a press still takes it, in screen pixels */
 export const HANDLE_REACH_PX = 10;
@@ -39,6 +40,7 @@ export function toolEnvFor(
         },
         hitRadius: HANDLE_REACH_PX / (field.zoom() || 1),
         ratioLocked: editor.ratioLocked,
+        layout: useLastLayoutStore.getState().family,
         pivotSnaps: () => [
             ...field.drawn(field.marchers().map((m) => m.id)).values(),
             ...(spots?.() ?? []),

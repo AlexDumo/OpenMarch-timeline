@@ -1,10 +1,12 @@
 import { resizeCursor } from "../frame/frame";
 import type { ToolEnv, ToolKind } from "../tool/toolKind";
 import { distributionFor, type Distribution } from "../distribute/distribution";
+import { layoutCatalogue, resolveLayout } from "../distribute/layouts";
 import { nearestSides, OUTLINE_MIN } from "../distribute/outline";
 import { BOX_PARAMS } from "./boxParams";
 import { boxRegion, boxShape } from "./boxShape";
 import {
+    boxBlock,
     boxDistribution,
     filesOf,
     grownFromPivot,
@@ -62,6 +64,13 @@ export const boxTool: ToolKind<BoxParams> = {
         region: boxRegion,
         intervals: (params) => ({ across: params.across, deep: params.deep }),
         distribution: boxDistribution,
+        layouts: {
+            catalogue: layoutCatalogue,
+            resolved: (params, n) =>
+                boxDistribution(params).mode === "files"
+                    ? boxBlock(params, n)
+                    : null,
+        },
         startMode: (params, n, mode) =>
             distributionFor(mode, filesOf(params), n),
         withDistribution(params, n, distribution, env) {
@@ -72,14 +81,25 @@ export const boxTool: ToolKind<BoxParams> = {
                 shortRankAt: _shortRankAt,
                 ...rest
             } = params;
-            const next: BoxParams = { ...rest, distribution };
+            // A layout at a width it can't make the count with (a saved shape's family at the
+            // drawn file count) is stored as its nearest version; one whose family can't make
+            // the count at all is kept as asked, Short back standing in (#387)
+            const resolved =
+                distribution.mode === "files"
+                    ? resolveLayout(distribution.layout, n)
+                    : null;
+            const filled =
+                distribution.mode === "files" && resolved?.fellBack === null
+                    ? { ...distribution, layout: resolved.layout }
+                    : distribution;
+            const next: BoxParams = { ...rest, distribution: filled };
             // A new mode resizes the shape: it grows from the pivot
             return grownFromPivot(
                 params,
-                distribution.mode === "files"
-                    ? withFileCount(next, distribution.layout.files)
-                    : distribution.mode === "outline"
-                      ? outlineIn(params, next, n, distribution, env)
+                filled.mode === "files"
+                    ? withFileCount(next, filled.layout.files)
+                    : filled.mode === "outline"
+                      ? outlineIn(params, next, n, filled, env)
                       : next,
                 n,
                 env,

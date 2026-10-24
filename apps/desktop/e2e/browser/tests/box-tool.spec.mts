@@ -75,8 +75,16 @@ async function toScreen(page: Page, p: Point): Promise<Point> {
     };
 }
 
-const shapeOverlay = (page: Page): Promise<FieldTestShapeOverlay | null> =>
-    page.evaluate(() => window.fieldTest!.shapeOverlay!());
+/**
+ * What the shape tool draws once its spots have settled: after a change the marchers glide to
+ * their new spots for about 150 ms (#387), so this waits for the glide to land
+ */
+async function shapeOverlay(page: Page): Promise<FieldTestShapeOverlay | null> {
+    await page.waitForFunction(
+        () => window.fieldTest!.shapeOverlay!()?.gliding !== true,
+    );
+    return page.evaluate(() => window.fieldTest!.shapeOverlay!());
+}
 
 const placedBoxes = (page: Page): Promise<FieldTestPlacedBox[]> =>
     page.evaluate(() => window.fieldTest!.placedBoxes!());
@@ -1218,6 +1226,192 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     await expect.poll(() => onSpots(show, second)).toBe(false);
 });
 
+// The box's layouts (#387, spec #385; owner lab feedback 2026-10-23): the
+// inspector lists Full · Stagger · Rounded · Short back · Notched with live
+// thumbnails, a layout the count can't make greyed in its place with what it
+// needs; a layout menu sits under the chip, and ↻ beside the size turns the box
+// a quarter. Picking a version lays the box out in it, the recipe keeps it, and
+// the next box starts in it.
+
+/** How many spots stand on each line across, back first */
+const rankCounts = (spots: readonly Point[]) => {
+    const by = new Map<number, number>();
+    for (const s of spots) {
+        const y = Math.round(s.y * 100) / 100;
+        by.set(y, (by.get(y) ?? 0) + 1);
+    }
+    return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c);
+};
+
+test("change: the layout picker lays the box out in the version picked, the recipe keeps it, and the next box starts in it", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.evaluate(() =>
+        localStorage.removeItem("openmarch:shapeLastLayout"),
+    );
+    await drawBox(show);
+    const picker = page.getByTestId("shape-layout-picker");
+    await expect(picker).toBeVisible();
+    // 8 marchers: every layout but Notched, which stays in its place greyed
+    // with what would make it
+    await expect(page.getByTestId("shape-layout-row-full")).toBeVisible();
+    await expect(
+        page.getByTestId("shape-layout-notched-missing"),
+    ).toBeDisabled();
+    await expect(page.getByTestId("shape-layout-notched-missing")).toHaveText(
+        "add 2",
+    );
+    const stagger = page.getByTestId("shape-layout-stagger-0");
+    await expect(stagger).toHaveText("3 × 3");
+    await expect(stagger).toHaveAttribute(
+        "title",
+        "Stagger 3 × 3: 3 / 2 / 3, front to back",
+    );
+    await expect(stagger).toHaveAttribute("aria-pressed", "false");
+
+    await stagger.click();
+    await expect(stagger).toHaveAttribute("aria-pressed", "true");
+    const bar = page.getByTestId("shape-tool-readout");
+    await expect(bar.getByTestId("shape-editor-size")).toHaveText("3 × 3");
+    await expect(bar.getByTestId("shape-layout-menu")).toHaveText(/Stagger/);
+    const spots = (await shapeOverlay(page))!.spots;
+    expect(spots).toHaveLength(8);
+    expect(rankCounts(spots)).toEqual([3, 2, 3]);
+
+    await page.keyboard.press("Enter");
+    await expect(bar).toBeHidden();
+    await waitForIdle(page);
+    const [recipe] = await show.query<{ params: string }>(
+        "SELECT params FROM timeline_shape_recipes",
+    );
+    expect(JSON.parse(recipe.params).distribution).toEqual({
+        mode: "files",
+        layout: { family: "stagger", files: 3, byFile: false },
+        stagger: [0, 1],
+    });
+    // Everyone stands on a spot the open box showed
+    await expect
+        .poll(async () =>
+            (await savedPositions(show, 0)).every((p) =>
+                spots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < CLOSE),
+            ),
+        )
+        .toBe(true);
+
+    // The next box starts in the layout picked last
+    await page.keyboard.press("Escape");
+    await drawBox(show);
+    await expect(page.getByTestId("shape-layout-stagger-0")).toHaveAttribute(
+        "aria-pressed",
+        "true",
+    );
+    expect(rankCounts((await shapeOverlay(page))!.spots)).toEqual([3, 2, 3]);
+});
+
+test("change: the layout menu under the chip switches layout, ↻ turns the box a quarter, and undo puts each back", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.evaluate(() =>
+        localStorage.removeItem("openmarch:shapeLastLayout"),
+    );
+    await drawBox(show);
+    const bar = page.getByTestId("shape-tool-readout");
+    const before = (await shapeOverlay(page))!.spots;
+    await bar.getByTestId("shape-layout-menu").click();
+    const menu = page.getByTestId("shape-layout-menu-content");
+    await expect(menu).toBeVisible();
+    // Every layout in its place; Notched greyed with what it needs for 8
+    await expect(
+        menu.getByTestId("shape-layout-menu-row-notched"),
+    ).toBeDisabled();
+    await expect(menu.getByTestId("shape-layout-menu-row-notched")).toHaveText(
+        /add 2/,
+    );
+    // Hovering a layout shows its versions beside the list
+    await menu.getByTestId("shape-layout-menu-row-rounded").hover();
+    await menu.getByTestId("shape-layout-menu-version-rounded-0").click();
+    await expect(menu).toBeHidden();
+    await expect(bar.getByTestId("shape-layout-menu")).toHaveText(/Rounded/);
+    expect(rankCounts((await shapeOverlay(page))!.spots)).toEqual([2, 4, 2]);
+    await expect(bar.getByTestId("shape-editor-size")).toHaveText("4 × 3");
+
+    // ↻ turns it a quarter: the deep version, without the ⋯ row
+    await bar.getByTestId("shape-editor-quarter-turn").click();
+    await expect(bar.getByTestId("shape-editor-size")).toHaveText("3 × 4");
+    expect(rankCounts((await shapeOverlay(page))!.spots)).toEqual([1, 3, 3, 1]);
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(bar.getByTestId("shape-editor-size")).toHaveText("4 × 3");
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.spots)
+        .toEqual(before);
+});
+
+// The size number's − and + (owner lab feedback on #387; the owner picked
+// center + glide in the lab): the box grows about its center without creeping,
+// and the marchers glide to their new spots rather than jump.
+
+const sizeButton = (page: Page, more: boolean) =>
+    page.getByTestId("shape-tool-readout").getByRole("button", {
+        name: more ? "One more across" : "One fewer across",
+    });
+
+test("change: − and + come back to the same spots, so the box doesn't creep", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const before = (await shapeOverlay(page))!.spots;
+    for (const more of [true, true, false, false, false, true]) {
+        await sizeButton(page, more).click();
+    }
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.spots)
+        .toEqual(before);
+});
+
+test.describe("the glide", () => {
+    /** Presses + and reads the drawing 40 ms later, in one go, while a glide would still run */
+    const plusAndPeek = (page: Page) =>
+        page.evaluate(async () => {
+            const plus = [...document.querySelectorAll("button")].find(
+                (b) => b.getAttribute("aria-label") === "One more across",
+            )!;
+            plus.click();
+            await new Promise((r) => setTimeout(r, 40));
+            return window.fieldTest!.shapeOverlay!()!;
+        });
+
+    test("change: after + the marchers slide to their new spots rather than jump", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await drawBox(show);
+        const before = (await shapeOverlay(page))!.spots;
+        const mid = await plusAndPeek(page);
+        expect(mid.gliding).toBe(true);
+        const after = (await shapeOverlay(page))!.spots;
+        expect(after).not.toEqual(before);
+        // Part way: neither where they were nor where they land
+        expect(mid.spots).not.toEqual(after);
+        expect(mid.spots).not.toEqual(before);
+    });
+
+    test("change: with reduced motion asked for, the marchers go straight to their new spots", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await drawBox(show);
+        const mid = await plusAndPeek(page);
+        expect(mid.gliding).toBe(false);
+        expect(mid.spots).toEqual((await shapeOverlay(page))!.spots);
+    });
+});
+
 // The pivot on the field (#350): Cmd/Ctrl-drag from the center dot pulls it
 // out into a yellow crosshair, it snaps to marchers, turns go around it, it is
 // saved with the box, and a double click sends it back to the center.
@@ -1352,6 +1546,11 @@ test("change: / opens the command bar, and Shape › Box asks each number with a
     await answer(page).fill("3");
     await page.keyboard.press("Enter");
     await expect(question(page)).toHaveText(/^Front-to-back/);
+
+    // Last, the layout (#387), as the picker labels it
+    await page.keyboard.press("Enter");
+    await expect(question(page)).toHaveText(/^Layout/);
+    await expect(answer(page)).toHaveValue("Full 4 × 2");
 
     // The show is untouched until the last answer, which places the box as one undo step
     expect(await readout(page)).toBe("4 × 2 · 3 × 2 steps");

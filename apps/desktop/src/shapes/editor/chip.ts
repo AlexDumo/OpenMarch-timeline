@@ -1,3 +1,7 @@
+import { turnShape } from "../frame/gestures";
+import { pivotOf } from "../frame/pivot";
+import { pivotPoint } from "../frame/frame";
+import type { XY } from "../types";
 import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
 
 /** One number in the floating chip, worked out from its kind's declaration */
@@ -46,4 +50,46 @@ export function chipLayout(
         intervals,
         ratioLock: kind.ratioLock === true && intervals.length > 1,
     };
+}
+
+/**
+ * The chip's turn button (owner lab feedback, 2026-10-23): the shape turned a quarter clockwise
+ * about its pivot, so a box's deep versions are a click away without the ⋯ row
+ */
+export function quarterTurn(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    env: ToolEnv,
+): unknown {
+    const { rotation } = kind.frameOf(params, n);
+    return turnShape(
+        kind,
+        params,
+        n,
+        rotation + Math.PI / 2,
+        pivotOf(params),
+        env,
+    );
+}
+
+/** A run of presses on the chip's − and +: the shape the last press made, and where it began */
+export interface SizeRun {
+    readonly params: unknown;
+    readonly anchor: XY;
+}
+
+/**
+ * Where the next press grows from (#387): the run's anchor while the shape is still what the
+ * run's last press made, else the shape's pivot on the field, starting a new run. Pressing from
+ * the anchor rather than the last press's rounded place keeps the shape from creeping.
+ */
+export function sizeRun(
+    run: SizeRun | null,
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+): XY {
+    if (run && run.params === params) return run.anchor;
+    return pivotPoint(kind.frameOf(params, n), pivotOf(params));
 }

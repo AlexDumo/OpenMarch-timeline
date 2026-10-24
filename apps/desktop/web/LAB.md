@@ -71,6 +71,41 @@ pull request unmerged closes it. Its feedback stays either way. The lab adds
 its feedback widget to the page; nothing here knows about it. The manifest format and the lab
 itself are in the `OpenMarch/om-lab` repository.
 
+## Comparing versions
+
+A test can build two or more versions of a behavior into one build, so
+testers try them side by side on the same show instead of in two builds
+(reloading loses a show's edits). List them in the manifest's front matter;
+the first is the one testers start on:
+
+```yaml
+variants:
+  - id: play-on
+    label: A
+    description: What the app does now
+  - id: from-flag
+    label: B
+    description: Space plays from the start flag
+```
+
+The build then shows a **Version** switch in its toolbar (`variants.ts`). It
+sets the URL's `variant` parameter without reloading, so a reload keeps it
+and the feedback (which records the page's URL) says which version was on.
+App code reads the version with `useLabVariant()` or `getLabVariant()` from
+`src/lab/labVariant.ts`, which is `null` with no `variant` in the URL,
+meaning the current behavior:
+
+```ts
+if (getLabVariant() === "from-flag") return playFromStartFlag();
+```
+
+Ask in the questions which version testers preferred and why. Once a version
+wins, build it without the switch.
+
+Locally, point the build at the manifest:
+`LAB_MANIFEST=lab/<id>/experiment.md pnpm run lab:build` (the path is from
+the repository root).
+
 ## Demo shows
 
 `public/demos/` holds the demo `.dots` files, listed in `demos.ts`. To add

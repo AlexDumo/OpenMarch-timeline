@@ -2,13 +2,14 @@ import {
     onField,
     scrubSize,
     scrubSpacing,
+    stepSize,
     withFieldCount,
     withSpacing,
 } from "../editor/boxEdits";
 import { formatSteps } from "../editor/format";
 import { parseSize, parseSteps, scrubDistance } from "../editor/scrub";
 import type { ToolParam } from "../tool/toolKind";
-import { isSpread, shortBy, type BoxParams } from "./boxGeometry";
+import { boxBlock, isSpread, shortBy, type BoxParams } from "./boxGeometry";
 
 /**
  * The box's numbers (#344, "The kind contract"; 08-shape-system-ux.md, "The floating editor"):
@@ -31,10 +32,7 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
             const field = onField(p, n);
             return `${field.across} × ${field.deep}`;
         },
-        note(p, n) {
-            const short = shortBy(p, n);
-            return short > 0 ? `${short} short` : null;
-        },
+        note: sizeNote,
         type(p, n, text, env) {
             const size = parseSize(text);
             if (!size) return null;
@@ -54,16 +52,28 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
         stepper: {
             less: "One fewer across",
             more: "One more across",
-            by(p, n, by, env) {
-                const across = onField(p, n).across + by;
-                if (across < 1 || across > n) return null;
-                return withFieldCount(p, n, "across", across, env);
-            },
+            by: stepSize,
         },
     },
     spacing("across"),
     spacing("deep"),
 ];
+
+/**
+ * The note after the box's size: "1 short" for Short back. Other layouts leave nothing out of
+ * their block by accident, so they have none; Short back standing in for a layout that can't make
+ * the count shows that layout greyed in the chip's layout menu instead (owner lab feedback,
+ * 2026-10-23).
+ */
+export function sizeNote(p: BoxParams, n: number): string | null {
+    // A spread has no ranks to be short
+    if (isSpread(p)) return null;
+    const block = boxBlock(p, n);
+    if (block.fellBack) return null;
+    if (block.layout.family !== "shortBack") return null;
+    const short = shortBy(p, n);
+    return short > 0 ? `${short} short` : null;
+}
 
 /** A spacing on the field: side to side (across) or front to back (deep) */
 function spacing(way: "across" | "deep"): ToolParam<BoxParams> {

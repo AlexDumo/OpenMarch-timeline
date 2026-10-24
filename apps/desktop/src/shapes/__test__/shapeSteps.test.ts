@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
-import { filesOf, ranksOf, type BoxParams } from "../box/boxGeometry";
+import { boxBlock, filesOf, ranksOf, type BoxParams } from "../box/boxGeometry";
 import { fillAhead, shapeSteps, startingParams } from "../command/shapeSteps";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { XY } from "../types";
@@ -39,6 +39,7 @@ describe("the box's steps", () => {
             ["size", "4 × 3"],
             ["across", "2"],
             ["deep", "2"],
+            ["layout", "Full 4 × 3"],
         ]);
     });
 
@@ -62,6 +63,7 @@ describe("the box's steps", () => {
             "4 × 3",
             "2",
             "2",
+            "Full 6 × 2",
         ]);
     });
 
@@ -87,12 +89,14 @@ describe("the box's steps", () => {
             "size",
             "across",
             "deep",
+            "layout",
         ]);
         const oneRank = shapeSteps(boxTool, start(), N, env, ["", "12x1"]);
         expect(oneRank.steps.map((s) => s.param.key)).toEqual([
             "mode",
             "size",
             "across",
+            "layout",
         ]);
     });
 });
@@ -177,5 +181,87 @@ describe("the mode step (#386)", () => {
         expect(
             keys(rowTool, startingParams(rowTool, starts(4), 4, env), 4),
         ).not.toContain("mode");
+    });
+});
+
+describe("the layout step (#387)", () => {
+    const N = 23;
+    const start = () => startingParams(boxTool, starts(N), N, env) as BoxParams;
+
+    it("comes after the box's numbers, shown as the picker labels it", () => {
+        const { steps } = shapeSteps(boxTool, start(), N, env, []);
+        expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
+            ["mode", "Files"],
+            ["size", "6 × 4"],
+            ["across", "2"],
+            ["deep", "2"],
+            ["layout", "Short back 6 × 4, 1 short"],
+        ]);
+        expect(steps[4]!.param.label).toBe(
+            "Layout: Full, Stagger, Rounded, Short back, Notched",
+        );
+    });
+
+    it("lays the box out in the layout typed, by the start of its name, nearest its proportions", () => {
+        const { params, steps } = shapeSteps(boxTool, start(), N, env, [
+            "",
+            "",
+            "",
+            "",
+            "stag",
+        ]);
+        expect(steps[4]!.invalid).toBe(false);
+        expect(boxBlock(params as BoxParams, N).lines).toEqual([5, 4, 5, 4, 5]);
+    });
+
+    it("takes a layout with its block, or a block of the box's layout", () => {
+        const typed = (answer: string) =>
+            shapeSteps(boxTool, start(), N, env, ["", "", "", "", answer]);
+        const wide = typed("stagger 8x3").params as BoxParams;
+        expect(boxBlock(wide, N).lines).toEqual([8, 7, 8]);
+        const short = typed("6 × 4").params as BoxParams;
+        expect(boxBlock(short, N).layout).toMatchObject({
+            family: "shortBack",
+            files: 6,
+        });
+        expect(typed("short back").steps[4]!.invalid).toBe(false);
+    });
+
+    it("marks a layout the count can't make, or a block it has no version of, as not understood", () => {
+        const base = start();
+        for (const answer of ["full", "stagger 6x4", "hexagon"]) {
+            const { params, steps } = shapeSteps(boxTool, base, N, env, [
+                "",
+                "",
+                "",
+                "",
+                answer,
+            ]);
+            expect(steps[4]!.invalid).toBe(true);
+            expect(params).toBe(base);
+        }
+    });
+
+    it("leaves a one-liner's size and spacing where they were", () => {
+        // The mode step left as it is
+        const { params, steps } = shapeSteps(boxTool, start(), N, env, [
+            "",
+            "6x4",
+            "2½",
+        ]);
+        expect(steps.map((s) => s.invalid)).toEqual([
+            false,
+            false,
+            false,
+            false,
+            false,
+        ]);
+        expect(filesOf(params as BoxParams)).toBe(6);
+    });
+
+    it("is hidden for a kind without layouts", () => {
+        expect(
+            keys(padTool, startingParams(padTool, starts(5), 5, env), 5),
+        ).not.toContain("layout");
     });
 });

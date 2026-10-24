@@ -1,3 +1,5 @@
+import { LAYOUT_LABELS } from "../distribute/distribution";
+import { layoutOf } from "../distribute/modes";
 import {
     displayedBeat,
     useTimelineSelectionStore,
@@ -16,7 +18,7 @@ export function useDrawnOnPage(box: PlacedBox | null): string | null {
 
 /**
  * A placed shape's numbers, from those its kind declares, as the floating editor shows them
- * (across is side to side however it's turned): its counts ("5 × 4"), its intervals ("2", or
+ * (across is side to side however it's turned): its counts ("5 × 4", or "Stagger 3 × 3"), its intervals ("2", or
  * "2 × 1½" when they differ; null for a kind without), its notes ("1 short") and how many of its
  * spots are holes members left
  */
@@ -27,6 +29,10 @@ export function placedNumbers(box: PlacedBox, stepPx: number) {
     const counts = shown
         .filter((p) => p.unit === "count")
         .map((p) => p.display(params, spots, stepPx));
+    // A layout other than Short back is named first, as the picker names it (#387)
+    const family = layoutOf(kind, params, spots)?.layout.family;
+    if (family && family !== "shortBack" && counts.length > 0)
+        counts[0] = `${LAYOUT_LABELS[family]} ${counts[0]}`;
     const intervals = kind.params
         .filter((p) => p.interval && p.value)
         .map((p) => formatSteps(p.value!(params, spots, stepPx)));

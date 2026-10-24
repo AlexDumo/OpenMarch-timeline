@@ -26,6 +26,7 @@ import {
     type ToolState,
 } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
+import { SpotGlide } from "./spotGlide";
 
 /**
  * The spot the pointer rests on, with who will stand there, on shapes too big to label every spot
@@ -129,6 +130,90 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
     };
 });
 
+/**
+ * The open shape's marchers glide to their new spots when it changes without a gesture (a press
+ * of − or +, a layout picked, a quarter turn): the owner picked it in the lab (#387)
+ */
+const glide = new SpotGlide();
+const glideListeners = new Set<() => void>();
+let gliding = false;
+/** Counts the glide's frames: the overlay reads the drawing as a snapshot, so one per frame */
+let glideStamp = 0;
+let glideCache: {
+    shown: Shown | null;
+    stamp: number;
+    drawing: ReturnType<typeof drawingOf>;
+} | null = null;
+
+/** Redraws every frame while a glide runs, then once more where it lands */
+function glideFrame() {
+    glideStamp++;
+    glideListeners.forEach((listener) => listener());
+    if (glide.active(performance.now())) requestAnimationFrame(glideFrame);
+    else {
+        gliding = false;
+        glideStamp++;
+        glideListeners.forEach((listener) => listener());
+    }
+}
+
+/** {@link glidingDrawing}, worked out once per state and glide frame */
+function glidingSnapshot(shown: Shown | null) {
+    if (glideCache?.shown !== shown || glideCache.stamp !== glideStamp)
+        glideCache = {
+            shown,
+            stamp: glideStamp,
+            drawing: glidingDrawing(shown),
+        };
+    return glideCache.drawing;
+}
+
+/** People who ask their system for less motion get no glide, as the timeline's follow does */
+const reducedMotion = () =>
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+
+/**
+ * The drawing, with each marcher's spot, walk and label part way to where it's going while a
+ * glide runs: a change without a gesture slides, not jumps
+ */
+function glidingDrawing(shown: Shown | null) {
+    const drawing = drawingOf(shown);
+    if (!shown) return drawing;
+    const { tool } = shown;
+    const field = currentShapeField();
+    if (!drawing || tool.params === null || !field || reducedMotion())
+        return drawing;
+    const targets = targetsOf(tool, shapeContextFor(field));
+    const now = performance.now();
+    glide.update(
+        tool.params,
+        tool.gesture !== null && tool.gesture !== undefined,
+        targets,
+        now,
+    );
+    const at = glide.positions(now);
+    if (!at) return drawing;
+    if (!gliding) {
+        gliding = true;
+        requestAnimationFrame(glideFrame);
+    }
+    const shownAt = (t: { id: number; to: XY }) => at.get(t.id) ?? t.to;
+    const labels = drawing.labels ?? [];
+    return {
+        ...drawing,
+        gliding: true,
+        spots:
+            drawing.spots.length === targets.length
+                ? targets.map(shownAt)
+                : drawing.spots,
+        walks: targets.map((t) => ({ from: t.from, to: shownAt(t) })),
+        labels:
+            labels.length === targets.length
+                ? labels.map((l, i) => ({ ...l, at: shownAt(targets[i]!) }))
+                : labels,
+    };
+}
+
 /** The env for a pointer event: a dragged pivot also snaps to the open shape's spots (#350) */
 const envOf = (field: ShapeField, tool: ToolState, pointer: FieldPointer) =>
     toolEnvFor(field, keysOf(pointer), () =>
@@ -174,13 +259,15 @@ export const shapeToolMode: FieldMode = {
         if (target.type === "draw") return "crosshair";
         return shapeCursor(tool.kind, tool.params, tool.spots, target);
     },
-    drawing: () => drawingOf(shownNow()),
+    drawing: () => glidingSnapshot(shownNow()),
     subscribe: (listener) => {
         const offTool = useShapeToolStore.subscribe(listener);
         const offHover = useSpotHover.subscribe(listener);
+        glideListeners.add(listener);
         return () => {
             offTool();
             offHover();
+            glideListeners.delete(listener);
         };
     },
     // The tool's handles move the shape; the marchers stay put until Place

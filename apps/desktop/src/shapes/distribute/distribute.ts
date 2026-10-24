@@ -5,7 +5,8 @@ import type {
     OutlineDistribution,
     SpreadDistribution,
 } from "./distribution";
-import { rankOffset } from "./distribution";
+import { NO_STAGGER, rankOffset, takesStagger } from "./distribution";
+import { resolveLayout } from "./layouts";
 import {
     nearestSides,
     OUTLINE_MIN,
@@ -157,20 +158,17 @@ export interface LayoutLines {
 }
 
 /**
- * Short back: full lines of `files`, the back one short. One line holds them all when there are
- * fewer than `files`, centered in the block's width.
+ * A layout's lines for `n` (#387): the version it names, or, when the count has changed, its
+ * family's nearest version, or Short back (`layouts.ts`, `resolveLayout`). Short back is full
+ * lines of `files`, the back one short; one line holds them all when there are fewer than
+ * `files`, centered in the block's width.
  */
 export function layoutLines(
     layout: FilesDistribution["layout"],
     n: number,
 ): LayoutLines {
-    const width = Math.max(1, Math.round(layout.files));
-    const count = Math.max(1, n);
-    const ranks = Math.ceil(count / width);
-    const lines = Array.from({ length: ranks }, (_, i) =>
-        i === 0 ? count - (ranks - 1) * width : width,
-    );
-    return { width, lines };
+    const { lines } = resolveLayout(layout, n);
+    return { width: Math.max(...lines), lines };
 }
 
 /**
@@ -184,8 +182,10 @@ function filesSpots(
     across: number,
     deep: number,
 ): FrameSpot[] {
-    const { width, lines } = layoutLines(d.layout, n);
-    const byFile = d.layout.byFile;
+    const { layout, lines } = resolveLayout(d.layout, n);
+    const width = Math.max(...lines);
+    const byFile = layout.byFile;
+    const stagger = takesStagger(layout.family) ? d.stagger : NO_STAGGER;
     const along = byFile ? deep : across;
     const apart = byFile ? across : deep;
     const count = lines.length;
@@ -194,7 +194,7 @@ function filesSpots(
         const inLine = lines[line]!;
         const lead = (width - inLine) / 2;
         // Rank r counts from the front, the stagger's own rank 0; turned, file 0 is the left one
-        const offset = rankOffset(byFile ? line : count - 1 - line, d.stagger);
+        const offset = rankOffset(byFile ? line : count - 1 - line, stagger);
         const v = (line - (count - 1) / 2) * apart;
         for (let i = 0; i < inLine; i++) {
             const file = lead + i;
