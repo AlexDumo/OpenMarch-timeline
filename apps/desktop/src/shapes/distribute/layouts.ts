@@ -205,9 +205,9 @@ export function isVersionAnyTurn(
     return shapeKey(lines, byFile) === key || turnedKey(lines, byFile) === key;
 }
 
-/** Within 3:1 of square: the long side under three times the short one */
+/** Within 3:1 of square: the long side at most three times the short one */
 const nearSquare = (v: { across: number; deep: number }) =>
-    Math.max(v.across, v.deep) < 3 * Math.min(v.across, v.deep);
+    Math.max(v.across, v.deep) <= 3 * Math.min(v.across, v.deep);
 
 /**
  * No lonely marchers: a short line keeps at least 2, and Short back's at least a third of a full

@@ -6,7 +6,7 @@ import {
     type DistributionMode,
     type FilesLayout,
 } from "./distribution";
-import type { LayoutRow, ResolvedLayout } from "./layouts";
+import type { ResolvedLayout } from "./layouts";
 
 /**
  * The mode switch's rules (spec #385), the same for the inspector and the command bar, without
@@ -79,14 +79,6 @@ export function parseMode(
     return (
         modes.find((m) => MODE_LABELS[m].toLowerCase().startsWith(t)) ?? null
     );
-}
-
-/** The layout picker's rows for `kind` at `n` (#387); none for a kind without layouts */
-export function layoutRowsOf(
-    kind: AnyToolKind,
-    n: number,
-): readonly LayoutRow[] {
-    return kind.closed?.layouts?.catalogue(n) ?? [];
 }
 
 /**

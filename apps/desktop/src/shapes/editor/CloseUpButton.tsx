@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import tolgee from "@/global/singletons/Tolgee";
 import { ArrowsInIcon } from "@phosphor-icons/react";
 import type { ShapeEditTarget } from "./editTargets";
 import { keepFocus } from "./keepFocus";
@@ -22,14 +23,18 @@ export function CloseUpButton({
     return (
         <button
             type="button"
-            title={`Close up: fill the ${target.empty} empty ${target.empty === 1 ? "spot" : "spots"} with the marchers left`}
+            title={tolgee.t(
+                "shapes.edit.closeUp.title",
+                "Close up: fill the {count, plural, one {# empty spot} other {# empty spots}} with the marchers left",
+                { count: target.empty },
+            )}
             onPointerDown={keepFocus}
             onClick={closeUp}
             data-testid={testId}
             className={clsx("flex items-center gap-4", className)}
         >
             <ArrowsInIcon size={14} />
-            Close up
+            {tolgee.t("shapes.edit.closeUp.label", "Close up")}
         </button>
     );
 }

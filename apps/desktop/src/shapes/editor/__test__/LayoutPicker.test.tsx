@@ -77,7 +77,7 @@ describe("the layout picker", () => {
             "shape-layout-row-shortBack",
             "shape-layout-row-notched",
         ]);
-        expect(labelsIn("stagger")).toEqual(["8 × 3", "5 × 5"]);
+        expect(labelsIn("stagger")).toEqual(["8 × 3", "5 × 5", "3 × 9"]);
         expect(screen.queryByText(/Not for/)).toBeNull();
     });
 
@@ -101,7 +101,7 @@ describe("the layout picker", () => {
             "Stagger 5 × 5: 5 / 4 / 5 / 4 / 5, front to back",
         );
         // Drawn square, 23 is Short back 6 × 4
-        expect(screen.getByTestId("shape-layout-shortBack-1")).toHaveAttribute(
+        expect(screen.getByTestId("shape-layout-shortBack-2")).toHaveAttribute(
             "aria-pressed",
             "true",
         );
@@ -199,11 +199,18 @@ describe("the chip's layout menu", () => {
         fireEvent.pointerEnter(
             within(content).getByTestId("shape-layout-menu-row-stagger"),
         );
-        expect(versions()).toEqual(["Stagger 8 × 3", "Stagger 5 × 5"]);
+        expect(versions()).toEqual([
+            "Stagger 8 × 3",
+            "Stagger 5 × 5",
+            "Stagger 3 × 9",
+        ]);
         fireEvent.click(
             within(content).getByTestId("shape-layout-menu-expand-rounded"),
         );
-        expect(versions()).toEqual(["Rounded 5 × 5 staggered"]);
+        expect(versions()).toEqual([
+            "Rounded 9 × 3 straight",
+            "Rounded 5 × 5 staggered",
+        ]);
     });
 
     it("lays the box out in a version picked, and closes", () => {
