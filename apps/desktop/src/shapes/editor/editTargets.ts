@@ -23,7 +23,7 @@ import {
 } from "../tool/toolMachine";
 import {
     updateTool,
-    useShapeAway,
+    useShapeHidden,
     useShapeToolStore,
 } from "../tool/shapeToolStore";
 import type { AnyToolKind } from "../tool/toolKind";
@@ -69,12 +69,12 @@ const withField = (run: (ctx: ReturnType<typeof shapeContextFor>) => void) => {
 };
 
 /**
- * The open tool's shape, or null with none open, none drawn yet, or the timeline away from its
- * moment (#416), where it is hidden
+ * The open tool's shape, or null with none open, none drawn yet, or the shape waiting out of
+ * sight (#416, `useShapeHidden`)
  */
 export function useToolEditTarget(): ShapeEditTarget | null {
     const tool = useShapeToolStore((s) => s.tool);
-    const away = useShapeAway();
+    const away = useShapeHidden();
     const place = useApplyShape();
     return useMemo(() => {
         if (!tool || tool.params === null || away) return null;

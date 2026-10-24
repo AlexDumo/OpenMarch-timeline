@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { isVisualsView, useIsVisualsView } from "@/stores/WorkspaceViewStore";
+import { usePreviewModeStore } from "@/stores/PreviewModeStore";
 import type { ToolState } from "./toolMachine";
 import { isAwayFrom, momentOf, type ShapeMoment } from "./shapeMoment";
 
@@ -8,9 +10,8 @@ import { isAwayFrom, momentOf, type ShapeMoment } from "./shapeMoment";
  * The open shape tool, if any. Every change goes through the pure functions in `toolMachine.ts`;
  * this store only holds the result so the canvas, the readout and the keys see the same state.
  *
- * `openedAt` is what the edit window was when the tool opened: the shape is placed there, even
- * from another moment (`shapeLeave.ts`). `moment` is where the timeline was then (#416): away
- * from it the shape is hidden behind a chip that goes back. `discarded` is the shape Escape just
+ * `openedAt` is what the edit window was when the tool opened. `moment` is where the timeline was
+ * then (#416): away from it the shape is hidden behind a chip that goes back. `discarded` is the shape Escape just
  * threw away, which undo can still bring back.
  */
 export const useShapeToolStore = create<{
@@ -64,4 +65,28 @@ export function useShapeAway(): boolean {
     const moment = useShapeToolStore((s) => (s.tool ? s.moment : null));
     const key = useTimelineSelectionStore((s) => momentOf(s).key);
     return moment !== null && key !== moment.key;
+}
+
+/**
+ * Whether a shape is open but waiting out of sight (#416): away from its moment, while the show
+ * plays, or in Visuals or Preview. Nothing acts on it then; it shows again once that ends.
+ */
+export function isShapeHidden(): boolean {
+    if (!useShapeToolStore.getState().tool) return false;
+    return (
+        isShapeAway() ||
+        useTimelineSelectionStore.getState().playback !== null ||
+        isVisualsView() ||
+        usePreviewModeStore.getState().isPreview
+    );
+}
+
+/** {@link isShapeHidden} for components */
+export function useShapeHidden(): boolean {
+    const open = useShapeToolStore((s) => s.tool !== null);
+    const away = useShapeAway();
+    const playing = useTimelineSelectionStore((s) => s.playback !== null);
+    const visuals = useIsVisualsView();
+    const preview = usePreviewModeStore((s) => s.isPreview);
+    return open && (away || playing || visuals || preview);
 }

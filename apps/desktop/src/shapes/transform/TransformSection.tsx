@@ -33,7 +33,7 @@ import { parseDegrees, scrubDistance } from "../editor/scrub";
 import { ScrubNumber, type ScrubMove } from "../editor/ScrubNumber";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { ToolEnv } from "../tool/toolKind";
-import { useShapeAway, useShapeToolStore } from "../tool/shapeToolStore";
+import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { flipSelection, selectionPivot } from "./selectionTransform";
 
 /**
@@ -42,15 +42,15 @@ import { flipSelection, selectionPivot } from "./selectionTransform";
  * For a shape (the open one, or a selected placed one) it also scales by interval, half a step
  * per − or +, never by a percentage; the shape keeps its turn and flip in its recipe. For a plain
  * selection only positions change: no scale, no recipe. The same in Basic and Expert. Hidden
- * while the open shape is away from its moment (#416).
+ * while the open shape waits out of sight (#416).
  */
 export function TransformSection() {
     const selected = useSelectedMarchers()?.selectedMarchers ?? [];
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
-    const away = useShapeAway();
+    const away = useShapeHidden();
     const tool = useToolEditTarget();
     const placed = usePlacedEditTarget();
-    // Away from the open shape's moment (#416) it is hidden, and the selection is its marchers
+    // The open shape is waiting out of sight (#416): nothing here acts on it
     if (toolOpen && away) return null;
     // A kind armed with nothing drawn yet has no shape: the selection's own controls show
     const target = toolOpen ? tool : placed;

@@ -563,8 +563,9 @@ test("change: Escape while typing a number cancels only the number", async ({
 
 // Option B (#416): moving around the timeline keeps an open shape open, tied
 // to the moment it was drawn at. Away from it the shape and its editor hide
-// behind a chip with Go back; Enter places it at its own moment, Escape
-// discards it. Playback, a new selection and Visuals still place it.
+// behind a chip with Go back. Only Enter or Place places it (owner lab
+// feedback): Enter and Escape act only on a shape you can see, playback and
+// Visuals hide it until they end, and a new selection leaves it open.
 
 const awayChip = (page: Page) => page.getByTestId("shape-away-chip");
 
@@ -622,33 +623,7 @@ test("change: scrubbing, page keys and timeline clicks keep an open box open; aw
     expect(await undoSteps(show)).toBe(steps);
 });
 
-test("change: Enter away from an open box places it at its own moment as one undo step, and the playhead stays", async ({
-    show,
-}) => {
-    const { page } = show;
-    const steps = await undoSteps(show);
-    await drawBox(show);
-    const { spots } = await openBox(page);
-    const home = await page.evaluate(() => window.fieldTest!.pageId());
-    await page.keyboard.press("Shift+E");
-    await expect(awayChip(page)).toBeVisible();
-    const away = await page.evaluate(() => window.fieldTest!.pageId());
-    expect(away).not.toBe(home);
-
-    await page.keyboard.press("Enter");
-    await expect(awayChip(page)).toBeHidden();
-    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
-    await expect.poll(() => onSpots(show, spots)).toBe(true);
-    await waitForIdle(page);
-    expect(await undoSteps(show)).toBe(steps + 1);
-    expect(await page.evaluate(() => window.fieldTest!.pageId())).toBe(away);
-    await expect(toasts(page)).toHaveCount(0);
-
-    await page.keyboard.press("ControlOrMeta+z");
-    await expect.poll(() => savedPositions(show, 0)).toEqual(asPositions(HOME));
-});
-
-test("change: Escape away from an open box discards it, and undo right after brings it back as it was", async ({
+test("change: away from an open box, Enter and Escape leave it alone; back at its moment Enter places it as one undo step", async ({
     show,
 }) => {
     const { page } = show;
@@ -658,42 +633,53 @@ test("change: Escape away from an open box discards it, and undo right after bri
     await page.keyboard.press("Shift+E");
     await expect(awayChip(page)).toBeVisible();
 
+    await page.keyboard.press("Enter");
     await page.keyboard.press("Escape");
-    await expect(awayChip(page)).toBeHidden();
-    await expect(toasts(page)).toHaveCount(0);
-    await page.keyboard.press("ControlOrMeta+z");
+    await waitForIdle(page);
     await expect(awayChip(page)).toBeVisible();
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    expect(await undoSteps(show)).toBe(steps);
+
     await awayChip(page).getByRole("button", { name: "Go back" }).click();
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
     expect(await openBox(page)).toEqual(before);
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(() => onSpots(show, before.spots)).toBe(true);
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(steps + 1);
+    await expect(toasts(page)).toHaveCount(0);
+});
+
+test("change: playing hides an open box until it stops, and Visuals until the Editor is back; neither places it", async ({
+    show,
+}) => {
+    const { page } = show;
+    const steps = await undoSteps(show);
+    await drawBox(show);
+    const before = await openBox(page);
+
+    await page.keyboard.press("Space");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect(awayChip(page)).toBeHidden();
+    // Stopping goes back to where Play was pressed: the box's moment
+    await page.keyboard.press("Space");
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await openBox(page)).toEqual(before);
+
+    await page.getByTestId("workspace-view-visuals").click();
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect(awayChip(page)).toBeHidden();
+    await page.getByTestId("workspace-view-editor").click();
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await openBox(page)).toEqual(before);
+
+    await waitForIdle(page);
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
     expect(await undoSteps(show)).toBe(steps);
 });
 
-for (const [what, leave] of [
-    ["playing", (page: Page) => page.keyboard.press("Space")],
-    [
-        "switching to Visuals",
-        (page: Page) => page.getByTestId("workspace-view-visuals").click(),
-    ],
-] as const)
-    test(`change: ${what} with a box open still places it where it was drawn as one undo step, with no toast`, async ({
-        show,
-    }) => {
-        const { page } = show;
-        const steps = await undoSteps(show);
-        await drawBox(show);
-        const { spots } = await openBox(page);
-        await leave(page);
-        await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
-        await expect(awayChip(page)).toBeHidden();
-        await expect.poll(() => onSpots(show, spots)).toBe(true);
-        await waitForIdle(page);
-        expect(await undoSteps(show)).toBe(steps + 1);
-        await expect(toasts(page)).toHaveCount(0);
-    });
-
-test("change: changing the selection with a box open places it as one undo step, with no toast", async ({
+test("change: changing the selection leaves an open box open for its own marchers, and Enter places only them", async ({
     show,
 }) => {
     const { page } = show;
@@ -719,6 +705,12 @@ test("change: changing the selection with a box open places it as one undo step,
     const spots = (await shapeOverlay(page))!.spots;
 
     await selectAll(page);
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    await waitForIdle(page);
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    expect((await shapeOverlay(page))!.spots).toEqual(spots);
+
+    await page.keyboard.press("Enter");
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
     const placed = async () =>
         (await savedPositions(show, 0))
@@ -733,10 +725,6 @@ test("change: changing the selection with a box open places it as one undo step,
         asPositions(HOME).filter((p) => p.id > 2),
     );
     expect(await undoSteps(show)).toBe(steps + 1);
-    await expect(toasts(page)).toHaveCount(0);
-
-    await page.keyboard.press("ControlOrMeta+z");
-    await expect.poll(() => savedPositions(show, 0)).toEqual(asPositions(HOME));
 });
 
 test("change: the rotation is a number in ⋯ you type, and Tab goes from number to number", async ({

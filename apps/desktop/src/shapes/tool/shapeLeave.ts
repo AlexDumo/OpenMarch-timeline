@@ -1,36 +1,14 @@
 import { cancelGesture } from "./toolMachine";
-import {
-    closeShapeTool,
-    useShapeToolStore,
-    type OpenShape,
-} from "./shapeToolStore";
+import { closeShapeTool, useShapeToolStore } from "./shapeToolStore";
 
 /**
- * How an open shape ends without Enter (spec #344, "Leaving"):
+ * How an open shape ends without Enter (spec #344, "Leaving"; #416):
  *
- * - The group moves on or the show plays (a selection change, playback, Visuals, isolating a
- *   move): the shape is placed where it was drawn, as one undo step, with no toast. Nothing
- *   drawn is lost. Moving around the timeline doesn't end it (#416, `shapeMoment.ts`).
+ * - Nothing else places it. Moving around the timeline, playing, Visuals and a new selection
+ *   leave it open; while it can't be seen it waits (`isShapeHidden`) and nothing acts on it.
  * - Escape: the shape is discarded, and that is an undo step of its own: undo right after it
  *   brings the shape back with its numbers, who goes where and its own history.
- *
- * Placing itself is the host's place function, passed in.
  */
-
-/** Places `tool` at the edit window it opened at */
-export type PlaceShape = (
-    tool: OpenShape["tool"],
-    openedAt: OpenShape["openedAt"],
-) => Promise<void>;
-
-/** Closes the open tool and places its shape, if one was drawn; a drag under way is dropped */
-export function leaveShapeTool(place: PlaceShape): void {
-    const { tool, openedAt } = useShapeToolStore.getState();
-    if (!tool) return;
-    closeShapeTool();
-    const settled = cancelGesture(tool);
-    if (settled.params !== null) void place(settled, openedAt);
-}
 
 /** Escape: closes the open tool, placing nothing, and keeps its shape for undo */
 export function discardShapeTool(): void {

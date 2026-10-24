@@ -32,7 +32,7 @@ export function ShapeToolSection() {
     const selected = useSelectedMarchers()?.selectedMarchers ?? [];
     const tool = useShapeToolStore((s) => s.tool);
     const moment = useShapeToolStore((s) => s.moment);
-    const away = useShapeAway();
+    const away = useShapeAway() && moment !== null;
     // The open shape, or the selected placed one, which ☆ Save keeps (#353)
     const open = useToolEditTarget();
     const placed = usePlacedEditTarget();
@@ -44,8 +44,8 @@ export function ShapeToolSection() {
             <h5 className="text-h5">Shapes</h5>
             {tool ? (
                 <p className="text-sub text-text/80">
-                    {away && moment
-                        ? `The shape is open at ${momentLabel(moment)}. Go back to edit it; Enter places it there, Esc cancels.`
+                    {away
+                        ? `The shape is open at ${momentLabel(moment)}. Go back to edit or place it.`
                         : tool.params === null
                           ? `Drag on the field to draw a ${tool.kind.shape.label.toLowerCase()}.`
                           : "Drag a handle to resize it, the knob to turn it, or inside to move it. Enter places the marchers, Esc cancels."}

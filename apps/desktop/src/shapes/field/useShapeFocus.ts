@@ -1,17 +1,17 @@
 import { useEffect } from "react";
 import type { FieldDimming } from "@/field/three/fieldDimming";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { useShapeAway, useShapeToolStore } from "../tool/shapeToolStore";
+import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 
 /**
  * Fades everyone who isn't in the open shape (08-shape-system-ux.md, "Marcher styling"): while
  * it's open, or with the View tab's "Fade only while drawing", only while a drag draws it. A
- * selected placed shape fades nobody: selecting one is frequent. Away from the shape's moment
- * (#416) it is hidden, and fades nobody either.
+ * selected placed shape fades nobody: selecting one is frequent. A shape waiting out of
+ * sight (#416, `useShapeHidden`) fades nobody either.
  */
 export function useShapeFocus(dimming: FieldDimming): void {
     const focus = useUiSettingsStore((s) => s.uiSettings.shapeFocus ?? "rest");
-    const away = useShapeAway();
+    const away = useShapeHidden();
     const shapeMembers = useShapeToolStore((s) => {
         const tool = s.tool;
         if (!tool) return null;

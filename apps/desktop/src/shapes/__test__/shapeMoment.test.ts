@@ -1,17 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
+import { useWorkspaceViewStore } from "@/stores/WorkspaceViewStore";
+import { useEditorModeStore } from "@/stores/EditorModeStore";
+import { usePreviewModeStore } from "@/stores/PreviewModeStore";
 import { boxTool } from "../box/boxTool";
 import { openTool } from "../tool/toolMachine";
 import {
     goBackTo,
     isAwayFrom,
-    isolationChangedSince,
     momentLabel,
     momentOf,
 } from "../tool/shapeMoment";
 import {
     closeShapeTool,
     isShapeAway,
+    isShapeHidden,
     openShapeTool,
     useShapeToolStore,
 } from "../tool/shapeToolStore";
@@ -97,17 +100,32 @@ describe("an open shape's moment (#416)", () => {
         expect(momentLabel(momentOf())).toBe("count 12");
     });
 
-    it("isolating a move is a change of isolation, not only of moment", () => {
+    it("isolating a move is away too, and Go back comes back out of it", () => {
+        store().setStoredTimelines([
+            { id: 7, start: 9, end: 17, marcherIds: new Set([1]) },
+        ]);
+        store().selectRange(9, 12);
+        const moment = momentOf();
+        store().isolate(7);
+        expect(isAwayFrom(moment)).toBe(true);
+        goBackTo(moment);
+        expect(store().isolation).toBeNull();
+        expect(isAwayFrom(moment)).toBe(false);
+    });
+
+    it("a shape drawn in isolation goes back into it", () => {
         store().setStoredTimelines([
             { id: 7, start: 9, end: 17, marcherIds: new Set([1]) },
         ]);
         store().selectRange(9, 17);
-        const moment = momentOf();
-        expect(isolationChangedSince(moment)).toBe(false);
-        store().seek(20);
-        expect(isolationChangedSince(moment)).toBe(false);
         store().isolate(7);
-        expect(isolationChangedSince(moment)).toBe(true);
+        const moment = momentOf();
+        store().exitIsolation();
+        store().selectRange(1, 9);
+        expect(isAwayFrom(moment)).toBe(true);
+        goBackTo(moment);
+        expect(store().isolation?.timelineId).toBe(7);
+        expect(isAwayFrom(moment)).toBe(false);
     });
 
     it("an open shape is away only while a shape is open and its moment is elsewhere", () => {
@@ -120,6 +138,31 @@ describe("an open shape's moment (#416)", () => {
         closeShapeTool();
         expect(isShapeAway()).toBe(false);
         expect(useShapeToolStore.getState().moment).toBeNull();
+    });
+
+    it("an open shape waits hidden while the show plays, in Visuals and in Preview", () => {
+        store().selectRange(9, 12);
+        openShapeTool(drawn(), null);
+        expect(isShapeHidden()).toBe(false);
+
+        store().setPlayback({ kind: "on" });
+        expect(isShapeHidden()).toBe(true);
+        expect(isShapeAway()).toBe(false);
+        store().setPlayback(null);
+        expect(isShapeHidden()).toBe(false);
+
+        useEditorModeStore.setState({ mode: "expert" });
+        useWorkspaceViewStore.getState().setView("visuals");
+        expect(isShapeHidden()).toBe(true);
+        useWorkspaceViewStore.getState().setView("editor");
+        expect(isShapeHidden()).toBe(false);
+
+        usePreviewModeStore.setState({ isPreview: true });
+        expect(isShapeHidden()).toBe(true);
+        usePreviewModeStore.setState({ isPreview: false });
+
+        store().seek(20);
+        expect(isShapeHidden()).toBe(true);
     });
 
     it("a shape discarded while away comes back on undo with its own moment", () => {

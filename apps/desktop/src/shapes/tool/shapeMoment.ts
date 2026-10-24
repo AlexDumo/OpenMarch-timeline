@@ -8,8 +8,8 @@ import {
  * around the timeline doesn't end the shape. While the window is somewhere else the shape is
  * "away": hidden, with a chip that goes back to it, and back at its moment it shows again.
  *
- * Isolating a move or leaving isolation still ends the shape (placed where it was drawn): that
- * changes what an edit writes to, not only where the playhead is.
+ * Isolating a move, or leaving isolation, is moving away too. Nothing but Place (Enter) places the
+ * shape (owner lab feedback on #416).
  */
 export interface ShapeMoment {
     /** The window: its kind and range, and the move it stands for when several share the range */
@@ -18,8 +18,8 @@ export interface ShapeMoment {
     readonly startBeat: number;
     readonly playheadBeat: number;
     readonly windowTimelineId: number | null;
-    /** The isolated timeline and its range, `""` outside isolation */
-    readonly isolation: string;
+    /** The isolated timeline, or `null` outside isolation */
+    readonly isolatedTimelineId: number | null;
 }
 
 type MomentState = Pick<
@@ -42,11 +42,12 @@ export function momentOf(
             sel.kind,
             sel.kind === "range" ? `${sel.start}-${sel.end}` : "",
             state.windowTimelineId ?? "",
+            iso ? `${iso.timelineId}:${iso.start}-${iso.end}` : "",
         ].join("|"),
         startBeat: state.startBeat,
         playheadBeat: state.playheadBeat,
         windowTimelineId: state.windowTimelineId,
-        isolation: iso ? `${iso.timelineId}:${iso.start}-${iso.end}` : "",
+        isolatedTimelineId: iso?.timelineId ?? null,
     };
 }
 
@@ -58,19 +59,19 @@ export function isAwayFrom(
     return moment !== null && momentOf(state).key !== moment.key;
 }
 
-/** Whether a move was isolated or isolation left since `moment`: that ends its shape */
-export function isolationChangedSince(
-    moment: ShapeMoment | null,
-    state: MomentState = useTimelineSelectionStore.getState(),
-): boolean {
-    return moment !== null && momentOf(state).isolation !== moment.isolation;
-}
-
 /** Go back: puts the start flag and the playhead where they were at `moment` */
 export function goBackTo(moment: ShapeMoment): void {
     const store = useTimelineSelectionStore.getState();
-    if (store.isolation) store.seekKeepingStart(moment.playheadBeat);
-    else if (moment.playheadBeat === 0) store.selectHome();
+    const isolated = moment.isolatedTimelineId;
+    if (isolated !== null) {
+        if (store.isolation?.timelineId !== isolated) {
+            if (store.isolation) store.exitIsolation();
+            useTimelineSelectionStore.getState().isolate(isolated);
+        }
+        useTimelineSelectionStore
+            .getState()
+            .seekKeepingStart(moment.playheadBeat);
+    } else if (moment.playheadBeat === 0) store.selectHome();
     else
         store.selectRange(
             moment.startBeat,

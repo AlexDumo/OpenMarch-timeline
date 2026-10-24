@@ -480,6 +480,10 @@ match. In short:
   steps. The pivot is draggable on the field (answers open question 1 below).
 - The open shape is measured from the start flag.
 - Leaving an open shape places it silently; Esc discards and is undoable, with no toast.
+  Replaced 2026-10-24 (#416, lab feedback): only Enter or Place places a shape. Away from its
+  moment it hides behind a "Shape open at count N" chip with Go back; playing, Visuals and Preview
+  hide it until they end; a new selection leaves it open. Enter and Esc act only on a shape you can
+  see.
 - Same in Basic and Expert.
 - Shapes with unassigned spots come later (#358); the host keeps the guardrails for them now.
 
