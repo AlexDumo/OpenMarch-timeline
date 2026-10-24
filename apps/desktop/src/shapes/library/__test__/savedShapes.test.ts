@@ -186,7 +186,7 @@ describe("applying a saved shape to another selection", () => {
         });
         const { steps } = shapeSteps(kind, base, 10, env(), []);
         expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
-            ["mode", "Files"],
+            ["mode", "Grid"],
             ["size", expect.any(String)],
             ["across", "3"],
             ["deep", "1½"],
@@ -502,6 +502,22 @@ describe("the user's library as stored (#393)", () => {
             updatedAt: AT,
         };
         expect(SavedShapeSchema.parse(entry)).toEqual(entry);
+    });
+
+    it("reads the distribution as a recipe's, dropping a mode this version doesn't know", () => {
+        expect(
+            SavedShapeSchema.parse({
+                ...old,
+                distribution: { mode: "files", layout: { family: "zigzag" } },
+            }).distribution,
+        ).toEqual({
+            mode: "files",
+            layout: { family: "shortBack", byFile: false },
+            stagger: [0, 1],
+        });
+        expect(
+            SavedShapeSchema.parse({ ...old, distribution: { mode: "swirl" } }),
+        ).toEqual(old);
     });
 
     it("drops a field that doesn't read, keeping the entry", () => {

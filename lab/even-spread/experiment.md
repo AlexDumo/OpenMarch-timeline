@@ -14,7 +14,7 @@ questions:
   - Was it clear that the spacing in Spread is the closest any two marchers stand?
 ---
 
-A closed shape can now be filled three ways: **Files** (ranks and files,
+A closed shape can now be filled three ways: **Grid** (ranks and files,
 the box as it was), **Outline** (around the edge, the circle) and
 **Spread**. Spread scatters the marchers evenly with no visible files.
 No two stand closer than the spacing you set, and the edges stay soft,
@@ -25,7 +25,7 @@ and undo brings the last one back.
 
 - Open a demo show or start a new one, and select 20 to 60 marchers.
 - Press **B** and drag out a box. In the inspector's **Shapes** section,
-  switch the fill from **Files** to **Spread**.
+  switch the fill from **Grid** to **Spread**.
 - Press **Reshuffle** a few times, under the shape or in the inspector.
   Then press **⌘Z** / **Ctrl+Z** to go back a layout.
 - Change the spacing under the shape (type it or drag it), and drag the
@@ -37,7 +37,7 @@ and undo brings the last one back.
 
 **Good to know**
 
-- The shape's size follows how many marchers there are, as in Files.
+- The shape's size follows how many marchers there are, as in Grid.
   The spacing is the closest pair, so most neighbors stand a little
   farther apart than it.
 - The same shape, count and layout always give the same spots, so a placed

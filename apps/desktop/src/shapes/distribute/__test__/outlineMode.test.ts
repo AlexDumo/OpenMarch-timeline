@@ -1,29 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { boxTool } from "../box/boxTool";
+import { boxTool } from "../../box/boxTool";
 import {
     boxCorners,
     boxDistribution,
     drawBox,
     onField,
     type BoxParams,
-} from "../box/boxGeometry";
-import { flipBox, reoriented, withFieldCount } from "../editor/boxEdits";
+} from "../../box/boxGeometry";
+import { flipBox, reoriented, withFieldCount } from "../../editor/boxEdits";
 import {
     DEFAULT_ODD_GAP,
     type OddGap,
     type OutlineDistribution,
-} from "../distribute/distribution";
-import { withMode } from "../distribute/modes";
+} from "../distribution";
+import { withMode } from "../modes";
 import {
     gapPickAt,
     outlineGapAt,
     outlineGapOf,
     withOddGap,
-} from "../distribute/outlineGap";
-import { boxesAt, type PlacedRecipe } from "../placed/placedBox";
-import { liveTargets } from "../placed/liveBox";
-import { placementOf } from "../tool/shapePlacement";
-import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
+} from "../outlineGap";
+import { boxesAt, type PlacedRecipe } from "../../placed/placedBox";
+import { liveTargets } from "../../placed/liveBox";
+import { placementOf } from "../../tool/shapePlacement";
+import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
 import {
     edit,
     openTool,
@@ -33,9 +33,9 @@ import {
     slotsOf,
     undo,
     type ToolState,
-} from "../tool/toolMachine";
-import type { ShapeContext, XY } from "../types";
-import { padTool } from "./fakeRowKind";
+} from "../../tool/toolMachine";
+import type { ShapeContext, XY } from "../../types";
+import { padTool } from "../../__test__/fakeRowKind";
 
 /**
  * Outline mode for the box (#390, spec #385): spots around the edge at the interval with one on

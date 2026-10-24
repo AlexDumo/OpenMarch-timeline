@@ -1,8 +1,8 @@
-import type { SavedDistribution, SavedShape } from "@/db-functions/savedShapes";
+import type { SavedShape } from "@/db-functions/savedShapes";
 import {
-    storedDistribution,
-    type Distribution,
-    type DistributionMode,
+    fromSaved,
+    savedDistributionOf,
+    type SavedDistribution,
 } from "../distribute/distribution";
 import type { ShapeFrame } from "../frame/frame";
 import { typedValue } from "../command/shapeSteps";
@@ -50,22 +50,6 @@ export function intervalsOf(
     return Object.fromEntries(
         intervalParams(kind).map((p) => [p.key, p.value!(params, n, stepPx)]),
     );
-}
-
-/**
- * What a saved shape keeps of how a shape is filled: the distribution without its size (a Files
- * layout's `files`, which the count decides) or a spread's `seed` and the `count` it was laid out
- * for (a new placement starts at seed 1, laid out for its own count)
- */
-export function savedDistributionOf(d: Distribution): SavedDistribution {
-    const {
-        seed: _seed,
-        count: _count,
-        ...rest
-    } = d as Distribution & { seed?: unknown; count?: unknown };
-    if (rest.mode !== "files") return rest;
-    const { files: _files, ...layout } = rest.layout;
-    return { ...rest, layout };
 }
 
 /**
@@ -136,24 +120,10 @@ export function withSavedDistribution(
     env: ToolEnv,
 ): unknown {
     const closed = kind.closed;
-    const mode = saved?.mode as DistributionMode | undefined;
-    if (!closed || !saved || !mode || !closed.modes.includes(mode))
-        return params;
-    const start = closed.startMode(params, n, mode);
+    if (!closed || !saved || !closed.modes.includes(saved.mode)) return params;
+    const start = closed.startMode(params, n, saved.mode);
     const files = start.mode === "files" ? start.layout.files : 1;
-    const merged =
-        start.mode === "files"
-            ? {
-                  ...start,
-                  ...saved,
-                  layout: { ...start.layout, ...(saved.layout as object) },
-              }
-            : { ...start, ...saved };
-    const read = storedDistribution({ distribution: merged }, files);
-    if (!read || read.mode !== mode) return params;
-    const distribution =
-        read.mode === "spread" ? ({ ...read, seed: 1 } as Distribution) : read;
-    return closed.withDistribution(params, n, distribution, env);
+    return closed.withDistribution(params, n, fromSaved(saved, files, n), env);
 }
 
 /**

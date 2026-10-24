@@ -1,15 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { blockKind, type BlockParams } from "../kinds/block";
-import { boxTool } from "../box/boxTool";
-import type { BoxParams } from "../box/boxGeometry";
-import {
-    filesDistribution,
-    rankOffset,
-    type Fraction,
-} from "../distribute/distribution";
-import { distribute } from "../distribute/distribute";
-import { rectRegion } from "../distribute/region";
-import type { ShapeContext } from "../types";
+import { blockKind, type BlockParams } from "../../kinds/block";
+import { boxTool } from "../../box/boxTool";
+import type { BoxParams } from "../../box/boxGeometry";
+import { filesDistribution, rankOffset, type Fraction } from "../distribution";
+import { distribute } from "../distribute";
+import { rectRegion } from "../region";
+import type { ShapeContext } from "../../types";
 
 /**
  * The host's distributor (#386, spec #385), driven with the box: its Files mode is the box's grid

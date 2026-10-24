@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import tolgee from "@/global/singletons/Tolgee";
 import { ShuffleIcon } from "@phosphor-icons/react";
 import { distributionOf, reshuffle } from "../distribute/modes";
 import type { ToolEnv } from "../tool/toolKind";
@@ -27,7 +28,10 @@ export function ReshuffleButton({
     return (
         <button
             type="button"
-            title="Reshuffle: a new layout"
+            title={tolgee.t(
+                "shapes.edit.reshuffle.title",
+                "Reshuffle: a new layout",
+            )}
             onPointerDown={keepFocus}
             onClick={() => {
                 const env = envFor();
@@ -45,7 +49,7 @@ export function ReshuffleButton({
             className={clsx("flex items-center gap-4", className)}
         >
             <ShuffleIcon size={14} />
-            Reshuffle
+            {tolgee.t("shapes.edit.reshuffle.label", "Reshuffle")}
         </button>
     );
 }
