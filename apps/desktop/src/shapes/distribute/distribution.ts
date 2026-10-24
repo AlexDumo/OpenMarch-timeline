@@ -1,4 +1,4 @@
-import { SPREAD_GENERATOR } from "../geometry/naturalFill";
+import { SPREAD_GENERATOR } from "./spread";
 
 /**
  * How a closed shape is filled (spec #385): one host-owned object in a recipe's `params`, beside
@@ -14,7 +14,7 @@ export type DistributionMode = (typeof DISTRIBUTION_MODES)[number];
 
 /** What the mode switch and the command bar call each mode */
 export const MODE_LABELS: Readonly<Record<DistributionMode, string>> = {
-    files: "Files",
+    files: "Grid",
     outline: "Outline",
     spread: "Spread",
 };
@@ -217,6 +217,47 @@ function readSpread(d: object): SpreadDistribution | undefined {
         generator,
         ...(isWhole(count) && count >= 1 && { count }),
     };
+}
+
+/**
+ * How a saved shape is filled (ADR 0006, saved shapes): a distribution without what the count it's
+ * drawn at decides, a Files layout's `files` and a spread's `seed` and `count`
+ */
+export type SavedDistribution =
+    | (Omit<FilesDistribution, "layout"> & {
+          readonly layout: Omit<FilesLayout, "files">;
+      })
+    | OutlineDistribution
+    | Omit<SpreadDistribution, "seed" | "count">;
+
+/** What a saved shape keeps of `d` */
+export function savedDistributionOf(d: Distribution): SavedDistribution {
+    if (d.mode === "spread") return { mode: d.mode, generator: d.generator };
+    if (d.mode === "outline") return d;
+    const { files: _files, ...layout } = d.layout;
+    return { ...d, layout };
+}
+
+/**
+ * A saved shape's distribution as stored, read as a recipe's is: undefined for one this version
+ * can't read, which leaves the kind's own fill
+ */
+export function readSavedDistribution(
+    stored: unknown,
+): SavedDistribution | undefined {
+    const d = storedDistribution({ distribution: stored }, 1);
+    return d && savedDistributionOf(d);
+}
+
+/** The distribution `saved` gives a shape of `n` spots whose Files layout would be `files` across */
+export function fromSaved(
+    saved: SavedDistribution,
+    files: number,
+    n: number,
+): Distribution {
+    if (saved.mode === "spread") return spreadDistribution(1, n);
+    if (saved.mode === "outline") return saved;
+    return { ...saved, layout: { ...saved.layout, files } };
 }
 
 /**

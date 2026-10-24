@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
 import { boxFrame, drawBox, type BoxParams } from "../box/boxGeometry";
 import { chipLayout, sizeRun, type SizeRun } from "../editor/chip";
-import { useLabVariantStore } from "../../lab/labVariant";
 import type { ToolEnv } from "../tool/toolKind";
 
 /**
@@ -26,8 +25,6 @@ const env: ToolEnv = {
     }),
     hitRadius: 3,
 };
-
-afterEach(() => useLabVariantStore.setState({ variant: null }));
 
 /** 23 marchers, Short back 6 × 4, 2 steps across and 2½ deep */
 function start(): BoxParams {
@@ -89,8 +86,7 @@ describe("the size number's − and +", () => {
             );
     });
 
-    it("grows from the center whatever the lab link says (the owner picked center + glide)", () => {
-        useLabVariantStore.setState({ variant: "front" });
+    it("grows from the center (the owner picked center + glide)", () => {
         const p = start();
         const seen = stepped(p, [-1]);
         // 6 × 4 to 5 × 5: one rank deeper, about the center, so the front rank moves

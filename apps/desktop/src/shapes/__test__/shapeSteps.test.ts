@@ -35,7 +35,7 @@ describe("the box's steps", () => {
     it("asks each declared parameter in order, starting from its default", () => {
         const { steps } = shapeSteps(boxTool, start(), N, env, []);
         expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
-            ["mode", "Files"],
+            ["mode", "Grid"],
             ["size", "4 × 3"],
             ["across", "2"],
             ["deep", "2"],
@@ -59,7 +59,7 @@ describe("the box's steps", () => {
         expect([filesOf(p), ranksOf(p, N)]).toEqual([6, 2]);
         expect(p.across).toBeCloseTo(3 * STEP);
         expect(steps.map((s) => s.initial)).toEqual([
-            "Files",
+            "Grid",
             "4 × 3",
             "2",
             "2",
@@ -141,10 +141,10 @@ describe("the mode step (#386)", () => {
     it("comes first for a closed kind with more than one mode, typed by name", () => {
         const { steps } = shapeSteps(padTool, start(), N, env, []);
         expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
-            ["mode", "Files"],
+            ["mode", "Grid"],
             ["gap", "2"],
         ]);
-        expect(steps[0]!.param.label).toBe("Fill: Files, Outline");
+        expect(steps[0]!.param.label).toBe("Fill: Grid, Outline");
     });
 
     it("fills the shape in the mode typed, and later steps follow it", () => {
@@ -191,7 +191,7 @@ describe("the layout step (#387)", () => {
     it("comes after the box's numbers, shown as the picker labels it", () => {
         const { steps } = shapeSteps(boxTool, start(), N, env, []);
         expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
-            ["mode", "Files"],
+            ["mode", "Grid"],
             ["size", "6 × 4"],
             ["across", "2"],
             ["deep", "2"],

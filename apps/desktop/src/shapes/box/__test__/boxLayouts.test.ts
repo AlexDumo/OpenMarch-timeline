@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { boxTool } from "../box/boxTool";
+import { boxTool } from "../boxTool";
 import {
     boxBlock,
     boxDistribution,
     boxFrame,
     type BoxParams,
-} from "../box/boxGeometry";
-import type { FilesLayout, LayoutFamily } from "../distribute/distribution";
-import { layoutRowsOf, layoutOf, withLayout } from "../distribute/modes";
-import { layoutOrientations } from "../distribute/layouts";
-import { chipLayout, quarterTurn } from "../editor/chip";
-import { boxesAt, type PlacedRecipe } from "../placed/placedBox";
-import { placementOf } from "../tool/shapePlacement";
-import type { ToolEnv } from "../tool/toolKind";
+} from "../boxGeometry";
+import type { FilesLayout, LayoutFamily } from "../../distribute/distribution";
+import { layoutOf, withLayout } from "../../distribute/modes";
+import { layoutCatalogue, layoutOrientations } from "../../distribute/layouts";
+import { chipLayout, quarterTurn } from "../../editor/chip";
+import { boxesAt, type PlacedRecipe } from "../../placed/placedBox";
+import { placementOf } from "../../tool/shapePlacement";
+import type { ToolEnv } from "../../tool/toolKind";
 import {
     edit,
     openTool,
@@ -22,8 +22,8 @@ import {
     slotsOf,
     undo,
     type ToolState,
-} from "../tool/toolMachine";
-import type { ShapeContext, Slot, XY } from "../types";
+} from "../../tool/toolMachine";
+import type { ShapeContext, Slot, XY } from "../../types";
 
 /**
  * The box's layouts in the shape session (#387, spec #385): picking a version, the stepper and
@@ -72,7 +72,7 @@ function countsBy(slots: readonly Slot[], key: (s: Slot) => number) {
 }
 
 const versionOf = (n: number, family: LayoutFamily, label: string, i = 0) =>
-    layoutRowsOf(boxTool, n)
+    layoutCatalogue(n)
         .find((r) => r.family === family)!
         .versions.filter((v) => v.label === label)[i]!;
 
@@ -88,13 +88,9 @@ describe("picking a layout", () => {
 
     it("offers the box's catalogue, and the box starts in Short back", () => {
         const t = start();
-        expect(layoutRowsOf(boxTool, 23).map((r) => r.label)).toEqual([
-            "Full",
-            "Stagger",
-            "Rounded",
-            "Short back",
-            "Notched",
-        ]);
+        expect(
+            boxTool.closed!.layouts!.catalogue(23).map((r) => r.label),
+        ).toEqual(["Full", "Stagger", "Rounded", "Short back", "Notched"]);
         expect(layoutOf(boxTool, t.params, 23)!.layout.family).toBe(
             "shortBack",
         );
@@ -247,11 +243,18 @@ describe("keeping the layout", () => {
         t = pick(t, versionOf(23, "stagger", "5 × 5").layout);
         const more = sizeOf(t.params as BoxParams, 23).more as BoxParams;
         expect(sizeOf(more, 23).display).toBe("8 × 3");
-        const less = sizeOf(t.params as BoxParams, 23).less as BoxParams;
-        expect(sizeOf(less, 23).display).toBe("3 × 8");
-        expect(boxBlock(less, 23).layout).toMatchObject({
+        // 9 × 3 is 3 × 9 turned a quarter
+        const wider = sizeOf(more, 23).more as BoxParams;
+        expect(sizeOf(wider, 23).display).toBe("9 × 3");
+        expect(boxBlock(wider, 23).layout).toMatchObject({
             family: "stagger",
             byFile: true,
+        });
+        const less = sizeOf(t.params as BoxParams, 23).less as BoxParams;
+        expect(sizeOf(less, 23).display).toBe("3 × 9");
+        expect(boxBlock(less, 23).layout).toMatchObject({
+            family: "stagger",
+            byFile: false,
         });
     });
 
@@ -331,7 +334,8 @@ describe("the layout a new box starts in", () => {
             { x: 140, y: 40 },
             envWith("stagger"),
         );
-        expect(sizeOf(wide.params as BoxParams, 23).display).toBe("8 × 3");
+        // 3½ : 1 drawn: 9 × 3 is exactly 3:1, within it
+        expect(sizeOf(wide.params as BoxParams, 23).display).toBe("9 × 3");
     });
 
     it("falls back to Short back, noting the layout it stands in for", () => {

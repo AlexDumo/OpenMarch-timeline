@@ -1,11 +1,16 @@
-import { evenSpread, type SpreadLayout } from "../geometry/naturalFill";
+import { evenSpread, type SpreadLayout } from "./spread";
 import type {
     Distribution,
     FilesDistribution,
     OutlineDistribution,
     SpreadDistribution,
 } from "./distribution";
-import { NO_STAGGER, rankOffset, takesStagger } from "./distribution";
+import {
+    filesDistribution,
+    NO_STAGGER,
+    rankOffset,
+    takesStagger,
+} from "./distribution";
 import { resolveLayout } from "./layouts";
 import {
     nearestSides,
@@ -65,15 +70,7 @@ export function distribute(input: DistributeInput): FrameSpot[] {
     return filesSpots(
         distribution.mode === "files"
             ? distribution
-            : {
-                  mode: "files",
-                  layout: {
-                      family: "shortBack",
-                      files: Math.ceil(Math.sqrt(input.n)),
-                      byFile: false,
-                  },
-                  stagger: [0, 1],
-              },
+            : filesDistribution(Math.ceil(Math.sqrt(input.n))),
         input.n,
         input.across,
         input.deep,

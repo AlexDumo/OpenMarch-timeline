@@ -1046,9 +1046,9 @@ test("change: a placed box comes back turned and flipped when selected again", a
 
 // How a shape is filled (#386, spec #385): the host's distributor lays the
 // box out in Files, Short back, as it always was, and the recipe keeps the
-// distribution. The inspector's mode switch offers Files, Outline and Spread.
+// distribution. The inspector's mode switch offers Grid, Outline and Spread.
 
-test("change: a placed box keeps its distribution, Files with the short rank at the back, and the mode switch shows Files", async ({
+test("change: a placed box keeps its distribution, Files with the short rank at the back, and the mode switch shows Grid", async ({
     show,
 }) => {
     const { page } = show;
@@ -1631,11 +1631,11 @@ test("change: / opens the command bar, and Shape › Box asks each number with a
     await page.keyboard.press("Enter");
 
     // Docked, not the centered palette, and the box is already on the field.
-    // How it's filled comes first (#390): Enter keeps Files
+    // How it's filled comes first (#390): Enter keeps Grid
     await expect(bar(page)).toBeVisible();
     await expect(page.getByRole("listbox")).toBeHidden();
     await expect(question(page)).toHaveText(/^Fill/);
-    await expect(answer(page)).toHaveValue("Files");
+    await expect(answer(page)).toHaveValue("Grid");
     await page.keyboard.press("Enter");
     await expect(question(page)).toHaveText(/^Size/);
     const size = await answer(page).inputValue();
@@ -2407,7 +2407,7 @@ test("change: O opens the circle tool; a drag from the center draws it, its hand
                 Math.abs(p.y - (center.y + r)) < CLOSE,
         ),
     ).toBe(true);
-    // Outline and Spread, Outline on (and never Files)
+    // Outline and Spread, Outline on (and never Grid)
     await expect(page.getByTestId("shape-tool-section")).toBeVisible();
     await expect(page.getByTestId("shape-mode-outline")).toHaveAttribute(
         "data-state",
