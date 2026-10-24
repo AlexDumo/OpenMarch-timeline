@@ -60,7 +60,7 @@ async function closeWindow(app: ElectronApplication, sketchpad: Page) {
     await closed;
 }
 
-test("make a sketch, draw, close the window, and reopen it from the sidebar", async ({
+test("make a sketch, draw, close the window, reopen it, and edit a template from the sidebar", async ({
     electronApp,
 }) => {
     test.setTimeout(180_000);
@@ -140,6 +140,92 @@ test("make a sketch, draw, close the window, and reopen it from the sidebar", as
     await expect(panel.getByTestId("sketch-card")).toHaveCount(1);
     await editor.getByRole("button", { name: "Undo" }).click();
     await expect(panel.getByTestId("sketch-card")).toHaveCount(2);
+
+    // Save the first sketch as a template in this show
+    sketchpad = await openWindow(
+        app,
+        () =>
+            panel
+                .getByTestId("sketch-card")
+                .first()
+                .locator("button")
+                .first()
+                .click(),
+        external,
+    );
+    await inTab(sketchpad, "sketch-menu").click();
+    await sketchpad.getByTestId("menu-save-template").click();
+    await expect(sketchpad.getByTestId("save-template-dialog")).toBeVisible();
+    await sketchpad.getByTestId("template-name").fill("Block");
+    await sketchpad.getByTestId("save-template").click();
+    await expect(sketchpad.getByTestId("save-template-dialog")).toBeHidden();
+    await closeWindow(app, sketchpad);
+
+    const templateCard = panel.getByTestId("sketch-template");
+    await expect(templateCard).toHaveCount(1);
+    await expect(templateCard.getByTestId("sketch-thumbnail")).toBeVisible();
+    const templateId = (await templateCard.getAttribute("data-sketch-id"))!;
+
+    // Rename it in place
+    await templateCard.getByTestId("sketch-menu").click();
+    await editor.getByTestId("template-rename").click();
+    await templateCard.getByTestId("sketch-name-input").fill("Block band");
+    await templateCard.getByTestId("sketch-name-input").press("Enter");
+    await expect(templateCard.getByTestId("sketch-name")).toHaveText(
+        "Block band",
+    );
+
+    // Edit it in the window: a Template tab, and a drawing saved back to the template
+    await templateCard.getByTestId("sketch-menu").click();
+    sketchpad = await openWindow(
+        app,
+        () => editor.getByTestId("template-edit").click(),
+        external,
+    );
+    await expect(sketchpad.getByTestId("tab-template-badge")).toBeVisible();
+    await expect(inTab(sketchpad, "template-badge")).toBeVisible();
+    await expect(sketchpad.getByTestId("sketch-tab")).toContainText(
+        "Block band",
+    );
+    await inTab(sketchpad, "tool-ellipse").click();
+    const tbox = (await sketchpad
+        .getByTestId("sketch-tab-active")
+        .boundingBox())!;
+    const tx = tbox.x + tbox.width / 2;
+    const ty = tbox.y + tbox.height / 2;
+    await drag(sketchpad, [tx + 120, ty - 40], [tx + 220, ty + 40]);
+    await closeWindow(app, sketchpad);
+
+    // Reopen it: the ellipse is in the template, which is still the only one
+    await templateCard.getByTestId("sketch-menu").click();
+    sketchpad = await openWindow(
+        app,
+        () => editor.getByTestId("template-edit").click(),
+        external,
+    );
+    const template = await sketchpad.evaluate(
+        (id) => window.sketchpad.templates.load(id, "show"),
+        templateId,
+    );
+    expect(template.name).toBe("Block band");
+    const shapes = (
+        template.pages[0]!.elements as unknown as StoredElement[]
+    ).filter((e) => !e.isDeleted);
+    expect(shapes.map((e) => e.type).sort()).toEqual(["ellipse", "rectangle"]);
+    expect(template).not.toHaveProperty("field");
+    await closeWindow(app, sketchpad);
+    await expect(templateCard).toHaveCount(1);
+    await expect(panel.getByTestId("sketch-card")).toHaveCount(2);
+
+    // Delete it, and Undo brings it back
+    await templateCard.getByTestId("sketch-menu").click();
+    await editor.getByTestId("template-delete").click();
+    await expect(templateCard).toHaveCount(0);
+    await editor.getByRole("button", { name: "Undo" }).click();
+    await expect(templateCard).toHaveCount(1);
+    await expect(templateCard.getByTestId("sketch-name")).toHaveText(
+        "Block band",
+    );
 
     expect(external).toEqual([]);
 });
