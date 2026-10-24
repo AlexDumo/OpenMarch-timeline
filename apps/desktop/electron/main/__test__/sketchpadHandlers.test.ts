@@ -167,7 +167,7 @@ describe("template handlers", () => {
             template: template(ID_B),
             destination: "show",
         });
-        expect(await handlers.listTemplates()).toEqual([
+        expect(await handlers.listTemplates()).toMatchObject([
             { id: ID_B, name: "Grid paper", destination: "show" },
         ]);
         expect(
@@ -184,7 +184,7 @@ describe("template handlers", () => {
             template: template(ID_C, elements),
             destination: "library",
         });
-        expect(await handlers.listTemplates()).toEqual([
+        expect(await handlers.listTemplates()).toMatchObject([
             { id: ID_C, name: "Grid paper", destination: "library" },
         ]);
 
@@ -245,5 +245,160 @@ describe("template handlers", () => {
             onChanged: () => {},
         });
         expect(await broken.listTemplates()).toHaveLength(1);
+    });
+
+    describe("editing templates from the sidebar", () => {
+        const THUMB = new Uint8Array([137, 80, 78, 71, 1]);
+
+        it.each(["show", "library"] as const)(
+            "renames, duplicates and saves back a %s template, with its thumbnail",
+            async (destination) => {
+                await handlers.saveTemplate({
+                    template: template(ID_B),
+                    destination,
+                    thumbnail: THUMB,
+                });
+                let [listed] = await handlers.listTemplates();
+                expect(listed).toMatchObject({
+                    id: ID_B,
+                    destination,
+                    thumbnail: THUMB,
+                });
+                expect(listed!.updatedAt).toBeGreaterThan(0);
+
+                expect(
+                    await handlers.renameTemplate({
+                        id: ID_B,
+                        destination,
+                        name: "Block band",
+                    }),
+                ).toBe(true);
+                expect(
+                    (await handlers.loadTemplate({ id: ID_B, destination }))
+                        .name,
+                ).toBe("Block band");
+
+                // Edited in the window: the same id saves in place, and no thumbnail keeps it
+                const edited = {
+                    ...template(ID_B, [{ id: "r1", type: "rectangle" }]),
+                    name: "Block band",
+                };
+                await handlers.saveTemplate({ template: edited, destination });
+                expect(
+                    await handlers.loadTemplate({ id: ID_B, destination }),
+                ).toEqual(edited);
+                [listed] = await handlers.listTemplates();
+                expect(listed!.thumbnail).toEqual(THUMB);
+
+                const copy = await handlers.duplicateTemplate({
+                    id: ID_B,
+                    destination,
+                });
+                expect(copy!.name).toBe("Block band copy");
+                const loaded = await handlers.loadTemplate({
+                    id: copy!.id,
+                    destination,
+                });
+                expect(loaded).toMatchObject({
+                    id: copy!.id,
+                    name: "Block band copy",
+                    pages: edited.pages,
+                });
+                expect(await handlers.listTemplates()).toHaveLength(2);
+            },
+        );
+
+        it.each(["show", "library"] as const)(
+            "deletes a %s template and Undo restores it as it was",
+            async (destination) => {
+                await handlers.saveTemplate({
+                    template: template(ID_B),
+                    destination,
+                    thumbnail: THUMB,
+                });
+                const before = await handlers.listTemplates();
+                const removed = await handlers.removeTemplate({
+                    id: ID_B,
+                    destination,
+                });
+                expect(removed?.destination).toBe(destination);
+                expect(await handlers.listTemplates()).toEqual([]);
+                // It crosses IPC to the editor and back
+                expect(
+                    await handlers.restoreTemplate(structuredClone(removed)),
+                ).toBe(true);
+                expect(await handlers.listTemplates()).toEqual(before);
+                expect(
+                    await handlers.restoreTemplate(structuredClone(removed)),
+                ).toBe(false);
+            },
+        );
+
+        it("won't delete a sketch as a template", async () => {
+            await handlers.save(sketch(ID_A, "Opener"));
+            expect(
+                await handlers.removeTemplate({
+                    id: ID_A,
+                    destination: "show",
+                }),
+            ).toBeNull();
+            expect(await handlers.list()).toHaveLength(1);
+        });
+
+        it("copies a template to the Library and back, with its images and thumbnail", async () => {
+            const sha = await handlers.putFile({
+                mime: "image/png",
+                data: PNG,
+            });
+            const elements = [{ id: "i1", type: "image", fileId: sha }];
+            await handlers.saveTemplate({
+                template: template(ID_B, elements),
+                destination: "show",
+                thumbnail: THUMB,
+            });
+            const toLibrary = await handlers.copyTemplate({
+                id: ID_B,
+                from: "show",
+                to: "library",
+            });
+            const lib = await handlers.loadTemplate({
+                id: toLibrary.id,
+                destination: "library",
+            });
+            expect(lib).toEqual({ ...template(toLibrary.id, elements) });
+            const entry = await library.readSketchTemplate(toLibrary.id);
+            expect(Object.keys(entry.files)).toEqual([sha]);
+
+            const back = await handlers.copyTemplate({
+                id: toLibrary.id,
+                from: "library",
+                to: "show",
+            });
+            expect(
+                await handlers.loadTemplate({
+                    id: back.id,
+                    destination: "show",
+                }),
+            ).toEqual(template(back.id, elements));
+            const listed = await handlers.listTemplates();
+            expect(listed.map((t) => t.destination).sort()).toEqual([
+                "library",
+                "show",
+                "show",
+            ]);
+            expect(listed.every((t) => t.thumbnail !== null)).toBe(true);
+            await expect(
+                handlers.copyTemplate({ id: ID_B, from: "show", to: "show" }),
+            ).rejects.toThrow();
+        });
+
+        it("refuses a restore that isn't one", async () => {
+            await expect(
+                handlers.restoreTemplate({
+                    destination: "library",
+                    entry: { id: ID_B },
+                }),
+            ).rejects.toThrow();
+        });
     });
 });

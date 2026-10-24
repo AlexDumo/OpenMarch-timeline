@@ -155,13 +155,14 @@ export function duplicateSketch(
     db: Db,
     id: string,
     newId: string,
+    kind: "sketch" | "template" = "sketch",
 ): { id: string; name: string } | null {
     return inTransaction(db, () => {
         const row = db
             .prepare(
-                "SELECT name, sort_index FROM sketches WHERE id = ? AND kind = 'sketch'",
+                "SELECT name, sort_index FROM sketches WHERE id = ? AND kind = ?",
             )
-            .get(id) as { name: string; sort_index: number } | undefined;
+            .get(id, kind) as { name: string; sort_index: number } | undefined;
         if (!row) return null;
         const below = db
             .prepare(
@@ -174,7 +175,7 @@ export function duplicateSketch(
         const at = nowIso();
         db.prepare(
             `INSERT INTO sketches (id, kind, name, field_json, doc_json, render_json, thumbnail, sort_index, created_at, updated_at)
-             SELECT ?, 'sketch', ?, field_json, json_set(doc_json, '$.id', ?, '$.name', ?), render_json, thumbnail, ?, ?, ?
+             SELECT ?, kind, ?, field_json, json_set(doc_json, '$.id', ?, '$.name', ?), render_json, thumbnail, ?, ?, ?
              FROM sketches WHERE id = ?`,
         ).run(newId, name, newId, name, sortIndex, at, at, id);
         return { id: newId, name };
@@ -320,10 +321,41 @@ export function pruneSketchFiles(db: Db): number {
 export function listShowTemplates(db: Db): SketchTemplateListItem[] {
     const rows = db
         .prepare(
-            "SELECT id, name FROM sketches WHERE kind = 'template' ORDER BY sort_index DESC",
+            "SELECT id, name, updated_at, thumbnail FROM sketches WHERE kind = 'template' ORDER BY sort_index DESC",
         )
-        .all() as { id: string; name: string }[];
-    return rows.map((r) => ({ id: r.id, name: r.name, destination: "show" }));
+        .all() as {
+        id: string;
+        name: string;
+        updated_at: string;
+        thumbnail: Uint8Array | null;
+    }[];
+    return rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        destination: "show",
+        updatedAt: storedTimeMs(r.updated_at),
+        thumbnail: toBytes(r.thumbnail),
+    }));
+}
+
+/** Renames a show template, in its row and its JSON. Returns false when there's no such template. */
+export function renameShowTemplate(db: Db, id: string, name: string): boolean {
+    const result = db
+        .prepare(
+            "UPDATE sketches SET name = ?, doc_json = json_set(doc_json, '$.name', ?), updated_at = ? WHERE id = ? AND kind = 'template'",
+        )
+        .run(name, name, nowIso(), id);
+    return Number(result.changes) > 0;
+}
+
+/** A show template's thumbnail, or null */
+export function showTemplateThumbnail(db: Db, id: string): Uint8Array | null {
+    const row = db
+        .prepare(
+            "SELECT thumbnail FROM sketches WHERE id = ? AND kind = 'template'",
+        )
+        .get(id) as { thumbnail: Uint8Array | null } | undefined;
+    return toBytes(row?.thumbnail);
 }
 
 /** A show template's JSON, or null when there's no such template */
@@ -336,8 +368,15 @@ export function loadShowTemplateJson(db: Db, id: string): string | null {
     return row?.doc_json ?? null;
 }
 
-/** Stores a template in the show: a `sketches` row with `kind = 'template'` (ADR 0006 D-6) */
-export function saveShowTemplate(db: Db, template: TemplateToSave): void {
+/**
+ * Stores a template in the show: a `sketches` row with `kind = 'template'` (ADR 0006 D-6). A
+ * thumbnail left out keeps the stored one.
+ */
+export function saveShowTemplate(
+    db: Db,
+    template: TemplateToSave,
+    thumbnail?: Uint8Array | null,
+): void {
     const at = nowIso();
     inTransaction(db, () => {
         const existing = db
@@ -346,21 +385,24 @@ export function saveShowTemplate(db: Db, template: TemplateToSave): void {
         if (existing && existing.kind !== "template")
             throw new Error(`${template.id} is a sketch, not a template`);
         db.prepare(
-            `INSERT INTO sketches (id, kind, name, field_json, doc_json, sort_index, created_at, updated_at)
-             VALUES (?, 'template', ?, ?, ?, ?, ?, ?)
+            `INSERT INTO sketches (id, kind, name, field_json, doc_json, thumbnail, sort_index, created_at, updated_at)
+             VALUES (?, 'template', ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT (id) DO UPDATE SET
                 name = excluded.name,
                 field_json = excluded.field_json,
                 doc_json = excluded.doc_json,
+                thumbnail = CASE WHEN ? THEN thumbnail ELSE excluded.thumbnail END,
                 updated_at = excluded.updated_at`,
         ).run(
             template.id,
             template.name,
             JSON.stringify({ style: template.style }),
             JSON.stringify(template),
+            thumbnail ?? null,
             existing ? 0 : nextSortIndex(db),
             at,
             at,
+            thumbnail === undefined ? 1 : 0,
         );
     });
 }

@@ -53,7 +53,10 @@ export function initialOpen(requests: readonly SketchOpenRequest[]): {
 } {
     const ids = requests.flatMap((r) => (r.kind === "sketch" ? [r.id] : []));
     const later = requests.filter(
-        (r) => r.kind === "new" || r.kind === "template",
+        (r) =>
+            r.kind === "new" ||
+            r.kind === "template" ||
+            r.kind === "edit-template",
     );
     return { ids, autoOpen: later.length === 0, later };
 }
@@ -111,6 +114,17 @@ function SketchpadWindow() {
             });
         else if (request.kind === "new")
             handle.newSketch({ blank: request.blank });
+        else if (request.kind === "edit-template")
+            void handle
+                .editTemplate(
+                    templateKey(
+                        request.template.destination,
+                        request.template.id,
+                    ),
+                )
+                .catch((e: unknown) => {
+                    console.error("Couldn't open the template", e);
+                });
         else if (request.kind === "template")
             handle.newSketch({
                 templateId: templateKey(

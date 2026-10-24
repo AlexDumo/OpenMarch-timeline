@@ -6,7 +6,7 @@
  * Rename, duplicate and delete are outside the editor's undo history. Delete asks nothing and
  * offers Undo in a toast instead (ux-spec §3.5).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
     DotsThreeIcon,
@@ -210,11 +210,16 @@ function Thumbnail({
     );
 }
 
-function useDeleteWithUndo() {
+/** Shows "Deleted …" with Undo for 10 s after `remove` resolves with something to restore */
+function useUndoToast() {
     const { t } = useTranslate();
     const qc = useQueryClient();
-    return async (id: string, name: string) => {
-        const removed = await window.electron.sketches.remove(id);
+    return async <R,>(
+        name: string,
+        remove: () => Promise<R | null>,
+        restore: (removed: R) => Promise<unknown>,
+    ) => {
+        const removed = await remove();
         await invalidateSketches(qc);
         if (!removed) return;
         toast(t("sketches.deleted", { name }), {
@@ -222,54 +227,78 @@ function useDeleteWithUndo() {
             action: {
                 label: t("sketches.undo"),
                 onClick: () =>
-                    void window.electron.sketches
-                        .restore(removed)
-                        .then(() => invalidateSketches(qc)),
+                    void restore(removed).then(() => invalidateSketches(qc)),
             },
         });
     };
 }
 
-function SketchCard({ sketch }: { sketch: SketchListItem }) {
+interface CardAction {
+    label: ReactNode;
+    onSelect: () => void;
+    testId: string;
+    danger?: boolean;
+}
+
+/**
+ * A sketch or template in the panel: thumbnail, name (double-click or Rename to edit it in
+ * place) and a line under it, with a ⋯ menu
+ */
+function ItemCard({
+    id,
+    name,
+    thumbnail,
+    detail,
+    onOpen,
+    onRename,
+    actions,
+    testId,
+    openLabel,
+}: {
+    id: string;
+    name: string;
+    thumbnail: Uint8Array | null;
+    detail: ReactNode;
+    onOpen: () => void;
+    onRename: (name: string) => Promise<unknown>;
+    actions: (startRename: () => void) => CardAction[];
+    testId: string;
+    openLabel: string;
+}) {
     const { t } = useTranslate();
     const qc = useQueryClient();
     const [renaming, setRenaming] = useState(false);
-    const remove = useDeleteWithUndo();
-    const language = tolgee.getLanguage() ?? "en";
 
-    const rename = async (name: string) => {
+    const rename = async (next: string) => {
         setRenaming(false);
-        const next = name.trim();
-        if (!next || next === sketch.name) return;
-        await window.electron.sketches.rename(sketch.id, next);
+        const trimmed = next.trim();
+        if (!trimmed || trimmed === name) return;
+        await onRename(trimmed);
         await invalidateSketches(qc);
     };
 
     return (
         <li
             className="hover:bg-fg-2 rounded-6 group flex items-center gap-12 p-4"
-            data-testid="sketch-card"
-            data-sketch-id={sketch.id}
+            data-testid={testId}
+            data-sketch-id={id}
         >
             <button
                 type="button"
                 className="flex min-w-0 flex-1 items-center gap-12 text-left"
-                onClick={() =>
-                    !renaming &&
-                    openSketchpad({ kind: "sketch", id: sketch.id })
-                }
+                onClick={() => !renaming && onOpen()}
                 onDoubleClick={(event) => {
                     event.preventDefault();
                     setRenaming(true);
                 }}
-                aria-label={t("sketches.open", { name: sketch.name })}
+                aria-label={openLabel}
             >
-                <Thumbnail bytes={sketch.thumbnail} name={sketch.name} />
+                <Thumbnail bytes={thumbnail} name={name} />
                 <span className="flex min-w-0 flex-col gap-2">
                     {renaming ? (
                         <RenameInput
-                            initial={sketch.name}
-                            onDone={(name) => void rename(name)}
+                            initial={name}
+                            onDone={(next) => void rename(next)}
                             onCancel={() => setRenaming(false)}
                         />
                     ) : (
@@ -277,17 +306,11 @@ function SketchCard({ sketch }: { sketch: SketchListItem }) {
                             className="text-body truncate"
                             data-testid="sketch-name"
                         >
-                            {sketch.name}
+                            {name}
                         </span>
                     )}
                     <span className="text-sub text-text-subtitle truncate">
-                        {t("sketches.edited", {
-                            when: editedAgo(
-                                sketch.updatedAt,
-                                Date.now(),
-                                language,
-                            ),
-                        })}
+                        {detail}
                     </span>
                 </span>
             </button>
@@ -296,7 +319,7 @@ function SketchCard({ sketch }: { sketch: SketchListItem }) {
                     <button
                         type="button"
                         className="rounded-4 hover:bg-fg-1 text-text-subtitle hover:text-text flex size-24 shrink-0 items-center justify-center"
-                        aria-label={t("sketches.menu", { name: sketch.name })}
+                        aria-label={t("sketches.menu", { name })}
                         data-testid="sketch-menu"
                     >
                         <DotsThreeIcon size={18} weight="bold" />
@@ -308,43 +331,81 @@ function SketchCard({ sketch }: { sketch: SketchListItem }) {
                         sideOffset={4}
                         className={MENU_CLASS}
                     >
-                        <DropdownMenu.Item
-                            className={MENU_ITEM_CLASS}
-                            onSelect={() =>
-                                openSketchpad({ kind: "sketch", id: sketch.id })
-                            }
-                        >
-                            <T keyName="sketches.action.open" />
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                            className={MENU_ITEM_CLASS}
-                            data-testid="sketch-rename"
-                            onSelect={() => setRenaming(true)}
-                        >
-                            <T keyName="sketches.action.rename" />
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                            className={MENU_ITEM_CLASS}
-                            data-testid="sketch-duplicate"
-                            onSelect={() =>
-                                void window.electron.sketches
-                                    .duplicate(sketch.id)
-                                    .then(() => invalidateSketches(qc))
-                            }
-                        >
-                            <T keyName="sketches.action.duplicate" />
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                            className={`${MENU_ITEM_CLASS} text-red`}
-                            data-testid="sketch-delete"
-                            onSelect={() => void remove(sketch.id, sketch.name)}
-                        >
-                            <T keyName="sketches.action.delete" />
-                        </DropdownMenu.Item>
+                        {actions(() => setRenaming(true)).map((a) => (
+                            <DropdownMenu.Item
+                                key={a.testId}
+                                className={
+                                    a.danger
+                                        ? `${MENU_ITEM_CLASS} text-red`
+                                        : MENU_ITEM_CLASS
+                                }
+                                data-testid={a.testId}
+                                onSelect={a.onSelect}
+                            >
+                                {a.label}
+                            </DropdownMenu.Item>
+                        ))}
                     </DropdownMenu.Content>
                 </DropdownMenu.Portal>
             </DropdownMenu.Root>
         </li>
+    );
+}
+
+function SketchCard({ sketch }: { sketch: SketchListItem }) {
+    const { t } = useTranslate();
+    const qc = useQueryClient();
+    const undoable = useUndoToast();
+    const api = window.electron.sketches;
+    const open = () => openSketchpad({ kind: "sketch", id: sketch.id });
+    return (
+        <ItemCard
+            id={sketch.id}
+            name={sketch.name}
+            thumbnail={sketch.thumbnail}
+            testId="sketch-card"
+            openLabel={t("sketches.open", { name: sketch.name })}
+            detail={t("sketches.edited", {
+                when: editedAgo(
+                    sketch.updatedAt,
+                    Date.now(),
+                    tolgee.getLanguage() ?? "en",
+                ),
+            })}
+            onOpen={open}
+            onRename={(name) => api.rename(sketch.id, name)}
+            actions={(startRename) => [
+                {
+                    label: <T keyName="sketches.action.open" />,
+                    onSelect: open,
+                    testId: "sketch-open",
+                },
+                {
+                    label: <T keyName="sketches.action.rename" />,
+                    onSelect: startRename,
+                    testId: "sketch-rename",
+                },
+                {
+                    label: <T keyName="sketches.action.duplicate" />,
+                    onSelect: () =>
+                        void api
+                            .duplicate(sketch.id)
+                            .then(() => invalidateSketches(qc)),
+                    testId: "sketch-duplicate",
+                },
+                {
+                    label: <T keyName="sketches.action.delete" />,
+                    onSelect: () =>
+                        void undoable(
+                            sketch.name,
+                            () => api.remove(sketch.id),
+                            (removed) => api.restore(removed),
+                        ),
+                    testId: "sketch-delete",
+                    danger: true,
+                },
+            ]}
+        />
     );
 }
 
@@ -385,14 +446,109 @@ function RenameInput({
     );
 }
 
+function TemplateCard({ template }: { template: SketchTemplateListItem }) {
+    const { t } = useTranslate();
+    const qc = useQueryClient();
+    const undoable = useUndoToast();
+    const api = window.electron.sketches;
+    const ref = { id: template.id, destination: template.destination };
+    const other = template.destination === "show" ? "library" : "show";
+    return (
+        <ItemCard
+            id={template.id}
+            name={template.name}
+            thumbnail={template.thumbnail}
+            testId="sketch-template"
+            openLabel={t("sketches.templates.use", { name: template.name })}
+            detail={
+                <T
+                    keyName={
+                        template.destination === "show"
+                            ? "sketches.templates.show"
+                            : "sketches.templates.library"
+                    }
+                />
+            }
+            // The card makes a new sketch from the template; Edit changes the template
+            onOpen={() => openSketchpad({ kind: "template", template: ref })}
+            onRename={(name) =>
+                api.renameTemplate(template.id, template.destination, name)
+            }
+            actions={(startRename) => [
+                {
+                    label: <T keyName="sketches.templates.action.edit" />,
+                    onSelect: () =>
+                        openSketchpad({ kind: "edit-template", template: ref }),
+                    testId: "template-edit",
+                },
+                {
+                    label: <T keyName="sketches.templates.action.newSketch" />,
+                    onSelect: () =>
+                        openSketchpad({ kind: "template", template: ref }),
+                    testId: "template-new-sketch",
+                },
+                {
+                    label: <T keyName="sketches.action.rename" />,
+                    onSelect: startRename,
+                    testId: "template-rename",
+                },
+                {
+                    label: <T keyName="sketches.action.duplicate" />,
+                    onSelect: () =>
+                        void api
+                            .duplicateTemplate(
+                                template.id,
+                                template.destination,
+                            )
+                            .then(() => invalidateSketches(qc)),
+                    testId: "template-duplicate",
+                },
+                {
+                    label: (
+                        <T
+                            keyName={
+                                other === "library"
+                                    ? "sketches.templates.action.copyToLibrary"
+                                    : "sketches.templates.action.copyToShow"
+                            }
+                        />
+                    ),
+                    onSelect: () =>
+                        void api
+                            .copyTemplate(
+                                template.id,
+                                template.destination,
+                                other,
+                            )
+                            .then(() => invalidateSketches(qc)),
+                    testId: "template-copy",
+                },
+                {
+                    label: <T keyName="sketches.action.delete" />,
+                    onSelect: () =>
+                        void undoable(
+                            template.name,
+                            () =>
+                                api.removeTemplate(
+                                    template.id,
+                                    template.destination,
+                                ),
+                            (removed) => api.restoreTemplate(removed),
+                        ),
+                    testId: "template-delete",
+                    danger: true,
+                },
+            ]}
+        />
+    );
+}
+
 function TemplatesSection({
     templates,
 }: {
     templates: SketchTemplateListItem[];
 }) {
-    const { t } = useTranslate();
     const [open, setOpen] = useState(true);
-    const remove = useDeleteWithUndo();
     return (
         <section className="flex flex-col gap-8" data-testid="sketch-templates">
             <button
@@ -409,57 +565,12 @@ function TemplatesSection({
                         <T keyName="sketches.templates.empty" />
                     </p>
                 ) : (
-                    <ul className="flex flex-col gap-2">
+                    <ul className="flex flex-col gap-8">
                         {templates.map((template) => (
-                            <li
+                            <TemplateCard
                                 key={`${template.destination}:${template.id}`}
-                                className="hover:bg-fg-2 rounded-4 group flex items-center gap-8 px-4 py-2"
-                                data-testid="sketch-template"
-                            >
-                                <button
-                                    type="button"
-                                    className="text-body min-w-0 flex-1 truncate text-left"
-                                    onClick={() =>
-                                        openSketchpad({
-                                            kind: "template",
-                                            template: {
-                                                id: template.id,
-                                                destination:
-                                                    template.destination,
-                                            },
-                                        })
-                                    }
-                                >
-                                    {template.name}
-                                </button>
-                                <span className="text-sub text-text-subtitle shrink-0">
-                                    <T
-                                        keyName={
-                                            template.destination === "show"
-                                                ? "sketches.templates.show"
-                                                : "sketches.templates.library"
-                                        }
-                                    />
-                                </span>
-                                {template.destination === "show" && (
-                                    <button
-                                        type="button"
-                                        className="text-text-subtitle hover:text-red opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                                        onClick={() =>
-                                            void remove(
-                                                template.id,
-                                                template.name,
-                                            )
-                                        }
-                                        aria-label={t(
-                                            "sketches.templates.delete",
-                                            { name: template.name },
-                                        )}
-                                    >
-                                        <XIcon size={14} />
-                                    </button>
-                                )}
-                            </li>
+                                template={template}
+                            />
                         ))}
                     </ul>
                 ))}

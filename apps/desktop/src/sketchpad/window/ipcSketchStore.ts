@@ -44,6 +44,7 @@ async function bytes(blob: Blob): Promise<Uint8Array> {
     return new Uint8Array(await blob.arrayBuffer());
 }
 
+// eslint-disable-next-line max-lines-per-function -- one object literal of small methods
 export function createIpcSketchStore(
     api: Pick<
         SketchpadApi,
@@ -106,8 +107,20 @@ export function createIpcSketchStore(
                 const { destination, id } = parseTemplateId(key);
                 return api.templates.load(id, destination);
             },
-            async save(template, destination) {
-                await api.templates.save(template, toDestination(destination));
+            async save(template, destination, render) {
+                await api.templates.save(
+                    template,
+                    toDestination(destination),
+                    render?.thumbnail ? await bytes(render.thumbnail) : null,
+                );
+            },
+            async update(key, template, render) {
+                const { destination } = parseTemplateId(key);
+                await api.templates.save(
+                    template,
+                    destination,
+                    render.thumbnail ? await bytes(render.thumbnail) : null,
+                );
             },
             async remove(key) {
                 const { destination, id } = parseTemplateId(key);

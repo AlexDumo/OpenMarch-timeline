@@ -178,8 +178,13 @@ export interface LibraryStore {
         name: string;
         data: SketchTemplateEntry["data"];
         files: SketchTemplateEntry["files"];
+        /** base64 PNG; left out keeps the stored one */
+        thumbnail?: string | null;
     }): Promise<SketchTemplateEntrySummary>;
-    deleteSketchTemplate(id: string): Promise<void>;
+    /** Removes a template's file and returns what it held, so it can be written back (Undo) */
+    deleteSketchTemplate(id: string): Promise<SketchTemplateEntry>;
+    /** Writes a deleted template back as it was; does nothing when its id is taken again */
+    restoreSketchTemplate(entry: SketchTemplateEntry): Promise<boolean>;
 }
 
 const ITEMS_DIR = "items";
@@ -651,8 +656,15 @@ class LocalLibrary implements LibraryStore {
                     createdAt,
                     updatedAt,
                     name: n,
+                    thumbnail,
                 } = await this.readSketchTemplate(name.slice(0, -5));
-                summaries.push({ id, name: n, createdAt, updatedAt });
+                summaries.push({
+                    id,
+                    name: n,
+                    createdAt,
+                    updatedAt,
+                    thumbnail,
+                });
             } catch {
                 // A file a newer app wrote, or a broken one: leave it out
             }
@@ -692,6 +704,7 @@ class LocalLibrary implements LibraryStore {
         name: string;
         data: SketchTemplateEntry["data"];
         files: SketchTemplateEntry["files"];
+        thumbnail?: string | null;
     }): Promise<SketchTemplateEntrySummary> {
         if (input.id !== undefined) checkItemId(input.id);
         const name = cleanName(input.name);
@@ -699,11 +712,16 @@ class LocalLibrary implements LibraryStore {
             const id = input.id ?? this.newUUID();
             const at = this.now().toISOString();
             let createdAt = at;
+            let thumbnail: string | undefined;
             try {
-                createdAt = (await this.readSketchTemplate(id)).createdAt;
+                const old = await this.readSketchTemplate(id);
+                createdAt = old.createdAt;
+                thumbnail = old.thumbnail;
             } catch {
                 // A new template
             }
+            if (input.thumbnail !== undefined)
+                thumbnail = input.thumbnail ?? undefined;
             const entry: SketchTemplateEntry = {
                 schemaVersion: LIBRARY_SCHEMA_VERSION,
                 id,
@@ -712,31 +730,49 @@ class LocalLibrary implements LibraryStore {
                 updatedAt: at,
                 data: input.data,
                 files: input.files,
+                ...(thumbnail ? { thumbnail } : {}),
             };
-            await mkdir(path.join(this.root, SKETCH_TEMPLATES_DIR), {
-                recursive: true,
-            });
-            await this.writeAtomic(
-                this.sketchTemplatePath(id),
-                JSON.stringify(entry),
-            );
-            return { id, name, createdAt, updatedAt: at };
+            await this.writeSketchTemplate(entry);
+            return { id, name, createdAt, updatedAt: at, thumbnail };
         });
     }
 
-    deleteSketchTemplate(id: string): Promise<void> {
+    private async writeSketchTemplate(entry: SketchTemplateEntry) {
+        await mkdir(path.join(this.root, SKETCH_TEMPLATES_DIR), {
+            recursive: true,
+        });
+        await this.writeAtomic(
+            this.sketchTemplatePath(entry.id),
+            JSON.stringify(entry),
+        );
+    }
+
+    deleteSketchTemplate(id: string): Promise<SketchTemplateEntry> {
         const file = this.sketchTemplatePath(id);
         return this.exclusive(async () => {
+            const entry = await this.readSketchTemplate(id);
+            await rm(file);
+            return entry;
+        });
+    }
+
+    restoreSketchTemplate(entry: SketchTemplateEntry): Promise<boolean> {
+        const parsed = SketchTemplateEntrySchema.parse(entry);
+        return this.exclusive(async () => {
             try {
-                await rm(file);
+                await this.readSketchTemplate(parsed.id);
+                return false;
             } catch (error) {
-                if (isMissing(error))
-                    throw new LibraryError(
-                        "not-found",
-                        `No sketch template ${id}`,
-                    );
-                throw error;
+                if (
+                    !(
+                        error instanceof LibraryError &&
+                        error.code === "not-found"
+                    )
+                )
+                    throw error;
             }
+            await this.writeSketchTemplate(parsed);
+            return true;
         });
     }
 

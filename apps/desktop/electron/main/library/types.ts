@@ -184,9 +184,11 @@ export const SketchTemplateEntrySchema = z.object({
         sha256Hex,
         z.object({ mime: z.string().min(1), base64: z.string() }),
     ),
+    /** A small PNG for the sidebar, base64 */
+    thumbnail: z.string().optional(),
 });
 export type SketchTemplateEntry = z.infer<typeof SketchTemplateEntrySchema>;
 export type SketchTemplateEntrySummary = Pick<
     SketchTemplateEntry,
-    "id" | "name" | "createdAt" | "updatedAt"
+    "id" | "name" | "createdAt" | "updatedAt" | "thumbnail"
 >;

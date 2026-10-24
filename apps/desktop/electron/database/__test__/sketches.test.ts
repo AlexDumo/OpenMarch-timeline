@@ -18,6 +18,8 @@ import {
     pruneSketchFiles,
     putSketchFile,
     removeShowTemplate,
+    renameShowTemplate,
+    showTemplateThumbnail,
     removeSketch,
     renameSketch,
     restoreSketch,
@@ -233,7 +235,7 @@ describe("show templates", () => {
         saveSketch(db, sketch(ID_A, "Opener"));
         saveShowTemplate(db, template);
 
-        expect(listShowTemplates(db)).toEqual([
+        expect(listShowTemplates(db)).toMatchObject([
             { id: ID_B, name: "Grid paper", destination: "show" },
         ]);
         expect(listSketches(db).map((s) => s.id)).toEqual([ID_A]);
@@ -260,5 +262,33 @@ describe("show templates", () => {
         expect(() => saveSketch(db, sketch(ID_B, "Not a sketch"))).toThrow();
         expect(() => saveShowTemplate(db, { ...template, id: ID_A })).toThrow();
         expect(listSketches(db)[0]!.name).toBe("Opener");
+    });
+
+    it("renames and duplicates a template, and keeps its thumbnail unless given one", () => {
+        const thumb = new Uint8Array([9, 9]);
+        saveShowTemplate(db, template, thumb);
+        expect(renameShowTemplate(db, ID_B, "Hash grid")).toBe(true);
+        expect(renameShowTemplate(db, ID_A, "Nothing")).toBe(false);
+        expect(JSON.parse(loadShowTemplateJson(db, ID_B)!).name).toBe(
+            "Hash grid",
+        );
+        saveShowTemplate(db, { ...template, name: "Hash grid 2" });
+        expect(showTemplateThumbnail(db, ID_B)).toEqual(thumb);
+        saveShowTemplate(db, template, null);
+        expect(showTemplateThumbnail(db, ID_B)).toBeNull();
+
+        expect(duplicateSketch(db, ID_B, ID_C, "template")).toEqual({
+            id: ID_C,
+            name: "Grid paper copy",
+        });
+        expect(JSON.parse(loadShowTemplateJson(db, ID_C)!)).toMatchObject({
+            id: ID_C,
+            name: "Grid paper copy",
+            pages: template.pages,
+        });
+        expect(listSketches(db)).toEqual([]);
+        // A sketch isn't duplicated as a template
+        saveSketch(db, sketch(ID_A, "Opener"));
+        expect(duplicateSketch(db, ID_A, "x", "template")).toBeNull();
     });
 });

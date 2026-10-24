@@ -32,6 +32,7 @@ import type {
 } from "@om-electron/database/sqlProxy";
 import type { ConvertProgress } from "@om-electron/database/convertOnOpenProtocol";
 import type {
+    RemovedTemplate,
     RemovedSketch,
     SketchListItem,
     SketchOpenRequest,
@@ -461,11 +462,43 @@ const APP_API = {
             ipcRenderer.invoke("sketch:templates") as Promise<
                 SketchTemplateListItem[]
             >,
+        /** Deletes a template; resolves with what `restoreTemplate` takes (Undo) */
         removeTemplate: (id: string, destination: TemplateDestinationId) =>
             ipcRenderer.invoke("sketch:template-remove", {
                 id,
                 destination,
-            }) as Promise<void>,
+            }) as Promise<RemovedTemplate | null>,
+        restoreTemplate: (removed: RemovedTemplate) =>
+            ipcRenderer.invoke(
+                "sketch:template-restore",
+                removed,
+            ) as Promise<boolean>,
+        renameTemplate: (
+            id: string,
+            destination: TemplateDestinationId,
+            name: string,
+        ) =>
+            ipcRenderer.invoke("sketch:template-rename", {
+                id,
+                destination,
+                name,
+            }) as Promise<boolean>,
+        duplicateTemplate: (id: string, destination: TemplateDestinationId) =>
+            ipcRenderer.invoke("sketch:template-duplicate", {
+                id,
+                destination,
+            }) as Promise<{ id: string; name: string } | null>,
+        /** Copies a template from this show to the Library, or from the Library to this show */
+        copyTemplate: (
+            id: string,
+            from: TemplateDestinationId,
+            to: TemplateDestinationId,
+        ) =>
+            ipcRenderer.invoke("sketch:template-copy", {
+                id,
+                from,
+                to,
+            }) as Promise<{ id: string }>,
         /**
          * Opens the Sketchpad window, or focuses it, with a sketch, a new sketch or one from a
          * template. Resolves false when no show is open.

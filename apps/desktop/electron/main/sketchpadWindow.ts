@@ -159,7 +159,32 @@ export function initSketchpadWindow(windowConfig: SketchpadWindowConfig) {
     handle(C.templates, "both", () => handlers.listTemplates());
     handle(C.templateLoad, "window", (p) => handlers.loadTemplate(p));
     handle(C.templateSave, "window", (p) => handlers.saveTemplate(p));
-    handle(C.templateRemove, "both", (p) => handlers.removeTemplate(p));
+    handle(C.templateRemove, "both", async (p, from) => {
+        const removed = await handlers.removeTemplate(p);
+        if (removed && from === "editor")
+            sendToWindow(SKETCH_EXTERNAL_CHANGE_CHANNEL, {
+                id:
+                    removed.destination === "show"
+                        ? removed.removed.sketch.id
+                        : removed.entry.id,
+                change: "removed",
+            } satisfies SketchExternalChange);
+        return removed;
+    });
+    handle(C.templateRestore, "editor", (p) => handlers.restoreTemplate(p));
+    handle(C.templateRename, "editor", async (p) => {
+        const renamed = await handlers.renameTemplate(p);
+        const { id, name } = p as { id: string; name: string };
+        if (renamed)
+            sendToWindow(SKETCH_EXTERNAL_CHANGE_CHANNEL, {
+                id,
+                change: "renamed",
+                name: name.trim(),
+            } satisfies SketchExternalChange);
+        return renamed;
+    });
+    handle(C.templateDuplicate, "editor", (p) => handlers.duplicateTemplate(p));
+    handle(C.templateCopy, "editor", (p) => handlers.copyTemplate(p));
     handle(C.field, "window", async () => {
         const db = await DatabaseServices.getConnectionOutsideTransaction();
         const row = db

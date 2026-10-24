@@ -59,16 +59,22 @@ const SKETCHPAD_API = {
                 id,
                 destination,
             }) as Promise<SketchTemplate>,
-        save: (template: SketchTemplate, destination: TemplateDestinationId) =>
+        /** Saves a new template, or an edited one back in place; `thumbnail` is a small PNG */
+        save: (
+            template: SketchTemplate,
+            destination: TemplateDestinationId,
+            thumbnail?: Uint8Array | null,
+        ) =>
             ipcRenderer.invoke("sketch:template-save", {
                 template,
                 destination,
+                thumbnail,
             }) as Promise<void>,
         remove: (id: string, destination: TemplateDestinationId) =>
             ipcRenderer.invoke("sketch:template-remove", {
                 id,
                 destination,
-            }) as Promise<void>,
+            }) as Promise<unknown>,
     },
 
     /** The show's current field, which new sketches copy */

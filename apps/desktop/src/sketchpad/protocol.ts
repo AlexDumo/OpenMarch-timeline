@@ -40,8 +40,16 @@ export const SKETCH_CHANNELS = {
     templateLoad: "sketch:template-load",
     /** Window: saves a template to this show or to the Library */
     templateSave: "sketch:template-save",
-    /** Editor and window: deletes a template */
+    /** Editor and window: deletes a template, returning what `templateRestore` takes (Undo) */
     templateRemove: "sketch:template-remove",
+    /** Editor: brings back a template `templateRemove` deleted */
+    templateRestore: "sketch:template-restore",
+    /** Editor: renames a template */
+    templateRename: "sketch:template-rename",
+    /** Editor: copies a template in the same place, as "<name> copy" */
+    templateDuplicate: "sketch:template-duplicate",
+    /** Editor: copies a template from this show to the Library, or back */
+    templateCopy: "sketch:template-copy",
     /** Window: the show's current field, for new sketches */
     field: "sketch:field",
     /** Editor: opens the Sketchpad window, or focuses it, and asks it to open something */
@@ -186,7 +194,21 @@ export const templateRefSchema = z.object({
 export const templateSaveSchema = z.object({
     template: sketchTemplateSchema,
     destination: templateDestinationSchema,
+    /** A small PNG for the sidebar; left out keeps the stored one */
+    thumbnail: bytesSchema(SKETCH_THUMBNAIL_MAX_BYTES).nullable().optional(),
 });
+
+export const templateRenameSchema = templateRefSchema.extend({
+    name: sketchNameSchema,
+});
+
+export const templateCopySchema = z
+    .object({
+        id: sketchIdSchema,
+        from: templateDestinationSchema,
+        to: templateDestinationSchema,
+    })
+    .refine((c) => c.from !== c.to, "Copy to the other place");
 
 /** A deleted sketch as `remove` returns it, and `restore` takes it back */
 export const removedSketchSchema = z.object({
@@ -214,6 +236,36 @@ export const removedSketchSchema = z.object({
     ),
 });
 
+/** A Library template file as `templateRemove` returns it (`SketchTemplateEntrySchema`'s shape) */
+const libraryTemplateEntrySchema = z.object({
+    schemaVersion: z.literal(1),
+    id: sketchIdSchema,
+    name: sketchNameSchema,
+    createdAt: z.string().min(1).max(40),
+    updatedAt: z.string().min(1).max(40),
+    data: sketchTemplateSchema,
+    files: z.record(
+        z.string().regex(/^[0-9a-f]{64}$/),
+        z.object({
+            mime: z.string().min(1).max(50),
+            base64: z.string().max(SKETCH_DOC_MAX_BYTES),
+        }),
+    ),
+    thumbnail: z
+        .string()
+        .max(SKETCH_THUMBNAIL_MAX_BYTES * 2)
+        .optional(),
+});
+
+/** A deleted template, for Undo: the show's row, or the Library's file */
+export const removedTemplateSchema = z.discriminatedUnion("destination", [
+    z.object({ destination: z.literal("show"), removed: removedSketchSchema }),
+    z.object({
+        destination: z.literal("library"),
+        entry: libraryTemplateEntrySchema,
+    }),
+]);
+
 /** What the editor asks the window to open */
 export const sketchOpenRequestSchema = z.union([
     /** Only open or focus the window (it opens the latest sketch when it starts) */
@@ -221,6 +273,8 @@ export const sketchOpenRequestSchema = z.union([
     z.object({ kind: z.literal("sketch"), id: sketchIdSchema }),
     z.object({ kind: z.literal("new"), blank: z.boolean().optional() }),
     z.object({ kind: z.literal("template"), template: templateRefSchema }),
+    /** Opens a template in a tab to edit it */
+    z.object({ kind: z.literal("edit-template"), template: templateRefSchema }),
 ]);
 
 /* ------------------------------ types ------------------------------ */
@@ -228,6 +282,7 @@ export const sketchOpenRequestSchema = z.union([
 export type RemovedSketch = z.infer<typeof removedSketchSchema>;
 export type SketchOpenRequest = z.infer<typeof sketchOpenRequestSchema>;
 export type TemplateRef = z.infer<typeof templateRefSchema>;
+export type RemovedTemplate = z.infer<typeof removedTemplateSchema>;
 
 /** A sketch as the sidebar lists it */
 export interface SketchListItem {
@@ -243,6 +298,10 @@ export interface SketchTemplateListItem {
     id: string;
     name: string;
     destination: TemplateDestinationId;
+    /** Milliseconds since the epoch */
+    updatedAt: number;
+    /** A small PNG, or null for a template saved without one */
+    thumbnail: Uint8Array | null;
 }
 
 /** What `sketch:save` takes: the package's render, with the thumbnail as bytes */

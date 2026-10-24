@@ -2555,7 +2555,13 @@
             "empty": "Save any sketch as a template from its ≡ menu in the Sketchpad.",
             "show": "This show",
             "library": "My Library",
-            "delete": "Delete {name}"
+            "use": "New sketch from {name}",
+            "action": {
+                "edit": "Edit template",
+                "newSketch": "New sketch from template",
+                "copyToLibrary": "Copy to My Library",
+                "copyToShow": "Copy to this show"
+            }
         }
     },
     "sketchpad": {

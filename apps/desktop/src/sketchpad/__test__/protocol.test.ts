@@ -107,6 +107,10 @@ describe("sketch protocol", () => {
             { kind: "new", blank: true },
             { kind: "sketch", id: ID },
             { kind: "template", template: { id: ID, destination: "library" } },
+            {
+                kind: "edit-template",
+                template: { id: ID, destination: "show" },
+            },
         ])
             expect(sketchOpenRequestSchema.safeParse(ok).success).toBe(true);
         for (const bad of [
@@ -177,7 +181,11 @@ describe("sketch protocol", () => {
                 "sketch:remove",
                 "sketch:rename",
                 "sketch:restore",
+                "sketch:template-copy",
+                "sketch:template-duplicate",
                 "sketch:template-remove",
+                "sketch:template-rename",
+                "sketch:template-restore",
                 "sketch:templates",
             ].sort(),
         );
