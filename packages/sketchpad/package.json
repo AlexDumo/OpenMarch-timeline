@@ -1,0 +1,64 @@
+{
+    "name": "@openmarch/sketchpad",
+    "type": "module",
+    "version": "0.1.0",
+    "private": true,
+    "license": "AGPL-3.0",
+    "description": "The OpenMarch Sketchpad: free drawing on a marching field, built on Excalidraw",
+    "homepage": "https://openmarch.com",
+    "author": "OpenMarch LLC <contact@openmarch.com>",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/OpenMarch/OpenMarch.git"
+    },
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "default": "./dist/index.js"
+        },
+        "./index.css": "./dist/index.css",
+        "./fonts/*": "./dist/fonts/*",
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "dist/**/*",
+        "README.md"
+    ],
+    "scripts": {
+        "dev": "tsup --watch",
+        "build": "tsup",
+        "test": "vitest run --silent",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit -p .",
+        "lint": "eslint . --fix",
+        "lint:check": "eslint .",
+        "spellcheck": "cspell 'src/**' '*.md'"
+    },
+    "peerDependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0"
+    },
+    "dependencies": {
+        "@excalidraw/excalidraw": "0.18.1",
+        "@openmarch/core": "workspace:*",
+        "@openmarch/ui": "workspace:*",
+        "@phosphor-icons/react": "^2.1.10",
+        "clsx": "^2.1.1",
+        "jspdf": "^4.2.1",
+        "roughjs": "4.6.4",
+        "svg2pdf.js": "^2.8.1"
+    },
+    "devDependencies": {
+        "@openmarch/config": "workspace:*",
+        "@types/react": "^19.2.9",
+        "@types/react-dom": "^19.2.3",
+        "jsdom": "26.1.0",
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4",
+        "tsup": "^8.5.1",
+        "typescript": "catalog:",
+        "vitest": "^3.2.3"
+    }
+}

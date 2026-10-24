@@ -81,6 +81,11 @@ import {
 } from "./services/library-ipc-self-test";
 import { closeView3dWindow, initView3dWindow } from "./view3dWindow";
 import {
+    closeSketchpadWindow,
+    initSketchpadWindow,
+    pruneSketchFilesOnClose,
+} from "./sketchpadWindow";
+import {
     getLibraryStore,
     initLibraryIpc,
     watchEditorWindow,
@@ -221,6 +226,7 @@ let win: BrowserWindow | null = null;
 // Here, you can also use other preload
 const preload = join(__dirname, "../preload/index.js");
 const view3dPreload = join(__dirname, "../preload/view3d.js");
+const sketchpadPreload = join(__dirname, "../preload/sketchpad.js");
 const url = process.env.VITE_DEV_SERVER_URL;
 const indexHtml = join(process.env.DIST, "index.html");
 // eslint-disable-next-line max-lines-per-function
@@ -306,6 +312,8 @@ async function createWindow(title?: string) {
         event.preventDefault();
         win!.hide(); // use non-null assertion now that we're inside the if-block
         closeView3dWindow();
+        // The Sketchpad saves before it closes (ADR 0006 D-4)
+        await closeSketchpadWindow();
 
         try {
             await closeCurrentFile(true);
@@ -629,6 +637,17 @@ void app.whenReady().then(async () => {
     initGetters();
     initView3dWindow({
         preload: view3dPreload,
+        devServerUrl: url,
+        indexHtml,
+        icon: join(process.env.VITE_PUBLIC, "favicon.ico"),
+        frame: isCodegen,
+        getTheme: () => store.get("theme", "light") as string,
+        getLanguage: () => store.get("language", "en") as string,
+        getEditorWindow: () => win,
+        getLibraryStore,
+    });
+    initSketchpadWindow({
+        preload: sketchpadPreload,
         devServerUrl: url,
         indexHtml,
         icon: join(process.env.VITE_PUBLIC, "favicon.ico"),
@@ -1471,6 +1490,9 @@ async function closeCurrentFileNow(isAppQuitting: boolean) {
     if (!win) return -1;
 
     closeView3dWindow();
+    // The Sketchpad saves before it closes, then unused sketch images go (ADR 0006 D-4, D-5)
+    await closeSketchpadWindow();
+    await pruneSketchFilesOnClose();
     // A question about converting another file is stale once the person closes the show.
     conversionQuestion.forget();
 
@@ -1692,6 +1714,9 @@ async function setActiveDbNow(
     refusalAfterReload = null;
     const hadShowOpen = DatabaseServices.getDbPath() !== "";
     try {
+        // The Sketchpad writes to the open show: it saves and closes before another file can
+        // take the show's place (ADR 0006 D-4)
+        await closeSketchpadWindow();
         // The 3D View shows one show; a confirmed conversion is about to replace it.
         if (options.conversionConfirmed) closeView3dWindow();
 

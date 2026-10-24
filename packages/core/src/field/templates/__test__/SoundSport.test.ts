@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FieldProperties } from "@openmarch/core";
+import { FieldProperties } from "../../FieldProperties";
 import GridFieldTemplates from "../GridFields";
 
 const EXPECTED_WIDTH_INCHES = 1080;

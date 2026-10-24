@@ -84,6 +84,8 @@ export default defineConfig(({ mode }) => {
             // The preload runs in Node under Electron; a browser has no `process`.
             "process.platform": JSON.stringify(process.platform),
             "process.env.PLAYWRIGHT_CODEGEN": JSON.stringify(""),
+            // Excalidraw (the Sketchpad window's lazy chunk) reads this at module load
+            "process.env.IS_PREACT": JSON.stringify("false"),
             "process.env.PLAYWRIGHT_SESSION": JSON.stringify("true"),
             // No analytics from test runs.
             "import.meta.env.VITE_PUBLIC_POSTHOG_KEY": JSON.stringify(""),

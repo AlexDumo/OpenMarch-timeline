@@ -1,0 +1,36 @@
+{
+    "name": "@openmarch/sketchpad-site",
+    "private": true,
+    "type": "module",
+    "version": "0.0.0",
+    "license": "AGPL-3.0",
+    "description": "The Sketchpad as a static site: sketches in IndexedDB, .omsketch files",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc --noEmit -p . && vite build",
+        "preview": "vite preview --port 5290 --strictPort",
+        "e2e": "playwright test",
+        "lint": "eslint . --fix",
+        "lint:check": "eslint .",
+        "spellcheck": "cspell 'src/**' 'e2e/**' '*.md'"
+    },
+    "dependencies": {
+        "@fontsource/dm-sans": "^5.2.8",
+        "@openmarch/core": "workspace:*",
+        "@openmarch/sketchpad": "workspace:*",
+        "@openmarch/ui": "workspace:*",
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4"
+    },
+    "devDependencies": {
+        "@playwright/test": "1.60.0",
+        "@tailwindcss/vite": "4.1.18",
+        "@types/node": "^24.11.1",
+        "@types/react": "^19.2.9",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^4.7.0",
+        "tailwindcss": "^4.2.2",
+        "typescript": "catalog:",
+        "vite": "^8.0.14"
+    }
+}

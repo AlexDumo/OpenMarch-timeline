@@ -31,6 +31,14 @@ import type {
     SqlReadBatchResult,
 } from "@om-electron/database/sqlProxy";
 import type { ConvertProgress } from "@om-electron/database/convertOnOpenProtocol";
+import type {
+    RemovedTemplate,
+    RemovedSketch,
+    SketchListItem,
+    SketchOpenRequest,
+    SketchTemplateListItem,
+    TemplateDestinationId,
+} from "../../src/sketchpad/protocol";
 // Types only, so this preload doesn't share a chunk with the sandboxed 3D
 // View preload.
 import type {
@@ -426,6 +434,86 @@ const APP_API = {
 
     buffer: {
         from: (data: any) => Buffer.from(data),
+    },
+
+    // Sketchpad (ADR 0006 D-4): the sidebar's calls. Main checks each payload.
+    sketches: {
+        list: () =>
+            ipcRenderer.invoke("sketch:list") as Promise<SketchListItem[]>,
+        /** Deletes a sketch; resolves with what `restore` takes to bring it back (Undo) */
+        remove: (id: string) =>
+            ipcRenderer.invoke(
+                "sketch:remove",
+                id,
+            ) as Promise<RemovedSketch | null>,
+        restore: (removed: RemovedSketch) =>
+            ipcRenderer.invoke("sketch:restore", removed) as Promise<boolean>,
+        rename: (id: string, name: string) =>
+            ipcRenderer.invoke("sketch:rename", {
+                id,
+                name,
+            }) as Promise<boolean>,
+        duplicate: (id: string) =>
+            ipcRenderer.invoke("sketch:duplicate", id) as Promise<{
+                id: string;
+                name: string;
+            } | null>,
+        templates: () =>
+            ipcRenderer.invoke("sketch:templates") as Promise<
+                SketchTemplateListItem[]
+            >,
+        /** Deletes a template; resolves with what `restoreTemplate` takes (Undo) */
+        removeTemplate: (id: string, destination: TemplateDestinationId) =>
+            ipcRenderer.invoke("sketch:template-remove", {
+                id,
+                destination,
+            }) as Promise<RemovedTemplate | null>,
+        restoreTemplate: (removed: RemovedTemplate) =>
+            ipcRenderer.invoke(
+                "sketch:template-restore",
+                removed,
+            ) as Promise<boolean>,
+        renameTemplate: (
+            id: string,
+            destination: TemplateDestinationId,
+            name: string,
+        ) =>
+            ipcRenderer.invoke("sketch:template-rename", {
+                id,
+                destination,
+                name,
+            }) as Promise<boolean>,
+        duplicateTemplate: (id: string, destination: TemplateDestinationId) =>
+            ipcRenderer.invoke("sketch:template-duplicate", {
+                id,
+                destination,
+            }) as Promise<{ id: string; name: string } | null>,
+        /** Copies a template from this show to the Library, or from the Library to this show */
+        copyTemplate: (
+            id: string,
+            from: TemplateDestinationId,
+            to: TemplateDestinationId,
+        ) =>
+            ipcRenderer.invoke("sketch:template-copy", {
+                id,
+                from,
+                to,
+            }) as Promise<{ id: string }>,
+        /**
+         * Opens the Sketchpad window, or focuses it, with a sketch, a new sketch or one from a
+         * template. Resolves false when no show is open.
+         */
+        open: (request: SketchOpenRequest) =>
+            ipcRenderer.invoke("sketch:open", request) as Promise<boolean>,
+        /** A sketch or template changed (its id, or null). Returns an unsubscribe function. */
+        onChanged: (callback: (id: string | null) => void) => {
+            const listener = (_event: IpcRendererEvent, id: unknown) =>
+                callback(typeof id === "string" ? id : null);
+            ipcRenderer.on("sketch:changed", listener);
+            return () => {
+                ipcRenderer.removeListener("sketch:changed", listener);
+            };
+        },
     },
 
     // 3D View

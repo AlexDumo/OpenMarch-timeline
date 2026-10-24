@@ -2,8 +2,8 @@ import { describe, expect } from "vitest";
 import { count } from "drizzle-orm";
 import { describeDbTests, schema, type DbConnection } from "@/test/base";
 import { getTestWithHistory } from "@/test/history";
-import FootballTemplates from "@/global/classes/fieldTemplates/Football";
-import GridFieldTemplates from "@/global/classes/fieldTemplates/GridFields";
+import { FootballFieldTemplates as FootballTemplates } from "@openmarch/core";
+import { GridFieldTemplates } from "@openmarch/core";
 import { performRedo, performUndo } from "../history";
 import {
     getStoredVenueSettings,

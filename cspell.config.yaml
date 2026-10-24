@@ -38,6 +38,37 @@ words:
   - swiftshader
   - marktime
   - stepoff
+  # Sketchpad (Excalidraw engine and research)
+  - collab
+  - crdt
+  - drawnix
+  - excalidraw
+  - Excalifont
+  - freedraw
+  - grayscale
+  - Harf
+  - jspdf
+  - konva
+  - leafer
+  - loro
+  - Nunito
+  - packageable
+  - Penpot
+  - rects
+  - roughjs
+  - stickynote
+  - stylable
+  - subsetting
+  - tldraw
+  - tlschema
+  - unforked
+  - Xiaolai
+  - omsketch
+  - fillers
+  - hachure
+  - Shanns
+  - roundable
+  - bcurve
   - prefs
   - frameloop
   - powermetrics

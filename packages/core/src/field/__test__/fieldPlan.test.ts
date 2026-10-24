@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { FieldProperties, stepMeters } from "@openmarch/core";
-import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
+import { FieldProperties } from "../FieldProperties";
+import { stepMeters } from "../world";
+import { FieldPropertiesTemplates } from "../templates";
 import { planField2d, planFieldImage, textCenterY } from "../fieldPlan";
 
 const base: FieldProperties =

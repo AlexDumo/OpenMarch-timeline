@@ -1,0 +1,14 @@
+diff --git a/bin/fillers/filler.js b/bin/fillers/filler.js
+index 3b7dd7575b04af646ec48cb39e95fff1daf63950..c9e4bc5b962c9fc241ec07d2c8565713f86c6efa 100644
+--- a/bin/fillers/filler.js
++++ b/bin/fillers/filler.js
+@@ -6,6 +6,9 @@ import { DashedFiller } from './dashed-filler';
+ import { ZigZagLineFiller } from './zigzag-line-filler';
+ const fillers = {};
+ export function getFiller(o, helper) {
++    // OpenMarch: fill styles starting with "om-" go to the fillers @openmarch/sketchpad registers
++    const om = globalThis.__openmarchRoughFiller && globalThis.__openmarchRoughFiller(o, helper);
++    if (om) return om;
+     let fillerName = o.fillStyle || 'hachure';
+     if (!fillers[fillerName]) {
+         switch (fillerName) {

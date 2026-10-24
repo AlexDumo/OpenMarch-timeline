@@ -9,7 +9,7 @@ import {
     PlaneGeometry,
     Texture,
 } from "three";
-import type { FieldPlanImage } from "@/field/fieldPlan";
+import type { FieldPlanImage } from "@openmarch/core";
 
 /**
  * The show's field image, between the field's background and its lines

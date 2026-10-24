@@ -8,6 +8,7 @@
  *   Versions. These are the records a future cloud would sync.
  * - `index.json`: a cache rebuilt from the manifests alone.
  * - `size-presets.json`: personal size presets beside the built-in catalog.
+ * - `sketch-templates/<id>.json`: Sketchpad templates (ADR 0006 D-6).
  *
  * Main process only. Nothing here is exposed over IPC (package C1.9).
  */
@@ -165,3 +166,29 @@ export const CameraProfileFileSchema = z.object({
     schemaVersion: z.literal(LIBRARY_SCHEMA_VERSION),
     profiles: z.array(CameraProfileEntrySchema),
 });
+
+/**
+ * A Sketchpad template in the Library (ADR 0006 D-6), one file per template under
+ * `sketch-templates/<id>.json`. Like camera profiles, the store keeps templates and the shape of
+ * `data` is owned by the Sketchpad (`sketchTemplateSchema` in `src/sketchpad/protocol.ts`). The
+ * images its elements refer to travel with it, base64 by sha256, so any show can use it.
+ */
+export const SketchTemplateEntrySchema = z.object({
+    schemaVersion: z.literal(LIBRARY_SCHEMA_VERSION),
+    id: uuid,
+    name: z.string().min(1),
+    createdAt: isoTime,
+    updatedAt: isoTime,
+    data: z.json(),
+    files: z.record(
+        sha256Hex,
+        z.object({ mime: z.string().min(1), base64: z.string() }),
+    ),
+    /** A small PNG for the sidebar, base64 */
+    thumbnail: z.string().optional(),
+});
+export type SketchTemplateEntry = z.infer<typeof SketchTemplateEntrySchema>;
+export type SketchTemplateEntrySummary = Pick<
+    SketchTemplateEntry,
+    "id" | "name" | "createdAt" | "updatedAt" | "thumbnail"
+>;

@@ -145,7 +145,11 @@
             "showNextPaths": "Show next page paths",
             "toggleNextPaths": "Toggle next page paths",
             "togglePreview": "Preview the show",
-            "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play"
+            "togglePreviewKeywords": "preview cinematic watch present presentation fullscreen play",
+            "openSketchpad": "Open Sketchpad",
+            "openSketchpadKeywords": "sketch sketches draw drawing pen paper form idea window",
+            "newSketch": "New sketch",
+            "newSketchKeywords": "sketch draw drawing pen paper form idea sketchpad"
         }
     },
     "analyticsOptIn": {
@@ -2524,6 +2528,45 @@
             "fits_nobody": "fits none of its marchers",
             "kind_not_allowed": "a phrase on a channel that takes states only",
             "transition_cut": "its transition starts before the cue before it lands"
+        }
+    },
+    "sketches": {
+        "title": "Sketches",
+        "new": "New sketch",
+        "newTooltip": "New sketch (Alt+click for a blank one)",
+        "close": "Close Sketches",
+        "open": "Open {name}",
+        "menu": "More for {name}",
+        "edited": "Edited {when}",
+        "deleted": "Deleted “{name}”",
+        "undo": "Undo",
+        "action": {
+            "open": "Open",
+            "rename": "Rename",
+            "duplicate": "Duplicate",
+            "delete": "Delete"
+        },
+        "empty": {
+            "title": "Sketch a form",
+            "body": "Draw freely on the field, with no marchers or counts. Use sketches as an overlay while you write drill."
+        },
+        "templates": {
+            "title": "Templates",
+            "empty": "Save any sketch as a template from its ≡ menu in the Sketchpad.",
+            "show": "This show",
+            "library": "My Library",
+            "use": "New sketch from {name}",
+            "action": {
+                "edit": "Edit template",
+                "newSketch": "New sketch from template",
+                "copyToLibrary": "Copy to My Library",
+                "copyToShow": "Copy to this show"
+            }
+        }
+    },
+    "sketchpad": {
+        "window": {
+            "title": "Sketchpad — {showName}"
         }
     }
 }

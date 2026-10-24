@@ -13,7 +13,11 @@ import { useShallow } from "zustand/react/shallow";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera, WebGLRenderer } from "three";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
+import {
+    DEFAULT_FIELD_THEME,
+    planFieldImage,
+    type FieldProperties,
+} from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
@@ -68,7 +72,6 @@ import {
 } from "@/field/fieldPropTool";
 import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import { isMacPlatform } from "@/shortcuts/platform";
-import { planFieldImage } from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import { FieldMarchers } from "./fieldMarchers";
 import { FieldItems } from "./fieldItems";

@@ -339,6 +339,27 @@ export function handleSqlReadBatch(queries: unknown) {
     );
 }
 
+/** How long main's own writes wait for the editor's open transaction to end */
+const OUTSIDE_TRANSACTION_TIMEOUT_MS = 5000;
+
+/**
+ * The shared connection for main's own writes (the Sketchpad's, ADR 0006 D-4), once the editor
+ * has no transaction open on it, so a write never joins, or is rolled back with, an editor
+ * transaction. `node:sqlite` is synchronous: use the connection before awaiting anything else.
+ */
+export async function getConnectionOutsideTransaction(): Promise<DatabaseSync> {
+    const started = Date.now();
+    for (;;) {
+        assertSqlProxyNotSuspended();
+        if (!databaseIsReady()) throw new Error("No show is open");
+        const db = getPersistentConnection();
+        if (!db.isTransaction) return db;
+        if (Date.now() - started > OUTSIDE_TRANSACTION_TIMEOUT_MS)
+            throw new Error("The show was busy for too long");
+        await new Promise((resolve) => setTimeout(resolve, 15));
+    }
+}
+
 /** Directly executes the SQL query without any parameters */
 export async function handleUnsafeSqlProxy(_: any, sql: string) {
     assertSqlProxyNotSuspended();
