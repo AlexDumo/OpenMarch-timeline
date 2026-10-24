@@ -1,22 +1,33 @@
 import type { BlockParams } from "../kinds/block";
 import type { XY } from "../types";
 import type { ToolEnv } from "../tool/toolKind";
+import {
+    DEFAULT_PIVOT,
+    fieldToFrame,
+    frameToField,
+    pivotPoint,
+    rotationDegrees,
+    squareToField,
+    type ShapeFrame,
+} from "../frame/frame";
 
 /**
- * A box as the box tool draws it (docs/timeline/research/shapes/06-box-v1.md): a block square to
- * the field, its rectangle reaching from marcher to marcher (the edge files and ranks stand on
- * its edges), a short rank at the back and centered.
+ * A box as the box tool draws it (docs/timeline/research/shapes/06-box-v1.md): a block, its
+ * rectangle reaching from marcher to marcher (the edge files and ranks stand on its edges), a
+ * short rank at the back and centered. It is drawn square to the field; turning and flipping it
+ * are the shape frame's (08-shape-system-ux.md), so every function here works in the box's own
+ * axes.
  */
 export type BoxParams = BlockParams & {
-    readonly rotation: 0;
     readonly pattern: "grid";
     readonly shortRank: "center";
     readonly shortRankAt: "back";
 };
 
 /**
- * The rectangle through the edge marchers, in field units. `top` is the back (toward the back
- * sideline). A single rank or file has no depth or width.
+ * The rectangle through the edge marchers, in the box's own axes around its center as if it were
+ * square to the field, in field units. `top` is the back. A single rank or file has no depth or
+ * width. Turned boxes: see {@link boxFrame}.
  */
 export interface Footprint {
     readonly left: number;
@@ -52,6 +63,33 @@ export function footprintOf(p: BlockParams, n: number): Footprint {
         right: p.center.x + halfW,
         top: p.center.y - halfH,
         bottom: p.center.y + halfH,
+    };
+}
+
+/** The box's frame: its center, the half sizes through its edge marchers, its turn and flip */
+export function boxFrame(p: BlockParams, n: number): ShapeFrame {
+    return {
+        center: p.center,
+        halfWidth: ((filesOf(p) - 1) * p.across) / 2,
+        halfDepth: ((ranksOf(p, n) - 1) * p.deep) / 2,
+        rotation: p.rotation,
+        flipX: p.flipX === true,
+        flipY: p.flipY === true,
+    };
+}
+
+/** The box with `frame`'s center, turn and flip; its size is its own */
+export function withBoxFrame<P extends BlockParams>(
+    p: P,
+    frame: ShapeFrame,
+): P {
+    return {
+        ...p,
+        center: frame.center,
+        rotation: frame.rotation,
+        // Absent rather than false, so a box that was never flipped stores as before
+        ...(frame.flipX ? { flipX: true } : { flipX: undefined }),
+        ...(frame.flipY ? { flipY: true } : { flipY: undefined }),
     };
 }
 
@@ -104,14 +142,16 @@ export function splitFor(
 /**
  * `p` moved so its marchers stand on the grid: the back-left corner snaps (a spot of the full
  * grid, even when the short back rank leaves it empty), and every other marcher follows, the
- * intervals being whole half steps. Unchanged without snap.
+ * intervals being whole half steps. Unchanged without snap, and for a box turned off the field's
+ * axes, whose marchers can't all stand on the grid.
  */
 export function snapToGrid(p: BoxParams, n: number, env: ToolEnv): BoxParams {
-    if (!env.snap) return p;
-    const first = {
-        x: p.center.x - ((filesOf(p) - 1) / 2) * p.across,
-        y: p.center.y - ((ranksOf(p, n) - 1) / 2) * p.deep,
-    };
+    if (!env.snap || !squareToField(p.rotation)) return p;
+    const frame = boxFrame(p, n);
+    const first = frameToField(frame, {
+        x: -frame.halfWidth,
+        y: -frame.halfDepth,
+    });
     const snapped = env.gridSnap(first);
     return {
         ...p,
@@ -234,6 +274,35 @@ export function handleKeysOf(p: BlockParams, n: number): BoxHandleKey[] {
     });
 }
 
+/** Where handle `key` is on the field, on the box's corner or edge marchers, turned with it */
+export function boxHandlePoint(
+    p: BlockParams,
+    n: number,
+    key: BoxHandleKey,
+): XY {
+    const frame = boxFrame(p, n);
+    return frameToField(frame, handleDirection(key, frame));
+}
+
+/** Which way handle `key` faces in the box's axes, scaled to reach its corner or side */
+export function handleDirection(
+    key: BoxHandleKey,
+    half: { readonly halfWidth: number; readonly halfDepth: number },
+): XY {
+    return {
+        x: key.includes("w")
+            ? -half.halfWidth
+            : key.includes("e")
+              ? half.halfWidth
+              : 0,
+        y: key.includes("n")
+            ? -half.halfDepth
+            : key.includes("s")
+              ? half.halfDepth
+              : 0,
+    };
+}
+
 export function handlePoint(f: Footprint, key: BoxHandleKey): XY {
     const x = key.includes("w")
         ? f.left
@@ -259,6 +328,56 @@ export function stretchBox(
     to: XY,
     env: ToolEnv,
 ): BoxParams {
+    return inBoxAxes(base, n, env, (flat, flatEnv) =>
+        stretchSquare(
+            flat,
+            n,
+            key,
+            fieldToFrame(boxFrame(base, n), to),
+            flatEnv,
+        ),
+    );
+}
+
+/**
+ * `change` worked out in the box's own axes: on a copy of the box centered on 0, 0 and square to
+ * the field, with nothing snapped to the field's grid (that grid is the field's, not the box's).
+ * The result is put back where the box is, turned and flipped as it was, then snapped.
+ */
+function inBoxAxes(
+    base: BoxParams,
+    n: number,
+    env: ToolEnv,
+    change: (flat: BoxParams, flatEnv: ToolEnv) => BoxParams,
+): BoxParams {
+    const frame = boxFrame(base, n);
+    const flat: BoxParams = {
+        ...base,
+        center: { x: 0, y: 0 },
+        rotation: 0,
+    };
+    const out = change(flat, { ...env, gridSnap: (p) => p });
+    return snapToGrid(
+        {
+            ...out,
+            center: frameToField(frame, out.center),
+            rotation: base.rotation,
+            flipX: base.flipX,
+            flipY: base.flipY,
+        },
+        n,
+        env,
+    );
+}
+
+/** {@link stretchBox} for a box square to the field, `to` in its axes */
+function stretchSquare(
+    base: BoxParams,
+    n: number,
+    key: BoxHandleKey,
+    to: XY,
+    env: ToolEnv,
+): BoxParams {
     const f = footprintOf(base, n);
     const files = filesOf(base);
     const ranks = ranksOf(base, n);
@@ -276,6 +395,8 @@ export function stretchBox(
         (movesY && spread(Math.abs(to.y - anchor.y), ranks, env)) || base.deep;
     if (env.shift && movesX && movesY)
         ({ across, deep } = equalized(across, deep, env));
+    else if (env.ratioLocked)
+        ({ across, deep } = keepRatio(base, across, deep, movesX, movesY, env));
     // A side handle keeps the other axis where it was; past the fixed edge, the box flips over it
     const sign = {
         x: movesX ? signOf(to.x - anchor.x) : 1,
@@ -288,33 +409,108 @@ export function stretchBox(
     return boxFrom(start, sign, files, across, deep, n, env);
 }
 
-/** The box moved by `delta`, its marchers back on the grid */
+/**
+ * The intervals with the ratio lock on: the one the drag changed most, by proportion, decides,
+ * and the other keeps the box's deep-to-across ratio. Both stay on half steps (owner,
+ * 2026-10-16), so the ratio is as near as half steps allow. A side handle changes only its own.
+ */
+export function keepRatio(
+    base: Pick<BlockParams, "across" | "deep">,
+    across: number,
+    deep: number,
+    movesX: boolean,
+    movesY: boolean,
+    env: ToolEnv,
+): { across: number; deep: number } {
+    if (!(base.across > 0) || !(base.deep > 0)) return { across, deep };
+    const ratio = base.deep / base.across;
+    const acrossLeads =
+        movesX &&
+        (!movesY ||
+            Math.abs(Math.log(across / base.across)) >=
+                Math.abs(Math.log(deep / base.deep)));
+    return acrossLeads
+        ? { across, deep: snapInterval(across * ratio, env) }
+        : { across: snapInterval(deep / ratio, env), deep };
+}
+
+/**
+ * The box moved by `delta`, its marchers back on the grid. A box turned off the field's axes
+ * can't stand on the grid, so it moves by whole half steps instead.
+ */
 export function moveBox(
     base: BoxParams,
     n: number,
     delta: XY,
     env: ToolEnv,
 ): BoxParams {
+    const by =
+        env.snap && !squareToField(base.rotation)
+            ? {
+                  x: Math.round(delta.x / halfStep(env)) * halfStep(env),
+                  y: Math.round(delta.y / halfStep(env)) * halfStep(env),
+              }
+            : delta;
     return snapToGrid(
         {
             ...base,
-            center: { x: base.center.x + delta.x, y: base.center.y + delta.y },
+            center: { x: base.center.x + by.x, y: base.center.y + by.y },
         },
         n,
         env,
     );
 }
 
-/** The box with `delta` more files (fewer when negative): same intervals, same center */
+/** The box with `delta` more files (fewer when negative): same intervals, grown from the pivot */
 export function changeFiles(
     p: BoxParams,
     n: number,
     delta: number,
     env: ToolEnv,
 ): BoxParams {
-    const files = Math.min(Math.max(1, n), Math.max(1, filesOf(p) + delta));
-    if (files === filesOf(p)) return p;
-    return snapToGrid({ ...p, files }, n, env);
+    return resizeFiles(p, n, filesOf(p) + delta, env);
+}
+
+/**
+ * The box with `files` across (clamped to 1 to `n`): it keeps its spacing and grows or shrinks
+ * around the pivot. (Keeping its size and refitting the spacing instead lost an A/B with the
+ * simulated users on 2026-10-18: everyone's typed spacing broke.)
+ */
+export function resizeFiles(
+    p: BoxParams,
+    n: number,
+    files: number,
+    env: ToolEnv,
+): BoxParams {
+    const clamped = Math.min(Math.max(1, n), Math.max(1, Math.round(files)));
+    if (clamped === filesOf(p)) return p;
+    return grownFromPivot(p, { ...p, files: clamped }, n, env);
+}
+
+/**
+ * `after`, a resize of `before` (a new count or spacing), moved so the pivot stays where it was:
+ * by default the center (2026-10-18). Then back on the grid.
+ */
+export function grownFromPivot(
+    before: BoxParams,
+    after: BoxParams,
+    n: number,
+    env: ToolEnv,
+): BoxParams {
+    const key = env.pivot ?? DEFAULT_PIVOT;
+    const was = pivotPoint(boxFrame(before, n), key);
+    const now = pivotPoint(boxFrame(after, n), key);
+    return snapToGrid(
+        {
+            ...after,
+            center: {
+                x: after.center.x + was.x - now.x,
+                y: after.center.y + was.y - now.y,
+            },
+        },
+        n,
+        env,
+    );
 }
 
 /**
@@ -322,13 +518,62 @@ export function changeFiles(
  * of them, so a single rank or file can be grabbed too
  */
 export function insideBox(p: BlockParams, n: number, at: XY): boolean {
-    const f = footprintOf(p, n);
-    const padX = p.across / 2;
-    const padY = p.deep / 2;
+    const frame = boxFrame(p, n);
+    const local = fieldToFrame(frame, at);
     return (
-        at.x >= f.left - padX &&
-        at.x <= f.right + padX &&
-        at.y >= f.top - padY &&
-        at.y <= f.bottom + padY
+        Math.abs(local.x) <= frame.halfWidth + p.across / 2 &&
+        Math.abs(local.y) <= frame.halfDepth + p.deep / 2
     );
+}
+
+/** The outline through the box's edge marchers, turned with it: back-left first */
+export function boxCorners(p: BlockParams, n: number): XY[] {
+    const frame = boxFrame(p, n);
+    const { halfWidth: w, halfDepth: d } = frame;
+    return [
+        frameToField(frame, { x: -w, y: -d }),
+        frameToField(frame, { x: w, y: -d }),
+        frameToField(frame, { x: w, y: d }),
+        frameToField(frame, { x: -w, y: d }),
+    ];
+}
+
+/** The field-aligned rectangle around the box's edge marchers, however it's turned */
+export function boxBounds(p: BlockParams, n: number): Footprint {
+    const corners = boxCorners(p, n);
+    const xs = corners.map((c) => c.x);
+    const ys = corners.map((c) => c.y);
+    return {
+        left: Math.min(...xs),
+        right: Math.max(...xs),
+        top: Math.min(...ys),
+        bottom: Math.max(...ys),
+    };
+}
+
+/**
+ * Whether the box is turned far enough that its own deep runs side to side on the field: between
+ * 45° and 135° (or 225° and 315°). The editor's numbers then follow the field, so "across" is
+ * always side to side as people see it (owner, 2026-10-17). Exactly 45° keeps the box's own.
+ */
+export function acrossIsDeep(rotation: number): boolean {
+    const d = rotationDegrees(rotation) % 180;
+    return d > 45 && d < 135;
+}
+
+/** The box's counts and spacings as the field shows them: across is side to side */
+export function onField(p: BlockParams, spots: number) {
+    const swap = acrossIsDeep(p.rotation);
+    const files = filesOf(p);
+    const ranks = ranksOf(p, spots);
+    return {
+        swap,
+        across: swap ? ranks : files,
+        deep: swap ? files : ranks,
+        acrossSpacing: swap ? p.deep : p.across,
+        deepSpacing: swap ? p.across : p.deep,
+        /** The box's own parameter each field number edits */
+        acrossKey: (swap ? "deep" : "across") as "across" | "deep",
+        deepKey: (swap ? "across" : "deep") as "across" | "deep",
+    };
 }

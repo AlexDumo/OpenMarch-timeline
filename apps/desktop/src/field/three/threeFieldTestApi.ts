@@ -164,11 +164,16 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
             from: copy(from),
             to: copy(to),
         })),
-        handles: drawing.handles.map((at) => {
-            const { x, y } = fieldToElement(view, at.x, at.y);
-            return { x: rect.x + x, y: rect.y + y };
-        }),
+        handles: drawing.handles.map(screen),
+        stage: drawing.stage ?? null,
+        knob: drawing.knob ? screen(drawing.knob.at) : null,
+        centerDot: drawing.centerDot ? screen(drawing.centerDot) : null,
+        labels: (drawing.labels ?? []).map((l) => l.text),
     };
+    function screen(at: FieldPoint) {
+        const { x, y } = fieldToElement(view, at.x, at.y);
+        return { x: rect.x + x, y: rect.y + y };
+    }
 }
 
 /** The prop tool as the field shows it, or null when it's off. */

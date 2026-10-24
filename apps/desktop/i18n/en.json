@@ -1944,6 +1944,10 @@
     },
     "shapes": {
         "box": {
+            "discarded": {
+                "message": "Box discarded",
+                "undo": "Undo"
+            },
             "label": "Box {files} × {ranks} · {interval} steps",
             "left": {
                 "closeUp": "Close up",
@@ -2241,6 +2245,9 @@
             "labelsNumbers": "Numbers only",
             "labelsOff": "Off",
             "nextPaths": "Next paths",
+            "shapeFocus": "While shaping",
+            "shapeFocusDrawing": "Fade only while drawing",
+            "shapeFocusRest": "Fade the rest",
             "shapes": "Shapes",
             "shapesAlways": "Always",
             "shapesOff": "Off",

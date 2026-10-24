@@ -1,10 +1,15 @@
+import { create } from "zustand";
 import type { FieldMode } from "@/field/editor/fieldEditor";
+import type { XY } from "../types";
 import type { BoxParams } from "../box/boxGeometry";
 import {
-    asCursor,
     boxOutline,
+    drillNumbers,
+    frameDrawing,
     keysOf,
     memoDrawing,
+    shapeCursor,
+    SPOT_LABEL_LIMIT,
 } from "../field/fieldModeBase";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { toolEnvFor } from "./toolEnv";
@@ -20,26 +25,100 @@ import {
 } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
 
-const drawingOf = memoDrawing((tool: ToolState) => {
+/**
+ * The spot the pointer rests on, with who will stand there, on shapes too big to label every spot
+ * (sims, F1: with 64 nobody could tell who goes where). Null otherwise.
+ */
+const useSpotHover = create<{ hover: { at: XY; text: string } | null }>(() => ({
+    hover: null,
+}));
+
+interface Shown {
+    readonly tool: ToolState;
+    readonly hover: { at: XY; text: string } | null;
+}
+let shown: Shown | null = null;
+const shownNow = (): Shown | null => {
+    const { tool } = useShapeToolStore.getState();
+    if (!tool) return null;
+    const { hover } = useSpotHover.getState();
+    if (shown?.tool !== tool || shown.hover !== hover) shown = { tool, hover };
+    return shown;
+};
+
+/** Notes the spot under the pointer, on a shape that doesn't label every spot */
+function hoverAt(tool: ToolState, at: XY, radius: number): void {
+    const field = currentShapeField();
+    let hover: { at: XY; text: string } | null = null;
+    if (
+        field &&
+        !tool.gesture &&
+        tool.params !== null &&
+        tool.marchers.length > SPOT_LABEL_LIMIT
+    ) {
+        const names = drillNumbers(field);
+        let best = radius;
+        for (const t of targetsOf(tool, shapeContextFor(field))) {
+            const d = Math.hypot(t.to.x - at.x, t.to.y - at.y);
+            if (d <= best) {
+                best = d;
+                hover = { at: t.to, text: names.get(t.id) ?? "" };
+            }
+        }
+    }
+    const was = useSpotHover.getState().hover;
+    if (was?.text !== hover?.text || was?.at !== hover?.at)
+        useSpotHover.setState({ hover });
+}
+
+const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
     const field = currentShapeField();
     if (!field) return null;
     const ctx = shapeContextFor(field);
+    const n = tool.marchers.length;
+    const spots = slotsOf(tool, ctx);
+    if (tool.params === null)
+        return { outline: null, spots, walks: [], handles: [] };
+    // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every
+    // other gesture holds who goes where, so the walks follow it live.
+    const drawing = tool.gesture?.type === "draw";
+    const targets = drawing ? [] : targetsOf(tool, ctx);
+    const names = drillNumbers(field);
+    const env = toolEnvFor(field, { shift: false, alt: false });
+    const g =
+        tool.gesture &&
+        tool.gesture.type !== "draw" &&
+        tool.gesture.type !== "edit"
+            ? tool.gesture
+            : null;
     return {
-        outline:
-            tool.params === null
-                ? null
-                : boxOutline(tool.params as BoxParams, tool.marchers.length),
-        spots: slotsOf(tool, ctx),
-        // The walks show once a gesture ends and who goes where is worked out
-        walks: tool.gesture
+        stage: drawing ? ("drawing" as const) : ("open" as const),
+        outline: boxOutline(tool.params as BoxParams, n),
+        spots,
+        walks: targets.map((t) => ({ from: t.from, to: t.to })),
+        labels:
+            n <= SPOT_LABEL_LIMIT
+                ? targets.map((t) => ({
+                      at: t.to,
+                      text: names.get(t.id) ?? "",
+                  }))
+                : [],
+        handles: drawing
             ? []
-            : targetsOf(tool, ctx).map((t) => ({ from: t.from, to: t.to })),
-        handles:
-            tool.params === null
-                ? []
-                : tool.kind
-                      .handles(tool.params, tool.marchers.length)
-                      .map((h) => h.at),
+            : tool.kind.handles(tool.params, n).map((h) => h.at),
+        ...(drawing
+            ? {}
+            : frameDrawing(
+                  tool.kind,
+                  tool.params,
+                  n,
+                  g,
+                  tool.pointer ?? null,
+                  env,
+              )),
+        ...(hover && !tool.gesture
+            ? { labels: [{ at: hover.at, text: hover.text }] }
+            : {}),
     };
 });
 
@@ -77,20 +156,27 @@ export const shapeToolMode: FieldMode = {
         const tool = useShapeToolStore.getState().tool;
         const field = currentShapeField();
         if (!tool || !field) return null;
-        const target = pressTarget(
-            tool,
-            pointer.field,
-            toolEnvFor(field, keysOf(pointer)),
-        );
-        if (target.type === "move") return "move";
+        const env = toolEnvFor(field, keysOf(pointer));
+        // The editor asks for the cursor as the pointer moves, so this is where hovering is seen
+        hoverAt(tool, pointer.field, env.hitRadius);
+        const target = pressTarget(tool, pointer.field, env);
         if (target.type === "draw") return "crosshair";
-        const handle = tool.kind
-            .handles(tool.params, tool.marchers.length)
-            .find((h) => h.key === target.key);
-        return handle ? asCursor(handle.cursor) : "default";
+        return shapeCursor(
+            tool.kind,
+            tool.params,
+            tool.marchers.length,
+            target,
+        );
     },
-    drawing: () => drawingOf(useShapeToolStore.getState().tool),
-    subscribe: (listener) => useShapeToolStore.subscribe(listener),
+    drawing: () => drawingOf(shownNow()),
+    subscribe: (listener) => {
+        const offTool = useShapeToolStore.subscribe(listener);
+        const offHover = useSpotHover.subscribe(listener);
+        return () => {
+            offTool();
+            offHover();
+        };
+    },
     // The tool's handles move the shape; the marchers stay put until Place
     ownsSelectionBox: true,
     locksSelection: true,

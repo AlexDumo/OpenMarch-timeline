@@ -58,7 +58,11 @@ describe("a selected placed box", () => {
             type: "handle",
             key: "se",
         });
+        // The middle is the center dot; elsewhere inside moves it too
         expect(pressLive(live, { x: 10, y: 10 }, env)?.gesture?.type).toBe(
+            "center",
+        );
+        expect(pressLive(live, { x: 15, y: 6 }, env)?.gesture?.type).toBe(
             "move",
         );
         expect(pressLive(live, { x: 80, y: 80 }, env)).toBe(null);

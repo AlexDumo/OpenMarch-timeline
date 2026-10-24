@@ -40,6 +40,16 @@ const PROP_PREVIEW_WIDTH = 2;
 
 /** The rotate handle's connecting line, in CSS px. */
 const ROTATE_LINE_WIDTH = 1;
+/** A shape's rotate knob, center dot and pivot, in CSS px (08-shape-system-ux.md). */
+const KNOB_RADIUS = 5;
+const CENTER_DOT_RADIUS = 5;
+const CENTER_DOT_RING = 2.5;
+const PIVOT_RADIUS = 4;
+const PIVOT_COLOR = "#facc15";
+/** Spot labels and the pointer tip, in CSS px. */
+const SPOT_LABEL_PX = 10;
+const TIP_PX = 12;
+const TIP_OFFSET_PX = 14;
 
 /**
  * The SVG overlay over the field (ADR 0005 D-2): what the editor draws on top
@@ -282,12 +292,15 @@ function ModeDrawing({
     const view = useFieldViewStore();
     const shape = rgbaToString(theme.shape);
     const walk = rgbaToString({ ...theme.shape, a: 0.4 });
+    const fill = rgbaToString({ ...theme.shape, a: 0.06 });
     const z = view.zoom;
     const at = (point: { x: number; y: number }) =>
         fieldToElement(view, point.x, point.y);
     const half = SHAPE_HANDLE_SIZE / 2;
+    const open = drawing.stage === "open";
+    const dots = drawing.stage === "drawing";
     return (
-        <g data-testid="fieldShapeMode">
+        <g data-testid="fieldShapeMode" data-stage={drawing.stage}>
             {drawing.outline && (
                 <polygon
                     points={drawing.outline
@@ -296,10 +309,10 @@ function ModeDrawing({
                             return `${p.x},${p.y}`;
                         })
                         .join(" ")}
-                    fill="none"
+                    fill={open ? fill : "none"}
                     stroke={shape}
                     strokeWidth={SHAPE_OUTLINE_WIDTH}
-                    strokeDasharray={SHAPE_OUTLINE_DASH}
+                    strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
                 />
             )}
             {drawing.walks.map(({ from, to }, i) => {
@@ -325,12 +338,55 @@ function ModeDrawing({
                         cx={p.x}
                         cy={p.y}
                         r={SPOT_RADIUS * z}
-                        fill="none"
-                        stroke={shape}
+                        fill={dots ? shape : "none"}
+                        stroke={dots ? "white" : shape}
                         strokeWidth={SPOT_WIDTH * z}
                     />
                 );
             })}
+            {drawing.labels?.map(({ at: point, text }, i) => {
+                const p = at(point);
+                return (
+                    <text
+                        key={i}
+                        x={p.x}
+                        y={p.y - (SPOT_RADIUS + 2) * z}
+                        fontSize={SPOT_LABEL_PX}
+                        fontFamily="DM Sans, sans-serif"
+                        textAnchor="middle"
+                        fill={shape}
+                        data-testid="fieldShapeSpotLabel"
+                    >
+                        {text}
+                    </text>
+                );
+            })}
+            {drawing.knob &&
+                (() => {
+                    const a = at(drawing.knob.stem);
+                    const b = at(drawing.knob.at);
+                    return (
+                        <g data-testid="fieldShapeKnob">
+                            <line
+                                x1={a.x}
+                                y1={a.y}
+                                x2={b.x}
+                                y2={b.y}
+                                stroke={shape}
+                                strokeWidth={ROTATE_LINE_WIDTH}
+                                strokeDasharray="3 3"
+                            />
+                            <circle
+                                cx={b.x}
+                                cy={b.y}
+                                r={KNOB_RADIUS}
+                                fill="white"
+                                stroke={shape}
+                                strokeWidth={SHAPE_HANDLE_WIDTH}
+                            />
+                        </g>
+                    );
+                })()}
             {drawing.handles.map((point, i) => {
                 const p = at(point);
                 return (
@@ -346,6 +402,67 @@ function ModeDrawing({
                     />
                 );
             })}
+            {drawing.centerDot &&
+                (() => {
+                    const p = at(drawing.centerDot);
+                    return (
+                        <circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={CENTER_DOT_RADIUS}
+                            fill="white"
+                            stroke={shape}
+                            strokeWidth={CENTER_DOT_RING}
+                            data-testid="fieldShapeCenterDot"
+                        />
+                    );
+                })()}
+            {drawing.pivot &&
+                (() => {
+                    const a = at(drawing.pivot.at);
+                    const b = at(drawing.pivot.to);
+                    return (
+                        <g data-testid="fieldShapePivot">
+                            <line
+                                x1={a.x}
+                                y1={a.y}
+                                x2={b.x}
+                                y2={b.y}
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={ROTATE_LINE_WIDTH}
+                                strokeDasharray="4 3"
+                            />
+                            <circle
+                                cx={a.x}
+                                cy={a.y}
+                                r={PIVOT_RADIUS}
+                                fill={PIVOT_COLOR}
+                                stroke="black"
+                                strokeWidth={1}
+                            />
+                        </g>
+                    );
+                })()}
+            {drawing.tip &&
+                (() => {
+                    const p = at(drawing.tip.at);
+                    return (
+                        <text
+                            x={p.x + TIP_OFFSET_PX}
+                            y={p.y + TIP_OFFSET_PX}
+                            fontSize={TIP_PX}
+                            fontFamily="DM Sans, sans-serif"
+                            fill="white"
+                            stroke="black"
+                            strokeWidth={3}
+                            paintOrder="stroke"
+                            dominantBaseline="hanging"
+                            data-testid="fieldShapeTip"
+                        >
+                            {drawing.tip.text}
+                        </text>
+                    );
+                })()}
         </g>
     );
 }

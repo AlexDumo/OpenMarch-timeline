@@ -84,6 +84,11 @@ export interface UiSettings {
      * any member is selected, always, or never
      */
     shapes?: ShapeOutlines;
+    /**
+     * While a shape is open, who isn't in it is faded (`rest`, the default) or only while the
+     * shape is being drawn (`drawing`) (docs/timeline/research/shapes/08-shape-system-ux.md)
+     */
+    shapeFocus?: ShapeFocus;
     /** Whether props show their names on the canvas, unless `propNameOverrides` says otherwise */
     showPropNames: boolean;
     /** Per prop: whether its name shows. Key is the item id. */
@@ -99,6 +104,7 @@ export interface UiSettings {
 export type MarcherLabelForm = "auto" | "names" | "numbers" | "off";
 export type MarcherLabelSize = "small" | "normal" | "large";
 export type ShapeOutlines = "selected" | "always" | "off";
+export type ShapeFocus = "rest" | "drawing";
 
 /** How much each label size scales the labels' normal size */
 export const LABEL_SIZE_SCALE: Record<MarcherLabelSize, number> = {
@@ -142,6 +148,7 @@ export const defaultSettings: UiSettings = {
     },
     marcherLabels: "auto",
     shapes: "selected",
+    shapeFocus: "rest",
     showPropNames: false,
     propNameOverrides: {},
     hiddenPropIds: {},

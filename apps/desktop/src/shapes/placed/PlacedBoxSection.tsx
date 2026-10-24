@@ -10,11 +10,11 @@ import {
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { currentShapeField } from "../field/shapeFieldContext";
 import { useBoxSelectionStore } from "./boxSelectionStore";
-import { placedBoxSummary, useDrawnOnPage } from "./PlacedBoxReadout";
+import { placedBoxSummary, useDrawnOnPage } from "./placedBoxText";
 import { placedBoxesAt, usePlacedBoxStore } from "./placedBoxStore";
 import { selectOnField } from "./boxSelection";
 import { stepPlacedBoxFiles } from "./PlacedBoxKeys";
-import { filesOf } from "../box/boxGeometry";
+import { onField } from "../box/boxGeometry";
 import { setInsideBox } from "./boxSelectionStore";
 
 /**
@@ -35,7 +35,8 @@ export function PlacedBoxSection() {
     if (!field) return null;
 
     if (box) {
-        const files = filesOf(box.params);
+        // Across as the field shows it, like the floating editor
+        const files = onField(box.params, box.spots).across;
         const button = getButtonClassName({
             variant: "secondary",
             size: "compact",

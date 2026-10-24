@@ -10,6 +10,11 @@ export class FieldDimming {
     version = 0;
     /** The isolated move's marchers, the only ones not dimmed; null dims nobody. */
     private members: ReadonlySet<number> | null = null;
+    /**
+     * The open shape's marchers (08-shape-system-ux.md, "fade the rest"); null dims nobody. A
+     * second set beside isolation's, so each can come and go without the other.
+     */
+    private focus: ReadonlySet<number> | null = null;
     private readonly listeners = new Set<() => void>();
 
     /** Calls `listener` after each change (a layer asks for a frame). Returns the unsubscribe. */
@@ -32,8 +37,19 @@ export class FieldDimming {
         for (const listener of this.listeners) listener();
     }
 
+    /** Dims every marcher but `members` while a shape is open; null ends it. */
+    setFocus(members: ReadonlySet<number> | null) {
+        if (sameMembers(members, this.focus)) return;
+        this.focus = members;
+        this.version++;
+        for (const listener of this.listeners) listener();
+    }
+
     isDimmed(id: number): boolean {
-        return this.members !== null && !this.members.has(id);
+        return (
+            (this.members !== null && !this.members.has(id)) ||
+            (this.focus !== null && !this.focus.has(id))
+        );
     }
 }
 

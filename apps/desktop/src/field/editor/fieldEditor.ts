@@ -200,6 +200,7 @@ export type FieldCursor =
     | "pointer"
     | "crosshair"
     | "move"
+    | "grab"
     | ReturnType<typeof handleCursor>;
 
 /**
@@ -212,6 +213,22 @@ export type FieldModeDrawing = {
     spots: readonly FieldPoint[];
     walks: readonly { from: FieldPoint; to: FieldPoint }[];
     handles: readonly FieldPoint[];
+    /**
+     * The shape's look at this stage (docs/timeline/research/shapes/08-shape-system-ux.md,
+     * "Marcher styling"): while it's drawn, a dashed outline and solid spots; once open, a solid
+     * outline with a faint fill. Dashed rings when absent.
+     */
+    stage?: "drawing" | "open";
+    /** Who will stand on each spot */
+    labels?: readonly { at: FieldPoint; text: string }[];
+    /** The rotate knob and the foot of its stem on the shape's back edge */
+    knob?: { at: FieldPoint; stem: FieldPoint };
+    /** The dot that moves the whole shape */
+    centerDot?: FieldPoint;
+    /** While turning: what it turns around, and the pointer */
+    pivot?: { at: FieldPoint; to: FieldPoint };
+    /** A note by the pointer: the angle, or where the shape is in drill terms */
+    tip?: { at: FieldPoint; text: string };
 };
 
 /**

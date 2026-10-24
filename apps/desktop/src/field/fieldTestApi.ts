@@ -174,6 +174,13 @@ export type FieldTestShapeOverlay = {
     walks: { from: { x: number; y: number }; to: { x: number; y: number } }[];
     /** Its handles, in the viewport. */
     handles: ScreenPoint[];
+    /** Drawing (a drag draws it) or open; null for a mode that doesn't say. */
+    stage: "drawing" | "open" | null;
+    /** The rotate knob and the center dot, in the viewport; null when not drawn. */
+    knob: ScreenPoint | null;
+    centerDot: ScreenPoint | null;
+    /** Who will stand on each spot, as labeled. */
+    labels: string[];
 };
 
 /** A placed box outlined on the field. */
