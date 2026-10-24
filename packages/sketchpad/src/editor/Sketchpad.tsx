@@ -53,8 +53,15 @@ export interface SketchpadHandle {
     open(id: string): Promise<void>;
     /** Opens a sketch the host loaded itself (a `.omsketch` file), saving it to the store */
     openDoc(doc: SketchDoc): Promise<void>;
-    /** Shows the New sketch dialog */
-    newSketch(): void;
+    /**
+     * Shows the New sketch dialog; with `blank`, makes a blank sketch without asking, and with
+     * `templateId`, makes one from that template (an id from `store.templates.list()`)
+     */
+    newSketch(options?: { blank?: boolean; templateId?: string }): void;
+    /** Renames an open sketch's tab after the host renamed the sketch itself */
+    rename(id: string, name: string): void;
+    /** Closes a sketch's tab without saving it (the host deleted the sketch) */
+    discard(id: string): void;
     /** The active tab's sketch as it is now */
     activeDoc(): SketchDoc | null;
 }
@@ -67,6 +74,11 @@ export interface SketchpadProps {
     assetPath: string;
     /** Sketches to open first; with none, the most recent opens, or a new blank one */
     initialOpenIds?: string[];
+    /**
+     * With false, only `initialOpenIds` open at the start: nothing else opens or is created when
+     * none of them can be (for a host that asks for a new sketch right away)
+     */
+    autoOpen?: boolean;
     /** The show's name, for export file names */
     hostName?: string;
     theme?: "dark" | "light";
@@ -106,6 +118,7 @@ export const Sketchpad = forwardRef<SketchpadHandle, SketchpadProps>(
             initialField,
             assetPath,
             initialOpenIds,
+            autoOpen = true,
             hostName,
             theme = "dark",
             menuItems,
@@ -202,19 +215,57 @@ export const Sketchpad = forwardRef<SketchpadHandle, SketchpadProps>(
             setNewOpen(true);
         }, [store]);
 
+        const newSketch = useCallback(
+            (options?: { blank?: boolean; templateId?: string }) => {
+                if (options?.templateId) {
+                    const id = options.templateId;
+                    const builtIn = builtIns.find((t) => t.id === id);
+                    void (
+                        builtIn
+                            ? Promise.resolve(builtIn)
+                            : store.templates.load(id)
+                    )
+                        .then((template) => createFrom(template, ""))
+                        .catch((error: unknown) =>
+                            console.error("Couldn't use the template", error),
+                        );
+                } else if (options?.blank) void createFrom(builtIns[0]!, "");
+                else showNew();
+            },
+            [builtIns, store, createFrom, showNew],
+        );
+
+        const discard = useCallback((id: string) => {
+            handles.current.delete(id);
+            setTabs((t) => {
+                const index = t.findIndex((x) => x.doc.id === id);
+                if (index < 0) return t;
+                const rest = t.filter((x) => x.doc.id !== id);
+                setActiveId((active) =>
+                    active === id
+                        ? (rest[Math.max(0, index - 1)]?.doc.id ?? null)
+                        : active,
+                );
+                return rest;
+            });
+        }, []);
+
         useImperativeHandle(
             ref,
             () => ({
                 flush,
                 open,
                 openDoc,
-                newSketch: showNew,
+                newSketch,
+                rename: (id: string, name: string) =>
+                    handles.current.get(id)?.rename(name),
+                discard,
                 activeDoc: () =>
                     activeId
                         ? (handles.current.get(activeId)?.getDoc() ?? null)
                         : null,
             }),
-            [flush, open, openDoc, showNew, activeId],
+            [flush, open, openDoc, newSketch, discard, activeId],
         );
 
         // Open something right away: paper first (UX spec principle 1)
@@ -233,7 +284,7 @@ export const Sketchpad = forwardRef<SketchpadHandle, SketchpadProps>(
                         // A sketch removed since; skip it
                     }
                 }
-                if (opened > 0) return;
+                if (opened > 0 || !autoOpen) return;
                 const list = await store.list();
                 const recent = [...list].sort(
                     (a, b) => b.updatedAt - a.updatedAt,
@@ -241,7 +292,7 @@ export const Sketchpad = forwardRef<SketchpadHandle, SketchpadProps>(
                 if (recent) await open(recent.id);
                 else await createFrom(builtIns[0]!, "");
             })();
-        }, [initialOpenIds, open, store, createFrom, builtIns]);
+        }, [initialOpenIds, autoOpen, open, store, createFrom, builtIns]);
 
         // Save on blur and when the page hides (ADR 0006 D-4)
         useEffect(() => {

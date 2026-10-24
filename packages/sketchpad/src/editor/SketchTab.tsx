@@ -85,6 +85,8 @@ export interface SketchTabHandle {
     flush(): Promise<void>;
     /** The sketch as it is now */
     getDoc(): SketchDoc;
+    /** Takes a name given elsewhere (the host's sidebar), and saves it like any change */
+    rename(name: string): void;
 }
 
 export interface SketchMenuItem {
@@ -441,10 +443,17 @@ export const SketchTab = forwardRef<SketchTabHandle, SketchTabProps>(
             timer.current = setTimeout(() => void saveNow(), wait);
         }, [saveNow]);
 
-        useImperativeHandle(ref, () => ({ flush: saveNow, getDoc: buildDoc }), [
-            saveNow,
-            buildDoc,
-        ]);
+        useImperativeHandle(
+            ref,
+            () => ({
+                flush: saveNow,
+                getDoc: buildDoc,
+                rename: (next: string) => {
+                    if (next.trim()) setName(next.trim());
+                },
+            }),
+            [saveNow, buildDoc],
+        );
 
         useEffect(() => {
             if (saveOnMount) void saveNow();
