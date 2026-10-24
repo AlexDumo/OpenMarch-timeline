@@ -31,9 +31,10 @@ export default function WebWelcomeModal() {
                         <p>
                             This is a test build of a feature that is still in
                             development, so expect rough edges. Your show stays
-                            on this computer: the editor does not upload it.
-                            Open an example show, an existing <code>.dots</code>{" "}
-                            file or start a new one to begin.
+                            on this computer: the editor does not upload it. It
+                            opens with an example show; use the File menu to
+                            open your own <code>.dots</code> file or start a new
+                            one.
                         </p>
                     ) : (
                         <p>

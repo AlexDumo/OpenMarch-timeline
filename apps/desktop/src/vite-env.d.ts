@@ -19,6 +19,10 @@ interface ImportMetaEnv {
     readonly VITE_PUBLIC_WEB_STORAGE_NAMESPACE?: string;
     /** JSON list of the example shows a preview or lab web build offers. */
     readonly VITE_PUBLIC_WEB_EXAMPLES?: string;
+    /** A lab build's show to open straight away, an example show's id (fork-only, web/LAB.md). */
+    readonly VITE_PUBLIC_LAB_SHOW?: string;
+    /** A lab build's editor mode, "basic" or "expert" (fork-only, web/LAB.md). */
+    readonly VITE_PUBLIC_LAB_MODE?: string;
     /** "true" in the 3D View web preview, which has no Settings window. */
     readonly VITE_VIEW3D_NO_SETTINGS_WINDOW?: string;
     /** The app's version, in the web build's worker. */

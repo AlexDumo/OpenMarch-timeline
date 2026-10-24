@@ -1,9 +1,11 @@
 # Lab test builds (fork-only, do not merge to OpenMarch's `main`)
 
 > **Do not merge the lab pieces into OpenMarch's `main` branch:** this file,
-> the `lab` channel in `vite.web.config.mts` (with `LAB_TEST_ID`) and its
-> wording in the app (`webChannel === "lab"`), the example shows (`demos.ts`,
-> `public/demos/`, which the fork's `preview` channel uses too), `lab/` and
+> the `lab` channel in `vite.web.config.mts` (with `LAB_TEST_ID`,
+> `LAB_MANIFEST` and the `VITE_PUBLIC_LAB_*` values) and its wording in the
+> app (`webChannel === "lab"`), `renderer/lab.ts` and its calls in
+> `renderer/index.ts`, the example shows (`demos.ts`, `public/demos/`, which
+> the fork's `preview` channel uses too), `lab/` and
 > `.github/workflows/lab-deploy.yaml`. They exist so testers can try features
 > that are still in development, in a browser, and give feedback. They live
 > on the fork.
@@ -13,10 +15,23 @@ A lab test build is the production web editor (`README.md`) built on its
 worker, storage, Settings and 3D View windows that editor.openmarch.com runs,
 with these differences:
 
+- **Straight into a show.** A tester lands in the editor with the test's
+  show open, with no welcome flow, "Web" notice or start page
+  (`renderer/lab.ts`). The show is the example show the manifest's `show`
+  names (below), or Part 1 Demo; a page-era show converts to timelines as
+  it opens. The editor mode is the manifest's `mode`, or Expert, and the
+  language and theme are the defaults; Settings changes them.
+  - A reload keeps the tester's show, edits and all, as on the web editor.
+  - **Close file** starts over: the page reloads into a fresh copy of the
+    test's show (after asking, if there are changes since the last
+    download).
+  - **Open file** opens the tester's own `.dots`, and a reload keeps it.
+    **New file** goes to the start page's new-show dialog, as on the web
+    editor; the start page also offers the example shows.
+  - The "Web" notice still opens from the title bar's "Web" badge.
 - **Example shows.** The start page offers the shows in `public/demos/`
   (listed in `demos.ts`), as the `preview` channel does, so a tester doesn't
-  need a `.dots` file of their own. A page-era show converts to timelines
-  when it opens.
+  need a `.dots` file of their own.
 - **Served from a folder.** The lab serves each test at
   `https://lab.openmarch.com/x/<test id>/`, so the build's URLs are relative
   (`base: "./"`): its scripts, the worker, SQLite's WebAssembly, the 3D
@@ -48,21 +63,32 @@ WEB_CHANNEL=lab LAB_TEST_ID=my-test pnpm run web:dev     # local server
 WEB_CHANNEL=lab LAB_TEST_ID=my-test pnpm run web:build   # static site in dist-web/
 ```
 
-A lab build without `LAB_TEST_ID` (a-z, 0-9 and -) fails. To try it as the
+A lab build without `LAB_TEST_ID` (a-z, 0-9 and -) fails. `LAB_MANIFEST`,
+the test's `lab/<id>/experiment.md` (from the repository root), gives the
+build the manifest's `show` and `mode` (below); without it the build opens
+Part 1 Demo in Expert mode. To try it as the
 lab serves it, copy `dist-web/` to `<folder>/x/my-test/`, serve `<folder>`
 (e.g. with `python3 -m http.server`) and open `/x/my-test/`.
 
 ## Publishing to the lab
 
 A test is a folder `lab/<id>/` with `experiment.md` (the test's title, intro
-and questions) and, optionally, an intro video or GIF. To publish one:
+and questions) and, optionally, an intro video or GIF. Two front-matter
+fields are the build's, and the lab ignores them:
+
+```yaml
+show: lhb-daft-punk # the example show it opens: an id in demos.ts (default: part1)
+mode: basic # the editor mode: basic or expert (default: expert)
+```
+
+A value that isn't one of these fails the build. To publish one:
 
 1. Open a pull request on the fork that adds or changes exactly one
    `lab/<id>/experiment.md`.
 2. Add the **`lab`** label.
 
 `.github/workflows/lab-deploy.yaml` builds the web editor with
-`WEB_CHANNEL=lab` and `LAB_TEST_ID=<id>`, publishes `apps/desktop/dist-web`
+`WEB_CHANNEL=lab`, `LAB_TEST_ID=<id>` and `LAB_MANIFEST`, publishes `apps/desktop/dist-web`
 to the OpenMarch lab, with a link to the pull request and credit to its
 author, and comments on the pull request with the test's link. It publishes
 again on every push while the label is on. Merging the pull request archives
