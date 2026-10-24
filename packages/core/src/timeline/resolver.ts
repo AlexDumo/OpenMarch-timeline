@@ -763,6 +763,7 @@ export function createCachedResolver(host: TimelineSnapshot): CachedResolver {
         end: s.end,
         kind: k,
         assignmentId: s.row?.id ?? null,
+        assignmentEnd: s.row?.end ?? null,
         transitionId: s.row?.transition ?? null,
         slot: s.row?.slot ?? null,
     });

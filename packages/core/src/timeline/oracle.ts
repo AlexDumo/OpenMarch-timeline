@@ -224,6 +224,7 @@ export function createOracle(db: TimelineSnapshot): Oracle {
         end: sp.end,
         kind: kind(sp),
         assignmentId: sp.row?.id ?? null,
+        assignmentEnd: sp.row?.end ?? null,
         transitionId: sp.row?.transition ?? null,
         slot: sp.row?.slot ?? null,
     });

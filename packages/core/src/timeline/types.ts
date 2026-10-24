@@ -19,6 +19,12 @@ export interface SpanInfo {
     end: Beat;
     kind: SpanKind;
     assignmentId: number | null;
+    /**
+     * The `end_beat` of the span's assignment, null for holds. It equals `end` when the span is
+     * the one that arrives where its row ends; it's later when a higher layer cuts the row short
+     * here (R-2), whether or not the row resumes after.
+     */
+    assignmentEnd: Beat | null;
     transitionId: number | null;
     slot: number | null;
 }
