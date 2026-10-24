@@ -22,6 +22,7 @@ import { storageKey } from "./channel";
 import { invokeWorker, ipcRenderer, startWorker } from "./ipc";
 import { installView3dApi, registerView3dHost } from "./view3d";
 import { initVariants, mountVariantSwitch } from "../variants";
+import { isLabBuild, startLabBuild } from "./lab";
 import { WEB_CHANNELS, WEB_EVENTS, type WorkerStatus } from "../protocol";
 
 declare global {
@@ -93,7 +94,8 @@ function warnAboutStorage(status: WorkerStatus) {
     if (status.storage === "opfs") {
         const remindedKey = storageKey("reminded");
         try {
-            if (!sessionStorage.getItem(remindedKey)) {
+            // A lab test build opens straight into its show (./lab.ts).
+            if (!isLabBuild && !sessionStorage.getItem(remindedKey)) {
                 sessionStorage.setItem(remindedKey, "1");
                 useWebWelcomeStore.getState().setOpen(true);
             }
@@ -171,6 +173,7 @@ async function start() {
             setStoredInBrowser(status.storage === "opfs");
             // Also with storage: one that failed hands its show off too.
             await reopenHandedOffShow();
+            if (isLabBuild) await startLabBuild();
             warnAboutStorage(status);
             registerView3dHost();
         } catch (error) {
