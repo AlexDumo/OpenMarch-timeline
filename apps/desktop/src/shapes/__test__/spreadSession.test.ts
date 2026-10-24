@@ -9,7 +9,7 @@ import {
 } from "../distribute/distribution";
 import { distributionOf, reshuffle, withMode } from "../distribute/modes";
 import { fieldToFrame } from "../frame/frame";
-import { SPREAD_GENERATOR } from "../geometry/naturalFill";
+import { SPREAD_GENERATOR } from "../distribute/spread";
 import { savedShapeOf, withSavedDistribution } from "../library/savedShapes";
 import { boxesAt, type PlacedRecipe } from "../placed/placedBox";
 import { placedBoxSummary } from "../placed/placedBoxText";

@@ -38,9 +38,9 @@ section. The marchers stand around the edge with one on every corner.
   type a size, and watch the outline go round.
 - Flip the box, place it with **Enter**, then select it again: the gap is
   where you left it.
-- In the command bar, **/ box** asks **Fill** first (Enter keeps Files).
+- In the command bar, **/ box** asks **Fill** first (Enter keeps Grid).
   A one-liner such as **box outline** works too, and **box 4x2 3** still
-  sizes a box in Files.
+  sizes a box in Grid.
 
 **Good to know**
 

@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import tolgee from "@/global/singletons/Tolgee";
 import { useState } from "react";
 import { StarIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -92,8 +93,14 @@ export function SaveShapeButton({
                 data-testid={`${testId}-name`}
             />
             <input
-                aria-label="Description of the saved shape (optional)"
-                placeholder="Description (optional)"
+                aria-label={tolgee.t(
+                    "shapes.save.descriptionLabel",
+                    "Description of the saved shape (optional)",
+                )}
+                placeholder={tolgee.t(
+                    "shapes.save.descriptionPlaceholder",
+                    "Description (optional)",
+                )}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 onKeyDown={(e) => {

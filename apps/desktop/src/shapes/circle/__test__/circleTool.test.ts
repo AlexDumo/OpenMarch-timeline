@@ -1,20 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { circleTool } from "../circle/circleTool";
-import {
-    radiusFor,
-    radiusOf,
-    type CircleParams,
-} from "../circle/circleGeometry";
-import { boxTool } from "../box/boxTool";
-import { distributionOf, switchModes, withMode } from "../distribute/modes";
-import { filesDistribution } from "../distribute/distribution";
-import { flipShape, turnShape } from "../frame/gestures";
-import { scaleShape } from "../frame/scale";
-import { savedShapeOf, savedToolKind } from "../library/savedShapes";
-import { placementOf } from "../tool/shapePlacement";
-import { SHAPE_TOOLS } from "../tool/shapeTools";
-import { shapeSteps, startingParams } from "../command/shapeSteps";
-import type { ToolEnv } from "../tool/toolKind";
+import { circleTool } from "../circleTool";
+import { radiusFor, radiusOf, type CircleParams } from "../circleGeometry";
+import { boxTool } from "../../box/boxTool";
+import { distributionOf, switchModes, withMode } from "../../distribute/modes";
+import { filesDistribution } from "../../distribute/distribution";
+import { flipShape, turnShape } from "../../frame/gestures";
+import { scaleShape } from "../../frame/scale";
+import { savedShapeOf, savedToolKind } from "../../library/savedShapes";
+import { placementOf } from "../../tool/shapePlacement";
+import { SHAPE_TOOLS } from "../../tool/shapeTools";
+import { shapeSteps, startingParams } from "../../command/shapeSteps";
+import type { ToolEnv } from "../../tool/toolKind";
 import {
     openTool,
     pointerMove,
@@ -24,8 +20,8 @@ import {
     switchKind,
     undo,
     type ToolState,
-} from "../tool/toolMachine";
-import type { ShapeContext, XY } from "../types";
+} from "../../tool/toolMachine";
+import type { ShapeContext, XY } from "../../types";
 
 /**
  * The circle kind (#389, spec #385): drawn center-out, sized by the interval between neighbors

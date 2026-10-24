@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GLIDE_MS, SpotGlide } from "../tool/spotGlide";
+import { GLIDE_MS, SpotGlide } from "../spotGlide";
 
 /**
  * The glide (#387, the owner's pick from the lab): when the open shape changes without a gesture,

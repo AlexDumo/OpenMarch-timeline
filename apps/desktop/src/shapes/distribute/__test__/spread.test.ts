@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { distribute, spreadScale } from "../distribute/distribute";
+import { distribute, spreadScale } from "../distribute";
 import {
     reshuffled,
     spreadDistribution,
     storedDistribution,
     type SpreadDistribution,
-} from "../distribute/distribution";
+} from "../distribution";
 import {
     circleRegion,
     polygonRegion,
     rectRegion,
     type Region,
-} from "../distribute/region";
-import { evenSpread, SPREAD_GENERATOR } from "../geometry/naturalFill";
-import { leastTravel } from "../leastTravel";
-import type { XY } from "../types";
+} from "../region";
+import { evenSpread, SPREAD_GENERATOR } from "../spread";
+import { leastTravel } from "../../leastTravel";
+import type { XY } from "../../types";
 
 /**
  * Even spread (#391, spec #385), at the distributor: a seeded scatter with no visible files, the

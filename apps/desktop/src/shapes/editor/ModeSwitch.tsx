@@ -1,4 +1,5 @@
 import { SegmentedTextSwitch } from "@openmarch/ui";
+import tolgee from "@/global/singletons/Tolgee";
 import { MODE_LABELS, type DistributionMode } from "../distribute/distribution";
 import { distributionOf, switchModes, withMode } from "../distribute/modes";
 import type { ToolEnv } from "../tool/toolKind";
@@ -22,12 +23,12 @@ export function ModeSwitch({
     if (modes.length === 0 || !current) return null;
     return (
         <SegmentedTextSwitch
-            ariaLabel="Fill"
+            ariaLabel={tolgee.t("shapes.edit.mode.label", "Fill")}
             testId="shape-mode-switch"
             className="self-start"
             options={modes.map((mode) => ({
                 value: mode,
-                label: MODE_LABELS[mode],
+                label: tolgee.t(`shapes.edit.mode.${mode}`, MODE_LABELS[mode]),
                 testId: `shape-mode-${mode}`,
             }))}
             selected={current.mode}

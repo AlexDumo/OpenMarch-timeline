@@ -164,7 +164,7 @@ describe("the command bar's layout step", () => {
         expect(boxBlock(box.shape, N).lines).toEqual([5, 4, 5, 4, 5]);
         key("Enter");
         expect(box.finish).toHaveBeenCalledWith([
-            "Files",
+            "Grid",
             "6 × 4",
             "2",
             "2",
