@@ -55,6 +55,8 @@ const PIVOT_COLOR = "#facc15";
 /** The pivot's crosshair once it's out of the center (#350): its arms and ring, in CSS px */
 const PIVOT_MARK_ARM = 9;
 const PIVOT_MARK_RING = 5;
+/** How strong an open shape's controls are while the pointer is away from it (#403) */
+const CALM_CONTROLS_OPACITY = 0.25;
 /** Spot labels and the pointer tip, in CSS px. */
 const SPOT_LABEL_PX = 10;
 const TIP_PX = 12;
@@ -308,6 +310,11 @@ function ModeDrawing({
     const half = SHAPE_HANDLE_SIZE / 2;
     const open = drawing.stage === "open";
     const dots = drawing.stage === "drawing";
+    // The controls fade while the pointer is away from the shape (#403), and come back over it
+    const controls = {
+        opacity: drawing.calm ? CALM_CONTROLS_OPACITY : 1,
+        transition: "opacity 150ms ease-out",
+    };
     return (
         <g data-testid="fieldShapeMode" data-stage={drawing.stage}>
             {drawing.outline && (
@@ -318,7 +325,8 @@ function ModeDrawing({
                             return `${p.x},${p.y}`;
                         })
                         .join(" ")}
-                    fill={open ? fill : "none"}
+                    // The faint fill shows with the controls, on hover (#403)
+                    fill={open && !drawing.calm ? fill : "none"}
                     stroke={shape}
                     strokeWidth={SHAPE_OUTLINE_WIDTH}
                     strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
@@ -362,8 +370,10 @@ function ModeDrawing({
                         cx={p.x}
                         cy={p.y}
                         r={SPOT_RADIUS * z}
-                        fill={dots ? shape : "none"}
-                        stroke={dots ? "white" : shape}
+                        // Solid while drawn and once open (#403): the spots are where everyone will
+                        // stand, unlike the hollow start rings
+                        fill={dots || open ? shape : "none"}
+                        stroke={dots || open ? "white" : shape}
                         strokeWidth={SPOT_WIDTH * z}
                     />
                 );
@@ -380,6 +390,7 @@ function ModeDrawing({
                         stroke={shape}
                         strokeWidth={SPOT_WIDTH * z}
                         strokeDasharray={`${1.5 * z} ${1.5 * z}`}
+                        style={controls}
                         data-testid="fieldShapeGap"
                     />
                 );
@@ -406,7 +417,7 @@ function ModeDrawing({
                     const a = at(drawing.knob.stem);
                     const b = at(drawing.knob.at);
                     return (
-                        <g data-testid="fieldShapeKnob">
+                        <g data-testid="fieldShapeKnob" style={controls}>
                             <line
                                 x1={a.x}
                                 y1={a.y}
@@ -439,6 +450,8 @@ function ModeDrawing({
                         fill="white"
                         stroke={shape}
                         strokeWidth={SHAPE_HANDLE_WIDTH}
+                        style={controls}
+                        data-testid="fieldShapeHandle"
                     />
                 );
             })}
@@ -453,6 +466,7 @@ function ModeDrawing({
                             fill="white"
                             stroke={shape}
                             strokeWidth={CENTER_DOT_RING}
+                            style={controls}
                             data-testid="fieldShapeCenterDot"
                         />
                     );
@@ -463,7 +477,7 @@ function ModeDrawing({
                     const r = PIVOT_MARK_ARM;
                     const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
                     return (
-                        <g data-testid="fieldShapePivotMark">
+                        <g data-testid="fieldShapePivotMark" style={controls}>
                             {/* A dark edge under the yellow, so it reads on grass and on white */}
                             <path d={cross} stroke="black" strokeWidth={3.5} />
                             <circle

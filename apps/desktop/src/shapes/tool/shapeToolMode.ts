@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import type { FieldMode, FieldPointer } from "@/field/editor/fieldEditor";
 import type { ShapeField } from "../field/shapeField";
 import type { XY } from "../types";
@@ -29,23 +30,38 @@ import { updateTool, useShapeToolStore } from "./shapeToolStore";
 import { SpotGlide } from "./spotGlide";
 
 /**
- * The spot the pointer rests on, with who will stand there, on shapes too big to label every spot
- * (sims, F1: with 64 nobody could tell who goes where). Null otherwise.
+ * `hover`: the spot the pointer rests on, with who will stand there, on shapes too big to label
+ * every spot (sims, F1: with 64 nobody could tell who goes where). Null otherwise.
+ * `over`: the pointer is over the shape or one of its controls (#403).
  */
-const useSpotHover = create<{ hover: { at: XY; text: string } | null }>(() => ({
+const useSpotHover = create<{
+    hover: { at: XY; text: string } | null;
+    over: boolean;
+}>(() => ({
     hover: null,
+    over: false,
 }));
 
 interface Shown {
     readonly tool: ToolState;
     readonly hover: { at: XY; text: string } | null;
+    readonly over: boolean;
+    /** The walks and start rings are shown: the pathways toggle (#403) */
+    readonly walks: boolean;
 }
 let shown: Shown | null = null;
 const shownNow = (): Shown | null => {
     const { tool } = useShapeToolStore.getState();
     if (!tool) return null;
-    const { hover } = useSpotHover.getState();
-    if (shown?.tool !== tool || shown.hover !== hover) shown = { tool, hover };
+    const { hover, over } = useSpotHover.getState();
+    const walks = useUiSettingsStore.getState().uiSettings.shapeWalks ?? false;
+    if (
+        shown?.tool !== tool ||
+        shown.hover !== hover ||
+        shown.over !== over ||
+        shown.walks !== walks
+    )
+        shown = { tool, hover, over, walks };
     return shown;
 };
 
@@ -74,14 +90,20 @@ function hoverAt(tool: ToolState, at: XY, radius: number): void {
         useSpotHover.setState({ hover });
 }
 
-const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
+/** Notes whether the pointer is over the shape or one of its controls (#403) */
+function overAt(over: boolean): void {
+    if (useSpotHover.getState().over !== over) useSpotHover.setState({ over });
+}
+
+const drawingOf = memoDrawing(({ tool, hover, over, walks }: Shown) => {
     const field = currentShapeField();
     if (!field) return null;
     const ctx = shapeContextFor(field);
     const n = tool.spots;
     const spots = slotsOf(tool, ctx);
-    // The marchers' hollow rings stand where they start the move: at the start flag (#346)
-    const rings = startsOf(tool);
+    // The marchers' hollow rings stand where they start the move: at the start flag (#346). The
+    // pathways toggle hides them with the walks that leave from them (#403).
+    const rings = walks ? startsOf(tool) : [];
     if (tool.params === null)
         return { outline: null, spots, walks: [], handles: [], rings };
     // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every
@@ -101,8 +123,10 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
         stage: drawing ? ("drawing" as const) : ("open" as const),
         outline: shapeOutline(tool.kind, tool.params, n),
         spots,
-        walks: targets.map((t) => ({ from: t.from, to: t.to })),
+        walks: walks ? targets.map((t) => ({ from: t.from, to: t.to })) : [],
         rings,
+        // The controls stay at full strength while the pointer is on the shape or a gesture runs
+        calm: !over && !tool.gesture,
         gaps: gap ? [gap] : [],
         labels:
             n <= SPOT_LABEL_LIMIT
@@ -206,7 +230,9 @@ function glidingDrawing(shown: Shown | null) {
             drawing.spots.length === targets.length
                 ? targets.map(shownAt)
                 : drawing.spots,
-        walks: targets.map((t) => ({ from: t.from, to: shownAt(t) })),
+        walks: shown.walks
+            ? targets.map((t) => ({ from: t.from, to: shownAt(t) }))
+            : [],
         labels:
             labels.length === targets.length
                 ? labels.map((l, i) => ({ ...l, at: shownAt(targets[i]!) }))
@@ -256,17 +282,25 @@ export const shapeToolMode: FieldMode = {
         // The editor asks for the cursor as the pointer moves, so this is where hovering is seen
         hoverAt(tool, pointer.field, env.hitRadius);
         const target = pressTarget(tool, pointer.field, env);
+        overAt(target.type !== "draw");
         if (target.type === "draw") return "crosshair";
         return shapeCursor(tool.kind, tool.params, tool.spots, target);
+    },
+    leave() {
+        overAt(false);
+        if (useSpotHover.getState().hover)
+            useSpotHover.setState({ hover: null });
     },
     drawing: () => glidingSnapshot(shownNow()),
     subscribe: (listener) => {
         const offTool = useShapeToolStore.subscribe(listener);
         const offHover = useSpotHover.subscribe(listener);
+        const offSettings = useUiSettingsStore.subscribe(listener);
         glideListeners.add(listener);
         return () => {
             offTool();
             offHover();
+            offSettings();
             glideListeners.delete(listener);
         };
     },
