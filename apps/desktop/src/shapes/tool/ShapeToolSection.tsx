@@ -13,6 +13,7 @@ import { LayoutPicker } from "../editor/LayoutPicker";
 import { StaggerSlider } from "../editor/StaggerSlider";
 import { OutlineGap } from "../editor/OutlineGap";
 import { ReshuffleButton } from "../editor/ReshuffleButton";
+import { CloseUpButton } from "../editor/CloseUpButton";
 import { toolEnvFor } from "./toolEnv";
 
 /** The field's tool environment with no keys held, for a change made from the inspector */
@@ -25,7 +26,7 @@ const inspectorEnv = () => {
  * The inspector's way into the shape tool: with marchers selected, a Box button (also B). While
  * the tool is open, what the keys do. With a shape open or a placed one selected, how it is
  * filled (the mode switch, for kinds with more than one mode; the layout picker and the stagger,
- * for a box in Files; Reshuffle for a spread) and ☆ Save.
+ * for a box in Files; Reshuffle for a spread), Close up for a placed shape with holes, and ☆ Save.
  */
 export function ShapeToolSection() {
     const selected = useSelectedMarchers()?.selectedMarchers ?? [];
@@ -80,6 +81,19 @@ export function ShapeToolSection() {
                         "self-start",
                     )}
                     testId="shape-section-reshuffle"
+                />
+            )}
+            {target && (
+                <CloseUpButton
+                    target={target}
+                    className={clsx(
+                        getButtonClassName({
+                            variant: "secondary",
+                            size: "compact",
+                        }),
+                        "self-start",
+                    )}
+                    testId="shape-section-close-up"
                 />
             )}
             {target && field && (
