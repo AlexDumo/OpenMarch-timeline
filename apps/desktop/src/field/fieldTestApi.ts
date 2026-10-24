@@ -189,6 +189,8 @@ export type FieldTestShapeOverlay = {
     labels: string[];
     /** The readout by the pointer during a gesture ("7½ × 2 steps · ↔ 2½ ↕ 2 apart"), or null. */
     tip: string | null;
+    /** The spots are still gliding to where they're going after a change (#387). */
+    gliding: boolean;
 };
 
 /** A placed box outlined on the field. */

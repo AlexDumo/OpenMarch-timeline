@@ -10,7 +10,7 @@ import type { ToolEnv } from "../tool/toolKind";
  * the box no longer creeps. A run of presses keeps the pivot where it was when the run began (the
  * chip's anchor), and a corner exactly between two half steps goes against the way the box grew,
  * so the box stays within a quarter step of where it was and + then − comes back to the same
- * place. The lab's "front" version keeps the front rank where it is instead of the center.
+ * place. It grows from the center (the shape's pivot), as the owner picked from the lab.
  */
 
 const STEP = 10;
@@ -89,13 +89,15 @@ describe("the size number's − and +", () => {
             );
     });
 
-    it('keeps the front rank where it is in the lab\'s "front" version', () => {
+    it("grows from the center whatever the lab link says (the owner picked center + glide)", () => {
         useLabVariantStore.setState({ variant: "front" });
         const p = start();
+        const seen = stepped(p, [-1]);
+        // 6 × 4 to 5 × 5: one rank deeper, about the center, so the front rank moves
         const front = (q: BoxParams) => q.center.y + boxFrame(q, 23).halfDepth;
-        for (const q of stepped(p, [1, 1, 1, -1, -1, -1, -1]))
-            expect(front(q)).toBeCloseTo(front(p), 9);
-        const seen = stepped(p, [1, 1, -1, -1]);
-        expect(seen.at(-1)!.center).toEqual(p.center);
+        expect(front(seen[1]!)).not.toBeCloseTo(front(p), 6);
+        expect(Math.abs(seen[1]!.center.y - p.center.y)).toBeLessThanOrEqual(
+            STEP / 4 + 1e-9,
+        );
     });
 });

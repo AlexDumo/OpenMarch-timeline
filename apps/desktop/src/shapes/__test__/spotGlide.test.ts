@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { GLIDE_MS, SpotGlide } from "../tool/spotGlide";
 
 /**
- * The lab's "glide" versions of − and + (#387): when the open shape changes without a gesture,
+ * The glide (#387, the owner's pick from the lab): when the open shape changes without a gesture,
  * each marcher's spot slides from where it was to where it's going instead of jumping.
  */
 
@@ -22,20 +22,16 @@ const b = {
 };
 
 describe("the spot glide", () => {
-    it("does nothing until the shape changes, and nothing when it's off", () => {
+    it("does nothing until the shape changes", () => {
         const g = new SpotGlide();
-        g.update(a.params, false, a.targets, 0, true);
+        g.update(a.params, false, a.targets, 0);
         expect(g.positions(10)).toBeNull();
-        const off = new SpotGlide();
-        off.update(a.params, false, a.targets, 0, false);
-        off.update(b.params, false, b.targets, 0, false);
-        expect(off.positions(10)).toBeNull();
     });
 
     it("slides each marcher from its old spot to its new one, eased, then stops", () => {
         const g = new SpotGlide();
-        g.update(a.params, false, a.targets, 0, true);
-        g.update(b.params, false, b.targets, 1000, true);
+        g.update(a.params, false, a.targets, 0);
+        g.update(b.params, false, b.targets, 1000);
         const start = g.positions(1000)!;
         expect(start.get(1)).toEqual({ x: 0, y: 0 });
         const mid = g.positions(1000 + GLIDE_MS / 2)!;
@@ -49,15 +45,15 @@ describe("the spot glide", () => {
 
     it("doesn't glide during a gesture: a drag follows the pointer", () => {
         const g = new SpotGlide();
-        g.update(a.params, false, a.targets, 0, true);
-        g.update(b.params, true, b.targets, 10, true);
+        g.update(a.params, false, a.targets, 0);
+        g.update(b.params, true, b.targets, 10);
         expect(g.positions(20)).toBeNull();
     });
 
     it("starts a new glide from where the marchers are shown, mid-glide", () => {
         const g = new SpotGlide();
-        g.update(a.params, false, a.targets, 0, true);
-        g.update(b.params, false, b.targets, 100, true);
+        g.update(a.params, false, a.targets, 0);
+        g.update(b.params, false, b.targets, 100);
         const shown = g.positions(100 + GLIDE_MS / 2)!.get(1)!;
         const c = {
             params: {},
@@ -66,18 +62,18 @@ describe("the spot glide", () => {
                 { id: 2, to: { x: 0, y: 0 } },
             ],
         };
-        g.update(c.params, false, c.targets, 100 + GLIDE_MS / 2, true);
+        g.update(c.params, false, c.targets, 100 + GLIDE_MS / 2);
         expect(g.positions(100 + GLIDE_MS / 2)!.get(1)).toEqual(shown);
     });
 
     it("leaves a marcher that only one side has where it's going", () => {
         const g = new SpotGlide();
-        g.update(a.params, false, a.targets, 0, true);
+        g.update(a.params, false, a.targets, 0);
         const more = {
             params: {},
             targets: [...b.targets, { id: 3, to: { x: 5, y: 5 } }],
         };
-        g.update(more.params, false, more.targets, 10, true);
+        g.update(more.params, false, more.targets, 10);
         expect(g.positions(10)!.get(3)).toEqual({ x: 5, y: 5 });
     });
 });

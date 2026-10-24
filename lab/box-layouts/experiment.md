@@ -3,24 +3,14 @@
 # Keep `id` stable: feedback is filed under it.
 id: box-layouts
 title: Pick a layout for a box
-summary: A box can be a full block, a stagger, rounded, short at the back or notched. This build follows your last round. Turned copies are gone and ↻ turns the box instead, the row under the editor is a layout menu, and layouts the count can't make show greyed. It also has four versions of − and + to compare.
+summary: A box can be a full block, a stagger, rounded, short at the back or notched. This build follows your last round. Turned copies are gone and ↻ turns the box instead, the row under the editor is a layout menu, and layouts the count can't make show greyed. − and + now grow the box about its center without creeping, and the marchers glide to their new spots.
 status: open
-variants:
-  - id: center
-    label: Center
-    description: The box grows and shrinks around its center
-  - id: front
-    label: Front
-    description: The front rank stays put and the box grows toward the back
-  - id: glide
-    label: Glide
-    description: Around the center, with marchers sliding to their new spots
-  - id: front-glide
-    label: Front + glide
-    description: The front rank stays put, and marchers slide
+# No versions to compare: the owner picked center + glide for − and +
+variants: []
 questions:
-  - "Which version of − and + feels best: Center, Front, Glide or Front + glide? Why?"
+  - Do − and + feel calm now, with the box growing about its center and the marchers gliding to their new spots? Is the glide too slow or too fast?
   - Did the box stay where you put it while you pressed − and + (no creeping toward the front)?
+  - Does the glide when you pick a layout or press ↻ help, or get in the way?
   - Is ↻ next to the size where you expected to turn the box? Do you miss the turned versions in the lists?
   - Does the layout menu under the box's editor work for you? Is hovering a layout (or clicking its arrow) the right way to see its versions?
   - 'Do the greyed layouts with "add 1 / remove 2" tell you what you need, in the menu and in the inspector?'
@@ -66,22 +56,11 @@ that order.
 
 **Good to know**
 
-**Try the versions of − and +** (your "fairly jarring" note)
+**− and +** (you picked center + glide)
 
-The box no longer creeps toward the front as you press − and + (in every
-version). Draw a box and press − and + a few times. The **Version** switch in
-the toolbar at the bottom left changes version without reloading. These links
-open a version directly:
-
-- [Center](https://lab.openmarch.com/x/box-layouts/?variant=center): the box
-  grows and shrinks around its center (as before, minus the creep).
-- [Front](https://lab.openmarch.com/x/box-layouts/?variant=front): the front
-  rank stays where it is, and the box grows toward the back.
-- [Glide](https://lab.openmarch.com/x/box-layouts/?variant=glide): around the
-  center, with each marcher sliding to their new spot instead of jumping.
-- [Front + glide](https://lab.openmarch.com/x/box-layouts/?variant=front-glide):
-  both.
-
-The glide also plays when you pick a layout or press ↻.
+The box grows and shrinks about its center and no longer creeps toward the
+front as you press − and +. Each marcher glides to their new spot over about
+150 ms instead of jumping. The glide also plays when you pick a layout or
+press ↻. Draw a box and press − and + a few times.
 
 - The stagger slider comes next, in the same section.

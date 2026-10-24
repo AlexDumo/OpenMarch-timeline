@@ -75,8 +75,16 @@ async function toScreen(page: Page, p: Point): Promise<Point> {
     };
 }
 
-const shapeOverlay = (page: Page): Promise<FieldTestShapeOverlay | null> =>
-    page.evaluate(() => window.fieldTest!.shapeOverlay!());
+/**
+ * What the shape tool draws once its spots have settled: after a change the marchers glide to
+ * their new spots for about 150 ms (#387), so this waits for the glide to land
+ */
+async function shapeOverlay(page: Page): Promise<FieldTestShapeOverlay | null> {
+    await page.waitForFunction(
+        () => window.fieldTest!.shapeOverlay!()?.gliding !== true,
+    );
+    return page.evaluate(() => window.fieldTest!.shapeOverlay!());
+}
 
 const placedBoxes = (page: Page): Promise<FieldTestPlacedBox[]> =>
     page.evaluate(() => window.fieldTest!.placedBoxes!());
@@ -1342,10 +1350,9 @@ test("change: the layout menu under the chip switches layout, ↻ turns the box 
         .toEqual(before);
 });
 
-// The size number's − and + (owner lab feedback on #387): the box no longer
-// creeps, and the lab test compares versions of how it resizes, picked with
-// `?variant=` (front: the front rank stays; glide: marchers slide to their
-// new spots).
+// The size number's − and + (owner lab feedback on #387; the owner picked
+// center + glide in the lab): the box grows about its center without creeping,
+// and the marchers glide to their new spots rather than jump.
 
 const sizeButton = (page: Page, more: boolean) =>
     page.getByTestId("shape-tool-readout").getByRole("button", {
@@ -1366,30 +1373,17 @@ test("change: − and + come back to the same spots, so the box doesn't creep", 
         .toEqual(before);
 });
 
-test.describe("the lab's front version", () => {
-    test.use({
-        initScript: `history.replaceState(null, "", location.pathname + "?variant=front")`,
-    });
-
-    test("change: − and + keep the front rank where it is", async ({
-        show,
-    }) => {
-        const { page } = show;
-        await drawBox(show);
-        const frontOf = async () =>
-            Math.max(...(await shapeOverlay(page))!.spots.map((s) => s.y));
-        const front = await frontOf();
-        for (const more of [false, false, true]) {
-            await sizeButton(page, more).click();
-            expect(await frontOf()).toBeCloseTo(front, 6);
-        }
-    });
-});
-
-test.describe("the lab's glide version", () => {
-    test.use({
-        initScript: `history.replaceState(null, "", location.pathname + "?variant=glide")`,
-    });
+test.describe("the glide", () => {
+    /** Presses + and reads the drawing 40 ms later, in one go, while a glide would still run */
+    const plusAndPeek = (page: Page) =>
+        page.evaluate(async () => {
+            const plus = [...document.querySelectorAll("button")].find(
+                (b) => b.getAttribute("aria-label") === "One more across",
+            )!;
+            plus.click();
+            await new Promise((r) => setTimeout(r, 40));
+            return window.fieldTest!.shapeOverlay!()!;
+        });
 
     test("change: after + the marchers slide to their new spots rather than jump", async ({
         show,
@@ -1397,21 +1391,24 @@ test.describe("the lab's glide version", () => {
         const { page } = show;
         await drawBox(show);
         const before = (await shapeOverlay(page))!.spots;
-        // Press and look straight away, in one go, so the glide is still running
-        const mid = await page.evaluate(async () => {
-            const plus = [...document.querySelectorAll("button")].find(
-                (b) => b.getAttribute("aria-label") === "One more across",
-            )!;
-            plus.click();
-            await new Promise((r) => setTimeout(r, 40));
-            return window.fieldTest!.shapeOverlay!()!.spots;
-        });
-        await page.waitForTimeout(400);
+        const mid = await plusAndPeek(page);
+        expect(mid.gliding).toBe(true);
         const after = (await shapeOverlay(page))!.spots;
         expect(after).not.toEqual(before);
         // Part way: neither where they were nor where they land
-        expect(mid).not.toEqual(after);
-        expect(mid).not.toEqual(before);
+        expect(mid.spots).not.toEqual(after);
+        expect(mid.spots).not.toEqual(before);
+    });
+
+    test("change: with reduced motion asked for, the marchers go straight to their new spots", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await page.emulateMedia({ reducedMotion: "reduce" });
+        await drawBox(show);
+        const mid = await plusAndPeek(page);
+        expect(mid.gliding).toBe(false);
+        expect(mid.spots).toEqual((await shapeOverlay(page))!.spots);
     });
 });
 

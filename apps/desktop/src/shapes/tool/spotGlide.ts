@@ -1,11 +1,10 @@
 import type { XY } from "../types";
 
 /**
- * TEMPORARY, the lab's "glide" versions of the size number's − and + (#387, lab test
- * box-layouts): when the open shape changes without a gesture (a press of − or +, a layout
- * picked, a quarter turn), each marcher's spot slides from where it was shown to where it's
- * going over {@link GLIDE_MS}, instead of jumping. Goes, or becomes the app's, when the owner
- * picks. Pure: the field mode asks it for positions each frame.
+ * When the open shape changes without a gesture (a press of − or +, a layout picked, a quarter
+ * turn), each marcher's spot slides from where it was shown to where it's going over
+ * {@link GLIDE_MS}, instead of jumping (#387: the owner picked center + glide in the lab). Pure:
+ * the field mode asks it for positions each frame.
  */
 export const GLIDE_MS = 150;
 
@@ -27,19 +26,18 @@ export class SpotGlide {
     private glide: Glide | null = null;
 
     /**
-     * The shape as it is at `now`: a change of `params` with no gesture starts a glide when `on`,
-     * from where each marcher is shown now
+     * The shape as it is at `now`: a change of `params` with no gesture starts a glide, from
+     * where each marcher is shown now
      */
     update(
         params: unknown,
         gesture: boolean,
         targets: readonly GlideTarget[],
         now: number,
-        on: boolean,
     ): void {
         const to = new Map(targets.map((t) => [t.id, t.to]));
         const changed = this.last !== null && this.last.params !== params;
-        if (!on || gesture) this.glide = null;
+        if (gesture) this.glide = null;
         else if (changed)
             this.glide = {
                 from: this.positions(now) ?? this.last!.to,

@@ -173,6 +173,7 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         pivotMark: drawing.pivotMark ? screen(drawing.pivotMark) : null,
         labels: (drawing.labels ?? []).map((l) => l.text),
         tip: drawing.tip?.text ?? null,
+        gliding: drawing.gliding === true,
     };
     function screen(at: FieldPoint) {
         const { x, y } = fieldToElement(view, at.x, at.y);

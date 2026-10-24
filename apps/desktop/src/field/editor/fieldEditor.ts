@@ -244,6 +244,8 @@ export type FieldModeDrawing = {
     pivot?: { at: FieldPoint; to: FieldPoint };
     /** A note by the pointer: the angle, or where the shape is in drill terms */
     tip?: { at: FieldPoint; text: string };
+    /** The spots are part way to where they're going: a glide is running (#387) */
+    gliding?: boolean;
 };
 
 /**

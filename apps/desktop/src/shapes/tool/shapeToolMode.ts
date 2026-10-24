@@ -27,7 +27,6 @@ import {
 } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
 import { SpotGlide } from "./spotGlide";
-import { getLabVariant } from "@/lab/labVariant";
 
 /**
  * The spot the pointer rests on, with who will stand there, on shapes too big to label every spot
@@ -131,8 +130,10 @@ const drawingOf = memoDrawing(({ tool, hover }: Shown) => {
     };
 });
 
-/** TEMPORARY: the lab's "glide" versions of − and + (#387, lab test box-layouts) */
-const GLIDE_VARIANTS: ReadonlySet<string> = new Set(["glide", "front-glide"]);
+/**
+ * The open shape's marchers glide to their new spots when it changes without a gesture (a press
+ * of − or +, a layout picked, a quarter turn): the owner picked it in the lab (#387)
+ */
 const glide = new SpotGlide();
 const glideListeners = new Set<() => void>();
 let gliding = false;
@@ -167,18 +168,21 @@ function glidingSnapshot(shown: Shown | null) {
     return glideCache.drawing;
 }
 
+/** People who ask their system for less motion get no glide, as the timeline's follow does */
+const reducedMotion = () =>
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+
 /**
  * The drawing, with each marcher's spot, walk and label part way to where it's going while a
- * glide runs (the lab's "glide" versions): a change without a gesture slides, not jumps
+ * glide runs: a change without a gesture slides, not jumps
  */
 function glidingDrawing(shown: Shown | null) {
     const drawing = drawingOf(shown);
     if (!shown) return drawing;
     const { tool } = shown;
-    const variant = getLabVariant();
-    const on = variant !== null && GLIDE_VARIANTS.has(variant);
     const field = currentShapeField();
-    if (!on || !drawing || tool.params === null || !field) return drawing;
+    if (!drawing || tool.params === null || !field || reducedMotion())
+        return drawing;
     const targets = targetsOf(tool, shapeContextFor(field));
     const now = performance.now();
     glide.update(
@@ -186,7 +190,6 @@ function glidingDrawing(shown: Shown | null) {
         tool.gesture !== null && tool.gesture !== undefined,
         targets,
         now,
-        on,
     );
     const at = glide.positions(now);
     if (!at) return drawing;
@@ -198,6 +201,7 @@ function glidingDrawing(shown: Shown | null) {
     const labels = drawing.labels ?? [];
     return {
         ...drawing,
+        gliding: true,
         spots:
             drawing.spots.length === targets.length
                 ? targets.map(shownAt)
