@@ -47,11 +47,12 @@ describe("Play in tempo mode", () => {
         expect(store().playback).toEqual({ kind: "on" });
     });
 
-    it("plays on even with looping on", () => {
+    it("loops the loop with looping on", () => {
         useTempoModeStore.setState({ on: true });
         store().setLoop({ start: 4, end: 8 });
         toggleTimelinePlayback(transport());
-        expect(store().playback).toEqual({ kind: "on" });
+        expect(store().cursorBeat).toBe(4);
+        expect(store().playback).toEqual({ kind: "preview", from: 4, to: 8 });
     });
 
     it("stops where it is", () => {

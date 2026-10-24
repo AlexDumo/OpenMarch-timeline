@@ -425,8 +425,8 @@ export function startTimelinePlayOn(
  * (project owner, 2026-10-13, lab test playback-start: version B won). Alt+Space plays on from the
  * start flag (`playTimelineOn`) and Shift+Space from the playhead (`playTimelinePage`). Playing,
  * it stops and goes back to where Play was pressed (UI-24, `stopTimelinePlayback`); Shift+Space
- * pauses where it is instead. In tempo mode (prototype) it plays on from the playhead, and Stop
- * stays where playback stopped.
+ * pauses where it is instead. In tempo mode (prototype) it plays on from the playhead (or loops
+ * the loop, with looping on), and Stop stays where playback stopped.
  */
 export function toggleTimelinePlayback({
     isPlaying,
@@ -444,11 +444,13 @@ export function toggleTimelinePlayback({
         return;
     }
     const state = useTimelineSelectionStore.getState();
-    if (tempoModeOn()) {
+    const bounds = loopBounds(state);
+    // Tempo mode (prototype): plays on from the playhead, or loops the loop (to hear a tempo
+    // change again and again; owner, 2026-10-24)
+    if (tempoModeOn() && !bounds) {
         startTimelinePlayOn(setIsPlaying, state.playheadBeat);
         return;
     }
-    const bounds = loopBounds(state);
     if (bounds) {
         state.cue(bounds.from);
         state.setPlayback({ kind: "preview", ...bounds });
