@@ -114,7 +114,11 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         type(p, n, text, env) {
             const steps = parseSteps(text);
             if (steps === null) return null;
-            return withSpacing(p, ownKey(p, n), steps, n, env);
+            // A typed spacing is kept to hundredths of a step, not half steps (#411)
+            return withSpacing(p, ownKey(p, n), steps, n, {
+                ...env,
+                snap: false,
+            });
         },
         scrub: (base, n, m, env) =>
             scrubSpacing(

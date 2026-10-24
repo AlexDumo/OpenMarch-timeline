@@ -256,12 +256,12 @@ export function withBoxFrame<P extends BoxSize>(p: P, frame: ShapeFrame): P {
 export const halfStep = (env: ToolEnv): number => env.stepPx / 2;
 
 /**
- * An interval as drawn or stretched: half steps, tenths of a step with Alt (spec #344), never
- * under half a step
+ * An interval as drawn, stretched or typed: half steps, hundredths of a step with Alt (spec #344,
+ * #411) or typed, never under half a step
  */
 export function snapInterval(v: number, env: ToolEnv): number {
     const half = halfStep(env);
-    const unit = env.snap ? half : env.stepPx / 10;
+    const unit = env.snap ? half : env.stepPx / 100;
     return Math.max(half, Math.round(v / unit) * unit);
 }
 

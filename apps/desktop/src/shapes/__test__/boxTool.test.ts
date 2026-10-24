@@ -154,15 +154,15 @@ describe("drawing a box", () => {
         expect(box.across).toBe(box.deep);
     });
 
-    it("Alt rounds to tenths of a step, not half steps", () => {
+    it("Alt rounds to hundredths of a step, not half steps (#411)", () => {
         const box = drawBox(
             { x: 0, y: 0 },
             { x: 83, y: 83 },
             16,
             env({ snap: false }),
         )!;
-        // 2.77 steps is 2.8
-        expect(box.across).toBeCloseTo(28);
+        // 2.7666 steps is 2.77
+        expect(box.across).toBeCloseTo(27.7);
     });
 
     it("keeps the file count until another fits clearly better", () => {
