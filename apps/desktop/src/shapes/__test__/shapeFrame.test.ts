@@ -333,18 +333,24 @@ describe("who goes where, held through turns and flips", () => {
 });
 
 describe("the floating editor's numbers", () => {
-    it("spacing drags half a step per 8 px, tenths with Alt, from where it started", () => {
+    it("spacing drags half a step per 8 px, a hundredth per px with Alt, from where it started", () => {
         const b = box4x2();
         expect(scrubSpacing(b, "across", 16, 8, env()).across).toBe(20);
         expect(scrubSpacing(b, "deep", 8, 8, env()).deep).toBe(15);
         expect(
             scrubSpacing(b, "across", 8, 8, env({ snap: false })).across,
-        ).toBeCloseTo(11);
+        ).toBeCloseTo(10.8);
         // Back where it started: unchanged, not rounded
         const odd = { ...b, across: 12.3 };
         expect(scrubSpacing(odd, "across", 3, 8, env())).toBe(odd);
         // Never under half a step
         expect(scrubSpacing(b, "across", -400, 8, env()).across).toBe(5);
+    });
+
+    it("a typed spacing keeps hundredths of a step, not half steps (#411)", () => {
+        const across = boxTool.params.find((p) => p.key === "across")!;
+        const typed = across.type(box4x2(), 8, "2.37", env()) as BoxParams;
+        expect(typed.across).toBeCloseTo(23.7);
     });
 
     it("the ratio lock moves the other spacing, both on half steps", () => {

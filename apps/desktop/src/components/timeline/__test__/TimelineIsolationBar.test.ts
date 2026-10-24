@@ -154,7 +154,7 @@ describe("the field line past the last flag in Basic (UI-19)", () => {
     it("says how to edit there, since a drop is refused, with or without a stop note", () => {
         expect(
             editingWords(plan(17, 21, true), "After page 2, counts 1–4"),
-        ).toBe("Add a page with + to edit here");
+        ).toBe("Right-click the playhead to add a page here");
     });
 
     it("names what a drop edits everywhere else", () => {

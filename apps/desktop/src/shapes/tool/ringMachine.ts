@@ -94,6 +94,15 @@ export function openRing(
     return { center, openedAt: now, latched: false, hot: null, aim: pointer };
 }
 
+/**
+ * The ring opened from the command palette (#411): latched, as a tap leaves it, since there's no
+ * key to let go. A click picks or dismisses it.
+ */
+export const latchRing = (ring: RingState): RingState => ({
+    ...ring,
+    latched: true,
+});
+
 const offsetFrom = (ring: RingState, pointer: Point): Point => ({
     x: pointer.x - ring.center.x,
     y: pointer.y - ring.center.y,

@@ -102,6 +102,7 @@ import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
+import StartFlagLayers from "./StartFlagLayers";
 import { useTimelineVisuals } from "./useTimelineVisuals";
 import {
     KeptMarksOverlay,
@@ -633,6 +634,13 @@ function ThreeFieldView() {
                         <OverlayLayer
                             plan={timeline.paths}
                             renderOrder={PATHS_ORDER}
+                        />
+                        <StartFlagLayers
+                            enabled={timeline.ready}
+                            isPlaying={isPlaying}
+                            marcherIds={marcherIds}
+                            selectedIds={selectedIds}
+                            fieldProperties={fieldProperties}
                         />
                         <MarchersLayer
                             marchers={marchers}

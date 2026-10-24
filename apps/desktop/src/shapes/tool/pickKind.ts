@@ -8,7 +8,12 @@ import { shapeSelectionGate } from "./selectionGate";
 import { toolEnvFor } from "./toolEnv";
 import type { AnyToolKind } from "./toolKind";
 import { openTool, switchKind } from "./toolMachine";
-import { openShapeTool, updateTool, useShapeToolStore } from "./shapeToolStore";
+import {
+    closeShapeTool,
+    openShapeTool,
+    updateTool,
+    useShapeToolStore,
+} from "./shapeToolStore";
 
 export type KindPickGate =
     | { readonly ok: true }
@@ -25,6 +30,16 @@ export function kindPickGate(
     if (shapeOpen) return { ok: true };
     const gate = shapeSelectionGate(selected);
     return gate.ok ? { ok: true } : { ok: false, reason: gate.reason };
+}
+
+/**
+ * A click on the kind that's already picked, in the Shapes tab (#411): with nothing drawn yet it
+ * closes the tool, as a second click on a tool does; once a shape is drawn it does nothing, so a
+ * stray click never throws a shape away (Escape still discards it)
+ */
+export function clickPickedKind(): void {
+    const { tool } = useShapeToolStore.getState();
+    if (tool && tool.params === null && !tool.gesture) closeShapeTool();
 }
 
 /**

@@ -8,7 +8,7 @@ import { getActionShortcutLabel } from "@/shortcuts/labels";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { showShapeLibrary } from "../library/ShapeLibraryPanel";
-import { kindPickGate, pickShapeKind } from "./pickKind";
+import { clickPickedKind, kindPickGate, pickShapeKind } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
 import { useShapeToolStore } from "./shapeToolStore";
 import { useStarredShapes } from "./starredShapes";
@@ -55,6 +55,12 @@ export default function ShapesTab() {
                             <ActionButton
                                 action={action}
                                 disabled={!gate.ok}
+                                // The picked kind again closes the tool if nothing is drawn (#411)
+                                onClick={(event) => {
+                                    if (!on) return;
+                                    event.preventDefault();
+                                    clickPickedKind();
+                                }}
                                 aria-pressed={on}
                                 aria-label={kind.shape.label}
                                 data-testid={`shapes-tab-${kind.shape.id}`}
@@ -85,7 +91,9 @@ export default function ShapesTab() {
                                 type="button"
                                 disabled={!gate.ok}
                                 onClick={() =>
-                                    pickShapeKind(shape.kind, performers)
+                                    on
+                                        ? clickPickedKind()
+                                        : pickShapeKind(shape.kind, performers)
                                 }
                                 title={gate.ok ? shape.label : undefined}
                                 aria-label={shape.label}

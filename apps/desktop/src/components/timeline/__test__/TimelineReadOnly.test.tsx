@@ -108,14 +108,15 @@ describe("the read-only timeline", () => {
         ).not.toBeInTheDocument();
     });
 
-    it("draws no clips, no window, no + and no flag grips, though it's given them", () => {
+    it("draws no clips, no window, no add-page menu and no flag grips, though it's given them", () => {
         renderTimeline({ readOnly: true });
         expect(screen.queryByTestId("timeline-clip")).not.toBeInTheDocument();
         expect(
             screen.queryByTestId("timeline-selection-range"),
         ).not.toBeInTheDocument();
+        fireEvent.contextMenu(screen.getByTestId("timeline-playhead"));
         expect(
-            screen.queryByTestId("timeline-add-page-flag"),
+            screen.queryByTestId("timeline-add-page-flag-menu"),
         ).not.toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Page 1" })).toHaveAttribute(
             "aria-pressed",
@@ -129,8 +130,9 @@ describe("the read-only timeline", () => {
         expect(
             screen.getByTestId("timeline-selection-range"),
         ).toBeInTheDocument();
+        fireEvent.contextMenu(screen.getByTestId("timeline-playhead"));
         expect(
-            screen.getByTestId("timeline-add-page-flag"),
+            screen.getByTestId("timeline-add-page-flag-menu"),
         ).toBeInTheDocument();
     });
 

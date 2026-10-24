@@ -3,7 +3,9 @@ import {
     usePaletteSource,
     type PaletteItem,
 } from "@/shortcuts/palette/sources";
-import type { Translate } from "@/shortcuts/labels";
+import { getActionShortcutKeys, type Translate } from "@/shortcuts/labels";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
+import type { ActionId } from "@/shortcuts/definitions";
 import { isActionOffInWorkspace } from "@/shortcuts/workspaceActions";
 import { isPreviewMode } from "@/stores/PreviewModeStore";
 import { kindPickGate } from "../tool/pickKind";
@@ -63,8 +65,16 @@ export function useShapePaletteSource(
             icon: <ShapesIcon size={18} />,
             keywords: t("actions.shape.keywords").split(/\s+/),
             children: () => [
-                ...SHAPE_TOOLS.map(({ kind }) =>
-                    kindItem(kind, ready, selected, t, place),
+                ...SHAPE_TOOLS.map(({ kind, action }) =>
+                    kindItem(
+                        kind,
+                        ready,
+                        selected,
+                        t,
+                        place,
+                        undefined,
+                        action,
+                    ),
                 ),
                 ...savedShapeItems(rows, ready, selected, t, place),
             ],
@@ -80,6 +90,8 @@ function kindItem(
     place: () => Promise<void>,
     /** A saved shape's own id and name; the kind's when absent */
     named?: { readonly id: string; readonly label: string },
+    /** The kind's own action, whose shortcut the entry shows (#411: B for Shape › Box) */
+    action?: ActionId,
 ): PaletteItem {
     const gate = shapeSelectionGate(selected);
     // With a shape open, any kind can be picked: the open shape turns into it
@@ -100,6 +112,11 @@ function kindItem(
             // "stagger" finds Box, whose layout step takes it (#387)
             ...layoutKeywords(kind),
         ],
+        shortcut: action
+            ? getActionShortcutKeys(action, {
+                  overrides: useShortcutOverridesStore.getState().overrides,
+              })
+            : undefined,
         disabled: !ready || offHere || !pick.ok,
         disabledReason: offHere
             ? t(

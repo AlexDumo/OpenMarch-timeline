@@ -4,7 +4,7 @@ import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { ACTIONS, type ActionId } from "../definitions";
 import { runAction, subscribeToActionRuns } from "../registry";
 
-/** Playback controls, which leave a held preview frame alone (UI-11) */
+/** Playback controls, and peeks that only change what's drawn, leave a held preview frame alone (UI-11) */
 const TRANSPORT_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
     "playPause",
     "timelinePlayPause",
@@ -16,6 +16,7 @@ const TRANSPORT_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
     "holdSlowerPlayback",
     "nextPlaybackSpeed",
     "resetPlaybackSpeed",
+    "toggleStartFlagPositions",
 ]);
 
 export function useTimelineActionEffects() {
