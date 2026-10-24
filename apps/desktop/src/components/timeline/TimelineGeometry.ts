@@ -522,7 +522,7 @@ export const isPastLastFlag = (
 
 /**
  * The window's count badge (UI-13), in the field line's words: "counts 3–6" inside one page box,
- * counted to that page's flag, or "12 counts" when it passes a flag.
+ * counted to that page's flag, or "12 counts" when it passes a flag or ends past the last one.
  */
 export const getWindowCountLabel = (
     model: Pick<TimelineViewModel, "pages">,
@@ -530,8 +530,8 @@ export const getWindowCountLabel = (
 ) => {
     const length = range.endBeatIndex - range.startBeatIndex;
     const at = getPageCountAt(model, range.endBeatIndex);
-    // Past the last flag the count is from that flag, however the window starts
-    if (at.after) return at.count === 1 ? "1 count" : `${at.count} counts`;
+    // Past the last flag it is the window's length, start flag to playhead (owner 2026-10-20);
+    // **+ Add N-Count Page** says the new page's
     if (
         length > 0 &&
         !at.home &&

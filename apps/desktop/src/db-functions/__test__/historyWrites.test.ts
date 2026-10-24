@@ -21,7 +21,7 @@ import {
 } from "../tempo";
 import { applyTapTheBeat } from "../tapTheBeat";
 import { editMeasureLines } from "../measureLines";
-import { appendPageOfCounts } from "../showLength";
+import { appendPageOfCounts } from "../appendPages";
 import { addPageFlag } from "../pageFlags";
 import { applyMusicXmlReimport } from "../musicXmlReimport";
 import { commitDrillEdit } from "../drillEdits";

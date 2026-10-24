@@ -1,5 +1,5 @@
 /**
- * Counts that never end (docs/tempo/endless-counts.md). A show's counts are its `beats` rows, but
+ * Counts that never end (docs/timeline/endless-counts.md). A show's counts are its `beats` rows, but
  * the timeline draws, scrubs and plays on past the last one: the counts after it repeat the last
  * stored measure as it sounds (`countContinuation`), and its meter's measure lines carry on.
  * Nothing marks where the stored counts stop.
@@ -18,7 +18,7 @@ import {
     countContinuation,
     FALLBACK_BEAT_DURATION,
     type CountContinuation,
-} from "./showLength";
+} from "./countsPastEnd";
 import {
     BEAT_BOUNDARY_EPSILON_SECONDS,
     beatAtTime as storedBeatAtTime,
@@ -81,28 +81,13 @@ interface Pattern {
     readonly phase: number;
 }
 
-/** The period of the continuation: one measure's counts with measures, else one count */
-function patternOf(
-    continuation: CountContinuation,
-    measured: boolean,
-): Pattern {
-    // The continuation repeats with its meter; its downbeats mark where a period starts
-    let period = 1;
-    let phase = 0;
-    if (measured) {
-        // The first downbeat at or after the first endless count gives the phase; the next one
-        // the period. Meters are small, so a short scan finds both.
-        let first = -1;
-        for (let k = 0; k < 4096; k++)
-            if (continuation.isDownbeat(k)) {
-                if (first < 0) first = k;
-                else {
-                    period = k - first;
-                    break;
-                }
-            }
-        phase = first <= 0 ? 0 : period - first;
-    }
+/**
+ * The continuation's repeating pattern (`countContinuation`'s own period and phase, so the grid and
+ * the counts that get stored agree however long the last measure is): one measure's counts with
+ * measures, else one count, read from the start of a period.
+ */
+function patternOf(continuation: CountContinuation): Pattern {
+    const { period, phase } = continuation;
     const lengths = Array.from({ length: period }, (_, i) =>
         continuation.durationAt((i - phase + period) % period),
     );
@@ -156,7 +141,7 @@ export function createCountGrid({
         fallbackDuration,
     });
     const measured = continuation.measured;
-    const pattern = patternOf(continuation, measured);
+    const pattern = patternOf(continuation);
     const period = pattern.lengths.length;
     const downbeats = new Set(measureStarts);
     const startOffset = offsetOf(pattern, pattern.phase);
@@ -188,9 +173,15 @@ export function createCountGrid({
             BEAT_BOUNDARY_EPSILON_SECONDS;
         const whole = Math.floor(into / pattern.sums[period]!);
         const rest = into - whole * pattern.sums[period]!;
-        // The last count of the period starting at or before `rest`
+        // The last count of the period starting at or before `rest` (a binary search, since a
+        // period is a whole measure, which can be long)
         let i = 0;
-        while (i + 1 < period && pattern.sums[i + 1]! <= rest) i++;
+        let hi = period - 1;
+        while (i < hi) {
+            const mid = (i + hi + 1) >> 1;
+            if (pattern.sums[mid]! <= rest) i = mid;
+            else hi = mid - 1;
+        }
         const n = whole * period + i;
         const k = Math.max(n - pattern.phase, 0);
         const begins = storedEndSeconds + endlessOffset(k);

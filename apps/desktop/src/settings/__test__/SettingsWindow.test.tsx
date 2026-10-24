@@ -48,12 +48,13 @@ const renderWindow = () =>
     );
 
 describe("SettingsWindow", () => {
-    it("lists the nine sections in order", () => {
+    it("lists the ten sections in order", () => {
         expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual([
             "general",
             "appearance",
             "mouse",
             "timeline",
+            "view3d",
             "shortcuts",
             "plugins",
             "privacy",

@@ -106,6 +106,19 @@ const notifyHistoryWrite = () => {
     }
 };
 
+/** What the running `transactionWithHistory` does once it commits (`afterHistoryCommit`) */
+let commitCallbacks: (() => void)[] | null = null;
+
+/**
+ * Runs `callback` once the `transactionWithHistory` running now commits, before the
+ * `subscribeHistoryChanges` listeners hear of it. A rolled-back edit drops it, and so does a call
+ * outside one, which no listener would hear of. For a write that must say what it did only once
+ * that is saved.
+ */
+export function afterHistoryCommit(callback: () => void): void {
+    commitCallbacks?.push(callback);
+}
+
 /**
  * Runs a function in a transaction with undo/redo history tracking.
  *
@@ -132,6 +145,8 @@ export const transactionWithHistory = async <T>(
     async function runLockedTransactionWithHistory(): Promise<T> {
         let drained: ChangeBatch | undefined;
         let touchedDisplayTables = false;
+        const committed: (() => void)[] = [];
+        commitCallbacks = committed;
         // eslint-disable-next-line max-lines-per-function
         const output = await db.transaction(async (tx) => {
             const startMessage = `=========== start ${funcName} ============`;
@@ -239,6 +254,8 @@ export const transactionWithHistory = async <T>(
                 error = err as Error;
                 console.debug("Rolling back history state");
             } finally {
+                // `func` is done: nothing more joins this edit's commit callbacks
+                commitCallbacks = null;
                 const endMessage = `=========== end ${funcName} ============\n`;
                 mainProcessLog("info", endMessage);
             }
@@ -247,6 +264,7 @@ export const transactionWithHistory = async <T>(
             return result!;
         });
         // Only reached once the transaction has committed
+        for (const callback of committed) callback();
         notifyTimelineBatch(drained);
         if (touchedDisplayTables) bumpTimelineDisplayVersion();
         notifyHistoryChange();
@@ -958,6 +976,8 @@ type PerformHistoryActionResponse = {
     pageIdToGoTo: number | undefined;
     marcherIdsToSelect: Set<number> | undefined;
     queriesToInvalidate: string[][] | undefined;
+    /** The tables the action changed; empty when it didn't apply or there was nothing to do */
+    tableNames: ReadonlySet<string>;
     /**
      * True when the stack was empty, so nothing changed. Read in the action's own lock turn, so
      * an edit or action queued before it counts.
@@ -1010,6 +1030,7 @@ export async function performHistoryAction(
             pageIdToGoTo: undefined,
             marcherIdsToSelect: undefined,
             queriesToInvalidate: undefined,
+            tableNames: new Set(),
             failure: {
                 kind: "error",
                 message: response.error?.message ?? "unknown error",
@@ -1024,6 +1045,7 @@ export async function performHistoryAction(
         pageIdToGoTo: timelineFocus?.pageIdToGoTo,
         marcherIdsToSelect: timelineFocus?.marcherIdsToSelect,
         queriesToInvalidate,
+        tableNames: response.tableNames,
         nothingToDo: response.sqlStatements.length === 0,
     };
 }

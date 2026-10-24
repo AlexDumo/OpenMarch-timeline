@@ -2,6 +2,12 @@ import { create } from "zustand";
 import { parseTimelineHeight } from "@/components/timeline/timelineSplit";
 import { syncFromStorage } from "@/stores/syncFromStorage";
 import {
+    clampStartFlagPositions,
+    DEFAULT_START_FLAG_POSITIONS,
+    parseStartFlagPositions,
+    type StartFlagPositionsSettings,
+} from "@/timeline/startFlagLevels";
+import {
     parseWaveformStyle,
     type WaveformStyle,
 } from "@/timeline/timelineWaveform";
@@ -81,10 +87,10 @@ export interface UiSettings {
     isPlaying: boolean;
     /** Whether to show the full database path in the title bar */
     showFullDatabasePath: boolean;
-    /** Boolean to view previous page's paths/dots */
-    previousPaths: boolean;
     /** Boolean to view next page's paths/dots */
     nextPaths: boolean;
+    /** Start flag positions (#331): what the field draws normally, and while N is held */
+    startFlagPositions: StartFlagPositionsSettings;
     /** Boolean to force-show over-threshold paths and apply step-size warning styling */
     stepSizeWarnings: boolean;
     /** Boolean to show collision markers on the canvas */
@@ -132,6 +138,12 @@ export interface UiSettings {
         /** In steps, the offset from the center-front point to round to on the Y-axis */
         referencePointY?: number;
     };
+    /** Whether props show their names on the canvas, unless `propNameOverrides` says otherwise */
+    showPropNames: boolean;
+    /** Per prop: whether its name shows. Key is the item id. */
+    propNameOverrides: Record<string, boolean>;
+    /** Per prop: true hides it on the canvas wherever the timeline has it. Key is the item id. */
+    hiddenPropIds: Record<string, boolean>;
     /** Whether to enable Tolgee In-Context Translating */
     tolgeeDevTools?: boolean;
     /** Tolgee API Key for In-Context Translating */
@@ -146,8 +158,8 @@ export const defaultSettings: UiSettings = {
     lockX: false,
     lockY: false,
     showFullDatabasePath: false,
-    previousPaths: false,
     nextPaths: false,
+    startFlagPositions: DEFAULT_START_FLAG_POSITIONS,
     stepSizeWarnings: false,
     showCollisions: false,
     gridLines: true,
@@ -173,6 +185,9 @@ export const defaultSettings: UiSettings = {
         nearestYSteps: 0,
         referencePointY: undefined,
     },
+    showPropNames: false,
+    propNameOverrides: {},
+    hiddenPropIds: {},
     tolgeeDevTools: false,
     tempoLab: defaultTempoLab,
 };
@@ -185,7 +200,10 @@ const clampZoomSensitivity = (value: number): number =>
 // Helper function to parse settings from a JSON string
 // Throws on bad JSON or invalid structure
 const parseSettings = (raw: string): UiSettings => {
-    const parsed = JSON.parse(raw) as UiSettings;
+    // `previousPaths` (Previous paths) gave way to start flag positions (#331): dropped
+    const { previousPaths: _previousPaths, ...parsed } = JSON.parse(
+        raw,
+    ) as UiSettings & { previousPaths?: unknown };
     const mergedMouseSettings = {
         ...defaultSettings.mouseSettings,
         ...parsed.mouseSettings,
@@ -202,6 +220,7 @@ const parseSettings = (raw: string): UiSettings => {
         ...parsed,
         timelineHeight: parseTimelineHeight(parsed.timelineHeight),
         timelineWaveformStyle: parseWaveformStyle(parsed.timelineWaveformStyle),
+        startFlagPositions: parseStartFlagPositions(parsed.startFlagPositions),
         mouseSettings: mergedMouseSettings,
         coordinateRounding: parsed.coordinateRounding
             ? {
@@ -245,6 +264,8 @@ interface UiSettingsStoreActions {
     /** Turns the compact timeline on or off (`!timelineCompact` without an argument) */
     setTimelineCompact: (compact?: boolean) => void;
     setTimelineHeight: (height: number | null) => void;
+    /** Saves both start flag positions states, narrowing paths to the dots level */
+    setStartFlagPositions: (settings: StartFlagPositionsSettings) => void;
     toggleAudioMute: () => void;
     setAudioVolume: (volume: number) => void;
     /** Sets one Tempo lab flag */
@@ -302,6 +323,8 @@ export const useUiSettingsStore = create<UiSettingsStoreInterface>(
             setSetting("timelineZoomFitted", fitted),
         setTimelineHeight: (height: number | null) =>
             setSetting("timelineHeight", parseTimelineHeight(height)),
+        setStartFlagPositions: (settings: StartFlagPositionsSettings) =>
+            setSetting("startFlagPositions", clampStartFlagPositions(settings)),
         setTimelineCompact: (compact?: boolean) =>
             setSetting(
                 "timelineCompact",

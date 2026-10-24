@@ -9,7 +9,10 @@ import {
     tagAppearanceByPageIdMapQueryOptions,
 } from "@/hooks/queries";
 import { buildMarcherAppearancesByPageId } from "./utils/exportAppearances";
-import { buildCoordinateSheets } from "./utils/coordinateSheets";
+import {
+    buildCoordinateSheets,
+    coordinateSheetMarchers,
+} from "./utils/coordinateSheets";
 import {
     marchersWithoutPositions,
     readExportPositions,
@@ -205,28 +208,7 @@ function CoordinateSheetExport() {
                 throw new Error(t("exportCoordinates.cancelledByUser"));
             setProgress(15);
 
-            const processedMarchers = marchers
-                .map((marcher) => ({
-                    ...marcher,
-                    // Use raw DB section with the numeric part of drill_number as fallback display name
-                    name:
-                        marcher.name ||
-                        `${marcher.section} ${
-                            marcher.drill_number.match(/\d+/)?.[0] ||
-                            String(marcher.drill_order)
-                        }`,
-                }))
-                .sort((a, b) => {
-                    const sectionCompare = (a.section || "").localeCompare(
-                        b.section || "",
-                    );
-                    if (sectionCompare !== 0) return sectionCompare;
-                    return a.drill_number.localeCompare(
-                        b.drill_number,
-                        undefined,
-                        { numeric: true },
-                    );
-                });
+            const processedMarchers = coordinateSheetMarchers(marchers);
 
             await new Promise((resolve) => setTimeout(resolve, 300));
             if (isCancelled.current)
@@ -317,7 +299,7 @@ function CoordinateSheetExport() {
             toast.success(
                 <span>
                     {t("exportCoordinates.exportSuccess", {
-                        count: marchers.length,
+                        count: processedMarchers.length,
                     })}
                     <button
                         type="button"
@@ -1298,6 +1280,7 @@ function VideoExport() {
                     frameSampler: previewSampler,
                     appearanceSteps,
                     backgroundImage: fieldImage.image,
+                    backgroundImageSize: fieldImage.size,
                     // The preview sizes it to its own canvas on the first frame
                     width: 1,
                     height: 1,
@@ -1335,6 +1318,7 @@ function VideoExport() {
         appearanceSteps,
         fieldImage.loaded,
         fieldImage.image,
+        fieldImage.size,
     ]);
 
     const previewLoading =
@@ -1428,6 +1412,7 @@ function VideoExport() {
                 frameSampler,
                 appearanceSteps,
                 backgroundImage: fieldImage.image,
+                backgroundImageSize: fieldImage.size,
                 audioData: audioFile.data,
                 audioOffsetSeconds: workspaceSettings?.audioOffsetSeconds ?? 0,
                 width,
@@ -1492,6 +1477,7 @@ function VideoExport() {
         marchers,
         appearanceSteps,
         fieldImage.image,
+        fieldImage.size,
         workspaceSettings?.audioOffsetSeconds,
         frameRate,
         videoTheme,

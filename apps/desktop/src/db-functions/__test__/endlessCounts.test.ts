@@ -11,13 +11,17 @@ import {
 } from "@/timeline/timelineStore";
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { readPageGrid } from "../timelineRipple";
-import { ensureCountsInTransaction } from "../endlessCounts";
-import { addPageFlag, movePageFlag, pageFlagMoveLimits } from "../pageFlags";
+import { ensureCountsInTransaction, takeStoredCounts } from "../endlessCounts";
 import { editMeasureLines } from "../measureLines";
-import { endlessIdOf } from "@/timeline/endlessTimeline";
+import { appendPageOfCounts } from "../appendPages";
+import { addPageFlag, movePageFlag, pageFlagMoveLimits } from "../pageFlags";
 import { resizeTimeline } from "../timelineResize";
 import { shiftTimeline } from "../timelineCommands";
 import { moveMarchersInRangeInTransaction } from "../timelineMoves";
+import { addMarchersToTimeline } from "../timelineMembership";
+import { createItems, setItemGeometry, type NewItemArgs } from "../items";
+import { endlessIdOf } from "@/timeline/endlessTimeline";
+import { createAllUndoTriggers } from "../historyTriggers";
 
 // These tests set the flag and convert the show themselves
 keepFixturesInPageMode(
@@ -25,7 +29,7 @@ keepFixturesInPageMode(
 );
 
 /**
- * Writes past the last stored count (docs/tempo/endless-counts.md, slice 2), on the
+ * Writes past the last stored count (docs/timeline/endless-counts.md, slice 2), on the
  * `marchersAndPages` show: beat 0 plus 96 counts of 0.5 s, 24 measures of 4 starting at beats 1,
  * 5, …, 93, and page 0 plus pages 1 to 6 starting at beats 1, 9, …, 41, 8 counts each, so the
  * last flag is at beat 49 and the stored counts end at beat 97.
@@ -311,6 +315,31 @@ describeDbTests("writes past the last stored count", (it) => {
             await roundTrip(db, before, await snapshot(db));
         });
 
+        it("Add selected marchers past the end stores the counts the move lands on", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const [marcher] = await db.select().from(schema.marchers).all();
+            const before = await snapshot(db);
+
+            const result = await addMarchersToTimeline({
+                db,
+                range: { start: 110, end: 118 },
+                marcherIds: [marcher!.id],
+            });
+
+            expect(result.createdTimeline).toBe(true);
+            expect(await beatCount(db)).toBe(118);
+            const timeline = (
+                await db.select().from(schema.timelines).all()
+            ).find((t) => t.id === result.timelineId);
+            expect(timeline).toMatchObject({ start_beat: 110, end_beat: 118 });
+            // The last page doesn't grow to cover it
+            expect((await grid(db)).slice(-1)).toEqual([[6, 41, 49]]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
         it("a move shifted past the end stores the counts it lands on", async ({
             db,
             marchersAndPages: _,
@@ -325,6 +354,212 @@ describeDbTests("writes past the last stored count", (it) => {
 
             expect(await beatCount(db)).toBe(last.end_beat + 100);
             await roundTrip(db, before, await snapshot(db));
+        });
+    });
+
+    describe("a last page whose counts run past the stored ones", () => {
+        /**
+         * The last page (6, from beat 41) has `last_page_counts` 72 but the show stores counts
+         * only to beat 97, so it's drawn ending at 97 (`fromDatabasePages` clamps it), and its
+         * move ends there.
+         */
+        const setUpLongLastPage = async (db: DbConnection) => {
+            await db.update(schema.utility).set({ last_page_counts: 72 });
+            await setUp(db);
+            expect((await grid(db)).slice(-1)).toEqual([[6, 41, 97]]);
+        };
+
+        it("storing counts for a move keeps the last page as drawn, and moves nothing", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUpLongLastPage(db);
+            const [marcher] = await db.select().from(schema.marchers).all();
+            const timelinesBefore = await db
+                .select()
+                .from(schema.timelines)
+                .all();
+            const motionBefore = await positions(97);
+            const before = await snapshot(db);
+
+            await transactionWithHistory(db, "makeClip", async (tx) => {
+                await moveMarchersInRangeInTransaction({
+                    tx,
+                    range: { start: 120, end: 128 },
+                    moves: [{ marcherId: marcher!.id, x: 12, y: 34 }],
+                });
+            });
+
+            expect(await beatCount(db)).toBe(128);
+            // Its flag stays where it was drawn, and its length now says so
+            expect((await grid(db)).slice(-1)).toEqual([[6, 41, 97]]);
+            expect((await db.query.utility.findFirst())!.last_page_counts).toBe(
+                56,
+            );
+            // Every row that was there stays, the move ending on the last flag included
+            const timelinesAfter = await db
+                .select()
+                .from(schema.timelines)
+                .all();
+            for (const row of timelinesBefore)
+                expect(timelinesAfter).toContainEqual(row);
+            expect(await positions(97)).toEqual(motionBefore);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("+ N counts adds its page after the last flag as drawn", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUpLongLastPage(db);
+            const timelineBefore = await snapshot(db, TIMELINE_TABLES);
+            const before = await snapshot(db);
+
+            const added = await appendPageOfCounts({ db, counts: 16 });
+
+            expect([added.startBeat, added.endBeat]).toEqual([97, 113]);
+            expect((await grid(db)).slice(-2)).toEqual([
+                [6, 41, 97],
+                [added.page.id, 97, 113],
+            ]);
+            expect(await beatCount(db)).toBe(113);
+            expect(await snapshot(db, TIMELINE_TABLES)).toEqual(timelineBefore);
+            await roundTrip(db, before, await snapshot(db));
+        });
+    });
+
+    describe("the stored counts flag", () => {
+        it("is set only by an edit that commits", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            takeStoredCounts();
+            const refused = await transactionWithHistory(
+                db,
+                "test",
+                async (tx) => {
+                    await ensureCountsInTransaction({ tx, through: 120 });
+                    throw new Error("refused");
+                },
+            ).catch((error: unknown) => error);
+            expect(refused).toBeInstanceOf(Error);
+            expect(await beatCount(db)).toBe(97);
+            expect(takeStoredCounts()).toBe(false);
+
+            await transactionWithHistory(db, "test", (tx) =>
+                ensureCountsInTransaction({ tx, through: 120 }),
+            );
+            expect(takeStoredCounts()).toBe(true);
+            expect(takeStoredCounts()).toBe(false);
+        });
+    });
+
+    describe("big edits and writes keyed by beat id", () => {
+        it("stores more counts in one edit than one insert statement can bind", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            // 12,000 beats bind 36,000 values, past SQLite's 32,766 for one statement
+            const after = await transactionWithHistory(db, "test", (tx) =>
+                ensureCountsInTransaction({ tx, through: 97 + 12_000 }),
+            );
+            expect(after).toBe(97 + 12_000);
+            expect(await beatCount(db)).toBe(97 + 12_000);
+        });
+
+        const riser = (beatId: number): NewItemArgs => ({
+            kind: "prop",
+            name: "Riser",
+            surfaceType: "platform",
+            home: [120, 80],
+            beatId,
+            geometry: {
+                outlineType: "rectangle",
+                width: 2.4,
+                depth: 1.2,
+                height: 0.4,
+            },
+        });
+        const beatIdAt = async (db: DbConnection, ordinal: number) =>
+            (
+                await db
+                    .select({ id: schema.beats.id })
+                    .from(schema.beats)
+                    .orderBy(asc(schema.beats.position))
+                    .all()
+            )[ordinal]!.id;
+
+        it("a prop drawn past the end stores the counts up to its beat and is on field from it, one undo step", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            // The timeline-only tables (items among them) get their history triggers as the app's
+            // conversion makes them (`convertOnOpen`); the test conversion leaves that to its tests
+            await createAllUndoTriggers(db);
+            const before = await snapshot(db, [
+                schema.beats,
+                schema.measures,
+                schema.items,
+                schema.item_geometry,
+            ]);
+            const [item] = await createItems({
+                db,
+                newItems: [riser(endlessIdOf(110))],
+            });
+            expect(await beatCount(db)).toBe(111);
+            const geometry = await db
+                .select()
+                .from(schema.item_geometry)
+                .where(sql`${schema.item_geometry.item_id} = ${item!.id}`)
+                .all();
+            expect(geometry.map((g) => g.beat_id)).toEqual([
+                await beatIdAt(db, 110),
+            ]);
+            await performUndo(db);
+            expect(
+                await snapshot(db, [
+                    schema.beats,
+                    schema.measures,
+                    schema.items,
+                    schema.item_geometry,
+                ]),
+            ).toEqual(before);
+        });
+
+        it("an Outline set past the end adds a change there, and leaves the one on the last stored count", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const last = await beatIdAt(db, 96);
+            const [item] = await createItems({ db, newItems: [riser(last)] });
+            await setItemGeometry({
+                db,
+                itemId: item!.id,
+                beatId: endlessIdOf(104),
+                geometry: {
+                    outlineType: "rectangle",
+                    width: 4,
+                    depth: 1.2,
+                    height: 0.4,
+                },
+            });
+            const rows = await db
+                .select()
+                .from(schema.item_geometry)
+                .where(sql`${schema.item_geometry.item_id} = ${item!.id}`)
+                .all();
+            expect(
+                rows
+                    .map((r) => [r.beat_id, r.width])
+                    .sort((a, b) => a[1]! - b[1]!),
+            ).toEqual([
+                [last, 2.4],
+                [await beatIdAt(db, 104), 4],
+            ]);
         });
     });
 });

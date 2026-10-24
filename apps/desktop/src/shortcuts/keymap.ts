@@ -136,13 +136,36 @@ function sameBindings(a: readonly string[], b: readonly string[]): boolean {
     );
 }
 
-/** Drops unknown actions, invalid bindings and entries equal to the defaults, so saved overrides only hold real changes. */
+/** Renamed actions, old id → new id: a saved override moves to the new id unless it has one. */
+const RENAMED_ACTIONS: Readonly<Record<string, ActionId>> = {
+    // Previous paths became start flag positions (fork #331)
+    togglePreviousPagePaths: "toggleStartFlagPositions",
+};
+
+function withRenamedActions(
+    overrides: Record<string, unknown>,
+): Record<string, unknown> {
+    let renamed = overrides;
+    for (const [oldId, newId] of Object.entries(RENAMED_ACTIONS)) {
+        if (!(oldId in overrides) || newId in overrides) continue;
+        const { [oldId]: bindings, ...rest } = renamed;
+        renamed = { ...rest, [newId]: bindings };
+    }
+    return renamed;
+}
+
+/**
+ * Moves overrides of renamed actions to their new ids, and drops unknown actions, invalid bindings
+ * and entries equal to the defaults, so saved overrides only hold real changes.
+ */
 export function normalizeOverrides(
     overrides: Record<string, unknown>,
     actions: Record<string, ActionDefinition> = ACTIONS,
 ): ShortcutOverrides {
     const result: ShortcutOverrides = {};
-    for (const [id, bindings] of Object.entries(overrides)) {
+    for (const [id, bindings] of Object.entries(
+        withRenamedActions(overrides),
+    )) {
         if (!(id in actions) || !Array.isArray(bindings)) continue;
         const valid = bindings.filter(
             (b): b is string => typeof b === "string" && isValidBinding(b),

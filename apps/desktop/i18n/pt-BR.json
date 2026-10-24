@@ -81,7 +81,6 @@
         "shape": {
             "applyQuick": "Ajustar à forma",
             "create": "Criar forma",
-            "createCircle": "Criar círculo",
             "delete": "Exclui as formas selecionadas atualmente",
             "noMarchersSelected": "Nenhum marchador selecionado"
         },
@@ -100,13 +99,10 @@
             "focusCanvas": "Focar o canvas",
             "focusTimeline": "Editar linha do tempo",
             "hideNextPaths": "Ocultar trajetos da próxima página",
-            "hidePreviousPaths": "Ocultar trajetos da página anterior",
             "openCommandPalette": "Paleta de comandos",
             "openSettings": "Configurações…",
             "showNextPaths": "Mostrar trajetos da próxima página",
-            "showPreviousPaths": "Mostrar trajetos da página anterior",
-            "toggleNextPaths": "Alternar trajetos da próxima página",
-            "togglePreviousPaths": "Alternar trajetos da página anterior"
+            "toggleNextPaths": "Alternar trajetos da próxima página"
         }
     },
     "analyticsOptIn": {
@@ -1189,10 +1185,7 @@
             "label": "Página {pageName}",
             "subset": "Subconjunto"
         },
-        "pages": "Páginas",
-        "perspective": {
-            "label": "Perspectiva"
-        }
+        "pages": "Páginas"
     },
     "titlebar": {
         "bugReport": "Enviar erro ou feedback",
@@ -1227,7 +1220,6 @@
             "gridLines": "Linhas de Grade",
             "halfLines": "Meias linhas",
             "nextPaths": "Próximos Caminhos",
-            "previousPaths": "Caminhos Anteriores",
             "uiSettingsToolbar": "Barra de Ferramentas de Configurações da UI"
         }
     },

@@ -1,14 +1,16 @@
 /**
- * The counts the timeline draws past the last stored one (docs/tempo/endless-counts.md rules 1, 6
+ * The counts the timeline draws past the last stored one (docs/timeline/endless-counts.md rules 1, 6
  * and 7). The timeline's lanes draw `Beat`s and `Measure`s, so past the stored counts it gets
  * stand-ins from the count grid (`countGrid.ts`) up to the scroll extent: beats and measures with
- * negative ids that nothing stores. They look the same as stored ones. A write that lands on one
- * stores the counts first (`ensureCountsInTransaction`); an edit that names an endless measure by
- * id finds its beat with `endlessBeatOfId`.
+ * negative ids that nothing stores. They look the same as stored ones. A write that lands past the
+ * stored counts stores the counts first (`ensureCountsInTransaction`): the timeline's writes name
+ * a spec beat; a write keyed by beat id (a prop's Outline, from the playhead) may name an endless
+ * one, which `storedBeatIdInTransaction` stores and swaps for the stored id.
  */
 import type Beat from "@/global/classes/Beat";
 import type Measure from "@/global/classes/Measure";
 import type { CountGrid } from "./countGrid";
+import { musicEndBeat } from "./countsPastEnd";
 
 /** Endless ids are this minus the spec beat, far below any stored id or `tempBeat`'s -1 */
 const ENDLESS_ID_BASE = -1_000_000;
@@ -44,6 +46,24 @@ export function beatsThrough(
             timestamp: grid.timeAtBeat(index),
         });
     return out;
+}
+
+/**
+ * The counts the metronome clicks (EC-6): the stored ones and endless ones up to the stop point
+ * `stopBeat`, which is a count boundary. The count starting at the stop point is left out, so no
+ * click lands where playing on stops, and past it the metronome is silent, stored counts there
+ * included (an older file's counts after its last page). With the stored counts ending at the
+ * stop point it is the stored beats, as before endless counts.
+ */
+export function metronomeBeats(
+    grid: CountGrid,
+    beats: readonly Beat[],
+    stopBeat: number,
+): readonly Beat[] {
+    const counted = beatsThrough(grid, beats, stopBeat);
+    return stopBeat > 0 && stopBeat < counted.length
+        ? counted.slice(0, stopBeat)
+        : counted;
 }
 
 /**
@@ -101,9 +121,7 @@ export function playbackStopBeat({
     lastMoveEndBeat: number;
 }): number {
     const musicBeat =
-        musicEndSeconds !== null && grid.storedCount > 0
-            ? Math.ceil(grid.beatAtTime(musicEndSeconds) - 1e-6)
-            : 0;
+        musicEndSeconds !== null ? musicEndBeat(grid, musicEndSeconds) : 0;
     return Math.max(showEndBeat, musicBeat, lastMoveEndBeat);
 }
 

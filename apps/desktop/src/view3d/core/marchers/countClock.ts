@@ -76,3 +76,11 @@ export function msAtCount(clock: CountClock, c: number): number {
     const k = Math.floor(c);
     return b[k] + (c - k) * (b[k + 1] - b[k]);
 }
+
+/**
+ * How long count `k` lasts, s: its tempo's beat, the last count's past the
+ * end, and 120 bpm for a count with none.
+ */
+export function secondsPerCount(clock: CountClock, k: number): number {
+    return 60 / (clock.bpm[Math.min(k, clock.bpm.length - 1)] || 120);
+}

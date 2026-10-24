@@ -44,7 +44,7 @@ import { updateVenueSettingsMutationOptions } from "@/hooks/queries/useVenueSett
 import { venueSettingsSchema } from "@/view3d/core/venueSettings";
 import { updateShowCamerasMutationOptions } from "@/hooks/queries/useShowCameras";
 import { showCamerasSchema } from "@/view3d/core/cameraList";
-import { pressAction } from "@/shortcuts/registry";
+import { pressAction, type ReleaseReason } from "@/shortcuts/registry";
 import { subscribeTimelineChanges } from "@/db-functions/timelineChanges";
 import {
     VIEW3D_AUTO_OPEN_SETTING,
@@ -359,13 +359,17 @@ export function useView3dPlaybackRequests() {
     useEffect(() => {
         const electron = window.electron;
         if (!electron?.onView3dPlaybackRequest) return;
-        const held = new Map<View3dPlaybackAction, () => void>();
-        const letGo = (action: View3dPlaybackAction) => {
+        const held = new Map<
+            View3dPlaybackAction,
+            (reason: ReleaseReason) => void
+        >();
+        const letGo = (action: View3dPlaybackAction, reason: ReleaseReason) => {
             const release = held.get(action);
             held.delete(action);
-            release?.();
+            release?.(reason);
         };
-        const letGoAll = () => [...held.keys()].forEach(letGo);
+        const letGoAll = () =>
+            [...held.keys()].forEach((action) => letGo(action, "lost"));
         const cleanups = [
             electron.onView3dPlaybackRequest((request) => {
                 if (request?.action === VIEW3D_SET_SPEED) {
@@ -376,7 +380,10 @@ export function useView3dPlaybackRequests() {
                 }
                 if (!isView3dPlaybackAction(request?.action)) return;
                 // A release, or a second press without one
-                letGo(request.action);
+                letGo(
+                    request.action,
+                    request.release === true ? "keyup" : "lost",
+                );
                 if (request.release === true) return;
                 const release = pressAction(request.action);
                 if (release) held.set(request.action, release);

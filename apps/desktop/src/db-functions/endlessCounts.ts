@@ -1,19 +1,25 @@
-import { asc } from "drizzle-orm";
+import { asc, count } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import {
     continuedCounts,
     countContinuation,
     type CountContinuation,
-} from "@/timeline/showLength";
+} from "@/timeline/countsPastEnd";
+import { endlessBeatOfId } from "@/timeline/endlessTimeline";
 import { createBeatsInTransaction } from "./beat";
 import { createMeasuresInTransaction } from "./measures";
-import { ensureSecondBeatHasPage } from "./page";
-import { withTimelinePageRipple } from "./timelineRipple";
+import {
+    ensureSecondBeatHasPage,
+    FIRST_PAGE_ID,
+    updateLastPageCounts,
+} from "./page";
+import { afterHistoryCommit } from "./history";
+import { readPageGrid, withTimelinePageRipple } from "./timelineRipple";
 import { refuse } from "./timelineErrors";
 import type { DbTransaction } from "./types";
 
 /**
- * Storing counts past the last one (docs/tempo/endless-counts.md). The timeline draws counts on
+ * Storing counts past the last one (docs/timeline/endless-counts.md). The timeline draws counts on
  * forever (`timeline/countGrid.ts`), but pages and measures point at `beats` rows, so a write that
  * lands at or past the last stored count stores the counts up to it first, in its own transaction
  * and undo step (`ensureCountsInTransaction`). Looking, scrolling and playing store nothing.
@@ -23,7 +29,28 @@ import type { DbTransaction } from "./types";
  * with them. The append runs inside `withTimelinePageRipple`, like every beat edit: timeline rows
  * hold plain count numbers, and counts appended after the last one move none of them, even moves
  * that run past the show's end.
+ *
+ * A last page whose `last_page_counts` runs past the stored counts is drawn ending at the last
+ * stored count (`fromDatabasePages`, `readPageGrid` clamp it there). Storing counts would let it
+ * grow into them, moving its flag and every row ending on it, so the append first shortens
+ * `last_page_counts` to the length the page is drawn with (`keepLastPageAsDrawn`).
  */
+
+/**
+ * Sets `last_page_counts` to the last page's drawn length where it runs past the stored counts, so
+ * appending counts leaves the last flag where it is drawn. Every reader then agrees on that flag.
+ */
+async function keepLastPageAsDrawn(tx: DbTransaction): Promise<void> {
+    const grid = await readPageGrid(tx);
+    const last = grid.pages[grid.pages.length - 1];
+    if (!last || last.id === FIRST_PAGE_ID) return;
+    const utility = await tx
+        .select({ lastPageCounts: schema.utility.last_page_counts })
+        .from(schema.utility)
+        .get();
+    if (!utility || last.start + utility.lastPageCounts <= last.end) return;
+    await updateLastPageCounts({ tx, lastPageCounts: last.end - last.start });
+}
 
 /** `countContinuation` for the show in `tx`, and its beat count (beat 0 included) */
 async function readContinuation(tx: DbTransaction): Promise<{
@@ -67,7 +94,11 @@ export async function appendCountsInTransaction({
     const { continuation, beatCount } = await readContinuation(tx);
     if (counts === 0) return beatCount;
     const appended = continuedCounts(continuation, counts);
-    storedCounts = true;
+    await keepLastPageAsDrawn(tx);
+    // Only once the edit commits: a refused one stores nothing
+    afterHistoryCommit(() => {
+        storedCounts = true;
+    });
     await withTimelinePageRipple(tx, async () => {
         const created = await createBeatsInTransaction({
             tx,
@@ -97,9 +128,10 @@ export async function appendCountsInTransaction({
 let storedCounts = false;
 
 /**
- * Whether an edit has stored counts since the last call (which clears it). Any write can store
- * counts now, a move or a measure line too, so the app refreshes the beats and measures after a
- * write that did (`refreshHistoryOnWrites`), whatever queries the write itself refreshes.
+ * Whether a committed edit has stored counts since the last call (which clears it); a refused one
+ * never counts (`afterHistoryCommit`). Any write can store counts now, a move or a measure line
+ * too, so the app refreshes the beats and measures after a write that did
+ * (`refreshAfterStoredCounts`), whatever queries the write itself refreshes.
  */
 export const takeStoredCounts = (): boolean => {
     const stored = storedCounts;
@@ -108,7 +140,7 @@ export const takeStoredCounts = (): boolean => {
 };
 
 /**
- * The most counts one edit stores (docs/tempo/decisions.md EC-1): about an hour at 300 BPM, far
+ * The most counts one edit stores (docs/timeline/endless-counts.md EC-1): about an hour at 300 BPM, far
  * past any show, so a bad beat number can't make a runaway show.
  */
 export const MAX_COUNTS_PER_EDIT = 20_000;
@@ -132,9 +164,8 @@ export async function ensureCountsInTransaction({
 }): Promise<number> {
     if (!Number.isFinite(through))
         refuse(`can't store counts up to beat ${through}`);
-    const beatCount = (
-        await tx.select({ id: schema.beats.id }).from(schema.beats).all()
-    ).length;
+    const beatCount =
+        (await tx.select({ n: count() }).from(schema.beats).get())?.n ?? 0;
     const need = Math.ceil(through);
     if (need <= beatCount) return beatCount;
     if (need - beatCount > MAX_COUNTS_PER_EDIT)
@@ -142,4 +173,30 @@ export async function ensureCountsInTransaction({
             `that is ${need - beatCount} counts past the end; one edit stores at most ${MAX_COUNTS_PER_EDIT}`,
         );
     return await appendCountsInTransaction({ tx, counts: need - beatCount });
+}
+
+/**
+ * The stored id for a beat id a write names: a stored one as it is; an endless one (`endlessIdOf`,
+ * past the stored counts) has the counts up to it stored first, in the same edit, and becomes that
+ * stored beat's id.
+ */
+export async function storedBeatIdInTransaction({
+    tx,
+    beatId,
+}: {
+    tx: DbTransaction;
+    beatId: number;
+}): Promise<number> {
+    const beat = endlessBeatOfId(beatId);
+    if (beat === null) return beatId;
+    await ensureCountsInTransaction({ tx, through: beat + 1 });
+    const row = await tx
+        .select({ id: schema.beats.id })
+        .from(schema.beats)
+        .orderBy(asc(schema.beats.position))
+        .limit(1)
+        .offset(beat)
+        .get();
+    if (!row) refuse(`no count ${beat} to write on`);
+    return row.id;
 }

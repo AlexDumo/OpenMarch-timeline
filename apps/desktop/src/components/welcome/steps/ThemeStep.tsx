@@ -14,7 +14,8 @@ export type ThemeChoice = "light" | "dark";
  * The preview's colors, from each theme's tokens in packages/ui tailwind.css.
  * Fixed rather than tokens so both previews show at once whatever the app's
  * current theme is; a test keeps `bg`, `stroke` and `accent` equal to the
- * tokens. The rest are toned-down versions for a small drawing.
+ * tokens. The rest are toned-down versions for a small drawing. The field is
+ * white with dark lines in both themes, as it is in the app.
  */
 export const PREVIEW_COLORS: Record<
     ThemeChoice,
@@ -25,6 +26,7 @@ export const PREVIEW_COLORS: Record<
         text: string;
         accent: string;
         field: string;
+        fieldLine: string;
     }
 > = {
     light: {
@@ -34,6 +36,7 @@ export const PREVIEW_COLORS: Record<
         text: "rgba(32, 32, 32, 0.35)",
         accent: "rgb(100, 66, 255)",
         field: "rgb(255, 255, 255)",
+        fieldLine: "rgba(0, 0, 0, 0.1)",
     },
     dark: {
         bg: "rgb(15, 14, 19)",
@@ -41,7 +44,8 @@ export const PREVIEW_COLORS: Record<
         stroke: "rgba(255, 255, 255, 0.06)",
         text: "rgba(208, 208, 208, 0.35)",
         accent: "rgb(150, 126, 255)",
-        field: "rgb(36, 35, 42)",
+        field: "rgb(255, 255, 255)",
+        fieldLine: "rgba(0, 0, 0, 0.1)",
     },
 };
 
@@ -96,7 +100,7 @@ function ThemePreview({ theme }: { theme: ThemeChoice }) {
                     y1="17"
                     x2={x}
                     y2="69"
-                    stroke={c.stroke}
+                    stroke={c.fieldLine}
                     strokeWidth="0.8"
                 />
             ))}

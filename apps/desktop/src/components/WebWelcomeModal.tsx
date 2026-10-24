@@ -2,6 +2,7 @@ import { Description as DialogDescription } from "@radix-ui/react-dialog";
 import { Button, Dialog, DialogContent, DialogTitle } from "@openmarch/ui";
 import { useWebWelcomeStore } from "@/stores/WebWelcomeStore";
 import { useWelcomeFlowStore } from "@/stores/WelcomeFlowStore";
+import { webChannel } from "@/utilities/webBuild";
 
 /**
  * Explains the web build. Opens once per browser session when the app starts
@@ -26,11 +27,21 @@ export default function WebWelcomeModal() {
                             exporting and native windows, are not available.
                         </p>
                     </DialogDescription>
-                    <p>
-                        There are no accounts and nothing is uploaded: your show
-                        stays on this computer. Open an existing{" "}
-                        <code>.dots</code> file or start a new one to begin.
-                    </p>
+                    {webChannel === "lab" ? (
+                        <p>
+                            This is a test build of a feature that is still in
+                            development, so expect rough edges. Your show stays
+                            on this computer: the editor does not upload it.
+                            Open an example show, an existing <code>.dots</code>{" "}
+                            file or start a new one to begin.
+                        </p>
+                    ) : (
+                        <p>
+                            There are no accounts and nothing is uploaded: your
+                            show stays on this computer. Open an existing{" "}
+                            <code>.dots</code> file or start a new one to begin.
+                        </p>
+                    )}
                     <p>
                         <strong className="text-text">
                             Download your show to save it ({save}).

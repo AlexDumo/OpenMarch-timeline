@@ -85,7 +85,7 @@ export function pageFlagGrid(
 /**
  * What **+** does at `beat` (UI-9): inside a page (strictly between its start and its flag) it
  * splits that page; past the last flag it appends a page ending there, at any count: the counts
- * never end (docs/tempo/endless-counts.md), and `addPageFlagInTransaction` stores any it needs. On
+ * never end (docs/timeline/endless-counts.md), and `addPageFlagInTransaction` stores any it needs. On
  * a flag, at or before home's flag (beat 1), or at a fractional beat, there's nothing to add
  * (null).
  */
@@ -162,7 +162,7 @@ export interface AddedPageFlag {
  *
  * - **Split:** the split page's `start_beat` moves to `beat`, and a new page row takes its old
  *   start, so the split page keeps its flag, id and data (notes, appearance) and the new page comes
- *   before it. Later pages renumber, unless `subset` (**Add subset page**) makes the new page a
+ *   before it. Later pages renumber, unless `subset` (**Create subset at playhead**) makes the new page a
  *   subset, which takes a letter and leaves every later page's number. Splitting the last page also
  *   rewrites `last_page_counts` so its flag stays where it was.
  * - **Append:** a new page starts at the last flag and ends at `beat` (`last_page_counts`); a
@@ -184,7 +184,7 @@ export async function addPageFlagInTransaction({
     tx: DbTransaction;
     beat: number;
     splitMoves?: boolean;
-    /** Make the new page a subset page (**Add subset page**) */
+    /** Make the new page a subset page (**Create subset at playhead**) */
     subset?: boolean;
 }): Promise<AddedPageFlag> {
     let grid = await readPageGrid(tx);
@@ -369,7 +369,7 @@ export async function deletePageFlags({
  *
  * - `flag`: the neighboring flag (page `pageId`'s; home's is page 0). Every page keeps a count.
  * - `open`: nothing, for the last flag past every move: the counts never end
- *   (docs/tempo/endless-counts.md), so its `max` is `Infinity`.
+ *   (docs/timeline/endless-counts.md), so its `max` is `Infinity`.
  * - `move`: a timeline in the way. `timelineId` is set when one timeline is to blame: one with an
  *   edge on the flag that the flag would leave behind, or one whose range the page timeline would
  *   take (C-12). `message` is the ripple's own refusal otherwise.
@@ -465,12 +465,21 @@ export function pageFlagMoveBlock(
                 timelineId: timelineOf.get(a.transition_id),
                 message: "a move on the flag would be left behind",
             };
-    // C-12: one timeline per range. Only a timeline that changed can newly share a range.
+    // C-12: one timeline per range. Only a timeline that changed can newly share a range. Moves
+    // that already shared one (a move split off a page's timeline, UI-25) move together and
+    // keep sharing it, which is allowed
+    const rangeBefore = new Map(
+        rows.timelines.map((l) => [l.id, `${l.start_beat}:${l.end_beat}`]),
+    );
     for (const l of rows.timelines) {
         const r = plan.newTimeline.get(l.id);
         if (!r || (r[0] === l.start_beat && r[1] === l.end_beat)) continue;
         const other = [...plan.newTimeline].find(
-            ([id, q]) => id !== l.id && q[0] === r[0] && q[1] === r[1],
+            ([id, q]) =>
+                id !== l.id &&
+                q[0] === r[0] &&
+                q[1] === r[1] &&
+                rangeBefore.get(id) !== rangeBefore.get(l.id),
         );
         if (other)
             return {

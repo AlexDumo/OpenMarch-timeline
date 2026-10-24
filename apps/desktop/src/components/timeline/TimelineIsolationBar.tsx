@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@openmarch/ui";
-import { FlagIcon, PushPinSlashIcon } from "@phosphor-icons/react";
+import { FlagIcon } from "@phosphor-icons/react";
 import { Keycaps } from "./ShortcutTooltip";
 import clsx from "clsx";
 import { START_INK } from "./startFlagInk";
@@ -11,11 +11,14 @@ import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import {
     isolatedTimeline,
     useTimelineSelectionStore,
+    windowMove,
     type PageBox,
     type TimelineEditSelection,
 } from "@/stores/TimelineSelectionStore";
 import { pageFlags, type FlagPage } from "@/timeline/timelinePlayhead";
+import { isPageTimeline, moveLabels } from "@/timeline/timelineViewModel";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
+import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import {
     basicPageBox,
     planCanvasEdit,
@@ -32,16 +35,33 @@ import {
 export function isolatedTimelineName(
     range: { readonly start: number; readonly end: number },
     pages: readonly (FlagPage & { readonly name: string })[],
+    /**
+     * UI-25: the timeline is a move, not a page's own timeline, though its range may be a page
+     * box's (a move split off it): named in counts, "Page 2, counts 1–8"
+     */
+    asMove = false,
 ): string {
     const boxes = pageFlags(pages).filter((f) => f.range !== null);
     // Page 1's box starts at beat 1, show time 0, which the store writes as beat 0 (a flag
     // pinned on page 1's start): the same moment, so name it as page 1's
     if (range.start === 0 && boxes[0]?.range?.start === 1)
         range = { start: 1, end: range.end };
+    // Both lines held on one beat (UI-21): an empty window, named by its beat, not as a run of
+    // pages read backwards ("Pages 5–4")
+    if (range.end <= range.start) {
+        const flag = boxes.find((f) => f.range!.end === range.start);
+        if (flag) return `Page ${flag.page.name}'s flag`;
+        const inside = boxes.find(
+            (f) => f.range!.start <= range.start && range.start < f.range!.end,
+        );
+        return inside
+            ? `Page ${inside.page.name}, count ${range.start - inside.range!.start}`
+            : `Beat ${range.start}`;
+    }
     const exact = boxes.find(
         (f) => f.range!.start === range.start && f.range!.end === range.end,
     );
-    if (exact) return `Page ${exact.page.name}'s move`;
+    if (exact && !asMove) return `Page ${exact.page.name}'s move`;
     const at = (beat: number) =>
         boxes.find((f) => f.range!.start <= beat && beat < f.range!.end);
     const first = at(range.start);
@@ -204,7 +224,7 @@ export function editingWords(
         !plan.ok &&
         plan.error instanceof TimelineEditRefusedError &&
         plan.error.refusal === "pastLastPage"
-        ? "Add a page with + to edit here"
+        ? "Right-click the playhead to add a page here"
         : `Editing ${name}`;
 }
 
@@ -217,8 +237,8 @@ export const passedSets = (names: readonly string[]) =>
 /**
  * The line over the field (UI-12, replacing UI-11's From start badge): what a drag edits now, so
  * the window is never only a tint on the timeline. Quiet (no border, subtitle text) for an
- * ordinary page: a whole page box, start flag not pinned. Prominent, and flashed
- * once, when anything is unusual: a partial window, a pinned start flag (with **Unpin**), a window
+ * ordinary page: a whole page box. Prominent, and flashed
+ * once, when anything is unusual: a partial window, a window
  * passing page flags (that part never truncates), or past the last flag. With looping on it
  * names it while it is elsewhere ("Space loops Page 3's move", UI-17). Only the buttons take the pointer, so the field under it stays
  * usable. Screen readers hear the sentence once it settles, not on every scrubbed beat. Hidden
@@ -226,16 +246,13 @@ export const passedSets = (names: readonly string[]) =>
  */
 export function TimelineFromStartBadge() {
     const selection = useTimelineSelectionStore((s) => s.selection);
-    const startBeat = useTimelineSelectionStore((s) => s.startBeat);
-    const pinned = useTimelineSelectionStore((s) => s.startPinned);
     const isolated = useTimelineSelectionStore((s) => s.isolation !== null);
     const playing = useTimelineSelectionStore((s) => s.playback !== null);
     const { pages } = useTimingObjects()!;
     const basic = useIsBasicMode();
+    // What a drop edits: nothing drops in Visuals mode (performer-behavior.md 7.1)
+    const visuals = useIsVisualsView();
     const range = selection.kind === "range" ? selection : null;
-    // The pin only matters while it bounds the window (not when P is on or before it)
-    const pinShown = pinned && range !== null && range.start === startBeat;
-    // (Basic never pins; see useBasicModeGuards)
     // UI-17: with looping on, the loop's name when it isn't the window being edited
     const loop = useTimelineSelectionStore((s) => s.loop);
     const loopName =
@@ -257,6 +274,21 @@ export function TimelineFromStartBadge() {
             ? basicEditSpot(plan.target, pages)
             : null;
     const through = range && !basic ? flagsInside(range, pages) : [];
+    // UI-25: a move split off a page's timeline has the page's range; the line names the move
+    const splitMoveName = useTimelineSelectionStore((s) => {
+        const move = basic ? null : windowMove(s);
+        if (!move || s.isolation) return null;
+        if (
+            !s.pageBoxes.some(
+                (b) => b.start === move.start && b.end === move.end,
+            )
+        )
+            return null;
+        return (
+            moveLabels(s.storedTimelines ?? [], s.pageBoxes).get(move.id) ??
+            null
+        );
+    });
     const name =
         selection.kind === "home"
             ? "home positions"
@@ -264,9 +296,11 @@ export function TimelineFromStartBadge() {
               ? basicSpot.count === null
                   ? `page ${basicSpot.pageName}`
                   : `count ${basicSpot.count} of page ${basicSpot.pageName}`
-              : range
-                ? isolatedTimelineName(range, pages)
-                : "";
+              : splitMoveName !== null && range
+                ? `${splitMoveName} (${isolatedTimelineName(range, pages, true)})`
+                : range
+                  ? isolatedTimelineName(range, pages)
+                  : "";
     const wholePage = basicSpot
         ? basicSpot.count === null
         : isWholePageWindow(selection, pages);
@@ -306,17 +340,16 @@ export function TimelineFromStartBadge() {
             : null;
     const movedOn = stopped !== null;
     const editing = editingWords(basic ? plan : null, name);
-    const unusual =
-        loopShown || pinShown || through.length > 0 || !wholePage || movedOn;
+    const unusual = loopShown || through.length > 0 || !wholePage || movedOn;
     const sentence =
         selection.kind === "none"
             ? ""
-            : `${stopped ? `${stopped}. ` : ""}${editing}${through.length ? `, through ${passedSets(through)}` : ""}${pinShown ? ", start flag pinned" : ""}${loopShown ? `. Space loops ${loopName}` : ""}`;
-    // Flash when it turns prominent for a new reason: a pin, or crossing flags
-    const flashKey = `${loopShown}|${pinShown}|${through.join(",")}`;
+            : `${stopped ? `${stopped}. ` : ""}${editing}${through.length ? `, through ${passedSets(through)}` : ""}${loopShown ? `. Space loops ${loopName}` : ""}`;
+    // Flash when it turns prominent for a new reason: a loop elsewhere, or crossing flags
+    const flashKey = `${loopShown}|${through.join(",")}`;
     const [fresh, setFresh] = useState(false);
     useEffect(() => {
-        if (!loopShown && !pinShown && through.length === 0) return;
+        if (!loopShown && through.length === 0) return;
         setFresh(true);
         const timeout = setTimeout(() => setFresh(false), 900);
         return () => clearTimeout(timeout);
@@ -324,7 +357,7 @@ export function TimelineFromStartBadge() {
     }, [flashKey]);
     // Announced once the window settles, not on every beat of a scrub; and at once when the line
     // comes back (leaving isolation, UI-14 round-2 review), not with what it said while hidden
-    const hidden = isolated || selection.kind === "none";
+    const hidden = isolated || visuals || selection.kind === "none";
     const [announced, setAnnounced] = useState(sentence);
     const wasHidden = useRef(hidden);
     // Before paint, so the live region never shows the stale sentence
@@ -348,7 +381,7 @@ export function TimelineFromStartBadge() {
                 unusual
                     ? clsx(
                           "bg-bg-1 text-text border shadow-md",
-                          loopShown || pinShown || through.length
+                          loopShown || through.length
                               ? START_INK.border
                               : "border-stroke",
                       )
@@ -386,24 +419,6 @@ export function TimelineFromStartBadge() {
                     · through {passedSets(through)}
                 </span>
             )}
-            {pinShown && (
-                <button
-                    type="button"
-                    data-testid="timeline-window-unpin"
-                    title="The start flag is pinned: it stays here when you move to other pages. Unpin it to follow the page again."
-                    className={clsx(
-                        "rounded-4 hover:bg-fg-2 pointer-events-auto flex shrink-0 items-center gap-4 border px-6 py-1 text-[11px]",
-                        START_INK.border,
-                        START_INK.strongText,
-                    )}
-                    onClick={() =>
-                        useTimelineSelectionStore.getState().unpinStart()
-                    }
-                >
-                    <PushPinSlashIcon size={11} weight="fill" />
-                    Unpin
-                </button>
-            )}
             {loopShown && (
                 <span
                     data-testid="timeline-loop-badge"
@@ -430,6 +445,12 @@ export function TimelineFromStartBadge() {
 export default function TimelineIsolationBar() {
     useIsolationEscape();
     const timeline = useTimelineSelectionStore(isolatedTimeline);
+    // UI-25: a move split off a page's timeline is named as a move, not as the page's
+    const isPage = useTimelineSelectionStore(
+        (s) =>
+            timeline !== null &&
+            isPageTimeline(timeline, s.storedTimelines ?? [], s.pageBoxes),
+    );
     const { pages } = useTimingObjects()!;
     if (!timeline) return null;
     const count = timeline.marcherIds.size;
@@ -445,7 +466,7 @@ export default function TimelineIsolationBar() {
         >
             <span className="text-accent font-medium">Isolated</span>
             <span>
-                {isolatedTimelineName(timeline, pages)} · {count}{" "}
+                {isolatedTimelineName(timeline, pages, !isPage)} · {count}{" "}
                 {count === 1 ? "marcher" : "marchers"}
             </span>
             <span className="text-text-subtitle flex min-w-0 items-center gap-4 truncate text-[11px]">

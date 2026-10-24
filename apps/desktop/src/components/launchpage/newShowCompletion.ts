@@ -14,10 +14,9 @@ import {
     FIRST_PAGE_ID,
 } from "@/db-functions/page";
 import { transactionWithHistory } from "@/db-functions/history";
-import {
-    updateFieldProperties,
-    updateFieldPropertiesImage,
-} from "@/global/classes/FieldProperties";
+import { updateFieldProperties } from "@/global/classes/FieldProperties";
+import { showLibraryKeys } from "@/hooks/queries/useShowLibrary";
+import { conToastError } from "@/utilities/utils";
 import {
     updateWorkspaceSettingsParsed,
     getWorkspaceSettingsParsed,
@@ -310,17 +309,29 @@ async function applyPreviousDotsCoordinates(
     });
 }
 
-async function applyPreviousDotsFieldImage(
+export async function applyPreviousDotsFieldImage(
     form: NewShowFormState,
     queryClient: QueryClient,
 ): Promise<void> {
+    const fieldFloor = form.previousDotsImport?.fieldFloor;
     const fieldImage = form.previousDotsImport?.fieldImage;
-    if (fieldImage == null || fieldImage.length === 0) return;
+    if (!fieldFloor && (fieldImage == null || fieldImage.length === 0)) return;
 
-    await updateFieldPropertiesImage(fieldImage);
+    // The new show's floor (D-23): the previous show's floor Version as it is, or one made in
+    // main from a previous show's legacy image. The rest of the copy goes on without it: a floor
+    // that can't be made is a toast, not a failed show.
+    try {
+        if (fieldFloor)
+            await window.electron.setNewShowFloorFromVersion(fieldFloor);
+        else await window.electron.setNewShowFloorFromImage(fieldImage!);
+    } catch (error) {
+        conToastError("Couldn't copy the previous show's field image", error);
+        return;
+    }
     await queryClient.invalidateQueries({
         queryKey: fieldPropertiesKeys.detail(),
     });
+    await queryClient.invalidateQueries({ queryKey: showLibraryKeys.all() });
 }
 
 async function applyPreviousDotsSectionAppearances(

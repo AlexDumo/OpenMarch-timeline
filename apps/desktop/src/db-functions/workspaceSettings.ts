@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import * as z from "zod";
 import { DbConnection, DbTransaction } from "./types";
+import { withTimelineWriteLock } from "./history";
 import { schema } from "@/global/database/db";
 import {
     type WorkspaceSettings,
@@ -45,23 +46,30 @@ export async function updateWorkspaceSettings({
     db: DbConnection;
     args: ModifiedWorkspaceSettingsArgs;
 }): Promise<DatabaseWorkspaceSettings> {
-    // Initialize the workspace settings record if it doesn't exist
-    await initializeWorkspaceSettings({ db });
+    // Under the history lock: a settings write is its own transaction, and one started while an
+    // edit's transaction is open (saving a new page length as pages are added, say) would fail
+    return withTimelineWriteLock(async () => {
+        // Initialize the workspace settings record if it doesn't exist
+        await initializeWorkspaceSettings({ db });
 
-    return await db.transaction(async (tx: DbTransaction) => {
-        await tx
-            .update(schema.workspace_settings)
-            .set({
-                ...args,
-                updated_at: new Date().toISOString(),
-            })
-            .where(eq(schema.workspace_settings.id, 1));
+        return await db.transaction(async (tx: DbTransaction) => {
+            await tx
+                .update(schema.workspace_settings)
+                .set({
+                    ...args,
+                    updated_at: new Date().toISOString(),
+                })
+                .where(eq(schema.workspace_settings.id, 1));
 
-        const updatedSettings = await tx.query.workspace_settings.findFirst();
-        if (!updatedSettings) {
-            throw new Error("Workspace settings record not found after update");
-        }
-        return updatedSettings;
+            const updatedSettings =
+                await tx.query.workspace_settings.findFirst();
+            if (!updatedSettings) {
+                throw new Error(
+                    "Workspace settings record not found after update",
+                );
+            }
+            return updatedSettings;
+        });
     });
 }
 

@@ -58,6 +58,7 @@ export const generateMarchers = ({
             updated_at: faker.date.recent().toISOString(),
             home_x: 0,
             home_y: 0,
+            type: "marcher",
         });
     }
 

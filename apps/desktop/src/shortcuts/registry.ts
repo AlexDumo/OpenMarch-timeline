@@ -3,14 +3,26 @@ import {
     type ActionArgs,
     type ActionId,
 } from "./definitions";
+import { isActionOffInWorkspace } from "./workspaceActions";
+
+/**
+ * Why a held action was let go: its key came up, or the key was lost (the window lost focus, a
+ * second press arrived without a key up, or the listener went away).
+ */
+export type ReleaseReason = "keyup" | "lost";
 
 export interface ActionHandler {
     run: (args: ActionArgs | undefined) => void;
     isEnabled: () => boolean;
     /** True while a held key's repeats shouldn't run the action again */
     ignoresRepeat?: () => boolean;
+    /**
+     * Runs instead of `run` when a key press runs the action (`pressAction`), for actions whose
+     * key works differently from the palette or a button (hold N to peek, the palette latches)
+     */
+    press?: (args: ActionArgs | undefined) => void;
     /** Runs when the key that ran the action is let go, for actions that last while held */
-    release?: () => void;
+    release?: (reason: ReleaseReason) => void;
 }
 
 const handlers = new Map<ActionId, ActionHandler[]>();
@@ -45,7 +57,7 @@ export function hasActionHandler(id: ActionId): boolean {
 }
 
 export function isActionEnabled(id: ActionId): boolean {
-    return top(id)?.isEnabled() ?? false;
+    return !isActionOffInWorkspace(id) && (top(id)?.isEnabled() ?? false);
 }
 
 /** Whether the action's handler skips key repeats right now (`useActionHandler`'s `ignoreRepeat`) */
@@ -53,23 +65,31 @@ export function actionIgnoresRepeat(id: ActionId): boolean {
     return top(id)?.ignoresRepeat?.() ?? false;
 }
 
-export function runAction(id: ActionId): boolean {
+/** Runs the action's handler (its `press` for a key press, when it has one); null if it can't run */
+function runHandler(id: ActionId, byKey: boolean): ActionHandler | null {
     const handler = top(id);
-    if (!handler || !handler.isEnabled()) return false;
+    if (!handler || !handler.isEnabled() || isActionOffInWorkspace(id))
+        return null;
     runListeners.forEach((listener) => listener(id));
-    handler.run(getActionDefinition(id).args);
-    return true;
+    const run = byKey && handler.press ? handler.press : handler.run;
+    run(getActionDefinition(id).args);
+    return handler;
+}
+
+export function runAction(id: ActionId): boolean {
+    return runHandler(id, false) !== null;
 }
 
 /**
  * Runs the action and returns what to call when its key is let go, or null if it didn't run or
  * doesn't care about release (`useActionHandler`'s `onRelease`).
  */
-export function pressAction(id: ActionId): (() => void) | null {
-    const handler = top(id);
-    if (!runAction(id) || !handler?.release) return null;
-    const release = handler.release;
-    return () => release();
+export function pressAction(
+    id: ActionId,
+): ((reason: ReleaseReason) => void) | null {
+    const release = runHandler(id, true)?.release;
+    if (!release) return null;
+    return (reason) => release(reason);
 }
 
 /** Call when a handler's `isEnabled()` result may have changed without a (un)registration. */

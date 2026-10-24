@@ -22,7 +22,7 @@ import { usePlaybackStopBeat } from "./usePlaybackStopBeat";
  *
  * - **Stop** (Space, `stopTimelinePlayback`, UI-24) goes back to where Play was pressed: the
  *   cursor clears, and the start flag and P, which playing never moved, are the edit window again.
- *   Playing on stops the same way where it reaches the stop point (docs/tempo/endless-counts.md
+ *   Playing on stops the same way where it reaches the stop point (docs/timeline/endless-counts.md
  *   rule 6: the latest of the show's end, the music's end and the last move's end); started or
  *   jumped at or past it, it plays on in silence until stopped. Show time and counts convert on
  *   the count grid, so playback goes on past the stored counts.

@@ -52,8 +52,6 @@ a preview first.
 
 - Click a measure number on the measure row to add a rehearsal mark (or press
   **R** at the playhead).
-- **+ N counts** after the last page, and a note when your music runs longer
-  than your counts.
 
 **Good to know**
 

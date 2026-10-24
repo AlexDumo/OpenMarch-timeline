@@ -3,7 +3,7 @@ import { useTimingObjects } from "@/hooks/useTimingObjects";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { pageEndBeat } from "./pageEndBeat";
 import { playbackStopBeat } from "./endlessTimeline";
-import { musicEndSeconds } from "./showLength";
+import { musicEndSeconds } from "./countsPastEnd";
 import { useAudioEnvelopeStore, WAVEFORM_FLOOR_DB } from "./timelineWaveform";
 
 /** Where the music ends on the show's clock (`musicEndSeconds`), or null without music */
@@ -16,7 +16,7 @@ export function useMusicEndSeconds(): number | null {
 }
 
 /**
- * Where playing on stops, and what Fit fits (docs/tempo/endless-counts.md rules 6 and 7): the
+ * Where playing on stops, and what Fit fits (docs/timeline/endless-counts.md rules 6 and 7): the
  * latest of the show's end (the last page's flag), the music's end and the last move's end, as a
  * spec beat.
  */

@@ -447,7 +447,7 @@ describe("counts past the last flag", () => {
         ],
     };
 
-    it("counts from the last flag to the window's end", () => {
+    it("counts the window, start flag to playhead, not from the last flag", () => {
         expect(
             getWindowCountLabel(model, {
                 startBeatIndex: lastFlag,
@@ -459,7 +459,13 @@ describe("counts past the last flag", () => {
                 startBeatIndex: lastFlag + 2,
                 endBeatIndex: lastFlag + 3,
             }),
-        ).toBe("3 counts");
+        ).toBe("1 count");
+        expect(
+            getWindowCountLabel(model, {
+                startBeatIndex: 6,
+                endBeatIndex: lastFlag + 5,
+            }),
+        ).toBe("11 counts");
     });
 
     it("shows the badge from a page line only past the last flag", () => {

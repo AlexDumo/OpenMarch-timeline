@@ -161,7 +161,7 @@ export const movePageFlagMutationOptions = (
 
 /**
  * **+** for the paused playhead (UI-9): what it would add at `playheadBeat`, or null where it isn't
- * shown (playing, on a flag, at home, past the show's beats), and `add` to run it as one edit.
+ * shown (playing, on a flag, at home), and `add` to run it as one edit.
  * `pages` are the renderer's pages (`useTimingObjects`) and `beatCount` the show's beat count,
  * beat 0 included. `onAdded` gets the new page and its range, for selecting its page timeline.
  */
@@ -182,7 +182,7 @@ export function useAddPageFlag({
 }): {
     insertion: PageFlagInsertion | null;
     add: () => void;
-    /** **Add subset page**: the same page, as a subset */
+    /** **Create subset at playhead**: the same page, as a subset */
     addSubset: () => void;
     /** What the new page would be named as a plain page and as a subset; null with no insertion */
     names: { page: string; subset: string } | null;

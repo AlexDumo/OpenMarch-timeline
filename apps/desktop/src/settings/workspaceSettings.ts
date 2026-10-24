@@ -79,6 +79,12 @@ export const workspaceSettingsSchema = z.object({
      * yet" strip was dismissed for this file, or the user tapped the beat. Absent means not yet.
      */
     tempoLineUpDismissed: z.boolean().optional(),
+
+    /**
+     * "Warn when a prop moves without a crew" (ADR 0002 D-10, props-spec section 4). Off when
+     * absent (`warnPropMovesWithoutCrewOf`): a placed prop may move with people outside the show.
+     */
+    warnPropMovesWithoutCrew: z.boolean().optional(),
 });
 
 export type WorkspaceSettings = z.infer<typeof workspaceSettingsSchema>;
@@ -138,4 +144,11 @@ export function performerDefaultsOf(
         stepOffFoot: settings?.performerDefaults?.stepOffFoot ?? "left",
         dotMode: settings?.performerDefaults?.dotMode ?? "foot",
     };
+}
+
+/** Whether the show warns when a placed prop moves with no crew: off unless turned on. */
+export function warnPropMovesWithoutCrewOf(
+    settings: Pick<WorkspaceSettings, "warnPropMovesWithoutCrew"> | undefined,
+): boolean {
+    return settings?.warnPropMovesWithoutCrew === true;
 }

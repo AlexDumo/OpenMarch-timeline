@@ -1,36 +1,22 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTolgee } from "@tolgee/react";
-import { toast } from "sonner";
 import { Button, WarningNote } from "@openmarch/ui";
 import { useTimingObjects } from "@/hooks";
-import { workspaceSettingsQueryOptions } from "@/hooks/queries/useWorkspaceSettings";
-import { appendPagesToEndMutationOptions } from "@/hooks/queries/useShowLength";
+import { usePagesToEnd } from "@/hooks/queries/useAppendPages";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { movesPastEnd } from "@/timeline/endlessTimeline";
 import { pageEndBeat } from "@/timeline/pageEndBeat";
 
 /**
- * Exports end at the show's end, the last page's flag (docs/tempo/endless-counts.md rule 4), so a
+ * Exports end at the show's end, the last page's flag (docs/timeline/endless-counts.md rule 4), so a
  * move placed past it isn't in them (rule 9). Each export tab says so, offers pages every "new page
  * counts" counts up to the end of the last move (one undoable edit), and can still export as it is.
  * Nothing shows when every move ends by the show's end.
  */
 export default function MovesPastEndWarning() {
     const { t } = useTolgee();
-    const queryClient = useQueryClient();
     const { pages } = useTimingObjects();
     const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
-    const counts =
-        useQuery(workspaceSettingsQueryOptions()).data?.defaultNewPageCounts ??
-        16;
-    const { mutate: addPages, isPending } = useMutation(
-        appendPagesToEndMutationOptions(queryClient, (added) => {
-            if (added > 0)
-                toast.success(
-                    t("timeline.showLength.pagesAdded", { pages: added }),
-                );
-        }),
-    );
+    const { counts, addPagesToEnd, isPending } = usePagesToEnd();
     const lastPage = pages[pages.length - 1];
     if (!lastPage || !storedTimelines) return null;
     const past = movesPastEnd(storedTimelines, pageEndBeat(lastPage));
@@ -51,9 +37,7 @@ export default function MovesPastEndWarning() {
                 variant="secondary"
                 disabled={isPending}
                 title={t("exportCoordinates.addPagesToEndTitle", { counts })}
-                onClick={() =>
-                    addPages({ counts, untilBeat: past.lastEndBeat })
-                }
+                onClick={() => addPagesToEnd(past.lastEndBeat)}
             >
                 {t("exportCoordinates.addPagesToEnd")}
             </Button>

@@ -134,7 +134,8 @@ export function AssetsHost() {
     const review = useAssetsStore((s) => s.review);
     const seq = useAssetsStore((s) => s.highlight?.seq ?? null);
     const setOnImported = useAssetsStore((s) => s.setOnImported);
-    const { mutate: embedImported } = useEmbedImportedVersions();
+    // Awaited, so a contextual link acts only once the show holds its copy
+    const { mutateAsync: embedImported } = useEmbedImportedVersions();
 
     useEffect(() => {
         setOnImported(embedImported);

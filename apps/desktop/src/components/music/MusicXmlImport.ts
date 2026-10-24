@@ -4,6 +4,7 @@ import {
     checkAndDrainTimelineChangesInTransaction,
     DbTransaction,
     FIRST_BEAT_ID,
+    remapItemChangesOntoReplacementBeatsInTransaction,
     transactionWithHistory,
     withTimelineWriteLock,
 } from "@/db-functions";
@@ -19,6 +20,7 @@ import { updatePagesInTransaction } from "@/db-functions";
 import { db } from "@/global/database/db";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { workspaceSettingsKeys } from "@/hooks/queries/useWorkspaceSettings";
+import { itemGeometryKeys } from "@/hooks/queries/useItems";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     Measure as ParserMeasure,
@@ -258,10 +260,13 @@ async function importParsedInTransaction(
         (b) => !newBeatIds.has(b.id) && b.id !== FIRST_BEAT_ID,
     );
     if (unusedBeats.length > 0) {
-        await deleteBeatsInTransaction({
+        const beatIds = new Set(unusedBeats.map((b) => b.id));
+        // Item changes move to the new beat at their time instead of going with the old beats
+        await remapItemChangesOntoReplacementBeatsInTransaction({
             tx,
-            beatIds: new Set(unusedBeats.map((b) => b.id)),
+            beatIds,
         });
+        await deleteBeatsInTransaction({ tx, beatIds });
     }
 
     await setMeasureNumberOffsetInTransaction(tx, firstMeasureNumber(report));
@@ -358,6 +363,10 @@ const useMusicXmlMutation = <TArgs>(
             // The import also writes the measure-number offset, which lives in workspace settings
             await queryClient.invalidateQueries({
                 queryKey: workspaceSettingsKeys.all(),
+            });
+            // Item Outline changes moved to the new beats
+            void queryClient.invalidateQueries({
+                queryKey: itemGeometryKeys.all(),
             });
             // This happens twice to bypass the errors. There's likely a better solution
             await fetchTimingObjects();

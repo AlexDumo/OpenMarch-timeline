@@ -14,3 +14,4 @@ export * from "./useMarcherAppearances";
 export * from "./useCues";
 export * from "./usePhraseAssets";
 export * from "./usePagePerformerSettings";
+export * from "./useItems";

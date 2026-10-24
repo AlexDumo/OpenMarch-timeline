@@ -4,9 +4,9 @@ import type Measure from "@/global/classes/Measure";
 import { createCountGrid } from "../countGrid";
 import {
     beatsThrough,
-    endlessBeatOfId,
     endlessIdOf,
     measuresThrough,
+    metronomeBeats,
     movesPastEnd,
     playbackStopBeat,
 } from "../endlessTimeline";
@@ -49,9 +49,25 @@ describe("endless counts on the timeline", () => {
             duration: 0.5,
         });
         expect(drawn[13]!.timestamp).toBe(6);
-        expect(endlessBeatOfId(drawn[12]!.id)).toBe(12);
-        expect(endlessBeatOfId(beats[3]!.id)).toBeNull();
+        expect(drawn[12]!.id).toBe(endlessIdOf(12));
+        expect(drawn[12]!.id).toBeLessThan(-1);
         expect(new Set(drawn.map((b) => b.position)).size).toBe(14);
+    });
+
+    it("clicks the metronome up to the stop point, never on it (EC-6)", () => {
+        // Only stored counts: the show ends after the last stored count, so it is the stored beats
+        expect(metronomeBeats(grid, beats, beats.length)).toBe(beats);
+        // Counting on past the stored counts, the last click is the count before the stop point
+        const stop = 13;
+        const clicks = metronomeBeats(grid, beats, stop);
+        expect(clicks.map((b) => b.index).at(-1)).toBe(stop - 1);
+        expect(clicks.every((b) => b.timestamp < grid.timeAtBeat(stop))).toBe(
+            true,
+        );
+        // Stored counts past the stop point (an older file's, after its last page) aren't clicked
+        expect(metronomeBeats(grid, beats, 5).map((b) => b.index)).toEqual([
+            0, 1, 2, 3, 4,
+        ]);
     });
 
     it("numbers endless measures on, on the meter's downbeats", () => {

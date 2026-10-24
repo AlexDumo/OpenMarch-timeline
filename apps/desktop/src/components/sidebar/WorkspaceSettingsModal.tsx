@@ -8,8 +8,9 @@ import { MIN_TEMPO_BPM } from "@/global/classes/Beat";
 import {
     WorkspaceSettings,
     defaultWorkspaceSettings,
+    warnPropMovesWithoutCrewOf,
 } from "@/settings/workspaceSettings";
-import { Button, UnitInput } from "@openmarch/ui";
+import { Button, Switch, UnitInput } from "@openmarch/ui";
 import * as Form from "@radix-ui/react-form";
 import { SidebarModalLauncher } from "./SidebarModal";
 import FormField from "../ui/FormField";
@@ -315,6 +316,31 @@ function WorkspaceSettingsModalContents() {
                             );
                         },
                     )}
+                    {/* Show checks (ADR 0002 D-22): a placed prop that moves with nobody on its crew */}
+                    <label
+                        className="text-body flex items-center justify-between gap-12"
+                        htmlFor="workspace-warn-prop-moves-without-crew"
+                    >
+                        <span className="flex flex-col">
+                            <span>
+                                <T keyName="workspaceSettings.warnPropMovesWithoutCrew" />
+                            </span>
+                            <span className="text-sub text-text-subtitle">
+                                <T keyName="workspaceSettings.warnPropMovesWithoutCrewHelp" />
+                            </span>
+                        </span>
+                        <Switch
+                            id="workspace-warn-prop-moves-without-crew"
+                            data-testid="workspace-warn-prop-moves-without-crew"
+                            checked={warnPropMovesWithoutCrewOf(localSettings)}
+                            onCheckedChange={(checked) =>
+                                setLocalSettings({
+                                    ...localSettings,
+                                    warnPropMovesWithoutCrew: checked,
+                                })
+                            }
+                        />
+                    </label>
                 </Form.Root>
 
                 <div className="flex flex-col gap-8">

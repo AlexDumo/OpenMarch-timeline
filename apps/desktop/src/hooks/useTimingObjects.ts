@@ -24,7 +24,7 @@ export type TimingObjects = {
     measures: Measure[];
     pages: Page[];
     utility: DatabaseUtility | undefined;
-    /** The counts as they go on forever past the last stored one (docs/tempo/endless-counts.md) */
+    /** The counts as they go on forever past the last stored one (docs/timeline/endless-counts.md) */
     countGrid: CountGrid;
     fetchTimingObjects: () => Promise<void>;
     isLoading: boolean;

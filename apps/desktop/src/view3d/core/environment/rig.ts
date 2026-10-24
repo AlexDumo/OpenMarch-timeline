@@ -6,7 +6,11 @@ import {
     type Vector3Tuple,
 } from "three";
 import type { LightingPreset } from "../types";
-import { lightingValues, type LightingValues } from "./lighting";
+import {
+    lightingValues,
+    setLightIntensity,
+    type LightingValues,
+} from "./lighting";
 import { createSkyDome, type SkyDome } from "./sky";
 import { ft } from "./units";
 
@@ -86,7 +90,7 @@ export function createEnvironment(
             hemisphere.groundColor.setHex(v.hemisphere.ground);
             hemisphere.intensity = v.hemisphere.intensity;
             sun.color.setHex(v.sun.color);
-            sun.intensity = v.sun.intensity;
+            setLightIntensity(sun, v.sun.intensity);
             sun.position.set(
                 focus[0] + v.sun.offset[0],
                 focus[1] + v.sun.offset[1],

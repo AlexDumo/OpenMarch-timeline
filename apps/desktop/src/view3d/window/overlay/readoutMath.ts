@@ -4,6 +4,7 @@
  */
 import type { MeasurementSystem } from "@openmarch/core";
 import type Page from "@/global/classes/Page";
+import type { CountClock } from "@/timeline/countGrid";
 
 export type ReadoutPage = Pick<
     Page,
@@ -20,6 +21,24 @@ export interface PageCount {
 
 /** Show times closer than this (ms) count as equal. */
 const EPSILON_MS = 0.5;
+
+/**
+ * How many counts past the show's end a show time is (endless counts, EC-8), as the timeline's
+ * "END +n": the count playing, numbered from the last page's end, as a page's count is. Null at
+ * or before the end. `clock` times the counts on past the stored ones.
+ */
+export function countsPastEnd(
+    pages: readonly ReadoutPage[],
+    showMs: number,
+    clock: CountClock,
+): number | null {
+    if (pages.length === 0) return null;
+    const last = pages.reduce((a, b) => (b.order > a.order ? b : a));
+    const endSeconds = last.timestamp + last.duration;
+    if (showMs <= endSeconds * 1000 + EPSILON_MS) return null;
+    const past = clock.beatAtTime(showMs / 1000) - clock.beatAtTime(endSeconds);
+    return Math.max(1, Math.ceil(past - 1e-6));
+}
 
 /**
  * The page and count at a show time, matching the editor's convention that a

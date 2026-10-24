@@ -134,7 +134,7 @@ export function previewBounds(
  * - A preview, the pinned window's loop, goes back to its start at its end.
  * - Playing on stops where it crosses `stopBeat` (`"stop"`, which goes back to where Play was
  *   pressed, UI-24): the latest of the show's end, the music's end and the last move's end
- *   (docs/tempo/endless-counts.md rule 6). Started (or jumped) at or past it, `previousBeat` is
+ *   (docs/timeline/endless-counts.md rule 6). Started (or jumped) at or past it, `previousBeat` is
  *   past it too, and it plays on in silence until stopped. An isolated timeline loops instead.
  *
  * @param previousBeat the live beat a frame ago, or where playback started

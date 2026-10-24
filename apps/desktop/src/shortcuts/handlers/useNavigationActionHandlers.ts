@@ -5,6 +5,7 @@ import { useMetronomeStore } from "@/stores/MetronomeStore";
 import { usePlaybackSpeedStore } from "@/stores/PlaybackSpeedStore";
 import {
     navigateTimeline,
+    playTimelineOn,
     playTimelinePage,
     toggleTimelineLoop,
     toggleTimelinePlayback,
@@ -46,7 +47,8 @@ export function useNavigationActionHandlers() {
     useActionHandler("nextBeat", () => navigate("next-beat"), enabled);
     useActionHandler(
         "playPause",
-        // UI-17 Play: loops the loop, or plays on from the start flag; playing, it stops
+        // UI-17 Play: loops the loop, else plays the window once (Expert, UI-26) or on from the
+        // start flag (Basic); playing, it stops
         () => toggleTimelinePlayback(transport()),
         enabled,
     );
@@ -54,8 +56,13 @@ export function useNavigationActionHandlers() {
     useActionHandler("playPage", () => playTimelinePage(transport()), {
         enabled: canNavigate,
     });
-    // UI-17: C turns looping on over the page being edited, or off. Not in Basic (UI-19)
     const basic = useIsBasicMode();
+    // UI-26: Alt+Space plays on from the start flag, past the playhead. Expert only: Basic's Space
+    // already plays on
+    useActionHandler("playOn", () => playTimelineOn(transport()), {
+        enabled: canNavigate && !basic,
+    });
+    // UI-17: C turns looping on over the page being edited, or off. Not in Basic (UI-19)
     useActionHandler("toggleLoop", () => toggleTimelineLoop(), {
         enabled: ready && !basic,
     });

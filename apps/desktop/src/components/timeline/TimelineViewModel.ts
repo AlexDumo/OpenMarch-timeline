@@ -1,7 +1,9 @@
 import type { LabeledHoldMarks } from "./PageHoldMark";
+import type { TimelineBand } from "./TimelineBand";
 import type { PageKeepChains } from "./PageKeepChain";
 import type { TimelineClipResizeCommands } from "./TimelineClipResize";
 import type { TimelineDrillFlagMove } from "./TimelinePageFlagHandles";
+import type { TimelineClipPeel } from "./TimelineClipPeel";
 import type { ReactNode } from "react";
 import type { AudioEnvelope } from "@/timeline/timelineWaveform";
 import type { CountUnit, TypedSection } from "@/timeline/tempo";
@@ -100,13 +102,6 @@ export interface TimelineTarget {
 /** What a track stands for: a marcher or a shape (stories), or a whole stored timeline (UI-9) */
 export type TimelineTrackTargetType = TimelineTarget["type"] | "timeline";
 
-/** The diagnostics (spec §8.9) in a track's range, shown as a badge on its clip */
-export interface TimelineTrackDiagnostics {
-    readonly level: "warning" | "info";
-    /** One line per diagnostic, for the badge's tooltip */
-    readonly messages: readonly string[];
-}
-
 export interface TimelineTrack {
     readonly id: TimelineTrackId;
     /**
@@ -121,7 +116,6 @@ export interface TimelineTrack {
     readonly legs: readonly TimelineLeg[];
     /** A gap-free, non-overlapping partition of the track's complete range. */
     readonly activitySpans: readonly TimelineActivitySpan[];
-    readonly diagnostics?: TimelineTrackDiagnostics;
     /**
      * What screen readers call the clip, when the owner can say more than the label (UI-14 review:
      * "Move 1, Page 3, counts 1–4"); without it, the label and its beats
@@ -140,24 +134,23 @@ export interface TimelineWaveform {
 }
 
 /**
- * **+ N counts** after the last page (E1): always offered while paused, since nothing lies after
- * the end of the show. The owner names it, since it adds counts.
+ * **+ Add N-Count Page** beside the paused playhead past the last page (UI-9, owner 2026-10-20;
+ * it replaced **+ N counts** after the last flag): a page from the last flag to the playhead, N
+ * counts long, as **Create page at playhead** adds there. Hovering it shades where the page goes.
  */
-export interface TimelineAppendCounts {
-    /** The button's text, such as "+ 16 counts" */
+export interface TimelineAppendAtPlayhead {
+    /** The new page's counts, from the last page's flag to the playhead */
+    readonly counts: number;
+    /** The button's text, such as "Add 3-Count Page" */
     readonly label: string;
-    /** Its tooltip and accessible name, such as "Add a page of 16 counts after the last page" */
+    /** Its tooltip and accessible name */
     readonly title: string;
     readonly onAppend: () => void;
-    /** The page length it adds now; with `onCountsChange`, a right-click changes it */
-    readonly counts?: number;
-    /** Sets the file's default new page counts, from the pill's right-click menu */
-    readonly onCountsChange?: (counts: number) => void;
     /**
-     * "Create pages every 16 counts to the end", when the music runs on past the last page (FB-7):
-     * an entry in the pill's right-click menu
+     * With Shift held the button adds the page as a subset (owner 2026-10-20), as **Create subset
+     * at playhead** does: its text and tooltip, and the add
      */
-    readonly toEnd?: {
+    readonly subset?: {
         readonly label: string;
         readonly title: string;
         readonly onAppend: () => void;
@@ -166,8 +159,8 @@ export interface TimelineAppendCounts {
 
 /** What the timeline's scroller shows, so its owner can leave room past the show (endless counts) */
 export interface TimelineViewportExtent {
-    /** How many counts one screen holds now */
-    readonly screenBeats: number;
+    /** The scroller's width in pixels; with the zoom, how many counts one screen holds */
+    readonly width: number;
 }
 
 export interface TimelineViewModel {
@@ -199,10 +192,23 @@ export type TimelineSelection =
           /** The range was drawn by dragging on empty timeline space (Ctrl+drag) */
           readonly drawn?: boolean;
           /**
-           * The start flag was placed by hand and stays through navigation (UI-10 pinning); UI-12
-           * draws it with a pin that unpins it
+           * UI-25: the stored timeline the window stands for, when known (a clicked clip; the
+           * app's resolved one). Several moves may share a range since a move can be split off a
+           * page's timeline, so the range alone doesn't say which clip is selected
            */
-          readonly startPinned?: boolean;
+          readonly timelineId?: number;
+          /**
+           * UI-25: the window is a move's clip, not a page box, though its range may be a page
+           * box's (a move split off it): the page box doesn't show selected
+           */
+          readonly onClip?: boolean;
+          /**
+           * UI-25: a second move selected beside the window's (Shift+click on its clip), for
+           * **Merge moves**; its clip shows selected too
+           */
+          readonly pairedTimelineId?: number;
+          /** From the timeline: a Shift+click on a clip, which adds it beside the selected one */
+          readonly extend?: boolean;
       }
     | null;
 
@@ -268,6 +274,8 @@ export interface TimelineInteractionProps {
     readonly playLoops?: boolean;
     /** Shift+click on Play (Shift+Space): plays on from the playhead, or the loop once */
     readonly onPlayFromPlayhead?: () => void;
+    /** Alt+click on Play (Alt+Space): plays on from the start flag (Expert, UI-26) */
+    readonly onPlayOn?: () => void;
     readonly onNavigate?: (direction: TimelineNavigation) => void;
     readonly onSelectionChange?: (selection: TimelineSelection) => void;
     readonly onCreateTrack?: (request: TimelineCreateTrackRequest) => void;
@@ -276,24 +284,25 @@ export interface TimelineInteractionProps {
     /** A clip's move commands (UI-14), by track id here: its menu, ⋯ button and keys */
     readonly moveCommands?: TimelineMoveCommands<TimelineTrackId>;
     /**
-     * UI-9 **+**: adds a page whose flag is at the paused playhead. Shown just after the playhead
-     * while it's given and the timeline isn't playing; the owner passes it only where **+** applies.
+     * UI-9 **Create page at playhead**: adds a page whose flag is at the paused playhead, from the playhead's
+     * right-click menu while it's given and the timeline isn't playing; the owner passes it only
+     * where a page can be added. Without it the playhead has no menu.
      */
     readonly onAddPageFlag?: () => void;
-    /** **Add subset page** in the right-click menu of **+**; without it, **+** has no menu */
+    /** **Create subset at playhead** in the playhead's right-click menu, after **Create page at playhead** */
     readonly onAddSubsetPage?: () => void;
-    /** The names **+**'s menu shows, muted, after **Add page** and **Add subset page** */
+    /** The names the playhead's menu shows, muted, after **Create page at playhead** and **Create subset at playhead** */
     readonly addPageNames?: { readonly page: string; readonly subset: string };
     /**
      * Moving page flags by their grips (docs/timeline/research/move-page-flag), in view beats here.
      * The owner passes it only where flags can move (paused, not isolated).
      */
     readonly pageFlagMove?: TimelinePageFlagMove;
-    /** **+ N counts** after the last page's flag (E1); without it, none */
-    readonly appendCounts?: TimelineAppendCounts;
+    /** **+ Add N-Count Page** at the playhead past the last page; without it, none */
+    readonly appendAtPlayhead?: TimelineAppendAtPlayhead;
     /** The beats Fit fits (rule 7: where playback stops), in view beats; without it, every beat */
     readonly fitBeatCount?: number;
-    /** The scroller's width in counts (rule 7) */
+    /** The scroller's width (rule 7) */
     readonly onViewportExtent?: (extent: TimelineViewportExtent) => void;
     /** Double-clicking a page box or clip opens (isolates) its range, in view beats here */
     readonly onOpenRange?: (target: TimelineMenuTarget) => void;
@@ -388,6 +397,19 @@ export interface TimelineCommonProps
     readonly showTransport?: boolean;
     /** The playback clock shown in the transport. The app passes its audio clock; stories pass none. */
     readonly transportClock?: ReactNode;
+    /**
+     * A timeline that only navigates (Visuals mode, performer-behavior.md section 7.1): page
+     * boxes select and the ruler seeks, but nothing draws a range. The owner passes no editing
+     * commands
+     */
+    readonly readOnly?: boolean;
+    /**
+     * A read-only timeline's start flag (view beats), drawn with no handles: Play starts there,
+     * so it shows even where nothing moves it by hand
+     */
+    readonly startFlagBeat?: number;
+    /** Lanes drawn where the clip rows go, under the waveform (Visuals mode's cue lanes) */
+    readonly band?: TimelineBand;
     /** Extra transport controls, such as volume, the metronome and fullscreen */
     readonly transportAccessories?: ReactNode;
     readonly className?: string;
@@ -396,20 +418,28 @@ export interface TimelineCommonProps
     ) => TimelineRangeCommitResult;
     /** Resizing a clip by its edges (resize-move), in view beats; without it clips have no handles */
     readonly clipResize?: TimelineClipResizeCommands;
-    /** Unpins the start flag (UI-12), from its pin */
-    readonly onUnpinStart?: () => void;
+    /** UI-25: dragging a clip down splits the selected marchers off; onto a move, merges */
+    readonly clipPeel?: TimelineClipPeel;
     /** The loop (UI-17), view beats; `null` or absent when looping is off */
     readonly loop?: TimelineBeatRange | null;
     /** A loop end dragged or stepped (UI-17), view beats */
     readonly onLoopChange?: (loop: TimelineBeatRange) => void;
     /** Transport controls that fold into "⋯" on a narrow panel, such as Sound (UI-12) */
     readonly transportSecondary?: ReactNode;
+    /** View controls first in the transport's right group, before Fit (fork #331); they fold too */
+    readonly transportLeadingViewControls?: ReactNode;
     /** View controls at the transport's end, such as Compact (UI-12); they fold too */
     readonly transportViewControls?: ReactNode;
     /** Where the selected marchers hold, on the page boxes (UI-18); none without a selection */
     readonly holdMarks?: LabeledHoldMarks;
     /** The chains on the page boxes (UI-18 keep later pages); none without a selection */
     readonly keepChains?: PageKeepChains;
+    /**
+     * The moves a page box stands for, so they have no clip (`timelinesOffPages`), by track id.
+     * One that gets a clip (its box was split, or a flag deleted) drops out of the page row
+     * (`useClipDrops`)
+     */
+    readonly pageMoves?: ReadonlySet<string | number>;
     /** UI-19 Basic: the selected marchers' mid-page positions, view beats */
     readonly basicPoints?: readonly TimelineBasicPoint[];
     /** UI-19 Basic: **Remove this count's position**, by its view beat */
