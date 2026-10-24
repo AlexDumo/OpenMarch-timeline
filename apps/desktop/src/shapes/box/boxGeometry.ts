@@ -308,7 +308,13 @@ export function splitFor(
  * intervals being whole half steps. Unchanged without snap, and for a box turned off the field's
  * axes, whose marchers can't all stand on the grid.
  */
-export function snapToGrid(p: BoxParams, n: number, env: ToolEnv): BoxParams {
+export function snapToGrid(
+    p: BoxParams,
+    n: number,
+    env: ToolEnv,
+    /** Which way a corner exactly between two half steps goes; the field's rounding when absent */
+    tie?: XY,
+): BoxParams {
     // A spread has no corner marcher: its center goes on the grid, as a circle's does
     if (env.snap && isSpread(p))
         return { ...p, center: env.gridSnap(p.center) };
@@ -318,7 +324,9 @@ export function snapToGrid(p: BoxParams, n: number, env: ToolEnv): BoxParams {
         x: -frame.halfWidth,
         y: -frame.halfDepth,
     });
-    const snapped = env.gridSnap(first);
+    const snapped = tie
+        ? breakTies(first, env.gridSnap(first), tie, halfStep(env))
+        : env.gridSnap(first);
     return {
         ...p,
         center: {
@@ -326,6 +334,21 @@ export function snapToGrid(p: BoxParams, n: number, env: ToolEnv): BoxParams {
             y: p.center.y + snapped.y - first.y,
         },
     };
+}
+
+/**
+ * `snapped`, the grid point the field rounded `at` to, with each axis where `at` was exactly
+ * between two grid points taken the way `tie` points instead (left alone where `tie` is 0)
+ */
+function breakTies(at: XY, snapped: XY, tie: XY, unit: number): XY {
+    const axis = (a: number, s: number, t: number) => {
+        const d = a - s;
+        if (t === 0 || Math.abs(Math.abs(d) - unit / 2) > 1e-6) return s;
+        const other = s + 2 * d;
+        // The candidate on `t`'s side of `at`
+        return Math.sign(other - a) === Math.sign(t) ? other : s;
+    };
+    return { x: axis(at.x, snapped.x, tie.x), y: axis(at.y, snapped.y, tie.y) };
 }
 
 /**
@@ -797,7 +820,13 @@ export function resizeFiles(
 
 /**
  * `after`, a resize of `before` (a new count or spacing), moved so the pivot stays where it was:
- * the shape's own, the center by default (2026-10-18). Then back on the grid.
+ * the shape's own, the center by default (2026-10-18), or where a run of size presses began
+ * (`env.anchor`). Then back on the grid.
+ *
+ * A new count can leave the box's corner exactly between two half steps (4 ranks 2½ apart about
+ * a center on the grid, then 3). Rounding that tie the same way every time made the box creep a
+ * quarter step per press (owner lab feedback on #387, 2026-10-23), so the tie goes against the
+ * way the box grew on that axis: + then − comes back to the same place.
  */
 export function grownFromPivot(
     before: BoxParams,
@@ -806,19 +835,34 @@ export function grownFromPivot(
     env: ToolEnv,
 ): BoxParams {
     const key = env.pivot ?? pivotOf(before);
-    const was = pivotPoint(boxFrame(before, n), key);
+    const was = env.anchor ?? pivotPoint(boxFrame(before, n), key);
     const now = pivotPoint(boxFrame(after, n), key);
-    return snapToGrid(
-        {
-            ...after,
-            center: {
-                x: after.center.x + was.x - now.x,
-                y: after.center.y + was.y - now.y,
-            },
+    const moved: BoxParams = {
+        ...after,
+        center: {
+            x: after.center.x + was.x - now.x,
+            y: after.center.y + was.y - now.y,
         },
-        n,
-        env,
-    );
+    };
+    return snapToGrid(moved, n, env, growthBias(before, moved, n));
+}
+
+/**
+ * Which way a tie on the grid goes after `before` became `after`, on the field: against the
+ * growth on each of the box's own axes (a box that got deeper rounds toward its back)
+ */
+function growthBias(before: BoxParams, after: BoxParams, n: number): XY {
+    const a = boxFrame(before, n);
+    const b = boxFrame(after, n);
+    const gx = Math.sign(b.halfWidth - a.halfWidth);
+    const gy = Math.sign(b.halfDepth - a.halfDepth);
+    const o = frameToField(b, { x: 0, y: 0 });
+    const u = frameToField(b, { x: 1, y: 0 });
+    const v = frameToField(b, { x: 0, y: 1 });
+    return {
+        x: -gx * (u.x - o.x) - gy * (v.x - o.x),
+        y: -gx * (u.y - o.y) - gy * (v.y - o.y),
+    };
 }
 
 /**

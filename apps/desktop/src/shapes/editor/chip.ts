@@ -1,5 +1,8 @@
 import { turnShape } from "../frame/gestures";
 import { pivotOf } from "../frame/pivot";
+import { DEFAULT_PIVOT, pivotPoint, type Pivot } from "../frame/frame";
+import { getLabVariant } from "@/lab/labVariant";
+import type { XY } from "../types";
 import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
 
 /** One number in the floating chip, worked out from its kind's declaration */
@@ -69,4 +72,42 @@ export function quarterTurn(
         pivotOf(params),
         env,
     );
+}
+
+/** A run of presses on the chip's − and +: the shape the last press made, and where it began */
+export interface SizeRun {
+    readonly params: unknown;
+    readonly anchor: XY;
+}
+
+/**
+ * Where the next press grows from (#387): the run's anchor while the shape is still what the
+ * run's last press made, else the shape's pivot on the field, starting a new run. Pressing from
+ * the anchor rather than the last press's rounded place keeps the shape from creeping.
+ */
+export function sizeRun(
+    run: SizeRun | null,
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+): XY {
+    if (run && run.params === params) return run.anchor;
+    return pivotPoint(kind.frameOf(params, n), sizePivot(params));
+}
+
+/** The lab's versions of − and + (#387, lab test box-layouts) that grow from the front rank */
+const FRONT_VARIANTS: ReadonlySet<string> = new Set(["front", "front-glide"]);
+
+/**
+ * What a size press grows from: the shape's own pivot, or in the lab's "front" versions the
+ * front rank's middle while the pivot is the default center. TEMPORARY: goes when the owner picks.
+ */
+export function sizePivot(params: unknown): Pivot {
+    const own = pivotOf(params);
+    const variant = getLabVariant();
+    return own === DEFAULT_PIVOT &&
+        variant !== null &&
+        FRONT_VARIANTS.has(variant)
+        ? "s"
+        : own;
 }

@@ -28,7 +28,13 @@ import {
 import { toolEnvFor } from "../tool/toolEnv";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { useShapeToolStore } from "../tool/shapeToolStore";
-import { chipLayout, quarterTurn, type ChipNumber } from "./chip";
+import {
+    chipLayout,
+    quarterTurn,
+    sizeRun,
+    type ChipNumber,
+    type SizeRun,
+} from "./chip";
 import {
     usePlacedEditTarget,
     useToolEditTarget,
@@ -112,9 +118,12 @@ function ShapeEditorBar({
     // The shape at the press of a number's drag
     const base = useRef<unknown>(params);
 
+    // A run of − and + presses grows from where it began, so the shape doesn't creep (#387)
+    const run = useRef<SizeRun | null>(null);
+    const anchor = sizeRun(run.current, kind, params, spots);
     const env = envFor(PLAIN);
     const layout = env
-        ? chipLayout(kind, params, spots, { ...env, stepPx })
+        ? chipLayout(kind, params, spots, { ...env, stepPx, anchor })
         : { values: [], intervals: [], ratioLock: false };
     const degrees = rotationDegrees(kind.frameOf(params, spots).rotation);
 
@@ -180,9 +189,14 @@ function ShapeEditorBar({
                                 <IconButton
                                     label={x.param.stepper.less}
                                     disabled={x.less === null}
-                                    onClick={() =>
-                                        x.less !== null && target.apply(x.less)
-                                    }
+                                    onClick={() => {
+                                        if (x.less === null) return;
+                                        run.current = {
+                                            params: x.less,
+                                            anchor,
+                                        };
+                                        target.apply(x.less);
+                                    }}
                                 >
                                     <MinusIcon size={12} />
                                 </IconButton>
@@ -192,9 +206,14 @@ function ShapeEditorBar({
                                 <IconButton
                                     label={x.param.stepper.more}
                                     disabled={x.more === null}
-                                    onClick={() =>
-                                        x.more !== null && target.apply(x.more)
-                                    }
+                                    onClick={() => {
+                                        if (x.more === null) return;
+                                        run.current = {
+                                            params: x.more,
+                                            anchor,
+                                        };
+                                        target.apply(x.more);
+                                    }}
                                 >
                                     <PlusIcon size={12} />
                                 </IconButton>

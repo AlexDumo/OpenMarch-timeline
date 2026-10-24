@@ -1342,6 +1342,87 @@ test("change: the layout menu under the chip switches layout, ↻ turns the box 
         .toEqual(before);
 });
 
+// The size number's − and + (owner lab feedback on #387): the box no longer
+// creeps, and the lab test compares versions of how it resizes, picked with
+// `?variant=` (front: the front rank stays; glide: marchers slide to their
+// new spots).
+
+const sizeButton = (page: Page, more: boolean) =>
+    page
+        .getByTestId("shape-tool-readout")
+        .getByRole("button", {
+            name: more ? "One more across" : "One fewer across",
+        });
+
+test("change: − and + come back to the same spots, so the box doesn't creep", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const before = (await shapeOverlay(page))!.spots;
+    for (const more of [true, true, false, false, false, true]) {
+        await sizeButton(page, more).click();
+    }
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.spots)
+        .toEqual(before);
+    // No version switch outside the lab's links
+    await expect(page.getByTestId("lab-version")).toHaveCount(0);
+});
+
+test.describe("the lab's front version", () => {
+    test.use({
+        initScript: `history.replaceState(null, "", location.pathname + "?variant=front")`,
+    });
+
+    test("change: − and + keep the front rank where it is, and the version switch says Front", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await drawBox(show);
+        await expect(page.getByTestId("lab-version-front")).toHaveAttribute(
+            "data-state",
+            "on",
+        );
+        const frontOf = async () =>
+            Math.max(...(await shapeOverlay(page))!.spots.map((s) => s.y));
+        const front = await frontOf();
+        for (const more of [false, false, true]) {
+            await sizeButton(page, more).click();
+            expect(await frontOf()).toBeCloseTo(front, 6);
+        }
+    });
+});
+
+test.describe("the lab's glide version", () => {
+    test.use({
+        initScript: `history.replaceState(null, "", location.pathname + "?variant=glide")`,
+    });
+
+    test("change: after + the marchers slide to their new spots rather than jump", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await drawBox(show);
+        const before = (await shapeOverlay(page))!.spots;
+        // Press and look straight away, in one go, so the glide is still running
+        const mid = await page.evaluate(async () => {
+            const plus = [...document.querySelectorAll("button")].find(
+                (b) => b.getAttribute("aria-label") === "One more across",
+            )!;
+            plus.click();
+            await new Promise((r) => setTimeout(r, 40));
+            return window.fieldTest!.shapeOverlay!()!.spots;
+        });
+        await page.waitForTimeout(400);
+        const after = (await shapeOverlay(page))!.spots;
+        expect(after).not.toEqual(before);
+        // Part way: neither where they were nor where they land
+        expect(mid).not.toEqual(after);
+        expect(mid).not.toEqual(before);
+    });
+});
+
 // The pivot on the field (#350): Cmd/Ctrl-drag from the center dot pulls it
 // out into a yellow crosshair, it snaps to marchers, turns go around it, it is
 // saved with the box, and a double click sends it back to the center.

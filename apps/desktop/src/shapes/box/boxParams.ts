@@ -8,7 +8,9 @@ import {
 } from "../editor/boxEdits";
 import { formatSteps } from "../editor/format";
 import { parseSize, parseSteps, scrubDistance } from "../editor/scrub";
-import type { ToolParam } from "../tool/toolKind";
+import type { ToolEnv, ToolParam } from "../tool/toolKind";
+import { sizePivot } from "../editor/chip";
+import { pivotOf } from "../frame/pivot";
 import { boxBlock, isSpread, shortBy, type BoxParams } from "./boxGeometry";
 
 /**
@@ -38,8 +40,8 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
             if (!size) return null;
             const field = onField(p, n);
             return size.across !== field.across || size.deep === undefined
-                ? withFieldCount(p, n, "across", size.across, env)
-                : withFieldCount(p, n, "deep", size.deep, env);
+                ? withFieldCount(p, n, "across", size.across, sizeEnv(p, env))
+                : withFieldCount(p, n, "deep", size.deep, sizeEnv(p, env));
         },
         scrub: (base, n, m, env) =>
             scrubSize(
@@ -47,12 +49,12 @@ export const BOX_PARAMS: readonly ToolParam<BoxParams>[] = [
                 m.axis === "x" ? "across" : "deep",
                 scrubDistance(m.axis, m.dx, m.dy),
                 n,
-                env,
+                sizeEnv(base, env),
             ),
         stepper: {
             less: "One fewer across",
             more: "One more across",
-            by: stepSize,
+            by: (p, n, by, env) => stepSize(p, n, by, sizeEnv(p, env)),
         },
     },
     spacing("across"),
@@ -74,6 +76,12 @@ export function sizeNote(p: BoxParams, n: number): string | null {
     const short = shortBy(p, n);
     return short > 0 ? `${short} short` : null;
 }
+
+/** A size change's environment: grown from `sizePivot` (the lab's "front" versions, #387) */
+const sizeEnv = (p: BoxParams, env: ToolEnv): ToolEnv => {
+    const pivot = sizePivot(p);
+    return pivot === pivotOf(p) ? env : { ...env, pivot };
+};
 
 /** A spacing on the field: side to side (across) or front to back (deep) */
 function spacing(way: "across" | "deep"): ToolParam<BoxParams> {

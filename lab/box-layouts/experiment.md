@@ -3,9 +3,11 @@
 # Keep `id` stable: feedback is filed under it.
 id: box-layouts
 title: Pick a layout for a box
-summary: A box can be a full block, a stagger, rounded, short at the back or notched. This build follows your last round. Turned copies are gone and ↻ on the box's editor turns the box instead. The row under the editor is now a layout menu. Layouts the count can't make show greyed with what they need, in place of the "Not for 23" line.
+summary: A box can be a full block, a stagger, rounded, short at the back or notched. This build follows your last round. Turned copies are gone and ↻ turns the box instead, the row under the editor is a layout menu, and layouts the count can't make show greyed. It also has four versions of − and + to compare.
 status: open
 questions:
+  - "Which version of − and + feels best: Center, Front, Glide or Front + glide? Why?"
+  - Did the box stay where you put it while you pressed − and + (no creeping toward the front)?
   - Is ↻ next to the size where you expected to turn the box? Do you miss the turned versions in the lists?
   - Does the layout menu under the box's editor work for you? Is hovering a layout (or clicking its arrow) the right way to see its versions?
   - 'Do the greyed layouts with "add 1 / remove 2" tell you what you need, in the menu and in the inspector?'
@@ -51,6 +53,22 @@ that order.
 
 **Good to know**
 
-- − and + still move between versions of the layout. We're looking at what
-  makes that feel jumpy separately; this build doesn't change it yet.
+**Try the versions of − and +** (your "fairly jarring" note)
+
+The box no longer creeps toward the front as you press − and + (in every
+version). Open one of these links, draw a box, and press − and + a few times.
+The inspector's **Shapes** section has a **Lab** switch, so you can change
+version without reloading:
+
+- [Center](https://lab.openmarch.com/x/box-layouts/?variant=center): the box
+  grows and shrinks around its center (as before, minus the creep).
+- [Front](https://lab.openmarch.com/x/box-layouts/?variant=front): the front
+  rank stays where it is, and the box grows toward the back.
+- [Glide](https://lab.openmarch.com/x/box-layouts/?variant=glide): around the
+  center, with each marcher sliding to their new spot instead of jumping.
+- [Front + glide](https://lab.openmarch.com/x/box-layouts/?variant=front-glide):
+  both.
+
+The glide also plays when you pick a layout or press ↻.
+
 - The stagger slider comes next, in the same section.

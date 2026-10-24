@@ -30,6 +30,12 @@ export interface ToolEnv {
     /** The box's ratio lock: changing one spacing changes the other in proportion */
     readonly ratioLocked?: boolean;
     /**
+     * Where the pivot was, on the field, when a run of size presses began (the chip's − and +):
+     * each press grows from there rather than from the last one's rounding, so the shape doesn't
+     * creep (#387). From the shape's own pivot when absent.
+     */
+    readonly anchor?: XY;
+    /**
      * The user's last-used Files layout (#387), which a new box starts in; Short back when
      * absent
      */
