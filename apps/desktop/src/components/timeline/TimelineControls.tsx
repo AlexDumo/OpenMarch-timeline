@@ -5,6 +5,7 @@ import {
     SpeakerSimpleXIcon,
     RowsIcon,
     RepeatIcon,
+    PathIcon,
 } from "@phosphor-icons/react";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { clsx } from "clsx";
@@ -18,6 +19,10 @@ import { ShortcutTooltip } from "./ShortcutTooltip";
 import { PlaybackSpeedButton } from "./PlaybackSpeedButton";
 import { TRANSPORT_SHORTCUTS } from "./TimelinePrimitives";
 import { START_INK } from "./startFlagInk";
+import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
+import { getActionShortcutKeys } from "@/shortcuts/labels";
+import { runAction } from "@/shortcuts/registry";
 import {
     effectivePlaybackSpeed,
     usePlaybackSpeedStore,
@@ -144,6 +149,44 @@ export function TimelineLoopButton() {
                 )}
             >
                 <RepeatIcon size={16} weight={looping ? "bold" : "regular"} />
+            </button>
+        </ShortcutTooltip>
+    );
+}
+
+/**
+ * Pathways (#403): while a shape is open, shows or hides its walks and start rings, so the shape
+ * can be seen as it will stand. It runs the previous paths action, so N does the same.
+ */
+export function ShapePathwaysButton() {
+    const open = useShapeToolStore((s) => s.tool !== null);
+    const shown = useUiSettingsStore((s) => s.uiSettings.shapeWalks ?? true);
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    if (!open) return null;
+    const shortcut = getActionShortcutKeys("togglePreviousPagePaths", {
+        overrides,
+    })?.join(" + ");
+    return (
+        <ShortcutTooltip
+            label={shown ? "Pathways: shown" : "Pathways: hidden"}
+            shortcut={shortcut}
+            hint="The lines from the start flag to the open shape"
+        >
+            <button
+                type="button"
+                data-testid="timeline-shape-pathways"
+                aria-label="Pathways"
+                aria-pressed={shown}
+                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
+                // Keeps keyboard focus off, so Space after a click is still Play
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => runAction("togglePreviousPagePaths")}
+                className={clsx(
+                    "rounded-4 focus-visible:ring-accent hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden duration-150 focus-visible:ring-2",
+                    shown ? "text-accent" : "text-text hover:text-accent",
+                )}
+            >
+                <PathIcon size={16} weight={shown ? "bold" : "regular"} />
             </button>
         </ShortcutTooltip>
     );

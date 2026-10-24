@@ -373,6 +373,95 @@ test("change: while a box is open everyone else fades, and nobody once it closes
     await expect.poll(dimmedIds).toEqual([]);
 });
 
+test("change: the open box's controls fade while the pointer is away from it, and come back over it or a handle", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { grid } = await drawBox(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    const calm = async () => (await shapeOverlay(page))!.calm;
+    const handleOpacity = () =>
+        page
+            .getByTestId("fieldShapeHandle")
+            .first()
+            .evaluate((el) => getComputedStyle(el).opacity);
+
+    // Away from the box, on empty field: faint controls, the spots as they were
+    const away = await toScreen(page, { x: cf.x + 20 * S, y: cf.y - 5 * S });
+    await page.mouse.move(away.x, away.y);
+    await expect.poll(calm).toBe(true);
+    await expect.poll(handleOpacity).toBe("0.25");
+    expect((await shapeOverlay(page))!.spots).toHaveLength(ALL.length);
+
+    // Over the box: full strength
+    const spots = (await shapeOverlay(page))!.spots;
+    const xs = spots.map((p) => p.x);
+    const ys = spots.map((p) => p.y);
+    const inside = await toScreen(page, {
+        x: (Math.min(...xs) + Math.max(...xs)) / 2,
+        y: (Math.min(...ys) + Math.max(...ys)) / 2,
+    });
+    await page.mouse.move(inside.x, inside.y);
+    await expect.poll(calm).toBe(false);
+    await expect.poll(handleOpacity).toBe("1");
+
+    // Away again, then over a handle
+    await page.mouse.move(away.x, away.y);
+    await expect.poll(calm).toBe(true);
+    const [handle] = (await shapeOverlay(page))!.handles;
+    await page.mouse.move(handle.x, handle.y);
+    await expect.poll(calm).toBe(false);
+
+    // Off the field (down on the timeline): faint again
+    const timeline = await page.getByTestId("timeline-loop").boundingBox();
+    await page.mouse.move(timeline!.x - 40, timeline!.y + 4);
+    await expect.poll(calm).toBe(true);
+});
+
+test("change: N and the transport's Pathways button hide and show the open box's walks and start rings, and N is previous paths again once it closes", async ({
+    show,
+}) => {
+    const { page } = show;
+    const pathways = page.getByTestId("timeline-shape-pathways");
+    const previousPaths = () =>
+        page.evaluate(
+            () =>
+                JSON.parse(localStorage.getItem("openmarch:uiSettings") ?? "{}")
+                    .previousPaths ?? false,
+        );
+    await expect(pathways).toHaveCount(0);
+    await drawBox(show);
+    let overlay = (await shapeOverlay(page))!;
+    expect(overlay.walks).toHaveLength(ALL.length);
+    expect(overlay.rings).toHaveLength(ALL.length);
+    await expect(pathways).toHaveAttribute("aria-pressed", "true");
+
+    await page.keyboard.press("n");
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.walks)
+        .toEqual([]);
+    overlay = (await shapeOverlay(page))!;
+    expect(overlay.rings).toEqual([]);
+    expect(overlay.spots).toHaveLength(ALL.length);
+    await expect(pathways).toHaveAttribute("aria-pressed", "false");
+    // The page's own previous paths didn't change
+    expect(await previousPaths()).toBe(false);
+
+    await pathways.click();
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.walks)
+        .toHaveLength(ALL.length);
+    expect((await shapeOverlay(page))!.rings).toHaveLength(ALL.length);
+    await expect(pathways).toHaveAttribute("aria-pressed", "true");
+
+    // Closed, the button goes and N is the previous paths shortcut again
+    await page.keyboard.press("Escape");
+    await expect(pathways).toHaveCount(0);
+    await page.keyboard.press("n");
+    await expect.poll(previousPaths).toBe(true);
+});
+
 const screenOf = async (page: Page, id: number): Promise<[number, number]> => {
     const m = (await drawnMarchers(page)).find((d) => d.id === id)!;
     return [m.screen.x, m.screen.y];

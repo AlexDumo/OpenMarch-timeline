@@ -49,6 +49,7 @@ import { AudioClock } from "./Clock";
 import {
     TimelineCompactButton,
     TimelineLoopButton,
+    ShapePathwaysButton,
     TimelineSoundButton,
     TimelineSpeedButton,
 } from "./TimelineControls";
@@ -150,9 +151,16 @@ const LOOP_BUTTONS = (
     <>
         <TimelineLoopButton />
         <TimelineSpeedButton />
+        <ShapePathwaysButton />
     </>
 );
-const SPEED_BUTTON = <TimelineSpeedButton />;
+// Basic has no loop, but an open shape's pathways toggle all the same (#403)
+const SPEED_BUTTON = (
+    <>
+        <TimelineSpeedButton />
+        <ShapePathwaysButton />
+    </>
+);
 const COMPACT_BUTTON = <TimelineCompactButton />;
 
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */

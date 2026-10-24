@@ -1,8 +1,22 @@
-import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { type UiSettings, useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
 import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useWorkspaceViewStore } from "@/stores/WorkspaceViewStore";
 import { useActionHandler } from "../useActionHandler";
+
+/**
+ * The previous paths shortcut (N): while a shape is open it shows or hides the shape's walks and
+ * start rings instead (#403), the pathways the open shape draws in their place
+ */
+export function togglePreviousPaths(
+    settings: UiSettings,
+    shapeOpen: boolean,
+): UiSettings {
+    return shapeOpen
+        ? { ...settings, shapeWalks: !(settings.shapeWalks ?? true) }
+        : { ...settings, previousPaths: !settings.previousPaths };
+}
 
 export function useUiActionHandlers() {
     // Read when an action runs, so a settings change (such as a timeline zoom save) doesn't
@@ -16,10 +30,12 @@ export function useUiActionHandlers() {
         setUiSettings({ ...settings(), nextPaths: !settings().nextPaths }),
     );
     useActionHandler("togglePreviousPagePaths", () =>
-        setUiSettings({
-            ...settings(),
-            previousPaths: !settings().previousPaths,
-        }),
+        setUiSettings(
+            togglePreviousPaths(
+                settings(),
+                useShapeToolStore.getState().tool !== null,
+            ),
+        ),
     );
     useActionHandler("focusCanvas", () => focus("canvas"));
     useActionHandler("exitTimelineFocus", () => focus("canvas"));
