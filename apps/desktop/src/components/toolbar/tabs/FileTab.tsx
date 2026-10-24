@@ -10,7 +10,6 @@ import {
     GearSixIcon,
 } from "@phosphor-icons/react";
 import ActionButton from "@/shortcuts/ActionButton";
-import { useFullscreenStore } from "@/stores/FullscreenStore";
 import { T } from "@tolgee/react";
 import {
     canUndoQueryOptions,
@@ -22,7 +21,6 @@ import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { isWebBuild } from "@/utilities/webBuild";
 
 export function FileTab() {
-    const { isFullscreen } = useFullscreenStore();
     const databaseReady = useDatabaseReady();
     const { data: canUndo } = useQuery(canUndoQueryOptions(databaseReady));
     const { data: canRedo } = useQuery(canRedoQueryOptions(databaseReady));
@@ -61,26 +59,24 @@ export function FileTab() {
                     <T keyName="fileTab.exitFile" />
                 </ActionButton>
             </ToolbarSection>
-            {!isFullscreen && (
-                <ToolbarSection>
-                    <button
-                        disabled={!canUndo}
-                        onClick={() => performHistoryAction("undo")}
-                        className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
-                    >
-                        <ArrowUUpLeftIcon size={24} />
-                        <T keyName="fileTab.undo" />
-                    </button>
-                    <button
-                        disabled={!canRedo}
-                        onClick={() => performHistoryAction("redo")}
-                        className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
-                    >
-                        <ArrowUUpRightIcon size={24} />
-                        <T keyName="fileTab.redo" />
-                    </button>
-                </ToolbarSection>
-            )}
+            <ToolbarSection>
+                <button
+                    disabled={!canUndo}
+                    onClick={() => performHistoryAction("undo")}
+                    className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
+                >
+                    <ArrowUUpLeftIcon size={24} />
+                    <T keyName="fileTab.undo" />
+                </button>
+                <button
+                    disabled={!canRedo}
+                    onClick={() => performHistoryAction("redo")}
+                    className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
+                >
+                    <ArrowUUpRightIcon size={24} />
+                    <T keyName="fileTab.redo" />
+                </button>
+            </ToolbarSection>
             {/* Export needs Electron (printToPDF, file streams, sign-in). */}
             {!isWebBuild && (
                 <ToolbarSection>

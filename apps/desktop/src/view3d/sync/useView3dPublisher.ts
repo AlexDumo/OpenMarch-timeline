@@ -34,7 +34,7 @@ import {
     displayedBeat,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
-import { timeAtBeat, type BeatTiming } from "@/timeline/timeMap";
+import type { CountClock } from "@/timeline/countGrid";
 import { loopBounds } from "@/timeline/timelineTransport";
 import {
     effectivePlaybackSpeed,
@@ -44,7 +44,7 @@ import { updateVenueSettingsMutationOptions } from "@/hooks/queries/useVenueSett
 import { venueSettingsSchema } from "@/view3d/core/venueSettings";
 import { updateShowCamerasMutationOptions } from "@/hooks/queries/useShowCameras";
 import { showCamerasSchema } from "@/view3d/core/cameraList";
-import { pressAction } from "@/shortcuts/registry";
+import { pressAction, type ReleaseReason } from "@/shortcuts/registry";
 import { subscribeTimelineChanges } from "@/db-functions/timelineChanges";
 import {
     VIEW3D_AUTO_OPEN_SETTING,
@@ -76,13 +76,13 @@ const PLAY_SETTLE_MS = 150;
  */
 export function currentAnchorShowMs(
     isPlaying: boolean,
-    beats: readonly BeatTiming[],
+    clock: CountClock,
     pausedBeat: number,
 ): number {
     if (isPlaying && playbackStartInfoRef.current) {
         return getLivePlaybackPosition() * 1000;
     }
-    return timeAtBeat(beats, pausedBeat) * 1000;
+    return clock.timeAtBeat(pausedBeat) * 1000;
 }
 
 /**
@@ -135,7 +135,8 @@ export function useView3dPublisher() {
     const isPlaying = useIsPlaying()?.isPlaying ?? false;
     const selectedPage = useSelectedPage()?.selectedPage ?? null;
     const selectedMarchers = useSelectedMarchers()?.selectedMarchers;
-    const { beats } = useTimingObjects();
+    // Past the stored counts too: the counts go on (endless counts)
+    const { countGrid } = useTimingObjects();
     const pausedBeat = useTimelineSelectionStore(displayedBeat);
     // The playhead also moves while playing; only a paused one re-anchors the clock
     const heldBeat = isPlaying ? null : pausedBeat;
@@ -166,7 +167,7 @@ export function useView3dPublisher() {
         isPlaying,
         selectedPage,
         selectedMarcherIdsKey,
-        beats,
+        countGrid,
         pausedBeat,
         playLoops,
     });
@@ -174,7 +175,7 @@ export function useView3dPublisher() {
         isPlaying,
         selectedPage,
         selectedMarcherIdsKey,
-        beats,
+        countGrid,
         pausedBeat,
         playLoops,
     };
@@ -182,14 +183,14 @@ export function useView3dPublisher() {
     const sendClock = useCallback(() => {
         const {
             isPlaying: playing,
-            beats: b,
+            countGrid: grid,
             pausedBeat: beat,
             playLoops: loops,
         } = latest.current;
         const clock: View3dClock = {
             seq: ++seqRef.current,
             playing,
-            anchorShowMs: currentAnchorShowMs(playing, b, beat),
+            anchorShowMs: currentAnchorShowMs(playing, grid, beat),
             anchorWallMs: wallNowMs(),
             // The window's clock runs at the speed the audio plays at, which takes a speed
             // change when the audio does (1 until playback has started)
@@ -294,7 +295,7 @@ export function useView3dPublisher() {
         windowOpen,
         isPlaying,
         heldBeat,
-        beats,
+        countGrid,
         playbackSpeed,
         chosenSpeed,
         playLoops,
@@ -358,13 +359,17 @@ export function useView3dPlaybackRequests() {
     useEffect(() => {
         const electron = window.electron;
         if (!electron?.onView3dPlaybackRequest) return;
-        const held = new Map<View3dPlaybackAction, () => void>();
-        const letGo = (action: View3dPlaybackAction) => {
+        const held = new Map<
+            View3dPlaybackAction,
+            (reason: ReleaseReason) => void
+        >();
+        const letGo = (action: View3dPlaybackAction, reason: ReleaseReason) => {
             const release = held.get(action);
             held.delete(action);
-            release?.();
+            release?.(reason);
         };
-        const letGoAll = () => [...held.keys()].forEach(letGo);
+        const letGoAll = () =>
+            [...held.keys()].forEach((action) => letGo(action, "lost"));
         const cleanups = [
             electron.onView3dPlaybackRequest((request) => {
                 if (request?.action === VIEW3D_SET_SPEED) {
@@ -375,7 +380,10 @@ export function useView3dPlaybackRequests() {
                 }
                 if (!isView3dPlaybackAction(request?.action)) return;
                 // A release, or a second press without one
-                letGo(request.action);
+                letGo(
+                    request.action,
+                    request.release === true ? "keyup" : "lost",
+                );
                 if (request.release === true) return;
                 const release = pressAction(request.action);
                 if (release) held.set(request.action, release);

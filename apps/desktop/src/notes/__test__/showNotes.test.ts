@@ -1,17 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type {
-    Diagnostic,
-    PlacementChange,
-    PutDownAnchor,
-    XY,
-} from "@openmarch/core";
+import type { PlacementChange, PutDownAnchor, XY } from "@openmarch/core";
 import {
     cueNotes,
     itemNotes,
     notesAt,
     notesForItem,
     sortShowNotes,
-    timelineNotes,
     type ItemNotesInput,
     type NoteItem,
 } from "../showNotes";
@@ -138,7 +132,6 @@ describe("itemNotes", () => {
                     itemIds: [FLAG.id, RIFLE.id],
                     marcherIds: [ALICE],
                     cueIds: [],
-                    transitionId: null,
                 },
                 detail: { hand: "right" },
             },
@@ -153,7 +146,6 @@ describe("itemNotes", () => {
                     itemIds: [RIFLE.id],
                     marcherIds: [ALICE],
                     cueIds: [],
-                    transitionId: null,
                 },
                 detail: { needed: 2, held: 1 },
             },
@@ -167,7 +159,6 @@ describe("itemNotes", () => {
                     itemIds: [FLAG.id],
                     marcherIds: [ALICE],
                     cueIds: [],
-                    transitionId: null,
                 },
                 action: { kind: "snap_to_holder", placementId: flagPutDown.id },
             },
@@ -182,7 +173,6 @@ describe("itemNotes", () => {
                     itemIds: [RISER.id],
                     marcherIds: [CREW],
                     cueIds: [],
-                    transitionId: null,
                 },
             },
         ]);
@@ -289,7 +279,7 @@ describe("hand conflicts", () => {
     });
 });
 
-describe("cue and timeline notes", () => {
+describe("cue notes", () => {
     it("places the cue compiler's notes on their cue's count", () => {
         expect(
             cueNotes(
@@ -307,26 +297,6 @@ describe("cue and timeline notes", () => {
                 what: { cueIds: [7], marcherIds: [ALICE] },
             },
             { kind: "carry_mismatch", beat: null },
-        ]);
-    });
-
-    it("places the timeline's diagnostics on their move's flag", () => {
-        const d: Diagnostic = {
-            code: "D-REBASE",
-            level: "info",
-            transitionId: 4,
-            marcherId: BOB,
-            slot: null,
-            message: "",
-        };
-        expect(timelineNotes([d], () => 16)).toMatchObject([
-            {
-                kind: "timeline",
-                source: "timeline",
-                beat: 16,
-                what: { marcherIds: [BOB], transitionId: 4 },
-                detail: { code: "D-REBASE" },
-            },
         ]);
     });
 });

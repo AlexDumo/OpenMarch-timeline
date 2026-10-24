@@ -43,6 +43,7 @@ import { useTimingObjects } from "@/hooks";
 import individualDemoSVG from "@/assets/drill_chart_export_individual_demo.svg";
 import overviewDemoSVG from "@/assets/drill_chart_export_overview_demo.svg";
 import { Tabs, TabsList, TabContent, TabItem } from "@openmarch/ui";
+import MovesPastEndWarning from "./MovesPastEndWarning";
 import { useAppDialogStore, type ExportTab } from "@/stores/AppDialogStore";
 import { coordinateRoundingOptions } from "../../config/exportOptions";
 import clsx from "clsx";
@@ -1235,7 +1236,11 @@ function VideoExport() {
         [storeResolver, beats],
     );
 
-    const durationSeconds = useMemo(() => showEndTime(beats), [beats]);
+    // The video ends at the show's end, the last page's flag (endless counts rule 4), as the export does
+    const durationSeconds = useMemo(() => {
+        const last = pages[pages.length - 1];
+        return last ? last.timestamp + last.duration : showEndTime(beats);
+    }, [beats, pages]);
 
     useEffect(() => {
         if (!isLoading) return;
@@ -1906,15 +1911,19 @@ function ExportModalContents({
                 <MobileExportOption onClick={onMobileExportClick} />
             </TabContent>
 
+            {/* Exports end at the show's end; moves past it are left out (endless counts) */}
             <TabContent value="coordinate-sheets">
+                <MovesPastEndWarning />
                 <CoordinateSheetExport />
             </TabContent>
 
             <TabContent value="drill-charts">
+                <MovesPastEndWarning />
                 <DrillChartExport />
             </TabContent>
 
             <TabContent value="video">
+                <MovesPastEndWarning />
                 <VideoExport />
             </TabContent>
         </Tabs>

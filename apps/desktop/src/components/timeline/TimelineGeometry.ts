@@ -405,8 +405,9 @@ export const getPageCountAt = (
 
 /**
  * The playhead's page, count and measure, as the transport shows them (UI-13): "Pg 2 · ct 7/16"
- * and "m4 beat 4", or "Home", or "After pg 4 · +4". `spoken` spells them out for screen readers.
- * `measure` is null when the show has no measure there.
+ * and "m4 beat 4", or "Home", or "END +4" past the show's end, where the counts belong to no page
+ * (endless counts rule 8). `spoken` spells them out for screen readers. `measure` is null when
+ * the show has no measure there.
  */
 export const getPlayheadReadout = (
     model: Pick<TimelineViewModel, "pages" | "measures" | "beatCount">,
@@ -417,7 +418,7 @@ export const getPlayheadReadout = (
     const page = at.home
         ? "Home"
         : at.after
-          ? `After pg ${at.pageLabel} · +${at.count}`
+          ? `END +${at.count}`
           : `Pg ${at.pageLabel} · ct ${at.count}${at.total != null ? `/${at.total}` : ""}`;
     const measure = measureAt
         ? `m${measureAt.measure} beat ${measureAt.beat}`
@@ -425,7 +426,9 @@ export const getPlayheadReadout = (
     const spokenPage = at.home
         ? `Home, page ${at.pageLabel}`
         : at.after
-          ? `${at.count} counts after page ${at.pageLabel}`
+          ? at.count === 1
+              ? "1 count past the end of the show"
+              : `${at.count} counts past the end of the show`
           : `Page ${at.pageLabel}, count ${at.count}${at.total != null ? ` of ${at.total}` : ""}`;
     const spoken = measureAt
         ? `${spokenPage}, measure ${measureAt.measure} beat ${measureAt.beat}`
@@ -466,7 +469,7 @@ export const isPastLastFlag = (
 
 /**
  * The window's count badge (UI-13), in the field line's words: "counts 3–6" inside one page box,
- * counted to that page's flag, or "12 counts" when it passes a flag.
+ * counted to that page's flag, or "12 counts" when it passes a flag or ends past the last one.
  */
 export const getWindowCountLabel = (
     model: Pick<TimelineViewModel, "pages">,
@@ -474,8 +477,8 @@ export const getWindowCountLabel = (
 ) => {
     const length = range.endBeatIndex - range.startBeatIndex;
     const at = getPageCountAt(model, range.endBeatIndex);
-    // Past the last flag the count is from that flag, however the window starts
-    if (at.after) return at.count === 1 ? "1 count" : `${at.count} counts`;
+    // Past the last flag it is the window's length, start flag to playhead (owner 2026-10-20);
+    // **+ Add N-Count Page** says the new page's
     if (
         length > 0 &&
         !at.home &&

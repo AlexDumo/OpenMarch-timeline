@@ -65,7 +65,7 @@ describe("isolation plan (docs/timeline/research/ownership/09-isolation.md)", ()
         timelineId: 7,
         start: 0,
         end: 16,
-        restore: { startBeat: 0, startPinned: false, playheadBeat: 0 },
+        restore: { startBeat: 0, playheadBeat: 0 },
     };
 
     it("members are drawn and edited at the plan; others at the real show", () => {
@@ -88,7 +88,6 @@ describe("isolation plan (docs/timeline/research/ownership/09-isolation.md)", ()
                     end: 17,
                     restore: {
                         startBeat: 0,
-                        startPinned: false,
                         playheadBeat: 0,
                     },
                 },

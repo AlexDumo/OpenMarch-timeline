@@ -143,10 +143,10 @@ describe("planCanvasEdit (UI-10 edit window, Home)", () => {
             target: { kind: "range", start: 1, end: 9 },
             beat: 9,
         });
-        store.seek(13); // the start flag follows to the box holding the playhead
+        store.seek(13); // the start flag stays put (UI-26)
         expect(planCanvasEdit()).toEqual({
             ok: true,
-            target: { kind: "range", start: 9, end: 13 },
+            target: { kind: "range", start: 1, end: 13 },
             beat: 13,
         });
         store.setPageBoxes([]);

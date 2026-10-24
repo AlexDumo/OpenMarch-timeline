@@ -63,7 +63,9 @@ describe("timeline stories", () => {
         ).toBeInTheDocument();
         // UI-17: Play reads Stop while playing
         fireEvent.click(
-            screen.getByRole("button", { name: "Play from the start flag" }),
+            screen.getByRole("button", {
+                name: "Play from start flag and continue",
+            }),
         );
         expect(
             screen.getByRole("button", { name: "Stop and go back" }),

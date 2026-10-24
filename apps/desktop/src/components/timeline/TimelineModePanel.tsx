@@ -1,6 +1,8 @@
+import { StartFlagPositionsButton } from "./StartFlagPositionsButton";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTolgee } from "@tolgee/react";
 import {
     pageFlagMoveLimits,
     type AddedPageFlag,
@@ -20,6 +22,9 @@ import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { db } from "@/global/database/db";
 import {
     displayedBeat,
+    isolatedTimeline,
+    resolveStoredTimeline,
+    selectedStoredTimeline,
     selectionIsRange,
     useTimelineSelectionStore,
     type TimelineEditSelection,
@@ -31,6 +36,7 @@ import {
     type FlagPage,
 } from "@/timeline/timelinePlayhead";
 import { useTimelineTracksState } from "@/timeline/useTimelineTracks";
+import { musicEndBeat } from "@/timeline/countsPastEnd";
 import { AudioClock } from "./Clock";
 import {
     TimelineCompactButton,
@@ -50,14 +56,27 @@ import {
     peaksByBeat,
     useAudioEnvelopeStore,
 } from "@/timeline/timelineWaveform";
-import { createTimelineBeatAxis } from "@/timeline/timelineViewModel";
-import { timeAtBeat } from "@/timeline/timeMap";
+import {
+    createTimelineBeatAxis,
+    isPageTimeline,
+    pageTimelineIds,
+} from "@/timeline/timelineViewModel";
+import {
+    useMusicEndSeconds,
+    usePlaybackStopBeat,
+} from "@/timeline/usePlaybackStopBeat";
+import type { CountGrid } from "@/timeline/countGrid";
+import { beatsThrough, measuresThrough } from "@/timeline/endlessTimeline";
 import {
     moveCommandBlocker,
     useMoveCommands,
     useTimelineCommands,
+    moveAtPlayhead,
+    splitMoveBlocker,
 } from "./useTimelineCommands";
 import { useTimelineClipResize } from "./useTimelineClipResize";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
+import { useSplitMergeActions, useSplitMergeMoves } from "./useSplitMergeMoves";
 import { useTimelinePlayback } from "./useTimelinePlayback";
 import { jumpTimelinePlayback } from "@/timeline/timelineTransport";
 import { useLabeledHoldMarks } from "./PageHoldMark";
@@ -126,13 +145,18 @@ const LOOP_BUTTONS = (
     </>
 );
 const SPEED_BUTTON = <TimelineSpeedButton />;
-const COMPACT_BUTTON = <TimelineCompactButton />;
+/** First on the transport's right in both modes, before Fit: start flag positions (fork #331) */
+const LEADING_VIEW_CONTROLS = <StartFlagPositionsButton />;
+const EXPERT_VIEW_CONTROLS = <TimelineCompactButton />;
 
 /** The store's selection as the timeline draws it (spec beats; `Timeline` maps them to its axis) */
 export const toTimelineSelection = (
     selection: TimelineEditSelection,
     startBeat?: number,
-    startPinned = false,
+    /** UI-25: the stored timeline the window resolves to, and whether it is a move's clip */
+    resolved?: { readonly id: number; readonly onClip: boolean } | null,
+    /** UI-25: a second move selected beside it (Shift+click) */
+    pairedTimelineId: number | null = null,
 ): TimelineSelection =>
     selection.kind === "range"
         ? {
@@ -141,11 +165,13 @@ export const toTimelineSelection = (
                   startBeatIndex: selection.start,
                   endBeatIndex: selection.end,
               },
+              ...(resolved ? { timelineId: resolved.id } : {}),
+              ...(resolved?.onClip ? { onClip: true } : {}),
+              ...(pairedTimelineId !== null ? { pairedTimelineId } : {}),
               // UI-10: with P on or before S the window falls back, but the flag stays where it is
               ...(startBeat !== undefined && startBeat !== selection.start
                   ? { startFlagBeatIndex: startBeat }
                   : {}),
-              ...(startPinned ? { startPinned: true } : {}),
           }
         : selection.kind === "home"
           ? { kind: "home" }
@@ -155,31 +181,35 @@ export const toTimelineSelection = (
  * The timeline (ui.md, from the 0.2 branch). It takes the file's real beats, pages and measures, and plays through the app's existing audio clock. Its
  * selection is `useTimelineSelectionStore`'s (UI-9): the initial page box selects home, a page box
  * or a dragged range selects that range, and each seeks (home to beat 0, a range to its end).
- * **+** after the free paused playhead adds a page flag there and selects the new page; a page
- * box's right-click menu deletes its flag (P8.13's writes, wired by P8.15), or the page and its
+ * **Create page at playhead** on the free paused playhead's right-click menu adds a page flag there and selects
+ * the new page; a page box's right-click menu deletes its flag (P8.13's writes, wired by P8.15), or the page and its
  * moves (defined coordinates, owner decision 3). Neither Create Track
  * nor **Add selected marchers** is offered: dragging marchers adds them (UI-10). Double-clicking
  * a page box or clip isolates its stored timeline (docs/timeline/research/ownership/09-isolation.md).
  * A clip is a move: its menu, its ⋯ button and Delete edit, rename and delete it (UI-14).
  */
 export default function TimelineModePanel() {
-    const { beats, pages, measures } = useTimingObjects()!;
+    const { beats, pages, measures, countGrid } = useTimingObjects()!;
     // UI-19: Basic is this timeline with its page boxes holding the music, and none of the
     // Expert parts (clips, the loop, isolation, moves): docs/timeline/research/basic-mode
     const basic = useIsBasicMode();
     const basicExtras = useBasicTimelineExtras(pages);
     const compact = useUiSettingsStore((s) => s.uiSettings.timelineCompact);
-    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis. Hidden
-    // in settings, the lane goes away as it does with no audio.
+    // UI-12: the waveform lane, from the audio player's envelope, per beat on the view axis, in
+    // full: past the stored counts on the counts that go on (endless counts), to the music's end.
+    // Hidden in settings, the lane goes away as it does with no audio.
     const envelope = useAudioEnvelopeStore((s) => s.envelope);
     const waveformHidden = useUiSettingsStore(
         (s) => s.uiSettings.timelineWaveformStyle === "hidden",
     );
+    const musicEnd = useMusicEndSeconds();
     const waveform = useMemo(() => {
         if (!envelope || waveformHidden) return null;
+        const through =
+            musicEnd === null ? 0 : musicEndBeat(countGrid, musicEnd);
         const peaks = peaksByBeat(
             envelope,
-            beats,
+            beatsThrough(countGrid, beats, through),
             createTimelineBeatAxis(beats).offset,
         );
         // A show with no audio plays a silent placeholder: nothing to draw, so in Basic, where the
@@ -187,7 +217,7 @@ export default function TimelineModePanel() {
         if (basic && !peaks.some((beat) => beat.some((peak) => peak > 0)))
             return null;
         return { peaksByBeat: peaks };
-    }, [envelope, beats, waveformHidden, basic]);
+    }, [envelope, beats, countGrid, musicEnd, waveformHidden, basic]);
     const zoomFitted = useUiSettingsStore(
         (s) => s.uiSettings.timelineZoomFitted,
     );
@@ -240,15 +270,26 @@ export default function TimelineModePanel() {
     // screen readers in counts, and saying why it is dashed where it is (`describeMoveClips`)
     const storedTimelines = useTimelineSelectionStore((s) => s.storedTimelines);
     const pageBoxes = useTimelineSelectionStore((s) => s.pageBoxes);
+    const clipTimelines = useMemo(
+        () => timelinesOffPages(timelines, clipBoxPages),
+        [timelines, clipBoxPages],
+    );
+    // The others: one that gets a clip (its box split, or a flag deleted) drops out of the page row
+    const pageMoves = useMemo(() => {
+        const clipped = new Set(clipTimelines);
+        return new Set(
+            timelines.flatMap((t) => (clipped.has(t) ? [] : [t.id])),
+        );
+    }, [timelines, clipTimelines]);
     const { clips: offPage, overridden } = useMemo(
         () =>
             describeMoveClips({
-                clips: timelinesOffPages(timelines, clipBoxPages),
+                clips: clipTimelines,
                 storedTimelines: storedTimelines ?? [],
                 pageBoxes,
                 pages,
             }),
-        [timelines, clipBoxPages, pages, storedTimelines, pageBoxes],
+        [clipTimelines, pages, storedTimelines, pageBoxes],
     );
     // The Move card says it too
     useEffect(() => {
@@ -261,11 +302,20 @@ export default function TimelineModePanel() {
         timelines,
         selectedMarcherIds,
     });
+    // UI-25: a move can be split, and moves merged (not in Basic, which gets no clips)
+    const splitMerge = useSplitMergeMoves({
+        database: db,
+        selectedMarcherIds,
+        isPlaying,
+        pages,
+    });
+    useSplitMergeActions(splitMerge, !basic, selectedMarcherIds, isPlaying);
     // UI-14: a clip is a move; it can be edited, renamed and deleted
     const moves = useMoveCommands(db);
     const moveCommands = useMemo(
         () => ({
             disabledReason: moveCommandBlocker(isPlaying),
+            extraFor: splitMerge.moveExtraFor,
             onEdit: (id: number) => {
                 if (!isPlaying) moves.editMove(id);
             },
@@ -274,8 +324,34 @@ export default function TimelineModePanel() {
             onDelete: (id: number) => {
                 if (!isPlaying) void moves.deleteMove(id);
             },
+            // UI-27: two moves that meet at the playhead
+            onSplit: (id: number) =>
+                void moves.splitMoveAtPlayhead(id, isPlaying),
+            splitDisabledReason: (id: number) => {
+                const s = useTimelineSelectionStore.getState();
+                return splitMoveBlocker(
+                    s.storedTimelines?.find((t) => t.id === id),
+                    s.playheadBeat,
+                    isPlaying,
+                );
+            },
         }),
-        [isPlaying, moves],
+        [isPlaying, moves, splitMerge],
+    );
+    // UI-27: ⌘K's Split at playhead acts on the move the playhead is inside (Expert only: Basic
+    // has no moves to split, its + splits the page's moves at a new flag). Greyed out while
+    // playing, as the menus' entry is
+    useActionHandler(
+        "timelineSplitMoveAtPlayhead",
+        () => {
+            const target = moveAtPlayhead(useTimelineSelectionStore.getState());
+            if (typeof target === "string") {
+                toast.error(target, { id: "timeline-split-move" });
+                return;
+            }
+            void moves.splitMoveAtPlayhead(target.id, isPlaying);
+        },
+        { enabled: !basic && !isPlaying },
     );
     const clipResize = useTimelineClipResize({ database: db, timelines });
     const queryClient = useQueryClient();
@@ -335,8 +411,11 @@ export default function TimelineModePanel() {
                   },
         [isPlaying, isolated, movePageFlag],
     );
+    // Playback and Fit go on to the latest of the last page's flag, the music's end and the last
+    // move's end (endless counts rule 4)
+    const stopBeat = usePlaybackStopBeat();
     const windowBeforeClick = useRef<TimelineIsolation["restore"] | null>(null);
-    // Change to subset / normal page: one `updatePages` edit, one undo step
+    // The page box menu's Subset switch: one `updatePages` edit, one undo step
     const { mutate: updatePages } = useMutation(
         updatePagesMutationOptions(queryClient),
     );
@@ -362,21 +441,44 @@ export default function TimelineModePanel() {
         // UI-17 follow-up: home while playing jumps playback to the start (a page box jumps by
         // its own scrub; home has nowhere else to go)
         if (isPlaying && next?.kind === "home") {
-            jumpTimelinePlayback(beats, 0);
+            jumpTimelinePlayback(countGrid, 0);
             return;
         }
         if (isPlaying) return;
         const store = useTimelineSelectionStore.getState();
+        // UI-25: Shift+click on another move's clip selects it beside the window's, for **Merge
+        // moves**; the window stays
+        if (
+            next?.kind === "range" &&
+            next.extend &&
+            next.timelineId !== undefined
+        ) {
+            const current = selectedStoredTimeline(store);
+            if (
+                store.isolation === null &&
+                current &&
+                current.id !== next.timelineId
+            ) {
+                store.pairTimeline(
+                    store.pairedTimelineId === next.timelineId
+                        ? null
+                        : next.timelineId,
+                );
+                return;
+            }
+        }
         if (next?.kind === "home") store.selectHome();
         else if (next?.kind === "range") {
             const { startBeatIndex: start, endBeatIndex: end } = next.range;
-            store.selectRange(start, end);
+            store.selectRange(start, end, next.timelineId);
             // UI-17: a drawn range (Ctrl+drag) is the loop, and turns looping on, as dragging
             // Logic's cycle bar does; a page box or Shift+click takes a loop that is on to the
-            // pages selected. A dragged start flag only moves the edit window
-            const pageBox = store.pageBoxes.some(
-                (b) => b.start === start && b.end === end,
-            );
+            // pages selected. A dragged start flag only moves the edit window. A clip click
+            // carries its move, and a move split off a page keeps the page's range but is still
+            // a clip, not the page box (UI-25)
+            const pageBox =
+                next.timelineId === undefined &&
+                store.pageBoxes.some((b) => b.start === start && b.end === end);
             if (
                 store.isolation === null &&
                 (next.drawn ||
@@ -396,8 +498,8 @@ export default function TimelineModePanel() {
                 const s = useTimelineSelectionStore.getState();
                 windowBeforeClick.current = s.isolation?.restore ?? {
                     startBeat: s.startBeat,
-                    startPinned: s.startPinned,
                     playheadBeat: s.playheadBeat,
+                    windowTimelineId: s.windowTimelineId,
                 };
             }}
         >
@@ -414,9 +516,13 @@ export default function TimelineModePanel() {
                     pages={pages}
                     measures={measures}
                     timelines={basic ? NO_CLIPS : offPage}
+                    pageMoves={pageMoves}
                     transportAccessories={basic ? SPEED_BUTTON : LOOP_BUTTONS}
                     transportSecondary={SOUND_BUTTON}
-                    transportViewControls={basic ? undefined : COMPACT_BUTTON}
+                    transportLeadingViewControls={LEADING_VIEW_CONTROLS}
+                    transportViewControls={
+                        basic ? undefined : EXPERT_VIEW_CONTROLS
+                    }
                     holdMarks={holdMarks}
                     keepChains={keepChains}
                     keepHere={keepHere}
@@ -425,21 +531,26 @@ export default function TimelineModePanel() {
                         basic ? undefined : commands.commitTimelineRange
                     }
                     clipResize={basic ? undefined : clipResize}
-                    onUnpinStart={() =>
-                        useTimelineSelectionStore.getState().unpinStart()
-                    }
                     onOpenRange={
                         basic
                             ? undefined
-                            : (range) => {
+                            : (range, timelineId) => {
                                   if (isPlaying) return;
                                   const store =
                                       useTimelineSelectionStore.getState();
-                                  const timeline = store.storedTimelines?.find(
-                                      (t) =>
-                                          t.start === range.startBeatIndex &&
-                                          t.end === range.endBeatIndex,
-                                  );
+                                  // UI-25: a clip's own move; a page box's is the oldest there
+                                  const timeline =
+                                      store.storedTimelines?.find(
+                                          (t) => t.id === timelineId,
+                                      ) ??
+                                      resolveStoredTimeline(
+                                          {
+                                              kind: "range",
+                                              start: range.startBeatIndex,
+                                              end: range.endBeatIndex,
+                                          },
+                                          store.storedTimelines,
+                                      );
                                   if (timeline)
                                       store.isolate(
                                           timeline.id,
@@ -453,7 +564,11 @@ export default function TimelineModePanel() {
                               }
                     }
                     moveCommands={basic ? undefined : moveCommands}
+                    clipPeel={basic ? undefined : splitMerge.clipPeel}
+                    pageMenuExtra={basic ? undefined : splitMerge.pageMenuExtra}
                     pageFlagMove={pageFlagMove}
+                    countGrid={countGrid}
+                    fitBeat={stopBeat}
                     onSetPageSubset={(pageId, subset) =>
                         updatePages({
                             modifiedPagesArgs: [
@@ -488,13 +603,14 @@ export default function TimelineModePanel() {
 }
 
 /**
- * The timeline fed by the audio playback, with its zoom, its window and **+**. The playback
+ * The timeline fed by the audio playback, with its zoom, its window and **Create page at playhead**. The playback
  * position changes once a beat while playing or scrubbing, the window (from the start flag to the
  * playhead) with it, and the zoom every frame of a pinch, so all of them are read here, under the
  * panel: they re-render the timeline, not the panel and its queries.
  */
 export function PlayingTimeline({
     basic = false,
+    countGrid,
     ...props
 }: { basic?: boolean } & Omit<
     TimelineProps,
@@ -506,11 +622,16 @@ export function PlayingTimeline({
     | "onAddPageFlag"
     | "onAddSubsetPage"
     | "addPageNames"
+    | "appendAtPlayhead"
     | "loop"
     | "onLoopChange"
->) {
+    | "onViewportExtent"
+> & {
+        /** The counts as they go on past the stored ones (endless counts) */
+        countGrid: CountGrid;
+    }) {
     const { beats, pages } = props;
-    const playback = useTimelinePlayback({ beats, pages });
+    const playback = useTimelinePlayback({ countGrid, pages });
     const editSelection = useTimelineSelectionStore((s) => s.selection);
     const startBeat = useTimelineSelectionStore((s) => s.startBeat);
     // UI-17: the loop, drawn as a bar with draggable ends; an isolated move always loops, so its
@@ -532,35 +653,44 @@ export function PlayingTimeline({
             }),
         [],
     );
-    // UI-12: the pin shows outside isolation, whose start flag is the isolated move's own
-    const startPinned = useTimelineSelectionStore(
-        (s) => s.startPinned && s.isolation === null,
+    // UI-25: which of the moves sharing the window's range it stands for
+    const resolvedId = useTimelineSelectionStore(
+        (s) => s.isolation?.timelineId ?? selectedStoredTimeline(s)?.id ?? null,
     );
+    const pairedId = useTimelineSelectionStore((s) => s.pairedTimelineId);
+    const resolvedOnClip = useTimelineSelectionStore((s) => {
+        const t = s.isolation ? isolatedTimeline(s) : selectedStoredTimeline(s);
+        return (
+            t !== null &&
+            !isPageTimeline(t, s.storedTimelines ?? [], s.pageBoxes) &&
+            s.pageBoxes.some((b) => b.start === t.start && b.end === t.end)
+        );
+    });
     const selection = useMemo(
-        () => toTimelineSelection(editSelection, startBeat, startPinned),
-        [editSelection, startBeat, startPinned],
+        () =>
+            toTimelineSelection(
+                editSelection,
+                startBeat,
+                resolvedId === null
+                    ? null
+                    : { id: resolvedId, onClip: resolvedOnClip },
+                pairedId,
+            ),
+        [editSelection, startBeat, resolvedId, resolvedOnClip, pairedId],
     );
     // UI-12: the paused clock reads the beat the timeline shows, not the selected page's end
     const shownBeat = useTimelineSelectionStore(displayedBeat);
+    // Past the stored counts too: they go on (endless counts)
     const pausedSeconds =
-        beats.length > 0
-            ? timeAtBeat(beats, Math.min(shownBeat, beats.length))
-            : undefined;
+        beats.length > 0 ? countGrid.timeAtBeat(shownBeat) : undefined;
     const clock = useMemo(
         () => <AudioClock pausedSeconds={pausedSeconds} />,
         [pausedSeconds],
     );
-    // UI-9 **+** after the free paused playhead; the new page becomes the selection
+    // UI-9 **Create page at playhead** on the free paused playhead's menu; the new page becomes the selection
     const playheadBeat = useTimelineSelectionStore((s) => s.playheadBeat);
-    // Not while a paused preview holds a frame: + is drawn there, but would add at P (UI-11)
-    const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
-    const addPageFlag = useAddPageFlag({
-        pages,
-        beatCount: beats.length,
-        playheadBeat,
-        isPlaying: playback.isPlaying || holding,
-        onAdded: selectAddedPage,
-    });
+    // Endless counts (rules 1 and 7): the timeline draws the counts on past the stored ones, with
+    // some room past where playback stops; the scroll ends there
     // The zoom changes every frame of a pinch: keep it here, and save it once the gesture settles
     const [pixelsPerBeat, setPixelsPerBeat] = useState(
         () => useUiSettingsStore.getState().uiSettings.timelinePixelsPerBeat,
@@ -575,13 +705,59 @@ export function PlayingTimeline({
         );
         return () => clearTimeout(timeout);
     }, [pixelsPerBeat]);
+    const endless = useEndlessCounts({
+        countGrid,
+        beats,
+        measures: props.measures,
+        stopBeat: props.fitBeat ?? 0,
+        playheadBeat: Math.max(playheadBeat, shownBeat, playback.positionBeat),
+        pixelsPerBeat,
+    });
+    // Not while a paused preview holds a frame: the menu would open there, but add at P (UI-11)
+    const holding = useTimelineSelectionStore((s) => s.cursorBeat !== null);
+    const addPageFlag = useAddPageFlag({
+        pages,
+        beatCount: beats.length,
+        playheadBeat,
+        isPlaying: playback.isPlaying || holding,
+        onAdded: selectAddedPage,
+    });
+    // F and Shift+F do what the playhead's menu does, whenever it would open
+    useActionHandler("timelineCreatePageAtPlayhead", addPageFlag.add, {
+        enabled: addPageFlag.insertion !== null,
+    });
+    useActionHandler("timelineCreateSubsetAtPlayhead", addPageFlag.addSubset, {
+        enabled: addPageFlag.insertion !== null,
+    });
+    // Past the last page, the playhead offers **+ Add N-Count Page**: a page from the last flag to it
+    const { t } = useTolgee();
+    const { insertion, add: addPage, addSubset } = addPageFlag;
+    const appendAtPlayhead = useMemo(() => {
+        if (insertion?.kind !== "append") return undefined;
+        const counts = insertion.beat - insertion.lastPage.end;
+        return {
+            counts,
+            label: t("timeline.appendAtPlayhead.label", { counts }),
+            title: t("timeline.appendAtPlayhead.title", { counts }),
+            onAppend: addPage,
+            subset: {
+                label: t("timeline.appendAtPlayhead.subsetLabel", { counts }),
+                title: t("timeline.appendAtPlayhead.subsetTitle", { counts }),
+                onAppend: addSubset,
+            },
+        };
+    }, [insertion, addPage, addSubset, t]);
     return (
         <Timeline
             {...props}
+            beats={endless.beats}
+            measures={endless.measures}
+            onViewportExtent={endless.onViewportExtent}
             selection={selection}
             transportClock={clock}
             onAddPageFlag={addPageFlag.insertion ? addPageFlag.add : undefined}
             addPageNames={addPageFlag.names ?? undefined}
+            appendAtPlayhead={appendAtPlayhead}
             onAddSubsetPage={
                 addPageFlag.insertion ? addPageFlag.addSubset : undefined
             }
@@ -592,6 +768,71 @@ export function PlayingTimeline({
             onLoopChange={isolation || basic ? undefined : changeLoop}
         />
     );
+}
+
+/** The fewest counts the timeline goes on past where playback stops */
+const MIN_PADDING_BEATS = 32;
+
+/**
+ * The counts the timeline draws (docs/timeline/endless-counts.md rules 1 and 7): the stored ones,
+ * then the grid's up to some room past `stopBeat` (the latest of the last page's flag, the music's
+ * end and the last move's end): half a screen, at least 32 counts (EC-9). The scroll ends there;
+ * placing a page or move further moves it on. The playhead keeps the end where it is (playing on
+ * past it, say) but adds no room, so clicking at the far right doesn't creep the end out. Rounded
+ * up to 32 counts so that playing on redraws the lanes once in a while. A screen's counts come from
+ * the zoom as it renders (and the scroller's width, reported on resize), so a zoom that changes
+ * the room lands in its own commit.
+ */
+function useEndlessCounts({
+    countGrid,
+    beats,
+    measures,
+    stopBeat,
+    playheadBeat,
+    pixelsPerBeat,
+}: {
+    countGrid: CountGrid;
+    beats: TimelineProps["beats"];
+    measures: TimelineProps["measures"];
+    stopBeat: number;
+    /** The playhead, or the beat playing: the timeline reaches it, with no room past it */
+    playheadBeat: number;
+    pixelsPerBeat: number;
+}) {
+    const [viewportWidth, setViewportWidth] = useState<number | null>(null);
+    // Whole powers of two (down), so a pinch redraws the counts a few times, not every frame
+    const screenBeats =
+        viewportWidth !== null && pixelsPerBeat > 0
+            ? Math.max(
+                  MIN_PADDING_BEATS,
+                  2 **
+                      Math.floor(
+                          Math.log2(Math.max(viewportWidth / pixelsPerBeat, 1)),
+                      ),
+              )
+            : 2 * MIN_PADDING_BEATS;
+    const padding = Math.max(MIN_PADDING_BEATS, screenBeats / 2);
+    const extent =
+        Math.ceil(
+            Math.max(stopBeat + padding, playheadBeat) / MIN_PADDING_BEATS,
+        ) * MIN_PADDING_BEATS;
+    const onViewportExtent = useCallback(
+        ({ width }: { width: number }) => setViewportWidth(width),
+        [],
+    );
+    const drawnBeats = useMemo(
+        () => beatsThrough(countGrid, beats, extent),
+        [beats, countGrid, extent],
+    );
+    const drawnMeasures = useMemo(
+        () => measuresThrough(countGrid, measures, drawnBeats),
+        [countGrid, drawnBeats, measures],
+    );
+    return {
+        beats: drawnBeats as TimelineProps["beats"],
+        measures: drawnMeasures as TimelineProps["measures"],
+        onViewportExtent,
+    };
 }
 
 /**
@@ -656,7 +897,7 @@ export function selectionAfterDeleteWithMoves(
         : { kind: "home" };
 }
 
-/** **+** selects the new page's page timeline (UI-9: "The new page is selected"). */
+/** **Create page at playhead** selects the new page's page timeline (UI-9: "The new page is selected"). */
 export const selectAddedPage = ({
     startBeat,
     endBeat,
@@ -676,7 +917,8 @@ export function describePageFlagBlock(
         "linkId" | "label" | "startBeatIndex" | "endBeatIndex"
     >[],
 ): string {
-    if (block.kind === "show-end") return "The end of the show";
+    // Nothing stops the last flag past every move (endless counts); never shown
+    if (block.kind === "open") return "";
     const flags = pageFlags(pages);
     if (block.kind === "flag") {
         const flag = flags.find((f) => f.page.id === block.pageId);
@@ -716,17 +958,36 @@ export function useHeldWhileStale<T>(value: T, current: boolean): T {
  * The timelines that don't match a page box (UI-10, project owner, 2026-10-03). A page box
  * already stands for the stored timeline with exactly its range: clicking it sets the start flag
  * and playhead to its edges, so a clip under it would only repeat it. Timelines that start or end
- * off a flag (a mid-page arrival, a pinned start flag) keep their clips. Ranges are spec beats.
+ * off a flag (a mid-page arrival) keep their clips, and so does a move split
+ * off a page's timeline (UI-25): the box stands for the oldest over its range. Ranges are spec
+ * beats.
  */
 export function timelinesOffPages<
-    T extends Pick<TimelineInput, "startBeatIndex" | "endBeatIndex">,
+    T extends Pick<TimelineInput, "startBeatIndex" | "endBeatIndex" | "linkId">,
 >(timelines: readonly T[], pages: readonly FlagPage[]): T[] {
-    const boxes = new Set(
-        pageFlags(pages).flatMap((f) =>
-            f.range ? [`${f.range.start}:${f.range.end}`] : [],
-        ),
+    const boxes = pageFlags(pages).flatMap((f) =>
+        f.range ? [{ start: f.range.start, end: f.range.end }] : [],
     );
+    // UI-25: only the page's own timeline (the oldest over the box) hides under it; a move split
+    // off it keeps the range and its clip
+    const pages_ = pageTimelineIds(
+        timelines.flatMap((t) =>
+            t.linkId === undefined
+                ? []
+                : [
+                      {
+                          id: Number(t.linkId),
+                          start: t.startBeatIndex,
+                          end: t.endBeatIndex,
+                      },
+                  ],
+        ),
+        boxes,
+    );
+    const onBox = new Set(boxes.map((b) => `${b.start}:${b.end}`));
     return timelines.filter(
-        (t) => !boxes.has(`${t.startBeatIndex}:${t.endBeatIndex}`),
+        (t) =>
+            !onBox.has(`${t.startBeatIndex}:${t.endBeatIndex}`) ||
+            (t.linkId !== undefined && !pages_.has(Number(t.linkId))),
     );
 }

@@ -23,6 +23,7 @@ import type { ShortcutOverrides } from "../keymap";
 import { getActionLabel, getActionShortcutKeys } from "../labels";
 import { hasActionHandler, isActionEnabled, runAction } from "../registry";
 import { isActionOffInWorkspace } from "../workspaceActions";
+import { isPreviewMode } from "@/stores/PreviewModeStore";
 import type { PaletteContext, PaletteItem } from "./sources";
 
 const CATEGORY_ICONS: Record<ActionCategory, Icon> = {
@@ -59,7 +60,6 @@ const PALETTE_CATEGORY_ORDER: readonly ActionCategory[] = [
 /** The most common drill-writing actions, shown in "Suggested" until usage history takes over. */
 const SUGGESTED_ACTIONS: readonly ActionId[] = [
     "alignmentEventLine",
-    "createCircle",
     "openExportDialog",
     "alignHorizontally",
     "alignVertically",
@@ -94,9 +94,14 @@ export function getActionPaletteItems(
                     : [],
                 shortcut: getActionShortcutKeys(id, { overrides }),
                 disabled: !isActionEnabled(id),
-                // Visuals mode turns the drill edits off: say so, and where they work
+                // Visuals mode turns the drill edits off, and Preview every edit: say so, and
+                // where they work
                 disabledReason: isActionOffInWorkspace(id)
-                    ? t("commandPalette.editsDrill")
+                    ? t(
+                          isPreviewMode()
+                              ? "commandPalette.offInPreview"
+                              : "commandPalette.editsDrill",
+                      )
                     : undefined,
                 suggestedRank: SUGGESTED_ACTIONS.includes(id)
                     ? SUGGESTED_ACTIONS.indexOf(id)

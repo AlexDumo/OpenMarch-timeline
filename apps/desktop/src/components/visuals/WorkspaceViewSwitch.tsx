@@ -1,43 +1,58 @@
 import { T, useTolgee } from "@tolgee/react";
-import { ToggleGroup, ToggleGroupItem } from "@openmarch/ui";
+import { SegmentedTextSwitch } from "@openmarch/ui";
 import {
     useWorkspaceViewStore,
     type WorkspaceView,
 } from "@/stores/WorkspaceViewStore";
+import { useIsBasicMode } from "@/stores/EditorModeStore";
+import { usePreviewModeStore } from "@/stores/PreviewModeStore";
 
-/** Editor or Visuals (performer-behavior.md section 7.1). */
+const EDITOR = {
+    value: "editor",
+    label: <T keyName="visuals.workspace.editor" />,
+    testId: "workspace-view-editor",
+};
+const VISUALS = {
+    value: "visuals",
+    label: <T keyName="visuals.workspace.visuals" />,
+    testId: "workspace-view-visuals",
+};
+const PREVIEW = {
+    value: "preview",
+    label: <T keyName="visuals.workspace.preview" />,
+    testId: "workspace-view-preview",
+};
+
+/**
+ * Editor, Visuals (performer-behavior.md section 7.1) or Preview, which watches the show without
+ * editing it (`PreviewModeStore`). Basic has no Visuals mode (UI-19): Editor or Preview.
+ */
 export default function WorkspaceViewSwitch({
     className,
 }: {
     className?: string;
 }) {
     const { t } = useTolgee();
+    const basic = useIsBasicMode();
     const view = useWorkspaceViewStore((s) => s.view);
     const setView = useWorkspaceViewStore((s) => s.setView);
+    const preview = usePreviewModeStore((s) => s.isPreview);
+    const setPreview = usePreviewModeStore((s) => s.setPreview);
     return (
-        <ToggleGroup
-            type="single"
-            value={view}
-            // Radix sends "" when the pressed item is clicked again: keep it
-            onValueChange={(v) => v && setView(v as WorkspaceView)}
-            aria-label={t("visuals.workspace.label")}
+        <SegmentedTextSwitch
+            options={basic ? [EDITOR, PREVIEW] : [EDITOR, VISUALS, PREVIEW]}
+            selected={preview ? "preview" : basic ? "editor" : view}
+            setSelected={(v) => {
+                if (v === "preview") {
+                    setPreview(true);
+                    return;
+                }
+                setPreview(false);
+                setView(v as WorkspaceView);
+            }}
+            ariaLabel={t("visuals.workspace.label")}
             className={className}
-            data-testid="workspace-view-switch"
-        >
-            <ToggleGroupItem
-                value="editor"
-                className="text-sub px-12"
-                data-testid="workspace-view-editor"
-            >
-                <T keyName="visuals.workspace.editor" />
-            </ToggleGroupItem>
-            <ToggleGroupItem
-                value="visuals"
-                className="text-sub px-12"
-                data-testid="workspace-view-visuals"
-            >
-                <T keyName="visuals.workspace.visuals" />
-            </ToggleGroupItem>
-        </ToggleGroup>
+            testId="workspace-view-switch"
+        />
     );
 }

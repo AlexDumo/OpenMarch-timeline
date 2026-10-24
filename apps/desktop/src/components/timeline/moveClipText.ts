@@ -43,9 +43,11 @@ export function describeMoveClips<T extends TimelineInput>({
         const id = clip.linkId === undefined ? undefined : Number(clip.linkId);
         const label =
             id === undefined ? clip.label : (labels.get(id) ?? clip.label);
+        // A clip is always a move, even over a page box's range (UI-25)
         const where = isolatedTimelineName(
             { start: clip.startBeatIndex, end: clip.endBeatIndex },
             pages,
+            true,
         );
         const note =
             clip.overriddenBy && clip.overriddenBy.length > 0

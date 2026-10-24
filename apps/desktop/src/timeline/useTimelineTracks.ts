@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Diagnostic, SpanInfo } from "@openmarch/core";
+import type { SpanInfo } from "@openmarch/core";
 import { asc } from "drizzle-orm";
 import { schema } from "@/global/database/db";
 import { withTimelineWriteLock } from "@/db-functions/history";
@@ -160,7 +160,7 @@ export const readVersionedTimelineViewTables = (
  *
  * - Tracks are only built from rows and a resolver of the same version. While the next version's
  *   rows load, the last tracks stay, so nothing flickers and no mismatched pair is ever built.
- * - Spans and diagnostics are cached per resolver version.
+ * - Spans are cached per resolver version.
  * - One track per stored timeline (`buildTimelineClipTracks`, ui.md UI-9 "Tracks"), so the tracks
  *   don't depend on the selected marchers.
  */
@@ -207,11 +207,10 @@ export function useTimelineTracksState({
         };
     }, [active, database, version, displayVersion]);
 
-    // Per resolver version: the spans asked for so far, and the diagnostics
+    // Per resolver version: the spans asked for so far
     const cache = useMemo(() => {
         void version; // the resolver answers differently after each version
         const spans = new Map<number, readonly SpanInfo[]>();
-        let diagnostics: readonly Diagnostic[] | null = null;
         return {
             spansOf: (marcherId: number) => {
                 let found = spans.get(marcherId);
@@ -221,8 +220,6 @@ export function useTimelineTracksState({
                 }
                 return found ?? [];
             },
-            diagnostics: () =>
-                (diagnostics ??= resolver ? resolver.diagnostics() : []),
         };
     }, [resolver, version]);
 
@@ -237,7 +234,6 @@ export function useTimelineTracksState({
         return buildTimelineClipTracks({
             tables: loaded.tables,
             spansOf: cache.spansOf,
-            diagnostics: cache.diagnostics(),
         });
     }, [active, loaded, version, displayVersion, cache]);
 

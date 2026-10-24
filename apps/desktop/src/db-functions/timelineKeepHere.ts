@@ -202,12 +202,14 @@ export async function followAgainOnPage({
                 })),
             markers: NO_MARKERS(),
         };
-        // A kept move is the marcher's own page move (`ownPageMoves`), as Keep wrote it
+        // A kept move is the marcher's own page move (`ownPageMoves`), as Keep wrote it, in the
+        // page's timeline or a move split off it (UI-25)
         const own = await ownPageMoves(
             tx,
             await readPageGrid(tx),
             pageBox,
             keptIds,
+            { anyTimelineOverBox: true },
         );
         result.changed = ascending(own.keys());
         if (own.size === 0) throw new NothingToDo(result);

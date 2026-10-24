@@ -325,6 +325,15 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Shift+Space"],
     },
+    // UI-26: Alt+Space plays on from the start flag past the playhead (Expert timeline); Space
+    // plays the window once
+    playOn: {
+        labelKey: "actions.playback.playOn",
+        category: "playback",
+        editsDrill: false,
+        scope: "canvas",
+        defaultBindings: ["Alt+Space"],
+    },
     // UI-17: C turns looping on over the page being edited, or off (timeline mode)
     toggleLoop: {
         labelKey: "actions.playback.toggleLoop",
@@ -495,14 +504,17 @@ const STATIC_ACTIONS = {
     },
 
     // UI
-    togglePreviousPagePaths: {
-        labelKey: "actions.ui.togglePreviousPaths",
-        toggleOnKey: "actions.ui.showPreviousPaths",
-        toggleOffKey: "actions.ui.hidePreviousPaths",
+    // Start flag positions (#331): hold N to peek at the Hold N state, tap to latch it
+    toggleStartFlagPositions: {
+        labelKey: "actions.ui.toggleStartFlagPositions",
+        keywordsKey: "actions.ui.toggleStartFlagPositionsKeywords",
+        toggleOnKey: "actions.ui.showStartFlagPositions",
+        toggleOffKey: "actions.ui.hideStartFlagPositions",
         category: "ui",
         editsDrill: false,
         scope: "canvas",
         defaultBindings: ["N"],
+        ignoreRepeat: true,
     },
     toggleNextPagePaths: {
         labelKey: "actions.ui.toggleNextPaths",
@@ -562,6 +574,16 @@ const STATIC_ACTIONS = {
         editsDrill: false,
         scope: "global",
         defaultBindings: ["$mod+Shift+V"],
+        ignoreRepeat: true,
+    },
+    // Preview: watch the show without editing it (the workspace switch's third mode)
+    togglePreview: {
+        labelKey: "actions.ui.togglePreview",
+        keywordsKey: "actions.ui.togglePreviewKeywords",
+        category: "ui",
+        editsDrill: false,
+        scope: "global",
+        defaultBindings: ["Alt+P"],
         ignoreRepeat: true,
     },
     // UI-17 follow-up: ? lists every shortcut
@@ -630,15 +652,6 @@ const STATIC_ACTIONS = {
         defaultBindings: ["$mod+A", "Control+A"],
     },
 
-    // Shapes
-    createCircle: {
-        labelKey: "actions.shape.createCircle",
-        category: "shape",
-        editsDrill: true,
-        scope: "canvas",
-        defaultBindings: ["O"],
-    },
-
     // UI-18 keep later pages: K keeps the selection where it holds on this page, or lets it
     // follow again (timeline mode)
     toggleKeepOnPage: {
@@ -658,6 +671,50 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: ["G", "$mod+G", "Control+G"],
         ignoreRepeat: true,
+    },
+
+    // UI-9: a page flag at the paused playhead, as its right-click menu does. F for flag; Shift
+    // for the smaller step (as Shift+Q/E steps a beat), a subset page keeping later pages' numbers
+    timelineCreatePageAtPlayhead: {
+        labelKey: "actions.timeline.createPageAtPlayhead",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: ["F"],
+        ignoreRepeat: true,
+    },
+    timelineCreateSubsetAtPlayhead: {
+        labelKey: "actions.timeline.createSubsetAtPlayhead",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: ["Shift+F"],
+        ignoreRepeat: true,
+    },
+
+    // UI-27: the move the playhead is inside becomes two that meet there (Expert); unbound
+    timelineSplitMoveAtPlayhead: {
+        labelKey: "actions.timeline.splitMoveAtPlayhead",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: [],
+    },
+    // UI-25: split the selected marchers off the window's move, or merge a split move back into
+    // its page (Expert timeline mode; not registered in Basic, so hidden there)
+    splitSelectedIntoNewMove: {
+        labelKey: "actions.timeline.splitSelectedIntoNewMove",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: [],
+    },
+    mergeMoveIntoPage: {
+        labelKey: "actions.timeline.mergeMoveIntoPage",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: [],
     },
 
     // Timeline (audio editor)
