@@ -191,6 +191,8 @@ export type FieldTestShapeOverlay = {
     tip: string | null;
     /** The spots are still gliding to where they're going after a change (#387). */
     gliding: boolean;
+    /** The controls are faint: the pointer is away from the shape (#403). */
+    calm: boolean;
 };
 
 /** A placed box outlined on the field. */

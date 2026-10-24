@@ -249,16 +249,20 @@ export function squareToField(rotation: number): boolean {
 
 export const DEGREE = Math.PI / 180;
 
+/** A dragged rotation snaps to this many degrees, as the field's rotate handle does (`ROTATION_SNAP`) */
+export const ROTATION_SNAP_DEGREES = 15;
+
 /**
- * A rotation as dragged or typed: whole degrees, 15° with Shift, as is with Alt (no snapping, as
- * in the rest of the timeline). Kept in [0, 2π).
+ * A rotation as dragged: 15° steps, as the field's rotate handle and the old app turn; whole
+ * degrees with Shift; as is with Alt (#403). Typed rotations don't come through here. Kept in
+ * [0, 2π).
  */
 export function snapRotation(
     rad: number,
     keys: { readonly shift: boolean; readonly snap: boolean },
 ): number {
     if (!keys.snap) return normalizeAngle(rad);
-    const step = (keys.shift ? 15 : 1) * DEGREE;
+    const step = (keys.shift ? 1 : ROTATION_SNAP_DEGREES) * DEGREE;
     const snapped = normalizeAngle(Math.round(rad / step) * step);
     // A full turn reads as 0
     return Math.abs(snapped - TAU) < 1e-9 ? 0 : snapped;
