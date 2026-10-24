@@ -14,7 +14,11 @@ import type { ToolState } from "./toolMachine";
 import { useShapePaletteSource } from "../command/useShapePaletteSource";
 import { keepSavedShapeInShow } from "../library/saveShape";
 import { leaveShapeTool } from "./shapeLeave";
-import { closeShapeTool, useShapeToolStore } from "./shapeToolStore";
+import {
+    closeShapeTool,
+    isShapeAway,
+    useShapeToolStore,
+} from "./shapeToolStore";
 
 /**
  * The host's place function (spec #344): every open shape is placed through here, whether by
@@ -43,17 +47,21 @@ export async function placeShape(
     return placed;
 }
 
-/** Place (Enter): places the open shape at the edit window now, then closes the tool */
+/**
+ * Place (Enter): places the open shape at the edit window now, then closes the tool. Away from the
+ * shape's moment (#416) it goes to the window it was drawn at, and the playhead stays.
+ */
 export function useApplyShape(): () => Promise<void> {
     const queryClient = useQueryClient();
     return useCallback(async () => {
-        const { tool } = useShapeToolStore.getState();
+        const { tool, openedAt } = useShapeToolStore.getState();
         if (!tool) return;
-        if (await placeShape(tool, queryClient)) closeShapeTool();
+        const plan = isShapeAway() ? openedAt : null;
+        if (await placeShape(tool, queryClient, plan)) closeShapeTool();
     }, [queryClient]);
 }
 
-/** Leaving the open shape (a scrub, a selection change): placed where it was drawn */
+/** Leaving the open shape (a selection change, playback): placed where it was drawn */
 export function useLeaveShapeTool(): () => void {
     const queryClient = useQueryClient();
     return useCallback(

@@ -1,4 +1,5 @@
 import { planCanvasEdit } from "@/timeline/timelineCoordinateWrites";
+import { momentOf } from "../tool/shapeMoment";
 import type { CommandRun, CommandStep } from "@/shortcuts/palette/commandBar";
 import { closeDockedCommand } from "@/shortcuts/palette/commandBar";
 import {
@@ -87,6 +88,7 @@ export function beginShapeCommand(
     if (!from) return null;
     const { start, base } = from;
     const openedAt = from.keeps ? before.openedAt : planCanvasEdit();
+    const moment = from.keeps ? before.moment : momentOf();
 
     /** The tool this command last showed; anything else means the shape ended another way */
     let shown: ToolState | null = null;
@@ -108,6 +110,7 @@ export function beginShapeCommand(
                 useShapeToolStore.setState({
                     tool,
                     openedAt,
+                    moment,
                     discarded: null,
                 });
             }
@@ -135,6 +138,7 @@ export function beginShapeCommand(
             useShapeToolStore.setState({
                 tool: before.tool,
                 openedAt: before.openedAt,
+                moment: before.moment,
                 discarded: before.discarded,
             });
         },

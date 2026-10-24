@@ -10,7 +10,7 @@ import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { changeFiles, type BoxParams } from "../box/boxGeometry";
 import { toolEnvFor } from "./toolEnv";
 import { cancelGesture, edit, redo, undo } from "./toolMachine";
-import { updateTool, useShapeToolStore } from "./shapeToolStore";
+import { isShapeAway, updateTool, useShapeToolStore } from "./shapeToolStore";
 
 const NUDGE_DIRECTIONS = {
     up: { x: 0, y: -1 },
@@ -44,6 +44,9 @@ export function stepFiles(delta: number): void {
  *   That is an undo step: undo right after it brings the shape back ({@link DiscardedShapeKeys}).
  * - Undo and Redo step through the shape's own edits; the show is untouched until Place.
  * - The nudge keys move the whole shape, as one undo step each (08), not the marchers under it.
+ *
+ * Away from the shape's moment (#416) it is hidden, so Undo, Redo and the nudge keys do nothing
+ * rather than change what can't be seen; Escape still discards it.
  */
 export function ShapeToolKeys(): null {
     const rounding = useUiSettingsStore((s) => s.uiSettings.coordinateRounding);
@@ -52,11 +55,15 @@ export function ShapeToolKeys(): null {
         if (tool?.gesture) updateTool(cancelGesture);
         else discardShapeTool();
     });
-    useActionHandler("performUndo", () => updateTool(undo));
-    useActionHandler("performRedo", () => updateTool(redo));
+    useActionHandler("performUndo", () => {
+        if (!isShapeAway()) updateTool(undo);
+    });
+    useActionHandler("performRedo", () => {
+        if (!isShapeAway()) updateTool(redo);
+    });
     useActionHandlerGroup(NUDGE_ACTION_IDS, (_id, args) => {
         const field = currentShapeField();
-        if (!field) return;
+        if (!field || isShapeAway()) return;
         const nudge = args as unknown as NudgeArgs;
         const d = NUDGE_DIRECTIONS[nudge.direction];
         const px =

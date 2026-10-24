@@ -9,7 +9,8 @@ import {
     useBoxSelectionStore,
 } from "../placed/boxSelectionStore";
 import { LiveBoxMode } from "../placed/liveBoxMode";
-import { useShapeToolStore } from "../tool/shapeToolStore";
+import { useShapeAway, useShapeToolStore } from "../tool/shapeToolStore";
+import { isAwayFrom, isolationChangedSince } from "../tool/shapeMoment";
 import { forgetDiscardedShape } from "../tool/shapeLeave";
 import { useLeaveShapeTool } from "../tool/useShapeToolActions";
 import type { ToolState } from "../tool/toolMachine";
@@ -22,13 +23,16 @@ import { shapeToolMode } from "../tool/shapeToolMode";
  * inside it (`LiveBoxMode`). Also keeps placed boxes in the selection (`useBoxSelection`).
  *
  * The tool is about one moment and one group of marchers, so it is placed where it was drawn and
- * closes when playback starts, the edit window moves or the selection changes (spec #344).
+ * closes when playback starts, a move is isolated or the selection changes (spec #344). Moving
+ * around the timeline keeps it open, tied to its moment (#416): while the window is elsewhere the
+ * field doesn't draw it or give it presses, and an armed tool with nothing drawn yet just closes.
  */
 export function useShapeFieldModes(
     editor: FieldEditor,
     isPlaying: boolean,
 ): void {
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
+    const away = useShapeAway();
     const box = useBoxSelectionStore((s) => s.selected);
     const queryClient = useQueryClient();
     useBoxSelection({ isPlaying });
@@ -48,8 +52,8 @@ export function useShapeFieldModes(
     }, [live, box]);
 
     useEffect(() => {
-        editor.setMode(toolOpen ? shapeToolMode : live);
-    }, [editor, toolOpen, live]);
+        editor.setMode(toolOpen ? (away ? null : shapeToolMode) : live);
+    }, [editor, toolOpen, away, live]);
     useEffect(() => () => editor.setMode(null), [editor]);
 
     useLeaveWhenTheMomentChanges(isPlaying, toolOpen);
@@ -91,14 +95,14 @@ function useLeaveWhenTheMomentChanges(isPlaying: boolean, open: boolean): void {
             iso ? `${iso.timelineId}:${iso.start}-${iso.end}` : "",
         ].join("|");
     });
-    const openedAt = useRef(windowKey);
     useEffect(() => {
-        if (open) openedAt.current = windowKey;
-        // Only the opening: a later change of window is handled below
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open]);
-    useEffect(() => {
-        if (open && windowKey !== openedAt.current) leaveRef.current();
+        if (!open) return;
+        const { tool, moment } = useShapeToolStore.getState();
+        // Isolating a move (or leaving it) changes what the shape writes to: place it
+        if (isolationChangedSince(moment)) leaveRef.current();
+        // Nothing drawn yet: the marchers it armed on were where they stood at that moment
+        else if (tool?.params === null && isAwayFrom(moment))
+            leaveRef.current();
     }, [windowKey, open]);
     // Undo after Escape opens the shape at the moment it was discarded, so a new moment ends it
     const discardedAt = useRef(windowKey);

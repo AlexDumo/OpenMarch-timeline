@@ -28,7 +28,8 @@ import {
 } from "../frame/shapeEditorStore";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
-import { useShapeToolStore } from "../tool/shapeToolStore";
+import { useShapeAway, useShapeToolStore } from "../tool/shapeToolStore";
+import { ShapeAwayChip } from "./ShapeAwayChip";
 import {
     chipLayout,
     quarterTurn,
@@ -66,15 +67,18 @@ const GAP_PX = 14;
  * #392) and ☆ Save. ↻ beside the numbers turns
  * the shape a quarter (owner lab feedback, 2026-10-23: few people open ⋯). Under the numbers, a
  * box in Files has its layout menu (#387). Place shows only for a new shape; a selected placed
- * shape saves each edit on release.
+ * shape saves each edit on release. Away from the open shape's moment (#416) a chip goes back to
+ * it instead.
  */
 export function ShapeEditor({ stepPx }: { stepPx: number }) {
     const armed = useShapeToolStore((s) =>
         s.tool !== null && s.tool.params === null ? s.tool.kind : null,
     );
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
+    const away = useShapeAway();
     const tool = useToolEditTarget();
     const placed = usePlacedEditTarget();
+    if (toolOpen && away) return <ShapeAwayChip />;
     if (armed)
         return (
             <div

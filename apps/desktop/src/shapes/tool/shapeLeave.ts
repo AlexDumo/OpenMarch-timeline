@@ -8,8 +8,9 @@ import {
 /**
  * How an open shape ends without Enter (spec #344, "Leaving"):
  *
- * - The moment or the group moves on (a scrub, a selection change, playback): the shape is
- *   placed where it was drawn, as one undo step, with no toast. Nothing drawn is lost.
+ * - The group moves on or the show plays (a selection change, playback, Visuals, isolating a
+ *   move): the shape is placed where it was drawn, as one undo step, with no toast. Nothing
+ *   drawn is lost. Moving around the timeline doesn't end it (#416, `shapeMoment.ts`).
  * - Escape: the shape is discarded, and that is an undo step of its own: undo right after it
  *   brings the shape back with its numbers, who goes where and its own history.
  *
@@ -33,12 +34,14 @@ export function leaveShapeTool(place: PlaceShape): void {
 
 /** Escape: closes the open tool, placing nothing, and keeps its shape for undo */
 export function discardShapeTool(): void {
-    const { tool, openedAt } = useShapeToolStore.getState();
+    const { tool, openedAt, moment } = useShapeToolStore.getState();
     if (!tool) return;
     closeShapeTool();
     const settled = cancelGesture(tool);
     if (settled.params !== null)
-        useShapeToolStore.setState({ discarded: { tool: settled, openedAt } });
+        useShapeToolStore.setState({
+            discarded: { tool: settled, openedAt, moment },
+        });
 }
 
 /** Whether undo now would bring back a discarded shape */
@@ -53,6 +56,7 @@ export function restoreDiscardedShape(): boolean {
     useShapeToolStore.setState({
         tool: discarded.tool,
         openedAt: discarded.openedAt,
+        moment: discarded.moment,
         discarded: null,
     });
     return true;
