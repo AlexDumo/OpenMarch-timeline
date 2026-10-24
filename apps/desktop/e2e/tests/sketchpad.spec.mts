@@ -188,11 +188,11 @@ test("make a sketch, draw, close the window, reopen it, and edit a template from
         "Block band",
     );
     await inTab(sketchpad, "tool-ellipse").click();
-    const tbox = (await sketchpad
+    const templateBox = (await sketchpad
         .getByTestId("sketch-tab-active")
         .boundingBox())!;
-    const tx = tbox.x + tbox.width / 2;
-    const ty = tbox.y + tbox.height / 2;
+    const tx = templateBox.x + templateBox.width / 2;
+    const ty = templateBox.y + templateBox.height / 2;
     await drag(sketchpad, [tx + 120, ty - 40], [tx + 220, ty + 40]);
     await closeWindow(app, sketchpad);
 
