@@ -9,7 +9,8 @@
  * older ones are removed only after it is complete, so a write cut short
  * leaves the previous copy to restore.
  *
- * One tab per release channel holds a Web Lock on this storage. Another tab
+ * One tab per storage namespace (see `../renderer/channel.ts`) holds a Web
+ * Lock on this storage. Another tab
  * keeps its show in memory only, rather than overwriting the first tab's.
  */
 
@@ -52,10 +53,10 @@ function holdLock(name: string): Promise<boolean> {
 }
 
 /**
- * Claims this release channel's storage.
+ * Claims this build's storage.
  *
- * @param namespace keeps each release channel's show apart, for builds
- * served from one origin (see `../renderer/channel.ts`).
+ * @param namespace keeps each release channel's (or lab test's) show apart,
+ * for builds served from one origin (see `../renderer/channel.ts`).
  */
 export async function claimStorage(namespace: string): Promise<StorageStatus> {
     if (
