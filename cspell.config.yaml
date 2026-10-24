@@ -325,7 +325,6 @@ ignorePaths:
   - "**/dist-electron/**"
   - "**/dist-browser/**"
   - "**/dist-browser-host/**"
-  - apps/desktop/web/dist/**
   - "**/dist-web/**"
   - "**/wasm/pkg/**"
   - "**/release/**"

@@ -311,7 +311,8 @@ export function registerPageHandlers({ isSettingsTab = false } = {}) {
         );
         window.open(
             url,
-            "openmarch-settings",
+            // Builds on one origin (lab tests) each get their own window.
+            storageKey("settings-window"),
             `popup,width=${width},height=${height},left=${left},top=${top}`,
         );
     });

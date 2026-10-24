@@ -52,6 +52,7 @@ import {
     writeDatabase,
 } from "./sqlite";
 import { claimStorage, clearShow, readShow, writeShow } from "./storage";
+import { STORAGE_NAMESPACE } from "../renderer/channel";
 import {
     WEB_CHANNELS,
     WEB_EVENTS,
@@ -557,9 +558,7 @@ async function handle(message: ToWorker) {
 
 async function start() {
     await loadSqlite();
-    const storage = await claimStorage(
-        import.meta.env.VITE_PUBLIC_WEB_CHANNEL || "dev",
-    );
+    const storage = await claimStorage(STORAGE_NAMESPACE);
     storageEnabled = storage.storage === "opfs";
     registerHandlers();
     if (storageEnabled) await restoreShow();
