@@ -1112,6 +1112,83 @@ export const item_artwork_slots = sqliteTable(
     ],
 );
 
+/* ========================= SKETCHPAD ========================= */
+/*
+ * Free drawings on the field (ADR 0006 D-5). The Sketchpad window writes them through main's
+ * `sketch:*` handlers. None of these tables has undo triggers: sketches keep their own undo
+ * history in the window, and the editor's Ctrl+Z never changes a sketch.
+ */
+
+/** A sketch, or a sketch template saved in this show (`kind = 'template'`). */
+export const sketches = sqliteTable(
+    "sketches",
+    {
+        /** uuid, the same as the `SketchDoc`'s id */
+        id: text().primaryKey(),
+        kind: text().notNull(),
+        name: text().notNull(),
+        /** `FieldSnapshot` JSON; a template keeps only `{ style }` */
+        field_json: text().notNull(),
+        /** The pages and elements (`SketchDoc` or `SketchTemplate`), schemaVersion inside */
+        doc_json: text().notNull(),
+        /** Per page `{ pageId, svg, bounds }`, for the overlay (D-7) */
+        render_json: text(),
+        /** A small PNG for the sidebar */
+        thumbnail: browserSafeBinaryBlob(),
+        /** Larger is higher in the sidebar */
+        sort_index: real().notNull(),
+        ...timestamps,
+    },
+    (_table) => [
+        check("sketches_kind_check", sql`kind IN ('sketch', 'template')`),
+    ],
+);
+
+/** Images in sketches, addressed by the sha256 of their bytes. Elements refer to them by `fileId`. */
+export const sketch_files = sqliteTable(
+    "sketch_files",
+    {
+        /** sha256 of `data`, lowercase hex */
+        sha256: text().primaryKey(),
+        mime: text().notNull(),
+        data: browserSafeBinaryBlob().notNull(),
+        created_at: text()
+            .notNull()
+            .default(sql`(CURRENT_TIMESTAMP)`),
+    },
+    (_table) => [
+        check("sketch_files_data_type_check", sql`typeof(data) = 'blob'`),
+    ],
+);
+
+/**
+ * A sketch page pinned to a beat, shown on the field when paused there (D-7). Deleting the beat
+ * unpins it (`beat_id` NULL) and keeps it in the list.
+ */
+export const sketch_pins = sqliteTable(
+    "sketch_pins",
+    {
+        id: integer().primaryKey(),
+        sketch_id: text()
+            .notNull()
+            .references(() => sketches.id, { onDelete: "cascade" }),
+        page_id: text().notNull(),
+        beat_id: integer().references(() => beats.id, {
+            onDelete: "set null",
+        }),
+        opacity: real().notNull().default(0.5),
+        position: text().notNull().default("below"),
+    },
+    (table) => [
+        index("sketch_pins_sketch_id_idx").on(table.sketch_id),
+        check("sketch_pins_opacity_check", sql`opacity > 0 AND opacity <= 1`),
+        check(
+            "sketch_pins_position_check",
+            sql`position IN ('below', 'above')`,
+        ),
+    ],
+);
+
 /* =========================== VIEWS =========================== */
 /**
  * An ordered list of the beats, pages, and measures in the app.

@@ -43,6 +43,9 @@ const LATER_TABLES = [
     "item_placements",
     "item_placement_marchers",
     "item_artwork_slots",
+    "sketches",
+    "sketch_files",
+    "sketch_pins",
 ];
 
 const CUE_TABLES = [
