@@ -1,10 +1,10 @@
 /**
- * TEMPORARY (see LAB.md, "Comparing versions"). The version switch: when the
- * lab test lists `variants` in its manifest, testers pick one from the
- * toolbar and the app changes behavior at once, on the same show. The URL's
- * `variant` parameter says which (`src/lab/labVariant.ts` keeps it), so a
- * reload keeps it and the lab's feedback, which records the page's URL, says
- * which version was on.
+ * TEMPORARY, fork-only (see LAB.md, "Comparing versions"). The version
+ * switch: when the lab test lists `variants` in its manifest, testers pick
+ * one from a switch at the bottom left and the app changes behavior at once,
+ * on the same show. The URL's `variant` parameter says which
+ * (`src/lab/labVariant.ts` keeps it), so a reload keeps it and the lab's
+ * feedback, which records the page's URL, says which version was on.
  */
 import { useLabVariantStore } from "@/lab/labVariant";
 
@@ -14,7 +14,7 @@ interface LabVariant {
     description: string;
 }
 
-/** From the manifest's front matter, at build time (vite.config.mts) */
+/** From the manifest's front matter, at build time (vite.web.config.mts) */
 declare const __LAB_VARIANTS__: LabVariant[];
 
 const variants: LabVariant[] = __LAB_VARIANTS__;
@@ -29,15 +29,24 @@ export function initVariants() {
     select(variants.find((v) => v.id === current) ?? variants[0]);
 }
 
-/** The switch for the toolbar, or null when the test compares nothing */
-export function variantSwitch(): HTMLElement | null {
-    if (!variants.length) return null;
+const BUTTON_STYLE =
+    "background:none;border:0;color:#c9c9d3;font:inherit;padding:4px 10px;border-radius:999px;cursor:pointer";
+const CHECKED_STYLE = "background:#967eff;color:#fff";
+
+/** Adds the switch to the page, when the test compares versions */
+export function mountVariantSwitch() {
+    if (!variants.length) return;
     const group = document.createElement("div");
-    group.className = "omw-variants";
     group.setAttribute("role", "radiogroup");
     group.setAttribute("aria-label", "Version to try");
+    // Stands out, since comparing is the test
+    group.style.cssText =
+        "position:fixed;left:12px;bottom:12px;z-index:2147483000;display:flex;align-items:center;" +
+        "gap:2px;padding:3px 3px 3px 10px;border-radius:999px;background:rgba(20,20,24,0.88);" +
+        "border:1px solid #967eff;color:#b9aaff;font:500 12px 'DM Sans',system-ui,sans-serif";
     const name = document.createElement("span");
     name.textContent = "Version";
+    name.style.marginRight = "4px";
     group.append(name);
 
     const buttons = variants.map((variant) => {
@@ -55,14 +64,14 @@ export function variantSwitch(): HTMLElement | null {
         return button;
     });
     const update = (current: string | null) =>
-        variants.forEach((variant, index) =>
-            buttons[index].setAttribute(
-                "aria-checked",
-                String(variant.id === current),
-            ),
-        );
+        variants.forEach((variant, index) => {
+            const checked = variant.id === current;
+            buttons[index].setAttribute("aria-checked", String(checked));
+            buttons[index].style.cssText =
+                BUTTON_STYLE + (checked ? `;${CHECKED_STYLE}` : "");
+        });
     update(useLabVariantStore.getState().variant);
     useLabVariantStore.subscribe((state) => update(state.variant));
     group.append(...buttons);
-    return group;
+    document.body.append(group);
 }

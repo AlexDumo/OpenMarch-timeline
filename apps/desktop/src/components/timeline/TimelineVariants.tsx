@@ -11,17 +11,15 @@ import {
     type MouseEvent,
 } from "react";
 import { TimelineLoopBar } from "./TimelineLoopBar";
-import { AddPageFlagMenu } from "./AddPageFlagMenu";
 import { useClipDrops } from "./clipDrops";
 import { TimelinePaneStretchContext } from "./timelinePaneStretch";
 import { flushSync } from "react-dom";
-import { CaretLeftIcon, CaretRightIcon, PlusIcon } from "@phosphor-icons/react";
+import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { useTimelineFollow, type FollowZoomAnchor } from "./useTimelineFollow";
 import clsx from "clsx";
 import { TimelineGridCanvas, TimelineWaveformCanvas } from "./TimelineCanvas";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
-    beatToX,
     clamp,
     getPageSnapBeats,
     getWindowCountLabel,
@@ -54,14 +52,12 @@ import {
     TimelineTransport,
     useElementHeight,
     useElementWidth,
-    useScrubFollow,
     useTimelinePointer,
 } from "./TimelinePrimitives";
 import { markedRangeAt, useTimelineRangeMenu } from "./TimelineRangeMenu";
-import { addPageFlagLeft } from "./PageKeepChain";
 import { isTyping, overlayOpen } from "./timelineHotkeys";
 import { useLatestCallback } from "./useLatestCallback";
-import { TimelineAppendCountsMenu } from "./TimelineAppendCountsMenu";
+import { TimelineAppendAtPlayhead } from "./TimelineAppendAtPlayhead";
 import { useViewportExtent } from "./useViewportExtent";
 import {
     createLiveValue,
@@ -88,10 +84,9 @@ type TimelineDensity = "expanded" | "collapsed" | "basic";
 const TIMELINE_DEFAULT_PX_PER_BEAT = 16;
 
 /**
- * Room after the show's last beat: **+** (UI-9) is drawn just after the playhead, so with the
- * playhead on the last beat past the last flag (a page ending at the show's end) it needs this
- * much to stay on screen and clickable, fitted or scrolled to the end. The button's 8px gap, its
- * 16px, and 8px to spare.
+ * Room after the show's last beat, fitted or scrolled to the end, so the playhead on the last
+ * beat stays on screen with room to right-click it for **Create page at playhead** (UI-9). Sized for the **+**
+ * that used to sit just after the playhead (its 8px gap, its 16px, and 8px to spare).
  */
 export const TIMELINE_END_INSET = 32;
 
@@ -113,10 +108,6 @@ export function fitBackZoom(
             : Math.max(TIMELINE_DEFAULT_PX_PER_BEAT, fitValue * 2);
     return Math.min(back, TIMELINE_MAX_PX_PER_BEAT);
 }
-
-/** About how wide **+ N counts** is, and the room kept for it after the last beat */
-const APPEND_COUNTS_WIDTH = 84;
-const APPEND_COUNTS_ROOM = APPEND_COUNTS_WIDTH + 16;
 
 /** How much one pixel of wheel or pinch delta zooms */
 const WHEEL_ZOOM_RATE = 0.0025;
@@ -647,7 +638,6 @@ const TimelineSurface = memo(function TimelineSurface({
     const expanded = density !== "collapsed";
     const viewportRef = useRef<HTMLDivElement>(null);
     const playheadRef = useRef<HTMLButtonElement>(null);
-    const addPageFlagRef = useRef<HTMLButtonElement>(null);
     const rows = useMemo(
         () => (basic ? [] : packTimelineTracks(model.tracks)),
         [basic, model.tracks],
@@ -755,11 +745,7 @@ const TimelineSurface = memo(function TimelineSurface({
         // Fit fits up to where playback stops (endless counts rule 7), not the counts drawn past it
         beatCount: props.fitBeatCount ?? model.beatCount,
         leadingInset: initialPageWidth,
-        // Fitted, **+ N counts** stays in view
-        trailingInset: Math.max(
-            TIMELINE_END_INSET,
-            props.appendCounts ? APPEND_COUNTS_ROOM : 0,
-        ),
+        trailingInset: TIMELINE_END_INSET,
         playheadBeat: positionBeat,
         onPixelsPerBeatChange: props.onPixelsPerBeatChange,
         fitted: props.zoomFitted,
@@ -783,17 +769,7 @@ const TimelineSurface = memo(function TimelineSurface({
     });
     // Endless counts rule 7: say how wide a screen is, for the room past the end
     useViewportExtent(viewportRef, props.onViewportExtent);
-    // **+ N counts** goes after the last page's flag; when **+** at the playhead would cover it,
-    // it moves just past that one, so both stay clickable
-    const showAddPageFlag = props.onAddPageFlag != null && !props.isPlaying;
-    // Past the playhead's box's keep chain, if it would cover it
-    const addPageFlagX = addPageFlagLeft({
-        pages: model.pages,
-        beatCount: model.beatCount,
-        positionBeat,
-        pixelsPerBeat,
-        keepChains: props.keepChains,
-    });
+    // Past the last page's flag, **+ Add N-Count Page** adds the page from it to the playhead
     const lastFlagBeat = Math.min(
         model.beatCount,
         model.pages.reduce(
@@ -801,20 +777,9 @@ const TimelineSurface = memo(function TimelineSurface({
             0,
         ),
     );
-    const appendCountsX = (() => {
-        const atFlag = lastFlagBeat * pixelsPerBeat + 8;
-        return showAddPageFlag &&
-            addPageFlagX + 22 > atFlag &&
-            addPageFlagX < atFlag + APPEND_COUNTS_WIDTH
-            ? addPageFlagX + 22
-            : atFlag;
-    })();
-    const showAppendCounts = props.appendCounts != null && !props.isPlaying;
-    // Right-clicking **+ N counts** sets how many counts new pages get
-    const [appendMenuAt, setAppendMenuAt] = useState<{
-        x: number;
-        y: number;
-    } | null>(null);
+    const appendAtPlayhead = props.isPlaying
+        ? undefined
+        : props.appendAtPlayhead;
     // The owner seeks on a selection (UI-9: to a range's end, or home's beat 0)
     const onSelectionChange = useLatestCallback(props.onSelectionChange);
     // UI-12: clicks and scrubs land on a nearby downbeat or page line; Basic's on any count
@@ -847,13 +812,6 @@ const TimelineSurface = memo(function TimelineSurface({
         beatCount: model.beatCount,
         snapBeats,
     });
-    // **+** sits just after the playhead, so a scrub carries it along with the line
-    useScrubFollow(
-        addPageFlagRef,
-        pointer.scrubLine,
-        beatToX(positionBeat, pixelsPerBeat),
-        pixelsPerBeat,
-    );
     const onNavigate = useLatestCallback(transportNavigation(props));
     // A clip is its timeline: clicking it selects that range (UI-12)
     const selectTrack = useLatestCallback(
@@ -1009,6 +967,7 @@ const TimelineSurface = memo(function TimelineSurface({
                         clock={props.transportClock}
                         accessories={props.transportAccessories}
                         secondary={props.transportSecondary}
+                        leadingViewControls={props.transportLeadingViewControls}
                         viewControls={props.transportViewControls}
                         onSeek={props.onSeek}
                         onSelectionChange={onSelectionChange}
@@ -1270,81 +1229,31 @@ const TimelineSurface = memo(function TimelineSurface({
                             onSeek={props.onSeek}
                             isPlaying={props.isPlaying}
                             scrubLine={pointer.scrubLine}
+                            onAddPage={
+                                props.isPlaying
+                                    ? undefined
+                                    : props.onAddPageFlag
+                            }
+                            onAddSubsetPage={props.onAddSubsetPage}
+                            addPageNames={props.addPageNames}
                         />
-                        {showAddPageFlag && (
-                            <AddPageFlagMenu
-                                onAddPage={props.onAddPageFlag}
-                                onAddSubsetPage={props.onAddSubsetPage}
-                                names={props.addPageNames}
-                            >
-                                <button
-                                    ref={addPageFlagRef}
-                                    type="button"
-                                    data-testid="timeline-add-page-flag"
-                                    data-timeline-interactive="true"
-                                    aria-label="Add a page flag here"
-                                    title="Add a page flag here"
-                                    onPointerDown={(event) =>
-                                        event.stopPropagation()
-                                    }
-                                    onClick={props.onAddPageFlag}
-                                    className="bg-accent text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex size-16 items-center justify-center rounded-full outline-hidden focus-visible:ring-2"
-                                    // Past the playhead's box's keep chain, if it would cover it
-                                    style={{
-                                        left: addPageFlagX,
-                                        top: TIMELINE_PAGE_ROW_TOP + 6,
-                                    }}
-                                >
-                                    <PlusIcon size={10} weight="bold" />
-                                </button>
-                            </AddPageFlagMenu>
-                        )}
-                        {showAppendCounts && props.appendCounts && (
-                            <button
-                                type="button"
-                                data-testid="timeline-append-counts"
-                                data-timeline-interactive="true"
-                                aria-label={props.appendCounts.title}
-                                title={props.appendCounts.title}
-                                onPointerDown={(event) =>
-                                    event.stopPropagation()
+                        {appendAtPlayhead && (
+                            <TimelineAppendAtPlayhead
+                                append={appendAtPlayhead}
+                                positionBeat={positionBeat}
+                                lastFlagBeat={lastFlagBeat}
+                                pixelsPerBeat={pixelsPerBeat}
+                                height={pinnedHeight}
+                                windowShowsPage={
+                                    !basic &&
+                                    sameRange(selectionRange, {
+                                        startBeatIndex: lastFlagBeat,
+                                        endBeatIndex: positionBeat,
+                                    })
                                 }
-                                onClick={props.appendCounts.onAppend}
-                                onContextMenu={(event) => {
-                                    const { counts, onCountsChange } =
-                                        props.appendCounts ?? {};
-                                    if (counts === undefined || !onCountsChange)
-                                        return;
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    setAppendMenuAt({
-                                        x: event.clientX,
-                                        y: event.clientY,
-                                    });
-                                }}
-                                className="border-accent text-accent bg-bg-1 hover:bg-accent hover:text-text-invert focus-visible:ring-accent pointer-events-auto absolute z-[60] flex h-16 items-center gap-2 rounded-full border px-6 text-[10px] leading-none font-medium whitespace-nowrap outline-hidden focus-visible:ring-2"
-                                style={{
-                                    left: appendCountsX,
-                                    top: TIMELINE_PAGE_ROW_TOP + 6,
-                                }}
-                            >
-                                <PlusIcon size={9} weight="bold" />
-                                {props.appendCounts.label}
-                            </button>
+                                scrubLine={pointer.scrubLine}
+                            />
                         )}
-                        {appendMenuAt &&
-                            props.appendCounts?.counts !== undefined &&
-                            props.appendCounts.onCountsChange && (
-                                <TimelineAppendCountsMenu
-                                    at={appendMenuAt}
-                                    counts={props.appendCounts.counts}
-                                    onCountsChange={
-                                        props.appendCounts.onCountsChange
-                                    }
-                                    toEnd={props.appendCounts.toEnd}
-                                    onClose={() => setAppendMenuAt(null)}
-                                />
-                            )}
                         <TimelineRangePreview
                             preview={pointer.rangePreview}
                             pixelsPerBeat={pixelsPerBeat}

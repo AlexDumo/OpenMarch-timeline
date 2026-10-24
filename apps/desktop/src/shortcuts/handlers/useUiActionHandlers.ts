@@ -1,4 +1,5 @@
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useStartFlagKeyStore } from "@/stores/StartFlagKeyStore";
 import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useWorkspaceViewStore } from "@/stores/WorkspaceViewStore";
@@ -15,11 +16,20 @@ export function useUiActionHandlers() {
     useActionHandler("toggleNextPagePaths", () =>
         setUiSettings({ ...settings(), nextPaths: !settings().nextPaths }),
     );
-    useActionHandler("togglePreviousPagePaths", () =>
-        setUiSettings({
-            ...settings(),
-            previousPaths: !settings().previousPaths,
-        }),
+    // Start flag positions (#331): N shows the Hold N state while held, and a quick tap latches
+    // it. A lost key (the window lost focus) lets go without counting as a tap. The palette has
+    // no key to let go, so it toggles the latch.
+    const startFlagKey = useStartFlagKeyStore.getState;
+    useActionHandler(
+        "toggleStartFlagPositions",
+        () => startFlagKey().toggleLatched(),
+        {
+            onPress: () => startFlagKey().press(),
+            onRelease: (reason) =>
+                reason === "keyup"
+                    ? startFlagKey().release()
+                    : startFlagKey().blurRelease(),
+        },
     );
     useActionHandler("focusCanvas", () => focus("canvas"));
     useActionHandler("exitTimelineFocus", () => focus("canvas"));

@@ -24,7 +24,7 @@ for that: the grid just keeps going.
    A tempo or meter change is an edit to stored counts, and the endless counts follow whatever
    comes last. Changing the last stored measure's timing changes everything after it.
 3. **Counts are stored when something lands on them.** Placing anything at or past the stored
-   end first appends counts up to it, in the same transaction and undo step: **+** or a page flag
+   end first appends counts up to it, in the same transaction and undo step: **Create page at playhead** (the playhead's menu, or F) or a page flag
    drag, the last page's length, and a timeline move's create, shift or resize. Undoing the edit
    removes the counts with it. Looking, scrolling, scrubbing and playing store nothing.
 4. **The show's end is the end of the last page:** its flag plus its counts (`last_page_counts`).
@@ -201,6 +201,11 @@ two counts, so a pinch redraws the lanes a few times, not every frame. V-301.
 
 ### EC-10 The pill after the last page
 
+_Replaced 2026-10-20 (owner, UI-9):_ the pill and its right-click menu (EC-16) are gone. Past the
+last page, the paused playhead offers **+ Add N-Count Page** instead, a page from the last flag to
+the playhead (see ui.md UI-9). "Pages every N counts to the end" stays in the export warning
+(EC-15); the default page length stays in Workspace settings. The rest of this entry is history.
+
 **+ N counts** always reads "+ 16 counts" ("Add a page of 16 counts after the last page").
 "Create pages every 16 counts to the end" is the first entry of the pill's right-click menu
 (EC-16), shown only with music that runs more than 16 counts past the last flag, and goes to the
@@ -233,6 +238,8 @@ either way. The Mobile tab doesn't warn (it exports the whole file). The video p
 show's end too, as the video does.
 
 ### EC-16 Right-click **+ N counts** to change N (owner request, 2026-10-16)
+
+_Removed with the pill, 2026-10-20 (EC-10)._
 
 Right-clicking the pill opens a small menu: "+ Create pages every N counts to the end" (when the
 music runs on, EC-10), then "New pages [16] counts" with the number selected. A whole number

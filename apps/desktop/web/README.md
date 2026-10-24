@@ -85,7 +85,8 @@ show (e.g. it's full) removes the old show's copy and becomes memory-only
 the same way. A stored show this build can't reopen is kept for a later
 build, and opening or creating a show asks before replacing it. Storage is
 also namespaced by channel, for
-builds that share an origin (such as local `web:dev` and `web:preview`).
+builds that share an origin (such as local `web:dev` and `web:preview`);
+a lab build namespaces it by its test id instead (`renderer/channel.ts`).
 
 ## What doesn't work on the web
 
@@ -131,7 +132,7 @@ with the build variables `WEB_CHANNEL` (`nightly` or `stable`) and
 `NODE_VERSION=24`.
 
 `WEB_CHANNEL` (`stable`, `nightly`, or `dev` by default) names a build's
-channel.
+channel. The fork adds `preview` and `lab` (below).
 
 ### The fork's preview build
 
@@ -139,8 +140,8 @@ This fork also deploys a preview of the editor, with a few changes:
 
 - `WEB_CHANNEL=preview` adds an "Or open an example show" list to the start
   page, with the shows in `web/public/demos/` (listed in `web/demos.ts`),
-  so a tester doesn't need a `.dots` file of their own. Other channels leave
-  the shows out of the build.
+  so a tester doesn't need a `.dots` file of their own. The `lab` channel
+  offers them too; other channels leave the shows out of the build.
 - It is one Worker, `openmarch-editor-preview`, on `workers.dev`
   (`web/wrangler.preview.jsonc`), with preview URLs on.
 
@@ -160,3 +161,11 @@ pnpm --filter @openmarch/desktop exec wrangler versions upload -c web/wrangler.p
 
 with the build variables `WEB_CHANNEL=preview` and `NODE_VERSION=24`. The
 Worker's name in the dashboard must match `openmarch-editor-preview`.
+
+### The fork's lab builds
+
+The OpenMarch lab (lab.openmarch.com) publishes this build for each test,
+with `WEB_CHANNEL=lab` and `LAB_TEST_ID=<test id>`: the example shows,
+relative URLs so it runs from the lab's `/x/<test id>/` folder, and storage
+of its own on the lab's shared origin. See `LAB.md`. Like the preview build,
+it is fork-only.

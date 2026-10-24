@@ -82,6 +82,13 @@ describe("ACTIONS", () => {
         expect(ACTIONS.nextPage.defaultBindings).toEqual(["E"]);
         expect(ACTIONS.playPause.defaultBindings).toEqual(["Space"]);
         expect(ACTIONS.flipVertical.defaultBindings).toEqual(["Alt+Shift+F"]);
+        // F for flag; Shift for the smaller step, a subset page (UI-9)
+        expect(ACTIONS.timelineCreatePageAtPlayhead.defaultBindings).toEqual([
+            "F",
+        ]);
+        expect(ACTIONS.timelineCreateSubsetAtPlayhead.defaultBindings).toEqual([
+            "Shift+F",
+        ]);
         expect(ACTIONS.moveSelectedMarchersUp.defaultBindings).toEqual([
             "W",
             "ArrowUp",

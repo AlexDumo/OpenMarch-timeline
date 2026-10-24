@@ -56,7 +56,6 @@ const props = (
     enabled: boolean,
     overrides: Partial<{
         isPlaying: boolean;
-        previousPathsEnabled: boolean;
         nextPathsEnabled: boolean;
         stepSizeWarningsEnabled: boolean;
     }> = {},
@@ -66,7 +65,6 @@ const props = (
     selectedPage: PAGES[1]!,
     pages: PAGES,
     marcherIds: MARCHER_IDS,
-    previousPathsEnabled: true,
     nextPathsEnabled: true,
     stepSizeWarningsEnabled: true,
     ...overrides,
@@ -82,15 +80,12 @@ const ready = (r: Resolver = resolver()) => {
 };
 
 describe("useTimelinePathSamples", () => {
-    it("samples the moves into and out of the selected page from the resolver", () => {
+    it("samples the moves out of the selected page from the resolver", () => {
         const r = ready();
         const { result } = renderHook(() =>
             useTimelinePathSamples(props(true)),
         );
         expect(result.current.active).toBe(true);
-        expect(result.current.previousPaths).toEqual(
-            pathsIntoPage(r, [1], PAGES[1], PAGES[0]),
-        );
         expect(result.current.nextPaths).toEqual(
             pathsIntoPage(r, [1], PAGES[2], PAGES[1]),
         );
@@ -101,10 +96,10 @@ describe("useTimelinePathSamples", () => {
         const { result } = renderHook(() =>
             useTimelinePathSamples(props(true)),
         );
-        const first = result.current.previousPaths;
+        const first = result.current.nextPaths;
         act(() => useTimelineResolverStore.setState({ version: 2 }));
-        expect(result.current.previousPaths).not.toBe(first);
-        expect(result.current.previousPaths).toEqual(first);
+        expect(result.current.nextPaths).not.toBe(first);
+        expect(result.current.nextPaths).toEqual(first);
     });
 
     it("samples nothing and is inactive when disabled", () => {
@@ -114,7 +109,7 @@ describe("useTimelinePathSamples", () => {
             useTimelinePathSamples(props(false)),
         );
         expect(result.current.active).toBe(false);
-        expect(result.current.previousPaths.size).toBe(0);
+        expect(result.current.nextPaths.size).toBe(0);
         expect(spy).not.toHaveBeenCalled();
     });
 
@@ -132,7 +127,7 @@ describe("useTimelinePathSamples", () => {
 
         rerender({ isPlaying: false });
         expect(result.current.active).toBe(true);
-        expect(result.current.previousPaths.size).toBe(1);
+        expect(result.current.nextPaths.size).toBe(1);
     });
 
     it("keeps the samples through Play and Stop on the same page", () => {
@@ -142,54 +137,50 @@ describe("useTimelinePathSamples", () => {
                 useTimelinePathSamples(props(true, { isPlaying })),
             { initialProps: { isPlaying: false } },
         );
-        const first = result.current.previousPaths;
+        const first = result.current.nextPaths;
         const spy = vi.spyOn(r, "positionAt");
         rerender({ isPlaying: true });
-        expect(result.current.previousPaths).toBe(first);
+        expect(result.current.nextPaths).toBe(first);
         rerender({ isPlaying: false });
         expect(spy).not.toHaveBeenCalled();
-        expect(result.current.previousPaths).toBe(first);
+        expect(result.current.nextPaths).toBe(first);
 
         // A change while playing is sampled once playback stops
         rerender({ isPlaying: true });
         act(() => useTimelineResolverStore.setState({ version: 2 }));
-        expect(result.current.previousPaths).toBe(first);
+        expect(result.current.nextPaths).toBe(first);
         rerender({ isPlaying: false });
-        expect(result.current.previousPaths).not.toBe(first);
+        expect(result.current.nextPaths).not.toBe(first);
     });
 
-    it("doesn't sample a side that can't show", () => {
+    it("doesn't sample paths that can't show", () => {
         const r = ready();
-        // Previous paths off (never forced); next paths off and warnings off (nothing forces them)
+        // Next paths off and warnings off: nothing forces them
         const off = renderHook(() =>
             useTimelinePathSamples(
                 props(true, {
-                    previousPathsEnabled: false,
                     nextPathsEnabled: false,
                     stepSizeWarningsEnabled: false,
                 }),
             ),
         ).result.current;
-        expect(off.previousPaths.size).toBe(0);
         expect(off.nextPaths.size).toBe(0);
 
-        // With warnings on, the next side may be forced on, so it is sampled
+        // With warnings on, they may be forced on, so they are sampled
         const forced = renderHook(() =>
             useTimelinePathSamples(
                 props(true, {
-                    previousPathsEnabled: false,
                     nextPathsEnabled: false,
                     stepSizeWarningsEnabled: true,
                 }),
             ),
         ).result.current;
-        expect(forced.previousPaths.size).toBe(0);
         expect(forced.nextPaths).toEqual(
             pathsIntoPage(r, [1], PAGES[2], PAGES[1]),
         );
     });
 
-    it("keeps the other side's samples when a toggle changes", () => {
+    it("keeps the samples when the toggle changes", () => {
         const r = ready();
         const { result, rerender } = renderHook(
             ({ nextPathsEnabled }) =>
@@ -198,9 +189,8 @@ describe("useTimelinePathSamples", () => {
         );
         const first = result.current;
         const spy = vi.spyOn(r, "positionAt");
-        // Warnings still force the next side on, so neither side resamples
+        // Warnings still force the paths on, so they aren't resampled
         rerender({ nextPathsEnabled: false });
-        expect(result.current.previousPaths).toBe(first.previousPaths);
         expect(result.current.nextPaths).toBe(first.nextPaths);
         expect(spy).not.toHaveBeenCalled();
     });
