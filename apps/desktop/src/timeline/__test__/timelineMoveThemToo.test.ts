@@ -426,11 +426,11 @@ describeDbTests("timeline mode: Move them too", (it) => {
         expect(at(ot5, pages[3]!)).toEqual([320, 180]);
         expect(at(ot4, pages[3]!)).toEqual([250, 100]);
         expect(info.mock.calls.map((c) => c[0])).toEqual([
-            `Page ${pages[1]!.name} is no longer a stop`,
+            `Page ${pages[1]!.name} is no longer a keyframe`,
         ]);
         expect(info.mock.calls[0]![1]).toMatchObject({
             id: expect.stringMatching(/^timeline-edit-\d+$/),
-            action: { label: `Keep Page ${pages[1]!.name} as a stop` },
+            action: { label: `Keep Page ${pages[1]!.name} as a keyframe` },
         });
     });
 

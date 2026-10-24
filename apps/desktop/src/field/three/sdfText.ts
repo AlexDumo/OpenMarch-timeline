@@ -31,6 +31,15 @@ const CELL = FONT_PX + BUFFER * 2;
 const COLS = 16;
 /** Distance-field margin kept around the ink, in atlas pixels. */
 const INK_MARGIN = 5;
+/**
+ * A thinned label (`TextLabel.weight`) keeps its thinnest strokes at least
+ * `MIN_STROKE_PX` screen pixels wide, so small text never breaks up: the
+ * thinning eases off as the text gets smaller, and is gone once those
+ * strokes are that thin already. `THINNEST_STROKE_EM` is the marcher label
+ * font's (bold Courier New's curves), the only text drawn thinner.
+ */
+const THINNEST_STROKE_EM = 0.07;
+const MIN_STROKE_PX = 0.8;
 
 type Glyph = {
     /** Cell origin in the atlas, pixels. */
@@ -256,27 +265,39 @@ attribute vec4 aGlyph;    // left, top, width, height in em from the label's anc
 attribute vec4 aUv;       // u0, v0, u1, v1
 attribute vec2 aScaleRot; // field units per em, rotation in radians
 attribute vec4 aColor;
+attribute float aWeight;  // em thinner off each side of a stroke; 0 as drawn
 uniform vec2 uOffset;
 varying vec2 vUv;
 varying vec4 vColor;
+varying float vWeight;
 void main() {
     vec2 local = (aGlyph.xy + position.xy * aGlyph.zw) * aScaleRot.x;
     float c = cos(aScaleRot.y), s = sin(aScaleRot.y);
     local = vec2(local.x * c - local.y * s, local.x * s + local.y * c);
     vUv = mix(aUv.xy, aUv.zw, position.xy);
     vColor = aColor;
+    vWeight = aWeight;
     gl_Position = projectionMatrix * viewMatrix * vec4(aAnchor + uOffset + local, 0.0, 1.0);
 }`;
 
 const FRAGMENT = /* glsl */ `
 uniform sampler2D uAtlas;
+uniform vec2 uAtlasSize;
 uniform float uOpacity;
 varying vec2 vUv;
 varying vec4 vColor;
+varying float vWeight;
 void main() {
     float d = texture2D(uAtlas, vUv).r;
     float w = max(fwidth(d) * 0.7, 0.002);
-    float edge = ${(1 - CUTOFF).toFixed(3)};
+    // A lighter weight moves the edge into the stroke: one em is
+    // ${FONT_PX} atlas pixels, and the field changes by 1 over ${RADIUS} of them.
+    // Small on screen, never thinner than leaves the thinnest strokes
+    // ${MIN_STROKE_PX} px wide
+    vec2 texels = fwidth(vUv) * uAtlasSize;
+    float emPx = ${FONT_PX.toFixed(1)} / max(max(texels.x, texels.y), 1e-4);
+    float thin = min(vWeight, max(0.0, (${THINNEST_STROKE_EM.toFixed(3)} - ${MIN_STROKE_PX.toFixed(1)} / emPx) * 0.5));
+    float edge = ${(1 - CUTOFF).toFixed(3)} + thin * ${(FONT_PX / RADIUS).toFixed(3)};
     float a = smoothstep(edge - w, edge + w, d) * vColor.a * uOpacity;
     if (a < 0.01) discard;
     gl_FragColor = vec4(vColor.rgb, a);
@@ -296,6 +317,11 @@ export type TextLabel = {
     letterSpacing?: number;
     /** `[r, g, b, a]`, 0 to 1. */
     color: readonly [number, number, number, number];
+    /**
+     * How much lighter than the font the strokes are drawn, in em off each
+     * side of a stroke (0, the default, draws them as the font does).
+     */
+    weight?: number;
 };
 
 /**
@@ -307,6 +333,8 @@ export class TextBatch {
     readonly mesh: Mesh<InstancedBufferGeometry, ShaderMaterial>;
     private anchors = new Float32Array(0);
     private anchorAttr: InstancedBufferAttribute | null = null;
+    private colorAttr: InstancedBufferAttribute | null = null;
+    private weightAttr: InstancedBufferAttribute | null = null;
     /** The label of each glyph. */
     private owner = new Int32Array(0);
 
@@ -326,6 +354,12 @@ export class TextBatch {
             fragmentShader: FRAGMENT,
             uniforms: {
                 uAtlas: { value: atlas.texture },
+                uAtlasSize: {
+                    value: [
+                        atlas.texture.image.width,
+                        atlas.texture.image.height,
+                    ],
+                },
                 uOpacity: { value: 1 },
                 uOffset: { value: [0, 0] },
             },
@@ -349,6 +383,7 @@ export class TextBatch {
         const uv = new Float32Array(count * 4);
         const scaleRot = new Float32Array(count * 2);
         const color = new Float32Array(count * 4);
+        const weight = new Float32Array(count);
         this.owner = new Int32Array(count);
         this.anchors = new Float32Array(count * 2);
         let g = 0;
@@ -376,6 +411,7 @@ export class TextBatch {
                 scaleRot[g * 2] = label.size;
                 scaleRot[g * 2 + 1] = label.rotation ?? 0;
                 color.set(label.color, g * 4);
+                weight[g] = label.weight ?? 0;
                 this.owner[g] = li;
                 pen += glyph.advance + spacing;
                 g++;
@@ -388,7 +424,12 @@ export class TextBatch {
             "aScaleRot",
             new InstancedBufferAttribute(scaleRot, 2),
         );
-        geometry.setAttribute("aColor", new InstancedBufferAttribute(color, 4));
+        this.colorAttr = new InstancedBufferAttribute(color, 4);
+        this.colorAttr.setUsage(DynamicDrawUsage);
+        geometry.setAttribute("aColor", this.colorAttr);
+        this.weightAttr = new InstancedBufferAttribute(weight, 1);
+        this.weightAttr.setUsage(DynamicDrawUsage);
+        geometry.setAttribute("aWeight", this.weightAttr);
         this.anchorAttr = new InstancedBufferAttribute(this.anchors, 2);
         this.anchorAttr.setUsage(DynamicDrawUsage);
         geometry.setAttribute("aAnchor", this.anchorAttr);
@@ -409,6 +450,35 @@ export class TextBatch {
             out[g * 2 + 1] = xy[li + 1];
         }
         if (this.anchorAttr) this.anchorAttr.needsUpdate = true;
+    }
+
+    /**
+     * Recolors every label (`colorOf` by label index, as given to
+     * {@link setLabels}) without laying the text out again: only the color
+     * buffer is rewritten and uploaded. Allocates nothing.
+     */
+    setColors(colorOf: (label: number) => TextLabel["color"]) {
+        const attr = this.colorAttr;
+        if (!attr) return;
+        const out = attr.array as Float32Array;
+        const owner = this.owner;
+        for (let g = 0; g < owner.length; g++)
+            out.set(colorOf(owner[g]), g * 4);
+        attr.needsUpdate = true;
+    }
+
+    /**
+     * Sets every label's weight (`weightOf` by label index, as given to
+     * {@link setLabels}; see `TextLabel.weight`) without laying the text out
+     * again: only the weight buffer is rewritten and uploaded. Allocates nothing.
+     */
+    setWeights(weightOf: (label: number) => number) {
+        const attr = this.weightAttr;
+        if (!attr) return;
+        const out = attr.array as Float32Array;
+        const owner = this.owner;
+        for (let g = 0; g < owner.length; g++) out[g] = weightOf(owner[g]);
+        attr.needsUpdate = true;
     }
 
     /** Moves every label by the same amount, in field units. */

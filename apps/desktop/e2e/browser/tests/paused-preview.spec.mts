@@ -109,3 +109,46 @@ test("a drag from a paused preview's frame moves no one", async ({ show }) => {
     expect((await readField(page)).selection).toEqual([]);
     expect(await saved()).toEqual(before);
 });
+
+test("a right-click after a paused preview clears it, then picks the marcher where it stands at the playhead (#315)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { atPlayhead, t1 } = await holdPreview(page);
+    const menu = page.getByTestId("field-menu");
+
+    // T1's held spot is empty field at the playhead: the menu opens, with nobody selected
+    await page.mouse.click(t1.screen.x, t1.screen.y, { button: "right" });
+    await expect.poll(() => shown(page)).toEqual(atPlayhead);
+    await expect(menu).toBeVisible();
+    expect((await readField(page)).selection).toEqual([]);
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+
+    // Where T1 stands at the playhead, the right-click selects it
+    const back = (await drawnMarchers(page)).find(
+        (m) => m.drillNumber === "T1",
+    )!;
+    await page.mouse.click(back.screen.x, back.screen.y, { button: "right" });
+    await expect(menu).toBeVisible();
+    expect((await readField(page)).selection).toEqual([back.id]);
+});
+
+test("the context-menu key after a paused preview clears it before the menu opens (#315)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await waitForField(page);
+    await waitForIdle(page);
+    // Select T1 at the playhead, then hold a frame
+    const t1 = (await drawnMarchers(page)).find((m) => m.drillNumber === "T1")!;
+    await page.mouse.click(t1.screen.x, t1.screen.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual([t1.id]);
+    const { atPlayhead } = await holdPreview(page);
+
+    await page.keyboard.press("Shift+F10");
+    await expect(page.getByTestId("field-menu")).toBeVisible();
+    await expect.poll(() => shown(page)).toEqual(atPlayhead);
+});

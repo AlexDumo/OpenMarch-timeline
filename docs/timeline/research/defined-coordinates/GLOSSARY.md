@@ -18,6 +18,28 @@ Terms used throughout:
   there (TL only, stored in the file). Don't call this "pinned" or "locked": "pin" is the start
   flag's word (UI-11, UI-17), and "Lock here" was a deferred idea.
 - The **selected page** is the page box the playhead is in.
+- On the playhead's exact count, a marcher is **Set** when a move of its own ends on that count with
+  real motion; on the first page every marcher is Set. Every other marcher is **Following**: it
+  holds from an earlier count, is partway through a move, or stands on a stay move that ends where
+  it began (Only Page N, unlink, a kept spot). While paused or scrubbing, the field draws a Following
+  marcher with a dashed edge at full strength: a shape with an outline dashes the outline round its
+  fill at 60%, one without dashes its edge in its fill's color with nothing inside, and an X dashes
+  its own lines, at any size (a small shape gets fewer, longer dashes). The dashes keep the shape's
+  contrast and read by shape, not only by lightness; the label is drawn lighter in weight at full opacity (#324). Following marchers stay selectable and draggable, and
+  dragging one on the count makes it Set. Playback draws everyone solid, and isolation's dim wins
+  over the Following look (#300, #301). In the UI a Set marcher **has a keyframe** on the count
+  (owner, 2026-10-20): "Set" stays the docs' and code's word, but the app doesn't show it, since
+  in drill a "set" is a page ("Set 12"). Say "keyframe" and "Following" (e.g. "Following Page 2")
+  in the UI, not "Set", "Unset", "spot", "stop", "pinned", "locked", "kept" or "edited".
+- With marchers selected, the timeline shows a **keyframe diamond** at every count after the first
+  page where a selected marcher is Set: filled where all of them are Set, hollow where only some
+  are. A click moves the playhead there; a right-click (or the context-menu key, or Shift+F10)
+  offers **Remove keyframe** and, where pages follow, **Remove keyframe, Pages N–M follow back**
+  for the selected marchers Set at that count, without moving the playhead (#306). These are the
+  two **Unset** actions (`timelineUnsetHere`, `timelineUnsetHereAndFollowing`), named "Unset here"
+  and "Unset here and on Pages N–M" until 2026-10-20. Its tooltip reads "Keyframe · Page 2, count
+  8", and with more than one marcher selected adds who has it ("2 of 3 selected: B1 and B4"). They replaced the hold marks and their tooltip (sections 1
+  and 2, kept below as history) in both modes (#303).
 
 About the screenshots: most were taken during the build, before the 2026-10-09 rebase onto #115
 (transport keys). Since then the tooltips are #115's `ShortcutTooltip`, and they may look slightly
@@ -37,6 +59,8 @@ which build it shows.
 9. [What this PR removed or renamed](#9-what-this-pr-removed-or-renamed)
 
 ## 1. Hold marks on the page boxes
+
+_Replaced by the keyframe diamonds (#303); kept as a record of what shipped before._
 
 ![Hold marks: diamonds under pages 1 and 2, solid bars along pages 3 and 4](images/04-hold-marks-page-boxes.png)
 
@@ -63,6 +87,8 @@ _TL, page 2 selected, all eight marchers selected (as of wp10). The marchers mov
 - V-146.
 
 ## 2. The hold-mark tooltip
+
+_Replaced by the keyframe diamonds (#303); kept as a record of what shipped before._
 
 ![Tooltip over page 3's bar: "Selected marchers hold from Page 2 / They stand where Page 2 left them"](images/05-hold-mark-tooltip.png)
 
@@ -293,7 +319,9 @@ at a time: each new one replaces the last (B-37), and a run of edits on the same
 the same marchers adds up behind one toast (B-36, V-184). Toasts with two buttons put them on their
 own row under the text (B-26).
 
-### Pass-through: "Page 3 is no longer a stop · Keep Page 3 as a stop"
+### Pass-through: "Page 3 is no longer a keyframe · Keep Page 3 as a keyframe"
+
+Worded "stop" until 2026-10-20 (the screenshot below); now "keyframe", to match the diamonds.
 
 ![Toast: "Page 3 is no longer a stop" with "Keep Page 3 as a stop"](images/07-pass-through-toast.png)
 

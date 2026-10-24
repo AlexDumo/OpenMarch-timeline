@@ -86,6 +86,8 @@ export type FieldEditorPorts = {
      * anything with it. The app may act on the press here (story 60: the
      * first press after a paused preview clears the preview) and returns
      * true when it takes it, so the editor selects, drags and drops nothing.
+     * A right-click calls it too, before it opens the menu, and goes on
+     * whatever it returns (#315).
      */
     takePress?(): boolean;
     /**
@@ -132,6 +134,12 @@ export type FieldEditorPorts = {
     snap?(point: FieldPoint): FieldPoint;
     /** The prop tool finished an Outline: for the app to make the prop. */
     propDrawn?(outline: DrawnOutline): void;
+    /**
+     * A right-click (a right press released under the click slop, outside the
+     * line tool) asks for the field's menu here (#315), after selecting the
+     * marcher clicked if it wasn't selected.
+     */
+    openMenu?(at: FieldPointer): void;
 };
 
 export type DropResult = "saved" | "refused";
@@ -227,8 +235,12 @@ export class FieldEditor {
     private propTool: PropTool | null = null;
     /** The prop tool's last press, for telling its double-clicks. */
     private lastToolPress: { time: number; screen: FieldPoint } | null = null;
-    /** A right press during the line tool, until its release: a click clears the line. */
-    private rightPress: FieldPointer | null = null;
+    /**
+     * A right press, until its release: navigation pans with it, and a click
+     * (one that never moved past the slop) clears the line tool's line, or
+     * opens the field's menu (#315).
+     */
+    private rightPress: { start: FieldPointer; dragged: boolean } | null = null;
     private readonly listeners = new Set<() => void>();
     private readonly now: () => number;
     private readonly areaPorts: AreaPorts;
@@ -256,9 +268,12 @@ export class FieldEditor {
      */
     pointerDown(pointer: FieldPointer): boolean {
         if (!this.isEditButton(pointer)) {
-            // Navigation pans with it; a right-click (no drag) clears the line tool's line
+            // Navigation pans with it; a right-click (no drag) clears the line
+            // tool's line or opens the menu. A Mac's Ctrl-click only pans (#194)
             this.rightPress =
-                pointer.button === 2 && this.lineTool ? pointer : null;
+                pointer.button === 2
+                    ? { start: pointer, dragged: false }
+                    : null;
             return false;
         }
         this.cancelGesture();
@@ -304,6 +319,9 @@ export class FieldEditor {
     }
 
     pointerMove(pointer: FieldPointer): void {
+        // A right press that went past the slop panned, even if it comes back
+        if (this.rightPress && isPastSlop(this.rightPress.start, pointer))
+            this.rightPress.dragged = true;
         if (this.propTool) {
             this.propTool.move(pointer);
             return;
@@ -347,8 +365,15 @@ export class FieldEditor {
         if (pointer.button === 2) {
             const right = this.rightPress;
             this.rightPress = null;
-            // A right-drag panned: the line stays, so the user can pan to its far end
-            if (right && !isPastSlop(right, pointer)) this.lineTool?.clear();
+            // A right-drag panned: the line stays, so the user can pan to its far
+            // end, and no menu opens
+            if (!right || right.dragged || isPastSlop(right.start, pointer))
+                return;
+            if (this.lineTool) this.lineTool.clear();
+            // Mid-press or mid-drag of the left button, the right one does
+            // nothing more; nor while the prop tool draws
+            else if (!this.gesture && !this.press && !this.propTool)
+                this.openMenu(pointer);
             return;
         }
         if (this.propTool) {
@@ -868,6 +893,23 @@ export class FieldEditor {
             );
         };
         this.ports.drop(positions).then(settle, () => settle());
+    }
+
+    /**
+     * The field's menu at a right-click (#315): it acts on the selection, so a
+     * marcher clicked that isn't selected is selected first. Empty field (a
+     * dimmed marcher, a handle) keeps the selection. A paused preview is
+     * cleared first, as a press clears it (story 60), so the marcher is found
+     * where it stands at the playhead, the count the menu's actions edit.
+     */
+    private openMenu(pointer: FieldPointer) {
+        this.ports.takePress?.();
+        const hit = this.handleAt(pointer.field)
+            ? null
+            : this.marcherAt(pointer.field);
+        if (hit !== null && !this.ports.selection.get().includes(hit))
+            this.write([hit]);
+        this.ports.openMenu?.(pointer);
     }
 
     private click(press: FieldPress, shift: boolean) {

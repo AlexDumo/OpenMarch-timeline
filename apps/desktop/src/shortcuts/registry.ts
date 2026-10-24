@@ -23,6 +23,8 @@ export interface ActionHandler {
     press?: (args: ActionArgs | undefined) => void;
     /** Runs when the key that ran the action is let go, for actions that last while held */
     release?: (reason: ReleaseReason) => void;
+    /** The label right now, when it depends on state (a page range); the definition's otherwise */
+    label?: () => string | undefined;
 }
 
 const handlers = new Map<ActionId, ActionHandler[]>();
@@ -58,6 +60,11 @@ export function hasActionHandler(id: ActionId): boolean {
 
 export function isActionEnabled(id: ActionId): boolean {
     return !isActionOffInWorkspace(id) && (top(id)?.isEnabled() ?? false);
+}
+
+/** The label the action's handler gives right now (`useActionHandler`'s `label`), if any */
+export function actionLabelNow(id: ActionId): string | undefined {
+    return top(id)?.label?.();
 }
 
 /** Whether the action's handler skips key repeats right now (`useActionHandler`'s `ignoreRepeat`) */

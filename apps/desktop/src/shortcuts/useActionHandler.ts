@@ -22,6 +22,11 @@ interface HandlerOptions {
     onPress?: (args: ActionArgs | undefined) => void;
     /** Runs when the key that ran the action is let go (or lost: the window lost focus while held) */
     onRelease?: (reason: ReleaseReason) => void;
+    /**
+     * The label shown in the palette instead of the definition's, for one that names state (a
+     * page range). Translated by the caller. Default: the definition's label.
+     */
+    label?: string;
 }
 
 export function useActionHandler(
@@ -55,6 +60,7 @@ export function useActionHandlerGroup(
     const pressRef = useRef(options.onPress);
     const hasPress = options.onPress !== undefined;
     const releaseRef = useRef(options.onRelease);
+    const labelRef = useRef(options.label);
     const hasRelease = options.onRelease !== undefined;
     useLayoutEffect(() => {
         runRef.current = run;
@@ -62,6 +68,11 @@ export function useActionHandlerGroup(
         pressRef.current = options.onPress;
         releaseRef.current = options.onRelease;
     });
+    useLayoutEffect(() => {
+        if (labelRef.current === options.label) return;
+        labelRef.current = options.label;
+        notifyActionHandlersChanged();
+    }, [options.label]);
     useLayoutEffect(() => {
         if (enabledRef.current === enabled) return;
         enabledRef.current = enabled;
@@ -87,6 +98,7 @@ export function useActionHandlerGroup(
                 release: hasRelease
                     ? (reason) => releaseRef.current?.(reason)
                     : undefined,
+                label: () => labelRef.current,
             }),
         );
         return () => unregister.forEach((off) => off());

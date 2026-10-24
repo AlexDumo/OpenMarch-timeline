@@ -127,45 +127,71 @@ export async function keepMarchersOnPage({
     if (marcherIds.length === 0)
         return { changed: [], skipped: [], markers: NO_MARKERS() };
     return await asOneEdit(db, "keepMarchersOnPage", async (tx) => {
-        await refuseUnlessPageBox(tx, pageBox);
-        const states = await statesOnBox(tx, pageBox, marcherIds);
-        const toKeep = ascending(
-            [...states].filter(([, s]) => s === "follows").map(([id]) => id),
-        );
-        const result: KeepResult = {
-            changed: toKeep,
-            skipped: ascending(states.keys())
-                .filter((id) => states.get(id) !== "follows")
-                .map((marcherId) => ({
-                    marcherId,
-                    state: states.get(marcherId)!,
-                })),
-            markers: NO_MARKERS(),
-        };
-        if (toKeep.length === 0) throw new NothingToDo(result);
-        // Each one holds through the box, so the add's destination (where it is at the box's
-        // end) is where it stands at the box's start: a move that goes nowhere
-        const { added } = await addMarchersToTimelineInTransaction({
+        const result = await keepMarchersOnPageInTransaction({
             tx,
-            range: pageBox,
-            marcherIds: toKeep,
+            pageBox,
+            marcherIds,
+            at,
         });
-        // Before the markers: moving a marked spot's ending would unmark it (`timelineMoves.ts`)
-        for (const own of added) {
-            const point = at?.get(own.marcherId);
-            if (point)
-                await updateTimelineSlotDestinationInTransaction({
-                    tx,
-                    transitionId: own.transitionId,
-                    slotIndex: 0,
-                    point,
-                });
-        }
-        const marked = ascending(added.map((o) => o.assignmentId));
-        await markAssignmentsKeptInTransaction(tx, marked);
-        result.markers.added = marked;
+        if (result.changed.length === 0) throw new NothingToDo(result);
         return result;
     });
+}
+
+/** `keepMarchersOnPage` inside a caller's edit; keeping nobody writes nothing. */
+export async function keepMarchersOnPageInTransaction({
+    tx,
+    pageBox,
+    marcherIds,
+    at,
+    markKept = true,
+}: {
+    tx: DbTransaction;
+    pageBox: KeptPageBox;
+    marcherIds: readonly number[];
+    at?: ReadonlyMap<number, XY>;
+    /** False writes the moves as the marchers' own, unmarked (Remove keyframe's stays, #332) */
+    markKept?: boolean;
+}): Promise<KeepResult> {
+    await refuseUnlessPageBox(tx, pageBox);
+    const states = await statesOnBox(tx, pageBox, marcherIds);
+    const toKeep = ascending(
+        [...states].filter(([, s]) => s === "follows").map(([id]) => id),
+    );
+    const result: KeepResult = {
+        changed: toKeep,
+        skipped: ascending(states.keys())
+            .filter((id) => states.get(id) !== "follows")
+            .map((marcherId) => ({
+                marcherId,
+                state: states.get(marcherId)!,
+            })),
+        markers: NO_MARKERS(),
+    };
+    if (toKeep.length === 0) return result;
+    // Each one holds through the box, so the add's destination (where it is at the box's
+    // end) is where it stands at the box's start: a move that goes nowhere
+    const { added } = await addMarchersToTimelineInTransaction({
+        tx,
+        range: pageBox,
+        marcherIds: toKeep,
+    });
+    // Before the markers: moving a marked spot's ending would unmark it (`timelineMoves.ts`)
+    for (const own of added) {
+        const point = at?.get(own.marcherId);
+        if (point)
+            await updateTimelineSlotDestinationInTransaction({
+                tx,
+                transitionId: own.transitionId,
+                slotIndex: 0,
+                point,
+            });
+    }
+    if (!markKept) return result;
+    const marked = ascending(added.map((o) => o.assignmentId));
+    await markAssignmentsKeptInTransaction(tx, marked);
+    result.markers.added = marked;
+    return result;
 }
 
 /**
