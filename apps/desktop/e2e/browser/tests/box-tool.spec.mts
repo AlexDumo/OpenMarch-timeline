@@ -378,6 +378,51 @@ test("change: while a box is open everyone else fades, and nobody once it closes
     await expect.poll(dimmedIds).toEqual([]);
 });
 
+test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const rotation = page.getByTestId("shape-editor-rotation");
+    await page.getByTestId("shape-editor-more").click();
+    /** Drags the knob `degrees` clockwise around the box's center dot */
+    const turnKnob = async (degrees: number) => {
+        const overlay = (await shapeOverlay(page))!;
+        const knob = overlay.knob!;
+        const c = overlay.centerDot!;
+        const a = (degrees * Math.PI) / 180;
+        const v = { x: knob.x - c.x, y: knob.y - c.y };
+        await drag(
+            page,
+            knob,
+            {
+                x: c.x + v.x * Math.cos(a) - v.y * Math.sin(a),
+                y: c.y + v.x * Math.sin(a) + v.y * Math.cos(a),
+            },
+            { steps: 20 },
+        );
+    };
+    const degreesShown = async () =>
+        Number((await rotation.innerText()).replace("°", ""));
+
+    await turnKnob(37);
+    await expect.poll(degreesShown).toBe(30);
+
+    await page.keyboard.down("Alt");
+    await turnKnob(37);
+    await page.keyboard.up("Alt");
+    const free = await degreesShown();
+    expect(free % 15).not.toBe(0);
+    expect(free).toBeGreaterThan(55);
+    expect(free).toBeLessThan(80);
+
+    // Typed, a rotation stays as typed
+    await rotation.click();
+    await page.keyboard.type("37");
+    await page.keyboard.press("Enter");
+    await expect(rotation).toHaveText("37°");
+});
+
 test("change: the open box's controls fade while the pointer is away from it, and come back over it or a handle", async ({
     show,
 }) => {

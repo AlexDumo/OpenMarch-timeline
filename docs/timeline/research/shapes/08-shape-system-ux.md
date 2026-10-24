@@ -181,8 +181,8 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   | A box's size (6 × 2)        | Sideways for more or fewer across, up or down for more or fewer deep. It locks to the first direction moved | 1 per 16 px     |
   | Rotation (in the inspector) | Right turns clockwise                                                                                       | 1° per 2 px     |
 
-- **Alt** while dragging a spacing gives hundredths of a step (#411). **Shift** while dragging a rotation
-  snaps to 15°.
+- **Alt** while dragging a spacing gives hundredths of a step (#411). A dragged rotation snaps to 15°
+  (#403), whole degrees with **Shift**.
 - A number lights up while it's being dragged, and its cursor shows its drag direction.
 - A drag that ends where it started changes nothing; it doesn't round the value.
 - A size change keeps the spacing and grows from the pivot (back-left by default; changed
@@ -262,8 +262,8 @@ the **start flag**, not where they stood on this page, so the shape shows the mo
 - **Just outside a corner** also rotates, as in design apps: diagonally past the corner, within a
   short reach of it. Past an edge is still the body, which has a margin.
 - Both rotations turn **around the pivot** chosen in the inspector. While rotating, the pivot
-  shows as a yellow dot with a dashed line to the cursor, and a tip shows the angle. Shift snaps
-  to 15°.
+  shows as a yellow dot with a dashed line to the cursor, and a tip shows the angle. It snaps
+  to 15° (#403), whole degrees with Shift.
 - **A center dot** (white, with an accent ring) moves the whole shape in half steps. While
   dragging, a tip reads the position in drill terms ("3.5 in from S2 45 · 8 in front of back
   hash"). It matters most on crowded shapes, where pressing the body tends to land on a marcher.
@@ -271,7 +271,8 @@ the **start flag**, not where they stood on this page, so the shape shows the mo
 - With a shape open, the nudge keys move the whole shape (07). `[` and `]` don't step a box's
   count across any more: they hold for playback speed (#216). Dragging the size, and its − and +
   buttons, do it instead (owner, 2026-10-16).
-- Turning snaps to whole degrees, 15° with Shift; Alt doesn't snap. A turn that lands on a quarter
+- Turning snaps to 15°, as the field's rotate handle does (#403); whole degrees with Shift; Alt
+  doesn't snap. A typed rotation is kept as typed. A turn that lands on a quarter
   turn puts the box back on the half-step grid, which can shift it by up to a quarter step.
 - A box turned off the field's axes can't stand on the grid: moving it moves it in whole half
   steps instead.
@@ -431,7 +432,7 @@ scored best, surprises worst):
   turned: past 45° (up to 135°, and the same the other way round) the bar's size, spacings, − and
   - swap to the box's own deep. Exactly 45° keeps the box's own.
 - **The rotation is a number in the ⋯ row**, typed or dragged like the inspector's (right turns
-  clockwise, 1° per 2 px, Shift 15°, Alt free). The 90° turn buttons are gone.
+  clockwise, 1° per 2 px in 15° steps, Shift whole degrees, Alt free). The 90° turn buttons are gone.
 - **Resizing grows from the pivot**, and the default pivot is the **back-left corner**, so a
   box stays where it was drawn and grows right and toward the front. The knob and flips turn
   around the same point. Basic mode, with no pivot grid, always uses back-left.

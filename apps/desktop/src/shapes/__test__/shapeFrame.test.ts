@@ -23,8 +23,10 @@ import {
 import {
     dragShape,
     frameControls,
+    scrubTurn,
     shapeTargetAt,
     startShapeGesture,
+    turnShape,
 } from "../frame/gestures";
 import {
     withFiles,
@@ -110,26 +112,40 @@ describe("the shape frame", () => {
         expect(turned.flipX).toBe(true);
     });
 
-    it("snaps rotation to whole degrees, 15° with Shift, and not with Alt", () => {
-        expect(
-            rotationDegrees(
-                snapRotation(33.4 * DEGREE, { shift: false, snap: true }),
-            ),
-        ).toBe(33);
-        expect(
-            rotationDegrees(
-                snapRotation(33.4 * DEGREE, { shift: true, snap: true }),
-            ),
-        ).toBe(30);
-        expect(
-            rotationDegrees(
-                snapRotation(33.4 * DEGREE, { shift: false, snap: false }),
-            ),
-        ).toBe(33.4);
+    it("snaps rotation to 15° as the field's rotate handle does, whole degrees with Shift, and not with Alt", () => {
+        const turn = (deg: number, keys: { shift: boolean; snap: boolean }) =>
+            rotationDegrees(snapRotation(deg * DEGREE, keys));
+        expect(turn(33.4, { shift: false, snap: true })).toBe(30);
+        expect(turn(38, { shift: false, snap: true })).toBe(45);
+        expect(turn(33.4, { shift: true, snap: true })).toBe(33);
+        expect(turn(33.4, { shift: false, snap: false })).toBe(33.4);
         expect(snapRotation(-0.1 * DEGREE, { shift: false, snap: true })).toBe(
             0,
         );
+        expect(snapRotation(355 * DEGREE, { shift: false, snap: true })).toBe(
+            0,
+        );
         expect(rotationDegrees(-90 * DEGREE)).toBe(270);
+    });
+
+    it("the rotation number drags in 15° steps, whole degrees with Shift, freely with Alt, and a typed one stays exact", () => {
+        const b = box4x2();
+        const degreesOf = (p: unknown) =>
+            rotationDegrees(boxTool.frameOf(p as BoxParams, 8).rotation);
+        // 2 px a degree: 20 px is 10°, which lands on 15°
+        expect(degreesOf(scrubTurn(boxTool, b, 8, 20, "c", env()))).toBe(15);
+        expect(
+            degreesOf(scrubTurn(boxTool, b, 8, 20, "c", env({ snap: false }))),
+        ).toBe(10);
+        expect(
+            degreesOf(scrubTurn(boxTool, b, 8, 21, "c", env({ shift: true }))),
+        ).toBe(11);
+        const typed = turnShape(boxTool, b, 8, 33.4 * DEGREE, "c", env());
+        expect(degreesOf(typed)).toBe(33.4);
+        // From a typed angle, the next 15° step
+        expect(degreesOf(scrubTurn(boxTool, typed, 8, 20, "c", env()))).toBe(
+            45,
+        );
     });
 
     it("turns resize cursors with the shape", () => {
@@ -456,7 +472,7 @@ describe("the decisions of 2026-10-17", () => {
         expect(filesOf(withRanks(big, 64, 9, env()))).toBe(7);
     });
 
-    it("the rotation drags 1° per 2 px, 15° with Shift, and back to the start changes nothing", () => {
+    it("the rotation drags 1° per 2 px in 15° steps (#403), whole degrees with Shift, and back to the start changes nothing", () => {
         const b = box4x2();
         expect(
             rotationDegrees(scrubRotation(b, 60, 8, "c", env()).rotation),
@@ -465,10 +481,10 @@ describe("the decisions of 2026-10-17", () => {
             rotationDegrees(
                 scrubRotation(b, 44, 8, "c", env({ shift: true })).rotation,
             ),
-        ).toBe(15);
+        ).toBe(22);
         expect(
             rotationDegrees(scrubRotation(b, -20, 8, "c", env()).rotation),
-        ).toBe(350);
+        ).toBe(345);
         expect(scrubRotation(b, 1, 8, "c", env())).toBe(b);
     });
 
