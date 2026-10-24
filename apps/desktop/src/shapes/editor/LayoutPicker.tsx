@@ -14,7 +14,7 @@ import {
     type LayoutVersion,
     type ResolvedLayout,
 } from "../distribute/layouts";
-import { layoutOf, layoutRowsOf, withLayout } from "../distribute/modes";
+import { layoutOf, withLayout } from "../distribute/modes";
 import { useLastLayoutStore } from "../tool/lastLayout";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
@@ -76,7 +76,7 @@ export function LayoutPicker(props: PickerProps) {
     const { target } = props;
     const pick = usePick(props);
     const now = layoutOf(target.kind, target.params, target.spots);
-    const rows = layoutRowsOf(target.kind, target.spots);
+    const rows = target.kind.closed?.layouts?.catalogue(target.spots) ?? [];
     if (now === null || rows.length === 0) return null;
     return (
         <div
@@ -168,7 +168,7 @@ export function LayoutMenu(props: PickerProps) {
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState<LayoutFamily | null>(null);
     const now = layoutOf(target.kind, target.params, target.spots);
-    const rows = layoutRowsOf(target.kind, target.spots);
+    const rows = target.kind.closed?.layouts?.catalogue(target.spots) ?? [];
     if (now === null || rows.length === 0) return null;
     const n = target.spots;
     const aspect = now.across / now.deep;

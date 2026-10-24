@@ -7,8 +7,8 @@ import {
     type BoxParams,
 } from "../boxGeometry";
 import type { FilesLayout, LayoutFamily } from "../../distribute/distribution";
-import { layoutRowsOf, layoutOf, withLayout } from "../../distribute/modes";
-import { layoutOrientations } from "../../distribute/layouts";
+import { layoutOf, withLayout } from "../../distribute/modes";
+import { layoutCatalogue, layoutOrientations } from "../../distribute/layouts";
 import { chipLayout, quarterTurn } from "../../editor/chip";
 import { boxesAt, type PlacedRecipe } from "../../placed/placedBox";
 import { placementOf } from "../../tool/shapePlacement";
@@ -72,7 +72,7 @@ function countsBy(slots: readonly Slot[], key: (s: Slot) => number) {
 }
 
 const versionOf = (n: number, family: LayoutFamily, label: string, i = 0) =>
-    layoutRowsOf(boxTool, n)
+    layoutCatalogue(n)
         .find((r) => r.family === family)!
         .versions.filter((v) => v.label === label)[i]!;
 
@@ -88,13 +88,9 @@ describe("picking a layout", () => {
 
     it("offers the box's catalogue, and the box starts in Short back", () => {
         const t = start();
-        expect(layoutRowsOf(boxTool, 23).map((r) => r.label)).toEqual([
-            "Full",
-            "Stagger",
-            "Rounded",
-            "Short back",
-            "Notched",
-        ]);
+        expect(
+            boxTool.closed!.layouts!.catalogue(23).map((r) => r.label),
+        ).toEqual(["Full", "Stagger", "Rounded", "Short back", "Notched"]);
         expect(layoutOf(boxTool, t.params, 23)!.layout.family).toBe(
             "shortBack",
         );
