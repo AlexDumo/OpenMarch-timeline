@@ -93,13 +93,10 @@
             "focusCanvas": "Enfocar el lienzo",
             "focusTimeline": "Editar la línea de tiempo",
             "hideNextPaths": "Ocultar trayectorias de la página siguiente",
-            "hidePreviousPaths": "Ocultar trayectorias de la página anterior",
             "openCommandPalette": "Paleta de comandos",
             "openSettings": "Ajustes…",
             "showNextPaths": "Mostrar trayectorias de la página siguiente",
-            "showPreviousPaths": "Mostrar trayectorias de la página anterior",
-            "toggleNextPaths": "Alternar trayectorias de la página siguiente",
-            "togglePreviousPaths": "Alternar trayectorias de la página anterior"
+            "toggleNextPaths": "Alternar trayectorias de la página siguiente"
         }
     },
     "analyticsOptIn": {
@@ -1205,7 +1202,6 @@
             "gridLines": "Líneas de cuadrícula",
             "halfLines": "Medias líneas",
             "nextPaths": "Próximas Rutas",
-            "previousPaths": "Rutas anteriores",
             "uiSettingsToolbar": "Barra de herramientas de configuración"
         }
     },

@@ -8,6 +8,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type Beat from "@/global/classes/Beat";
 import type Page from "@/global/classes/Page";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { Timeline, type TimelineInput } from "../Timeline";
 import {
@@ -77,7 +78,7 @@ const clip: TimelineInput = {
     activitySpans: [{ startBeatIndex: 3, endBeatIndex: 7, active: true }],
 };
 
-const show = ({
+const view = ({
     positionBeat = 5,
     isPlaying = false,
     onAddPageFlag,
@@ -95,62 +96,136 @@ const show = ({
     onAddSubsetPage?: () => void;
     onSetPageSubset?: (pageId: number, subset: boolean) => void;
     withAdd?: boolean;
-}) =>
-    render(
-        <Timeline
-            mode="expanded"
-            beats={BEATS}
-            pages={PAGES}
-            measures={[]}
-            timelines={[clip]}
-            showTransport={false}
-            playback={{ positionBeat, isPlaying }}
-            selection={null}
-            onSelectionChange={vi.fn()}
-            addSelectedMarchers={withAdd ? { onAdd: vi.fn() } : undefined}
-            onAddPageFlag={onAddPageFlag}
-            onDeletePageFlag={onDeletePageFlag}
-            onDeletePageWithMoves={onDeletePageWithMoves}
-            onAddSubsetPage={onAddSubsetPage}
-            addPageNames={{ page: "3", subset: "2A" }}
-            onSetPageSubset={onSetPageSubset}
-        />,
-    );
+}) => (
+    <Timeline
+        mode="expanded"
+        beats={BEATS}
+        pages={PAGES}
+        measures={[]}
+        timelines={[clip]}
+        showTransport={false}
+        playback={{ positionBeat, isPlaying }}
+        selection={null}
+        onSelectionChange={vi.fn()}
+        addSelectedMarchers={withAdd ? { onAdd: vi.fn() } : undefined}
+        onAddPageFlag={onAddPageFlag}
+        onDeletePageFlag={onDeletePageFlag}
+        onDeletePageWithMoves={onDeletePageWithMoves}
+        onAddSubsetPage={onAddSubsetPage}
+        addPageNames={{ page: "3", subset: "2A" }}
+        onSetPageSubset={onSetPageSubset}
+    />
+);
 
-const plus = () => screen.queryByTestId("timeline-add-page-flag");
+const show = (props: Parameters<typeof view>[0]) => render(view(props));
 
-describe("**+** at the paused playhead (UI-9)", () => {
-    it("shows just after the playhead and adds a flag there", () => {
+const playhead = () => screen.getByTestId("timeline-playhead");
+const addPageMenu = () => screen.queryByTestId("timeline-add-page-flag-menu");
+
+describe("Create page at playhead on the paused playhead's right-click menu (UI-9)", () => {
+    it("has no **+** beside the playhead: adding a page doesn't act on the range", () => {
+        show({ onAddPageFlag: vi.fn(), onAddSubsetPage: vi.fn() });
+        expect(screen.queryByTestId("timeline-add-page-flag")).toBeNull();
+    });
+
+    it("opens from a right-click on the playhead, and Create page at playhead adds a flag there", () => {
         const onAddPageFlag = vi.fn();
-        show({ onAddPageFlag });
-        const button = plus();
-        expect(button).not.toBeNull();
-        const playheadLeft = parseFloat(
-            screen.getByTestId("timeline-playhead").style.left,
+        show({ onAddPageFlag, onAddSubsetPage: vi.fn() });
+        fireEvent.contextMenu(playhead());
+        const names = screen.getAllByTestId("timeline-add-page-name");
+        expect(names.map((n) => n.textContent)).toEqual(["3", "2A"]);
+        const item = screen.getByTestId("timeline-add-page");
+        // The action's label (its key here: tests don't load en.json), name and shortcut
+        expect(item.textContent).toBe(
+            "actions.timeline.createPageAtPlayhead3F",
         );
-        expect(parseFloat(button!.style.left)).toBeGreaterThan(playheadLeft);
-        fireEvent.click(button!);
+        fireEvent.click(item);
         expect(onAddPageFlag).toHaveBeenCalledTimes(1);
     });
 
-    it("stays inside the timeline with the playhead on the show's last beat (a page to the show's end)", () => {
-        show({ positionBeat: BEATS.length, onAddPageFlag: vi.fn() });
-        const button = plus()!;
-        const surface = screen.getByTestId(
-            "timeline-pointer-surface",
-        ).parentElement!;
-        // The button is 16px wide
-        expect(parseFloat(button.style.left) + 16).toBeLessThanOrEqual(
-            parseFloat(surface.style.width),
+    it("Create subset at playhead adds the subset page", () => {
+        const onAddPageFlag = vi.fn();
+        const onAddSubsetPage = vi.fn();
+        show({ onAddPageFlag, onAddSubsetPage });
+        fireEvent.contextMenu(playhead());
+        const item = screen.getByTestId("timeline-add-subset-page");
+        expect(item.textContent).toBe(
+            "actions.timeline.createSubsetAtPlayhead2AShift+F",
         );
+        fireEvent.click(item);
+        expect(onAddSubsetPage).toHaveBeenCalledTimes(1);
+        expect(onAddPageFlag).not.toHaveBeenCalled();
     });
 
-    it("doesn't show while playing, or where the owner offers none (on a flag)", () => {
-        show({ onAddPageFlag: vi.fn(), isPlaying: true });
-        expect(plus()).toBeNull();
+    it("shows each entry's shortcut, as rebound in Settings", () => {
+        useShortcutOverridesStore.setState({
+            overrides: { timelineCreatePageAtPlayhead: ["Alt+N"] },
+        });
+        try {
+            show({ onAddPageFlag: vi.fn(), onAddSubsetPage: vi.fn() });
+            fireEvent.contextMenu(playhead());
+            const shortcuts = screen.getAllByTestId(
+                "timeline-add-page-shortcut",
+            );
+            expect(shortcuts.map((s) => s.textContent)).toEqual([
+                "Alt+N",
+                "Shift+F",
+            ]);
+        } finally {
+            useShortcutOverridesStore.setState({ overrides: {} });
+        }
+    });
+
+    it("keeps the range menu closed", () => {
+        show({ onAddPageFlag: vi.fn(), onAddSubsetPage: vi.fn() });
+        fireEvent.contextMenu(playhead());
+        expect(addPageMenu()).not.toBeNull();
+        expect(screen.queryByTestId("timeline-range-menu")).toBeNull();
+    });
+
+    it("offers only Create page at playhead without the subset command", () => {
+        show({ onAddPageFlag: vi.fn() });
+        fireEvent.contextMenu(playhead());
+        expect(screen.getByTestId("timeline-add-page")).not.toBeNull();
+        expect(screen.queryByTestId("timeline-add-subset-page")).toBeNull();
+    });
+
+    it("has no menu while playing, or where the owner offers none (on a flag)", () => {
+        show({
+            onAddPageFlag: vi.fn(),
+            onAddSubsetPage: vi.fn(),
+            isPlaying: true,
+        });
+        fireEvent.contextMenu(playhead());
+        expect(addPageMenu()).toBeNull();
         cleanup();
         show({ onAddPageFlag: undefined });
-        expect(plus()).toBeNull();
+        fireEvent.contextMenu(playhead());
+        expect(addPageMenu()).toBeNull();
+    });
+
+    it("keeps the playhead button, and its focus, as the menu comes and goes", () => {
+        // An arrow-key step onto a flag takes the menu away; a remount would drop focus, and the
+        // next arrow would go to the page step instead of the playhead's beat step
+        const { rerender } = show({ onAddPageFlag: vi.fn() });
+        const button = playhead();
+        button.focus();
+        rerender(view({ onAddPageFlag: undefined }));
+        expect(playhead()).toBe(button);
+        expect(document.activeElement).toBe(button);
+        rerender(view({ onAddPageFlag: vi.fn() }));
+        expect(playhead()).toBe(button);
+        expect(document.activeElement).toBe(button);
+    });
+
+    it("closes a menu left open when adding stops, and doesn't bring it back", () => {
+        const { rerender } = show({ onAddPageFlag: vi.fn() });
+        fireEvent.contextMenu(playhead());
+        expect(addPageMenu()).not.toBeNull();
+        rerender(view({ onAddPageFlag: undefined }));
+        expect(addPageMenu()).toBeNull();
+        rerender(view({ onAddPageFlag: vi.fn() }));
+        expect(addPageMenu()).toBeNull();
     });
 
     it("selects the new page's range and moves the playhead to its flag", () => {
@@ -353,62 +428,20 @@ describe("the page boxes the clips are matched against", () => {
     });
 });
 
-describe("Add subset page on **+** (UI-9)", () => {
-    it("opens from a right-click on **+**, and adds the subset page", () => {
-        const onAddPageFlag = vi.fn();
-        const onAddSubsetPage = vi.fn();
-        show({ onAddPageFlag, onAddSubsetPage });
-        fireEvent.contextMenu(plus()!);
-        const item = screen.getByTestId("timeline-add-subset-page");
-        expect(item.textContent).toBe("Add subset page2A");
-        fireEvent.click(item);
-        expect(onAddSubsetPage).toHaveBeenCalledTimes(1);
-        expect(onAddPageFlag).not.toHaveBeenCalled();
-    });
-
-    it("Add page does what a click on **+** does, and each entry shows its name", () => {
-        const onAddPageFlag = vi.fn();
-        show({ onAddPageFlag, onAddSubsetPage: vi.fn() });
-        fireEvent.contextMenu(plus()!);
-        const names = screen.getAllByTestId("timeline-add-page-name");
-        expect(names.map((n) => n.textContent)).toEqual(["3", "2A"]);
-        const item = screen.getByTestId("timeline-add-page");
-        expect(item.textContent).toBe("Add page3");
-        fireEvent.click(item);
-        expect(onAddPageFlag).toHaveBeenCalledTimes(1);
-    });
-
-    it("leaves a plain click as a plain add, and the range menu closed", () => {
-        const onAddPageFlag = vi.fn();
-        show({ onAddPageFlag, onAddSubsetPage: vi.fn() });
-        fireEvent.contextMenu(plus()!);
-        expect(screen.queryByTestId("timeline-range-menu")).toBeNull();
-        fireEvent.keyDown(document.activeElement ?? document.body, {
-            key: "Escape",
-        });
-        fireEvent.click(plus()!);
-        expect(onAddPageFlag).toHaveBeenCalledTimes(1);
-    });
-
-    it("has no menu without the command", () => {
-        show({ onAddPageFlag: vi.fn() });
-        fireEvent.contextMenu(plus()!);
-        expect(screen.queryByTestId("timeline-add-subset-page")).toBeNull();
-    });
-});
-
-describe("Change to subset / normal page on a page box (UI-9)", () => {
+describe("The Subset switch on a page box (UI-9)", () => {
     it("flips the right-clicked page, by page id", () => {
         const onSetPageSubset = vi.fn();
         show({ onSetPageSubset, withAdd: false });
         fireEvent.contextMenu(screen.getByRole("button", { name: "Page 2" }));
         const item = screen.getByTestId("timeline-range-menu-subset");
-        expect(item.textContent).toBe("Change to subset");
+        expect(item.textContent).toBe("Subset");
+        expect(item.getAttribute("role")).toBe("menuitemcheckbox");
+        expect(item.getAttribute("aria-checked")).toBe("false");
         fireEvent.click(item);
         expect(onSetPageSubset).toHaveBeenCalledWith(3, true);
     });
 
-    it("offers a subset page Change to normal page", () => {
+    it("shows a subset page switched on, and turns it off", () => {
         const onSetPageSubset = vi.fn();
         const subsetPages = PAGES.map((p) =>
             p.id === 3 ? ({ ...p, name: "1A", isSubset: true } as Page) : p,
@@ -429,7 +462,8 @@ describe("Change to subset / normal page on a page box (UI-9)", () => {
         );
         fireEvent.contextMenu(screen.getByRole("button", { name: "Page 1A" }));
         const item = screen.getByTestId("timeline-range-menu-subset");
-        expect(item.textContent).toBe("Change to normal page");
+        expect(item.textContent).toBe("Subset");
+        expect(item.getAttribute("aria-checked")).toBe("true");
         fireEvent.click(item);
         expect(onSetPageSubset).toHaveBeenCalledWith(3, false);
     });

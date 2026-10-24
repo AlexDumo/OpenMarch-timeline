@@ -162,7 +162,7 @@ export interface AddedPageFlag {
  *
  * - **Split:** the split page's `start_beat` moves to `beat`, and a new page row takes its old
  *   start, so the split page keeps its flag, id and data (notes, appearance) and the new page comes
- *   before it. Later pages renumber, unless `subset` (**Add subset page**) makes the new page a
+ *   before it. Later pages renumber, unless `subset` (**Create subset at playhead**) makes the new page a
  *   subset, which takes a letter and leaves every later page's number. Splitting the last page also
  *   rewrites `last_page_counts` so its flag stays where it was.
  * - **Append:** a new page starts at the last flag and ends at `beat` (`last_page_counts`); a
@@ -184,7 +184,7 @@ export async function addPageFlagInTransaction({
     tx: DbTransaction;
     beat: number;
     splitMoves?: boolean;
-    /** Make the new page a subset page (**Add subset page**) */
+    /** Make the new page a subset page (**Create subset at playhead**) */
     subset?: boolean;
 }): Promise<AddedPageFlag> {
     let grid = await readPageGrid(tx);

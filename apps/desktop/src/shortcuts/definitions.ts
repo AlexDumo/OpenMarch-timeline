@@ -504,14 +504,17 @@ const STATIC_ACTIONS = {
     },
 
     // UI
-    togglePreviousPagePaths: {
-        labelKey: "actions.ui.togglePreviousPaths",
-        toggleOnKey: "actions.ui.showPreviousPaths",
-        toggleOffKey: "actions.ui.hidePreviousPaths",
+    // Start flag positions (#331): hold N to peek at the Hold N state, tap to latch it
+    toggleStartFlagPositions: {
+        labelKey: "actions.ui.toggleStartFlagPositions",
+        keywordsKey: "actions.ui.toggleStartFlagPositionsKeywords",
+        toggleOnKey: "actions.ui.showStartFlagPositions",
+        toggleOffKey: "actions.ui.hideStartFlagPositions",
         category: "ui",
         editsDrill: false,
         scope: "canvas",
         defaultBindings: ["N"],
+        ignoreRepeat: true,
     },
     toggleNextPagePaths: {
         labelKey: "actions.ui.toggleNextPaths",
@@ -667,6 +670,25 @@ const STATIC_ACTIONS = {
         editsDrill: false,
         scope: "global",
         defaultBindings: ["G", "$mod+G", "Control+G"],
+        ignoreRepeat: true,
+    },
+
+    // UI-9: a page flag at the paused playhead, as its right-click menu does. F for flag; Shift
+    // for the smaller step (as Shift+Q/E steps a beat), a subset page keeping later pages' numbers
+    timelineCreatePageAtPlayhead: {
+        labelKey: "actions.timeline.createPageAtPlayhead",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: ["F"],
+        ignoreRepeat: true,
+    },
+    timelineCreateSubsetAtPlayhead: {
+        labelKey: "actions.timeline.createSubsetAtPlayhead",
+        category: "timeline",
+        editsDrill: true,
+        scope: "global",
+        defaultBindings: ["Shift+F"],
         ignoreRepeat: true,
     },
 

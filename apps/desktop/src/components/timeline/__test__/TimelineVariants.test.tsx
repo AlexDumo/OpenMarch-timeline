@@ -1364,7 +1364,6 @@ describe("a calmer timeline (UI-12)", () => {
         );
         const surface = screen.getByTestId("timeline-pointer-surface");
         const playhead = screen.getByTestId("timeline-playhead");
-        const plus = screen.queryByTestId("timeline-add-page-flag");
         press(surface, "pointerdown", 3 * 16);
         press(surface, "pointermove", 4 * 16);
         expect(playhead.style.transform).toBe("translateX(0px)");
@@ -1375,7 +1374,6 @@ describe("a calmer timeline (UI-12)", () => {
         expect(playhead.style.transform).toBe("translateX(0px)");
         press(surface, "pointermove", 14 * 16);
         expect(playhead.style.transform).toBe("translateX(0px)");
-        expect(plus?.style.transform ?? "").toBe(plus ? "translateX(0px)" : "");
         press(surface, "pointerup", 14 * 16);
         expect(playhead.style.transform).toBe("");
     });
