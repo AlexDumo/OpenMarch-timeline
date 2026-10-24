@@ -37,7 +37,6 @@ Object.defineProperty(window, "localStorage", {
 describe("uiSettings Store", () => {
     const initialSettings: UiSettings = {
         ...defaultSettings,
-        previousPaths: true,
         nextPaths: true,
         gridLines: true,
         halfLines: true,

@@ -3,6 +3,7 @@ import path from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { parse as parseYaml } from "yaml";
 import { version } from "./package.json";
 import { DEMOS } from "./web/demos";
 
@@ -18,10 +19,51 @@ import { DEMOS } from "./web/demos";
  * channel; the nightly build says so next to the version. The fork's
  * "preview" channel also offers the example shows in `web/public/demos/` on
  * the start page.
+ *
+ * The fork's "lab" channel is a test build for lab.openmarch.com (see
+ * `web/LAB.md`): it offers the example shows too, loads everything relative
+ * to its folder (the lab serves each test at `/x/<test id>/`), and keeps what
+ * it stores apart from every other test on that origin, by `LAB_TEST_ID`.
  */
 
 const channel = process.env.WEB_CHANNEL ?? "dev";
-const examples = channel === "preview" ? DEMOS : [];
+const isLab = channel === "lab";
+const labTestId = process.env.LAB_TEST_ID ?? "";
+if (isLab && !/^[a-z0-9-]+$/.test(labTestId))
+    throw new Error(
+        "WEB_CHANNEL=lab needs LAB_TEST_ID, the lab test's id (a-z, 0-9 and -)",
+    );
+const examples = channel === "preview" || isLab ? DEMOS : [];
+/**
+ * What names this build's browser storage (see `web/renderer/channel.ts`).
+ * Lab tests all share one origin, so each test gets its own.
+ */
+const storageNamespace = isLab ? `lab-${labTestId}` : channel;
+
+/**
+ * The versions a lab test compares (web/LAB.md, "Comparing versions"): the
+ * `variants` in the front matter of the manifest `LAB_MANIFEST` names, a path
+ * from the repository root. CI sets it to the test being published. Without
+ * it, outside the lab channel, or with fewer than two versions, the build has
+ * no version switch.
+ */
+function labVariants(): { id: string; label: string; description: string }[] {
+    const manifest = process.env.LAB_MANIFEST;
+    if (!isLab || !manifest) return [];
+    const text = fs.readFileSync(
+        path.resolve(__dirname, "..", "..", manifest),
+        "utf8",
+    );
+    const frontMatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? "";
+    const variants = (parseYaml(frontMatter)?.variants ?? []).map(
+        (v: { id: unknown; label?: unknown; description?: unknown }) => ({
+            id: String(v.id),
+            label: String(v.label ?? v.id),
+            description: String(v.description ?? ""),
+        }),
+    );
+    return variants.length >= 2 ? variants : [];
+}
 
 const web = (file: string) => path.join(__dirname, "web", file);
 const outDir = path.join(__dirname, "dist-web");
@@ -33,7 +75,8 @@ const outDir = path.join(__dirname, "dist-web");
  */
 const writeHeaders = (): Plugin => ({
     name: "openmarch-web-headers",
-    apply: "build",
+    // The lab serves its builds itself and ignores the file.
+    apply: (_config, { command }) => command === "build" && !isLab,
     closeBundle() {
         fs.writeFileSync(
             path.join(outDir, "_headers"),
@@ -49,18 +92,38 @@ const writeHeaders = (): Plugin => ({
     },
 });
 
-/** Copies the example shows into the preview build; other builds leave them out. */
-const copyExamples = (): Plugin => ({
-    name: "openmarch-web-examples",
-    apply: "build",
-    closeBundle() {
-        for (const example of examples) {
-            const target = path.join(outDir, example.file);
-            fs.mkdirSync(path.dirname(target), { recursive: true });
-            fs.copyFileSync(web(path.join("public", example.file)), target);
-        }
-    },
-});
+/**
+ * Copies the example shows into the preview and lab builds, and serves them
+ * from the dev server; other builds leave them out.
+ */
+const copyExamples = (): Plugin => {
+    let building = false;
+    return {
+        name: "openmarch-web-examples",
+        configResolved(config) {
+            building = config.command === "build";
+        },
+        configureServer(server) {
+            server.middlewares.use((req, res, next) => {
+                const pathname = (req.url ?? "").split("?")[0];
+                const example = examples.find((e) => pathname === `/${e.file}`);
+                if (!example) return next();
+                res.setHeader("Content-Type", "application/octet-stream");
+                fs.createReadStream(
+                    web(path.join("public", example.file)),
+                ).pipe(res);
+            });
+        },
+        closeBundle() {
+            if (!building) return;
+            for (const example of examples) {
+                const target = path.join(outDir, example.file);
+                fs.mkdirSync(path.dirname(target), { recursive: true });
+                fs.copyFileSync(web(path.join("public", example.file)), target);
+            }
+        },
+    };
+};
 
 /**
  * `electron` is two different modules here. Main-process code, which runs in
@@ -109,6 +172,8 @@ const webEntry = (): Plugin => ({
 });
 
 export default defineConfig({
+    // A lab build is served from a folder, so its URLs are relative.
+    base: isLab ? "./" : "/",
     resolve: {
         alias: [
             { find: /^@\//, replacement: path.join(__dirname, "src") + "/" },
@@ -147,7 +212,10 @@ export default defineConfig({
         "process.env.PLAYWRIGHT_SESSION": JSON.stringify(""),
         "import.meta.env.VITE_PUBLIC_WEB_BUILD": JSON.stringify("true"),
         "import.meta.env.VITE_PUBLIC_WEB_CHANNEL": JSON.stringify(channel),
+        "import.meta.env.VITE_PUBLIC_WEB_STORAGE_NAMESPACE":
+            JSON.stringify(storageNamespace),
         "import.meta.env.VITE_PUBLIC_APP_VERSION": JSON.stringify(version),
+        __LAB_VARIANTS__: JSON.stringify(labVariants()),
         "import.meta.env.VITE_PUBLIC_WEB_EXAMPLES": JSON.stringify(
             JSON.stringify(examples),
         ),
@@ -157,7 +225,8 @@ export default defineConfig({
     },
     optimizeDeps: {
         // Loads its .wasm next to itself, which pre-bundling breaks.
-        exclude: ["@sqlite.org/sqlite-wasm"],
+        // The migrator reads files with `fs`, which must reach worker/fs.ts.
+        exclude: ["@sqlite.org/sqlite-wasm", "drizzle-orm/migrator"],
     },
     build: {
         outDir,

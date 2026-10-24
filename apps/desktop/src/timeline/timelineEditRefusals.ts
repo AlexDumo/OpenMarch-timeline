@@ -27,7 +27,7 @@ export const CANVAS_EDIT_REFUSALS = {
     pastLastPage: {
         key: "timeline.edit.pastLastPage",
         defaultMessage:
-            "There's no page here yet. Add a page with + to write a set after the last page.",
+            "There's no page here yet. Right-click the playhead and choose Create page at playhead (F) to write a set after the last page.",
     },
 } as const;
 

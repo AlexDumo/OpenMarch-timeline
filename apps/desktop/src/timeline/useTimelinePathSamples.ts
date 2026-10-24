@@ -50,21 +50,20 @@ function useSamplesWhileActive(
     return paths;
 }
 
-/** The selected page's moves in and out, as `useTimelinePathSamples` keeps them. */
+/** The selected page's moves out, as `useTimelinePathSamples` keeps them. */
 export interface TimelinePathSamples {
-    /** Each marcher's move into the selected page */
-    readonly previousPaths: Paths;
     /** Each marcher's move into the next page */
     readonly nextPaths: Paths;
 }
 
 /**
- * The selected page's paths from the resolver (docs/timeline/phases/07-page-parity.md P7.10): the
- * move into the selected page and the move out of it, sampled between page end beats.
+ * The selected page's next paths from the resolver (docs/timeline/phases/07-page-parity.md
+ * P7.10): the move out of the selected page, sampled between page end beats. Where marchers came
+ * from is start flag positions' (`useStartFlagOverlay`, fork #331), which replaced previous paths.
  *
  * Cost: the samples are kept per resolver version and page pair, so toggles and visual changes
- * don't resample, and neither do Play and Stop; a side that can't show (its toggle off and no
- * forced warning) isn't sampled; nothing is sampled while playing or while `enabled` is false,
+ * don't resample, and neither do Play and Stop; paths that can't show (the toggle off and no
+ * forced warning) aren't sampled; nothing is sampled while playing or while `enabled` is false,
  * and the last samples are returned instead.
  */
 export function useTimelinePathSamples({
@@ -73,7 +72,6 @@ export function useTimelinePathSamples({
     selectedPage,
     pages,
     marcherIds,
-    previousPathsEnabled,
     nextPathsEnabled,
     stepSizeWarningsEnabled,
 }: {
@@ -82,7 +80,6 @@ export function useTimelinePathSamples({
     selectedPage: PathRenderPage | null;
     pages: readonly PathRenderPage[];
     marcherIds: readonly number[] | undefined;
-    previousPathsEnabled: boolean;
     nextPathsEnabled: boolean;
     stepSizeWarningsEnabled: boolean;
 }): TimelinePathSamples & { readonly active: boolean } {
@@ -90,37 +87,15 @@ export function useTimelinePathSamples({
     const version = useTimelineResolverStore((s) => s.version);
     const active = enabled && !isPlaying && resolver !== null;
 
-    const previousPage = selectedPage
-        ? findPage(pages, selectedPage.previousPageId)
-        : null;
     const nextPage = selectedPage
         ? findPage(pages, selectedPage.nextPageId)
         : null;
-    const sampleInto = canShowPath({
-        pathEnabled: previousPathsEnabled,
-        allowForceShow: false,
-        warningsEnabled: stepSizeWarningsEnabled,
-    });
     const sampleOut = canShowPath({
         pathEnabled: nextPathsEnabled,
         allowForceShow: true,
         warningsEnabled: stepSizeWarningsEnabled,
     });
 
-    const previousPaths = useSamplesWhileActive(
-        active,
-        () =>
-            sampleInto && marcherIds
-                ? pathsIntoPage(
-                      resolver!,
-                      marcherIds,
-                      selectedPage,
-                      previousPage,
-                  )
-                : NO_PATHS,
-        // `version` changes whenever the resolver's answers may have
-        [sampleInto, resolver, version, marcherIds, selectedPage, previousPage],
-    );
     const nextPaths = useSamplesWhileActive(
         active,
         () =>
@@ -129,5 +104,5 @@ export function useTimelinePathSamples({
                 : NO_PATHS,
         [sampleOut, resolver, version, marcherIds, selectedPage, nextPage],
     );
-    return { previousPaths, nextPaths, active };
+    return { nextPaths, active };
 }

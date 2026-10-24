@@ -419,17 +419,11 @@ test("change: the open box's controls fade while the pointer is away from it, an
     await expect.poll(calm).toBe(true);
 });
 
-test("change: N and the transport's Pathways button hide and show the open box's walks and start rings, and N is previous paths again once it closes", async ({
+test("change: the transport's Pathways button hides and shows the open box's walks and start rings, and goes once it closes", async ({
     show,
 }) => {
     const { page } = show;
     const pathways = page.getByTestId("timeline-shape-pathways");
-    const previousPaths = () =>
-        page.evaluate(
-            () =>
-                JSON.parse(localStorage.getItem("openmarch:uiSettings") ?? "{}")
-                    .previousPaths ?? false,
-        );
     await expect(pathways).toHaveCount(0);
     await drawBox(show);
     let overlay = (await shapeOverlay(page))!;
@@ -437,7 +431,7 @@ test("change: N and the transport's Pathways button hide and show the open box's
     expect(overlay.rings).toHaveLength(ALL.length);
     await expect(pathways).toHaveAttribute("aria-pressed", "true");
 
-    await page.keyboard.press("n");
+    await pathways.click();
     await expect
         .poll(async () => (await shapeOverlay(page))!.walks)
         .toEqual([]);
@@ -445,8 +439,6 @@ test("change: N and the transport's Pathways button hide and show the open box's
     expect(overlay.rings).toEqual([]);
     expect(overlay.spots).toHaveLength(ALL.length);
     await expect(pathways).toHaveAttribute("aria-pressed", "false");
-    // The page's own previous paths didn't change
-    expect(await previousPaths()).toBe(false);
 
     await pathways.click();
     await expect
@@ -455,11 +447,9 @@ test("change: N and the transport's Pathways button hide and show the open box's
     expect((await shapeOverlay(page))!.rings).toHaveLength(ALL.length);
     await expect(pathways).toHaveAttribute("aria-pressed", "true");
 
-    // Closed, the button goes and N is the previous paths shortcut again
+    // Closed, the button goes
     await page.keyboard.press("Escape");
     await expect(pathways).toHaveCount(0);
-    await page.keyboard.press("n");
-    await expect.poll(previousPaths).toBe(true);
 });
 
 const screenOf = async (page: Page, id: number): Promise<[number, number]> => {

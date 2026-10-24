@@ -105,34 +105,27 @@ const WHITE: Rgba = [1, 1, 1, 1];
 
 export type PathOverlayInput = {
     readonly marcherIds: readonly number[];
-    /** Each marcher's move into the selected page; its endpoint is where it starts. */
-    readonly previousPaths: ReadonlyMap<number, TimelinePath>;
     /** Each marcher's move into the next page; its endpoint is where it ends. */
     readonly nextPaths: ReadonlyMap<number, TimelinePath>;
-    readonly previousPathsEnabled: boolean;
     readonly nextPathsEnabled: boolean;
     readonly stepSizeWarningsEnabled: boolean;
     readonly fieldProperties: FieldProperties;
 };
 
 /**
- * The selected page's paths, midsets and endpoints: each side in its theme
- * color, or dashed, thicker and red when its fastest stretch is over the
- * step-size threshold. A next path over the threshold shows even with its
- * toggle off; a previous path never does (`evaluatePathWarning`).
+ * The selected page's next paths, midsets and endpoints: in the theme's next
+ * path color, or dashed, thicker and red when its fastest stretch is over the
+ * step-size threshold, which shows it even with its toggle off
+ * (`evaluatePathWarning`). Where marchers came from is start flag positions'
+ * (`planStartFlagOverlay`, fork #331), which replaced the previous paths.
  */
 export function planPathOverlay(input: PathOverlayInput): OverlayPlan {
     const strokes: StrokePlan[] = [];
     const dots: DotPlan[] = [];
     const { fieldProperties, stepSizeWarningsEnabled } = input;
     const theme = fieldProperties.theme;
-    const side = (
-        path: TimelinePath | undefined,
-        endpointAt: "start" | "end",
-        pathEnabled: boolean,
-        allowForceShow: boolean,
-        color: RgbaColor,
-    ) => {
+    const color = theme.nextPath;
+    const side = (path: TimelinePath | undefined) => {
         if (!path) return;
         const { show, isWarning } = evaluatePathWarning({
             start: path.start,
@@ -140,8 +133,8 @@ export function planPathOverlay(input: PathOverlayInput): OverlayPlan {
             distance: path.stride,
             counts: 1,
             fieldProperties,
-            pathEnabled,
-            allowForceShow,
+            pathEnabled: input.nextPathsEnabled,
+            allowForceShow: true,
             warningsEnabled: stepSizeWarningsEnabled,
         });
         if (!show) return;
@@ -164,29 +157,15 @@ export function planPathOverlay(input: PathOverlayInput): OverlayPlan {
         });
         // The endpoint keeps the theme color, even on a warning
         dots.push({
-            ...path[endpointAt],
+            ...path.end,
             radius: ENDPOINT_RADIUS,
             fill: rgbaOf(color),
             stroke: null,
             strokeWidth: 0,
         });
     };
-    for (const marcherId of input.marcherIds) {
-        side(
-            input.previousPaths.get(marcherId),
-            "start",
-            input.previousPathsEnabled,
-            false,
-            theme.previousPath,
-        );
-        side(
-            input.nextPaths.get(marcherId),
-            "end",
-            input.nextPathsEnabled,
-            true,
-            theme.nextPath,
-        );
-    }
+    for (const marcherId of input.marcherIds)
+        side(input.nextPaths.get(marcherId));
     return { units: "field", strokes, dots, labels: [] };
 }
 

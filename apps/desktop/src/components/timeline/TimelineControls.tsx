@@ -20,9 +20,6 @@ import { PlaybackSpeedButton } from "./PlaybackSpeedButton";
 import { TRANSPORT_SHORTCUTS } from "./TimelinePrimitives";
 import { START_INK } from "./startFlagInk";
 import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
-import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
-import { getActionShortcutKeys } from "@/shortcuts/labels";
-import { runAction } from "@/shortcuts/registry";
 import {
     effectivePlaybackSpeed,
     usePlaybackSpeedStore,
@@ -131,7 +128,6 @@ export function TimelineLoopButton() {
                 data-testid="timeline-loop"
                 aria-label="Loop"
                 aria-pressed={looping}
-                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
                 // Not `disabled` in isolation, so the tooltip still says why it can't turn off
                 aria-disabled={isolated || undefined}
                 // Keeps keyboard focus off, so Space after a click is still Play
@@ -156,20 +152,15 @@ export function TimelineLoopButton() {
 
 /**
  * Pathways (#403): while a shape is open, shows or hides its walks and start rings, so the shape
- * can be seen as it will stand. It runs the previous paths action, so N does the same.
+ * can be seen as it will stand. It has no key: N is start flag positions (#331).
  */
 export function ShapePathwaysButton() {
     const open = useShapeToolStore((s) => s.tool !== null);
     const shown = useUiSettingsStore((s) => s.uiSettings.shapeWalks ?? true);
-    const overrides = useShortcutOverridesStore((s) => s.overrides);
     if (!open) return null;
-    const shortcut = getActionShortcutKeys("togglePreviousPagePaths", {
-        overrides,
-    })?.join(" + ");
     return (
         <ShortcutTooltip
             label={shown ? "Pathways: shown" : "Pathways: hidden"}
-            shortcut={shortcut}
             hint="The lines from the start flag to the open shape"
         >
             <button
@@ -177,10 +168,16 @@ export function ShapePathwaysButton() {
                 data-testid="timeline-shape-pathways"
                 aria-label="Pathways"
                 aria-pressed={shown}
-                aria-keyshortcuts={shortcut?.replace(/\s*\+\s*/g, "+")}
                 // Keeps keyboard focus off, so Space after a click is still Play
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => runAction("togglePreviousPagePaths")}
+                onClick={() => {
+                    const { uiSettings, setUiSettings } =
+                        useUiSettingsStore.getState();
+                    setUiSettings({
+                        ...uiSettings,
+                        shapeWalks: !(uiSettings.shapeWalks ?? true),
+                    });
+                }}
                 className={clsx(
                     "rounded-4 focus-visible:ring-accent hover:bg-fg-2 flex size-24 items-center justify-center outline-hidden duration-150 focus-visible:ring-2",
                     shown ? "text-accent" : "text-text hover:text-accent",

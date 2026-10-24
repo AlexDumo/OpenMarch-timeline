@@ -1,22 +1,9 @@
-import { type UiSettings, useUiSettingsStore } from "@/stores/UiSettingsStore";
-import { useShapeToolStore } from "@/shapes/tool/shapeToolStore";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
+import { useStartFlagKeyStore } from "@/stores/StartFlagKeyStore";
 import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useWorkspaceViewStore } from "@/stores/WorkspaceViewStore";
 import { useActionHandler } from "../useActionHandler";
-
-/**
- * The previous paths shortcut (N): while a shape is open it shows or hides the shape's walks and
- * start rings instead (#403), the pathways the open shape draws in their place
- */
-export function togglePreviousPaths(
-    settings: UiSettings,
-    shapeOpen: boolean,
-): UiSettings {
-    return shapeOpen
-        ? { ...settings, shapeWalks: !(settings.shapeWalks ?? true) }
-        : { ...settings, previousPaths: !settings.previousPaths };
-}
 
 export function useUiActionHandlers() {
     // Read when an action runs, so a settings change (such as a timeline zoom save) doesn't
@@ -29,13 +16,20 @@ export function useUiActionHandlers() {
     useActionHandler("toggleNextPagePaths", () =>
         setUiSettings({ ...settings(), nextPaths: !settings().nextPaths }),
     );
-    useActionHandler("togglePreviousPagePaths", () =>
-        setUiSettings(
-            togglePreviousPaths(
-                settings(),
-                useShapeToolStore.getState().tool !== null,
-            ),
-        ),
+    // Start flag positions (#331): N shows the Hold N state while held, and a quick tap latches
+    // it. A lost key (the window lost focus) lets go without counting as a tap. The palette has
+    // no key to let go, so it toggles the latch.
+    const startFlagKey = useStartFlagKeyStore.getState;
+    useActionHandler(
+        "toggleStartFlagPositions",
+        () => startFlagKey().toggleLatched(),
+        {
+            onPress: () => startFlagKey().press(),
+            onRelease: (reason) =>
+                reason === "keyup"
+                    ? startFlagKey().release()
+                    : startFlagKey().blurRelease(),
+        },
     );
     useActionHandler("focusCanvas", () => focus("canvas"));
     useActionHandler("exitTimelineFocus", () => focus("canvas"));
