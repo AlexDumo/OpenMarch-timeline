@@ -58,10 +58,17 @@ export interface ActionDefinition {
     defaultBindings: readonly string[];
     allowInInputs?: boolean;
     allowInModals?: boolean;
+    /**
+     * Left out of the command palette. Every action with a default shortcut is listed (#411)
+     * unless it can't work without its key held, or the palette reaches it another way; the
+     * definitions test lists those with why.
+     */
     hiddenFromPalette?: boolean;
     /** A held key runs the action once, not again on each repeat (for toggles) */
     ignoreRepeat?: boolean;
     args?: ActionArgs;
+    /** Joins `args` when the action is run from the command palette, which has no key to let go */
+    paletteArgs?: ActionArgs;
     /** Asked in the command bar when chosen from the palette; the answers join `args` */
     params?: readonly ActionParam[];
 }
@@ -144,7 +151,6 @@ function buildNudgeActions(): Record<NudgeActionId, ActionDefinition> {
                 editsDrill: true,
                 scope: "canvas",
                 defaultBindings: variant.bindings(dir.letter, dir.arrow),
-                hiddenFromPalette: true,
                 args: {
                     direction: dir.direction,
                     step: variant.step,
@@ -168,7 +174,6 @@ function buildTapBeatsActions(): Record<TapBeatsActionId, ActionDefinition> {
             editsDrill: false,
             scope: "timeline",
             defaultBindings: [String(count)],
-            hiddenFromPalette: true,
             args: { count },
         };
     }
@@ -666,7 +671,8 @@ const STATIC_ACTIONS = {
         hiddenFromPalette: true,
     },
     // The favorites ring (#351): hold to aim and let go to pick a shape, tap to keep it open.
-    // The ring takes the key's release, so a held key doesn't repeat it.
+    // The ring takes the key's release, so a held key doesn't repeat it. From the palette it opens
+    // latched, as a tap does (#411).
     openShapeRing: {
         labelKey: "actions.shape.ring",
         keywordsKey: "actions.shape.keywords",
@@ -675,7 +681,7 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["R"],
         ignoreRepeat: true,
-        hiddenFromPalette: true,
+        paletteArgs: { latched: true },
     },
     applyShape: {
         labelKey: "actions.shape.apply",

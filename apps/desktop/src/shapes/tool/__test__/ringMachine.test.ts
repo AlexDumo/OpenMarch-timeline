@@ -3,6 +3,7 @@ import { boxTool } from "../../box/boxTool";
 import { rowTool } from "../../__test__/fakeRowKind";
 import {
     clickRing,
+    latchRing,
     openRing,
     pointRing,
     releaseRingKey,
@@ -141,6 +142,17 @@ describe("holding and tapping R", () => {
         expect(clickRing(latched, up, 4)).toBe(0);
         expect(clickRing(latched, { x: 400, y: 900 }, 4)).toBeNull();
         expect(clickRing(latched, center, 4)).toBeNull();
+    });
+
+    it("opened from the command palette it's latched, as a tap leaves it (#411)", () => {
+        const fromPalette = latchRing(openRing(center, 0));
+        expect(fromPalette.latched).toBe(true);
+        // No key to let go: a late release changes nothing, and a click picks
+        expect(releaseRingKey(fromPalette, 5000)).toEqual({
+            pick: null,
+            ring: fromPalette,
+        });
+        expect(clickRing(fromPalette, up, 4)).toBe(0);
     });
 });
 

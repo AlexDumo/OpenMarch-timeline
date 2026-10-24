@@ -24,9 +24,18 @@ export interface ScrubRate {
     readonly step: number;
 }
 
-/** Spacings: half a step per 8 px, tenths of a step with Alt */
+/**
+ * Spacings: half a step per 8 px; with Alt, hundredths of a step (#411), one per px so a step is
+ * still a short drag
+ */
 export const SPACING_RATE = { px: 8, step: 0.5 } as const;
-export const SPACING_FINE_STEP = 0.1;
+export const SPACING_FINE_RATE = { px: 1, step: 0.01 } as const;
+
+/** The spacing drag's rate: half steps, or with Alt (`snap` off) hundredths */
+export const spacingRate = (snap: boolean, axis: ScrubAxis): ScrubRate => ({
+    axis,
+    ...(snap ? SPACING_RATE : SPACING_FINE_RATE),
+});
 /** Counts (how many across or deep): one per 16 px */
 export const COUNT_RATE = { px: 16, step: 1 } as const;
 

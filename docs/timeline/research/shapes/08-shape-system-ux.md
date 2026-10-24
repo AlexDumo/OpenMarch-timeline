@@ -181,7 +181,7 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
   | A box's size (6 × 2)        | Sideways for more or fewer across, up or down for more or fewer deep. It locks to the first direction moved | 1 per 16 px     |
   | Rotation (in the inspector) | Right turns clockwise                                                                                       | 1° per 2 px     |
 
-- **Alt** while dragging a spacing gives tenths of a step. **Shift** while dragging a rotation
+- **Alt** while dragging a spacing gives hundredths of a step (#411). **Shift** while dragging a rotation
   snaps to 15°.
 - A number lights up while it's being dragged, and its cursor shows its drag direction.
 - A drag that ends where it started changes nothing; it doesn't round the value.
@@ -227,7 +227,7 @@ Guardrails for shapes with unassigned spots later (#358):
   flipped too; that writes positions only, with no recipe, and has no scale control.
 - **Scale by interval**, never by percentage: − and + change the spacing by half a step. A shape
   with uneven gaps (4, 4, 2) changes every gap by half a step. Footprint kinds scale their
-  footprint in half steps. Resize handles snap the spacing to half steps (Alt for tenths), with a
+  footprint in half steps. Resize handles snap the spacing to half steps (Alt for hundredths), with a
   length readout while dragging a long shape. There are no percentage scale buttons anywhere.
 - **The pivot.** A 3 × 3 grid in the inspector, the center by default. On the field, Cmd/Ctrl-drag
   from the center dot pulls the pivot out into its own yellow crosshair, which can then be

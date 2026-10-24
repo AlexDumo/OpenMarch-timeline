@@ -4,8 +4,7 @@ import {
     parseSteps,
     scrubDistance,
     scrubValue,
-    SPACING_FINE_STEP,
-    SPACING_RATE,
+    spacingRate,
 } from "../editor/scrub";
 import { distributionFor } from "../distribute/distribution";
 import type { ToolKind, ToolParam } from "../tool/toolKind";
@@ -47,15 +46,17 @@ const INTERVAL: ToolParam<CircleParams> = {
     type(p, n, text, env) {
         const steps = parseSteps(text);
         if (steps === null) return null;
-        return withInterval(p, n, steps * env.stepPx, env);
+        // A typed interval is kept to hundredths of a step, not half steps (#411)
+        return withInterval(p, n, steps * env.stepPx, { ...env, snap: false });
     },
     scrub(base, n, m, env) {
         const was = base.interval / env.stepPx;
-        const steps = scrubValue(was, scrubDistance("x", m.dx, m.dy), 0, {
-            axis: "x",
-            px: SPACING_RATE.px,
-            step: env.snap ? SPACING_RATE.step : SPACING_FINE_STEP,
-        });
+        const steps = scrubValue(
+            was,
+            scrubDistance("x", m.dx, m.dy),
+            0,
+            spacingRate(env.snap, "x"),
+        );
         // A drag that ends where it started changes nothing; it doesn't round the value
         if (steps === was) return base;
         return withInterval(base, n, steps * env.stepPx, env);

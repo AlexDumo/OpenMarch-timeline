@@ -11,20 +11,19 @@ import {
     subscribeToActionHandlers,
 } from "./registry";
 
-export type ActionButtonProps = Omit<
-    React.ButtonHTMLAttributes<HTMLButtonElement>,
-    "onClick"
-> & {
-    action: ActionId;
-    /** Overrides the generated tooltip */
-    tooltip?: string;
-    /** Selects the toggle on/off label for toggle actions */
-    toggleState?: "on" | "off";
-};
+export type ActionButtonProps =
+    React.ButtonHTMLAttributes<HTMLButtonElement> & {
+        action: ActionId;
+        /** Overrides the generated tooltip */
+        tooltip?: string;
+        /** Selects the toggle on/off label for toggle actions */
+        toggleState?: "on" | "off";
+    };
 
 /**
  * A button that runs a registered action; its tooltip shows the current shortcut.
  * Disabled while the action has no enabled handler, so a click never silently does nothing.
+ * An `onClick` runs first, and `preventDefault` there keeps the action from running.
  */
 export default function ActionButton({
     action,
@@ -33,6 +32,7 @@ export default function ActionButton({
     children,
     className,
     disabled,
+    onClick,
     ...rest
 }: ActionButtonProps) {
     const { t } = useTolgee();
@@ -53,7 +53,10 @@ export default function ActionButton({
                     { toggleState, overrides },
                 )
             }
-            onClick={() => runAction(action)}
+            onClick={(event) => {
+                onClick?.(event);
+                if (!event.defaultPrevented) runAction(action);
+            }}
             className={twMerge(
                 clsx(
                     "enabled:hover:text-accent outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",

@@ -972,7 +972,7 @@ test("change: a box's − and + in the Transform section change its spacing by h
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
 });
 
-test("change: handles snap spacings to half steps, Alt to tenths, with a length readout while dragging", async ({
+test("change: handles snap spacings to half steps, Alt to hundredths, with a length readout while dragging, and a typed spacing keeps hundredths", async ({
     show,
 }) => {
     const { page } = show;
@@ -998,7 +998,7 @@ test("change: handles snap spacings to half steps, Alt to tenths, with a length 
     expect((await shapeOverlay(page))!.tip).toBeNull();
     for (const s of await spacings(page)) expect((s * 2) % 1).toBe(0);
 
-    // With Alt: tenths
+    // With Alt: hundredths (#411)
     from = await se();
     await page.keyboard.down("Alt");
     await drag(page, from, { x: from.x + 13, y: from.y + 7 });
@@ -1006,8 +1006,52 @@ test("change: handles snap spacings to half steps, Alt to tenths, with a length 
     const bar = page.getByTestId("shape-tool-readout");
     for (const id of ["shape-editor-across", "shape-editor-deep"]) {
         const text = await bar.getByTestId(id).innerText();
-        expect(text).toMatch(/^\d+(\.\d)?$|^[\d½]+$/);
+        expect(text).toMatch(/^\d+(\.\d{1,2})?$|^[\d½]+$/);
     }
+    for (const s of await spacings(page))
+        expect(Math.abs(s * 100 - Math.round(s * 100))).toBeLessThan(1e-6);
+
+    // Typed, a spacing keeps its hundredths rather than going to half steps
+    await page.getByTestId("shape-editor-across").click();
+    await page.keyboard.type("2.37");
+    await page.keyboard.press("Enter");
+    await expect(bar.getByTestId("shape-editor-across")).toHaveText("2.37");
+});
+
+test("change: clicking the picked kind in the Shapes tab closes the tool while nothing is drawn, and does nothing once a box is", async ({
+    show,
+}) => {
+    const { page } = show;
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    await selectAll(page);
+    await page.getByRole("tab", { name: "Shapes" }).click();
+    const box = page.getByTestId("shapes-tab-block");
+    const hint = page.getByTestId("shape-tool-hint");
+
+    // Armed with nothing drawn: a second click closes the tool
+    await box.click();
+    await expect(hint).toBeVisible();
+    await box.click();
+    await expect(hint).toBeHidden();
+    await expect(box).toHaveAttribute("aria-pressed", "false");
+    expect((await readField(page)).selection).toEqual(ALL);
+
+    // Drawn: the click does nothing, and Escape still discards
+    await box.click();
+    await drag(
+        page,
+        await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+        await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 19 * S }),
+    );
+    const drawn = (await shapeOverlay(page))!;
+    await box.click();
+    await expect(box).toHaveAttribute("aria-pressed", "true");
+    expect((await shapeOverlay(page))!.spots).toEqual(drawn.spots);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
 });
 
 test("change: a placed box comes back turned and flipped when selected again", async ({
@@ -1934,6 +1978,50 @@ test("tapping R keeps the ring open: a click away dismisses it, a click on Box a
     await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("shape-tool-hint")).toBeHidden();
+});
+
+test("change: every shortcut is in the command palette: the ring opens latched from it, nudges are listed, and Shape › Box shows B", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectAll(page);
+    await pointAtField(show);
+    const palette = page.getByRole("combobox");
+
+    // The ring, from the palette: latched, as a tap of R leaves it
+    await page.keyboard.press("ControlOrMeta+k");
+    await palette.fill("favorites ring");
+    await expect(page.getByRole("option").first()).toHaveText(
+        /^Favorites ring/,
+    );
+    await page.keyboard.press("Enter");
+    await expect(ring(page)).toHaveAttribute("data-latched", "true");
+    await ringSlot(page, "block").click();
+    await expect(ring(page)).toBeHidden();
+    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-tool-hint")).toBeHidden();
+
+    // A nudge, with its key
+    await page.keyboard.press("ControlOrMeta+k");
+    await palette.fill("nudge up");
+    await expect(page.getByRole("option").first()).toHaveText(/^Nudge up.*W$/);
+
+    // Box and Circle are Shape › Box and Shape › Circle, with their keys
+    await palette.fill("box");
+    const shapeBox = page
+        .getByRole("option")
+        .filter({ hasText: /^Shape › Box/ })
+        .first();
+    await expect(shapeBox).toHaveText(/B$/);
+    await palette.fill("circle");
+    await expect(
+        page
+            .getByRole("option")
+            .filter({ hasText: /^Shape › Circle/ })
+            .first(),
+    ).toHaveText(/O$/);
+    await page.keyboard.press("Escape");
 });
 
 test("with nobody selected the ring's shapes are greyed out and say why, and letting go over one picks nothing", async ({

@@ -82,11 +82,11 @@ describe("drawing a circle", () => {
         expect(radiusOf(p, 8)).toBeCloseTo(radiusFor(20, 8));
     });
 
-    it("draws tenths of a step and off the grid with Alt", () => {
+    it("draws hundredths of a step and off the grid with Alt (#411)", () => {
         const p = paramsOf(drawn(8, { x: 101, y: 99 }, { x: 125, y: 99 }, alt));
         expect(p.center).toEqual({ x: 101, y: 99 });
-        // 2 · 24 · sin(π/8) = 18.37, to tenths of a step
-        expect(p.interval).toBeCloseTo(18);
+        // 2 · 24 · sin(π/8) = 18.37, to hundredths of a step
+        expect(p.interval).toBeCloseTo(18.4);
     });
 
     it("draws nothing for a drag shorter than half a step", () => {
@@ -168,7 +168,7 @@ describe("editing a circle", () => {
         );
         expect(out.interval).toBe(30);
         expect(out.center).toEqual(p.center);
-        // Alt: tenths, 30.9 → 31
+        // Alt: hundredths, 30.90
         const fine = circleTool.dragHandle(
             p,
             N,
@@ -176,7 +176,7 @@ describe("editing a circle", () => {
             { x: 100, y: 150 },
             alt,
         );
-        expect(fine.interval).toBeCloseTo(31);
+        expect(fine.interval).toBeCloseTo(30.9);
     });
 
     it("has no handle for one marcher", () => {
@@ -253,6 +253,10 @@ describe("editing a circle", () => {
         expect(
             (param!.type(t.params, N, "3.5", env) as CircleParams).interval,
         ).toBe(35);
+        // Typed, it keeps hundredths of a step, not half steps (#411)
+        expect(
+            (param!.type(t.params, N, "2.37", env) as CircleParams).interval,
+        ).toBeCloseTo(23.7);
         expect(undo(t).params).toBe(null);
     });
 });
