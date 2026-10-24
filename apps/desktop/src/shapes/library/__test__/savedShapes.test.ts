@@ -504,6 +504,22 @@ describe("the user's library as stored (#393)", () => {
         expect(SavedShapeSchema.parse(entry)).toEqual(entry);
     });
 
+    it("reads the distribution as a recipe's, dropping a mode this version doesn't know", () => {
+        expect(
+            SavedShapeSchema.parse({
+                ...old,
+                distribution: { mode: "files", layout: { family: "zigzag" } },
+            }).distribution,
+        ).toEqual({
+            mode: "files",
+            layout: { family: "shortBack", byFile: false },
+            stagger: [0, 1],
+        });
+        expect(
+            SavedShapeSchema.parse({ ...old, distribution: { mode: "swirl" } }),
+        ).toEqual(old);
+    });
+
     it("drops a field that doesn't read, keeping the entry", () => {
         expect(
             SavedShapeSchema.parse({

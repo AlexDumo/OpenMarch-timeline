@@ -1,6 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 import * as z from "zod";
 import { schema } from "@/global/database/db";
+import {
+    readSavedDistribution,
+    type SavedDistribution,
+} from "@/shapes/distribute/distribution";
 import type { DbConnection, DbTransaction } from "./types";
 
 /**
@@ -11,16 +15,6 @@ import type { DbConnection, DbTransaction } from "./types";
  */
 
 const { saved_shapes } = schema;
-
-/**
- * How a saved shape of a closed kind is filled: a recipe's `params.distribution` without its size
- * (a Files layout's `files`) or a spread's `seed` (ADR 0006, saved shapes). Kept as stored and read
- * by the kind when it's applied, so a mode this version doesn't know is kept, not lost.
- */
-export type SavedDistribution = {
-    readonly mode: string;
-    readonly [setting: string]: unknown;
-};
 
 /**
  * A saved shape: a kind and its intervals, under a name. The same record is the user's library
@@ -53,8 +47,13 @@ export const SavedShapeIntervalsSchema = z.record(
     z.number().finite(),
 );
 
-/** A saved shape's distribution as stored: any object naming its mode */
-export const SavedDistributionSchema = z.looseObject({ mode: z.string() });
+/**
+ * A saved shape's distribution as stored, read as a recipe's is; one this version can't read is
+ * dropped, so the shape fills the kind's own way
+ */
+export const SavedDistributionSchema = z
+    .unknown()
+    .transform(readSavedDistribution);
 
 /**
  * A whole saved shape as stored in the user's library. Everything after the intervals is
@@ -100,8 +99,7 @@ function realDatabaseSavedShapeToSavedShape(
     const distribution =
         row.distribution === null
             ? undefined
-            : SavedDistributionSchema.safeParse(parseJson(row.distribution))
-                  .data;
+            : readSavedDistribution(parseJson(row.distribution));
     return {
         id: row.id,
         name: row.name,
