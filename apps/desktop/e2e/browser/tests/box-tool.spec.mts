@@ -1664,6 +1664,11 @@ test("change: / opens the command bar, and Shape › Box asks each number with a
     await expect(question(page)).toHaveText(/^Layout/);
     await expect(answer(page)).toHaveValue("Full 4 × 2");
 
+    // Then the stagger (#388), straight to start
+    await page.keyboard.press("Enter");
+    await expect(question(page)).toHaveText(/^Stagger/);
+    await expect(answer(page)).toHaveValue("0");
+
     // The show is untouched until the last answer, which places the box as one undo step
     expect(await readout(page)).toBe("4 × 2 · 3 × 2 steps");
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
