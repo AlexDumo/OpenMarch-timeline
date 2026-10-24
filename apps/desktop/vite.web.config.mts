@@ -23,6 +23,8 @@ import { DEMOS } from "./web/demos";
  * `web/LAB.md`): it offers the example shows too, loads everything relative
  * to its folder (the lab serves each test at `/x/<test id>/`), and keeps what
  * it stores apart from every other test on that origin, by `LAB_TEST_ID`.
+ * It opens straight into an example show, which `LAB_MANIFEST`, the test's
+ * `lab/<id>/experiment.md`, may name.
  */
 
 const channel = process.env.WEB_CHANNEL ?? "dev";
@@ -33,6 +35,41 @@ if (isLab && !/^[a-z0-9-]+$/.test(labTestId))
         "WEB_CHANNEL=lab needs LAB_TEST_ID, the lab test's id (a-z, 0-9 and -)",
     );
 const examples = channel === "preview" || isLab ? DEMOS : [];
+
+/**
+ * A field from the front matter of the lab test's manifest, the path in
+ * `LAB_MANIFEST` (from the repository root; CI sets it to the test being
+ * published). Only plain one-word values (`show: part1`), so no YAML parser.
+ */
+function labManifestField(name: string): string | undefined {
+    const manifest = process.env.LAB_MANIFEST;
+    if (!isLab || !manifest) return undefined;
+    const text = fs.readFileSync(
+        path.resolve(__dirname, "..", "..", manifest),
+        "utf8",
+    );
+    const frontMatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? "";
+    return new RegExp(`^${name}:[ \\t]*["']?([\\w-]+)`, "m").exec(
+        frontMatter,
+    )?.[1];
+}
+
+/**
+ * What a lab build opens straight away (`web/renderer/lab.ts`): the example
+ * show the manifest's `show` names (an id in `web/demos.ts`), or the first,
+ * in the editor mode its `mode` names ("basic" or "expert", the default).
+ */
+const labShow = isLab ? (labManifestField("show") ?? DEMOS[0].id) : "";
+const labMode = isLab ? (labManifestField("mode") ?? "expert") : "";
+if (isLab && !DEMOS.some((demo) => demo.id === labShow))
+    throw new Error(
+        `The lab manifest's show "${labShow}" isn't one of web/demos.ts: ${DEMOS.map((demo) => demo.id).join(", ")}`,
+    );
+if (isLab && labMode !== "basic" && labMode !== "expert")
+    throw new Error(
+        `The lab manifest's mode "${labMode}" isn't "basic" or "expert"`,
+    );
+
 /**
  * What names this build's browser storage (see `web/renderer/channel.ts`).
  * Lab tests all share one origin, so each test gets its own.
@@ -201,6 +238,8 @@ export default defineConfig({
         "import.meta.env.VITE_PUBLIC_WEB_EXAMPLES": JSON.stringify(
             JSON.stringify(examples),
         ),
+        "import.meta.env.VITE_PUBLIC_LAB_SHOW": JSON.stringify(labShow),
+        "import.meta.env.VITE_PUBLIC_LAB_MODE": JSON.stringify(labMode),
         // No analytics on the web (PostHog stays uninitialized; Sentry is
         // stubbed in renderer/sentry.ts).
         "import.meta.env.VITE_PUBLIC_POSTHOG_KEY": JSON.stringify(""),
