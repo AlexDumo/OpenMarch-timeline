@@ -1,4 +1,5 @@
 import { SegmentedTextSwitch } from "@openmarch/ui";
+import tolgee from "@/global/singletons/Tolgee";
 import {
     GAP_SIDES,
     type GapSide,
@@ -20,6 +21,12 @@ const STYLE_LABELS: Readonly<Record<OddGap["style"], string>> = {
     gap: "Leaves a gap",
     spread: "Spreads evenly",
 };
+
+const sideLabel = (side: GapSide) =>
+    tolgee.t(`shapes.edit.gap.side.${side}`, SIDE_LABELS[side]);
+
+const styleLabel = (style: OddGap["style"]) =>
+    tolgee.t(`shapes.edit.gap.style.${style}`, STYLE_LABELS[style]);
 
 /**
  * Where an odd-count outline leaves its spot out (#390), under the mode switch: the side, as the
@@ -49,13 +56,18 @@ export function OutlineGap({
     return (
         <div className="flex flex-col gap-6" data-testid="outline-gap">
             <div className="flex items-center gap-8">
-                <span className="text-sub text-text/80 w-64">Gap</span>
+                <span className="text-sub text-text/80 w-64">
+                    {tolgee.t("shapes.edit.gap.label", "Gap")}
+                </span>
                 <SegmentedTextSwitch
-                    ariaLabel="Gap side"
+                    ariaLabel={tolgee.t(
+                        "shapes.edit.gap.sideLabel",
+                        "Gap side",
+                    )}
                     testId="outline-gap-side"
                     options={GAP_SIDES.map((side) => ({
                         value: side,
-                        label: SIDE_LABELS[side],
+                        label: sideLabel(side),
                         testId: `outline-gap-${side}`,
                     }))}
                     selected={seen.side}
@@ -73,13 +85,18 @@ export function OutlineGap({
                 />
             </div>
             <div className="flex items-center gap-8">
-                <span className="text-sub text-text/80 w-64">That side</span>
+                <span className="text-sub text-text/80 w-64">
+                    {tolgee.t("shapes.edit.gap.styleLabel", "That side")}
+                </span>
                 <SegmentedTextSwitch
-                    ariaLabel="That side"
+                    ariaLabel={tolgee.t(
+                        "shapes.edit.gap.styleLabel",
+                        "That side",
+                    )}
                     testId="outline-gap-style"
                     options={(["gap", "spread"] as const).map((style) => ({
                         value: style,
-                        label: STYLE_LABELS[style],
+                        label: styleLabel(style),
                         testId: `outline-gap-${style}`,
                     }))}
                     selected={gap.style}

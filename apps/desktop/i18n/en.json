@@ -1964,12 +1964,47 @@
             }
         },
         "circle": "Circle",
+        "edit": {
+            "closeUp": {
+                "label": "Close up",
+                "title": "Close up: fill the {count, plural, one {# empty spot} other {# empty spots}} with the marchers left"
+            },
+            "gap": {
+                "label": "Gap",
+                "side": {
+                    "back": "Back",
+                    "front": "Front",
+                    "left": "Left",
+                    "right": "Right"
+                },
+                "sideLabel": "Gap side",
+                "style": {
+                    "gap": "Leaves a gap",
+                    "spread": "Spreads evenly"
+                },
+                "styleLabel": "That side"
+            },
+            "mode": {
+                "files": "Files",
+                "label": "Fill",
+                "outline": "Outline",
+                "spread": "Spread"
+            },
+            "reshuffle": {
+                "label": "Reshuffle",
+                "title": "Reshuffle: a new layout"
+            }
+        },
         "placed": {
             "label": "{name} · {interval} steps",
             "left": {
                 "many": "{count} left the {shape}",
                 "one": "{name} left the {shape}"
             }
+        },
+        "save": {
+            "descriptionLabel": "Description of the saved shape (optional)",
+            "descriptionPlaceholder": "Description (optional)"
         },
         "saved": {
             "copyFailed": "Couldn't copy the saved shape into the show",
