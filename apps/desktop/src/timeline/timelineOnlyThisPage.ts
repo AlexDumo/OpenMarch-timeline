@@ -27,6 +27,7 @@ import {
 } from "./timelineKeepLater";
 import { editedMarcherEnds } from "./timelineCarryForward";
 import { toastTimelineError } from "./timelineErrorMessages";
+import { followLinksOn, useFollowLinksStore } from "./followLinks";
 import { applyKeptChange } from "./useKeepLaterPages";
 import {
     resolverSpans,
@@ -200,8 +201,33 @@ const isOnlyRun = (v: unknown): v is OnlyRun =>
     typeof v === "object" && v !== null && (v as OnlyRun).kind === "only-page";
 
 /**
- * Shows the toast for `found`, whose action keeps the followers on the next page box at their
- * spots in `positions` (from before the run's first edit).
+ * **Only Page N** for `found`: keeps the followers on the next page box at their spots in
+ * `positions` (from before the run's first edit), as its own undo step.
+ */
+function keepFollowersBack(
+    database: DbConnection,
+    found: FollowedAfterEdit,
+    positions: ReadonlyMap<number, XY>,
+): void {
+    const at = new Map<number, XY>();
+    for (const id of found.marcherIds) {
+        const spot = positions.get(id);
+        if (spot) at.set(id, spot);
+    }
+    keepMarchersOnPage({
+        db: database,
+        pageBox: found.next,
+        marcherIds: found.marcherIds,
+        at,
+    })
+        .then((kept) => applyKeptChange(kept.markers))
+        .catch((e: unknown) =>
+            toastTimelineError(e, "Error keeping the later pages"),
+        );
+}
+
+/**
+ * Shows the toast for `found`, whose action keeps the followers back (`keepFollowersBack`).
  *
  * @returns the toast's id
  */
@@ -216,11 +242,6 @@ function showOnlyThisPageToast({
     positions: ReadonlyMap<number, XY>;
     forget: () => void;
 }): string {
-    const at = new Map<number, XY>();
-    for (const id of found.marcherIds) {
-        const spot = positions.get(id);
-        if (spot) at.set(id, spot);
-    }
     const { message, actionLabel } = onlyThisPageMessage(
         found.pages,
         found.editedName,
@@ -233,20 +254,43 @@ function showOnlyThisPageToast({
             label: actionLabel,
             onClick: () => {
                 forget();
-                keepMarchersOnPage({
-                    db: database,
-                    pageBox: found.next,
-                    marcherIds: found.marcherIds,
-                    at,
-                })
-                    .then((kept) => applyKeptChange(kept.markers))
-                    .catch((e: unknown) =>
-                        toastTimelineError(e, "Error keeping the later pages"),
-                    );
+                keepFollowersBack(database, found, positions);
             },
         },
         onDismiss: forget,
         onAutoClose: forget,
+    });
+    return id;
+}
+
+/**
+ * The follow links variant's answer instead of the toast (`followLinks.ts`): the chains on the
+ * pages that followed stay lit, and a click on one does Only Page N. It takes the surprise slot
+ * (closing any open surprise toast) under an id no toast shows, so a run of nudges continues.
+ *
+ * @returns the slot's id
+ */
+function offerOnChains({
+    database,
+    found,
+    positions,
+    forget,
+}: {
+    database: DbConnection;
+    found: FollowedAfterEdit;
+    positions: ReadonlyMap<number, XY>;
+    forget: () => void;
+}): string {
+    const id = editSurpriseToastId();
+    useFollowLinksStore.getState().setCarried({
+        editedName: found.editedName,
+        pages: found.pages,
+        marcherIds: found.marcherIds,
+        onlyThisPage: () => {
+            forget();
+            useFollowLinksStore.getState().setCarried(null);
+            keepFollowersBack(database, found, positions);
+        },
     });
     return id;
 }
@@ -306,12 +350,14 @@ export async function offerOnlyThisPage({
     );
     // A newer edit's toast already shows
     if (run.stale) return false;
+    const onChains = followLinksOn();
     // A nudge in a run keeps the run's open toast, whose action now covers this edit too
-    if (run.value.continued && run.value.toastId !== null) {
+    if (run.value.continued && run.value.toastId !== null && !onChains) {
         run.shown(run.value.toastId);
         return true;
     }
-    const id = showOnlyThisPageToast({
+    // The chains' offer ended with the nudge's history change: set it again, for the whole run
+    const id = (onChains ? offerOnChains : showOnlyThisPageToast)({
         database,
         found,
         positions: run.value.positions,

@@ -87,7 +87,17 @@ import {
     usePageKeepStates,
 } from "@/timeline/useKeepLaterPages";
 import { useSelectedPage } from "@/context/SelectedPageContext";
-import { keepHereMenu, usePageKeepChains } from "./PageKeepChain";
+import tolgee from "@/global/singletons/Tolgee";
+import {
+    followLinkChains,
+    keepHereMenu,
+    usePageKeepChains,
+} from "./PageKeepChain";
+import {
+    followLinksOn,
+    useFieldEditing,
+    useFollowLinksStore,
+} from "@/timeline/followLinks";
 import { describeMoveClips } from "./moveClipText";
 import { useMoveNotesStore } from "@/stores/MoveNotesStore";
 import { useClearLeftoverMoveSelection } from "./useMoveMemberSelection";
@@ -246,16 +256,51 @@ export default function TimelineModePanel() {
     // (named up to three; K's target says so, from the current page)
     const keepStates = usePageKeepStates(pages, selectedIdList);
     const keepNameOf = useMarcherNameOf(selectedMarchers);
-    const keepK = useKeepToggle(
-        keepStates,
-        pages,
-        useSelectedPage()?.selectedPage?.id,
+    const currentPageId = useSelectedPage()?.selectedPage?.id;
+    const keepK = useKeepToggle(keepStates, pages, currentPageId);
+    const plainKeepChains = usePageKeepChains(keepStates, keepNameOf, keepK);
+    // Follow links (study variant): chains on the pages an edit carries into, lit while it does
+    const followLinks = followLinksOn();
+    const fieldEditing = useFieldEditing(followLinks);
+    const carried = useFollowLinksStore((s) => s.carried);
+    const carriedLit = useFollowLinksStore((s) => s.carriedLit);
+    const homePageId = pages[0]?.id ?? null;
+    const keepChains = useMemo(
+        () =>
+            followLinks
+                ? followLinkChains({
+                      chains: plainKeepChains,
+                      states: keepStates,
+                      currentPageId,
+                      homePageId,
+                      editing: fieldEditing,
+                      carried,
+                      carriedLit,
+                  })
+                : plainKeepChains,
+        [
+            followLinks,
+            plainKeepChains,
+            keepStates,
+            currentPageId,
+            homePageId,
+            fieldEditing,
+            carried,
+            carriedLit,
+        ],
     );
-    const keepChains = usePageKeepChains(keepStates, keepNameOf, keepK);
-    const keepHere = useMemo(
-        () => keepHereMenu(keepStates, keepK),
-        [keepStates, keepK],
-    );
+    const keepHere = useMemo(() => {
+        const menu = keepHereMenu(keepStates, keepK);
+        return followLinks
+            ? {
+                  ...menu,
+                  keepLabel: tolgee.t(
+                      "timeline.followLinks.unlinkHere",
+                      "Unlink selected marchers here",
+                  ),
+              }
+            : menu;
+    }, [keepStates, keepK, followLinks]);
     const { tracks: timelines, current: tracksCurrent } =
         useTimelineTracksState({
             database: db,

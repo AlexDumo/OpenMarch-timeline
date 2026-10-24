@@ -391,6 +391,8 @@ export interface TimelineKeepHereMenu {
     } | null;
     readonly onKeep: (pageId: string | number) => void;
     readonly onFollow: (pageId: string | number) => void;
+    /** The keep entry's words, where a study variant words it differently (follow links: "Unlink") */
+    readonly keepLabel?: string;
 }
 
 /**
@@ -559,10 +561,11 @@ export function useTimelineRangeMenu({
                                     className={ITEM_CLASS}
                                 >
                                     <LinkBreakIcon size={14} />
-                                    {tolgee.t(
-                                        "timeline.rangeMenu.keepHere",
-                                        "Keep selected marchers here",
-                                    )}
+                                    {menu?.keepHere?.keepLabel ??
+                                        tolgee.t(
+                                            "timeline.rangeMenu.keepHere",
+                                            "Keep selected marchers here",
+                                        )}
                                     <MenuShortcut
                                         keys={keepState.keepShortcut}
                                     />

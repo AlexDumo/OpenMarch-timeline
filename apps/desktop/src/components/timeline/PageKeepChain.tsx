@@ -2,7 +2,10 @@ import { useMemo, useRef } from "react";
 import { useTranslate } from "@tolgee/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { LinkBreakIcon, LinkSimpleIcon } from "@phosphor-icons/react";
+import type { CarriedEdit } from "@/timeline/followLinks";
 import {
+    followingPages,
+    pagesText,
     pageChainWords,
     type KeepToggle,
     type KeepTranslate,
@@ -27,6 +30,10 @@ export interface PageKeepChain extends PageChainWords {
     readonly withK?: boolean;
     /** **K** does what the page's menu does for `menuLabel`'s marchers (a box too narrow for it) */
     readonly menuWithK?: boolean;
+    /** A linked chain that shows without hovering its box (follow links: the page follows the selected one) */
+    readonly shown?: boolean;
+    /** Drawn in the accent: an edit is carrying into the page, or just did (follow links) */
+    readonly lit?: boolean;
 }
 
 /** The keyboard shortcut that toggles keep (`toggleKeepOnPage`), as menus and tooltips show it */
@@ -145,6 +152,103 @@ export function pageKeepChains(
     return chains;
 }
 
+/**
+ * The chains with the follow links variant on (`followLinks.ts`): the linked chain shows on every
+ * page box that follows the page `currentPageId` for the selection, and lights up there while
+ * `editing`. After an edit that carried into later pages (`carried`), those pages' chains stay lit,
+ * say so, and a click does **Only Page N** instead of keeping the marchers at their new spots.
+ */
+export function followLinkChains({
+    chains,
+    states,
+    currentPageId,
+    homePageId,
+    editing,
+    carried,
+    carriedLit = true,
+    translate = (key, defaultValue, params) =>
+        tolgee.t(key, defaultValue, params),
+}: {
+    chains: PageKeepChains;
+    states: readonly PageKeepState[];
+    currentPageId: number | null | undefined;
+    homePageId: number | null;
+    editing: boolean;
+    carried: CarriedEdit | null;
+    /** The carry's chains are lit (just after the edit) */
+    carriedLit?: boolean;
+    translate?: KeepTranslate;
+}): PageKeepChains {
+    if (chains.size === 0) return chains;
+    const following =
+        currentPageId == null
+            ? null
+            : followingPages(states, currentPageId, homePageId);
+    const followNames = new Set(following?.names ?? []);
+    const carriedNames = new Set(carried?.pages ?? []);
+    if (followNames.size === 0 && carriedNames.size === 0) return chains;
+    const out = new Map<string | number, PageKeepChain>(chains);
+    for (const state of states) {
+        const chain = chains.get(state.pageId);
+        if (!chain || chain.kind !== "follows") continue;
+        if (carried && carriedNames.has(state.pageName)) {
+            const params = {
+                page: state.pageName,
+                edited: carried.editedName,
+                pages: pagesText(carried.pages),
+            };
+            out.set(state.pageId, {
+                ...chain,
+                shown: true,
+                lit: editing || carriedLit,
+                withK: false,
+                label: translate(
+                    "timeline.followLinks.carried",
+                    "Moved with your change to Page {edited}",
+                    params,
+                ),
+                hint: translate(
+                    "timeline.followLinks.carriedHint",
+                    "Click to unlink and put {pages} back as they were",
+                    params,
+                ),
+                onToggle: carried.onlyThisPage,
+            });
+        } else if (followNames.has(state.pageName)) {
+            const params = {
+                page: state.pageName,
+                from: state.from[state.from.length - 1] ?? "",
+            };
+            const label = params.from
+                ? translate(
+                      "timeline.followLinks.linked",
+                      "Linked to Page {from}: changes there move this page too",
+                      params,
+                  )
+                : chain.label;
+            const hint = translate(
+                "timeline.followLinks.linkedHint",
+                "Click to unlink, so Page {page} and the pages after it stay put",
+                params,
+            );
+            out.set(state.pageId, {
+                ...chain,
+                shown: true,
+                lit: editing,
+                label,
+                hint,
+                menuLabel: label,
+                menuHint: translate(
+                    "timeline.followLinks.linkedMenuHint",
+                    "Right-click the page to unlink it",
+                    params,
+                ),
+            });
+        }
+    }
+    return out;
+}
+
 /*
  * What a page box's chain must stay clear of (measured 2026-10-12, all drawn above it and all
  * taking the pointer): the playhead and the start flag (12px handles centered on their beat, the
@@ -250,6 +354,10 @@ const KIND_CLASS: Record<PageKeepChain["kind"], string> = {
     mixed: "bg-fg-2 border border-accent text-accent hover:bg-accent/15",
 };
 
+/** A lit chain (follow links): the page is following an edit, filled in the accent like a hovered link */
+const LIT_CLASS =
+    "bg-accent border border-accent text-text-invert shadow-sm hover:opacity-85";
+
 /**
  * A linked chain shows only on the selected page, the page **K** works on, and the box under the
  * pointer (its own box, drawn just before it); everywhere else the
@@ -308,7 +416,7 @@ export function PageKeepChainButton({
     // A click runs only after a press on the chain itself, or from the keyboard (detail 0): a tap
     // whose press went to the box can end as a click here once the chain shows
     const pressed = useRef(false);
-    const hidden = chain.kind === "follows" && !always;
+    const hidden = chain.kind === "follows" && !always && !chain.shown;
     return (
         <ShortcutTooltip
             label={
@@ -325,6 +433,7 @@ export function PageKeepChainButton({
                 data-timeline-own-keys={OWN_KEYS_WITH_SPACE}
                 data-testid="page-keep-chain"
                 data-chain={chain.kind}
+                data-lit={chain.lit ? "true" : undefined}
                 data-reveal={hidden ? "hover" : undefined}
                 {...timelineRangeTargetProps(range, undefined, pageId)}
                 aria-label={tolgee.t(
@@ -333,7 +442,7 @@ export function PageKeepChainButton({
                     { page: pageLabel, label: chain.label, hint: chain.hint },
                 )}
                 aria-keyshortcuts={chain.withK ? KEEP_SHORTCUT : undefined}
-                className={`${BASE} ${KIND_CLASS[chain.kind]}${hidden ? ` ${REVEAL_ON_HOVER}` : ""}`}
+                className={`${BASE} ${chain.lit ? LIT_CLASS : KIND_CLASS[chain.kind]}${hidden ? ` ${REVEAL_ON_HOVER}` : ""}`}
                 style={{
                     left,
                     bottom: 2,
@@ -356,7 +465,7 @@ export function PageKeepChainButton({
             >
                 <Icon
                     size={size - 4}
-                    weight={KIND_WEIGHT[chain.kind]}
+                    weight={chain.lit ? "bold" : KIND_WEIGHT[chain.kind]}
                     aria-hidden
                 />
                 {chain.kind === "mixed" && size >= CHAIN_SIZES[0] && (
@@ -381,8 +490,11 @@ export function PageKeepChainButton({
 export function PageKeepDot({
     kind,
     left,
+    lit = false,
 }: {
     kind: PageKeepChain["kind"];
+    /** Follow links: a lit chain's dot fills in the accent */
+    lit?: boolean;
     /** How far in from the box's left edge (px, `keepDotFit`) */
     left: number;
 }) {
@@ -391,8 +503,13 @@ export function PageKeepDot({
             aria-hidden
             data-testid="page-keep-dot"
             data-chain={kind}
+            data-lit={lit ? "true" : undefined}
             className={`pointer-events-none absolute bottom-[2px] size-[8px] rounded-full ${
-                kind === "kept" ? "bg-accent" : "border-accent bg-fg-2 border-2"
+                kind === "kept" || lit
+                    ? "bg-accent"
+                    : kind === "follows"
+                      ? "border-text-subtitle/70 bg-fg-2 border"
+                      : "border-accent bg-fg-2 border-2"
             }`}
             style={{ left }}
         />

@@ -36,6 +36,12 @@ import {
     useTimelineResolverStore,
 } from "../timelineStore";
 
+// These cover the "Pages followed" toast: the follow links default (chains, no toast) is off here
+vi.mock("@/timeline/followLinks", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@/timeline/followLinks")>()),
+    followLinksOn: () => false,
+}));
+
 /**
  * **Move them too** (defined-coordinates 09, G4): an edit that splits the
  * marchers it moved at a later page (some follow into it, some keep their own move there) offers
