@@ -2,11 +2,9 @@ import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import {
     MODE_LABELS,
     reshuffled,
-    takesStagger,
     type Distribution,
     type DistributionMode,
     type FilesLayout,
-    type Fraction,
 } from "./distribution";
 import type { LayoutRow, ResolvedLayout } from "./layouts";
 
@@ -119,35 +117,4 @@ export function withLayout(
     const d = closed.distribution(params, n);
     if (d.mode !== "files") return params;
     return closed.withDistribution(params, n, { ...d, layout }, env);
-}
-
-/**
- * The stagger offset a shape takes (#388): null for a kind without layouts, a shape outside
- * Files, or a layout that fixes or centers its lines (Stagger, Rounded, Notched)
- */
-export function staggerOf(
-    kind: AnyToolKind,
-    params: unknown,
-    n: number,
-): Fraction | null {
-    const closed = kind.closed;
-    const d = closed?.distribution(params, n);
-    if (!closed?.layouts || d?.mode !== "files") return null;
-    const now = closed.layouts.resolved(params, n);
-    return now && takesStagger(now.layout.family) ? d.stagger : null;
-}
-
-/** `params` with the stagger offset `stagger`; `params` itself where it takes none */
-export function withStagger(
-    kind: AnyToolKind,
-    params: unknown,
-    n: number,
-    stagger: Fraction,
-    env: ToolEnv,
-): unknown {
-    const now = staggerOf(kind, params, n);
-    const d = kind.closed?.distribution(params, n);
-    if (now === null || d?.mode !== "files") return params;
-    if (now[0] * stagger[1] === stagger[0] * now[1]) return params;
-    return kind.closed!.withDistribution(params, n, { ...d, stagger }, env);
 }

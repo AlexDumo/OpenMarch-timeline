@@ -12,13 +12,10 @@ import {
     distributionOf,
     layoutOf,
     parseMode,
-    staggerOf,
     switchModes,
     withLayout,
     withMode,
-    withStagger,
 } from "../distribute/modes";
-import { parseStagger, staggerAmount } from "../distribute/stagger";
 import { formatSteps } from "../editor/format";
 import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
 import type { XY } from "../types";
@@ -60,13 +57,11 @@ export function shapeSteps(
     const steps: ShapeStep[] = [];
     const mode = modeStep(kind);
     const layout = layoutStep(kind);
-    const stagger = staggerStep(kind);
     for (const param of [
         ...(mode ? [mode] : []),
         ...(kind.params as readonly ToolParam<unknown>[]),
         // Last, so one-liners such as "box 4x3 2" still fill the size and spacing
         ...(layout ? [layout] : []),
-        ...(stagger ? [stagger] : []),
     ]) {
         if (param.shown && !param.shown(params, n)) continue;
         const initial = param.display(params, n, env.stepPx);
@@ -168,37 +163,6 @@ export function layoutStep(kind: AnyToolKind): ToolParam<unknown> | null {
             return version
                 ? withLayout(kind, params, n, version.layout, env)
                 : null;
-        },
-        scrub: (base) => base,
-    };
-}
-
-/**
- * The host's stagger step for a kind with layouts (#388, the box), only while the layout takes a
- * stagger (Full and Short back): the signed offset, typed "1/3", "-1/2" or "⅓ left". Last, after
- * the layout, so one-liners keep their meaning ("box 4x3 2 full 1/3"). None for a kind without
- * layouts.
- */
-export function staggerStep(kind: AnyToolKind): ToolParam<unknown> | null {
-    if (!kind.closed?.layouts) return null;
-    return {
-        key: "stagger",
-        label: "Stagger: 0 to ½ right or left",
-        unit: "choice",
-        primary: false,
-        drag: "x",
-        interval: false,
-        blends: false,
-        shown: (params, n) => staggerOf(kind, params, n) !== null,
-        display(params, n) {
-            const now = staggerOf(kind, params, n);
-            return now ? staggerAmount(now) : "";
-        },
-        type(params, n, text, env) {
-            const stagger = parseStagger(text);
-            if (stagger === null || staggerOf(kind, params, n) === null)
-                return null;
-            return withStagger(kind, params, n, stagger, env);
         },
         scrub: (base) => base,
     };
