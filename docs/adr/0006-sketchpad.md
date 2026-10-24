@@ -116,7 +116,8 @@ interface SketchDoc {
 - **Writes go straight to main.** Unlike the 3D View, the window writes. Sketch tables are outside
   the show's undo history (D-5), so writes don't need to pass through the editor's
   `transactionWithHistory`. Main handles a fixed set of `sketch:*` channels: list, load, save,
-  remove, restore, rename, duplicate, get-file, put-file, open and templates. Each handler checks
+  remove, restore, rename, duplicate, get-file, put-file, open, and the template channels (list,
+  load, save, remove, and the editor-only rename, duplicate, copy and restore). Each handler checks
   that its sender is allowed for that channel (the Sketchpad window, the editor's Sketches panel,
   or both), validates its payload with zod, and writes with prepared statements once no editor
   transaction is open. There is no general-purpose SQL from either window.
@@ -175,6 +176,12 @@ sketch_pins (
   is a JSON file in it (`sketch-templates/<id>.json`) holding the pages, the field style and its
   images inline. Using it copies those images into the show. No `library_items` migration is
   needed.
+- **Editing one.** The Sketches panel lists show and Library templates with thumbnails. A template
+  can be renamed, duplicated, copied between the show and the Library, and deleted with Undo (a
+  deleted Library file is written back). "Edit template" opens it in a Sketchpad tab marked
+  Template, drawn on the show's current field. Saving writes the pages and field style back under
+  the same id, still without the field layout. Show templates keep a thumbnail in the `thumbnail`
+  column, and Library template files carry it as base64.
 - **Using one.** A template keeps every page and the field style, never the field layout. A new
   sketch made from a template takes its field layout from the show's current field.
 - **Web.** The web build has no Library, so it offers only show templates.
