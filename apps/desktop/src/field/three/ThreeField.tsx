@@ -1,3 +1,4 @@
+import type { CountClock } from "@/timeline/countGrid";
 import {
     useCallback,
     useEffect,
@@ -5,10 +6,10 @@ import {
     useMemo,
     useRef,
     useState,
-    type CSSProperties,
     type RefObject,
 } from "react";
 import clsx from "clsx";
+import { useShallow } from "zustand/react/shallow";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { OrthographicCamera, WebGLRenderer } from "three";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -16,13 +17,19 @@ import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
-import { useFullscreenStore } from "@/stores/FullscreenStore";
+import { useIsPreviewMode } from "@/stores/PreviewModeStore";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
-    allMarchersQueryOptions,
+    allItemsQueryOptions,
+    allMarcherRowsQueryOptions,
     fieldPropertiesQueryOptions,
+    itemGeometryQueryOptions,
     moveMarchersInTargetMutationOptions,
 } from "@/hooks/queries";
+import {
+    beatIndexesById,
+    itemOutlineChanges,
+} from "@/items/itemOutlineTimeline";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 import { useTimingObjects } from "@/hooks";
 import { useFieldImage } from "@/view3d/window/useFieldImage";
@@ -33,14 +40,13 @@ import TimelineIsolationBar, {
     TimelineFromStartBadge,
 } from "@/components/timeline/TimelineIsolationBar";
 import {
-    displayedBeat,
+    fieldBeat,
     isMarcherDimmed,
     useTimelineSelectionStore,
 } from "@/stores/TimelineSelectionStore";
 import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useIsolationPlanStore } from "@/timeline/timelineIsolationPlan";
 import { playbackBeat } from "@/timeline/positionBuffer";
-import type { BeatTiming } from "@/timeline/timeMap";
 import { installFieldTestApi } from "@/field/fieldTestApi";
 import {
     probeWebGL,
@@ -49,19 +55,30 @@ import {
 } from "@/field/fieldQuality";
 import { FieldEditor } from "@/field/editor/fieldEditor";
 import { ruledMove } from "@/field/editor/moveRules";
+import { VisualsFieldEditor } from "@/field/editor/visualsFieldEditor";
+import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
 import { publishLinePreviews, useFieldLineTool } from "@/field/fieldLineTool";
+import { useFieldItemWrites } from "@/field/fieldItemWrites";
+import {
+    snapToRounding,
+    useFieldPropTool,
+    usePropDrawn,
+} from "@/field/fieldPropTool";
+import { PIXELS_PER_METER } from "@/items/itemOutlines";
 import { isMacPlatform } from "@/shortcuts/platform";
 import { planFieldImage } from "@/field/fieldPlan";
 import { dropMarchersOnTimeline } from "@/field/fieldDrop";
 import { FieldMarchers } from "./fieldMarchers";
+import { FieldItems } from "./fieldItems";
 import FieldOverlay from "./FieldOverlay";
 import { attachFieldPointerInput } from "./fieldPointerInput";
 import { cameraBounds, useFieldViewStore } from "./fieldView";
 import {
     attachFieldNavigation,
-    fitFullscreen,
+    fitAfterResize,
+    glideToFitAfterResize,
     resetView,
     settleView,
 } from "./fieldNavigation";
@@ -72,8 +89,10 @@ import { createThreeFieldTestApi } from "./threeFieldTestApi";
 import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
+import ItemsLayer from "./layers/ItemsLayer";
 import LabelsLayer from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
+import StartFlagLayers from "./StartFlagLayers";
 import { useTimelineVisuals } from "./useTimelineVisuals";
 import {
     KeptMarksOverlay,
@@ -91,6 +110,7 @@ import {
 import { FieldUnavailable, useFieldQualityNotice } from "./FieldQualityNotice";
 import { CanvasErrorBoundary, ContextLossGuard } from "./fieldRecovery";
 import FieldBenchmark from "@/field/benchmark/FieldBenchmark";
+import PropDrawingNotice from "@/components/items/PropDrawingNotice";
 import { threeFieldView } from "@/field/benchmark/fieldScenarios";
 import { r3fFrames } from "./benchmarkFrames";
 import {
@@ -106,6 +126,8 @@ import {
  * labels (1.9) and marchers (2). Collision markers sit over the marchers.
  */
 const FOCUS_ORDER = 1.4;
+/** Props and equipment lie on the field, under everything the timeline draws (C2.1). */
+const ITEMS_ORDER = 1.3;
 const PATHS_ORDER = 1.5;
 const COLLISIONS_ORDER = 4;
 
@@ -157,19 +179,15 @@ function ThreeFieldView() {
     const { data: fieldProperties } = useQuery(
         fieldPropertiesQueryOptions(databaseReady),
     );
-    const { data: marcherRows } = useQuery(allMarchersQueryOptions());
+    // Items too: the field draws and selects props and equipment
+    const { data: marcherRows } = useQuery(allMarcherRowsQueryOptions());
     const { selectedPage } = useSelectedPage()!;
     const { selectedMarchers, setSelectedMarchers } = useSelectedMarchers()!;
     const { isPlaying } = useIsPlaying()!;
-    const { beats, pages } = useTimingObjects()!;
-    const isFullscreen = useFullscreenStore((s) => s.isFullscreen);
-    const perspective = useFullscreenStore((s) => s.perspective);
-    const setPerspective = useFullscreenStore((s) => s.setPerspective);
-    // The tilt is fullscreen's only: leaving fullscreen flattens the field
-    useEffect(() => {
-        if (!isFullscreen) setPerspective(0);
-    }, [isFullscreen, setPerspective]);
-    const { image: fieldImage } = useFieldImage();
+    const { beats, pages, countGrid } = useTimingObjects()!;
+    const preview = useIsPreviewMode();
+    const panning = useFieldViewStore((s) => s.panning);
+    const { image: fieldImage, size: fieldImageSize } = useFieldImage();
     // Planned once, for the layer that draws it and the field test API
     const fieldImagePlan = useMemo(
         () =>
@@ -179,10 +197,11 @@ function ThreeFieldView() {
                       fieldImage && {
                           width: fieldImage.width,
                           height: fieldImage.height,
+                          size: fieldImageSize,
                       },
                   )
                 : null,
-        [fieldProperties, fieldImage],
+        [fieldProperties, fieldImage, fieldImageSize],
     );
     const appearanceSteps = useMarcherAppearanceSteps(true);
     const { mutateAsync: moveMarchers } = useMutation(
@@ -205,15 +224,19 @@ function ThreeFieldView() {
     const startOver = useCallback(() => setCanvasKey((key) => key + 1), []);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
+    const items = useMemo(() => new FieldItems(marchers), [marchers]);
+    const itemLabels = useFieldItems(items, beats);
+    const saveItem = useFieldItemWrites(items);
+    const propDrawn = usePropDrawn();
     const labels = useMemo(
         () =>
             new Map(
                 (marcherRows ?? []).map((marcher) => [
                     marcher.id,
-                    marcher.drill_number,
+                    itemLabels.get(marcher.id) ?? marcher.drill_number,
                 ]),
             ),
-        [marcherRows],
+        [marcherRows, itemLabels],
     );
     const atlases = useMemo(
         () => ({
@@ -287,6 +310,8 @@ function ThreeFieldView() {
     );
     const benchMarchers = useCallback(() => marchers.ids.length, [marchers]);
     const latest = useRef({
+        saveItem,
+        propDrawn,
         labels,
         pageId: selectedPage?.id ?? null,
         marcherRows,
@@ -297,6 +322,8 @@ function ThreeFieldView() {
         fieldProperties,
     });
     latest.current = {
+        saveItem,
+        propDrawn,
         labels,
         pageId: selectedPage?.id ?? null,
         fieldImage: fieldImagePlan,
@@ -309,7 +336,7 @@ function ThreeFieldView() {
 
     const editor = useMemo(
         () =>
-            new FieldEditor(
+            new VisualsFieldEditor(
                 {
                     selection: {
                         get: () => selection.current,
@@ -349,6 +376,23 @@ function ThreeFieldView() {
                     // #203: the line tool's previews are the alignment event's, which Shift+Enter applies
                     lineFinished: publishLinePreviews,
                     stepGrid: () => latest.current.fieldProperties ?? null,
+                    // C2.1: items are hit anywhere inside their Outline
+                    isItem: (id) => items.isItem(id),
+                    itemAt: (point) => items.itemAt(point),
+                    itemFrame: (id) => items.frameOf(id),
+                    previewItem: (id, size) =>
+                        items.setPreview(
+                            id,
+                            size && {
+                                width: size.width / PIXELS_PER_METER,
+                                depth: size.depth / PIXELS_PER_METER,
+                                rotation: size.rotation,
+                            },
+                        ),
+                    saveItem: (id, size) => latest.current.saveItem(id, size),
+                    snap: (point) =>
+                        snapToRounding(point, latest.current.fieldProperties),
+                    propDrawn: (outline) => latest.current.propDrawn(outline),
                 },
                 {
                     isMac: isMacPlatform(),
@@ -365,18 +409,27 @@ function ThreeFieldView() {
                     }),
                 },
             ),
-        [marchers],
+        [marchers, items],
     );
     useEffect(() => {
         setActiveFieldEditor(editor);
         return () => setActiveFieldEditor(null);
     }, [editor]);
+    // Visuals mode edits cues: the field only selects there (performer-behavior.md 7.1). Preview
+    // edits nothing: the editor hears no presses there at all (`EditorInput`), only navigation
+    const visuals = useIsVisualsView();
+    const previewing = useIsPreviewMode();
+    useEffect(
+        () => editor.setReadOnly(visuals || previewing),
+        [editor, visuals, previewing],
+    );
     // A rotation typed into the inspector belongs to its selection and page:
     // when either changes before it's saved, it's dropped (#198)
     useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
     useFieldLineTool(editor);
+    useFieldPropTool(editor);
     // A finished line follows its marchers to another page
     useEffect(
         () => marchers.subscribe(() => editor.refreshLineTool()),
@@ -396,20 +449,22 @@ function ThreeFieldView() {
                 selection: () => selection.current,
                 activeGesture: () => editor.activeGesture(),
                 handles() {
-                    const box = drawnSelectionBox(marchers, editor);
+                    const box = drawnSelectionBox(marchers, editor, items);
                     return (
                         box &&
                         selectionHandles(box, useFieldViewStore.getState().zoom)
                     );
                 },
                 lineTool: () => editor.lineToolShape(),
+                items,
+                propTool: () => editor.propToolShape(),
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
                 dimmed: (id) => dimming.isDimmed(id),
             }),
         );
         return () => installFieldTestApi(undefined);
-    }, [marchers, editor, dimming]);
+    }, [marchers, items, editor, dimming]);
 
     // Navigation (#194): wheel, pan drags and touch anywhere on the field
     useEffect(() => {
@@ -429,22 +484,26 @@ function ThreeFieldView() {
     // Here, not in the camera: a canvas started over after a lost context
     // keeps the view
     const opened = useRef(false);
-    useFullscreenFit(root, isFullscreen, ready, settled);
+    usePreviewFit(preview, ready, settled);
 
     return (
         <div
             ref={root}
-            // Fullscreen leaves room above the field, and the field takes no
-            // input there
+            // Preview edits nothing, but the view still moves: a hand to drag it
             className={clsx(
                 "rounded-6 relative h-full w-full touch-none overflow-hidden",
-                isFullscreen && "pointer-events-none pt-128",
+                preview && (panning ? "cursor-grabbing" : "cursor-grab"),
             )}
-            style={TILT_PERSPECTIVE}
             data-testid="threeField"
         >
-            <TimelineIsolationBar />
-            <TimelineFromStartBadge />
+            {/* What a drag edits: Preview edits nothing */}
+            {!preview && (
+                <>
+                    <TimelineIsolationBar />
+                    <TimelineFromStartBadge />
+                    <PropDrawingNotice />
+                </>
+            )}
             <FieldBenchmark
                 frames={benchFrames}
                 view={benchView}
@@ -459,17 +518,9 @@ function ThreeFieldView() {
                     }}
                 />
             )}
-            <div
-                // Fullscreen's perspective (UI-12) tilts the field and what's
-                // drawn over it together. The field takes no input in
-                // fullscreen, so nothing hit-tests through the tilt
-                className="relative h-full w-full"
-                style={tiltStyle(perspective)}
-                data-testid="fieldTilt"
-            >
+            <div className="relative h-full w-full">
                 {fieldProperties && quality.reason !== "noWebGL" && (
                     <Canvas
-                        // Sized by layout, not by the tilted box on screen
                         resize={{ offsetSize: true }}
                         key={canvasKey}
                         // The field canvas, for the scenarios
@@ -502,7 +553,6 @@ function ThreeFieldView() {
                         <ContextLossGuard onGiveUp={startOver} />
                         <FieldCamera
                             fieldProperties={fieldProperties}
-                            root={root}
                             ready={ready}
                             opened={opened}
                             settled={settled}
@@ -515,7 +565,7 @@ function ThreeFieldView() {
                         <PlayheadDriver
                             marchers={marchers}
                             isPlaying={isPlaying}
-                            beats={beats}
+                            clock={countGrid}
                             appearanceSteps={appearanceSteps}
                         />
                         <FieldLayer
@@ -527,6 +577,13 @@ function ThreeFieldView() {
                             image={fieldImage}
                             placement={fieldImagePlan}
                         />
+                        <ItemsLayer
+                            marchers={marchers}
+                            items={items}
+                            dimming={dimming}
+                            theme={fieldProperties.theme}
+                            renderOrder={ITEMS_ORDER}
+                        />
                         <OverlayLayer
                             plan={timeline.focus}
                             renderOrder={FOCUS_ORDER}
@@ -534,6 +591,13 @@ function ThreeFieldView() {
                         <OverlayLayer
                             plan={timeline.paths}
                             renderOrder={PATHS_ORDER}
+                        />
+                        <StartFlagLayers
+                            enabled={timeline.ready}
+                            isPlaying={isPlaying}
+                            marcherIds={marcherIds}
+                            selectedIds={selectedIds}
+                            fieldProperties={fieldProperties}
                         />
                         <MarchersLayer
                             marchers={marchers}
@@ -562,6 +626,7 @@ function ThreeFieldView() {
                 {fieldProperties && (
                     <FieldOverlay
                         marchers={marchers}
+                        items={items}
                         editor={editor}
                         theme={fieldProperties.theme}
                     />
@@ -576,87 +641,117 @@ function ThreeFieldView() {
     );
 }
 
-/** The tilt's depth: the field is viewed from 1500 CSS px away, at its center. */
-const TILT_PERSPECTIVE: CSSProperties = {
-    perspective: "1500px",
-    perspectiveOrigin: "center center",
-};
+/**
+ * Keeps the field's items (C2.1) in step with the show: which marchers rows
+ * are items, their Outline changes by beat, and which the user hid. Returns
+ * each item's label by marcher id: its name (or drill number) when names are
+ * shown, else nothing.
+ */
+function useFieldItems(
+    items: FieldItems,
+    beats: readonly { id: number; index: number }[],
+): ReadonlyMap<number, string> {
+    const { data: itemRows } = useQuery(allItemsQueryOptions());
+    const { data: geometry } = useQuery(itemGeometryQueryOptions());
+    const { hiddenPropIds, showPropNames, propNameOverrides } =
+        useUiSettingsStore(
+            useShallow((s) => ({
+                hiddenPropIds: s.uiSettings.hiddenPropIds,
+                showPropNames: s.uiSettings.showPropNames,
+                propNameOverrides: s.uiSettings.propNameOverrides,
+            })),
+        );
+    useEffect(() => {
+        const rows = itemRows ?? [];
+        items.set({
+            itemIds: new Set(rows.map((item) => item.marcher_id)),
+            changes: itemOutlineChanges({
+                items: rows,
+                geometry: geometry ?? [],
+                beatIndexes: beatIndexesById(beats),
+            }),
+            hidden: new Set(
+                rows
+                    .filter((item) => hiddenPropIds[item.id])
+                    .map((item) => item.marcher_id),
+            ),
+        });
+    }, [items, itemRows, geometry, beats, hiddenPropIds]);
+    return useMemo(
+        () =>
+            new Map(
+                (itemRows ?? []).map((item) => [
+                    item.marcher_id,
+                    (propNameOverrides[item.id] ?? showPropNames)
+                        ? item.marcher.name ||
+                          `${item.marcher.drill_prefix}${item.marcher.drill_order}`
+                        : "",
+                ]),
+            ),
+        [itemRows, showPropNames, propNameOverrides],
+    );
+}
+
+/** How long to wait for Preview's layout to settle. */
+const PREVIEW_SETTLE_MS = 250;
 
 /**
- * Fullscreen's perspective: the field leans back `degrees` about a line
- * below its center, which looks more natural, and eases into each angle.
+ * Switching Preview on or off glides the field to that mode's fit, as
+ * clicking the zoom percentage does; entering Preview also clears the
+ * selection. As the show opens, and for `PREVIEW_SETTLE_MS` after a switch,
+ * the view isn't `settled`: the panels are still laying out around the field,
+ * so a resize fits it again (the glide follows them by itself).
  */
-const tiltStyle = (degrees: number): CSSProperties => ({
-    transform: degrees === 0 ? undefined : `rotateX(${degrees}deg)`,
-    transformOrigin: "center 70%",
-    transition: "transform 0.2s ease-out",
-});
-
-/** How long to wait for the fullscreen layout to settle. */
-const FULLSCREEN_SETTLE_MS = 250;
-
-/**
- * Entering fullscreen fits the whole field and clears the selection, and
- * leaving it centers the field at the base zoom again, once the layout has
- * settled. The field also centers again that long after it's `ready`, as the
- * app's panels finish laying out around it, and marks the view `settled`.
- */
-function useFullscreenFit(
-    root: RefObject<HTMLDivElement | null>,
-    isFullscreen: boolean,
+function usePreviewFit(
+    preview: boolean,
     ready: boolean,
     settled: RefObject<boolean>,
 ) {
     const { setSelectedMarchers } = useSelectedMarchers()!;
-    // Read when it runs: the effect follows fullscreen and readiness only
+    // Read when it runs: the effect follows Preview and readiness only
     const clearSelection = useRef(() => setSelectedMarchers([]));
     clearSelection.current = () => setSelectedMarchers([]);
     const opening = useRef(true);
     useEffect(() => {
         if (!ready) return;
-        // Until it has run once, it's the show opening; then fullscreen changes
-        const first = opening.current;
+        // Once the show has opened, a run is Preview switching
+        const switching = !opening.current;
+        if (switching) {
+            settled.current = false;
+            glideToFitAfterResize();
+            if (preview) clearSelection.current();
+        }
         let frame = 0;
         const timeout = setTimeout(() => {
             frame = requestAnimationFrame(() => {
                 opening.current = false;
                 settled.current = true;
-                if (!isFullscreen) {
-                    if (first) settleView();
-                    else resetView();
-                    return;
-                }
-                if (root.current)
-                    fitFullscreen({
-                        width: root.current.clientWidth,
-                        height: root.current.clientHeight,
-                    });
-                clearSelection.current();
+                if (switching) return;
+                settleView();
+                if (preview) clearSelection.current();
             });
-        }, FULLSCREEN_SETTLE_MS);
+        }, PREVIEW_SETTLE_MS);
         return () => {
             clearTimeout(timeout);
             cancelAnimationFrame(frame);
         };
-    }, [isFullscreen, ready, root, settled]);
+    }, [preview, ready, settled]);
 }
 
 /**
  * Keeps the view store's size and field in step with the canvas, opens the
- * show centered at the base zoom once it's `ready`, and points the camera at
- * the store's view. Until the view has `settled`, a resize centers it again.
- * After that a resize keeps the zoom and where the field sits from the
- * top-left; in fullscreen it fits the field again.
+ * show fitted once it's `ready`, and points the camera at the store's view.
+ * Until the view has `settled`, a resize fits it again. After that a resize
+ * keeps the zoom and where the field sits from the top-left; in Preview it
+ * fits the field again, unless a glide is following the pane.
  */
 function FieldCamera({
     fieldProperties,
-    root,
     ready,
     opened,
     settled,
 }: {
     fieldProperties: FieldProperties;
-    root: RefObject<HTMLDivElement | null>;
     ready: boolean;
     opened: RefObject<boolean>;
     settled: RefObject<boolean>;
@@ -676,15 +771,10 @@ function FieldCamera({
         if (!opened.current) {
             opened.current = true;
             resetView();
-        } else if (useFullscreenStore.getState().isFullscreen && root.current) {
-            fitFullscreen({
-                width: root.current.clientWidth,
-                height: root.current.clientHeight,
-            });
-        } else if (!settled.current) {
-            settleView();
+        } else {
+            fitAfterResize(settled.current);
         }
-    }, [width, height, fieldProperties, root, ready, opened, settled]);
+    }, [width, height, fieldProperties, ready, opened, settled]);
 
     useLayoutEffect(() => {
         const apply = () => {
@@ -717,8 +807,13 @@ function EditorInput({
 }) {
     const canvas = useThree((s) => s.gl.domElement);
     const invalidate = useThree((s) => s.invalidate);
+    // Preview edits nothing, and selects nothing: presses only move the view (`fieldNavigation`)
+    const preview = useIsPreviewMode();
 
-    useEffect(() => attachFieldPointerInput(canvas, editor), [canvas, editor]);
+    useEffect(
+        () => (preview ? undefined : attachFieldPointerInput(canvas, editor)),
+        [canvas, editor, preview],
+    );
     // A drag moves marchers outside the playhead's fills: draw them
     useEffect(() => marchers.subscribe(invalidate), [marchers, invalidate]);
 
@@ -740,12 +835,13 @@ function EditorInput({
 function PlayheadDriver({
     marchers,
     isPlaying,
-    beats,
+    clock,
     appearanceSteps,
 }: {
     marchers: FieldMarchers;
     isPlaying: boolean;
-    beats: readonly BeatTiming[];
+    /** The show's counts, past the stored ones too: marchers follow moves past the end */
+    clock: CountClock;
     appearanceSteps: AppearanceStepsByMarcherId | undefined;
 }) {
     const invalidate = useThree((s) => s.invalidate);
@@ -766,10 +862,11 @@ function PlayheadDriver({
         const draw = (beat: number) => {
             if (marchers.fill(beat, isolationPlan)) invalidate();
         };
-        let drawn = displayedBeat(useTimelineSelectionStore.getState());
+        // UI-26: a dragged start flag shows where its movers leave from
+        let drawn = fieldBeat(useTimelineSelectionStore.getState());
         draw(drawn);
         return useTimelineSelectionStore.subscribe((state) => {
-            const at = displayedBeat(state);
+            const at = fieldBeat(state);
             if (at === drawn) return;
             drawn = at;
             // Called inside the store's write: a failed draw mustn't stop its other listeners
@@ -787,7 +884,7 @@ function PlayheadDriver({
     // Before the layers' frame hooks (priority 0), so they draw this frame's positions
     useFrame(() => {
         if (!isPlaying) return;
-        marchers.fill(playbackBeat(beats, getLivePlaybackPosition() * 1000));
+        marchers.fill(playbackBeat(clock, getLivePlaybackPosition() * 1000));
         invalidate();
     }, -1);
 

@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from "./reducedMotion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatestCallback } from "./useLatestCallback";
 import {
@@ -47,10 +48,6 @@ export interface FollowZoomAnchor {
     readonly anchorPx: number;
     readonly anchorBeat: number;
 }
-
-const prefersReducedMotion = () =>
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
 /** Runs `then` after two frames: once React has committed what the current event set off */
 const afterTwoFrames = (then: () => void) => {

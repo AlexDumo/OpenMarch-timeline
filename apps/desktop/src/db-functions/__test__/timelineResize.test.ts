@@ -15,12 +15,15 @@ import {
 import { createTimelineTransitionsInTransaction } from "../timelineTransitions";
 import { createTimelineAssignmentsInTransaction } from "../timelineAssignments";
 import {
+    growOverLayers,
     readTimelineResizeLimits,
     resizeTimeline,
     timelineResizeLimits,
     timelineResizeRefusal,
 } from "../timelineResize";
 import { keepFixturesInPageMode } from "@/test/timelineMode";
+import { readPageBoxes } from "../timelineMoveNames";
+import { shiftTimeline } from "../timelineCommands";
 
 /**
  * Resizing a move (docs/timeline/research/resize-move): dragging a clip's start or end edge
@@ -196,6 +199,82 @@ describe("timelineResizeLimits (pure)", () => {
                 stop: { kind: "minimum" },
             });
             expect(limits.endEdge.max.stop).toEqual({ kind: "show" });
+        },
+    );
+
+    plainIt(
+        "grows over a page's own moves on any layer, and raises its rows above them (owner, 2026-10-16)",
+        () => {
+            const page = (start: number, end: number, layer = 0) => ({
+                ...row(1, start, end, layer),
+                timelineId: 2,
+                pageMove: true,
+            });
+            const others = [page(0, 8), page(16, 24), page(24, 32, 2)];
+            const limits = timelineResizeLimits({
+                timelineId: 1,
+                start: 8,
+                end: 16,
+                own: [row(1, 8, 16)],
+                others,
+                taken: [],
+            });
+            expect(limits.startEdge.min.stop).toEqual({ kind: "show" });
+            expect(limits.endEdge.max.stop).toEqual({ kind: "show" });
+            const own = [{ id: 7, ...row(1, 8, 16) }];
+            const from = { start: 8, end: 16 };
+            expect(
+                growOverLayers(own, others, from, { start: 8, end: 20 }),
+            ).toEqual(new Map([[7, 1]]));
+            expect(
+                growOverLayers(own, others, from, { start: 8, end: 28 }),
+            ).toEqual(new Map([[7, 3]]));
+            // Shrinking or staying inside grows over nothing
+            expect(
+                growOverLayers(own, others, from, { start: 10, end: 16 }).size,
+            ).toBe(0);
+            // A higher move of the marcher inside this one would be overridden: page moves stop
+            // the edge as before
+            const guarded = timelineResizeLimits({
+                timelineId: 1,
+                start: 8,
+                end: 16,
+                own: [row(1, 8, 16)],
+                others: [...others, { ...row(1, 10, 12, 1), timelineId: 3 }],
+                taken: [],
+            });
+            expect(guarded.endEdge.max.beat).toBe(16);
+        },
+    );
+
+    plainIt(
+        "doesn't raise a row under a page move that already sits over the move: it grows underneath",
+        () => {
+            // Page 2's own move over [8,16) is above Move M over [4,12) (page 2 edited after M
+            // crossed its flag). Growing M's end to 14 must not lift M over page 2 on 8–12,
+            // counts the resize never touched
+            const pageAbove = {
+                ...row(1, 8, 16, 1),
+                timelineId: 2,
+                pageMove: true,
+            };
+            const limits = timelineResizeLimits({
+                timelineId: 1,
+                start: 4,
+                end: 12,
+                own: [row(1, 4, 12)],
+                others: [pageAbove],
+                taken: [],
+            });
+            expect(timelineResizeRefusal(limits, 4, 14)).toBeNull();
+            expect(
+                growOverLayers(
+                    [{ id: 7, ...row(1, 4, 12) }],
+                    [pageAbove],
+                    { start: 4, end: 12 },
+                    { start: 4, end: 14 },
+                ).size,
+            ).toBe(0);
         },
     );
 
@@ -536,6 +615,64 @@ describeDbTests("resizing a timeline", (it) => {
             }),
         );
         expect(error.message).toMatch(/already covers exactly these counts/);
+    });
+
+    it("refuses landing an older move on a newer page move's exact counts, by resize or clip move (UI-25)", async ({
+        db,
+        marchersAndPages: _,
+    }) => {
+        await converted(db);
+        const [m1, m2, m3] = (
+            await db.select().from(schema.marchers).all()
+        ).map((m) => m.id);
+        const box = (await readPageBoxes(db))[1]!;
+        // The older move shares no marcher with the page's move, so L-4 alone would let it land
+        const older = await addTimeline(db, {
+            marcherId: m1!,
+            start: box.start - 2,
+            end: box.end - 2,
+            layer: 1,
+        });
+        const page = await addTimeline(db, {
+            marcherId: m2!,
+            start: box.start,
+            end: box.end,
+            layer: 1,
+        });
+        expect(older).toBeLessThan(page);
+        const limits = (await readTimelineResizeLimits(db, older))!;
+        expect(limits.taken).toContainEqual({
+            timelineId: page,
+            start: box.start,
+            end: box.end,
+            pageTakeover: true,
+        });
+        const resized = await expectRefused(db, () =>
+            resizeTimeline({
+                db,
+                timelineId: older,
+                start: box.start,
+                end: box.end,
+            }),
+        );
+        expect(resized.message).toMatch(/make this move the page's own move/);
+        const moved = await expectRefused(db, () =>
+            shiftTimeline({ db, timelineId: older, delta: 2 }),
+        );
+        expect(moved.message).toMatch(/make this move the page's own move/);
+        // A newer move may still land on the page's counts (L-4): it stays a clip
+        const newer = await addTimeline(db, {
+            marcherId: m3!,
+            start: box.end,
+            end: box.end + box.end - box.start,
+            layer: 1,
+        });
+        await shiftTimeline({
+            db,
+            timelineId: newer,
+            delta: box.start - box.end,
+        });
+        expect(await rangeOf(db, newer)).toEqual([box.start, box.end]);
     });
 
     it("writes nothing for an unchanged range (an edge dropped where it started)", async ({

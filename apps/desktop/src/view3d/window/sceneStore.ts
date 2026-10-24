@@ -19,18 +19,14 @@
  *   default when the stored one doesn't fit the kit).
  * - `quality`: the render quality the scene builds for. `low` drops
  *   shadows and halves the crowd.
- * - `hornState`: which hold the brass plays. Always `up` for shows; the
- *   settings panel can switch it to check the other holds (`hornState.ts`).
- *   A preview override, never saved; Horn cues replace it
- *   (performer-behavior.md section 7.5).
- * - `guardEquipment`: what the guard sections carry: `section` for each
- *   section's own (flags carry the 6 ft flag, rifles the rifle), or one
- *   piece for every guard section, to see the other equipment. A preview
- *   override, never saved, until sections store their equipment.
- * - `stepOffFoot`: an unsaved preview override of the show's saved step-off
- *   foot (`performerDefaults`, ADR 0004 D-4 and D-7 as amended 2026-10-15);
- *   null, the start, plays the show's. `right` plays every move's clips
- *   mirrored. Feet cues still set their own foot.
+ * - `hornState`, `guardEquipment`, `stepOffFoot`: the window's preview
+ *   overrides (performer-behavior.md section 7.5, `performers/previewOverrides.ts`).
+ *   Never saved; null, the start, follows the show: the compiled
+ *   Horn/Equipment cues from horns up, each guard section's own equipment,
+ *   and the show's saved step-off foot (`performerDefaults`, ADR 0004 D-4)
+ *   with Feet cues setting their own. A horn state holds every carrier in
+ *   that hold for the whole show; a guard piece goes in every guard
+ *   member's hands; a foot replaces the show's default foot.
  * - `powerPrefs`: pause drawing when nothing moves, and cap the frame rate
  *   on battery (`drawPolicy.ts`); saved per computer. Set it with
  *   `setPowerPrefs`. `onBattery` is the window's own reading of the battery.
@@ -38,6 +34,15 @@
  *   or `high`), saved per computer. Set it with `setQualityMode`. In `auto`
  *   the scene lowers `quality` once with `_autoLower()` when frames are slow
  *   (P5.1), and `autoLowered` says so.
+ * - `resolution`: the most device pixels drawn per screen pixel
+ *   (`renderPrefs.ts`), saved per computer. Set it with `setResolution`.
+ * - `softwareGl`: WebGL draws in software here (SwiftShader, llvmpipe,
+ *   Microsoft Basic Render), which `View3dRoot` probes before the scene
+ *   mounts. Then `quality` stays `low` whatever the mode, like the 2D field's
+ *   low-quality mode (`fieldQuality.ts`); `low` also draws at 1x.
+ *
+ * The app's Settings window saves the quality, power and resolution choices;
+ * `startPrefsSync()` picks them up while the window is open.
  *
  * Read it in React with `useView3dSceneStore(selector)`, and in `useFrame` or
  * event handlers with `useView3dSceneStore.getState()`.
@@ -59,6 +64,7 @@ import type {
     VenueKitId,
 } from "@/view3d/core/types";
 import {
+    QUALITY_STORAGE_KEY,
     initialQuality,
     loadQualityMode,
     saveQualityMode,
@@ -66,16 +72,24 @@ import {
 } from "./qualityPreference";
 import type { HoldState } from "./hornState";
 import type { GuardModelId } from "@/view3d/core/instruments/model";
-import { loadPowerPrefs, savePowerPrefs, type PowerPrefs } from "./drawPolicy";
+import {
+    POWER_STORAGE_KEY,
+    loadPowerPrefs,
+    savePowerPrefs,
+    type PowerPrefs,
+} from "./drawPolicy";
+import {
+    RESOLUTION_STORAGE_KEY,
+    loadResolution,
+    saveResolution,
+    type Resolution,
+} from "./renderPrefs";
 import type { StepOffFoot } from "./performers/marchers/marcherBodies";
 
 /** People within this many meters of a seat camera are hidden (ui.md UI-3). */
 export const CROWD_CLEAR_RADIUS = 4.9;
 
 export type View3dQuality = "low" | "high";
-
-/** Each guard section's own equipment, or one piece for all of them. */
-export type GuardEquipment = "section" | GuardModelId;
 
 export interface View3dSceneState {
     kitId: VenueKitId | null;
@@ -88,10 +102,10 @@ export interface View3dSceneState {
     lighting: LightingPreset | null;
     quality: View3dQuality;
     setQuality: (quality: View3dQuality) => void;
-    hornState: HoldState;
-    setHornState: (state: HoldState) => void;
-    guardEquipment: GuardEquipment;
-    setGuardEquipment: (equipment: GuardEquipment) => void;
+    hornState: HoldState | null;
+    setHornState: (state: HoldState | null) => void;
+    guardEquipment: GuardModelId | null;
+    setGuardEquipment: (equipment: GuardModelId | null) => void;
     stepOffFoot: StepOffFoot | null;
     setStepOffFoot: (foot: StepOffFoot | null) => void;
     powerPrefs: PowerPrefs;
@@ -106,6 +120,15 @@ export interface View3dSceneState {
     autoLowered: boolean;
     /** Scene only: the automatic fallback fired. */
     _autoLower: () => void;
+    resolution: Resolution;
+    /** Saves the choice and applies it. */
+    setResolution: (resolution: Resolution) => void;
+    /** True when WebGL draws in software: the scene stays on `low`. */
+    softwareGl: boolean;
+    /** Window only, before the scene mounts: what the WebGL probe found. */
+    _setSoftwareGl: (softwareGl: boolean) => void;
+    /** Rereads a choice saved elsewhere: a storage key, or null for all. */
+    _loadPref: (key: string | null) => void;
     /** Scene only. */
     _setKit: (kitId: VenueKitId | null, kit: KitResult | null) => void;
     /** Scene only: the show's camera lists changed. */
@@ -119,6 +142,11 @@ export interface View3dSceneState {
 const ORIGIN: Vector3Tuple = [0, 0, 0];
 
 const startMode = loadQualityMode();
+
+/** The quality a mode starts at here: always `low` on software WebGL. */
+function startQuality(mode: QualityMode, softwareGl: boolean): View3dQuality {
+    return softwareGl ? "low" : initialQuality(mode);
+}
 
 /** The cameras for `kit` with the show's list for `kitId`, if it has one. */
 function camerasFor(
@@ -144,9 +172,9 @@ export const useView3dSceneStore = create<View3dSceneState>()((set, get) => ({
     lighting: null,
     quality: initialQuality(startMode),
     setQuality: (quality) => set({ quality }),
-    hornState: "up",
+    hornState: null,
     setHornState: (hornState) => set({ hornState }),
-    guardEquipment: "section",
+    guardEquipment: null,
     setGuardEquipment: (guardEquipment) => set({ guardEquipment }),
     stepOffFoot: null,
     setStepOffFoot: (stepOffFoot) => set({ stepOffFoot }),
@@ -162,12 +190,39 @@ export const useView3dSceneStore = create<View3dSceneState>()((set, get) => ({
         saveQualityMode(mode);
         set({
             qualityMode: mode,
-            quality: initialQuality(mode),
+            quality: startQuality(mode, get().softwareGl),
             autoLowered: false,
         });
     },
     autoLowered: false,
     _autoLower: () => set({ quality: "low", autoLowered: true }),
+    resolution: loadResolution(),
+    setResolution: (resolution) => {
+        saveResolution(resolution);
+        set({ resolution });
+    },
+    softwareGl: false,
+    _setSoftwareGl: (softwareGl) =>
+        set({
+            softwareGl,
+            quality: startQuality(get().qualityMode, softwareGl),
+            autoLowered: false,
+        }),
+    _loadPref: (key) => {
+        if (key === null || key === QUALITY_STORAGE_KEY) {
+            const mode = loadQualityMode();
+            if (mode !== get().qualityMode)
+                set({
+                    qualityMode: mode,
+                    quality: startQuality(mode, get().softwareGl),
+                    autoLowered: false,
+                });
+        }
+        if (key === null || key === POWER_STORAGE_KEY)
+            set({ powerPrefs: loadPowerPrefs() });
+        if (key === null || key === RESOLUTION_STORAGE_KEY)
+            set({ resolution: loadResolution() });
+    },
     _setKit: (kitId, kit) =>
         set({
             kitId,
@@ -183,3 +238,14 @@ export const useView3dSceneStore = create<View3dSceneState>()((set, get) => ({
     _setCrowd: (crowd) => set({ crowd }),
     _setLighting: (lighting) => set({ lighting }),
 }));
+
+/**
+ * Applies the quality, power and resolution choices the Settings window
+ * saves, as it saves them. Returns the function that stops listening.
+ */
+export function startPrefsSync(): () => void {
+    const onStorage = (event: StorageEvent) =>
+        useView3dSceneStore.getState()._loadPref(event.key);
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+}

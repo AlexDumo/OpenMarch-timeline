@@ -23,7 +23,6 @@ import {
     PART_WOOD,
 } from "@/view3d/core/instruments/mesh";
 import { composedSkinning, type Composer } from "@/view3d/render/composer";
-import type { SilkPattern } from "@/view3d/core/marchers/uniformPresets";
 import type { ArmPose } from "./armPose";
 
 /** The metal's sRGB color per finish: gold lacquer, silver lacquer. */
@@ -72,53 +71,32 @@ const BONE_NAMES: Record<InstrumentBone, string> = {
 
 const linear = (hex: number) => new THREE.Color(hex); // Color converts sRGB hex to linear
 
-/**
- * A silk's color at each vertex (by its index into `positions`) from a
- * pattern: (u, v) is the vertex's place in the silk's extent in the
- * instrument frame, out from the pole along +X and up the pole along +Z.
- */
-function silkPainter(positions: ArrayLike<number>, silk: SilkPattern) {
-    let x0 = Infinity;
-    let x1 = -Infinity;
-    let z0 = Infinity;
-    let z1 = -Infinity;
-    for (let i = 0; i < positions.length; i += 3) {
-        x0 = Math.min(x0, positions[i]);
-        x1 = Math.max(x1, positions[i]);
-        z0 = Math.min(z0, positions[i + 2]);
-        z1 = Math.max(z1, positions[i + 2]);
-    }
-    const dx = x1 - x0 || 1;
-    const dz = z1 - z0 || 1;
-    return (i: number) =>
-        linear(silk((positions[i] - x0) / dx, (positions[i + 2] - z0) / dz));
+/** Where a bone's pieces go: the bone's index, and the matrix to its bind pose. */
+export interface InstrumentFrame {
+    index: number;
+    /** Takes instrument-frame points to the bind pose of a vertex on this bone. */
+    toBind: THREE.Matrix4;
 }
 
-export function instrumentGeometry(
+/**
+ * Per bone, how instrument-frame points skin to it under `hold`: right-hand
+ * pieces ride the prop bone (after the skeleton's bones), which is the
+ * right hand times the hold's grip (`gripMatrix`), baked into every Horn
+ * row, so they stay in the instrument's own frame and follow any hold or
+ * transition the channel plays; left-hand pieces move with the hold's left
+ * hand; chest pieces stay at bind.
+ */
+export function instrumentFrames(
     skeleton: THREE.Skeleton,
     pose: ArmPose,
     hold: Hold,
-    model: InstrumentModel,
-    finish: Finish = "brass",
-    /** sRGB: the section's color, for drum shells and flag silks. */
-    sectionColor = 0xffffff,
-    /** Paints the flag silks instead of `sectionColor`. */
-    silk?: SilkPattern,
-): THREE.BufferGeometry {
+): (bone: InstrumentBone) => InstrumentFrame {
     const place = placement(hold);
-    /** Per bone: its index and the matrix taking placed body-frame points to the bind pose. */
-    const frames = new Map<
-        InstrumentBone,
-        { index: number; toBind: THREE.Matrix4 }
-    >();
-    const frameOf = (bone: InstrumentBone) => {
+    const frames = new Map<InstrumentBone, InstrumentFrame>();
+    return (bone) => {
         let f = frames.get(bone);
         if (f) return f;
         if (bone === "handR") {
-            // the prop bone (after the skeleton's bones) is the right hand
-            // times the hold's grip (`gripMatrix`), baked into every Horn
-            // row: the piece stays in the instrument's own frame, and the
-            // same geometry follows any hold or transition the channel plays
             f = { index: skeleton.bones.length, toBind: new THREE.Matrix4() };
             frames.set(bone, f);
             return f;
@@ -129,7 +107,6 @@ export function instrumentGeometry(
         if (index < 0)
             throw new Error(`instrumentGeometry: no ${BONE_NAMES[bone]} bone`);
         const bind = skeleton.boneInverses[index].clone().invert();
-        // the left hand moves with the hold; the chest stays at bind
         const posed = bone === "handL" ? pose.handL : bind;
         const toBind = bind
             .clone()
@@ -139,6 +116,18 @@ export function instrumentGeometry(
         frames.set(bone, f);
         return f;
     };
+}
+
+export function instrumentGeometry(
+    skeleton: THREE.Skeleton,
+    pose: ArmPose,
+    hold: Hold,
+    model: InstrumentModel,
+    finish: Finish = "brass",
+    /** sRGB: the section's color, for drum shells and flag silks. */
+    sectionColor = 0xffffff,
+): THREE.BufferGeometry {
+    const frameOf = instrumentFrames(skeleton, pose, hold);
     const metal = linear(FINISH_COLORS[finish]);
     const section = linear(sectionColor);
     const pos: number[] = [];
@@ -158,10 +147,6 @@ export function instrumentGeometry(
         const fallback = linear(
             BRASS_COLORS[piece.part] ?? BRASS_COLORS[PART_METAL],
         );
-        const paint =
-            silk && piece.part === PART_SILK
-                ? silkPainter(piece.positions, silk)
-                : null;
         for (let i = 0; i < piece.positions.length; i += 3) {
             v.set(
                 piece.positions[i],
@@ -173,10 +158,7 @@ export function instrumentGeometry(
                 .applyMatrix3(normalM)
                 .normalize();
             nrm.push(v.x, v.y, v.z);
-            const painted = paint?.(i);
-            if (painted) col.push(painted.r, painted.g, painted.b);
-            else if (piece.part === PART_METAL)
-                col.push(metal.r, metal.g, metal.b);
+            if (piece.part === PART_METAL) col.push(metal.r, metal.g, metal.b);
             else if (piece.part === PART_SHELL || piece.part === PART_SILK)
                 col.push(section.r, section.g, section.b);
             else if (piece.colors)

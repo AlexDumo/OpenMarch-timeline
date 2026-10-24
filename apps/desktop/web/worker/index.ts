@@ -15,6 +15,7 @@
  * page reopens it.
  */
 import "./process";
+import "./page";
 import * as DatabaseServices from "@om-electron/database/database.services";
 import { getOrm } from "@om-electron/database/db";
 import { DrizzleMigrationService } from "@om-electron/database/services/DrizzleMigrationService";
@@ -25,6 +26,13 @@ import {
 } from "@om-electron/database/fileVersion";
 import { initializeNewFileAsTimeline } from "@om-electron/database/convertOnOpenGate";
 import { convertFileOnOpen } from "@om-electron/database/convertOnOpen";
+import {
+    convertFieldImageOnOpen,
+    parseFloorVersion,
+    setFloorFromImage,
+    setFloorFromVersion,
+} from "@om-electron/database/convertFieldImage";
+import { webFloorFromFieldImage } from "./floor";
 import * as schema from "@om-electron/database/migrations/schema";
 import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
 import { readPreviousDotsFile } from "@om-electron/main/services/previous-dots-import-service";
@@ -44,6 +52,7 @@ import {
     writeDatabase,
 } from "./sqlite";
 import { claimStorage, clearShow, readShow, writeShow } from "./storage";
+import { STORAGE_NAMESPACE } from "../renderer/channel";
 import {
     WEB_CHANNELS,
     WEB_EVENTS,
@@ -118,6 +127,14 @@ async function openShowAt(path: string, isNewFile: boolean): Promise<number> {
             if (result.status === "conversion-failed") throw result.error;
         }
         await migrator.applyPendingMigrations(MIGRATIONS_FOLDER);
+        // A legacy field image becomes the show's floor, and the file 9 (D-23). A failure
+        // leaves the file as it was; the next open tries again.
+        await convertFieldImageOnOpen(db, {
+            makeFloor: (image, fieldProperties) =>
+                webFloorFromFieldImage(image, fieldProperties),
+        }).catch((error: unknown) =>
+            console.error("Couldn't convert the field image on open", error),
+        );
         // Shows from before workspace settings have no row, and the app adds
         // one as it loads (initializeWorkspaceSettings), which would count as
         // a change the person must download. Adding it while opening, as a
@@ -387,6 +404,26 @@ function registerNewShowHandlers() {
         return 200;
     });
     ipcMain.handle("newShow:getDraftPath", () => draftPath);
+    // A new show copies a previous show's field image as its own floor (D-23)
+    ipcMain.handle("newShow:setFloorFromImage", async (_, image: unknown) => {
+        if (!(image instanceof Uint8Array) || image.byteLength === 0)
+            throw new Error("Not a field image");
+        await setFloorFromImage(
+            DatabaseServices.getOrmConnection() as never,
+            image,
+            (bytes, fieldProperties) =>
+                webFloorFromFieldImage(bytes, fieldProperties),
+        );
+    });
+    ipcMain.handle(
+        "newShow:setFloorFromVersion",
+        async (_, version: unknown) => {
+            await setFloorFromVersion(
+                DatabaseServices.getOrmConnection() as never,
+                parseFloorVersion(version),
+            );
+        },
+    );
 }
 
 /** The web build's own channels: one show, in from and out to the page. */
@@ -491,6 +528,8 @@ function registerHandlers() {
 }
 
 async function handle(message: ToWorker) {
+    // The page's answers to `askPage` are taken as they arrive (`./page.ts`)
+    if (message.type === "answer") return;
     if (message.type === "send") {
         const listener = ipcListeners.get(message.channel);
         // Electron drops a message no one listens for; so does this.
@@ -519,9 +558,7 @@ async function handle(message: ToWorker) {
 
 async function start() {
     await loadSqlite();
-    const storage = await claimStorage(
-        import.meta.env.VITE_PUBLIC_WEB_CHANNEL || "dev",
-    );
+    const storage = await claimStorage(STORAGE_NAMESPACE);
     storageEnabled = storage.storage === "opfs";
     registerHandlers();
     if (storageEnabled) await restoreShow();

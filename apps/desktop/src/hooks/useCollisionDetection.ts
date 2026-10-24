@@ -117,11 +117,20 @@ export const _combineCollisions = (
         marchers.data.map((m) => [m.id, m.drill_number]),
     );
     const label = (id: number) => drillNumbers.get(id) ?? String(id);
+    // Performers only (the marchers query has no items): a performer on a prop (a platform, a
+    // floor) isn't colliding with it
+    const performers = new Set(marchers.data.map((m) => m.id));
     return {
-        collisions: found.data.map((c) => ({
-            ...c,
-            label: `${label(c.marcher1Id)}, ${label(c.marcher2Id)}`,
-        })),
+        collisions: found.data
+            .filter(
+                (c) =>
+                    performers.has(c.marcher1Id) &&
+                    performers.has(c.marcher2Id),
+            )
+            .map((c) => ({
+                ...c,
+                label: `${label(c.marcher1Id)}, ${label(c.marcher2Id)}`,
+            })),
         isLoading: false,
         hasError: false,
     };

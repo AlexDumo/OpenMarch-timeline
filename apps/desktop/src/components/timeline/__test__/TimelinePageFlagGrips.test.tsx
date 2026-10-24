@@ -317,7 +317,6 @@ describe("followPageFlagMove (case 14)", () => {
         store.followPageFlagMove(17, 14);
         const s = useTimelineSelectionStore.getState();
         expect(s.selection).toEqual({ kind: "range", start: 14, end: 25 });
-        expect(s.startPinned).toBe(false);
         expect(s.playheadBeat).toBe(25);
     });
 });
@@ -333,16 +332,15 @@ describe("describePageFlagBlock", () => {
         { linkId: 5, label: "Timeline 5", startBeatIndex: 2, endBeatIndex: 7 },
         { linkId: 6, label: "Breakaway", startBeatIndex: 3, endBeatIndex: 7 },
     ];
-    it("names the flag, the show's end, or the move", () => {
+    it("names the flag or the move", () => {
         expect(
             describePageFlagBlock({ kind: "flag", pageId: 3 }, pages, tracks),
         ).toBe("Page 2's flag");
         expect(
             describePageFlagBlock({ kind: "flag", pageId: 1 }, pages, tracks),
         ).toBe("Home");
-        expect(describePageFlagBlock({ kind: "show-end" }, pages, tracks)).toBe(
-            "The end of the show",
-        );
+        // The last flag past every move (endless counts): nothing to say
+        expect(describePageFlagBlock({ kind: "open" }, pages, tracks)).toBe("");
         expect(
             describePageFlagBlock(
                 { kind: "move", timelineId: 4, message: "E-A3 …" },

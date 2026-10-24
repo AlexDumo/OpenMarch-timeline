@@ -40,7 +40,7 @@ test("Launch page sub-menus", async ({ electronAppEmpty }) => {
 });
 
 const canvasIsVisible = async (page: Page) => {
-    await expect(page.getByText("Timeline")).toBeVisible();
+    await expect(page.getByTestId("timeline-page-ruler")).toBeVisible();
     await expect(page.getByTestId("fieldCanvas")).toBeVisible();
 };
 
@@ -63,8 +63,8 @@ test("Toolbars are visible", async ({ electronApp }) => {
     await expect(page.getByText("Open FileNew FileSave Copy")).toBeVisible();
     console.log("clicking view tab");
     await page.getByRole("tab", { name: "View" }).click();
-    console.log("clicking prev paths");
-    await expect(page.getByText("Previous pathsNext paths")).toBeVisible();
+    console.log("checking the paths buttons");
+    await expect(page.getByText("Next pathsStep size warnings")).toBeVisible();
     console.log("clicking alignment tab");
     await page.getByRole("tab", { name: "Alignment" }).click();
     await expect(
@@ -95,17 +95,17 @@ test("Export modal is visible", async ({ electronApp }) => {
 
 test("Sidebars are visible", async ({ electronApp }) => {
     const { page } = electronApp;
-    await page.locator("#sidebar").getByRole("button").first().click();
+    await page.locator("#sidebar-launcher-marchers").click();
     await expect(page.getByRole("heading", { name: "Marchers" })).toBeVisible();
     await expect(
         page.locator("#workspace div").filter({ hasText: "Marchers" }).nth(1),
     ).toBeVisible();
-    await page.locator("#sidebar").getByRole("button").nth(1).click();
+    await page.locator("#sidebar-launcher-music").click();
     await expect(page.locator("header")).toContainText("Music");
     await expect(
         page.getByRole("heading", { name: "Tempo Groups" }),
     ).toBeVisible();
-    await page.locator("#sidebar").getByRole("button").nth(2).click();
+    await page.locator("#sidebar-launcher-field").click();
     await expect(
         page
             .locator("#workspace div")
@@ -119,7 +119,7 @@ test("Field properties customizer tabs are visible", async ({
     electronApp,
 }) => {
     const { page } = electronApp;
-    await page.locator("#sidebar").getByRole("button").nth(2).click();
+    await page.locator("#sidebar-launcher-field").click();
     await expect(page.getByText("Field Template")).toBeVisible();
     await page
         .getByRole("combobox", { name: "High school football field (" })
@@ -274,7 +274,7 @@ test("Field properties customizer tabs are visible", async ({
         page.getByRole("heading", { name: "Image Rendering" }),
     ).toBeVisible();
     await expect(
-        page.getByRole("button", { name: "Import Image" }),
+        page.getByRole("button", { name: "Upload floor…" }),
     ).toBeVisible();
     await expect(
         page.getByRole("heading", { name: "Measurements" }),

@@ -5,6 +5,7 @@ import { useMetronomeStore } from "@/stores/MetronomeStore";
 import { usePlaybackSpeedStore } from "@/stores/PlaybackSpeedStore";
 import {
     navigateTimeline,
+    playTimelineOn,
     playTimelinePage,
     toggleTimelineLoop,
     toggleTimelinePlayback,
@@ -16,7 +17,7 @@ import { useEditorReadiness } from "./useEditorReadiness";
 // eslint-disable-next-line max-lines-per-function
 export function useNavigationActionHandlers() {
     const { ready } = useEditorReadiness();
-    const { pages, beats } = useTimingObjects()!;
+    const { pages, countGrid } = useTimingObjects()!;
     const isPlayingContext = useIsPlaying();
     const isPlaying = isPlayingContext?.isPlaying ?? false;
     const setIsPlaying = isPlayingContext?.setIsPlaying ?? (() => {});
@@ -28,17 +29,13 @@ export function useNavigationActionHandlers() {
      * Playing, it jumps playback there, as the transport's Previous and Next do.
      */
     const navigate = (target: TimelineNavigation) =>
-        navigateTimeline(beats, pages, isPlaying, target);
+        navigateTimeline(countGrid, pages, isPlaying, target);
 
     const goNext = () => navigate("next-page");
     const goPrevious = () => navigate("previous-page");
     // Playing, each jump restarts the audio, so a held key jumps once rather than stuttering
     const enabled = { enabled: canNavigate, ignoreRepeat: isPlaying };
-    const transport = () => ({
-        isPlaying,
-        showEndBeat: beats.length,
-        setIsPlaying,
-    });
+    const transport = () => ({ isPlaying, setIsPlaying });
 
     useActionHandler("nextPage", goNext, enabled);
     useActionHandler("timelineNextPage", goNext, enabled);
@@ -50,7 +47,8 @@ export function useNavigationActionHandlers() {
     useActionHandler("nextBeat", () => navigate("next-beat"), enabled);
     useActionHandler(
         "playPause",
-        // UI-17 Play: loops the loop, or plays on from the start flag; playing, it stops
+        // UI-17 Play: loops the loop, else plays the window once (Expert, UI-26) or on from the
+        // start flag (Basic); playing, it stops
         () => toggleTimelinePlayback(transport()),
         enabled,
     );
@@ -58,8 +56,13 @@ export function useNavigationActionHandlers() {
     useActionHandler("playPage", () => playTimelinePage(transport()), {
         enabled: canNavigate,
     });
-    // UI-17: C turns looping on over the page being edited, or off. Not in Basic (UI-19)
     const basic = useIsBasicMode();
+    // UI-26: Alt+Space plays on from the start flag, past the playhead. Expert only: Basic's Space
+    // already plays on
+    useActionHandler("playOn", () => playTimelineOn(transport()), {
+        enabled: canNavigate && !basic,
+    });
+    // UI-17: C turns looping on over the page being edited, or off. Not in Basic (UI-19)
     useActionHandler("toggleLoop", () => toggleTimelineLoop(), {
         enabled: ready && !basic,
     });

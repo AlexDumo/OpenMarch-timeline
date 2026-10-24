@@ -2,7 +2,12 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { db } from "@/global/database/db";
 import type { DbConnection } from "@/db-functions/types";
-import { startTimelineResolver, stopTimelineResolver } from "./timelineStore";
+import {
+    setTimelinePutDownItems,
+    startTimelineResolver,
+    stopTimelineResolver,
+} from "./timelineStore";
+import { usePutDownItems } from "@/hooks/queries/usePutDownItems";
 import { useTimelineSelectionHost } from "./useTimelineSelectionHost";
 import { useTimelinePageBridge } from "./useTimelinePageBridge";
 import { useDeselectDimmedMarchers } from "./useTimelineDimming";
@@ -39,6 +44,17 @@ export function useTimelineResolverSession(
         void startTimelineResolver(database);
         return () => stopTimelineResolver();
     }, [database, enabled]);
+}
+
+/**
+ * Feeds the resolver the items it puts down where their holders release them (ADR 0002 D-9):
+ * Placement isn't in the timeline change log, so the store gets it from a query.
+ */
+export function useTimelinePutDownFeed(): void {
+    const items = usePutDownItems();
+    useEffect(() => {
+        if (items) setTimelinePutDownItems(items);
+    }, [items]);
 }
 
 /**
@@ -86,6 +102,8 @@ function useTimelinePageBoxes(enabled: boolean): void {
  */
 export default function TimelineResolverHost() {
     useTimelineResolverSession(db, true);
+    // C2.5: released items are put down at their holders
+    useTimelinePutDownFeed();
     // The stored timelines the UI-9 selection resolves to (P8.11)
     useTimelineSelectionHost(db, true);
     // TEMPORARY (P8.12): the legacy selected page follows the playhead
@@ -96,7 +114,7 @@ export default function TimelineResolverHost() {
     useTimelinePlaybackDriver(true);
     // UI-10: the start flag follows the page boxes (both modes: Basic edits inside them, UI-19)
     useTimelinePageBoxes(true);
-    // UI-19: no pinned start flag, loop or isolation in Basic
+    // UI-26: Expert's start flag stays put; UI-19: Basic's follows, with no loop or isolation
     useBasicModeGuards(true);
     // UI-19: the marchers Basic can't edit, per page
     useBasicLocksHost(true);
