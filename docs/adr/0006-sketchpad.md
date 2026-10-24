@@ -116,14 +116,19 @@ interface SketchDoc {
 - **Writes go straight to main.** Unlike the 3D View, the window writes. Sketch tables are outside
   the show's undo history (D-5), so writes don't need to pass through the editor's
   `transactionWithHistory`. Main handles a fixed set of `sketch:*` channels: list, load, save,
-  remove, get-file, put-file and templates. Each handler checks that the sender is the Sketchpad
-  window, validates its payload with zod, and writes with prepared statements. There is no
-  general-purpose SQL from the window.
+  remove, restore, rename, duplicate, get-file, put-file, open and templates. Each handler checks
+  that its sender is allowed for that channel (the Sketchpad window, the editor's Sketches panel,
+  or both), validates its payload with zod, and writes with prepared statements once no editor
+  transaction is open. There is no general-purpose SQL from either window.
+- **Delete and Undo.** Deleting from the Sketches panel removes the row and shows an Undo toast;
+  `restore` puts it back. A save that arrives from the window for a sketch the editor just deleted
+  is ignored until it is restored.
 - **Refresh.** After a save, main sends `sketch:changed` with the sketch id to the editor. The editor
   invalidates its sketch queries, which drive the sidebar thumbnails and the overlay.
 - **Autosave.** The window saves about 2 s after the last change, and at least every 30 s while the
   user is editing. It also saves on tab close and on window blur. On window close, main waits up to
-  2 s for a final save before closing the window. Saving the show also flushes open sketches.
+  2 s for a final save before closing the window. Closing the show flushes open sketches the same
+  way. Writes go straight to the file, so saving the show needs no extra step.
 - **Undo.** Each tab and page keeps Excalidraw's undo history in memory. Hidden tabs stay mounted,
   so their history survives tab switches. History is not saved (owner decision Q5).
 
@@ -165,9 +170,11 @@ sketch_pins (
 ### D-6 Templates
 
 - **Saving.** "Save as template" saves either to the show (a `sketches` row with
-  `kind='template'`) or to the user's Library (owner decision Q3). A Library template is a new
-  Library item kind, `sketch_template`, whose content is the `SketchDoc` with the field layout
-  removed. Adding the kind needs a migration of the `library_items` kind check.
+  `kind='template'`, whose `field_json` keeps only the field style) or to the user's Library
+  (owner decision Q3). The Library is an app-level store, not a show table, so a Library template
+  is a JSON file in it (`sketch-templates/<id>.json`) holding the pages, the field style and its
+  images inline. Using it copies those images into the show. No `library_items` migration is
+  needed.
 - **Using one.** A template keeps every page and the field style, never the field layout. A new
   sketch made from a template takes its field layout from the show's current field.
 - **Web.** The web build has no Library, so it offers only show templates.
