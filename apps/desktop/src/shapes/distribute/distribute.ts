@@ -1,4 +1,4 @@
-import { evenSpread, type SpreadLayout } from "../geometry/naturalFill";
+import { evenSpread, type SpreadLayout } from "./spread";
 import type {
     Distribution,
     FilesDistribution,

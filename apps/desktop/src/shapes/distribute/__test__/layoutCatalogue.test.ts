@@ -9,10 +9,10 @@ import {
     shapeKey,
     turnedKey,
     type LayoutVersion,
-} from "../distribute/layouts";
-import { distribute } from "../distribute/distribute";
-import { rectRegion } from "../distribute/region";
-import type { FilesLayout } from "../distribute/distribution";
+} from "../layouts";
+import { distribute } from "../distribute";
+import { rectRegion } from "../region";
+import type { FilesLayout } from "../distribution";
 
 /**
  * The box's layout catalogue (#387, spec #385): every layout is a full block minus a pattern, its

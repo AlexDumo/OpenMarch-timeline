@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { boxTool } from "../box/boxTool";
+import { boxTool } from "../boxTool";
 import {
     boxBlock,
     boxDistribution,
     boxFrame,
     type BoxParams,
-} from "../box/boxGeometry";
-import type { FilesLayout, LayoutFamily } from "../distribute/distribution";
-import { layoutRowsOf, layoutOf, withLayout } from "../distribute/modes";
-import { layoutOrientations } from "../distribute/layouts";
-import { chipLayout, quarterTurn } from "../editor/chip";
-import { boxesAt, type PlacedRecipe } from "../placed/placedBox";
-import { placementOf } from "../tool/shapePlacement";
-import type { ToolEnv } from "../tool/toolKind";
+} from "../boxGeometry";
+import type { FilesLayout, LayoutFamily } from "../../distribute/distribution";
+import { layoutRowsOf, layoutOf, withLayout } from "../../distribute/modes";
+import { layoutOrientations } from "../../distribute/layouts";
+import { chipLayout, quarterTurn } from "../../editor/chip";
+import { boxesAt, type PlacedRecipe } from "../../placed/placedBox";
+import { placementOf } from "../../tool/shapePlacement";
+import type { ToolEnv } from "../../tool/toolKind";
 import {
     edit,
     openTool,
@@ -22,8 +22,8 @@ import {
     slotsOf,
     undo,
     type ToolState,
-} from "../tool/toolMachine";
-import type { ShapeContext, Slot, XY } from "../types";
+} from "../../tool/toolMachine";
+import type { ShapeContext, Slot, XY } from "../../types";
 
 /**
  * The box's layouts in the shape session (#387, spec #385): picking a version, the stepper and

@@ -1,4 +1,4 @@
-import { SPREAD_GENERATOR } from "../geometry/naturalFill";
+import { SPREAD_GENERATOR } from "./spread";
 
 /**
  * How a closed shape is filled (spec #385): one host-owned object in a recipe's `params`, beside
