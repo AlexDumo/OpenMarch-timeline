@@ -17,7 +17,11 @@ import {
 import { registerPaletteSource } from "@/shortcuts/palette/sources";
 import { runAction } from "@/shortcuts/registry";
 import { boxTool } from "../../box/boxTool";
-import { boxBlock, type BoxParams } from "../../box/boxGeometry";
+import {
+    boxBlock,
+    boxDistribution,
+    type BoxParams,
+} from "../../box/boxGeometry";
 import type { ToolEnv } from "../../tool/toolKind";
 import { fillAhead, shapeSteps, startingParams } from "../shapeSteps";
 
@@ -196,6 +200,8 @@ describe("the command bar's layout step", () => {
         key("Enter");
         expect(question()).toMatch(/^Layout/);
         key("Enter");
+        expect(question()).toMatch(/^Stagger/);
+        key("Enter");
         // The mode step left as it is
         expect(box.finish).toHaveBeenCalledWith([
             "",
@@ -203,6 +209,39 @@ describe("the command bar's layout step", () => {
             "2",
             "2",
             "Short back 6 × 4, 1 short",
+            "0",
+        ]);
+    });
+
+    it("asks the stagger last, and a one-liner can set it", async () => {
+        const box = withBox();
+        renderBar();
+        await choose("box 6x4 2 2 short 1/3");
+        expect(question()).toBe("Stagger: 0 to ½ right or left");
+        expect(boxDistribution(box.shape)).toMatchObject({ stagger: [1, 3] });
+        key("Enter");
+        expect(box.finish).toHaveBeenCalledWith([
+            "",
+            "6x4",
+            "2",
+            "2",
+            "short",
+            "1/3",
+        ]);
+    });
+
+    it("skips the stagger for a layout that centers its ranks", async () => {
+        const box = withBox();
+        renderBar();
+        await choose("box 6x4 2 2 stagger");
+        expect(question()).toMatch(/^Layout/);
+        key("Enter");
+        expect(box.finish).toHaveBeenCalledWith([
+            "",
+            "6x4",
+            "2",
+            "2",
+            "stagger",
         ]);
     });
 });
