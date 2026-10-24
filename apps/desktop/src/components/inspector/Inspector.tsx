@@ -1,6 +1,6 @@
 import MarcherEditor from "./MarcherEditor";
 import PageEditor from "./PageEditor";
-import AlignmentEditor from "./AlignmentEditor";
+import { ShapeToolSection } from "@/shapes/tool/ShapeToolSection";
 import { PageNotesSection } from "./PageNotesSection";
 import { TimelineMoveCardSlot } from "./TimelineMoveCard";
 import { T } from "@tolgee/react";
@@ -21,11 +21,12 @@ function Inspector() {
                 {/* Scrollable inspector content */}
                 {/* relative so Radix's visually-hidden native selects are contained here instead of escaping to the document */}
                 <div className="relative mt-8 flex min-h-0 flex-1 flex-col gap-48 overflow-y-auto">
+                    {/* Shapes come first: picking one is the usual next step after selecting */}
+                    <ShapeToolSection />
                     {/* UI-14 review: a selected move's card comes first */}
                     {!basic && <TimelineMoveCardSlot />}
                     <PageEditor />
                     <MarcherEditor />
-                    <AlignmentEditor />
                     {/* ADR 0002 D-22: the show's one quiet list, in both modes */}
                     <ShowChecksSection />
                 </div>

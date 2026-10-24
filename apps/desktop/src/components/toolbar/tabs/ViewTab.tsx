@@ -3,6 +3,17 @@ import { useShallow } from "zustand/react/shallow";
 import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { CubeIcon, EyeIcon, EyeSlashIcon } from "@phosphor-icons/react";
 import { T, useTolgee } from "@tolgee/react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTriggerCompact,
+} from "@openmarch/ui";
+import type {
+    MarcherLabelForm,
+    ShapeOutlines,
+    MarcherLabelSize,
+} from "@/stores/UiSettingsStore";
 import ActionButton from "@/shortcuts/ActionButton";
 
 export default function ViewTab() {
@@ -40,6 +51,10 @@ function UiSettingsToolbar() {
             gridLines: s.uiSettings.gridLines,
             halfLines: s.uiSettings.halfLines,
             showCollisions: s.uiSettings.showCollisions,
+            marcherLabels: s.uiSettings.marcherLabels ?? "auto",
+            marcherLabelSize: s.uiSettings.marcherLabelSize ?? "normal",
+            marcherLabelPosition: s.uiSettings.marcherLabelPosition ?? "above",
+            shapes: s.uiSettings.shapes ?? "selected",
         })),
     );
 
@@ -112,6 +127,122 @@ function UiSettingsToolbar() {
                         <EyeSlashIcon size={24} />
                     )}
                 </button>
+            </ToolbarSection>
+            <ToolbarSection>
+                {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}
+                <label className="flex items-center gap-8">
+                    <T keyName="toolbar.view.shapes" />
+                    <Select
+                        value={uiSettings.shapes}
+                        onValueChange={(v) =>
+                            setUiSettings({
+                                ...useUiSettingsStore.getState().uiSettings,
+                                shapes: v as ShapeOutlines,
+                            })
+                        }
+                    >
+                        <SelectTriggerCompact
+                            label={t("toolbar.view.shapes")}
+                            data-testid="view-shapes"
+                        />
+                        <SelectContent>
+                            <SelectItem value="selected">
+                                {t("toolbar.view.shapesSelected")}
+                            </SelectItem>
+                            <SelectItem value="always">
+                                {t("toolbar.view.shapesAlways")}
+                            </SelectItem>
+                            <SelectItem value="off">
+                                {t("toolbar.view.shapesOff")}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </label>
+                {/* Full drill numbers crowd at 2-step intervals (shape sims, round 6) */}
+                <label className="flex items-center gap-8">
+                    <T keyName="toolbar.view.labels" />
+                    <Select
+                        value={uiSettings.marcherLabels}
+                        onValueChange={(v) =>
+                            setUiSettings({
+                                ...useUiSettingsStore.getState().uiSettings,
+                                marcherLabels: v as MarcherLabelForm,
+                            })
+                        }
+                    >
+                        <SelectTriggerCompact
+                            label={t("toolbar.view.labels")}
+                            data-testid="view-marcher-labels"
+                        />
+                        <SelectContent>
+                            <SelectItem value="auto">
+                                {t("toolbar.view.labelsAuto")}
+                            </SelectItem>
+                            <SelectItem value="names">
+                                {t("toolbar.view.labelsNames")}
+                            </SelectItem>
+                            <SelectItem value="numbers">
+                                {t("toolbar.view.labelsNumbers")}
+                            </SelectItem>
+                            <SelectItem value="off">
+                                {t("toolbar.view.labelsOff")}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </label>
+                <label className="flex items-center gap-8">
+                    <T keyName="toolbar.view.labelSize" />
+                    <Select
+                        value={uiSettings.marcherLabelSize}
+                        onValueChange={(v) =>
+                            setUiSettings({
+                                ...useUiSettingsStore.getState().uiSettings,
+                                marcherLabelSize: v as MarcherLabelSize,
+                            })
+                        }
+                    >
+                        <SelectTriggerCompact
+                            label={t("toolbar.view.labelSize")}
+                            data-testid="view-marcher-label-size"
+                        />
+                        <SelectContent>
+                            <SelectItem value="small">
+                                {t("toolbar.view.labelSizeSmall")}
+                            </SelectItem>
+                            <SelectItem value="normal">
+                                {t("toolbar.view.labelSizeNormal")}
+                            </SelectItem>
+                            <SelectItem value="large">
+                                {t("toolbar.view.labelSizeLarge")}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </label>
+                <label className="flex items-center gap-8">
+                    <T keyName="toolbar.view.labelPosition" />
+                    <Select
+                        value={uiSettings.marcherLabelPosition}
+                        onValueChange={(v) =>
+                            setUiSettings({
+                                ...useUiSettingsStore.getState().uiSettings,
+                                marcherLabelPosition: v as "above" | "beside",
+                            })
+                        }
+                    >
+                        <SelectTriggerCompact
+                            label={t("toolbar.view.labelPosition")}
+                            data-testid="view-marcher-label-position"
+                        />
+                        <SelectContent>
+                            <SelectItem value="above">
+                                {t("toolbar.view.labelPositionAbove")}
+                            </SelectItem>
+                            <SelectItem value="beside">
+                                {t("toolbar.view.labelPositionBeside")}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </label>
             </ToolbarSection>
             {/* <ToolbarSection>
                 <button

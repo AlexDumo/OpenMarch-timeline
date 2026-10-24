@@ -17,8 +17,8 @@ import { DEFAULT_FIELD_THEME, type FieldProperties } from "@openmarch/core";
 import { useSelectedPage } from "@/context/SelectedPageContext";
 import { useSelectedMarchers } from "@/context/SelectedMarchersContext";
 import { useIsPlaying } from "@/context/IsPlayingContext";
+import { LABEL_SIZE_SCALE, useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useIsPreviewMode } from "@/stores/PreviewModeStore";
-import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import {
     allItemsQueryOptions,
     allMarcherRowsQueryOptions,
@@ -59,7 +59,15 @@ import { VisualsFieldEditor } from "@/field/editor/visualsFieldEditor";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { setActiveFieldEditor } from "@/field/editor/activeFieldEditor";
 import { takeFieldPress } from "@/field/takeFieldPress";
-import { publishLinePreviews, useFieldLineTool } from "@/field/fieldLineTool";
+import { setShapeField } from "@/shapes/field/shapeField";
+import { useShapeFieldModes } from "@/shapes/field/useShapeFieldModes";
+import { boxPressSelection, enterBox } from "@/shapes/placed/boxSelection";
+import {
+    drawnPlacedBoxes,
+    PlacedBoxesOverlay,
+} from "@/shapes/placed/PlacedBoxesOverlay";
+import { PlacedBoxReadout } from "@/shapes/placed/PlacedBoxReadout";
+import { ShapeToolReadout } from "@/shapes/tool/ShapeToolReadout";
 import { useFieldItemWrites } from "@/field/fieldItemWrites";
 import {
     snapToRounding,
@@ -90,7 +98,7 @@ import FieldLayer from "./layers/FieldLayer";
 import BackgroundImageLayer from "./layers/BackgroundImageLayer";
 import MarchersLayer from "./layers/MarchersLayer";
 import ItemsLayer from "./layers/ItemsLayer";
-import LabelsLayer from "./layers/LabelsLayer";
+import LabelsLayer, { type LabelStyle } from "./layers/LabelsLayer";
 import OverlayLayer from "./layers/OverlayLayer";
 import StartFlagLayers from "./StartFlagLayers";
 import { useTimelineVisuals } from "./useTimelineVisuals";
@@ -224,6 +232,15 @@ function ThreeFieldView() {
     const startOver = useCallback(() => setCanvasKey((key) => key + 1), []);
 
     const marchers = useMemo(() => new FieldMarchers(), []);
+    // The View tab's label form: full drill numbers ("OT12"), or the number only ("12")
+    const { labelForm, labelSize, labelPosition } = useUiSettingsStore(
+        useShallow((s) => ({
+            labelForm: s.uiSettings.marcherLabels ?? "auto",
+            labelSize: s.uiSettings.marcherLabelSize ?? "normal",
+            labelPosition: s.uiSettings.marcherLabelPosition ?? "above",
+        })),
+    );
+    const numbersOnly = labelForm === "numbers";
     const items = useMemo(() => new FieldItems(marchers), [marchers]);
     const itemLabels = useFieldItems(items, beats);
     const saveItem = useFieldItemWrites(items);
@@ -233,10 +250,26 @@ function ThreeFieldView() {
             new Map(
                 (marcherRows ?? []).map((marcher) => [
                     marcher.id,
-                    itemLabels.get(marcher.id) ?? marcher.drill_number,
+                    itemLabels.get(marcher.id) ??
+                        (numbersOnly
+                            ? String(marcher.drill_order)
+                            : marcher.drill_number),
                 ]),
             ),
-        [marcherRows, itemLabels],
+        [marcherRows, numbersOnly, itemLabels],
+    );
+    const labelStyle = useMemo(
+        (): LabelStyle => ({
+            form:
+                labelForm === "auto"
+                    ? "auto"
+                    : labelForm === "off"
+                      ? "off"
+                      : "fixed",
+            scale: LABEL_SIZE_SCALE[labelSize],
+            beside: labelPosition === "beside",
+        }),
+        [labelForm, labelSize, labelPosition],
     );
     const atlases = useMemo(
         () => ({
@@ -373,9 +406,10 @@ function ThreeFieldView() {
                             positions,
                             latest.current.moveMarchers,
                         ),
-                    // #203: the line tool's previews are the alignment event's, which Shift+Enter applies
-                    lineFinished: publishLinePreviews,
-                    stepGrid: () => latest.current.fieldProperties ?? null,
+                    // #204: a click on a placed box's member selects the whole box
+                    pressSelection: (hit, shift) =>
+                        boxPressSelection(hit, shift, selection.current),
+                    doubleClickMarcher: enterBox,
                     // C2.1: items are hit anywhere inside their Outline
                     isItem: (id) => items.isItem(id),
                     itemAt: (point) => items.itemAt(point),
@@ -428,13 +462,18 @@ function ThreeFieldView() {
     useEffect(() => editor.selectionChanged(), [editor, selectedIds]);
     const pageId = selectedPage?.id;
     useEffect(() => editor.cancelRotation(), [editor, pageId]);
-    useFieldLineTool(editor);
+    // #204: the shape tool and placed boxes read this field
+    useEffect(() => {
+        setShapeField({
+            fieldProperties: () => latest.current.fieldProperties,
+            zoom: () => useFieldViewStore.getState().zoom,
+            marchers: () => latest.current.marcherRows,
+            drawn: (ids) => marchers.drawn(ids),
+        });
+        return () => setShapeField(null);
+    }, [marchers]);
+    useShapeFieldModes(editor, isPlaying);
     useFieldPropTool(editor);
-    // A finished line follows its marchers to another page
-    useEffect(
-        () => marchers.subscribe(() => editor.refreshLineTool()),
-        [marchers, editor],
-    );
 
     useEffect(() => {
         installFieldTestApi(
@@ -455,7 +494,8 @@ function ThreeFieldView() {
                         selectionHandles(box, useFieldViewStore.getState().zoom)
                     );
                 },
-                lineTool: () => editor.lineToolShape(),
+                modeDrawing: () => editor.modeDrawing(),
+                placedBoxes: drawnPlacedBoxes,
                 items,
                 propTool: () => editor.propToolShape(),
                 fieldImage: () => latest.current.fieldImage,
@@ -610,6 +650,8 @@ function ThreeFieldView() {
                             labels={labels}
                             theme={fieldProperties.theme}
                             atlas={atlases.label}
+                            style={labelStyle}
+                            holdAutoSize={isPlaying}
                         />
                         <OverlayLayer
                             plan={timeline.collisions}
@@ -624,12 +666,29 @@ function ThreeFieldView() {
                     </Canvas>
                 )}
                 {fieldProperties && (
+                    <PlacedBoxesOverlay
+                        isPlaying={isPlaying}
+                        theme={fieldProperties.theme}
+                        stepPx={fieldProperties.pixelsPerStep}
+                    />
+                )}
+                {fieldProperties && (
                     <FieldOverlay
                         marchers={marchers}
                         items={items}
                         editor={editor}
                         theme={fieldProperties.theme}
                     />
+                )}
+                {fieldProperties && (
+                    <>
+                        <ShapeToolReadout
+                            stepPx={fieldProperties.pixelsPerStep}
+                        />
+                        <PlacedBoxReadout
+                            stepPx={fieldProperties.pixelsPerStep}
+                        />
+                    </>
                 )}
                 <KeptMarksOverlay
                     marks={keptMarks}

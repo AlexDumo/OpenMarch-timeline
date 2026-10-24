@@ -263,6 +263,21 @@ export class FieldMarchers {
         this.emit();
     }
 
+    /** Where the marchers in `ids` are drawn, skipping any not drawn or hidden. */
+    drawn(ids: readonly number[]): Map<number, { x: number; y: number }> {
+        const wanted = new Set(ids);
+        const out = new Map<number, { x: number; y: number }>();
+        for (let i = 0; i < this.ids.length; i++) {
+            const id = this.ids[i];
+            if (!wanted.has(id) || this.hidden[i]) continue;
+            out.set(id, {
+                x: this.positions[i * 2],
+                y: this.positions[i * 2 + 1],
+            });
+        }
+        return out;
+    }
+
     /**
      * Calls `listener` after every fill and selection change, for what draws
      * outside the WebGL frame (the SVG overlay). Returns the unsubscribe.

@@ -64,9 +64,10 @@ export type FieldTestHandle =
     | "rot";
 
 /**
- * What the user is doing on the field right now. `line` covers the whole line
- * tool, from choosing it until it applies or cancels, and `prop` the prop
- * tool, from the Props panel's Draw until it's turned off.
+ * What the user is doing on the field right now. `shape` covers the whole
+ * shape tool, from opening it until it places or cancels; `box` is a drag on a
+ * selected placed box (its handles, or inside it); `prop` the prop tool, from
+ * the Props panel's Draw until it's turned off.
  */
 export type FieldTestGesture =
     | "marquee"
@@ -75,7 +76,8 @@ export type FieldTestGesture =
     | "scale"
     | "rotate"
     | "pan"
-    | "line"
+    | "shape"
+    | "box"
     | "prop";
 
 /** How the field draws on this machine (the new field only, #205). */
@@ -119,8 +121,13 @@ export interface FieldTestApi {
      * null when none is shown (no image, hidden, or not loaded yet).
      */
     fieldImage(): FieldTestImage | null;
-    /** The line tool (L) while it's on, or null when it's off (#203). */
-    lineTool?(): FieldTestLineTool | null;
+    /**
+     * What the shape tool, or a selected placed box, draws over the field
+     * (#204), or null when neither is on the field.
+     */
+    shapeOverlay?(): FieldTestShapeOverlay | null;
+    /** The placed boxes outlined on the field (the View tab's Shapes setting). */
+    placedBoxes?(): FieldTestPlacedBox[];
     /**
      * The props and equipment drawn (C2.1), by ascending marcher id. Items Off
      * field at the beat shown, or hidden by the user, are left out.
@@ -154,24 +161,29 @@ export type FieldTestItem = {
     screen: ScreenPoint;
 };
 
-/** The line tool as the field shows it. Positions are in field units. */
-export type FieldTestLineTool = {
-    /** The marchers it lines up (outlined on the field), ascending. */
-    marchers: number[];
-    /**
-     * The line drawn, or null before the first click and after a right-click.
-     * `drawing` while its end follows the pointer, before the second click.
-     */
-    line: {
-        start: { x: number; y: number };
-        end: { x: number; y: number };
-        drawing: boolean;
-    } | null;
-    /**
-     * Where the dashed previews put each marcher, by ascending id: what
-     * Shift+Enter applies. Empty until a line is finished.
-     */
-    previews: { id: number; x: number; y: number }[];
+/**
+ * A shape drawn over the field: by the open shape tool, or a selected placed
+ * box edited in place. Field positions are in field units.
+ */
+export type FieldTestShapeOverlay = {
+    /** The shape's outline, a closed polygon; null before one is drawn. */
+    outline: { x: number; y: number }[] | null;
+    /** Where its marchers will stand. */
+    spots: { x: number; y: number }[];
+    /** From each marcher to its spot; empty during a gesture. */
+    walks: { from: { x: number; y: number }; to: { x: number; y: number } }[];
+    /** Its handles, in the viewport. */
+    handles: ScreenPoint[];
+};
+
+/** A placed box outlined on the field. */
+export type FieldTestPlacedBox = {
+    /** Its recipe's id. */
+    id: number;
+    /** The label under it, such as "8 × 4". */
+    label: string;
+    /** Its outline's corners, in field units: left, top, right, bottom. */
+    rect: { left: number; top: number; right: number; bottom: number };
 };
 
 export type FieldTestImage = {

@@ -11,12 +11,11 @@ import { stopTimelineResolver } from "@/timeline/timelineStore";
 import { EditorActionHandlers } from "@/shortcuts/ActionHandlers";
 import ShortcutDispatcher from "@/shortcuts/ShortcutDispatcher";
 import { runActionWhenReady } from "@/test/runActionWhenReady";
-import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import { createItems } from "@/db-functions/items";
 
 /**
  * A prop selected with marchers (a click on it, then Shift-clicks) isn't one more dot to the
- * formation tools (C2.2): align and Create Line work on the selected performers and leave the prop
+ * formation tools (C2.2): align works on the selected performers and leave the prop
  * where it is.
  */
 
@@ -35,7 +34,6 @@ beforeAll(async () => {
 afterEach(() => {
     cleanup();
     stopTimelineResolver();
-    useAlignmentEventStore.getState().resetAlignmentEvent();
     vi.restoreAllMocks();
 });
 
@@ -99,25 +97,5 @@ describeDbTests("formation tools with a prop selected", (it) => {
             });
         });
         expect(await positionsOn(db, page, [prop])).toEqual([propBefore]);
-    });
-
-    it("Create Line gives slots to the selected performers only", async ({
-        db,
-        marchersAndPages,
-    }) => {
-        const prop = await createRiser(db);
-        const performers = marchersAndPages.expectedMarchers
-            .slice(2, 5)
-            .map((m) => m.id);
-        await setUp([...performers, prop]);
-
-        await runActionWhenReady("alignmentEventLine");
-
-        const { alignmentEvent, alignmentEventMarchers } =
-            useAlignmentEventStore.getState();
-        expect(alignmentEvent).toBe("line");
-        expect(alignmentEventMarchers.map((m) => m.id).sort()).toEqual(
-            [...performers].sort(),
-        );
     });
 });

@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useAlignmentEventStore } from "@/stores/AlignmentEventStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { takeFieldPress } from "../takeFieldPress";
 
@@ -8,7 +7,6 @@ const timeline = () => useTimelineSelectionStore.getState();
 beforeEach(() => {
     timeline().reset();
     timeline().setShowEndBeat(16);
-    useAlignmentEventStore.getState().resetAlignmentEvent();
 });
 
 describe("takeFieldPress (#202)", () => {
@@ -28,10 +26,5 @@ describe("takeFieldPress (#202)", () => {
         timeline().setPlayback({ kind: "on" });
         expect(takeFieldPress()).toBe(false);
         expect(timeline().cursorBeat).toBe(5);
-    });
-
-    it("leaves the line tool's presses to the editor (#203)", () => {
-        useAlignmentEventStore.getState().setAlignmentEvent("line");
-        expect(takeFieldPress()).toBe(false);
     });
 });

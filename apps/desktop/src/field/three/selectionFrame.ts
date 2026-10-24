@@ -22,8 +22,8 @@ export type DrawnSelectionBox = Omit<SelectionFrame, "pad"> & { pad?: number };
  * fewer than two marchers are selected (a single marcher gets its ring and
  * no box or handles). It fits the selected marchers where they're drawn,
  * except while a rotation is dragged, when it turns with them (#198). None
- * while the line tool (#203) or the prop tool (C2.1) is on: its handles do
- * nothing then. The overlay
+ * while a mode with its own handles is on (the shape tool, a selected placed
+ * box, #204) or the prop tool (C2.1): its handles do nothing then. The overlay
  * draws it and the field test API reads its handles.
  *
  * One item selected alone gets its own frame instead (C2.1): on its Outline,
@@ -34,7 +34,7 @@ export function drawnSelectionBox(
     editor: FieldEditor,
     items?: FieldItems,
 ): DrawnSelectionBox | null {
-    if (editor.lineToolShape() || editor.propToolShape()) return null;
+    if (editor.modeOwnsSelectionBox() || editor.propToolShape()) return null;
     const rotating = editor.rotationFrame();
     if (rotating) return rotating;
     const { selected, positions, hidden } = marchers;

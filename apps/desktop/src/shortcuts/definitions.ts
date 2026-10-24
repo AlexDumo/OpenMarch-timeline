@@ -613,14 +613,27 @@ const STATIC_ACTIONS = {
         hiddenFromPalette: true,
     },
 
-    // Cursor mode
-    applyQuickShape: {
-        labelKey: "actions.shape.applyQuick",
-        category: "cursor",
+    // Shape tool (docs/timeline/research/shapes/06-box-v1.md): select marchers, open a shape, draw
+    // it on the field, Enter places them. Escape is cancelAlignmentUpdates, which the open tool
+    // takes over (shapes/tool/ShapeToolKeys).
+    shapeBlock: {
+        labelKey: "actions.shape.block",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
         editsDrill: true,
         scope: "canvas",
-        defaultBindings: ["Shift+Enter"],
+        defaultBindings: ["B"],
+        args: { kind: "block" },
     },
+    applyShape: {
+        labelKey: "actions.shape.apply",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["Enter"],
+    },
+
+    // Cursor mode
     cancelAlignmentUpdates: {
         labelKey: "actions.alignment.cancelUpdates",
         category: "cursor",
@@ -628,27 +641,14 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Escape"],
     },
-    alignmentEventDefault: {
-        labelKey: "actions.cursor.defaultMode",
-        category: "cursor",
-        editsDrill: true,
-        scope: "canvas",
-        defaultBindings: ["V"],
-    },
-    alignmentEventLine: {
-        labelKey: "actions.cursor.lineMode",
-        category: "cursor",
-        editsDrill: true,
-        scope: "canvas",
-        defaultBindings: ["L"],
-    },
 
     // Select
+    // Global so it works right after clicking a set on the timeline (shape sims)
     selectAllMarchers: {
         labelKey: "actions.select.selectAll",
         category: "select",
         editsDrill: false,
-        scope: "canvas",
+        scope: "global",
         defaultBindings: ["$mod+A", "Control+A"],
     },
 

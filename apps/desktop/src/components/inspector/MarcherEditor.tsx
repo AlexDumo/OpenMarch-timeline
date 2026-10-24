@@ -682,20 +682,6 @@ function MarcherEditor() {
                                             <T keyName="inspector.marcher.swapMarchers" />
                                         </ActionButton>
                                     )}
-                                    {selectedMarchers.length >= 3 && (
-                                        <ActionButton
-                                            className={clsx(
-                                                getButtonClassName({
-                                                    variant: "primary",
-                                                    size: "compact",
-                                                }),
-                                                "enabled:hover:text-text-invert",
-                                            )}
-                                            action="alignmentEventLine"
-                                        >
-                                            <T keyName="inspector.marcher.createLine" />
-                                        </ActionButton>
-                                    )}
 
                                     {/* Alignment, distribution, and transformation buttons */}
                                     <AlignmentButtons />

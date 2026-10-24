@@ -85,6 +85,12 @@ const ROLLBACKS: Record<number, (db: DatabaseSync) => void> = {
     25: (db) => dropTables(db, ["item_placement_marchers", "item_placements"]),
     // Artwork slot assignments (C2.4)
     26: (db) => dropTables(db, ["item_artwork_slots"]),
+    // Shape recipes (ADR 0006)
+    27: (db) =>
+        dropTables(db, [
+            "timeline_shape_recipe_marchers",
+            "timeline_shape_recipes",
+        ]),
 };
 
 /**
