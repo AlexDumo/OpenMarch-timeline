@@ -180,15 +180,19 @@ describe("timeline geometry", () => {
         ).toEqual(["measure-1", "measure-3", "measure-5", "measure-7"]);
     });
 
-    it("formats the playhead as page, count and measure (UI-13)", () => {
+    it("formats the playhead as page, count and measure (UI-13, D6)", () => {
         expect(getPlayheadLabel(timelineStoryModel, 0)).toBe("Home");
         expect(getPlayheadLabel(timelineStoryModel, 11)).toBe(
             "Pg 2 · ct 3/8 · m3 beat 4",
         );
-        // On a flag, the page ending there, as the transport counts it
+        // On a flag, the page ending there and the page starting there (D6)
         expect(getPlayheadLabel(timelineStoryModel, 16)).toBe(
-            "Pg 2 · ct 8/8 · m5 beat 1",
+            "end of Pg 2 · Pg 2A starts · m5 beat 1",
         );
+        expect(getPlayheadReadout(timelineStoryModel, 16)).toMatchObject({
+            compact: "Pg 2 ct 8 → 2A",
+            spoken: "End of page 2, count 8, page 2A starts, measure 5 beat 1",
+        });
         // The last page has no flag in this model, so no total
         expect(getPlayheadLabel(timelineStoryModel, 27)).toBe(
             "Pg 4 · ct 3 · m7 beat 4",
@@ -362,6 +366,22 @@ describe("getPageCountAt (UI-12)", () => {
             pageLabel: "0",
             count: 0,
             home: true,
+        });
+    });
+
+    it("names the count a playhead between two beat lines has passed, as the measure does (E2)", () => {
+        // 8.6 used to round to page 2's count 1 while its measure part floored to m3 beat 1
+        expect(getPageCountAt(timelineStoryModel, 8.6)).toMatchObject({
+            pageLabel: "1",
+            count: 8,
+        });
+        expect(getPlayheadLabel(timelineStoryModel, 8.6)).toBe(
+            getPlayheadLabel(timelineStoryModel, 8),
+        );
+        // A live position a hair short of a line is on it
+        expect(getPageCountAt(timelineStoryModel, 8.9999999)).toMatchObject({
+            pageLabel: "2",
+            count: 1,
         });
     });
 });

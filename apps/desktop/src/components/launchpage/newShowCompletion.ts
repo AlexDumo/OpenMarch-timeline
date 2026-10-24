@@ -411,6 +411,10 @@ async function applyPreviousDotsMarcherTags(
     });
 }
 
+/**
+ * The show's starter counts and pages ("Skip for now", and MusicXML when the file is short):
+ * 8 pages of 16 counts. Only what the pages need: the counts go on past them (endless counts).
+ */
 async function createBeatsAndPages(queryClient: QueryClient): Promise<void> {
     const currentBeats = await queryClient.fetchQuery(
         allDatabaseBeatsQueryOptions(),
@@ -530,6 +534,7 @@ function buildTempoOnlyPageArgs(
     sortedMeasures: DatabaseMeasure[],
     pageByStartBeat: Map<number, number>,
 ): { start_beat: number; is_subset: boolean }[] {
+    // The starter pages need the first 20 measures; a show with audio has more after them
     if (sortedMeasures.length < TEMPO_ONLY_MEASURE_COUNT) {
         throw new Error(
             `Expected ${TEMPO_ONLY_MEASURE_COUNT} measures, got ${sortedMeasures.length}`,
@@ -558,6 +563,7 @@ function buildTempoOnlyPageArgs(
 async function isTempoOnlyTimingComplete(
     tx: DbTransaction,
     beatsPerMeasure: number,
+    measureCount: number,
 ): Promise<boolean> {
     const measures = await tx.query.measures.findMany();
     const beats = await tx.query.beats.findMany();
@@ -565,12 +571,12 @@ async function isTempoOnlyTimingComplete(
     const utility = await tx.query.utility.findFirst();
 
     const nonFirstBeats = beats.filter((beat) => beat.id !== FIRST_BEAT_ID);
-    const expectedBeatCount = TEMPO_ONLY_MEASURE_COUNT * beatsPerMeasure;
+    const expectedBeatCount = measureCount * beatsPerMeasure;
     const expectedLastPageCounts =
         TEMPO_ONLY_LAST_PAGE_MEASURES * beatsPerMeasure;
 
     return (
-        measures.length === TEMPO_ONLY_MEASURE_COUNT &&
+        measures.length === measureCount &&
         nonFirstBeats.length === expectedBeatCount &&
         pages.length === TEMPO_ONLY_EXPECTED_PAGE_COUNT &&
         utility?.last_page_counts === expectedLastPageCounts
@@ -628,12 +634,14 @@ async function createTempoOnlyPagesInTransaction(
     params: {
         tempo: number;
         beatsPerMeasure: number;
+        /** `TEMPO_ONLY_MEASURE_COUNT` */
+        measureCount: number;
         pageByStartBeat: Map<number, number>;
     },
 ): Promise<void> {
-    const { tempo, beatsPerMeasure, pageByStartBeat } = params;
+    const { tempo, beatsPerMeasure, measureCount, pageByStartBeat } = params;
 
-    if (!(await isTempoOnlyTimingComplete(tx, beatsPerMeasure))) {
+    if (!(await isTempoOnlyTimingComplete(tx, beatsPerMeasure, measureCount))) {
         await resetTempoOnlyTimingStateInTransaction(tx);
         await _createFromTempoGroupInTransaction({
             tx,
@@ -641,7 +649,7 @@ async function createTempoOnlyPagesInTransaction(
                 name: "",
                 tempo,
                 bigBeatsPerMeasure: beatsPerMeasure,
-                numOfRepeats: TEMPO_ONLY_MEASURE_COUNT,
+                numOfRepeats: measureCount,
             },
             startingPosition: 0,
         });
@@ -679,11 +687,16 @@ async function invalidateTempoOnlyQueries(
     });
 }
 
+/**
+ * "Tempo only": 20 measures with 5 starter pages at the chosen tempo and meter. The counts go on
+ * past them at that tempo and meter (endless counts), so the show doesn't need more stored.
+ */
 async function createTempoOnlyBeatsMeasuresAndPages(
     form: NewShowFormState,
     queryClient: QueryClient,
 ): Promise<void> {
     const { tempo, beatsPerMeasure } = requireTempoOnlyData(form.tempo);
+    const measureCount = TEMPO_ONLY_MEASURE_COUNT;
 
     const existingPages = await queryClient.fetchQuery(
         allDatabasePagesQueryOptions(),
@@ -699,6 +712,7 @@ async function createTempoOnlyBeatsMeasuresAndPages(
             await createTempoOnlyPagesInTransaction(tx, {
                 tempo,
                 beatsPerMeasure,
+                measureCount,
                 pageByStartBeat,
             });
         },
@@ -708,7 +722,9 @@ async function createTempoOnlyBeatsMeasuresAndPages(
 }
 
 /**
- * Applies wizard data to the open draft DB, then moves the file to the user's path.
+ * Applies wizard data to the open draft DB, then moves the file to the user's path. The show stores
+ * only the counts its starter pages need, or a MusicXML file's measures; the counts go on past them
+ * (docs/tempo/endless-counts.md, T-8).
  */
 export async function completeNewShow(
     form: NewShowFormState,
@@ -732,11 +748,9 @@ export async function completeNewShow(
     await applyMusicSettings(form.audio, form.tempo);
     await updateFieldProperties(form.fieldTemplate);
     await applyPreviousDotsFieldImage(form, queryClient);
-    if (form.tempo?.method === "tempo_only") {
+    if (form.tempo?.method === "tempo_only")
         await createTempoOnlyBeatsMeasuresAndPages(form, queryClient);
-    } else {
-        await createBeatsAndPages(queryClient);
-    }
+    else await createBeatsAndPages(queryClient);
     await applyPerformersSettings(form.performers, queryClient);
     await applyPreviousDotsCoordinates(form, queryClient);
     await applyPreviousDotsSectionAppearances(form, queryClient);

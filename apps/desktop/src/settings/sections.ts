@@ -3,6 +3,7 @@ import {
     CubeIcon,
     CursorClickIcon,
     DatabaseIcon,
+    FlaskIcon,
     GearSixIcon,
     KeyboardIcon,
     PaletteIcon,
@@ -25,6 +26,7 @@ import PrivacySettings from "@/components/launchpage/settings/PrivacySettings";
 import DeveloperSettings from "@/components/launchpage/settings/DeveloperSettings";
 import DatabaseRepairSettings from "@/components/launchpage/settings/DatabaseRepairSettings";
 import { isWebBuild } from "@/utilities/webBuild";
+import TempoLabSettings from "@/components/launchpage/settings/TempoLabSettings";
 
 export type SettingsSectionId =
     | "general"
@@ -35,6 +37,7 @@ export type SettingsSectionId =
     | "shortcuts"
     | "plugins"
     | "privacy"
+    | "tempoLab"
     | "developer"
     | "database";
 
@@ -165,6 +168,23 @@ const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
         searchKeys: [
             "settings.privacy.analytics",
             "settings.privacy.analytics.toggle",
+        ],
+    },
+    {
+        id: "tempoLab",
+        labelKey: "settings.tempoLab",
+        Icon: FlaskIcon,
+        Component: TempoLabSettings,
+        descriptionKey: "settings.tempoLab.description",
+        searchKeys: [
+            "settings.tempoLab.tapTheBeat",
+            "settings.tempoLab.alignView",
+            "settings.tempoLab.alignDragScope",
+            "settings.tempoLab.punchInTap",
+            "settings.tempoLab.tempoMap",
+            "settings.tempoLab.snapToAttacks",
+            "settings.tempoLab.drillChoices",
+            "settings.tempoLab.reimportInPlace",
         ],
     },
     {

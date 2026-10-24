@@ -23,7 +23,11 @@ import {
     touchesTimelineDisplayTables,
     undoGroupTouchesDisplayTables,
 } from "./timelineDisplay";
-import { createTriggers, type HistoryType } from "./historyTriggers";
+import {
+    createTriggers,
+    tablesWithScopedHistory,
+    type HistoryType,
+} from "./historyTriggers";
 
 export {
     buildHistoryTriggerSql,
@@ -78,6 +82,29 @@ function notifyHistoryChange(): void {
         }
     }
 }
+const historyWriteListeners = new Set<() => void>();
+
+/**
+ * Calls `listener` after every committed `transactionWithHistory` write, whatever called it. The
+ * app refreshes its Undo and Redo state from here, so a write made outside a TanStack mutation
+ * (a drill edit dialog, a page-flag grip) still enables Undo. Returns the unsubscribe.
+ */
+export const subscribeHistoryWrites = (listener: () => void): (() => void) => {
+    historyWriteListeners.add(listener);
+    return () => {
+        historyWriteListeners.delete(listener);
+    };
+};
+
+const notifyHistoryWrite = () => {
+    for (const listener of historyWriteListeners) {
+        try {
+            listener();
+        } catch (err) {
+            console.error("History write listener failed:", err);
+        }
+    }
+};
 
 /** What the running `transactionWithHistory` does once it commits (`afterHistoryCommit`) */
 let commitCallbacks: (() => void)[] | null = null;
@@ -241,6 +268,7 @@ export const transactionWithHistory = async <T>(
         notifyTimelineBatch(drained);
         if (touchedDisplayTables) bumpTimelineDisplayVersion();
         notifyHistoryChange();
+        notifyHistoryWrite();
         return output;
     }
 
@@ -547,6 +575,14 @@ const switchTriggerModeInTransaction = async (
         await db.run(sql.raw(`DROP TRIGGER IF EXISTS ${trigger.name};`));
     }
     for (const table of tables) {
+        // Back in normal undo mode, scoped tables go without triggers again (see
+        // `tablesWithScopedHistory`)
+        if (
+            mode === "undo" &&
+            deleteRedoRows &&
+            tablesWithScopedHistory.includes(table)
+        )
+            continue;
         await createTriggers(db, table, mode, deleteRedoRows, true);
     }
     mainProcessLog(

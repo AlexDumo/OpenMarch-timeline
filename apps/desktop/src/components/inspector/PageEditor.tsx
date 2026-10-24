@@ -1,8 +1,11 @@
 import React, { useEffect } from "react";
 import { InspectorCollapsible } from "./InspectorCollapsible";
 import { Button, Switch } from "@openmarch/ui";
-import { measureRangeString } from "../../global/classes/Page";
-import { T } from "@tolgee/react";
+import {
+    measureRangeExact,
+    measureRangeString,
+} from "../../global/classes/Page";
+import { T, useTolgee } from "@tolgee/react";
 import { updatePagesMutationOptions } from "../../hooks/queries";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useSplitPage } from "./PageEditorUtils";
@@ -12,6 +15,7 @@ import { Help } from "./InspectorFields";
 // TODO: figure out how to make this work with the new music system
 function PageEditor() {
     const queryClient = useQueryClient();
+    const { t } = useTolgee();
     // While timeline playback runs, the page being played (the selected page waits for the stop)
     const { page: selectedPage, playing } = useInspectorPage();
     const updatePagesMutation = useMutation(
@@ -94,8 +98,15 @@ function PageEditor() {
                         <label className="text-body text-text/80">
                             <T keyName="inspector.page.measures" />
                         </label>
-                        <p className="text-body text-text leading-none">
-                            {measureRangeString(selectedPage)}
+                        {/* D5: the exact counts here; the sheet's "5–8" on hover */}
+                        <p
+                            className="text-body text-text leading-none"
+                            data-testid="page-measure-range"
+                            title={t("inspector.page.measuresPrinted", {
+                                printed: measureRangeString(selectedPage),
+                            })}
+                        >
+                            {measureRangeExact(selectedPage)}
                         </p>
                     </div>
                     <Button

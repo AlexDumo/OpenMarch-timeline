@@ -1,8 +1,12 @@
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { withTimelinePageRipple } from "@/db-functions/timelineRipple";
 import {
+    checkAndDrainTimelineChangesInTransaction,
+    DbTransaction,
     FIRST_BEAT_ID,
     remapItemChangesOntoReplacementBeatsInTransaction,
     transactionWithHistory,
+    withTimelineWriteLock,
 } from "@/db-functions";
 import {
     createBeatsInTransaction,
@@ -15,8 +19,8 @@ import {
 import { updatePagesInTransaction } from "@/db-functions";
 import { db } from "@/global/database/db";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { workspaceSettingsKeys } from "@/hooks/queries/useWorkspaceSettings";
 import { itemGeometryKeys } from "@/hooks/queries/useItems";
-import { conToastError } from "@/utilities/utils";
 import tolgee from "@/global/singletons/Tolgee";
 import {
     Measure as ParserMeasure,
@@ -32,19 +36,26 @@ import Page from "@/global/classes/Page";
 import Measure from "@/global/classes/Measure";
 import Beat from "@/global/classes/Beat";
 import { useTimingObjects } from "@/hooks";
+import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
+import { updateWorkspaceSettingsWithHistoryInTransaction } from "@/db-functions/workspaceSettings";
+import { timelineErrorMessage } from "@/timeline/timelineErrorMessages";
+import { firstMeasureNumber } from "./musicXmlPreview";
+import { applyMusicXmlReimport } from "@/db-functions/musicXmlReimport";
+import type {
+    ReimportScoreMeasure,
+    ReimportTiming,
+} from "@/timeline/tempo/reimport";
+import { scoreTempoMarks } from "@/timeline/tempo/scoreMarks";
+import { storedMarks, type TempoMapMark } from "@/timeline/tempo/tempoMap";
 
 // Types and interfaces
 export type MusicXmlImportData = {
-    file: File;
+    fileName: string;
+    /** The parsed file, as the preview showed it */
+    report: MusicXmlParseResult;
     allPages: Page[];
     measures: Measure[];
     allBeats: Beat[];
-};
-
-/** What the database writes need: the parsed score in place of the file. */
-export type MusicXmlImportWrite = Omit<MusicXmlImportData, "file"> & {
-    fileName: string;
-    parsed: MusicXmlParseResult;
 };
 
 export type ImportResult = {
@@ -52,6 +63,26 @@ export type ImportResult = {
     message: string;
     /** What the importer guessed or couldn't read, to check in the score */
     checks: ImportCheck[];
+};
+
+/** Reads a picked file's bytes (compressed or not, any text encoding) and parses them. */
+export const readMusicXmlScore = async (
+    file: Pick<Blob, "arrayBuffer">,
+): Promise<MusicXmlParseResult> =>
+    parseMusicXmlWithReport(await readMusicXmlFile(await file.arrayBuffer()));
+
+/**
+ * Reads the file's bytes (compressed or not, any text encoding) and parses it, without writing
+ * anything, so a file that can't be read fails before the import touches the show. Measures
+ * come in the order they are played, repeats played out.
+ */
+export const parseMusicXmlFile = async (
+    file: Pick<Blob, "arrayBuffer">,
+): Promise<MusicXmlParseResult> => {
+    const parsed = await readMusicXmlScore(file);
+    if (parsed.measures.length === 0)
+        throw new Error("The file has no measures");
+    return parsed;
 };
 
 // generates standard 120bpm 4/4 measures
@@ -72,158 +103,245 @@ function generateStandardMeasures(count: number): ParserMeasure[] {
 }
 
 /**
- * Reads the file's bytes (compressed or not, any text encoding) and parses it, outside any
- * transaction, so a file that can't be read fails before the import touches the show. Measures
- * come in the order they are played, repeats played out.
+ * Numbers the show's measures from the file's first measure number (0 for a pickup), so the
+ * measure row reads like the score. Recorded in the import's undo entry.
  */
-export const parseMusicXmlFile = async (
-    file: Pick<Blob, "arrayBuffer">,
-): Promise<MusicXmlParseResult> => {
-    const parsed = parseMusicXmlWithReport(
-        await readMusicXmlFile(await file.arrayBuffer()),
+async function setMeasureNumberOffsetInTransaction(
+    tx: DbTransaction,
+    first: number | undefined,
+) {
+    if (first === undefined) return;
+    const row = await tx.query.workspace_settings.findFirst();
+    if (row) {
+        const parsed = (() => {
+            try {
+                return workspaceSettingsSchema.safeParse(
+                    JSON.parse(row.json_data),
+                );
+            } catch {
+                return undefined;
+            }
+        })();
+        // Leave a row the app can't read alone, and skip a write that changes nothing
+        if (!parsed?.success || parsed.data.measurementOffset === first) return;
+    }
+    await updateWorkspaceSettingsWithHistoryInTransaction({
+        tx,
+        update: (settings) => ({ ...settings, measurementOffset: first }),
+    });
+}
+
+/**
+ * Stores the score's meters and tempo markings as the tempo map's marks (FX-3), replacing the
+ * show's, in the import's undo entry. Leaves a settings row the app can't read alone.
+ */
+async function setTempoMapMarksInTransaction(
+    tx: DbTransaction,
+    marks: Map<number, TempoMapMark>,
+    measureStartBeatIds: readonly number[],
+) {
+    const row = await tx.query.workspace_settings.findFirst();
+    if (row) {
+        try {
+            if (
+                !workspaceSettingsSchema.safeParse(JSON.parse(row.json_data))
+                    .success
+            )
+                return;
+        } catch {
+            return;
+        }
+    }
+    const tempoMapMarks = storedMarks(marks, measureStartBeatIds);
+    await updateWorkspaceSettingsWithHistoryInTransaction({
+        tx,
+        update: (settings) => ({ ...settings, tempoMapMarks }),
+    });
+}
+
+/**
+ * Writes a parsed file: replaces every measure and beat, and moves page N to measure N. Call
+ * inside `withTimelinePageRipple`.
+ */
+// eslint-disable-next-line max-lines-per-function
+async function importParsedInTransaction(
+    tx: DbTransaction,
+    data: MusicXmlImportData,
+): Promise<ImportResult> {
+    const { fileName, report, allPages, measures, allBeats } = data;
+    let parsedMeasures: ParserMeasure[] = report.measures;
+
+    // Get page count
+    if (!allPages) throw new Error("Failed to fetch pages");
+    const pageCount = allPages.length;
+
+    // Add standard measures if more pages than measures
+    if (parsedMeasures.length < pageCount) {
+        parsedMeasures = [
+            ...parsedMeasures,
+            ...generateStandardMeasures(pageCount - parsedMeasures.length),
+        ];
+    }
+
+    // Delete existing measures
+    if (measures.length > 0) {
+        await deleteMeasuresInTransaction({
+            tx,
+            itemIds: new Set(measures.map((m) => m.id)),
+        });
+    }
+
+    // Prepare new beats and store their grouping to measures
+    let beatPosition = 0;
+    const measureStartBeatPositions: number[] = [];
+    const newBeats: NewBeatArgs[] = parsedMeasures.flatMap((measure) => {
+        measureStartBeatPositions.push(beatPosition);
+        return measure.beats.map((beat) => ({
+            position: beatPosition++,
+            duration: beat.duration,
+            include_in_measure: true,
+            notes: beat.notes,
+        }));
+    });
+
+    // Insert new beats
+    const dbBeats = await createBeatsInTransaction({
+        tx,
+        newBeats,
+        startingPosition: 0,
+    });
+
+    // Insert new measures with their new start beats
+    const newMeasures: NewMeasureArgs[] = parsedMeasures.map((measure, i) => ({
+        start_beat: dbBeats[measureStartBeatPositions[i]].id,
+        // Each pass of a repeated section gets its own mark: A, A-2, A-3
+        rehearsal_mark:
+            measure.rehearsalMark && measure.time && measure.time > 1
+                ? `${measure.rehearsalMark}-${measure.time}`
+                : measure.rehearsalMark,
+        // A measure played again by a repeat says which written measure it is
+        notes:
+            measure.notes ??
+            (measure.time && measure.time > 1
+                ? tolgee.t("music.repeatPlayNote", {
+                      label: measure.label ?? "",
+                      time: measure.time,
+                  })
+                : undefined),
+    }));
+    await createMeasuresInTransaction({
+        tx,
+        newItems: newMeasures,
+    });
+
+    // Reassign start_beat for all pages to new measures
+    const modifiedPagesArgs: ModifiedPageArgs[] = allPages.map(
+        (page: Page, idx: number) => {
+            const measureIdx =
+                idx < measureStartBeatPositions.length
+                    ? idx
+                    : measureStartBeatPositions.length - 1;
+            return {
+                id: page.id,
+                start_beat: dbBeats[measureStartBeatPositions[measureIdx]].id,
+            };
+        },
     );
-    if (parsed.measures.length === 0)
-        throw new Error("The file has no measures");
-    return parsed;
-};
+    if (modifiedPagesArgs.length > 0) {
+        await updatePagesInTransaction({
+            tx,
+            modifiedPages: modifiedPagesArgs,
+        });
+    }
+
+    // Delete old beats now that they are not referenced
+    const newBeatIds = new Set(dbBeats.map((b: DatabaseBeat) => b.id));
+    const unusedBeats = allBeats.filter(
+        (b) => !newBeatIds.has(b.id) && b.id !== FIRST_BEAT_ID,
+    );
+    if (unusedBeats.length > 0) {
+        const beatIds = new Set(unusedBeats.map((b) => b.id));
+        // Item changes move to the new beat at their time instead of going with the old beats
+        await remapItemChangesOntoReplacementBeatsInTransaction({
+            tx,
+            beatIds,
+        });
+        await deleteBeatsInTransaction({ tx, beatIds });
+    }
+
+    await setMeasureNumberOffsetInTransaction(tx, firstMeasureNumber(report));
+    await setTempoMapMarksInTransaction(
+        tx,
+        scoreTempoMarks(report.measures),
+        report.measures.map((_, i) => dbBeats[measureStartBeatPositions[i]].id),
+    );
+
+    return {
+        success: true,
+        message: tolgee.t("music.importSuccess", { fileName }),
+        checks: importChecks(report),
+    };
+}
 
 // Database operation functions (private, prefixed with _)
-// eslint-disable-next-line max-lines-per-function
 export const _importMusicXmlFile = async ({
     data,
 }: {
-    data: MusicXmlImportWrite;
-}): Promise<ImportResult> => {
-    return await transactionWithHistory(
+    data: MusicXmlImportData;
+}): Promise<ImportResult> =>
+    await transactionWithHistory(
         db,
         "importMusicXmlFile",
-        // eslint-disable-next-line max-lines-per-function
         async (tx) =>
-            // eslint-disable-next-line max-lines-per-function
-            await withTimelinePageRipple(tx, async () => {
-                const { fileName, parsed, allPages, measures, allBeats } = data;
-                let parsedMeasures: ParserMeasure[] = parsed.measures;
-
-                // Get page count
-                if (!allPages) throw new Error("Failed to fetch pages");
-                const pageCount = allPages.length;
-
-                // Add standard measures if more pages than measures
-                if (parsedMeasures.length < pageCount) {
-                    parsedMeasures = [
-                        ...parsedMeasures,
-                        ...generateStandardMeasures(
-                            pageCount - parsedMeasures.length,
-                        ),
-                    ];
-                }
-
-                // Delete existing measures
-                if (measures.length > 0) {
-                    await deleteMeasuresInTransaction({
-                        tx,
-                        itemIds: new Set(measures.map((m) => m.id)),
-                    });
-                }
-
-                // Prepare new beats and store their grouping to measures
-                let beatPosition = 0;
-                const measureStartBeatPositions: number[] = [];
-                const newBeats: NewBeatArgs[] = parsedMeasures.flatMap(
-                    (measure) => {
-                        measureStartBeatPositions.push(beatPosition);
-                        return measure.beats.map((beat) => ({
-                            position: beatPosition++,
-                            duration: beat.duration,
-                            include_in_measure: true,
-                            notes: beat.notes,
-                        }));
-                    },
-                );
-
-                // Insert new beats
-                const dbBeats = await createBeatsInTransaction({
-                    tx,
-                    newBeats,
-                    startingPosition: 0,
-                });
-
-                // Insert new measures with their new start beats
-                const newMeasures: NewMeasureArgs[] = parsedMeasures.map(
-                    (measure, i) => ({
-                        start_beat: dbBeats[measureStartBeatPositions[i]].id,
-                        // Each pass of a repeated section gets its own mark: A, A-2, A-3
-                        rehearsal_mark:
-                            measure.rehearsalMark &&
-                            measure.time &&
-                            measure.time > 1
-                                ? `${measure.rehearsalMark}-${measure.time}`
-                                : measure.rehearsalMark,
-                        // A measure played again by a repeat says which written measure it is
-                        notes:
-                            measure.notes ??
-                            (measure.time && measure.time > 1
-                                ? tolgee.t("music.repeatPlayNote", {
-                                      label: measure.label ?? "",
-                                      time: measure.time,
-                                  })
-                                : undefined),
-                    }),
-                );
-                await createMeasuresInTransaction({
-                    tx,
-                    newItems: newMeasures,
-                });
-
-                // Reassign start_beat for all pages to new measures
-                const modifiedPagesArgs: ModifiedPageArgs[] = allPages.map(
-                    (page: any, idx: number) => {
-                        const measureIdx =
-                            idx < measureStartBeatPositions.length
-                                ? idx
-                                : measureStartBeatPositions.length - 1;
-                        return {
-                            id: page.id,
-                            start_beat:
-                                dbBeats[measureStartBeatPositions[measureIdx]]
-                                    .id,
-                        };
-                    },
-                );
-                if (modifiedPagesArgs.length > 0) {
-                    await updatePagesInTransaction({
-                        tx,
-                        modifiedPages: modifiedPagesArgs,
-                    });
-                }
-
-                // Delete old beats now that they are not referenced
-                const newBeatIds = new Set(
-                    dbBeats.map((b: DatabaseBeat) => b.id),
-                );
-                const unusedBeats = allBeats.filter(
-                    (b) => !newBeatIds.has(b.id) && b.id !== FIRST_BEAT_ID,
-                );
-                if (unusedBeats.length > 0) {
-                    const beatIds = new Set(unusedBeats.map((b) => b.id));
-                    // Item changes move to the new beat at their time instead of going with
-                    // the old beats
-                    await remapItemChangesOntoReplacementBeatsInTransaction({
-                        tx,
-                        beatIds,
-                    });
-                    await deleteBeatsInTransaction({ tx, beatIds });
-                }
-
-                return {
-                    success: true,
-                    message: tolgee.t("music.importSuccess", {
-                        fileName,
-                    }),
-                    checks: importChecks(parsed),
-                };
-            }),
+            await withTimelinePageRipple(tx, () =>
+                importParsedInTransaction(tx, data),
+            ),
     );
+
+/** Thrown at the end of a dry run to roll it back. */
+class DryRunRollback extends Error {
+    constructor() {
+        super("MusicXML import dry run");
+        this.name = "DryRunRollback";
+    }
+}
+
+export type DryRunResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * Runs the import, with the timeline ripple and the commit-time checks, in a transaction that is
+ * always rolled back. Says whether the real import would go through, and if not, why, in the
+ * same words the timeline uses for its refusals. Nothing is written and no undo entry is made.
+ */
+export const _dryRunMusicXmlImport = async ({
+    data,
+}: {
+    data: MusicXmlImportData;
+}): Promise<DryRunResult> => {
+    try {
+        await withTimelineWriteLock(() =>
+            db.transaction(async (tx) => {
+                await withTimelinePageRipple(tx, () =>
+                    importParsedInTransaction(tx, data),
+                );
+                await checkAndDrainTimelineChangesInTransaction(tx);
+                throw new DryRunRollback();
+            }),
+        );
+    } catch (error) {
+        if (error instanceof DryRunRollback) return { ok: true };
+        console.warn("MusicXML import dry run refused:", error);
+        return {
+            ok: false,
+            message: timelineErrorMessage(error, {
+                fallback:
+                    error instanceof Error && error.message
+                        ? error.message
+                        : tolgee.t("music.importError"),
+            }),
+        };
+    }
+    return { ok: true };
 };
 
 // React Query mutation hooks
@@ -242,6 +360,10 @@ const useMusicXmlMutation = <TArgs>(
     return useMutation({
         mutationFn,
         onSuccess: async () => {
+            // The import also writes the measure-number offset, which lives in workspace settings
+            await queryClient.invalidateQueries({
+                queryKey: workspaceSettingsKeys.all(),
+            });
             // Item Outline changes moved to the new beats
             void queryClient.invalidateQueries({
                 queryKey: itemGeometryKeys.all(),
@@ -254,7 +376,7 @@ const useMusicXmlMutation = <TArgs>(
             }
         },
         onError: (error) => {
-            conToastError(tolgee.t(errorKey), error);
+            toastTimelineError(error, tolgee.t(errorKey));
         },
     });
 };
@@ -262,14 +384,38 @@ const useMusicXmlMutation = <TArgs>(
 // Public mutation hooks
 export const useImportMusicXml = () => {
     return useMusicXmlMutation(
-        async ({ file, ...rest }: MusicXmlImportData) =>
-            _importMusicXmlFile({
-                data: {
-                    ...rest,
-                    fileName: file.name,
-                    parsed: await parseMusicXmlFile(file),
-                },
-            }),
+        (data: MusicXmlImportData) => _importMusicXmlFile({ data }),
+        "music.importError",
+    );
+};
+
+/**
+ * Re-imports a file in place (Tempo lab `reimportInPlace`, E12): the bars that line up with the
+ * show get the file's timing (unless `timing` is "keep") and marks, as one undo entry.
+ */
+export const useReimportMusicXml = () => {
+    return useMusicXmlMutation(
+        async ({
+            fileName,
+            score,
+            timing,
+        }: {
+            fileName: string;
+            score: ReimportScoreMeasure[];
+            timing: ReimportTiming;
+        }): Promise<ImportResult> => {
+            const result = await applyMusicXmlReimport({ db, score, timing });
+            return {
+                success: true,
+                checks: [],
+                message: tolgee.t(
+                    result.changed
+                        ? "music.xmlPreview.reimport.success"
+                        : "music.xmlPreview.reimport.unchanged",
+                    { fileName },
+                ),
+            };
+        },
         "music.importError",
     );
 };

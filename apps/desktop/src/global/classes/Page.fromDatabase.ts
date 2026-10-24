@@ -23,6 +23,58 @@ export type FromDatabasePagesArgs = {
 };
 
 /**
+ * The measures a page's counts are in, and the beats of the first and last of them that its count
+ * 1 and its last count are on (docs/tempo/count-convention.md). Count k is the k-th beat line
+ * after the page's start, named by the beat that starts on it, so count 1 is the page's second
+ * beat and the last count is the next page's first beat: a page from m5's downbeat to m9's reads
+ * "5(2) - 9(1)". The end of the show, which no beat starts on, is named by the last beat, as the
+ * timeline names it.
+ *
+ * @param startIndex index in `sortedBeats` of the page's first beat
+ * @param flagIndex index of the beat after the page's last (the next page's first), or the
+ * number of beats when the page runs to the end of the show
+ */
+function countMeasureRange({
+    sortedBeats,
+    sortedMeasures,
+    startIndex,
+    flagIndex,
+}: {
+    sortedBeats: readonly Beat[];
+    sortedMeasures: readonly Measure[];
+    startIndex: number;
+    flagIndex: number;
+}): Pick<Page, "measures" | "measureBeatToStartOn" | "measureBeatToEndOn"> {
+    const countBeat = (index: number) =>
+        sortedBeats[Math.min(index, sortedBeats.length - 1)];
+    const firstCount = countBeat(startIndex + 1);
+    const lastCount = countBeat(Math.max(flagIndex, startIndex + 1));
+    const measures = sortedMeasures.filter((measure) =>
+        measure.beats.some(
+            (beat) =>
+                beat.position >= firstCount.position &&
+                beat.position <= lastCount.position,
+        ),
+    );
+    if (measures.length === 0)
+        return {
+            measures: null,
+            measureBeatToStartOn: null,
+            measureBeatToEndOn: null,
+        };
+    return {
+        measures,
+        measureBeatToStartOn:
+            measures[0].beats.findIndex((beat) => beat.id === firstCount.id) +
+            1,
+        measureBeatToEndOn:
+            measures[measures.length - 1].beats.findIndex(
+                (beat) => beat.id === lastCount.id,
+            ) + 1,
+    };
+}
+
+/**
  * Converts the pages from the database (which are stored as a linked list) to Page objects.
  *
  * @param databasePages The pages from the database
@@ -96,19 +148,13 @@ export function fromDatabasePages({
                 startBeat.index < lastBeatIndex
                     ? sortedBeats.slice(startBeat.index, lastBeatIndex)
                     : [sortedBeats[startBeat.index]];
-            const lastBeat = beats[beats.length - 1];
-            const beatIdSet = new Set(beats.map((beat) => beat.id));
-
-            // Get the measures that belong to this page
-            const measures = sortedMeasures.filter(
-                (measure) =>
-                    // Check if the start beat of the measure is on or after the start beat of the page
-                    (measure.startBeat.position >= startBeat.position ||
-                        // Check that the start beat is on or before the last beat of the page
-                        measure.startBeat.position <= lastBeat.position) &&
-                    // If both are true, ensure that the beat is actually in the measure
-                    measure.beats.some((beat) => beatIdSet.has(beat.id)),
-            );
+            const { measures, measureBeatToStartOn, measureBeatToEndOn } =
+                countMeasureRange({
+                    sortedBeats,
+                    sortedMeasures,
+                    startIndex: startBeat.index,
+                    flagIndex: lastBeatIndex,
+                });
             const duration = beats.reduce(
                 (acc, beat) => acc + beat.duration,
                 0,
@@ -122,19 +168,9 @@ export function fromDatabasePages({
                 isSubset: dbPage.is_subset,
                 duration: duration,
                 beats,
-                measures: measures.length > 0 ? measures : null,
-                measureBeatToStartOn:
-                    measures.length > 0
-                        ? measures[0].beats.findIndex(
-                              (beat) => beat.id === startBeat.id,
-                          ) + 1
-                        : null,
-                measureBeatToEndOn:
-                    measures.length > 0
-                        ? measures[measures.length - 1].beats.findIndex(
-                              (beat) => beat.id === lastBeat.id,
-                          ) + 1
-                        : null,
+                measures,
+                measureBeatToStartOn,
+                measureBeatToEndOn,
                 timestamp: curTimestamp,
                 previousPageId: i > 0 ? sortedDbPages[i - 1].id : null,
                 nextPageId: nextPage ? nextPage.id : null,
