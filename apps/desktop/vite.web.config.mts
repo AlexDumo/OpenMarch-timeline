@@ -38,6 +38,12 @@ const examples = channel === "preview" || isLab ? DEMOS : [];
  * Lab tests all share one origin, so each test gets its own.
  */
 const storageNamespace = isLab ? `lab-${labTestId}` : channel;
+/**
+ * Scripts the lab's feedback widget loads into a lab build's page, which the
+ * content security policy must allow: Clerk's browser script, which signs
+ * the widget's requests to the lab's API in.
+ */
+const labScriptHosts = isLab ? ["https://clerk.openmarch.com"] : [];
 
 const web = (file: string) => path.join(__dirname, "web", file);
 const outDir = path.join(__dirname, "dist-web");
@@ -139,7 +145,10 @@ const webEntry = (): Plugin => ({
                 )
                 .replace(
                     "script-src 'self'",
-                    "script-src 'self' 'wasm-unsafe-eval'",
+                    [
+                        "script-src 'self' 'wasm-unsafe-eval'",
+                        ...labScriptHosts,
+                    ].join(" "),
                 )
                 .replace(/<title>[^<]*<\/title>/, "<title>OpenMarch</title>"),
     },
