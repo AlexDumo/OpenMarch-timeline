@@ -1350,6 +1350,118 @@ test("change: the layout menu under the chip switches layout, ↻ turns the box 
         .toEqual(before);
 });
 
+// The stagger (#388): for a box in Full or Short back, a switch and a slider
+// from ½ left to ½ right that rests on 0, ±⅙, ±¼, ±⅓ and ±½ (Alt for any
+// hundredth), with a readout. + moves each rank toward the audience's right
+// going back. The field follows the drag, the drag is one undo step, and the
+// recipe keeps the offset as [p, q]. Layouts that center their ranks hide it.
+
+/** Each rank's spots left to right, the front rank (nearest the audience) first */
+const ranksFrontFirst = (spots: readonly Point[]) => {
+    const by = new Map<number, number[]>();
+    for (const s of spots) {
+        const y = Math.round(s.y * 100) / 100;
+        by.set(y, [...(by.get(y) ?? []), s.x]);
+    }
+    return [...by.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .map(([, xs]) => xs.sort((a, b) => a - b));
+};
+
+/** How far the back rank leans right of the front one, in intervals across */
+const lean = async (page: Page) => {
+    const [front, back] = ranksFrontFirst((await shapeOverlay(page))!.spots);
+    return (back![0]! - front![0]!) / (front![1]! - front![0]!);
+};
+
+test("change: the stagger slider leans each rank going back, rests on its detents, follows the drag on the field, and the recipe keeps the fraction", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.evaluate(() =>
+        localStorage.removeItem("openmarch:shapeLastLayout"),
+    );
+    await drawBox(show);
+    const toggle = page.getByTestId("shape-stagger-switch");
+    const readoutText = page.getByTestId("shape-stagger-readout");
+    await expect(toggle).toHaveAttribute("data-state", "unchecked");
+    await expect(page.getByTestId("shape-stagger-slider")).toBeHidden();
+    expect(await lean(page)).toBeCloseTo(0, 3);
+    const frontBefore = ranksFrontFirst((await shapeOverlay(page))!.spots)[0];
+
+    // On: ½ right, the front rank where it was
+    await toggle.click();
+    await expect(readoutText).toHaveText("½ right · lines up every 2 ranks");
+    await expect.poll(() => lean(page)).toBeCloseTo(0.5, 3);
+    expect(ranksFrontFirst((await shapeOverlay(page))!.spots)[0]).toEqual(
+        frontBefore,
+    );
+
+    // A drag rests on ⅓, and the field shows it before the release
+    const slider = page.getByTestId("shape-stagger-slider");
+    const box = (await slider.boundingBox())!;
+    // The slider reads the pointer across its whole width
+    const xAt = (v: number) => box.x + (v + 0.5) * box.width;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(xAt(0.48), y);
+    await page.mouse.down();
+    await page.mouse.move(xAt(0.3), y, { steps: 6 });
+    await expect(readoutText).toHaveText("⅓ right · lines up every 3 ranks");
+    await expect.poll(() => lean(page)).toBeCloseTo(1 / 3, 3);
+    await page.mouse.up();
+
+    // One undo step for the whole drag
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(readoutText).toHaveText("½ right · lines up every 2 ranks");
+
+    // Alt lands on any hundredth; the arrow keys step to the next rest
+    await page.keyboard.down("Alt");
+    await page.mouse.move(xAt(0.48), y);
+    await page.mouse.down();
+    await page.mouse.move(xAt(0.42), y, { steps: 6 });
+    await page.mouse.up();
+    await page.keyboard.up("Alt");
+    await expect(readoutText).toHaveText(/^0\.4\d right$/);
+    await page.getByRole("slider", { name: "Stagger offset" }).focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(readoutText).toHaveText("⅓ right · lines up every 3 ranks");
+
+    // Left of 0 leans the other way
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await expect(readoutText).toHaveText("⅙ left · lines up every 6 ranks");
+    await expect.poll(() => lean(page)).toBeCloseTo(-1 / 6, 3);
+
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await waitForIdle(page);
+    const [recipe] = await show.query<{ params: string }>(
+        "SELECT params FROM timeline_shape_recipes",
+    );
+    expect(JSON.parse(recipe.params).distribution.stagger).toEqual([-1, 6]);
+});
+
+test("change: the stagger hides for the Stagger layout, which is a ½ stagger already", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.evaluate(() =>
+        localStorage.removeItem("openmarch:shapeLastLayout"),
+    );
+    await drawBox(show);
+    await expect(page.getByTestId("shape-stagger")).toBeVisible();
+    await page.getByTestId("shape-layout-stagger-0").click();
+    await expect(page.getByTestId("shape-stagger")).toBeHidden();
+    await page
+        .getByTestId("shape-layout-row-full")
+        .locator("button")
+        .first()
+        .click();
+    await expect(page.getByTestId("shape-stagger")).toBeVisible();
+});
+
 // The size number's − and + (owner lab feedback on #387; the owner picked
 // center + glide in the lab): the box grows about its center without creeping,
 // and the marchers glide to their new spots rather than jump.

@@ -4,6 +4,7 @@ import {
     type DistributionMode,
     type Fraction,
 } from "../distribute/distribution";
+import { staggerSize } from "../distribute/stagger";
 import { formatSteps } from "../editor/format";
 import { RING_SLOTS, type RingShape } from "../tool/ringMachine";
 import type { ShapeToolEntry } from "../tool/shapeTools";
@@ -38,24 +39,10 @@ export function intervalNote(steps: readonly number[]): string | null {
     return `${same ? shown[0] : shown.join(" × ")} apart`;
 }
 
-const FRACTIONS: Readonly<Record<string, string>> = {
-    "1/2": "½",
-    "1/3": "⅓",
-    "2/3": "⅔",
-    "1/4": "¼",
-    "3/4": "¾",
-    "1/6": "⅙",
-    "5/6": "⅚",
-};
-
-const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-
 /** A stagger as words: "stagger ½", "stagger ⅓ left"; null for none */
-function staggerNote([p, q]: Fraction): string | null {
-    if (p === 0) return null;
-    const d = gcd(Math.abs(p), q);
-    const plain = `${Math.abs(p) / d}/${q / d}`;
-    return `stagger ${FRACTIONS[plain] ?? plain}${p < 0 ? " left" : ""}`;
+function staggerNote(stagger: Fraction): string | null {
+    if (stagger[0] === 0) return null;
+    return `stagger ${staggerSize(stagger)}${stagger[0] < 0 ? " left" : ""}`;
 }
 
 /**
