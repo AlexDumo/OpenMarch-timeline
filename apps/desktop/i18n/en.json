@@ -1985,7 +1985,7 @@
                 "styleLabel": "That side"
             },
             "mode": {
-                "files": "Files",
+                "files": "Grid",
                 "label": "Fill",
                 "outline": "Outline",
                 "spread": "Spread"

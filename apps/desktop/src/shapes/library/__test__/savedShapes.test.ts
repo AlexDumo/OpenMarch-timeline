@@ -186,7 +186,7 @@ describe("applying a saved shape to another selection", () => {
         });
         const { steps } = shapeSteps(kind, base, 10, env(), []);
         expect(steps.map((s) => [s.param.key, s.initial])).toEqual([
-            ["mode", "Files"],
+            ["mode", "Grid"],
             ["size", expect.any(String)],
             ["across", "3"],
             ["deep", "1½"],

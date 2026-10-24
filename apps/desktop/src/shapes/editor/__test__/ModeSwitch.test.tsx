@@ -34,7 +34,7 @@ describe("the mode switch", () => {
         const group = screen.getByRole("group", { name: "Fill" });
         expect(
             [...group.querySelectorAll("button")].map((b) => b.textContent),
-        ).toEqual(["Files", "Outline"]);
+        ).toEqual(["Grid", "Outline"]);
         expect(screen.getByTestId("shape-mode-files")).toHaveAttribute(
             "data-state",
             "on",
@@ -52,13 +52,13 @@ describe("the mode switch", () => {
         });
     });
 
-    it("offers the box Files, Outline and Spread", () => {
+    it("offers the box Grid, Outline and Spread", () => {
         const box = drawBox({ x: 0, y: 0 }, { x: 40, y: 20 }, 6, env);
         shown(boxTool, box);
         const group = screen.getByRole("group", { name: "Fill" });
         expect(
             [...group.querySelectorAll("button")].map((b) => b.textContent),
-        ).toEqual(["Files", "Outline", "Spread"]);
+        ).toEqual(["Grid", "Outline", "Spread"]);
     });
 
     it("is hidden while the kind has one mode", () => {

@@ -131,7 +131,7 @@ describe("a fake closed kind fills through the distributor", () => {
     it("reads a typed mode by its name or the start of it", () => {
         expect(parseMode("Outline", ["files", "outline"])).toBe("outline");
         expect(parseMode(" out", ["files", "outline"])).toBe("outline");
-        expect(parseMode("f", ["files", "outline"])).toBe("files");
+        expect(parseMode("g", ["files", "outline"])).toBe("files");
         expect(parseMode("spread", ["files", "outline"])).toBeNull();
         expect(parseMode("", ["files", "outline"])).toBeNull();
     });

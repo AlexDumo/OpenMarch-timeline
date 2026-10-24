@@ -14,7 +14,7 @@ export type DistributionMode = (typeof DISTRIBUTION_MODES)[number];
 
 /** What the mode switch and the command bar call each mode */
 export const MODE_LABELS: Readonly<Record<DistributionMode, string>> = {
-    files: "Files",
+    files: "Grid",
     outline: "Outline",
     spread: "Spread",
 };
