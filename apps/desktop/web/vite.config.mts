@@ -9,8 +9,10 @@
  * app's own. Only the Node and Electron modules they import are swapped for
  * the stand-ins in `shims/`.
  */
+import fs from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vite";
+import { parse as parseYaml } from "yaml";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import type { Plugin } from "vite";
@@ -30,6 +32,30 @@ const scanAppSource = (): Plugin => ({
         return `${code}\n@source "${path.join(desktop, "src")}";\n`;
     },
 });
+
+/**
+ * The versions a lab test compares (LAB.md, "Comparing versions"): the
+ * `variants` in the front matter of the manifest `LAB_MANIFEST` names, a path
+ * from the repository root. CI sets it to the test being published. Without
+ * it, or with fewer than two versions, the build has no version switch.
+ */
+function labVariants(): { id: string; label: string; description: string }[] {
+    const manifest = process.env.LAB_MANIFEST;
+    if (!manifest) return [];
+    const text = fs.readFileSync(
+        path.resolve(desktop, "..", "..", manifest),
+        "utf8",
+    );
+    const frontMatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? "";
+    const variants = (parseYaml(frontMatter)?.variants ?? []).map(
+        (v: { id: unknown; label?: unknown; description?: unknown }) => ({
+            id: String(v.id),
+            label: String(v.label ?? v.id),
+            description: String(v.description ?? ""),
+        }),
+    );
+    return variants.length >= 2 ? variants : [];
+}
 
 export default defineConfig({
     root: __dirname,
@@ -68,6 +94,7 @@ export default defineConfig({
         // Translations come from the bundle, without Tolgee's in-context tools.
         "import.meta.env.VITE_PUBLIC_PLAYWRIGHT_SESSION":
             JSON.stringify("true"),
+        __LAB_VARIANTS__: JSON.stringify(labVariants()),
         // No analytics from test builds.
         "import.meta.env.VITE_PUBLIC_POSTHOG_KEY": JSON.stringify(""),
     },

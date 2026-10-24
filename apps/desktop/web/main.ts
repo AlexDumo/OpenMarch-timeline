@@ -13,6 +13,7 @@ import "./start.css";
 import { DEMOS, type Demo } from "./demos";
 import { downloadShow, openShow, registerHandlers, setShowName } from "./host";
 import { loadSqlite } from "./shims/sqlite";
+import { initVariants, variantSwitch } from "./variants";
 
 const start = document.getElementById("om-web-start")!;
 
@@ -193,6 +194,8 @@ function renderToolbar() {
             "Start over",
         ),
     );
+    const variants = variantSwitch();
+    if (variants) toolbar.prepend(variants);
     document.body.append(toolbar);
 }
 
@@ -205,6 +208,7 @@ async function launchApp() {
 
 async function boot() {
     showMessage("Loading…");
+    initVariants();
     await loadSqlite();
     registerHandlers({ onLeaveShow: goToStart });
 

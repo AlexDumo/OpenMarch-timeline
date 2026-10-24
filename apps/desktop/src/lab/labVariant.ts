@@ -3,7 +3,9 @@ import { create } from "zustand";
 /**
  * TEMPORARY, fork-only (the lab's "versions in one build", from fork PR #125). A lab test can
  * build two or more versions of a behavior into one test build and link each with `?variant=` in
- * the URL. The lab's feedback records the page's URL, so it says which version was on.
+ * the URL. When the test's manifest lists `variants`, the build's toolbar has a Version switch
+ * (`web/variants.ts`) that sets it without reloading. The lab's feedback records the page's URL,
+ * so it says which version was on.
  *
  * Code reads the version with `useLabVariant()` in components or `getLabVariant()` elsewhere. It
  * is `null` with no `variant` in the URL, which means the app's current behavior.

@@ -5,6 +5,19 @@ id: box-layouts
 title: Pick a layout for a box
 summary: A box can be a full block, a stagger, rounded, short at the back or notched. This build follows your last round. Turned copies are gone and ↻ turns the box instead, the row under the editor is a layout menu, and layouts the count can't make show greyed. It also has four versions of − and + to compare.
 status: open
+variants:
+  - id: center
+    label: Center
+    description: The box grows and shrinks around its center
+  - id: front
+    label: Front
+    description: The front rank stays put and the box grows toward the back
+  - id: glide
+    label: Glide
+    description: Around the center, with marchers sliding to their new spots
+  - id: front-glide
+    label: Front + glide
+    description: The front rank stays put, and marchers slide
 questions:
   - "Which version of − and + feels best: Center, Front, Glide or Front + glide? Why?"
   - Did the box stay where you put it while you pressed − and + (no creeping toward the front)?
@@ -56,9 +69,9 @@ that order.
 **Try the versions of − and +** (your "fairly jarring" note)
 
 The box no longer creeps toward the front as you press − and + (in every
-version). Open one of these links, draw a box, and press − and + a few times.
-The inspector's **Shapes** section has a **Lab** switch, so you can change
-version without reloading:
+version). Draw a box and press − and + a few times. The **Version** switch in
+the toolbar at the bottom left changes version without reloading. These links
+open a version directly:
 
 - [Center](https://lab.openmarch.com/x/box-layouts/?variant=center): the box
   grows and shrinks around its center (as before, minus the creep).

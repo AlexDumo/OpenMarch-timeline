@@ -1366,8 +1366,6 @@ test("change: − and + come back to the same spots, so the box doesn't creep", 
     await expect
         .poll(async () => (await shapeOverlay(page))!.spots)
         .toEqual(before);
-    // No version switch outside the lab's links
-    await expect(page.getByTestId("lab-version")).toHaveCount(0);
 });
 
 test.describe("the lab's front version", () => {
@@ -1375,15 +1373,11 @@ test.describe("the lab's front version", () => {
         initScript: `history.replaceState(null, "", location.pathname + "?variant=front")`,
     });
 
-    test("change: − and + keep the front rank where it is, and the version switch says Front", async ({
+    test("change: − and + keep the front rank where it is", async ({
         show,
     }) => {
         const { page } = show;
         await drawBox(show);
-        await expect(page.getByTestId("lab-version-front")).toHaveAttribute(
-            "data-state",
-            "on",
-        );
         const frontOf = async () =>
             Math.max(...(await shapeOverlay(page))!.spots.map((s) => s.y));
         const front = await frontOf();

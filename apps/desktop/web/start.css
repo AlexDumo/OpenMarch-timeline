@@ -99,3 +99,21 @@
     background: #2c2c34;
     color: #fff;
 }
+/* The version switch (variants.ts): stands out, since comparing is the test */
+.omw-variants {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 2px 0 8px;
+    margin-right: 4px;
+    border-radius: 999px;
+    background: rgba(150, 126, 255, 0.16);
+    color: #b9aaff;
+}
+.omw-variants > span {
+    margin-right: 4px;
+}
+.omw-toolbar .omw-variants button[aria-checked="true"] {
+    background: #967eff;
+    color: #fff;
+}
