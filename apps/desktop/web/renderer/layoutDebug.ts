@@ -1,11 +1,12 @@
 // cspell:words standalone
 /**
- * Preview-only diagnostic: with `?debug=layout` in the address, shows the
+ * Preview-only diagnostic (always on, temporarily): shows the
  * sizes the browser reports and where the app frame ends, to track down a
  * gap at the bottom of the screen on a real iPad. Not for upstream.
  */
 export function startLayoutDebug() {
-    if (!new URLSearchParams(window.location.search).has("debug")) return;
+    // Always on in the preview for now: a Home Screen app can't take a
+    // ?debug address. Remove before the class uses the preview.
 
     const probe = document.createElement("div");
     probe.style.cssText =
