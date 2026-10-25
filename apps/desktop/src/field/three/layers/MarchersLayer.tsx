@@ -11,7 +11,7 @@ import {
 } from "three";
 import type { FieldTheme } from "@openmarch/core";
 import type { FieldMarchers } from "../fieldMarchers";
-import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
+import type { FieldDimming } from "../fieldDimming";
 import { useFieldDraw } from "../fieldDrawContext";
 import { MARCHER_SHAPE, writeMarcherLooks } from "../marcherLooks";
 import { dotSizes, SELECTION_RGBA01 } from "../selectionRing";
@@ -271,7 +271,7 @@ export default function MarchersLayer({
             const opacity = instanced("aOpacity");
             const array = opacity.array as Float32Array;
             marchers.ids.forEach((id, i) => {
-                array[i] = dimming.isDimmed(id) ? DIMMED_OPACITY : 1;
+                array[i] = dimming.opacityOf(id);
             });
             opacity.needsUpdate = true;
         }

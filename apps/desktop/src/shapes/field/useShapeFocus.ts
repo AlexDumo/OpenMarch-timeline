@@ -4,7 +4,9 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 
 /**
- * Fades everyone who isn't in the open shape (08-shape-system-ux.md, "Marcher styling"): while
+ * Fades everyone who isn't in the open shape to a faint dot, and hides the shape's own marchers'
+ * dots once it's drawn: its spots are where they'll be, and with pathways on its start rings and
+ * walks show where they come from (#417). As 08-shape-system-ux.md, "Marcher styling", has it: while
  * it's open, or with the View tab's "Fade only while drawing", only while a drag draws it. A
  * selected placed shape fades nobody: selecting one is frequent. A shape waiting out of
  * sight (#416, `useShapeHidden`) fades nobody either.
@@ -18,9 +20,15 @@ export function useShapeFocus(dimming: FieldDimming): void {
         if (focus === "drawing" && tool.gesture?.type !== "draw") return null;
         return tool.marchers;
     });
+    // Once drawn, its spots show where they'll be: their dots now would be a second set (#417)
+    const drawn = useShapeToolStore(
+        (s) => s.tool !== null && s.tool.params !== null,
+    );
     const members = away ? null : shapeMembers;
     useEffect(() => {
-        dimming.setFocus(members ? new Set(members.map((m) => m.id)) : null);
-    }, [dimming, members]);
+        dimming.setFocus(members ? new Set(members.map((m) => m.id)) : null, {
+            hideMembers: drawn,
+        });
+    }, [dimming, members, drawn]);
     useEffect(() => () => dimming.setFocus(null), [dimming]);
 }

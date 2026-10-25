@@ -141,7 +141,10 @@ export default function LabelsLayer({
             ];
             text.setLabels(
                 marchers.ids.map((id, i) => ({
-                    text: shown[i] ? (labels.get(id) ?? "") : "",
+                    text:
+                        shown[i] && dimming.labelShown(id)
+                            ? (labels.get(id) ?? "")
+                            : "",
                     size,
                     align: style.beside ? "left" : "center",
                     baseline: CENTER_BASELINE,

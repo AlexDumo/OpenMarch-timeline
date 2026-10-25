@@ -378,6 +378,59 @@ test("change: while a box is open everyone else fades, and nobody once it closes
     await expect.poll(dimmedIds).toEqual([]);
 });
 
+test("change: an open box fades everyone else to a faint dot and, once drawn, hides its own marchers' dots; placing or Escape brings them back", async ({
+    show,
+}) => {
+    const { page } = show;
+    const looks = async () =>
+        Object.fromEntries(
+            (await drawnMarchers(page)).map((m) => [
+                m.id,
+                `${m.opacity === 1 ? "full" : m.opacity === 0 ? "hidden" : "faint"}${m.labelShown ? "" : " no-label"}`,
+            ]),
+        );
+    const expected = (mine: string, others: string) =>
+        Object.fromEntries(ALL.map((id) => [id, id <= 2 ? mine : others]));
+    const boxTwo = async () => {
+        await page.mouse.click(...(await screenOf(page, 1)));
+        await page.keyboard.down("Shift");
+        await page.mouse.click(...(await screenOf(page, 2)));
+        await page.keyboard.up("Shift");
+        await expect
+            .poll(async () => (await readField(page)).selection)
+            .toEqual([1, 2]);
+        await page.keyboard.press("b");
+        // Armed, nothing drawn: the two still show where they stand
+        await expect.poll(looks).toEqual(expected("full", "faint no-label"));
+        const grid = await fieldGrid(show);
+        const S = grid.pixelsPerStep;
+        const cf = grid.centerFront;
+        await drag(
+            page,
+            await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+            await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 23 * S }),
+        );
+        await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    };
+
+    await showPathways(page);
+    await boxTwo();
+    await expect
+        .poll(looks)
+        .toEqual(expected("hidden no-label", "faint no-label"));
+    // Pathways on: where they come from is the start rings and walks, no second set of dots
+    const overlay = (await shapeOverlay(page))!;
+    expect(overlay.rings).toHaveLength(2);
+    expect(overlay.walks).toHaveLength(2);
+    await page.keyboard.press("Escape");
+    await expect.poll(looks).toEqual(expected("full", "full"));
+
+    await boxTwo();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(looks).toEqual(expected("full", "full"));
+});
+
 test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({
     show,
 }) => {
