@@ -833,13 +833,14 @@ async function removeCountsInTransaction(
     }
 
     // Pages and measure lines that start inside the cut: on to the first count after it when they
-    // run past it (and nothing else starts there), else they go
+    // run past it (and nothing else starts there), else they go. A cut to the last stored count
+    // leaves no count after it, even for a last page whose flag is past the end.
     const startsAfter = new Set(grid.pages.map((p) => p.start));
     const pageMoves: { id: number; beat: number }[] = [];
     const pageDeletes: number[] = [];
     for (const p of grid.pages) {
         if (p.id === 0 || p.start < a || p.start >= b) continue;
-        if (p.end > b && !startsAfter.has(b))
+        if (p.end > b && b < n && !startsAfter.has(b))
             pageMoves.push({ id: p.id, beat: grid.beatIds[b]! });
         else pageDeletes.push(p.id);
     }
@@ -1090,12 +1091,13 @@ async function addCountsInTransaction(
         await nameHoldsInTransaction(tx, before, at, owner);
 
     if (edit.recording === "sameTime" && owner) {
-        // The page keeps its length in time: every beat of it, old and new, gets shorter alike
+        // The page keeps its length in time: every beat of it, old and new, gets shorter alike. A
+        // last page whose flag is past the stored counts has time only up to them (endless counts).
+        const end = Math.min(owner.end, beats.length);
         const ids = new Set(created.map((c) => c.id));
-        for (let o = owner.start; o < owner.end; o++) ids.add(beats[o]!.id);
+        for (let o = owner.start; o < end; o++) ids.add(beats[o]!.id);
         let seconds = 0;
-        for (let o = owner.start; o < owner.end; o++)
-            seconds += beats[o]!.duration;
+        for (let o = owner.start; o < end; o++) seconds += beats[o]!.duration;
         const factor = seconds / (seconds + count * duration);
         const rows = await tx
             .select({ id: schema.beats.id, duration: schema.beats.duration })
@@ -1170,14 +1172,27 @@ async function moveFlagInTransaction(
     if (next && to >= next.end)
         refuse("a page flag can't move to or past the next page's flag");
     if (to === page.end) refuse("the flag is already there");
-    // The last flag past the stored counts stores them first (endless counts)
-    if (!next) await ensureCountsInTransaction({ tx, through: to });
+    // A flag past the stored counts stores them first (endless counts): the last flag the counts
+    // up to it, any other the count the next page then starts on. Appending keeps earlier ids.
+    await ensureCountsInTransaction({ tx, through: next ? to + 1 : to });
+    const nextStart =
+        next &&
+        (grid.beatIds[to] ??
+            (
+                await tx
+                    .select({ id: schema.beats.id })
+                    .from(schema.beats)
+                    .orderBy(asc(schema.beats.position), asc(schema.beats.id))
+                    .limit(1)
+                    .offset(to)
+                    .get()
+            )?.id);
 
     await withTimelinePageRipple(tx, async () => {
         if (next) {
             await tx
                 .update(schema.pages)
-                .set({ start_beat: grid.beatIds[to]! })
+                .set({ start_beat: nextStart! })
                 .where(eq(schema.pages.id, next.id));
             // The next page keeps its own flag
             if (index + 1 === grid.pages.length - 1)

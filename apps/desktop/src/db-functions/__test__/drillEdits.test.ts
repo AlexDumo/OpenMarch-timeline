@@ -619,6 +619,80 @@ describeDbTests("count edits with drill choices (E10)", (it) => {
             const utility = await db.select().from(schema.utility).get();
             expect(utility!.last_page_counts).toBe(lastPageCounts);
         });
+
+        it("moves the next page's start past the stored counts, storing them first", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const beats = (await db.select().from(schema.beats).all()).length;
+            const lastPageCounts = beats - 41 + 4;
+            await db
+                .update(schema.utility)
+                .set({ last_page_counts: lastPageCounts });
+            // Page 6 then starts past the last stored count, before its own flag
+            const to = beats + 1;
+            await previewThenCommit(db, { kind: "moveFlag", pageId: 5, to });
+            expect((await pageRanges(db)).slice(-2)).toEqual([
+                [33, to],
+                [to, to + 1],
+            ]);
+            const utility = await db.select().from(schema.utility).get();
+            expect(to + utility!.last_page_counts).toBe(41 + lastPageCounts);
+        });
+
+        it("squeezes added counts into the stored counts of a last page that runs past them", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const beats = (await db.select().from(schema.beats).all()).length;
+            const lastPageCounts = beats - 41 + 4;
+            await db
+                .update(schema.utility)
+                .set({ last_page_counts: lastPageCounts });
+            await previewThenCommit(db, {
+                kind: "addCounts",
+                at: 45,
+                count: 2,
+                recording: "sameTime",
+                crossing: "stretch",
+            });
+            const durations = (
+                await db
+                    .select({ d: schema.beats.duration })
+                    .from(schema.beats)
+                    .orderBy(asc(schema.beats.position))
+                    .all()
+            ).map((b) => b.d);
+            expect(durations).toHaveLength(beats + 2);
+            // The page's stored counts, two more of them, take the time they took before
+            const page6 = durations.slice(41).reduce((s, d) => s + d, 0);
+            expect(page6).toBeCloseTo((beats - 41) * 0.5, 9);
+            const utility = await db.select().from(schema.utility).get();
+            expect(utility!.last_page_counts).toBe(lastPageCounts + 2);
+        });
+
+        it("removes a last page that starts in a cut running to the last stored count", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const beats = (await db.select().from(schema.beats).all()).length;
+            await db
+                .update(schema.utility)
+                .set({ last_page_counts: beats - 41 + 4 });
+            await previewThenCommit(db, {
+                kind: "removeCounts",
+                start: 41,
+                end: beats,
+                crossing: "squeeze",
+                inside: "delete",
+            });
+            expect(await pageRanges(db)).toEqual(ORIGINAL.slice(0, 5));
+            const utility = await db.select().from(schema.utility).get();
+            expect(utility!.last_page_counts).toBe(8);
+        });
     });
 
     describe("previews", () => {
