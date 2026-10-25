@@ -15,7 +15,7 @@ import {
     setStoredInBrowser,
     storageLost,
 } from "./handlers";
-import { takeHandedOffShow } from "./handoff";
+import { openShowArgs, takeHandedOffShow } from "./handoff";
 import { useWebLibraryStore } from "../../src/stores/WebLibraryStore";
 import {
     HOME_SCREEN_PROMPT_KEY,
@@ -173,7 +173,9 @@ function warnAboutStorage(status: WorkerStatus) {
     showNotice(
         status.storageProblem === "other-tab"
             ? "OpenMarch is open in another tab. In this tab, your show is only kept until you close or reload it. Download it to keep your changes."
-            : "This browser won't keep your shows (for example, in Private Browsing). Your work is lost when you close this tab unless you download it. Use a normal Safari tab, or add OpenMarch to your Home Screen.",
+            : status.storageProblem === "newer-format"
+              ? "Your shows here were saved by a newer version of OpenMarch, so this version leaves them as they are. Use the newer version to open them. Anything you do in this tab is only kept until you close it."
+              : "This browser won't keep your shows (for example, in Private Browsing). Your work is lost when you close this tab unless you download it. Use a normal Safari tab, or add OpenMarch to your Home Screen.",
     );
 }
 
@@ -196,8 +198,7 @@ async function reopenHandedOffShow() {
     if (!show) return;
     const status = await invokeWorker<number>(
         WEB_CHANNELS.openShow,
-        show.bytes,
-        show.name,
+        ...openShowArgs(show),
     );
     if (status !== 200)
         console.error(`Couldn't reopen the show after the reload (${status})`);

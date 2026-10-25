@@ -91,12 +91,38 @@ export function opfsDir(handle: FileSystemDirectoryHandle): Dir {
 /**
  * A folder in memory, for tests. `failWrites` makes the next writes store
  * only part of the file and throw, as a crash or a full disk would.
+ * `disk.limit` (shared with every folder in it) makes writes that would go
+ * past that many bytes in total fail the same way.
  */
 export class MemoryDir implements Dir {
     readonly entries = new Map<string, Uint8Array>();
     readonly subfolders = new Map<string, MemoryDir>();
-    /** Writes left to fail, and how many bytes each keeps. */
-    failWrites: { count: number; keep: number } = { count: 0, keep: 0 };
+    /**
+     * Writes left to fail, how many bytes each keeps, how many writes to let
+     * through first, and the error's name (a full disk by default).
+     */
+    failWrites: {
+        count: number;
+        keep: number;
+        skip?: number;
+        error?: string;
+    } = { count: 0, keep: 0 };
+
+    constructor(
+        readonly disk: { limit: number; root?: MemoryDir } = {
+            limit: Infinity,
+        },
+    ) {
+        this.disk.root ??= this;
+    }
+
+    /** Bytes stored in this folder and the ones in it. */
+    used(): number {
+        let total = 0;
+        for (const bytes of this.entries.values()) total += bytes.byteLength;
+        for (const folder of this.subfolders.values()) total += folder.used();
+        return total;
+    }
 
     async files() {
         return [...this.entries.keys()];
@@ -110,10 +136,22 @@ export class MemoryDir implements Dir {
         return bytes.slice();
     }
     async write(name: string, bytes: Uint8Array) {
-        if (this.failWrites.count > 0) {
+        if (this.failWrites.count > 0 && (this.failWrites.skip ?? 0) > 0) {
+            this.failWrites.skip!--;
+        } else if (this.failWrites.count > 0) {
             this.failWrites.count--;
             this.entries.set(name, bytes.slice(0, this.failWrites.keep));
-            throw new Error("QuotaExceededError: simulated");
+            const error = new Error(
+                `${this.failWrites.error ?? "QuotaExceededError"}: simulated`,
+            );
+            error.name = this.failWrites.error ?? "QuotaExceededError";
+            throw error;
+        }
+        const before = this.entries.get(name)?.byteLength ?? 0;
+        const free = this.disk.limit - this.disk.root!.used() + before;
+        if (bytes.byteLength > free) {
+            this.entries.set(name, bytes.slice(0, Math.max(0, free)));
+            throw new Error("QuotaExceededError: disk full");
         }
         this.entries.set(name, bytes.slice());
     }
@@ -124,7 +162,7 @@ export class MemoryDir implements Dir {
     async folder(name: string) {
         let folder = this.subfolders.get(name);
         if (!folder) {
-            folder = new MemoryDir();
+            folder = new MemoryDir(this.disk);
             this.subfolders.set(name, folder);
         }
         return folder;

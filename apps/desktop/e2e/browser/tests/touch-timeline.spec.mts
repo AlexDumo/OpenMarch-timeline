@@ -35,7 +35,14 @@ const touch = (cdp: CDPSession) => {
             await send("touchStart", [p]);
             return {
                 cancel: () => send("touchCancel", []),
+                lift: () => send("touchEnd", []),
             };
+        },
+        /** Two fingers down and up together */
+        twoFingerTap: async (a: Point, b: Point) => {
+            await send("touchStart", [a]);
+            await send("touchStart", [a, b]);
+            await send("touchEnd", []);
         },
         tap: async (p: Point) => {
             await send("touchStart", [p]);
@@ -285,12 +292,53 @@ test("the page-deleted toast undoes the delete", async ({ show }) => {
         .locator("[data-sonner-toast]")
         .getByRole("button", { name: "Undo" })
         .boundingBox())!;
+    // A slow tap (held longer than the toast's old dismiss-on-press delay,
+    // shorter than a long press) still reaches Undo
+    const press = await fingers.hold({
+        x: undo.x + undo.width / 2,
+        y: undo.y + undo.height / 2,
+    });
+    await page.waitForTimeout(350);
+    await press.lift();
+    await expect.poll(() => pageStarts(show)).toEqual(before);
+});
+
+test("the delete toast's Undo leaves a later edit alone", async ({ show }) => {
+    const { page } = show;
+    const fingers = await setUp(show);
+    const before = await pageStarts(show);
+    await tapNamed(page, fingers, "Page 2 options");
+    await tapNamed(page, fingers, /^In Place/);
+    await expect.poll(() => pageStarts(show)).toHaveLength(before.length - 1);
+    // Another edit after the delete: make page 1 a subset
+    const subset = async () =>
+        (
+            await show.query<{ is_subset: number }>(
+                "SELECT is_subset FROM pages WHERE id = 1",
+            )
+        )[0]?.is_subset;
+    await expect(page.getByRole("heading", { name: "Page 1" })).toBeVisible();
+    await tapNamed(page, fingers, "Page 1 options");
+    const toggle = page.locator('[role="menu"]').getByRole("switch");
+    const t = (await toggle.boundingBox())!;
+    await fingers.tap({ x: t.x + t.width / 2, y: t.y + t.height / 2 });
+    await expect.poll(subset).toBe(1);
+    await page.keyboard.press("Escape");
+    // Undo on the delete toast must not undo the subset change
+    const undo = (await page
+        .locator("[data-sonner-toast]")
+        .filter({ hasText: "deleted" })
+        .getByRole("button", { name: "Undo" })
+        .boundingBox())!;
     await fingers.tap({
         x: undo.x + undo.width / 2,
         y: undo.y + undo.height / 2,
     });
-    await page.waitForTimeout(300);
-    await expect.poll(() => pageStarts(show)).toEqual(before);
+    await expect(
+        page.locator("[data-sonner-toast]").filter({ hasText: "Can't undo" }),
+    ).toBeVisible();
+    expect(await subset()).toBe(1);
+    expect(await pageStarts(show)).toHaveLength(before.length - 1);
 });
 
 test("the timeline + and − buttons zoom with a finger", async ({ show }) => {
@@ -480,4 +528,83 @@ test("expanding shows the full transport, and collapsing goes back", async ({
         "data-timeline-layout",
         "compact",
     );
+});
+
+test("the sticky Pages label is opaque, so pages scroll under it unseen", async ({
+    show,
+}) => {
+    const { page } = show;
+    await setUp(show, { expanded: true });
+    const label = page.locator("[data-timeline-label]").first();
+    const style = await label.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return { color: s.backgroundColor, image: s.backgroundImage };
+    });
+    // A solid color under the panel's gradient
+    expect(style.color).toMatch(/^rgb\(/);
+    expect(style.image).toContain("gradient");
+    // Scrolled, the label is what's on top at its spot
+    await page.locator("#timeline").evaluate((el) => {
+        el.style.scrollBehavior = "auto";
+        el.scrollLeft = 200;
+    });
+    const b = (await label.boundingBox())!;
+    const onTop = await page.evaluate(
+        ([x, y]) =>
+            document
+                .elementFromPoint(x, y)
+                ?.closest("[data-timeline-label]") !== null,
+        [b.x + 4, b.y + b.height / 2],
+    );
+    expect(onTop).toBe(true);
+});
+
+test("fast undo presses are all kept", async ({ show }) => {
+    const { page } = show;
+    await setUp(show);
+    expect(await pageStarts(show)).toHaveLength(3);
+    // Two quick presses undo both added pages
+    await page.keyboard.press("Control+z");
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => pageStarts(show)).toHaveLength(1);
+});
+
+test("a two-finger tap undoes once and says so", async ({ show }) => {
+    const { page } = show;
+    const fingers = await setUp(show);
+    const field = (await page.locator("canvas").first().boundingBox())!;
+    const at = { x: field.x + field.width / 2, y: field.y + field.height / 2 };
+    await fingers.twoFingerTap(at, { x: at.x + 60, y: at.y });
+    await expect.poll(() => pageStarts(show)).toHaveLength(2);
+    await expect(
+        page.locator("[data-sonner-toast]").filter({ hasText: "Undone" }),
+    ).toBeVisible();
+    // Only once
+    await page.waitForTimeout(500);
+    expect(await pageStarts(show)).toHaveLength(2);
+});
+
+test("after undo and redo of the delete, the toast's Undo still undoes it", async ({
+    show,
+}) => {
+    const { page } = show;
+    const fingers = await setUp(show);
+    const before = await pageStarts(show);
+    await tapNamed(page, fingers, "Page 2 options");
+    await tapNamed(page, fingers, /^In Place/);
+    await expect.poll(() => pageStarts(show)).toHaveLength(before.length - 1);
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => pageStarts(show)).toEqual(before);
+    await page.keyboard.press("Control+Shift+z");
+    await expect.poll(() => pageStarts(show)).toHaveLength(before.length - 1);
+    const undo = (await page
+        .locator("[data-sonner-toast]")
+        .filter({ hasText: "deleted" })
+        .getByRole("button", { name: "Undo" })
+        .boundingBox())!;
+    await fingers.tap({
+        x: undo.x + undo.width / 2,
+        y: undo.y + undo.height / 2,
+    });
+    await expect.poll(() => pageStarts(show)).toEqual(before);
 });
