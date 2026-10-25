@@ -526,19 +526,25 @@ export const TimelineEnvelopeCanvas = memo(function TimelineEnvelopeCanvas({
     pixelsPerSecond,
     width,
     height,
+    viewportRef,
+    layerLeft,
     tone,
 }: {
     envelope: AudioEnvelope;
     pixelsPerSecond: number;
     width: number;
     height: number;
+    /** The timeline's scroller; the canvas draws only what it shows, plus overscan */
+    viewportRef?: RefObject<HTMLElement | null>;
+    /** How far into the scroller's content the layer's left edge is */
+    layerLeft?: number;
     tone: "played" | "rest";
 }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const loudest = useMemo(() => loudestOf(envelope.peaks), [envelope]);
 
     const paint = useCallback<PaintCanvas>(
-        (context, _span, color) => {
+        (context, span, color) => {
             if (loudest <= 0) return;
             context.fillStyle =
                 tone === "played"
@@ -556,9 +562,15 @@ export const TimelineEnvelopeCanvas = memo(function TimelineEnvelopeCanvas({
             context.globalAlpha = 0.25;
             context.fillRect(0, Math.round(centerY), Math.max(0, audioEnd), 1);
             context.globalAlpha = 1;
-            // Two-pixel bars: each the loudest moment in its slice of time
+            // Two-pixel bars: each the loudest moment in its slice of time. Only the bars in the
+            // drawn window, on the same two-pixel grid as from the layer's left edge
             const bar = 2;
-            for (let x = 0; x < audioEnd; x += bar) {
+            const barsEnd = Math.min(audioEnd, span.left + span.width);
+            for (
+                let x = Math.max(0, Math.floor(span.left / bar) * bar);
+                x < barsEnd;
+                x += bar
+            ) {
                 const from = Math.floor((x / pixelsPerSecond) * rate);
                 const to = Math.max(
                     from + 1,
@@ -586,8 +598,14 @@ export const TimelineEnvelopeCanvas = memo(function TimelineEnvelopeCanvas({
         [envelope, height, loudest, pixelsPerSecond, tone, width],
     );
 
-    // Drawn whole: the Align view is as wide as the music, not the show
-    useViewportCanvas({ canvasRef, width, height, paint });
+    useViewportCanvas({
+        canvasRef,
+        viewportRef,
+        layerLeft,
+        width,
+        height,
+        paint,
+    });
 
     return (
         <canvas
@@ -602,8 +620,8 @@ export const TimelineEnvelopeCanvas = memo(function TimelineEnvelopeCanvas({
                 tone === "rest" ? "Audio waveform in seconds" : undefined
             }
             aria-hidden={tone === "played" || undefined}
-            className="block"
-            style={{ width, height }}
+            className="absolute top-0"
+            style={{ height }}
         />
     );
 });
@@ -618,21 +636,29 @@ export const TimelineCountLinesCanvas = memo(function TimelineCountLinesCanvas({
     downbeats,
     width,
     height,
+    viewportRef,
+    layerLeft,
 }: {
     axis: TimelineXAxis;
     downbeats: ReadonlySet<number>;
     width: number;
     height: number;
+    /** The timeline's scroller; the canvas draws only what it shows, plus overscan */
+    viewportRef?: RefObject<HTMLElement | null>;
+    /** How far into the scroller's content the layer's left edge is */
+    layerLeft?: number;
 }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const paint = useCallback<PaintCanvas>(
-        (context, _span, color) => {
+        (context, span, color) => {
             context.fillStyle = color("--color-text", "rgb(208, 208, 208)");
+            const from = Math.max(-2, span.left - 2);
+            const to = Math.min(width, span.left + span.width) + 2;
             for (let beat = 0; beat <= axis.beatCount; beat++) {
                 const downbeat = downbeats.has(beat);
                 if (!downbeat && axis.pxPerBeatAt(beat) < 4) continue;
                 const x = Math.round(axis.x(beat));
-                if (x < -2 || x > width + 2) continue;
+                if (x < from || x > to) continue;
                 context.globalAlpha = downbeat ? 0.55 : 0.28;
                 context.fillRect(
                     downbeat ? x - 1 : x,
@@ -646,15 +672,22 @@ export const TimelineCountLinesCanvas = memo(function TimelineCountLinesCanvas({
         [axis, downbeats, height, width],
     );
 
-    useViewportCanvas({ canvasRef, width, height, paint });
+    useViewportCanvas({
+        canvasRef,
+        viewportRef,
+        layerLeft,
+        width,
+        height,
+        paint,
+    });
 
     return (
         <canvas
             ref={canvasRef}
             data-testid="timeline-align-count-lines"
             aria-hidden="true"
-            className="pointer-events-none absolute top-0 left-0"
-            style={{ width, height }}
+            className="pointer-events-none absolute top-0"
+            style={{ height }}
         />
     );
 });

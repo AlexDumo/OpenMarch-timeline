@@ -680,7 +680,11 @@ const TimelinePlayheadChip = memo(function TimelinePlayheadChip({
 });
 /** The Align view's px/s on entering it, before any zoom (no playhead count to keep) */
 const ALIGN_DEFAULT_PX_PER_SECOND = 32;
-/** The Align surface stays under this many pixels, so its canvases fit at 2× density */
+/**
+ * The Align surface stays under this many pixels. It kept whole-width canvases under the browser's
+ * canvas limit at 2× density; every Align canvas now draws only a viewport window, so this only
+ * caps how far the view zooms in
+ */
 const ALIGN_MAX_SURFACE_PX = 16000;
 
 /** The most px/s the Align view zooms to for a surface `extent` seconds long */
@@ -1673,6 +1677,8 @@ const TimelineSurface = memo(function TimelineSurface({
                                             pixelsPerSecond={pixelsPerSecond}
                                             width={width}
                                             height={waveformHeight}
+                                            viewportRef={viewportRef}
+                                            layerLeft={initialPageWidth}
                                             tone={tone}
                                         />
                                     ) : (
@@ -1706,6 +1712,8 @@ const TimelineSurface = memo(function TimelineSurface({
                                         downbeats={downbeats}
                                         width={width}
                                         height={waveformHeight}
+                                        viewportRef={viewportRef}
+                                        layerLeft={initialPageWidth}
                                     />
                                 )}
                             </TimelineWaveformLane>
