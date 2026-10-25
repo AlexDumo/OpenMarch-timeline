@@ -63,3 +63,21 @@ export async function startLabBuild() {
         console.error(`Couldn't open ${show.name}:`, error);
     }
 }
+
+/**
+ * Keeps the lab's feedback widget out of the 3D View window, which loads the
+ * same page as the editor. The widget mounts on an element with this id and
+ * skips mounting when one is already there; it runs after this module (both
+ * are deferred, and this one comes first), so claiming the id is enough. The
+ * style hides it should it get in first anyway.
+ */
+export function keepLabWidgetOut() {
+    if (!isLabBuild) return;
+    const placeholder = document.createElement("div");
+    placeholder.id = "om-lab-widget";
+    placeholder.hidden = true;
+    const style = document.createElement("style");
+    style.textContent = "#om-lab-widget { display: none !important; }";
+    document.head.append(style);
+    document.body.append(placeholder);
+}
