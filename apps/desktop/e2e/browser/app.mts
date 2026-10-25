@@ -398,4 +398,6 @@ export async function setUiSettings(
             { intervals: [0], timeout: 30_000 },
         )
         .toBe(true);
+    // As after the fixture's own load: the field centers its view again once it has settled
+    await waitForSettledField(page);
 }
