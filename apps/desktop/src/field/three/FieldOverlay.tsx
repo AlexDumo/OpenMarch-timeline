@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
-import { textPresentation } from "@/shapes/editor/GlyphText";
+import { GlyphText } from "@/shapes/editor/GlyphText";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
@@ -58,6 +58,8 @@ const CALM_CONTROLS_OPACITY = 0.25;
 const SPOT_LABEL_PX = 10;
 const TIP_PX = 12;
 const TIP_OFFSET_PX = 14;
+/** Room for the tip's pill; it lays itself out inside, from the top left */
+const TIP_BOX = { width: 360, height: 32 };
 
 /**
  * The SVG overlay over the field (ADR 0005 D-2): what the editor draws on top
@@ -584,21 +586,23 @@ function ModeDrawing({
             {drawing.tip &&
                 (() => {
                     const p = at(drawing.tip.at);
+                    // A solid pill, so the readout reads over any part of the field (owner)
                     return (
-                        <text
+                        <foreignObject
                             x={p.x + TIP_OFFSET_PX}
                             y={p.y + TIP_OFFSET_PX}
-                            fontSize={TIP_PX}
-                            fontFamily="DM Sans, sans-serif"
-                            fill="white"
-                            stroke="black"
-                            strokeWidth={3}
-                            paintOrder="stroke"
-                            dominantBaseline="hanging"
-                            data-testid="fieldShapeTip"
+                            width={TIP_BOX.width}
+                            height={TIP_BOX.height}
+                            overflow="visible"
                         >
-                            {textPresentation(drawing.tip.text)}
-                        </text>
+                            <div
+                                className="rounded-6 border-stroke bg-bg-1 bg-modal text-text shadow-modal inline-flex items-center gap-2 border px-6 py-2 whitespace-nowrap tabular-nums"
+                                style={{ fontSize: TIP_PX }}
+                                data-testid="fieldShapeTip"
+                            >
+                                <GlyphText text={drawing.tip.text} size={12} />
+                            </div>
+                        </foreignObject>
                     );
                 })()}
         </g>

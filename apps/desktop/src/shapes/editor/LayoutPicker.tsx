@@ -238,7 +238,7 @@ export function LayoutMenu(props: PickerProps) {
                     sideOffset={6}
                     onOpenAutoFocus={(e) => e.preventDefault()}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal z-50 flex gap-8 border p-6"
+                    className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex gap-8 border p-6"
                     data-testid="shape-layout-menu-content"
                 >
                     <div className="flex flex-col gap-1" role="menu">

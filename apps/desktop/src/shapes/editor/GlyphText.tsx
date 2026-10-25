@@ -8,7 +8,7 @@ import type { ParamGlyph } from "../tool/toolKind";
 /**
  * The shape UI's direction marks, ↔ (across) and ↕ (deep), drawn as Phosphor icons: as text a
  * platform may draw them as color emoji (owner bug on #417). Readouts keep the marks in their
- * strings; anything showing one goes through here, or `textPresentation` where only text fits.
+ * strings; anything showing one goes through here.
  */
 const ICONS: Record<
     ParamGlyph,
@@ -45,9 +45,4 @@ export function GlyphText({
             })}
         </>
     );
-}
-
-/** For text only (an SVG `<text>`): asks for text, not emoji, presentation after each mark */
-export function textPresentation(text: string): string {
-    return text.replace(/\p{Extended_Pictographic}(?!︎)/gu, "$&︎");
 }

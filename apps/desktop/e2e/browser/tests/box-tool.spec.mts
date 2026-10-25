@@ -463,6 +463,54 @@ test("change: start positions show as faint dots in the marchers' own color", as
     await expect(ghosts.first()).toHaveAttribute("fill", fill!);
 });
 
+test("change: the floating editor is a solid surface, an on toggle has the accent background, and the drag readout is a solid pill", async ({
+    show,
+}) => {
+    const { page } = show;
+    /** A computed CSS color's alpha: 1 for a solid color */
+    const alpha = (color: string) => {
+        const parts = color.match(/[\d.]+/g)!.map(Number);
+        return parts.length > 3 ? parts[3] : 1;
+    };
+    const background = (testId: string) =>
+        page
+            .getByTestId(testId)
+            .evaluate((el) => getComputedStyle(el).backgroundColor);
+    await drawBox(show);
+    expect(alpha(await background("shape-tool-readout"))).toBe(1);
+
+    const pathways = page.getByTestId("shape-editor-pathways");
+    const off = await background("shape-editor-pathways");
+    await pathways.click();
+    await expect(pathways).toHaveAttribute("aria-pressed", "true");
+    const accent = await page.evaluate(() => {
+        const probe = document.createElement("div");
+        probe.className = "bg-accent";
+        document.body.append(probe);
+        const color = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return color;
+    });
+    expect(await background("shape-editor-pathways")).toBe(accent);
+    expect(off).not.toBe(accent);
+
+    // A handle drag shows the spacing readout by the pointer
+    const handle = (await shapeOverlay(page))!.handles.at(-1)!;
+    await drag(
+        page,
+        handle,
+        { x: handle.x + 45, y: handle.y + 25 },
+        {
+            beforeRelease: async () => {
+                const tip = page.getByTestId("fieldShapeTip");
+                await expect(tip).toBeVisible();
+                expect(alpha(await background("fieldShapeTip"))).toBe(1);
+                await expect(tip.locator("[data-glyph]")).not.toHaveCount(0);
+            },
+        },
+    );
+});
+
 test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({
     show,
 }) => {
