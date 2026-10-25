@@ -448,45 +448,19 @@ test("change: the chip and the Transform section draw their direction marks as i
     await expect(transform.locator("[data-glyph]")).not.toHaveCount(0);
 });
 
-// The lab compares three looks for where an open shape's marchers start (#417)
-for (const [variant, ghosts, labels] of [
-    ["ghost", 2, 0],
-    ["ghost-labels", 2, 2],
-] as const)
-    test.describe(`with the lab's ${variant} version`, () => {
-        test.use({
-            initScript: `history.replaceState(null, "", "?variant=${variant}");`,
-        });
-
-        test(`change: start positions show as faint dots in the marchers' own color${labels ? " with their labels" : ""}, not rings`, async ({
-            show,
-        }) => {
-            const { page } = show;
-            await page.mouse.click(...(await screenOf(page, 1)));
-            await page.keyboard.down("Shift");
-            await page.mouse.click(...(await screenOf(page, 2)));
-            await page.keyboard.up("Shift");
-            await page.keyboard.press("b");
-            await expect(page.getByTestId("fieldShapeStartGhost")).toHaveCount(
-                ghosts,
-            );
-            await expect(page.getByTestId("fieldShapeStartRing")).toHaveCount(
-                0,
-            );
-            const marks = page.getByTestId("fieldShapeStartGhostLabel");
-            await expect(marks).toHaveCount(labels);
-            if (labels) await expect(marks).toHaveText(["T1", "T2"]);
-        });
-    });
-
-test("change: start positions show as hollow rings by default", async ({
+test("change: start positions show as faint dots in the marchers' own color", async ({
     show,
 }) => {
     const { page } = show;
     await page.mouse.click(...(await screenOf(page, 1)));
+    await page.keyboard.down("Shift");
+    await page.mouse.click(...(await screenOf(page, 2)));
+    await page.keyboard.up("Shift");
     await page.keyboard.press("b");
-    await expect(page.getByTestId("fieldShapeStartRing")).toHaveCount(1);
-    await expect(page.getByTestId("fieldShapeStartGhost")).toHaveCount(0);
+    const ghosts = page.getByTestId("fieldShapeStartGhost");
+    await expect(ghosts).toHaveCount(2);
+    const fill = (await drawnMarchers(page)).find((m) => m.id === 1)!.look.fill;
+    await expect(ghosts.first()).toHaveAttribute("fill", fill!);
 });
 
 test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({

@@ -5,24 +5,15 @@ id: shape-moment
 title: Keep a shape open while you move around the timeline
 summary: Only Enter or Place places a shape now. Moving the playhead, playing, switching to Visuals or selecting other marchers leaves it open. Away from its count it waits behind an accent chip that takes you back or dismisses it, and starting a new shape there sets it aside.
 status: open
-# Three looks for where an open shape's marchers start; rings is today's
-variants:
-  - id: rings
-    label: Rings
-    description: Hollow circles in the shape color where the marchers start
-  - id: ghost
-    label: Ghost
-    description: Faint see-through dots in each marcher's own color
-  - id: ghost-labels
-    label: Ghost + labels
-    description: Small faint dots with each marcher's label
+# The owner picked Ghost for start positions; no versions to compare now
+variants: []
 questions:
-  - Switch between Rings, Ghost and Ghost + labels with the Version switch at the bottom left. Which shows best where the box's marchers start? Why?
+  - With previous paths (N) on, the box's own marchers drop their previous dots and paths while it's open, and show their ghost and walk instead. Did anything you needed go missing?
   - Is the accent "Shape open at …" chip easy to notice now? Does it stand out too much?
   - Away from the shape, Enter and Esc do nothing to it. Did you ever press one expecting it to act on the shape?
   - Playing or switching to Visuals hides the shape until you stop or come back, without placing it. Did it come back when you expected?
   - After selecting other marchers, the shape stays open for its own marchers. Did that make sense, or did you expect something else?
-  - With a box open, the other marchers are lighter but still readable, and the box's own marchers show as their spots and the rings where they start. Could you tell who is where? Is the fade about right now?
+  - With a box open, the other marchers are lighter but still readable, and the box's own marchers show as their spots and the ghost dots where they start. Could you tell who is where? Is the fade about right now?
   - On another page, could you set the waiting shape aside and draw a new one, with the chip's × or by just starting a new shape? Did undo bring the old one back when you wanted it?
 ---
 
@@ -30,17 +21,21 @@ The last build placed the shape when you played, changed the selection or
 switched to Visuals. Now **only Enter or Place places it**. Select some
 marchers, press **B** and drag a box.
 
-**New in this build:** a **Version** switch at the bottom left offers
-three looks for where the box's marchers start: **Rings** (hollow circles,
-as before), **Ghost** (faint dots in each marcher's own color) and **Ghost +
-labels** (small faint dots with their labels). Try each with a box open.
+**New in this build:**
+
+- Where the box's marchers start is a **faint dot in each marcher's own
+  color** (the Ghost version you picked).
+- With **previous paths** on (N), the box's own marchers hide their previous
+  dots and paths while it's open: the ghost and the walk show where they come
+  from. Everyone else keeps theirs, and placing or dismissing the box brings
+  them back. The setting itself doesn't change.
 
 **From your last round:**
 
 - While a box is open, **everyone else is lighter** (40%, labels too), so the
   rest of the drill stays readable as context.
 - Once it's drawn, **the box's own marchers' dots hide**: its spots are where
-  they'll be, and the **rings show where they start**, always. **Pathways** in
+  they'll be, and their **ghosts show where they start**, always. **Pathways** in
   the floating editor now only adds the walk lines. Placing or Esc brings
   every dot back.
 - The **↔ and ↕ marks** in the floating editor and the inspector are icons

@@ -214,13 +214,12 @@ export type FieldModeDrawing = {
     walks: readonly { from: FieldPoint; to: FieldPoint }[];
     handles: readonly FieldPoint[];
     /**
-     * Hollow rings where the shape's marchers start the move (08-shape-system-ux.md, "Marcher
-     * styling"): at the start flag, the same points the walks leave from
+     * Where the shape's marchers start the move (08-shape-system-ux.md, "Marcher styling"), drawn
+     * as faint ghosts of them (#417): at the start flag, the same points the walks leave from
      */
     rings?: readonly FieldPoint[];
-    /** The marcher at each of `rings` and its label, for start marks drawn as that marcher */
+    /** The marcher at each of `rings`, whose ghost is drawn in its own color */
     ringIds?: readonly number[];
-    ringLabels?: readonly string[];
     /**
      * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
      * (#390), which a click on another spot between corners moves
