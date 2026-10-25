@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import type { FieldTheme } from "@openmarch/core";
 import { rgba01 } from "../fieldGeometry";
 import type { FieldMarchers } from "../fieldMarchers";
-import { DIMMED_OPACITY, type FieldDimming } from "../fieldDimming";
+import type { FieldDimming } from "../fieldDimming";
 import { useFieldDraw } from "../fieldDrawContext";
 import { labelsShown } from "../marcherLooks";
 import { TextBatch, type GlyphAtlas } from "../sdfText";
@@ -133,19 +133,21 @@ export default function LabelsLayer({
             dimming.version !== last.dimVersion;
         if (newLayout) {
             const color = rgba01(theme.defaultMarcher.label);
-            const dimmed: typeof color = [
-                color[0],
-                color[1],
-                color[2],
-                color[3] * DIMMED_OPACITY,
-            ];
             text.setLabels(
                 marchers.ids.map((id, i) => ({
-                    text: shown[i] ? (labels.get(id) ?? "") : "",
+                    text:
+                        shown[i] && dimming.labelShown(id)
+                            ? (labels.get(id) ?? "")
+                            : "",
                     size,
                     align: style.beside ? "left" : "center",
                     baseline: CENTER_BASELINE,
-                    color: dimming.isDimmed(id) ? dimmed : color,
+                    color: [
+                        color[0],
+                        color[1],
+                        color[2],
+                        color[3] * dimming.opacityOf(id),
+                    ],
                 })),
             );
         }

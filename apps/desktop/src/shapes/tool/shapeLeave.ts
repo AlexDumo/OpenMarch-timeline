@@ -1,44 +1,55 @@
-import { cancelGesture } from "./toolMachine";
+import { cancelGesture, undo } from "./toolMachine";
 import {
     closeShapeTool,
+    isShapeAway,
+    updateTool,
     useShapeToolStore,
-    type OpenShape,
 } from "./shapeToolStore";
 
 /**
- * How an open shape ends without Enter (spec #344, "Leaving"):
+ * How an open shape ends without Enter (spec #344, "Leaving"; #416):
  *
- * - The moment or the group moves on (a scrub, a selection change, playback): the shape is
- *   placed where it was drawn, as one undo step, with no toast. Nothing drawn is lost.
+ * - Nothing else places it. Moving around the timeline, playing, Visuals and a new selection
+ *   leave it open; while it can't be seen it waits (`isShapeHidden`) and nothing acts on it.
  * - Escape: the shape is discarded, and that is an undo step of its own: undo right after it
- *   brings the shape back with its numbers, who goes where and its own history.
- *
- * Placing itself is the host's place function, passed in.
+ *   brings the shape back with its numbers, who goes where and its own history. The away chip's
+ *   Dismiss, and starting a new shape away from a waiting one, discard it the same way.
  */
-
-/** Places `tool` at the edit window it opened at */
-export type PlaceShape = (
-    tool: OpenShape["tool"],
-    openedAt: OpenShape["openedAt"],
-) => Promise<void>;
-
-/** Closes the open tool and places its shape, if one was drawn; a drag under way is dropped */
-export function leaveShapeTool(place: PlaceShape): void {
-    const { tool, openedAt } = useShapeToolStore.getState();
-    if (!tool) return;
-    closeShapeTool();
-    const settled = cancelGesture(tool);
-    if (settled.params !== null) void place(settled, openedAt);
-}
 
 /** Escape: closes the open tool, placing nothing, and keeps its shape for undo */
 export function discardShapeTool(): void {
-    const { tool, openedAt } = useShapeToolStore.getState();
+    const { tool, openedAt, moment } = useShapeToolStore.getState();
     if (!tool) return;
     closeShapeTool();
     const settled = cancelGesture(tool);
     if (settled.params !== null)
-        useShapeToolStore.setState({ discarded: { tool: settled, openedAt } });
+        useShapeToolStore.setState({
+            discarded: { tool: settled, openedAt, moment },
+        });
+}
+
+/**
+ * A new shape is starting (B, the Shapes tab, the ring, the command bar): one waiting away from
+ * its moment is dismissed as Escape would, so the new one opens here (#416). Nothing happens to
+ * a shape that is showing, which the new kind changes instead.
+ */
+export function startOverWaitingShape(): void {
+    if (useShapeToolStore.getState().tool && isShapeAway()) discardShapeTool();
+}
+
+/**
+ * Undo with a shape open: a step back in its own history. With nothing drawn and no history,
+ * a shape dismissed to start this one comes back instead.
+ */
+export function undoOpenShape(): void {
+    const { tool, discarded } = useShapeToolStore.getState();
+    if (!tool) return;
+    if (discarded && tool.params === null && tool.past.length === 0) {
+        closeShapeTool();
+        restoreDiscardedShape();
+        return;
+    }
+    updateTool(undo);
 }
 
 /** Whether undo now would bring back a discarded shape */
@@ -53,6 +64,7 @@ export function restoreDiscardedShape(): boolean {
     useShapeToolStore.setState({
         tool: discarded.tool,
         openedAt: discarded.openedAt,
+        moment: discarded.moment,
         discarded: null,
     });
     return true;

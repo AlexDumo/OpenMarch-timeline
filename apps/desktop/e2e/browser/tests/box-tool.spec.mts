@@ -447,6 +447,91 @@ test("change: Settings › Field › Grid lines redraws the open field at once",
     await expect.poll(async () => (await field()).equals(withGrid)).toBe(false);
 });
 
+test("change: an open box fades everyone else, still readable, and once drawn hides its own marchers' dots for its spots and start rings; placing or Escape brings them back", async ({
+    show,
+}) => {
+    const { page } = show;
+    const looks = async () =>
+        Object.fromEntries(
+            (await drawnMarchers(page)).map((m) => [
+                m.id,
+                `${m.opacity === 1 ? "full" : m.opacity === 0 ? "hidden" : "faint"}${m.labelShown ? "" : " no-label"}`,
+            ]),
+        );
+    const expected = (mine: string, others: string) =>
+        Object.fromEntries(ALL.map((id) => [id, id <= 2 ? mine : others]));
+    const boxTwo = async () => {
+        await page.mouse.click(...(await screenOf(page, 1)));
+        await page.keyboard.down("Shift");
+        await page.mouse.click(...(await screenOf(page, 2)));
+        await page.keyboard.up("Shift");
+        await expect
+            .poll(async () => (await readField(page)).selection)
+            .toEqual([1, 2]);
+        await page.keyboard.press("b");
+        // Armed, nothing drawn: the two still show where they stand
+        await expect.poll(looks).toEqual(expected("full", "faint"));
+        const grid = await fieldGrid(show);
+        const S = grid.pixelsPerStep;
+        const cf = grid.centerFront;
+        await drag(
+            page,
+            await toScreen(page, { x: cf.x - 15 * S, y: cf.y - 25 * S }),
+            await toScreen(page, { x: cf.x - 5 * S, y: cf.y - 23 * S }),
+        );
+        await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    };
+
+    await boxTwo();
+    await expect.poll(looks).toEqual(expected("hidden no-label", "faint"));
+    // Where they come from is the start rings, pathways or not; pathways add the walks
+    expect((await shapeOverlay(page))!.rings).toHaveLength(2);
+    expect((await shapeOverlay(page))!.walks).toHaveLength(0);
+    await page.getByTestId("shape-editor-pathways").click();
+    await expect
+        .poll(async () => (await shapeOverlay(page))!.walks)
+        .toHaveLength(2);
+    expect((await shapeOverlay(page))!.rings).toHaveLength(2);
+    await page.keyboard.press("Escape");
+    await expect.poll(looks).toEqual(expected("full", "full"));
+
+    await boxTwo();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect.poll(looks).toEqual(expected("full", "full"));
+});
+
+test("change: the chip and the Transform section draw their direction marks as icons, never as text a font may make an emoji", async ({
+    show,
+}) => {
+    const { page } = show;
+    const PICTOGRAPHIC = /\p{Extended_Pictographic}/u;
+    await drawBox(show);
+    const chip = page.getByTestId("shape-tool-readout");
+    await expect(chip.locator('[data-glyph="across"]')).toHaveCount(1);
+    await expect(chip.locator('[data-glyph="deep"]')).toHaveCount(1);
+    expect(await chip.innerText()).not.toMatch(PICTOGRAPHIC);
+    const transform = page.getByTestId("transform-section");
+    await expect(transform).toBeVisible();
+    expect(await transform.innerText()).not.toMatch(PICTOGRAPHIC);
+    await expect(transform.locator("[data-glyph]")).not.toHaveCount(0);
+});
+
+test("change: start positions show as faint dots in the marchers' own color", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.mouse.click(...(await screenOf(page, 1)));
+    await page.keyboard.down("Shift");
+    await page.mouse.click(...(await screenOf(page, 2)));
+    await page.keyboard.up("Shift");
+    await page.keyboard.press("b");
+    const ghosts = page.getByTestId("fieldShapeStartGhost");
+    await expect(ghosts).toHaveCount(2);
+    const fill = (await drawnMarchers(page)).find((m) => m.id === 1)!.look.fill;
+    await expect(ghosts.first()).toHaveAttribute("fill", fill!);
+});
+
 test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({
     show,
 }) => {
@@ -546,7 +631,7 @@ test("change: the open box's controls fade while the pointer is away from it, an
     await expect.poll(calm).toBe(true);
 });
 
-test("change: the open box starts with no pathways; the floating editor's Pathways toggle shows and hides its walks and start rings", async ({
+test("change: the open box always shows its start rings, and starts with no walks; the floating editor's Pathways toggle shows and hides the walks", async ({
     show,
 }) => {
     const { page } = show;
@@ -554,7 +639,7 @@ test("change: the open box starts with no pathways; the floating editor's Pathwa
     await drawBox(show);
     let overlay = (await shapeOverlay(page))!;
     expect(overlay.walks).toEqual([]);
-    expect(overlay.rings).toEqual([]);
+    expect(overlay.rings).toHaveLength(ALL.length);
     expect(overlay.spots).toHaveLength(ALL.length);
     await expect(pathways).toHaveAttribute("aria-pressed", "false");
 
@@ -570,7 +655,7 @@ test("change: the open box starts with no pathways; the floating editor's Pathwa
         .poll(async () => (await shapeOverlay(page))!.walks)
         .toEqual([]);
     overlay = (await shapeOverlay(page))!;
-    expect(overlay.rings).toEqual([]);
+    expect(overlay.rings).toHaveLength(ALL.length);
     await expect(pathways).toHaveAttribute("aria-pressed", "false");
 });
 
@@ -630,26 +715,201 @@ test("change: Escape while typing a number cancels only the number", async ({
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
 });
 
-test("change: scrubbing with a box open places it where it was drawn as one undo step, with no toast", async ({
+// Option B (#416): moving around the timeline keeps an open shape open, tied
+// to the moment it was drawn at. Away from it the shape and its editor hide
+// behind a chip with Go back. Only Enter or Place places it (owner lab
+// feedback): Enter and Escape act only on a shape you can see, playback and
+// Visuals hide it until they end, and a new selection leaves it open.
+
+const awayChip = (page: Page) => page.getByTestId("shape-away-chip");
+
+/** What the open box looks like: its numbers, spots, who goes where and pivot */
+async function openBox(page: Page) {
+    const overlay = (await shapeOverlay(page))!;
+    return {
+        numbers: await readout(page),
+        spots: overlay.spots,
+        walks: overlay.walks,
+        pivot: overlay.pivotMark,
+    };
+}
+
+test("change: scrubbing, page keys and timeline clicks keep an open box open; away it hides behind a chip, and Go back shows it unchanged", async ({
+    show,
+}) => {
+    const { page } = show;
+    const steps = await undoSteps(show);
+    await showPathways(page);
+    await drawBox(show);
+    await page.getByRole("button", { name: "One more across" }).click();
+    const before = await openBox(page);
+
+    // One beat on: the box was drawn at home
+    await page.keyboard.press("Shift+E");
+    await expect(awayChip(page)).toBeVisible();
+    await expect(page.getByTestId("shape-away-chip-text")).toHaveText(
+        "Shape open at home",
+    );
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect
+        .poll(() => page.evaluate(() => window.fieldTest!.shapeOverlay!()))
+        .toBeNull();
+    // Page keys and a click on the timeline don't place it either
+    await page.keyboard.press("e");
+    await selectPage(show, "Page 2");
+    await expect(awayChip(page)).toBeVisible();
+    await waitForIdle(page);
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    expect(await undoSteps(show)).toBe(steps);
+    await expect(toasts(page)).toHaveCount(0);
+
+    await awayChip(page).getByRole("button", { name: "Go back" }).click();
+    await expect(awayChip(page)).toBeHidden();
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await openBox(page)).toEqual(before);
+
+    // Coming back another way shows it too
+    await page.keyboard.press("Shift+E");
+    await expect(awayChip(page)).toBeVisible();
+    await page.keyboard.press("Shift+Q");
+    await expect(awayChip(page)).toBeHidden();
+    expect(await openBox(page)).toEqual(before);
+    expect(await undoSteps(show)).toBe(steps);
+});
+
+test("change: away from an open box, Enter and Escape leave it alone; back at its moment Enter places it as one undo step", async ({
     show,
 }) => {
     const { page } = show;
     const steps = await undoSteps(show);
     await drawBox(show);
-    const spots = (await shapeOverlay(page))!.spots;
-    // One beat on: the moment the box was drawn at is left
+    const before = await openBox(page);
     await page.keyboard.press("Shift+E");
+    await expect(awayChip(page)).toBeVisible();
+
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Escape");
+    await waitForIdle(page);
+    await expect(awayChip(page)).toBeVisible();
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    expect(await undoSteps(show)).toBe(steps);
+
+    await awayChip(page).getByRole("button", { name: "Go back" }).click();
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await openBox(page)).toEqual(before);
+    await page.keyboard.press("Enter");
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
-    await expect.poll(() => onSpots(show, spots)).toBe(true);
+    await expect.poll(() => onSpots(show, before.spots)).toBe(true);
     await waitForIdle(page);
     expect(await undoSteps(show)).toBe(steps + 1);
     await expect(toasts(page)).toHaveCount(0);
-
-    await page.keyboard.press("ControlOrMeta+z");
-    await expect.poll(() => savedPositions(show, 0)).toEqual(asPositions(HOME));
 });
 
-test("change: changing the selection with a box open places it as one undo step, with no toast", async ({
+test("change: the away chip's Dismiss discards the waiting box with no toast, and undo right after brings it back", async ({
+    show,
+}) => {
+    const { page } = show;
+    const steps = await undoSteps(show);
+    await drawBox(show);
+    const before = await openBox(page);
+    await page.keyboard.press("Shift+E");
+    await awayChip(page).getByRole("button", { name: "Dismiss" }).click();
+    await expect(awayChip(page)).toBeHidden();
+    await expect(toasts(page)).toHaveCount(0);
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(awayChip(page)).toBeVisible();
+    await awayChip(page).getByRole("button", { name: "Go back" }).click();
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await openBox(page)).toEqual(before);
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    expect(await undoSteps(show)).toBe(steps);
+});
+
+for (const [how, start] of [
+    ["B", (page: Page) => page.keyboard.press("b")],
+    [
+        "the Shapes tab",
+        async (page: Page) => {
+            await page.getByRole("tab", { name: "Shapes" }).click();
+            await page.getByTestId("shapes-tab-block").click();
+        },
+    ],
+] as const)
+    test(`change: ${how} away from a waiting box starts a new one here, dismissing the old one, which undo before drawing brings back`, async ({
+        show,
+    }) => {
+        const { page } = show;
+        const steps = await undoSteps(show);
+        await drawBox(show);
+        const before = await openBox(page);
+        await page.keyboard.press("Shift+E");
+        await expect(awayChip(page)).toBeVisible();
+
+        await start(page);
+        await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
+        await expect(awayChip(page)).toBeHidden();
+        await expect(toasts(page)).toHaveCount(0);
+
+        // Nothing drawn yet: undo brings the waiting box back, still at home
+        await page.keyboard.press("ControlOrMeta+z");
+        await expect(page.getByTestId("shape-tool-hint")).toBeHidden();
+        await expect(awayChip(page)).toBeVisible();
+
+        // Start over again and draw: Enter places the new box here
+        await start(page);
+        const grid = await fieldGrid(show);
+        const S = grid.pixelsPerStep;
+        const cf = grid.centerFront;
+        await drag(
+            page,
+            await toScreen(page, { x: cf.x + 5 * S, y: cf.y - 25 * S }),
+            await toScreen(page, { x: cf.x + 15 * S, y: cf.y - 19 * S }),
+        );
+        await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+        const { spots } = await openBox(page);
+        expect(spots).not.toEqual(before.spots);
+        await page.keyboard.press("Enter");
+        await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+        await waitForIdle(page);
+        expect(await undoSteps(show)).toBe(steps + 1);
+        // The new box was placed here: the marchers stand on its spots at the playhead
+        const onNewSpots = async () =>
+            (await drawnMarchers(page)).every((m) =>
+                spots.some((p) => Math.hypot(p.x - m.x, p.y - m.y) < 0.01),
+            );
+        await expect.poll(onNewSpots).toBe(true);
+    });
+
+test("change: playing hides an open box until it stops, and Visuals until the Editor is back; neither places it", async ({
+    show,
+}) => {
+    const { page } = show;
+    const steps = await undoSteps(show);
+    await drawBox(show);
+    const before = await openBox(page);
+
+    await page.keyboard.press("Space");
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect(awayChip(page)).toBeHidden();
+    // Stopping goes back to where Play was pressed: the box's moment
+    await page.keyboard.press("Space");
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await openBox(page)).toEqual(before);
+
+    await page.getByTestId("workspace-view-visuals").click();
+    await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
+    await expect(awayChip(page)).toBeHidden();
+    await page.getByTestId("workspace-view-editor").click();
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    expect(await openBox(page)).toEqual(before);
+
+    await waitForIdle(page);
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    expect(await undoSteps(show)).toBe(steps);
+});
+
+test("change: changing the selection leaves an open box open for its own marchers, and Enter places only them", async ({
     show,
 }) => {
     const { page } = show;
@@ -675,6 +935,12 @@ test("change: changing the selection with a box open places it as one undo step,
     const spots = (await shapeOverlay(page))!.spots;
 
     await selectAll(page);
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    await waitForIdle(page);
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    expect((await shapeOverlay(page))!.spots).toEqual(spots);
+
+    await page.keyboard.press("Enter");
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
     const placed = async () =>
         (await savedPositions(show, 0))
@@ -689,10 +955,6 @@ test("change: changing the selection with a box open places it as one undo step,
         asPositions(HOME).filter((p) => p.id > 2),
     );
     expect(await undoSteps(show)).toBe(steps + 1);
-    await expect(toasts(page)).toHaveCount(0);
-
-    await page.keyboard.press("ControlOrMeta+z");
-    await expect.poll(() => savedPositions(show, 0)).toEqual(asPositions(HOME));
 });
 
 test("change: the rotation is a number in ⋯ you type, and Tab goes from number to number", async ({

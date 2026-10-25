@@ -28,7 +28,9 @@ import {
 } from "../frame/shapeEditorStore";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
-import { useShapeToolStore } from "../tool/shapeToolStore";
+import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
+import { ShapeAwayChip } from "./ShapeAwayChip";
+import { GlyphText } from "./GlyphText";
 import {
     chipLayout,
     quarterTurn,
@@ -66,15 +68,18 @@ const GAP_PX = 14;
  * #392) and ☆ Save. ↻ beside the numbers turns
  * the shape a quarter (owner lab feedback, 2026-10-23: few people open ⋯). Under the numbers, a
  * box in Files has its layout menu (#387). Place shows only for a new shape; a selected placed
- * shape saves each edit on release.
+ * shape saves each edit on release. While the open shape waits out of sight (#416) the editor
+ * hides, and away from its moment a chip goes back to it.
  */
 export function ShapeEditor({ stepPx }: { stepPx: number }) {
     const armed = useShapeToolStore((s) =>
         s.tool !== null && s.tool.params === null ? s.tool.kind : null,
     );
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
+    const hidden = useShapeHidden();
     const tool = useToolEditTarget();
     const placed = usePlacedEditTarget();
+    if (hidden) return <ShapeAwayChip />;
     if (armed)
         return (
             <div
@@ -258,7 +263,7 @@ function ShapeEditorBar({
                                             className="text-text/60"
                                             aria-hidden
                                         >
-                                            {x.param.glyph}
+                                            <GlyphText text={x.param.glyph} />
                                         </span>
                                     )}
                                     {number(x)}
@@ -379,7 +384,7 @@ function ShapeEditorBar({
                         testId="shape-editor-flip-across"
                     >
                         <FlipHorizontalIcon size={14} />
-                        Flip ↔
+                        <GlyphText text="Flip ↔" />
                     </TextButton>
                     <TextButton
                         label="Flip front to back"
@@ -398,7 +403,7 @@ function ShapeEditorBar({
                         testId="shape-editor-flip-deep"
                     >
                         <FlipVerticalIcon size={14} />
-                        Flip ↕
+                        <GlyphText text="Flip ↕" />
                     </TextButton>
                     <Divider />
                     <span className="text-text/60">Who goes where</span>
@@ -557,8 +562,8 @@ function Divider() {
 }
 
 /**
- * Pathways (#403): shows or hides the open shape's walks and start rings. Off until asked for, so
- * the shape reads clearly while it's drawn; the choice is remembered.
+ * Pathways (#403): shows or hides the open shape's walks; its start rings always show (#417).
+ * Off until asked for, so the shape reads clearly while it's drawn; the choice is remembered.
  */
 function PathwaysButton() {
     const shown = useUiSettingsStore((s) => s.uiSettings.shapeWalks ?? false);

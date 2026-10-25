@@ -330,6 +330,23 @@ With nothing open, the tab says how many marchers are selected and how to start 
 
 ## Marcher styling
 
+### While a shape is open (owner principle, 2026-10-25, #417)
+
+The field shows three things, and nothing that repeats them:
+
+1. **Where the shape's marchers come from**: a faint ghost dot in each marcher's own color at the
+   start flag, plus the walk lines when **Pathways** is on.
+2. **Where they go**: the shape's spots.
+3. **The rest of the page, as readable context**: everyone else faded (40%, labels too), with
+   their own previous paths (start flag positions, N) kept if that view is on.
+
+Anything that duplicates these is hidden while the shape is open: the shape's marchers' current
+dots and labels, and their previous dots and paths. The stored settings don't change; placing or
+dismissing the shape brings everything back. A shape waiting away from its moment, during
+playback or in Visuals shows none of this.
+
+The table below is the earlier per-stage plan; where it differs, the principle above wins.
+
 The marchers and marks at each stage. Owner choice for focus, 2026-10-15: fade everyone who isn't
 selected.
 
@@ -480,6 +497,10 @@ match. In short:
   steps. The pivot is draggable on the field (answers open question 1 below).
 - The open shape is measured from the start flag.
 - Leaving an open shape places it silently; Esc discards and is undoable, with no toast.
+  Replaced 2026-10-24 (#416, lab feedback): only Enter or Place places a shape. Away from its
+  moment it hides behind a "Shape open at count N" chip with Go back; playing, Visuals and Preview
+  hide it until they end; a new selection leaves it open. Enter and Esc act only on a shape you can
+  see.
 - Same in Basic and Expert.
 - Shapes with unassigned spots come later (#358); the host keeps the guardrails for them now.
 
