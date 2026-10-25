@@ -848,9 +848,9 @@ fixture list and how to score).
 - **Context:** count edits (cut, add counts, page flag grips) commit through
   `transactionWithHistory` outside a TanStack mutation. The app refreshed `canUndo` only on
   mutation events, so Undo stayed greyed out and Ctrl+Z said there was nothing to undo.
-- **Choice:** `transactionWithHistory` notifies `subscribeHistoryWrites` listeners after it
-  commits; `refreshHistoryOnWrites` (App) invalidates the history queries on those and on
-  mutations. Every write is covered, whoever calls it, so new tempo paths can't regress this.
+- **Choice:** `transactionWithHistory` notifies `subscribeHistoryChanges` listeners after it
+  commits (as undo and redo do); `refreshHistoryOnWrites` (App) invalidates the history queries on
+  those and on mutations. Every write is covered, whoever calls it, so new tempo paths can't regress this.
 - **Alternatives:** route every commit through `useMutation`; invalidate `historyKeys` in each
   caller (the drill-edit dialog does too, as a belt).
 - **Validate:** `historyWrites.test.ts` (one test per write path); V-445.

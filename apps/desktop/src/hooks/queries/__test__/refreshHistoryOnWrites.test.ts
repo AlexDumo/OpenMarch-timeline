@@ -15,9 +15,9 @@ vi.mock("@/global/database/db", async (importOriginal) => ({
     ...(await importOriginal<object>()),
     db: {},
 }));
-vi.mock("@/db-functions", async (importOriginal) => ({
+vi.mock("@/db-functions/history", async (importOriginal) => ({
     ...(await importOriginal<object>()),
-    subscribeHistoryWrites: (listener: () => void) => {
+    subscribeHistoryChanges: (listener: () => void) => {
         state.listeners.add(listener);
         return () => state.listeners.delete(listener);
     },

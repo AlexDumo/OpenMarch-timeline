@@ -13,7 +13,7 @@ import {
 import { scoreMeasuresOf } from "@/timeline/tempo";
 import type Measure from "@/global/classes/Measure";
 import { _importMusicXmlFile } from "@/components/music/MusicXmlImport";
-import { getUndoStackLength, subscribeHistoryWrites } from "../history";
+import { getUndoStackLength, subscribeHistoryChanges } from "../history";
 import {
     durationsByBeatId,
     readCountDurationsInTransaction,
@@ -29,7 +29,7 @@ import { commitDrillEdit } from "../drillEdits";
 /**
  * Undo must turn on after every tempo write, whoever calls it (Priya's blocker: a count edit made
  * outside a TanStack mutation left Undo greyed out). Every write path goes through
- * `transactionWithHistory`, which tells `subscribeHistoryWrites` listeners after it commits; the
+ * `transactionWithHistory`, which tells `subscribeHistoryChanges` listeners after it commits; the
  * app refreshes its Undo state from there (`refreshHistoryOnWrites`). Each test makes one write
  * and checks the listener heard it and the undo stack grew.
  */
@@ -56,7 +56,7 @@ const expectUndoAfter = async (
 ) => {
     const before = await getUndoStackLength(db);
     let heard = 0;
-    const stop = subscribeHistoryWrites(() => heard++);
+    const stop = subscribeHistoryChanges(() => heard++);
     try {
         await write();
     } finally {

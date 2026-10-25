@@ -2,7 +2,6 @@ import {
     getRedoStackLength,
     getUndoStackLength,
     performHistoryAction,
-    subscribeHistoryWrites,
 } from "@/db-functions";
 import { db } from "@/global/database/db";
 import { useEffect, useState } from "react";
@@ -55,8 +54,8 @@ export const canRedoQueryOptions = (enabled = true) =>
 
 /**
  * Keeps Undo and Redo fresh: refreshes the history queries after every TanStack mutation and
- * after every committed history write, including writes made without a mutation (drill edit
- * dialogs, page-flag grips). Returns the unsubscribe.
+ * after every committed history write, undo and redo (`subscribeHistoryChanges`), including writes
+ * made without a mutation (drill edit dialogs, page-flag grips). Returns the unsubscribe.
  */
 export const refreshHistoryOnWrites = (qc: QueryClient): (() => void) => {
     const refresh = () =>
@@ -64,10 +63,10 @@ export const refreshHistoryOnWrites = (qc: QueryClient): (() => void) => {
     const unsubscribeMutations = qc.getMutationCache().subscribe((event) => {
         if (event?.type === "updated") refresh();
     });
-    const unsubscribeWrites = subscribeHistoryWrites(refresh);
+    const unsubscribeHistory = subscribeHistoryChanges(refresh);
     return () => {
         unsubscribeMutations();
-        unsubscribeWrites();
+        unsubscribeHistory();
     };
 };
 

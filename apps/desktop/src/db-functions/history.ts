@@ -66,7 +66,9 @@ const historyChangeListeners = new Set<() => void>();
 /**
  * Calls `listener` after every committed undoable edit, undo and redo, until the returned function
  * unsubscribes it. A toast whose action undoes one edit (UI-14's delete toast) closes on the next
- * change, so its Undo can't undo something else.
+ * change, so its Undo can't undo something else. The app refreshes its Undo and Redo state from
+ * here too (`refreshHistoryOnWrites`), so a write made outside a TanStack mutation (a drill edit
+ * dialog, a page-flag grip) still enables Undo.
  */
 export function subscribeHistoryChanges(listener: () => void): () => void {
     historyChangeListeners.add(listener);
@@ -82,29 +84,6 @@ function notifyHistoryChange(): void {
         }
     }
 }
-const historyWriteListeners = new Set<() => void>();
-
-/**
- * Calls `listener` after every committed `transactionWithHistory` write, whatever called it. The
- * app refreshes its Undo and Redo state from here, so a write made outside a TanStack mutation
- * (a drill edit dialog, a page-flag grip) still enables Undo. Returns the unsubscribe.
- */
-export const subscribeHistoryWrites = (listener: () => void): (() => void) => {
-    historyWriteListeners.add(listener);
-    return () => {
-        historyWriteListeners.delete(listener);
-    };
-};
-
-const notifyHistoryWrite = () => {
-    for (const listener of historyWriteListeners) {
-        try {
-            listener();
-        } catch (err) {
-            console.error("History write listener failed:", err);
-        }
-    }
-};
 
 /** What the running `transactionWithHistory` does once it commits (`afterHistoryCommit`) */
 let commitCallbacks: (() => void)[] | null = null;
@@ -268,7 +247,6 @@ export const transactionWithHistory = async <T>(
         notifyTimelineBatch(drained);
         if (touchedDisplayTables) bumpTimelineDisplayVersion();
         notifyHistoryChange();
-        notifyHistoryWrite();
         return output;
     }
 
