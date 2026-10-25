@@ -180,6 +180,11 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         tip: drawing.tip?.text ?? null,
         gliding: drawing.gliding === true,
         calm: drawing.calm === true,
+        guides: (drawing.guides ?? []).map(({ from, to }) => ({
+            from: copy(from),
+            to: copy(to),
+        })),
+        onGuides: (drawing.onGuides ?? []).map(copy),
     };
     function screen(at: FieldPoint) {
         const { x, y } = fieldToElement(view, at.x, at.y);

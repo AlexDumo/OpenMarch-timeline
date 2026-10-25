@@ -20,7 +20,7 @@ import {
     outlineSides,
     type OutlineSides,
 } from "../distribute/outline";
-import type { ToolEnv } from "../tool/toolKind";
+import type { FieldLines, ToolEnv } from "../tool/toolKind";
 import { pivotOf } from "../frame/pivot";
 import {
     fieldToFrame,
@@ -411,6 +411,7 @@ function boxFrom(
     n: number,
     env: ToolEnv,
     distribution?: Distribution,
+    held?: HeldAxes,
 ): BoxParams {
     const sized = withFileCount(
         {
@@ -431,7 +432,7 @@ function boxFrom(
             y: anchor.y + (sign.y * (span.ranks - 1) * deep) / 2,
         },
     };
-    return snapToGrid(box, n, env);
+    return snapToGrid(box, n, env, undefined, held);
 }
 
 const signOf = (v: number) => (v < 0 ? -1 : 1);
@@ -448,6 +449,54 @@ function equalized(across: number, deep: number, env: ToolEnv) {
  */
 const spread = (extent: number, count: number, env: ToolEnv) =>
     count > 1 ? snapInterval(extent / (count - 1), env) : undefined;
+
+/**
+ * The interval that puts `count` marchers from `anchor` to a field line near `to`, the edge's
+ * marcher on it, or undefined where no line is near (#425). Near is within the pull radius on
+ * screen, and never more than a quarter of the edge's own half-step detent, so half steps win
+ * away from lines. Alt (no snap) and Shift (equal spacings) don't pull.
+ */
+function pulled(
+    anchor: number,
+    to: number,
+    count: number,
+    lines: readonly number[] | undefined,
+    env: ToolEnv,
+): number | undefined {
+    if (!lines || !env.snap || env.shift || count < 2) return undefined;
+    const gaps = count - 1;
+    const radius = Math.min(env.pullRadius ?? 0, (gaps * halfStep(env)) / 4);
+    const sign = signOf(to - anchor);
+    let best: number | undefined;
+    for (const line of lines) {
+        const d = Math.abs(line - to);
+        if (d > radius || (line - anchor) * sign <= 0) continue;
+        if (best === undefined || d < Math.abs(best - to)) best = line;
+    }
+    if (best === undefined) return undefined;
+    const interval = Math.abs(best - anchor) / gaps;
+    return interval >= halfStep(env) - 1e-9 ? interval : undefined;
+}
+
+/**
+ * The interval for `count` marchers spread from `anchor` toward `to` on one axis: pulled onto a
+ * line near `to` (#425), else on the half-step ladder; undefined for a single marcher
+ */
+function edgeInterval(
+    anchor: number,
+    to: number,
+    count: number,
+    lines: readonly number[] | undefined,
+    env: ToolEnv,
+): { interval: number | undefined; pulled: boolean } {
+    const onLine = pulled(anchor, to, count, lines, env);
+    return onLine !== undefined
+        ? { interval: onLine, pulled: true }
+        : {
+              interval: spread(Math.abs(to - anchor), count, env),
+              pulled: false,
+          };
+}
 
 /**
  * The layout a `width` × `depth` drag draws for `n` (#387): the layout this drag drew a moment
@@ -537,13 +586,28 @@ export function drawBox(
     const drawn = drawnLayout(width, depth, n, env, previous);
     // One file or one rank has no interval on that axis: it takes the other's, for a later
     // stretch or file change
-    const a = spread(width, drawn.block.across, env);
-    const d = spread(depth, drawn.block.deep, env);
+    const corner = env.snap ? env.gridSnap(from) : from;
+    // The dragged corner's edges land on field lines near the pointer (#425): the count can
+    // change on the way, and the edge stays on its line while the interval follows
+    const a = edgeInterval(
+        corner.x,
+        to.x,
+        drawn.block.across,
+        env.fieldLines?.x,
+        env,
+    ).interval;
+    const d = edgeInterval(
+        corner.y,
+        to.y,
+        drawn.block.deep,
+        env.fieldLines?.y,
+        env,
+    ).interval;
     let across = a ?? d ?? snapInterval(Math.max(width, depth), env);
     let deep = d ?? across;
     if (env.shift) ({ across, deep } = equalized(across, deep, env));
     return boxFrom(
-        env.snap ? env.gridSnap(from) : from,
+        corner,
         { x: signOf(to.x - from.x), y: signOf(to.y - from.y) },
         drawn.distribution.layout.files,
         across,
@@ -551,6 +615,9 @@ export function drawBox(
         n,
         env,
         drawn.distribution,
+        // The pressed corner is on the grid already; with a pulled interval, snapping the
+        // back-left corner instead would shift the box off the line (#423)
+        { x: true, y: true },
     );
 }
 
@@ -680,7 +747,11 @@ function inBoxAxes(
         center: { x: 0, y: 0 },
         rotation: 0,
     };
-    const out = change(flat, { ...env, gridSnap: (p) => p });
+    const out = change(flat, {
+        ...env,
+        gridSnap: (p) => p,
+        fieldLines: linesInBoxAxes(base, n, env),
+    });
     const placed: BoxParams = {
         ...out,
         center: frameToField(frame, out.center),
@@ -695,6 +766,34 @@ function inBoxAxes(
         undefined,
         held && toFieldAxes(placed, n, held(out)),
     );
+}
+
+/**
+ * The field's lines in the box's own axes, as {@link inBoxAxes} works: its own x gets the lines
+ * that cross it, side to side or front to back as it's turned. None for a box turned off the
+ * field's axes, which no line runs along (#425).
+ */
+function linesInBoxAxes(
+    base: BoxParams,
+    n: number,
+    env: ToolEnv,
+): FieldLines | undefined {
+    const lines = env.fieldLines;
+    if (!lines || !squareToField(base.rotation)) return undefined;
+    const frame = boxFrame(base, n);
+    const { x: cx, y: cy } = frame.center;
+    const own = (axis: "x" | "y") => {
+        const o = frameToField(frame, { x: 0, y: 0 });
+        const u = frameToField(
+            frame,
+            axis === "x" ? { x: 1, y: 0 } : { x: 0, y: 1 },
+        );
+        // The field lines this own axis crosses: x lines where it runs side to side
+        return Math.abs(u.x - o.x) >= Math.abs(u.y - o.y)
+            ? lines.x.map((v) => fieldToFrame(frame, { x: v, y: cy })[axis])
+            : lines.y.map((v) => fieldToFrame(frame, { x: cx, y: v })[axis]);
+    };
+    return { x: own("x"), y: own("y") };
 }
 
 /** {@link stretchBox} for a box square to the field, `to` in its axes */
@@ -714,15 +813,28 @@ function stretchSquare(
         x: key.includes("e") ? f.left : f.right,
         y: key.includes("s") ? f.top : f.bottom,
     };
-    let across =
-        (movesX && spread(Math.abs(to.x - anchor.x), across0, env)) ||
-        base.across;
-    let deep =
-        (movesY && spread(Math.abs(to.y - anchor.y), ranks, env)) || base.deep;
+    // The moving edge lands on a field line near the pointer, or the interval steps by halves
+    const x = movesX
+        ? edgeInterval(anchor.x, to.x, across0, env.fieldLines?.x, env)
+        : null;
+    const y = movesY
+        ? edgeInterval(anchor.y, to.y, ranks, env.fieldLines?.y, env)
+        : null;
+    let across = x?.interval || base.across;
+    let deep = y?.interval || base.deep;
     if (env.shift && movesX && movesY)
         ({ across, deep } = equalized(across, deep, env));
     else if (env.ratioLocked)
-        ({ across, deep } = keepRatio(base, across, deep, movesX, movesY, env));
+        // A pulled value drives the other spacing exactly (#425)
+        ({ across, deep } = keepRatio(
+            base,
+            across,
+            deep,
+            movesX,
+            movesY,
+            env,
+            x?.pulled === true || y?.pulled === true,
+        ));
     // A side handle keeps the other axis where it was; past the fixed edge, the box flips over it
     const sign = {
         x: movesX ? signOf(to.x - anchor.x) : 1,

@@ -1,0 +1,46 @@
+import type { FieldLines } from "../tool/toolKind";
+import type { XY } from "../types";
+
+/** How near a field line an edge must be to be on it, in field units */
+const ON_LINE = 1e-3;
+
+/**
+ * The guides while a stretch or a draw has a shape's edges on the field's lines (#425): a line
+ * across the field along each line one of the outline's sides lies on, and the spots standing on
+ * those lines. A side lies on a line when both its ends do, so a turned shape has none.
+ */
+export function edgeGuides(
+    outline: readonly XY[] | null,
+    spots: readonly XY[],
+    lines: FieldLines | undefined,
+    field: { readonly width: number; readonly height: number },
+): { guides: { from: XY; to: XY }[]; on: XY[] } {
+    if (!outline || !lines || outline.length < 2) return { guides: [], on: [] };
+    const near = (v: number, line: number) => Math.abs(v - line) < ON_LINE;
+    const xs = new Set<number>();
+    const ys = new Set<number>();
+    outline.forEach((a, i) => {
+        const b = outline[(i + 1) % outline.length]!;
+        for (const line of lines.x)
+            if (near(a.x, line) && near(b.x, line)) xs.add(line);
+        for (const line of lines.y)
+            if (near(a.y, line) && near(b.y, line)) ys.add(line);
+    });
+    const byValue = (a: number, b: number) => a - b;
+    const guides = [
+        ...[...xs].sort(byValue).map((x) => ({
+            from: { x, y: 0 },
+            to: { x, y: field.height },
+        })),
+        ...[...ys].sort(byValue).map((y) => ({
+            from: { x: 0, y },
+            to: { x: field.width, y },
+        })),
+    ];
+    const on = spots.filter(
+        (p) =>
+            [...xs].some((x) => near(p.x, x)) ||
+            [...ys].some((y) => near(p.y, y)),
+    );
+    return { guides, on };
+}

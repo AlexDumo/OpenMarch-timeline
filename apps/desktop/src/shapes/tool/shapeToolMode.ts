@@ -8,6 +8,7 @@ import { outlineGapAt } from "../distribute/outlineGap";
 import {
     drillNumbers,
     frameDrawing,
+    guideDrawing,
     keysOf,
     memoDrawing,
     shapeCursor,
@@ -158,6 +159,15 @@ const drawingOf = memoDrawing(({ tool, hover, over, walks }: Shown) => {
                   tool.pointer ?? null,
                   env,
               )),
+        ...guideDrawing(
+            tool.kind,
+            tool.params,
+            n,
+            spots,
+            tool.gesture,
+            env,
+            field,
+        ),
         ...(hover && !tool.gesture
             ? { labels: [{ at: hover.at, text: hover.text }] }
             : {}),

@@ -7,9 +7,11 @@ import { ReadableCoords } from "@/global/classes/ReadableCoords";
 import type { XY } from "../types";
 import {
     frameControls,
+    shapeOutline,
     type ShapeGesture,
     type ShapeTarget,
 } from "../frame/gestures";
+import { edgeGuides } from "../frame/edgeGuides";
 import { rotationDegrees } from "../frame/frame";
 import { lengthReadout } from "../frame/scale";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
@@ -116,6 +118,30 @@ export function frameDrawing(
         return text ? { ...out, tip: { at: pointer, text } } : out;
     }
     return out;
+}
+
+/**
+ * While a draw or a handle drag has the shape's edges on the field's lines (#425): a dashed
+ * guide along each, and its spots tinted. Nothing during any other gesture, or with none.
+ */
+export function guideDrawing(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    spots: readonly XY[],
+    gesture: { readonly type: string } | null | undefined,
+    env: ToolEnv,
+    field: ShapeField,
+): Pick<FieldModeDrawing, "guides" | "onGuides"> {
+    if (gesture?.type !== "draw" && gesture?.type !== "handle") return {};
+    const { width, height } = field.fieldProperties;
+    const { guides, on } = edgeGuides(
+        shapeOutline(kind, params, n),
+        spots,
+        env.fieldLines,
+        { width, height },
+    );
+    return guides.length > 0 ? { guides, onGuides: on } : {};
 }
 
 /**

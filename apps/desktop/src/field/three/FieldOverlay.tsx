@@ -52,6 +52,12 @@ const PIVOT_COLOR = "#facc15";
 /** The pivot's crosshair once it's out of the center (#350): its arms and ring, in CSS px */
 const PIVOT_MARK_ARM = 9;
 const PIVOT_MARK_RING = 5;
+/**
+ * The guide along a field line a shape's edge is on (#425), and the tint of the spots on it, as
+ * design tools draw their smart guides: dashed 4 on, 3 off, 1 CSS px
+ */
+const GUIDE_COLOR = "#ec4899";
+const GUIDE_DASH = "4 3";
 /** How strong an open shape's controls are while the pointer is away from it (#403) */
 const CALM_CONTROLS_OPACITY = 0.25;
 /** Spot labels and the pointer tip, in CSS px. */
@@ -425,6 +431,37 @@ function ModeDrawing({
                         // stand, unlike the hollow start rings
                         fill={dots || open ? shape : "none"}
                         stroke={dots || open ? "white" : shape}
+                        strokeWidth={SPOT_WIDTH * z}
+                    />
+                );
+            })}
+            {drawing.guides?.map(({ from, to }, i) => {
+                const a = at(from);
+                const b = at(to);
+                return (
+                    <line
+                        key={i}
+                        x1={a.x}
+                        y1={a.y}
+                        x2={b.x}
+                        y2={b.y}
+                        stroke={GUIDE_COLOR}
+                        strokeWidth={1}
+                        strokeDasharray={GUIDE_DASH}
+                        data-testid="fieldShapeGuide"
+                    />
+                );
+            })}
+            {drawing.onGuides?.map((point, i) => {
+                const p = at(point);
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={SPOT_RADIUS * z}
+                        fill={GUIDE_COLOR}
+                        stroke="white"
                         strokeWidth={SPOT_WIDTH * z}
                     />
                 );

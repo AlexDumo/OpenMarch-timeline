@@ -253,6 +253,13 @@ export type FieldModeDrawing = {
      * pivot and gap rings are drawn faint, so the spots read clearly
      */
     calm?: boolean;
+    /**
+     * While a stretch or a draw has the shape's edge on one of the field's lines (#425): a dashed
+     * guide along each such line, across the field
+     */
+    guides?: readonly { from: FieldPoint; to: FieldPoint }[];
+    /** The spots standing on a guide, tinted */
+    onGuides?: readonly FieldPoint[];
 };
 
 /**
