@@ -9,12 +9,7 @@ import {
     SelectItem,
     SelectTriggerCompact,
 } from "@openmarch/ui";
-import type {
-    MarcherLabelForm,
-    ShapeOutlines,
-    ShapeFocus,
-    MarcherLabelSize,
-} from "@/stores/UiSettingsStore";
+import type { MarcherLabelForm, ShapeOutlines } from "@/stores/UiSettingsStore";
 import ActionButton from "@/shortcuts/ActionButton";
 
 export default function ViewTab() {
@@ -48,144 +43,15 @@ function UiSettingsToolbar() {
     const uiSettings = useUiSettingsStore(
         useShallow((s) => ({
             nextPaths: s.uiSettings.nextPaths,
-            stepSizeWarnings: s.uiSettings.stepSizeWarnings,
-            gridLines: s.uiSettings.gridLines,
-            halfLines: s.uiSettings.halfLines,
             showCollisions: s.uiSettings.showCollisions,
             marcherLabels: s.uiSettings.marcherLabels ?? "auto",
-            marcherLabelSize: s.uiSettings.marcherLabelSize ?? "normal",
-            marcherLabelPosition: s.uiSettings.marcherLabelPosition ?? "above",
             shapes: s.uiSettings.shapes ?? "selected",
-            shapeFocus: s.uiSettings.shapeFocus ?? "rest",
         })),
     );
 
     return (
         <>
             <ToolbarSection aria-label={t("toolbar.view.uiSettingsToolbar")}>
-                <button
-                    onClick={() => {
-                        setUiSettings({
-                            ...useUiSettingsStore.getState().uiSettings,
-                            nextPaths: !uiSettings.nextPaths,
-                        });
-                    }}
-                    className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
-                >
-                    <T keyName="toolbar.view.nextPaths" />
-                    {uiSettings.nextPaths ? (
-                        <EyeIcon className="text-accent" size={24} />
-                    ) : (
-                        <EyeSlashIcon size={24} />
-                    )}
-                </button>
-                <button
-                    onClick={() => {
-                        setUiSettings({
-                            ...useUiSettingsStore.getState().uiSettings,
-                            stepSizeWarnings: !uiSettings.stepSizeWarnings,
-                        });
-                    }}
-                    className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
-                >
-                    <T keyName="toolbar.view.stepSizeWarnings" />
-                    {uiSettings.stepSizeWarnings ? (
-                        <EyeIcon className="text-accent" size={24} />
-                    ) : (
-                        <EyeSlashIcon size={24} />
-                    )}
-                </button>
-            </ToolbarSection>
-            <ToolbarSection>
-                <button
-                    onClick={() => {
-                        setUiSettings({
-                            ...useUiSettingsStore.getState().uiSettings,
-                            gridLines: !uiSettings.gridLines,
-                        });
-                    }}
-                    className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
-                >
-                    <T keyName="toolbar.view.gridLines" />
-                    {uiSettings.gridLines ? (
-                        <EyeIcon className="text-accent" size={24} />
-                    ) : (
-                        <EyeSlashIcon size={24} />
-                    )}
-                </button>
-                <button
-                    onClick={() => {
-                        setUiSettings({
-                            ...useUiSettingsStore.getState().uiSettings,
-                            halfLines: !uiSettings.halfLines,
-                        });
-                    }}
-                    className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
-                >
-                    <T keyName="toolbar.view.halfLines" />
-                    {uiSettings.halfLines ? (
-                        <EyeIcon className="text-accent" size={24} />
-                    ) : (
-                        <EyeSlashIcon size={24} />
-                    )}
-                </button>
-            </ToolbarSection>
-            <ToolbarSection>
-                {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}
-                <label className="flex items-center gap-8">
-                    <T keyName="toolbar.view.shapes" />
-                    <Select
-                        value={uiSettings.shapes}
-                        onValueChange={(v) =>
-                            setUiSettings({
-                                ...useUiSettingsStore.getState().uiSettings,
-                                shapes: v as ShapeOutlines,
-                            })
-                        }
-                    >
-                        <SelectTriggerCompact
-                            label={t("toolbar.view.shapes")}
-                            data-testid="view-shapes"
-                        />
-                        <SelectContent>
-                            <SelectItem value="selected">
-                                {t("toolbar.view.shapesSelected")}
-                            </SelectItem>
-                            <SelectItem value="always">
-                                {t("toolbar.view.shapesAlways")}
-                            </SelectItem>
-                            <SelectItem value="off">
-                                {t("toolbar.view.shapesOff")}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
-                </label>
-                {/* Who fades while a shape is open (08-shape-system-ux.md, "Marcher styling") */}
-                <label className="flex items-center gap-8">
-                    <T keyName="toolbar.view.shapeFocus" />
-                    <Select
-                        value={uiSettings.shapeFocus}
-                        onValueChange={(v) =>
-                            setUiSettings({
-                                ...useUiSettingsStore.getState().uiSettings,
-                                shapeFocus: v as ShapeFocus,
-                            })
-                        }
-                    >
-                        <SelectTriggerCompact
-                            label={t("toolbar.view.shapeFocus")}
-                            data-testid="view-shape-focus"
-                        />
-                        <SelectContent>
-                            <SelectItem value="rest">
-                                {t("toolbar.view.shapeFocusRest")}
-                            </SelectItem>
-                            <SelectItem value="drawing">
-                                {t("toolbar.view.shapeFocusDrawing")}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
-                </label>
                 {/* Full drill numbers crowd at 2-step intervals (shape sims, round 6) */}
                 <label className="flex items-center gap-8">
                     <T keyName="toolbar.view.labels" />
@@ -218,55 +84,47 @@ function UiSettingsToolbar() {
                         </SelectContent>
                     </Select>
                 </label>
+                <button
+                    onClick={() => {
+                        setUiSettings({
+                            ...useUiSettingsStore.getState().uiSettings,
+                            nextPaths: !uiSettings.nextPaths,
+                        });
+                    }}
+                    className="hover:text-accent flex items-center gap-8 outline-hidden duration-150 ease-out focus-visible:-translate-y-4 disabled:opacity-50"
+                >
+                    <T keyName="toolbar.view.nextPaths" />
+                    {uiSettings.nextPaths ? (
+                        <EyeIcon className="text-accent" size={24} />
+                    ) : (
+                        <EyeSlashIcon size={24} />
+                    )}
+                </button>
+                {/* Placed boxes' outlines (docs/timeline/research/shapes/07-placed-boxes.md) */}
                 <label className="flex items-center gap-8">
-                    <T keyName="toolbar.view.labelSize" />
+                    <T keyName="toolbar.view.shapes" />
                     <Select
-                        value={uiSettings.marcherLabelSize}
+                        value={uiSettings.shapes}
                         onValueChange={(v) =>
                             setUiSettings({
                                 ...useUiSettingsStore.getState().uiSettings,
-                                marcherLabelSize: v as MarcherLabelSize,
+                                shapes: v as ShapeOutlines,
                             })
                         }
                     >
                         <SelectTriggerCompact
-                            label={t("toolbar.view.labelSize")}
-                            data-testid="view-marcher-label-size"
+                            label={t("toolbar.view.shapes")}
+                            data-testid="view-shapes"
                         />
                         <SelectContent>
-                            <SelectItem value="small">
-                                {t("toolbar.view.labelSizeSmall")}
+                            <SelectItem value="selected">
+                                {t("toolbar.view.shapesSelected")}
                             </SelectItem>
-                            <SelectItem value="normal">
-                                {t("toolbar.view.labelSizeNormal")}
+                            <SelectItem value="always">
+                                {t("toolbar.view.shapesAlways")}
                             </SelectItem>
-                            <SelectItem value="large">
-                                {t("toolbar.view.labelSizeLarge")}
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
-                </label>
-                <label className="flex items-center gap-8">
-                    <T keyName="toolbar.view.labelPosition" />
-                    <Select
-                        value={uiSettings.marcherLabelPosition}
-                        onValueChange={(v) =>
-                            setUiSettings({
-                                ...useUiSettingsStore.getState().uiSettings,
-                                marcherLabelPosition: v as "above" | "beside",
-                            })
-                        }
-                    >
-                        <SelectTriggerCompact
-                            label={t("toolbar.view.labelPosition")}
-                            data-testid="view-marcher-label-position"
-                        />
-                        <SelectContent>
-                            <SelectItem value="above">
-                                {t("toolbar.view.labelPositionAbove")}
-                            </SelectItem>
-                            <SelectItem value="beside">
-                                {t("toolbar.view.labelPositionBeside")}
+                            <SelectItem value="off">
+                                {t("toolbar.view.shapesOff")}
                             </SelectItem>
                         </SelectContent>
                     </Select>
