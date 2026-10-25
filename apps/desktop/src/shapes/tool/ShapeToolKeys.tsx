@@ -1,4 +1,8 @@
-import { discardShapeTool, restoreDiscardedShape } from "./shapeLeave";
+import {
+    discardShapeTool,
+    restoreDiscardedShape,
+    undoOpenShape,
+} from "./shapeLeave";
 import { NUDGE_ACTION_IDS, type NudgeArgs } from "@/shortcuts/definitions";
 import { resolveNudgeDistance } from "@/shortcuts/nudge";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
@@ -9,7 +13,7 @@ import {
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { changeFiles, type BoxParams } from "../box/boxGeometry";
 import { toolEnvFor } from "./toolEnv";
-import { cancelGesture, edit, redo, undo } from "./toolMachine";
+import { cancelGesture, edit, redo } from "./toolMachine";
 import { updateTool, useShapeToolStore } from "./shapeToolStore";
 
 const NUDGE_DIRECTIONS = {
@@ -52,7 +56,7 @@ export function ShapeToolKeys(): null {
         if (tool?.gesture) updateTool(cancelGesture);
         else discardShapeTool();
     });
-    useActionHandler("performUndo", () => updateTool(undo));
+    useActionHandler("performUndo", undoOpenShape);
     useActionHandler("performRedo", () => updateTool(redo));
     useActionHandlerGroup(NUDGE_ACTION_IDS, (_id, args) => {
         const field = currentShapeField();

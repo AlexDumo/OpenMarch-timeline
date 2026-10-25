@@ -37,6 +37,9 @@ export type ThreeFieldState = {
     theme(): FieldTheme;
     /** Whether a marcher is drawn dimmed (#201). */
     dimmed(id: number): boolean;
+    /** How opaque a marcher's dot is drawn, and whether its label is (#417) */
+    opacity(id: number): number;
+    labelShown(id: number): boolean;
     /** The app's selection, as the editor reads it. */
     selection(): readonly number[];
     activeGesture(): FieldTestGesture | null;
@@ -85,6 +88,8 @@ export function createThreeFieldTestApi(field: ThreeFieldState): FieldTestApi {
                         screen.y < rect.bottom,
                     look: lookOf(stacks[i] ?? [], theme),
                     dimmed: field.dimmed(id),
+                    opacity: field.opacity(id),
+                    labelShown: field.labelShown(id),
                 };
             });
         },

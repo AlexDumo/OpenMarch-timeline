@@ -10,7 +10,7 @@ import ToolbarSection from "@/components/toolbar/ToolbarSection";
 import { showShapeLibrary } from "../library/ShapeLibraryPanel";
 import { clickPickedKind, kindPickGate, pickShapeKind } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
-import { useShapeToolStore } from "./shapeToolStore";
+import { useShapeShown, useShapeToolStore } from "./shapeToolStore";
 import { useStarredShapes } from "./starredShapes";
 import ShapePreviewIcon from "../preview/ShapePreviewIcon";
 
@@ -33,8 +33,11 @@ export default function ShapesTab() {
         () => performersOnly(selected ?? []),
         [selected],
     );
-    const armed = useShapeToolStore((s) => s.tool?.kind ?? null);
-    const gate = kindPickGate(armed !== null, performers);
+    // A shape waiting away from its moment isn't picked: a kind starts over (#416)
+    const shown = useShapeShown();
+    const openKind = useShapeToolStore((s) => s.tool?.kind ?? null);
+    const armed = shown ? openKind : null;
+    const gate = kindPickGate(shown, performers);
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const ringKey = getActionShortcutLabel("openShapeRing", { overrides });
     const starred = useStarredShapes();

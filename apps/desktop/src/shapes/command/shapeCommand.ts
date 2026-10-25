@@ -1,4 +1,5 @@
 import { planCanvasEdit } from "@/timeline/timelineCoordinateWrites";
+import { momentOf } from "../tool/shapeMoment";
 import type { CommandRun, CommandStep } from "@/shortcuts/palette/commandBar";
 import { closeDockedCommand } from "@/shortcuts/palette/commandBar";
 import {
@@ -16,7 +17,11 @@ import {
     switchKind,
     type ToolState,
 } from "../tool/toolMachine";
-import { useShapeToolStore } from "../tool/shapeToolStore";
+import {
+    isShapeShown,
+    useShapeToolStore,
+    type OpenShape,
+} from "../tool/shapeToolStore";
 import { fillAhead, shapeSteps, startingParams } from "./shapeSteps";
 import { useLastLayoutStore } from "../tool/lastLayout";
 
@@ -46,7 +51,8 @@ function startFrom(
     field: ShapeField,
     env: ToolEnv,
 ): { start: ToolState; base: unknown; keeps: boolean } | null {
-    const open = useShapeToolStore.getState().tool;
+    // A shape waiting away from its moment isn't started from: the new one opens here (#416)
+    const open = isShapeShown() ? useShapeToolStore.getState().tool : null;
     if (open !== null && open.params !== null && !open.gesture) {
         if (open.kind === kind)
             return { start: open, base: open.params, keeps: true };
@@ -61,6 +67,16 @@ function startFrom(
     return base === null ? null : { start, base, keeps: false };
 }
 
+/** A shape waiting elsewhere that a new one replaces, kept for undo as Escape keeps it (#416) */
+function dismissedFor(before: {
+    tool: ToolState | null;
+    openedAt: OpenShape["openedAt"];
+    moment: OpenShape["moment"];
+}): OpenShape | null {
+    const { tool, openedAt, moment } = before;
+    return tool && tool.params !== null ? { tool, openedAt, moment } : null;
+}
+
 /**
  * Shape › kind in the command bar (#354): opens a shape of `kind` on `ids` (the selection, past
  * the selection gate) and asks its parameters, the shape showing live on the field as each is
@@ -70,7 +86,8 @@ function startFrom(
  *
  * The answers are one undo step in the shape's own history, and the last one places the shape
  * through the host's place function; Escape puts back whatever was open before. If the shape ends
- * another way while the bar is up (a scrub or a new selection places it), the bar closes.
+ * another way while the bar is up, the bar closes. A shape waiting away from its moment (#416) is
+ * dismissed for the new one, as Escape would, and Escape in the bar puts it back.
  */
 export function beginShapeCommand(
     kind: AnyToolKind,
@@ -87,6 +104,8 @@ export function beginShapeCommand(
     if (!from) return null;
     const { start, base } = from;
     const openedAt = from.keeps ? before.openedAt : planCanvasEdit();
+    const moment = from.keeps ? before.moment : momentOf();
+    const dismissed = from.keeps ? null : dismissedFor(before);
 
     /** The tool this command last showed; anything else means the shape ended another way */
     let shown: ToolState | null = null;
@@ -108,7 +127,9 @@ export function beginShapeCommand(
                 useShapeToolStore.setState({
                     tool,
                     openedAt,
-                    discarded: null,
+                    moment,
+                    // One waiting elsewhere is dismissed as Escape would (#416)
+                    discarded: dismissed,
                 });
             }
             return steps.map(
@@ -135,6 +156,7 @@ export function beginShapeCommand(
             useShapeToolStore.setState({
                 tool: before.tool,
                 openedAt: before.openedAt,
+                moment: before.moment,
                 discarded: before.discarded,
             });
         },
