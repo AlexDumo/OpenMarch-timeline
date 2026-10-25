@@ -12,7 +12,7 @@ import { kindPickGate } from "../tool/pickKind";
 import { shapeSelectionGate } from "../tool/selectionGate";
 import type { AnyToolKind } from "../tool/toolKind";
 import { SHAPE_TOOLS } from "../tool/shapeTools";
-import { useShapeToolStore } from "../tool/shapeToolStore";
+import { isShapeShown } from "../tool/shapeToolStore";
 import { beginShapeCommand } from "./shapeCommand";
 import ShapePreviewIcon from "../preview/ShapePreviewIcon";
 import type { ShapeLibraryRow } from "../library/shapeLibrary";
@@ -95,10 +95,7 @@ function kindItem(
 ): PaletteItem {
     const gate = shapeSelectionGate(selected);
     // With a shape open, any kind can be picked: the open shape turns into it
-    const pick = kindPickGate(
-        useShapeToolStore.getState().tool !== null,
-        selected,
-    );
+    const pick = kindPickGate(isShapeShown(), selected);
     // Shapes edit the drill, like the box tool's key
     const offHere = isActionOffInWorkspace("shapeBlock");
     const label = named?.label ?? kind.shape.label;

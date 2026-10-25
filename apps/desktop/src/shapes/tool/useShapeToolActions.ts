@@ -17,6 +17,7 @@ import {
     closeShapeTool,
     isShapeHidden,
     useShapeHidden,
+    useShapeShown,
     useShapeToolStore,
 } from "./shapeToolStore";
 
@@ -65,7 +66,7 @@ export function useShapeToolActions(): void {
     );
     const apply = useApplyShape();
     const hidden = useShapeHidden();
-    const shapeOpen = useShapeToolStore((s) => s.tool !== null);
+    const shown = useShapeShown();
     useShapePaletteSource(ready, selectedPerformers, apply);
 
     // A kind's key arms it, or turns the open shape into it
@@ -75,7 +76,7 @@ export function useShapeToolActions(): void {
             const entry = SHAPE_TOOLS.find((e) => e.action === id);
             if (entry) pickShapeKind(entry.kind, selectedPerformers);
         },
-        { enabled: ready && kindPickGate(shapeOpen, selectedPerformers).ok },
+        { enabled: ready && kindPickGate(shown, selectedPerformers).ok },
     );
     useActionHandler(
         "applyShape",

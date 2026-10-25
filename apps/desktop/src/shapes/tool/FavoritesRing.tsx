@@ -22,7 +22,7 @@ import {
 } from "./ringMachine";
 import { kindPickGate, pickShapeKind } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
-import { useShapeToolStore } from "./shapeToolStore";
+import { useShapeShown } from "./shapeToolStore";
 import { useStarredShapes } from "./starredShapes";
 
 /** The open ring, if any */
@@ -69,8 +69,7 @@ export default function FavoritesRing() {
     );
     const starred = useStarredShapes();
     const slots = useMemo(() => ringSlots(starred, SHAPE_TOOLS), [starred]);
-    const shapeOpen = useShapeToolStore((s) => s.tool !== null);
-    const gate = kindPickGate(shapeOpen, performers);
+    const gate = kindPickGate(useShapeShown(), performers);
     const ring = useRingStore((s) => s.ring);
 
     // The key's handlers read these when they run, not when they were registered

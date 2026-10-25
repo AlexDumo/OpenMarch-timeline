@@ -21,7 +21,10 @@ import {
 import {
     discardShapeTool,
     forgetDiscardedShape,
+    hasDiscardedShape,
     restoreDiscardedShape,
+    startOverWaitingShape,
+    undoOpenShape,
 } from "../tool/shapeLeave";
 import type { ToolState } from "../tool/toolMachine";
 
@@ -174,5 +177,49 @@ describe("an open shape's moment (#416)", () => {
         expect(restoreDiscardedShape()).toBe(true);
         expect(useShapeToolStore.getState().moment).toEqual(moment);
         expect(isShapeAway()).toBe(true);
+    });
+
+    it("a new shape started away from a waiting one dismisses it, and undo before drawing brings it back", () => {
+        store().selectRange(9, 12);
+        const waiting = drawn();
+        openShapeTool(waiting, null);
+        const moment = useShapeToolStore.getState().moment;
+        store().seek(20);
+
+        startOverWaitingShape();
+        expect(useShapeToolStore.getState().tool).toBeNull();
+        expect(hasDiscardedShape()).toBe(true);
+        openShapeTool(openTool(boxTool, marchers), null, undefined, {
+            keepDiscarded: true,
+        });
+        expect(isShapeAway()).toBe(false);
+        expect(hasDiscardedShape()).toBe(true);
+
+        // Nothing drawn yet: undo brings the waiting shape back, away at its own moment
+        undoOpenShape();
+        expect(useShapeToolStore.getState().tool).toBe(waiting);
+        expect(useShapeToolStore.getState().moment).toEqual(moment);
+        expect(isShapeAway()).toBe(true);
+    });
+
+    it("starting over does nothing to a shape at its own moment", () => {
+        store().selectRange(9, 12);
+        const tool = drawn();
+        openShapeTool(tool, null);
+        startOverWaitingShape();
+        expect(useShapeToolStore.getState().tool).toBe(tool);
+        expect(hasDiscardedShape()).toBe(false);
+    });
+
+    it("undo on an open shape with its own history steps through it", () => {
+        const tool = { ...drawn(), past: [{ ...drawn(), past: [] }] } as never;
+        openShapeTool(tool, null);
+        useShapeToolStore.setState({
+            discarded: { tool: drawn(), openedAt: null, moment: null },
+        });
+        undoOpenShape();
+        expect(useShapeToolStore.getState().tool).not.toBe(tool);
+        expect(useShapeToolStore.getState().tool).not.toBeNull();
+        expect(hasDiscardedShape()).toBe(true);
     });
 });

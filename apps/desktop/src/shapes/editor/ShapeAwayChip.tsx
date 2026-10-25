@@ -1,15 +1,17 @@
-import { ArrowUUpLeftIcon } from "@phosphor-icons/react";
+import { ArrowUUpLeftIcon, XIcon } from "@phosphor-icons/react";
 import { useIsVisualsView } from "@/stores/WorkspaceViewStore";
 import { usePreviewModeStore } from "@/stores/PreviewModeStore";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { useShapeAway, useShapeToolStore } from "../tool/shapeToolStore";
 import { goBackTo, momentLabel } from "../tool/shapeMoment";
+import { discardShapeTool } from "../tool/shapeLeave";
 import { keepFocus } from "./keepFocus";
 
 /**
  * Shown at the top of the field while the paused playhead is away from the open shape's moment
  * (#416): the shape and its editor are hidden until the timeline comes back, by Go back or any
  * other way. In the accent color, so a shape left open isn't forgotten (owner lab feedback).
+ * Dismiss (×) discards it as Escape would at its moment: undo right after brings it back.
  * Not while playing, nor in Visuals or Preview, where the shape waits without it.
  */
 export function ShapeAwayChip() {
@@ -36,6 +38,16 @@ export function ShapeAwayChip() {
             >
                 <ArrowUUpLeftIcon size={14} weight="bold" />
                 Go back
+            </button>
+            <button
+                type="button"
+                aria-label="Dismiss"
+                title="Dismiss the shape (undo brings it back)"
+                className="rounded-6 hover:bg-text-invert/20 flex items-center p-4"
+                onPointerDown={keepFocus}
+                onClick={discardShapeTool}
+            >
+                <XIcon size={14} weight="bold" />
             </button>
         </div>
     );

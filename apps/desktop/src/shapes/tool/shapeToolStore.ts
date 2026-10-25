@@ -36,13 +36,35 @@ export function updateTool(change: (tool: ToolState) => ToolState): void {
     if (next !== tool) useShapeToolStore.setState({ tool: next });
 }
 
-/** Opens `tool` at the moment now; a discarded shape can't come back once another one opens */
+/**
+ * Opens `tool` at the moment now. A discarded shape can't come back once another one opens, unless
+ * `keepDiscarded`: a new shape started over one waiting elsewhere (#416), which undo before
+ * anything is drawn brings back
+ */
 export function openShapeTool(
     tool: ToolState,
     openedAt: CanvasEditPlan | null,
     moment: ShapeMoment | null = momentOf(),
+    { keepDiscarded = false }: { keepDiscarded?: boolean } = {},
 ): void {
-    useShapeToolStore.setState({ tool, openedAt, moment, discarded: null });
+    useShapeToolStore.setState((s) => ({
+        tool,
+        openedAt,
+        moment,
+        discarded: keepDiscarded ? s.discarded : null,
+    }));
+}
+
+/** Whether a shape is open and showing, so picking a kind changes it rather than starting over */
+export function isShapeShown(): boolean {
+    return useShapeToolStore.getState().tool !== null && !isShapeAway();
+}
+
+/** {@link isShapeShown} for components */
+export function useShapeShown(): boolean {
+    const open = useShapeToolStore((s) => s.tool !== null);
+    const away = useShapeAway();
+    return open && !away;
 }
 
 export function closeShapeTool(): void {
