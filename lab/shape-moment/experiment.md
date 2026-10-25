@@ -5,7 +5,19 @@ id: shape-moment
 title: Keep a shape open while you move around the timeline
 summary: Only Enter or Place places a shape now. Moving the playhead, playing, switching to Visuals or selecting other marchers leaves it open. Away from its count it waits behind an accent chip that takes you back or dismisses it, and starting a new shape there sets it aside.
 status: open
+# Three looks for where an open shape's marchers start; rings is today's
+variants:
+  - id: rings
+    label: Rings
+    description: Hollow circles in the shape color where the marchers start
+  - id: ghost
+    label: Ghost
+    description: Faint see-through dots in each marcher's own color
+  - id: ghost-labels
+    label: Ghost + labels
+    description: Small faint dots with each marcher's label
 questions:
+  - Switch between Rings, Ghost and Ghost + labels with the Version switch at the bottom left. Which shows best where the box's marchers start? Why?
   - Is the accent "Shape open at …" chip easy to notice now? Does it stand out too much?
   - Away from the shape, Enter and Esc do nothing to it. Did you ever press one expecting it to act on the shape?
   - Playing or switching to Visuals hides the shape until you stop or come back, without placing it. Did it come back when you expected?
@@ -18,7 +30,12 @@ The last build placed the shape when you played, changed the selection or
 switched to Visuals. Now **only Enter or Place places it**. Select some
 marchers, press **B** and drag a box.
 
-**New in this build** (from your feedback on the last one):
+**New in this build:** a **Version** switch at the bottom left offers
+three looks for where the box's marchers start: **Rings** (hollow circles,
+as before), **Ghost** (faint dots in each marcher's own color) and **Ghost +
+labels** (small faint dots with their labels). Try each with a box open.
+
+**From your last round:**
 
 - While a box is open, **everyone else is lighter** (40%, labels too), so the
   rest of the drill stays readable as context.

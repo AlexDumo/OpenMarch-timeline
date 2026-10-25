@@ -218,6 +218,9 @@ export type FieldModeDrawing = {
      * styling"): at the start flag, the same points the walks leave from
      */
     rings?: readonly FieldPoint[];
+    /** The marcher at each of `rings` and its label, for start marks drawn as that marcher */
+    ringIds?: readonly number[];
+    ringLabels?: readonly string[];
     /**
      * Spots the shape leaves empty on purpose, drawn as dashed rings: an odd-count outline's gap
      * (#390), which a click on another spot between corners moves

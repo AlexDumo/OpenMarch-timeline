@@ -14,7 +14,10 @@ import {
     selectionHandles,
     type DrawnSelectionBox,
 } from "./selectionFrame";
-import { ringReach, SELECTION_COLOR } from "./selectionRing";
+import { dotSizes, ringReach, SELECTION_COLOR } from "./selectionRing";
+import { DOT_RADIUS } from "@/field/editor/hitTest";
+import { resolveMarcherLook } from "@/entity-components/appearance";
+import { useStartMarkStyle } from "@/shapes/field/startMarks";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -127,7 +130,13 @@ export default function FieldOverlay({
                 <Marquee rect={area.rect} theme={theme} />
             )}
             {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
-            {modeDrawing && <ModeDrawing drawing={modeDrawing} theme={theme} />}
+            {modeDrawing && (
+                <ModeDrawing
+                    drawing={modeDrawing}
+                    theme={theme}
+                    marchers={marchers}
+                />
+            )}
             {propTool && <PropToolPreview tool={propTool} theme={theme} />}
         </svg>
     );
@@ -294,12 +303,103 @@ function Lasso({
  * marchers will stand on, a faint line from each marcher to its spot, and its
  * handles, in the theme's shape color.
  */
-function ModeDrawing({
+/** How see-through a ghost start mark is, and how much smaller with its label (#417 lab) */
+const GHOST_OPACITY = 0.35;
+const GHOST_LABELED_SCALE = 0.7;
+
+/**
+ * Where an open shape's marchers start (#346, #417): hollow rings in the shape color, or, in the
+ * lab's other versions (`useStartMarkStyle`), faint dots in each marcher's own color, labeled or
+ * not
+ */
+function StartMarks({
     drawing,
     theme,
+    marchers,
+    at,
+    zoom,
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
+    marchers: FieldMarchers;
+    at: (point: { x: number; y: number }) => { x: number; y: number };
+    zoom: number;
+}) {
+    const style = useStartMarkStyle();
+    const shape = rgbaToString(theme.shape);
+    const index = new Map(marchers.ids.map((id, i) => [id, i]));
+    const label = rgbaToString(theme.defaultMarcher.label);
+    return (
+        <>
+            {drawing.rings?.map((point, i) => {
+                const p = at(point);
+                if (style === "rings")
+                    return (
+                        <circle
+                            key={i}
+                            cx={p.x}
+                            cy={p.y}
+                            r={ringReach(zoom) * zoom + START_RING_GAP}
+                            fill="none"
+                            stroke={shape}
+                            strokeWidth={START_RING_WIDTH}
+                            data-testid="fieldShapeStartRing"
+                        />
+                    );
+                const id = drawing.ringIds?.[i];
+                const row = id === undefined ? undefined : index.get(id);
+                const look =
+                    row === undefined
+                        ? null
+                        : resolveMarcherLook(marchers.stacks[row] ?? [], theme);
+                const color = look
+                    ? rgbaToString(
+                          look.shape === "cross" ? look.crossColor : look.fill,
+                      )
+                    : shape;
+                const labeled = style === "ghost-labels";
+                const r =
+                    DOT_RADIUS *
+                    dotSizes(zoom).scale *
+                    zoom *
+                    (labeled ? GHOST_LABELED_SCALE : 1);
+                return (
+                    <g key={i} opacity={GHOST_OPACITY}>
+                        <circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={r}
+                            fill={color}
+                            data-testid="fieldShapeStartGhost"
+                        />
+                        {labeled && (
+                            <text
+                                x={p.x}
+                                y={p.y - r - 2}
+                                fontSize={SPOT_LABEL_PX}
+                                fontFamily="DM Sans, sans-serif"
+                                textAnchor="middle"
+                                fill={label}
+                                data-testid="fieldShapeStartGhostLabel"
+                            >
+                                {drawing.ringLabels?.[i] ?? ""}
+                            </text>
+                        )}
+                    </g>
+                );
+            })}
+        </>
+    );
+}
+
+function ModeDrawing({
+    drawing,
+    theme,
+    marchers,
+}: {
+    drawing: FieldModeDrawing;
+    theme: FieldTheme;
+    marchers: FieldMarchers;
 }) {
     const view = useFieldViewStore();
     const shape = rgbaToString(theme.shape);
@@ -333,21 +433,13 @@ function ModeDrawing({
                     strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
                 />
             )}
-            {drawing.rings?.map((point, i) => {
-                const p = at(point);
-                return (
-                    <circle
-                        key={i}
-                        cx={p.x}
-                        cy={p.y}
-                        r={ringReach(z) * z + START_RING_GAP}
-                        fill="none"
-                        stroke={shape}
-                        strokeWidth={START_RING_WIDTH}
-                        data-testid="fieldShapeStartRing"
-                    />
-                );
-            })}
+            <StartMarks
+                drawing={drawing}
+                theme={theme}
+                marchers={marchers}
+                at={at}
+                zoom={z}
+            />
             {drawing.walks.map(({ from, to }, i) => {
                 const a = at(from);
                 const b = at(to);

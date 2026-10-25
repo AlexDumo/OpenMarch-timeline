@@ -105,13 +105,23 @@ const drawingOf = memoDrawing(({ tool, hover, over, walks }: Shown) => {
     // always show, so where the marchers come from reads; the pathways toggle is only the walks
     // (owner lab feedback on #417)
     const rings = startsOf(tool);
+    const ringIds = tool.marchers.map((m) => m.id);
+    const names = drillNumbers(field);
+    const ringLabels = ringIds.map((id) => names.get(id) ?? "");
     if (tool.params === null)
-        return { outline: null, spots, walks: [], handles: [], rings };
+        return {
+            outline: null,
+            spots,
+            walks: [],
+            handles: [],
+            rings,
+            ringIds,
+            ringLabels,
+        };
     // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every
     // other gesture holds who goes where, so the walks follow it live.
     const drawing = tool.gesture?.type === "draw";
     const targets = drawing ? [] : targetsOf(tool, ctx);
-    const names = drillNumbers(field);
     const env = toolEnvFor(field, { shift: false, alt: false });
     const gap = drawing ? null : outlineGapAt(tool.kind, tool.params, n);
     const g =
@@ -126,6 +136,8 @@ const drawingOf = memoDrawing(({ tool, hover, over, walks }: Shown) => {
         spots,
         walks: walks ? targets.map((t) => ({ from: t.from, to: t.to })) : [],
         rings,
+        ringIds,
+        ringLabels,
         // The controls stay at full strength while the pointer is on the shape or a gesture runs
         calm: !over && !tool.gesture,
         gaps: gap ? [gap] : [],
