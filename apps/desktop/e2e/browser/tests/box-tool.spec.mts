@@ -162,8 +162,15 @@ async function drawBox(show: Show) {
     return { grid, pressed, released };
 }
 
-/** Turns on the open shape's pathways, off by default (#403), for scenarios that read the walks */
-const showPathways = (page: Page) => setUiSettings(page, { shapeWalks: true });
+/**
+ * Turns on the open shape's pathways, off by default (#403), for scenarios that read the walks.
+ * The setting reloads the app, and the marchers are drawn a little after the field is back: wait
+ * for them, or Ctrl/Cmd+A right after selects nobody
+ */
+async function showPathways(show: Show) {
+    await setUiSettings(show.page, { shapeWalks: true });
+    await expectCanvasMatchesShow(show);
+}
 
 test.beforeEach(async ({ show }) => {
     await expectCanvasMatchesShow(show);
@@ -173,7 +180,7 @@ test("B opens the box tool, and a drag draws a box edge to edge on half steps, m
     show,
 }) => {
     const { page } = show;
-    await showPathways(page);
+    await showPathways(show);
     const grid = await fieldGrid(show);
     const S = grid.pixelsPerStep;
     const cf = grid.centerFront;
@@ -268,7 +275,7 @@ test("change: the knob turns the box and ⋯ flips it, each marcher keeping thei
     show,
 }) => {
     const { page } = show;
-    await showPathways(page);
+    await showPathways(show);
     const { grid } = await drawBox(show);
     let overlay = (await shapeOverlay(page))!;
     expect(overlay.stage).toBe("open");
@@ -670,7 +677,7 @@ test("change: scrubbing, page keys and timeline clicks keep an open box open; aw
 }) => {
     const { page } = show;
     const steps = await undoSteps(show);
-    await showPathways(page);
+    await showPathways(show);
     await drawBox(show);
     await page.getByRole("button", { name: "One more across" }).click();
     const before = await openBox(page);
@@ -1222,7 +1229,7 @@ for (const editorMode of ["expert", "basic"] as const) {
             show,
         }) => {
             const { page } = show;
-            await showPathways(page);
+            await showPathways(show);
             await selectPage(show, "Page 2");
             // The field shows the playhead: page 2's positions
             await expect
@@ -1243,7 +1250,7 @@ for (const editorMode of ["expert", "basic"] as const) {
             show,
         }) => {
             const { page } = show;
-            await showPathways(page);
+            await showPathways(show);
             await selectPage(show, "Page 2");
             await page.keyboard.press("Home");
             await expect
@@ -2165,7 +2172,7 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
     show,
 }) => {
     const { page } = show;
-    await showPathways(page);
+    await showPathways(show);
     const grid = await fieldGrid(show);
     const S = grid.pixelsPerStep;
     const cf = grid.centerFront;
