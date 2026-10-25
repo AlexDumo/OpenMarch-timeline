@@ -88,13 +88,20 @@ export interface ToolParam<P> {
     display(params: P, n: number, stepPx: number): string;
     /**
      * The number in `unit`. Intervals declare it: a saved shape keeps its intervals by it (#353)
-     * and sets them back through {@link type}.
+     * and sets them back through {@link set}.
      */
     value?(params: P, n: number, stepPx: number): number;
     /** A note after the number, such as "1 short"; null for none */
     note?(params: P, n: number): string | null;
     /** The params with `text` typed over the number; null when the text isn't understood */
     type(params: P, n: number, text: string, env: ToolEnv): P | null;
+    /**
+     * The params with the number set to `value`, in `unit`, as typing it would but without going
+     * through its text, so a value the chip shows rounded (1.13 for 1⅛) comes back exact (#423).
+     * Saved shapes and the command bar's starting numbers use it; without it they type the value
+     * as shown.
+     */
+    set?(params: P, n: number, value: number, env: ToolEnv): P | null;
     /** The params with the number dragged by `move` from `base`, the params at the press */
     scrub(base: P, n: number, move: ScrubMove, env: ToolEnv): P;
     /**

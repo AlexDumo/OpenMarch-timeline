@@ -77,20 +77,6 @@ export function lockedAxis(
     return Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
 }
 
-/**
- * Steps as typed: "2", "2.5", "2½", "2 1/2", "½". Null for anything else, or a value not above 0.
- */
-export function parseSteps(text: string): number | null {
-    const t = text
-        .trim()
-        .replace(/steps?$/i, "")
-        .trim();
-    const m = /^(\d+(?:\.\d+)?)?\s*(½|1\/2)?$/.exec(t);
-    if (!m || (m[1] === undefined && m[2] === undefined)) return null;
-    const value = Number(m[1] ?? 0) + (m[2] ? 0.5 : 0);
-    return value > 0 ? value : null;
-}
-
 /** A size as typed: "6", "6 × 2", "6x2", "6 by 2". Null for anything else. */
 export function parseSize(
     text: string,

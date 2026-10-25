@@ -1,13 +1,8 @@
 import { resizeCursor } from "../frame/frame";
-import { formatSteps } from "../editor/format";
-import {
-    parseSteps,
-    scrubDistance,
-    scrubValue,
-    spacingRate,
-} from "../editor/scrub";
+import { formatSteps, parseSteps } from "../editor/format";
+import { scrubDistance, scrubValue, spacingRate } from "../editor/scrub";
 import { distributionFor } from "../distribute/distribution";
-import type { ToolKind, ToolParam } from "../tool/toolKind";
+import type { ToolEnv, ToolKind, ToolParam } from "../tool/toolKind";
 import { circleShape } from "./circleShape";
 import {
     CIRCLE_MODES,
@@ -28,6 +23,15 @@ import {
     type CircleParams,
 } from "./circleGeometry";
 
+/** An interval set as typed: kept as it is (1⅔, 1.37), not on half steps (#411, #423) */
+const typedInterval = (
+    p: CircleParams,
+    n: number,
+    steps: number,
+    env: ToolEnv,
+): CircleParams =>
+    withInterval(p, n, steps * env.stepPx, { ...env, snap: false }, true);
+
 /** The circle's one number: the interval between neighbors, which also sets its size */
 const INTERVAL: ToolParam<CircleParams> = {
     key: "interval",
@@ -45,10 +49,9 @@ const INTERVAL: ToolParam<CircleParams> = {
     value: (p, _n, stepPx) => p.interval / stepPx,
     type(p, n, text, env) {
         const steps = parseSteps(text);
-        if (steps === null) return null;
-        // A typed interval is kept to hundredths of a step, not half steps (#411)
-        return withInterval(p, n, steps * env.stepPx, { ...env, snap: false });
+        return steps === null ? null : typedInterval(p, n, steps, env);
     },
+    set: (p, n, steps, env) => typedInterval(p, n, steps, env),
     scrub(base, n, m, env) {
         const was = base.interval / env.stepPx;
         const steps = scrubValue(

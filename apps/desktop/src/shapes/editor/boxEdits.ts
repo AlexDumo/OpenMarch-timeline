@@ -76,15 +76,19 @@ export function withRanks(
     return p;
 }
 
-/** The box with a spacing set, in steps. The ratio lock moves the other spacing with it. */
+/**
+ * The box with a spacing set, in steps: on the drag's ladder, or kept as `typed` (#423). The ratio
+ * lock moves the other spacing with it.
+ */
 export function withSpacing(
     p: BoxParams,
     which: "across" | "deep",
     steps: number,
     spots: number,
     env: ToolEnv,
+    typed = false,
 ): BoxParams {
-    const value = snapInterval(steps * env.stepPx, env);
+    const value = snapInterval(steps * env.stepPx, env, typed);
     let across = which === "across" ? value : p.across;
     let deep = which === "deep" ? value : p.deep;
     if (env.ratioLocked)
@@ -95,6 +99,7 @@ export function withSpacing(
             which === "across",
             which === "deep",
             env,
+            typed,
         ));
     if (across === p.across && deep === p.deep) return p;
     return grownFromPivot(p, { ...p, across, deep }, spots, env);
