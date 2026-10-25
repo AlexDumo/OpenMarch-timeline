@@ -401,3 +401,25 @@ export async function setUiSettings(
     // As after the fixture's own load: the field centers its view again once it has settled
     await waitForSettledField(page);
 }
+
+/**
+ * Opens the Settings window from the File tab, as a user does, and shows
+ * `section`. In the browser target the window is a second page of the same
+ * context (`fixtures.mts`); in Electron it's the app's own window.
+ */
+export async function openSettings(page: Page, section: string) {
+    await page.getByRole("tab", { name: "File" }).click();
+    const [settings] = await Promise.all([
+        page.context().waitForEvent("page"),
+        page.getByRole("button", { name: "App Settings" }).click(),
+    ]);
+    await settings.waitForLoadState("domcontentloaded");
+    await settings
+        .getByRole("navigation")
+        .getByRole("button", { name: section, exact: true })
+        .click();
+    await expect(
+        settings.getByRole("heading", { name: section, level: 1 }),
+    ).toBeVisible();
+    return settings;
+}

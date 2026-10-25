@@ -7,7 +7,7 @@ import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
  * Fades everyone who isn't in the open shape to a faint dot, and hides the shape's own marchers'
  * dots once it's drawn: its spots are where they'll be, and with pathways on its start rings and
  * walks show where they come from (#417). As 08-shape-system-ux.md, "Marcher styling", has it: while
- * it's open, or with the View tab's "Fade only while drawing", only while a drag draws it. A
+ * it's open, or with Settings › Field "Fade only while drawing", only while a drag draws it. A
  * selected placed shape fades nobody: selecting one is frequent. A shape waiting out of
  * sight (#416, `useShapeHidden`) fades nobody either.
  */
