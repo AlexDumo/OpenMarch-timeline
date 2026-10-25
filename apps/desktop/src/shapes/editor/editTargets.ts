@@ -21,7 +21,11 @@ import {
     setOrder,
     type ToolOrder,
 } from "../tool/toolMachine";
-import { updateTool, useShapeToolStore } from "../tool/shapeToolStore";
+import {
+    updateTool,
+    useShapeHidden,
+    useShapeToolStore,
+} from "../tool/shapeToolStore";
 import type { AnyToolKind } from "../tool/toolKind";
 import { useApplyShape } from "../tool/useShapeToolActions";
 
@@ -64,12 +68,16 @@ const withField = (run: (ctx: ReturnType<typeof shapeContextFor>) => void) => {
     if (field) run(shapeContextFor(field));
 };
 
-/** The open tool's shape, or null with none open or none drawn yet */
+/**
+ * The open tool's shape, or null with none open, none drawn yet, or the shape waiting out of
+ * sight (#416, `useShapeHidden`)
+ */
 export function useToolEditTarget(): ShapeEditTarget | null {
     const tool = useShapeToolStore((s) => s.tool);
+    const away = useShapeHidden();
     const place = useApplyShape();
     return useMemo(() => {
-        if (!tool || tool.params === null) return null;
+        if (!tool || tool.params === null || away) return null;
         return {
             kind: tool.kind,
             params: tool.params,
@@ -90,7 +98,7 @@ export function useToolEditTarget(): ShapeEditTarget | null {
             setOrder: (order) =>
                 withField((ctx) => updateTool((t) => setOrder(t, order, ctx))),
         };
-    }, [tool, place]);
+    }, [tool, away, place]);
 }
 
 /** How long a saved drag's preview may outlast the save before the box is read back */

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
 import {
     edit,
@@ -20,7 +20,6 @@ import {
     discardShapeTool,
     forgetDiscardedShape,
     hasDiscardedShape,
-    leaveShapeTool,
     restoreDiscardedShape,
 } from "../tool/shapeLeave";
 import type { CanvasEditPlan } from "@/timeline/timelineCoordinateWrites";
@@ -62,52 +61,6 @@ const openTool$ = () => useShapeToolStore.getState().tool;
 afterEach(() => {
     closeShapeTool();
     forgetDiscardedShape();
-});
-
-describe("leaving an open shape", () => {
-    it("places a drawn shape where it was opened, and closes the tool", () => {
-        const place = vi.fn(async () => {});
-        const tool = drawn();
-        openShapeTool(tool, WINDOW);
-        leaveShapeTool(place);
-        expect(openTool$()).toBeNull();
-        expect(place).toHaveBeenCalledTimes(1);
-        const [placed, at] = place.mock.calls[0] as unknown as [
-            ToolState,
-            CanvasEditPlan,
-        ];
-        expect(targetsOf(placed, ctx)).toEqual(targetsOf(tool, ctx));
-        expect(at).toBe(WINDOW);
-        // Nothing to bring back: the shape was kept, not thrown away
-        expect(hasDiscardedShape()).toBe(false);
-    });
-
-    it("places nothing when no shape was drawn yet", () => {
-        const place = vi.fn(async () => {});
-        openShapeTool(openTool(boxTool, marchers), WINDOW);
-        leaveShapeTool(place);
-        expect(openTool$()).toBeNull();
-        expect(place).not.toHaveBeenCalled();
-    });
-
-    it("places the shape as it was before a drag still under way", () => {
-        const place = vi.fn(async () => {});
-        const tool = drawn();
-        // A drag inside the box, not let go
-        let dragging = press(tool, { x: 20, y: 20 }, env);
-        dragging = pointerMove(dragging, { x: 80, y: 20 }, env);
-        openShapeTool(dragging, WINDOW);
-        leaveShapeTool(place);
-        const [placed] = place.mock.calls[0] as unknown as [ToolState];
-        expect(placed.gesture).toBeNull();
-        expect(targetsOf(placed, ctx)).toEqual(targetsOf(tool, ctx));
-    });
-
-    it("does nothing when no tool is open", () => {
-        const place = vi.fn(async () => {});
-        leaveShapeTool(place);
-        expect(place).not.toHaveBeenCalled();
-    });
 });
 
 describe("Escape on an open shape", () => {

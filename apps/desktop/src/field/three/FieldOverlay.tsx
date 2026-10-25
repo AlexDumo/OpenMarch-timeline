@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
+import { textPresentation } from "@/shapes/editor/GlyphText";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
@@ -13,7 +14,9 @@ import {
     selectionHandles,
     type DrawnSelectionBox,
 } from "./selectionFrame";
-import { ringReach, SELECTION_COLOR } from "./selectionRing";
+import { dotSizes, SELECTION_COLOR } from "./selectionRing";
+import { DOT_RADIUS } from "@/field/editor/hitTest";
+import { resolveMarcherLook } from "@/entity-components/appearance";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -32,12 +35,6 @@ const SHAPE_OUTLINE_DASH = "6 4";
 const SPOT_RADIUS = 4;
 const SPOT_WIDTH = 1.5;
 const WALK_WIDTH = 1;
-/**
- * The hollow ring where each of the shape's marchers starts, in CSS px: just outside a selected
- * marcher's ring, so a marcher standing on its start shows both.
- */
-const START_RING_GAP = 2;
-const START_RING_WIDTH = 1.5;
 const SHAPE_HANDLE_SIZE = 9;
 const SHAPE_HANDLE_WIDTH = 1.5;
 
@@ -126,7 +123,13 @@ export default function FieldOverlay({
                 <Marquee rect={area.rect} theme={theme} />
             )}
             {area?.kind === "lasso" && <Lasso lasso={area} theme={theme} />}
-            {modeDrawing && <ModeDrawing drawing={modeDrawing} theme={theme} />}
+            {modeDrawing && (
+                <ModeDrawing
+                    drawing={modeDrawing}
+                    theme={theme}
+                    marchers={marchers}
+                />
+            )}
             {propTool && <PropToolPreview tool={propTool} theme={theme} />}
         </svg>
     );
@@ -293,12 +296,68 @@ function Lasso({
  * marchers will stand on, a faint line from each marcher to its spot, and its
  * handles, in the theme's shape color.
  */
-function ModeDrawing({
+/** How see-through a start ghost is (#417; the owner picked ghosts over rings in the lab) */
+const GHOST_OPACITY = 0.35;
+
+/**
+ * Where an open shape's marchers start (#346, #417): a faint, see-through dot in each marcher's
+ * own color, at the start flag
+ */
+function StartMarks({
     drawing,
     theme,
+    marchers,
+    at,
+    zoom,
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
+    marchers: FieldMarchers;
+    at: (point: { x: number; y: number }) => { x: number; y: number };
+    zoom: number;
+}) {
+    const shape = rgbaToString(theme.shape);
+    const index = new Map(marchers.ids.map((id, i) => [id, i]));
+    const r = DOT_RADIUS * dotSizes(zoom).scale * zoom;
+    return (
+        <>
+            {drawing.rings?.map((point, i) => {
+                const p = at(point);
+                const id = drawing.ringIds?.[i];
+                const row = id === undefined ? undefined : index.get(id);
+                const look =
+                    row === undefined
+                        ? null
+                        : resolveMarcherLook(marchers.stacks[row] ?? [], theme);
+                const color = look
+                    ? rgbaToString(
+                          look.shape === "cross" ? look.crossColor : look.fill,
+                      )
+                    : shape;
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={r}
+                        fill={color}
+                        opacity={GHOST_OPACITY}
+                        data-testid="fieldShapeStartGhost"
+                    />
+                );
+            })}
+        </>
+    );
+}
+
+function ModeDrawing({
+    drawing,
+    theme,
+    marchers,
+}: {
+    drawing: FieldModeDrawing;
+    theme: FieldTheme;
+    marchers: FieldMarchers;
 }) {
     const view = useFieldViewStore();
     const shape = rgbaToString(theme.shape);
@@ -332,21 +391,13 @@ function ModeDrawing({
                     strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
                 />
             )}
-            {drawing.rings?.map((point, i) => {
-                const p = at(point);
-                return (
-                    <circle
-                        key={i}
-                        cx={p.x}
-                        cy={p.y}
-                        r={ringReach(z) * z + START_RING_GAP}
-                        fill="none"
-                        stroke={shape}
-                        strokeWidth={START_RING_WIDTH}
-                        data-testid="fieldShapeStartRing"
-                    />
-                );
-            })}
+            <StartMarks
+                drawing={drawing}
+                theme={theme}
+                marchers={marchers}
+                at={at}
+                zoom={z}
+            />
             {drawing.walks.map(({ from, to }, i) => {
                 const a = at(from);
                 const b = at(to);
@@ -546,7 +597,7 @@ function ModeDrawing({
                             dominantBaseline="hanging"
                             data-testid="fieldShapeTip"
                         >
-                            {drawing.tip.text}
+                            {textPresentation(drawing.tip.text)}
                         </text>
                     );
                 })()}

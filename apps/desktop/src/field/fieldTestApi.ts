@@ -34,6 +34,13 @@ export type FieldTestMarcher = {
      * marcher can't be selected.
      */
     dimmed: boolean;
+    /**
+     * How opaque the dot is drawn: 1, dimmed by isolation, a faint dot outside an open shape,
+     * or 0 for the open shape's own marchers once it's drawn (#417).
+     */
+    opacity: number;
+    /** Whether its label is drawn (not for an open shape's faint or hidden marchers) */
+    labelShown: boolean;
 };
 
 /**

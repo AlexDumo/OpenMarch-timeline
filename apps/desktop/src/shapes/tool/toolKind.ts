@@ -49,6 +49,9 @@ export interface ToolHandle {
     readonly cursor: string;
 }
 
+/** A parameter's direction mark: ↔ across, ↕ deep */
+export type ParamGlyph = "↔" | "↕";
+
 /**
  * One of a kind's numbers (#344, "The kind contract"), declared once so the host can show and
  * change it without knowing the kind: the floating chip shows the primary ones now, and the
@@ -80,8 +83,11 @@ export interface ToolParam<P> {
     readonly default?: number;
     /** Smallest and largest values, in `unit`; counts are also capped by the spot count */
     readonly range?: { readonly min?: number; readonly max?: number };
-    /** A mark before the number in the chip ("↔"), so its direction reads without words */
-    readonly glyph?: string;
+    /**
+     * A mark before the number in the chip, so its direction reads without words: ↔ across, ↕
+     * deep. Drawn as an icon (`GlyphText`), never as text a font may make an emoji.
+     */
+    readonly glyph?: ParamGlyph;
     /** Hidden while this is false (a spacing with only one spot that way) */
     shown?(params: P, n: number): boolean;
     /** The number as shown: "6 × 2", "2" */
