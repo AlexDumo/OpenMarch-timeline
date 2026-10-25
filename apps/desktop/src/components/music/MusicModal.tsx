@@ -1,7 +1,9 @@
 import AudioSelector from "./AudioSelector";
 import MusicXmlSelector from "./MusicXmlSelector";
 import { SidebarModalLauncher } from "../sidebar/SidebarModal";
-import { BooksIcon, XIcon } from "@phosphor-icons/react";
+import { BooksIcon, TableIcon, XIcon } from "@phosphor-icons/react";
+import { useTempoLabFlag } from "@/stores/UiSettingsStore";
+import { useTempoMapOpenStore } from "@/components/timeline/TempoMapPanel";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import {
     getLastBeatOfTempoGroup,
@@ -26,6 +28,7 @@ import {
     updateWorkspaceSettingsMutationOptions,
 } from "@/hooks/queries/useWorkspaceSettings";
 import { StaticFormField } from "../ui/FormField";
+import { audioOffsetHint, formatAudioOffset } from "./audioOffset";
 
 export default function MusicModal({
     label = <MusicNotesIcon size={24} />,
@@ -41,6 +44,31 @@ export default function MusicModal({
             buttonLabel={label}
             className={buttonClassName}
         />
+    );
+}
+
+/** "Open the tempo map", where the Tempo Groups are (D7; Tempo lab `tempoMap`) */
+function OpenTempoMapButton({ onOpen }: { onOpen: () => void }) {
+    const enabled = useTempoLabFlag("tempoMap");
+    const { t } = useTolgee();
+    // The map lives in the timeline's transport
+    if (!enabled) return null;
+    return (
+        <Button
+            size="compact"
+            variant="secondary"
+            data-testid="music-open-tempo-map"
+            title={t("music.openTempoMapHint")}
+            className="w-fit min-w-fit whitespace-nowrap"
+            onClick={() => {
+                // The map sits beside the field: the Music panel closes so both stay usable
+                onOpen();
+                useTempoMapOpenStore.getState().setOpen(true);
+            }}
+        >
+            <TableIcon size={20} />
+            <T keyName="music.openTempoMap" />
+        </Button>
     );
 }
 
@@ -120,6 +148,7 @@ function MusicModalContents() {
                             <T keyName="music.seeDocs" />
                         </Button>
                     </a>
+                    <OpenTempoMapButton onOpen={toggleOpen} />
                 </div>
                 <div className="flex flex-col gap-16">
                     <MusicXmlSelector />
@@ -190,7 +219,7 @@ function AudioOffsetInput() {
     // Update local state when settings change
     useEffect(() => {
         if (settings) {
-            setAudioOffsetValue(settings.audioOffsetSeconds.toString());
+            setAudioOffsetValue(formatAudioOffset(settings.audioOffsetSeconds));
         }
     }, [settings]);
 
@@ -202,7 +231,7 @@ function AudioOffsetInput() {
             if (!isNaN(parsedValue) && settings) {
                 updateSettings({
                     ...settings,
-                    audioOffsetSeconds: parsedValue,
+                    audioOffsetSeconds: Number(formatAudioOffset(parsedValue)),
                 });
             } else if (e.target.value === "" && settings) {
                 // If empty, set to 0
@@ -233,19 +262,30 @@ function AudioOffsetInput() {
         [],
     );
 
+    const hint = audioOffsetHint(settings?.audioOffsetSeconds ?? 0);
     return (
-        <StaticFormField label={t("workspaceSettings.audioOffsetSeconds")}>
-            <UnitInput
-                type="text"
-                inputMode="numeric"
-                pattern="-?[0-9]*.?[0-9]*"
-                containerClassName="col-span-6 self-center"
-                unit={t("workspaceSettings.units.seconds")}
-                onBlur={handleBlur}
-                onChange={handleChange}
-                onKeyDown={blurOnEnter}
-                value={audioOffsetValue}
-            />
-        </StaticFormField>
+        <div className="flex flex-col gap-4">
+            <StaticFormField label={t("workspaceSettings.audioOffsetSeconds")}>
+                <UnitInput
+                    type="text"
+                    inputMode="numeric"
+                    pattern="-?[0-9]*.?[0-9]*"
+                    containerClassName="col-span-6 self-center"
+                    unit={t("workspaceSettings.units.seconds")}
+                    onBlur={handleBlur}
+                    onChange={handleChange}
+                    onKeyDown={blurOnEnter}
+                    value={audioOffsetValue}
+                    aria-describedby="audio-offset-hint"
+                />
+            </StaticFormField>
+            <p
+                id="audio-offset-hint"
+                data-testid="audio-offset-hint"
+                className="text-sub text-text-subtitle px-12"
+            >
+                {t(hint.key, hint.params)}
+            </p>
+        </div>
     );
 }

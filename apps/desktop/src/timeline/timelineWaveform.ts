@@ -119,29 +119,46 @@ export function peaksByBeat(
     offset: number,
     perBeat = WAVEFORM_PEAKS_PER_BEAT,
 ): number[][] {
+    return normalizedPeaks(
+        beats.slice(offset).map((beat) => beatPeaks(envelope, beat, perBeat)),
+    );
+}
+
+/** One beat's `perBeat` raw peaks, or none past the end of the audio */
+function beatPeaks(
+    envelope: AudioEnvelope,
+    beat: { readonly timestamp: number; readonly duration: number },
+    perBeat: number,
+): number[] {
     const at = (seconds: number) =>
         Math.min(
             envelope.peaks.length,
             Math.max(0, Math.floor(seconds * envelope.rate)),
         );
-    const shown = beats.slice(offset);
-    const raw = shown.map((beat) => {
-        if (at(beat.timestamp) >= envelope.peaks.length) return [];
-        return Array.from({ length: perBeat }, (_, slice) => {
-            const from = at(beat.timestamp + (beat.duration * slice) / perBeat);
-            const to = Math.max(
-                from + 1,
-                at(beat.timestamp + (beat.duration * (slice + 1)) / perBeat),
-            );
-            let peak = 0;
-            for (let i = from; i < to && i < envelope.peaks.length; i++)
-                if (envelope.peaks[i]! > peak) peak = envelope.peaks[i]!;
-            return peak;
-        });
+    if (at(beat.timestamp) >= envelope.peaks.length) return [];
+    return Array.from({ length: perBeat }, (_, slice) => {
+        const from = at(beat.timestamp + (beat.duration * slice) / perBeat);
+        const to = Math.max(
+            from + 1,
+            at(beat.timestamp + (beat.duration * (slice + 1)) / perBeat),
+        );
+        let peak = 0;
+        for (let i = from; i < to && i < envelope.peaks.length; i++)
+            if (envelope.peaks[i]! > peak) peak = envelope.peaks[i]!;
+        return peak;
     });
+}
+
+function loudestOf(raw: number[][]): number {
     let loudest = 0;
     for (const beat of raw)
         for (const peak of beat) loudest = Math.max(loudest, peak);
+    return loudest;
+}
+
+/** Raw peaks in decibels below the loudest of them, mapped onto 0 .. 1 (see `peaksByBeat`) */
+function normalizedPeaks(raw: number[][]): number[][] {
+    const loudest = loudestOf(raw);
     if (loudest <= 0) return raw.map((beat) => beat.map(() => 0));
     return raw.map((beat) => beat.map((peak) => Math.min(1, peak / loudest)));
 }

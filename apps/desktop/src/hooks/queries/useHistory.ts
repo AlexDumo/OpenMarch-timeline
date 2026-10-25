@@ -53,6 +53,24 @@ export const canRedoQueryOptions = (enabled = true) =>
     });
 
 /**
+ * Keeps Undo and Redo fresh: refreshes the history queries after every TanStack mutation and
+ * after every committed history write, undo and redo (`subscribeHistoryChanges`), including writes
+ * made without a mutation (drill edit dialogs, page-flag grips). Returns the unsubscribe.
+ */
+export const refreshHistoryOnWrites = (qc: QueryClient): (() => void) => {
+    const refresh = () =>
+        void qc.invalidateQueries({ queryKey: historyKeys.all() });
+    const unsubscribeMutations = qc.getMutationCache().subscribe((event) => {
+        if (event?.type === "updated") refresh();
+    });
+    const unsubscribeHistory = subscribeHistoryChanges(refresh);
+    return () => {
+        unsubscribeMutations();
+        unsubscribeHistory();
+    };
+};
+
+/**
  * Refreshes the beats, pages and measures after an edit that stored counts past the last one
  * (endless counts, docs/timeline/endless-counts.md EC-13): a move or a page flag can store counts
  * now, whatever queries the edit itself refreshes. Returns the unsubscribe.

@@ -8,12 +8,17 @@ import {
     type RefObject,
 } from "react";
 import {
+    clamp,
     beatToX,
     canvasWindowCovers,
     getBeatsInSpan,
     getCanvasWindow,
     type TimelineSpan,
 } from "./TimelineGeometry";
+import {
+    WAVEFORM_FLOOR_DB,
+    type AudioEnvelope,
+} from "@/timeline/timelineWaveform";
 import type { TimelineMarker, TimelineWaveform } from "./TimelineViewModel";
 import {
     forEachWaveformBar,
@@ -21,6 +26,7 @@ import {
     waveformBarRadius,
     type WaveformStyle,
 } from "@/timeline/timelineWaveform";
+import type { TimelineXAxis } from "./timelineAxis";
 
 /*
  * The timeline's canvases are layers as wide as the show, but each draws only a window of it: what
@@ -283,7 +289,12 @@ interface TimelineCanvasLayerProps {
     layerLeft?: number;
 }
 
-interface TimelineGridCanvasProps extends TimelineCanvasLayerProps {
+interface TimelineGridCanvasProps extends Omit<
+    TimelineCanvasLayerProps,
+    "pixelsPerBeat"
+> {
+    /** Where each beat is drawn: a fixed width per count, or the Align view's seconds */
+    axis: TimelineXAxis;
     measures: readonly TimelineMarker[];
     lineTop?: number;
     showMeasureLines?: boolean;
@@ -296,7 +307,7 @@ interface TimelineGridCanvasProps extends TimelineCanvasLayerProps {
 export const TimelineGridCanvas = memo(function TimelineGridCanvas({
     width,
     height,
-    pixelsPerBeat,
+    axis,
     viewportRef,
     layerLeft,
     measures,
@@ -319,9 +330,7 @@ export const TimelineGridCanvas = memo(function TimelineGridCanvas({
                 );
                 context.beginPath();
                 for (const measure of measures) {
-                    const x = Math.round(
-                        beatToX(measure.atBeat, pixelsPerBeat),
-                    );
+                    const x = Math.round(axis.x(measure.atBeat));
                     if (x < 0 || x > width || x + 1 < span.left || x > spanEnd)
                         continue;
                     context.moveTo(x + 0.5, lineTop);
@@ -333,14 +342,27 @@ export const TimelineGridCanvas = memo(function TimelineGridCanvas({
             if (!showBeatTicks) return;
             context.strokeStyle = color("--color-text", "rgb(208, 208, 208)");
             context.globalAlpha = 0.22;
-            const beats = getBeatsInSpan(
-                span,
-                pixelsPerBeat,
-                Math.floor(width / pixelsPerBeat),
-            );
+            const beats =
+                axis.kind === "counts"
+                    ? getBeatsInSpan(
+                          span,
+                          axis.scale,
+                          Math.floor(width / axis.scale),
+                      )
+                    : {
+                          first: Math.max(
+                              0,
+                              Math.floor(axis.beatAt(span.left - 1)),
+                          ),
+                          last: Math.min(
+                              axis.beatCount,
+                              Math.floor(axis.beatAt(width)),
+                              Math.ceil(axis.beatAt(spanEnd + 1)),
+                          ),
+                      };
             context.beginPath();
             for (let beat = beats.first; beat <= beats.last; beat++) {
-                const x = Math.round(beatToX(beat, pixelsPerBeat));
+                const x = Math.round(axis.x(beat));
                 context.moveTo(x + 0.5, topTickY);
                 context.lineTo(x + 0.5, topTickY + 4);
                 if (bottomTickY !== null) {
@@ -356,7 +378,7 @@ export const TimelineGridCanvas = memo(function TimelineGridCanvas({
             height,
             lineTop,
             measures,
-            pixelsPerBeat,
+            axis,
             showBeatTicks,
             showMeasureLines,
             topTickY,
@@ -481,6 +503,191 @@ export const TimelineWaveformCanvas = memo(function TimelineWaveformCanvas({
             aria-label={tone === "rest" ? "Audio waveform" : undefined}
             aria-hidden={tone === "played" || undefined}
             className="absolute top-0"
+        />
+    );
+});
+
+/** The loudest envelope value, so the Align waveform uses the same decibel scale as `peaksByBeat` */
+const loudestOf = (peaks: Float32Array) => {
+    let loudest = 0;
+    for (let i = 0; i < peaks.length; i++)
+        if (peaks[i]! > loudest) loudest = peaks[i]!;
+    return loudest;
+};
+
+/**
+ * The Align view's waveform (E7, 11-ui.md A): the audio envelope drawn straight in time, x =
+ * seconds × `pixelsPerSecond`, with no per-count resampling, so a hit that misses its count shows
+ * as a bar off the count's line. Levels are decibels below the loudest moment, as on the normal
+ * timeline. It doesn't depend on the counts, so dragging them never redraws it.
+ */
+export const TimelineEnvelopeCanvas = memo(function TimelineEnvelopeCanvas({
+    envelope,
+    pixelsPerSecond,
+    width,
+    height,
+    viewportRef,
+    layerLeft,
+    tone,
+}: {
+    envelope: AudioEnvelope;
+    pixelsPerSecond: number;
+    width: number;
+    height: number;
+    /** The timeline's scroller; the canvas draws only what it shows, plus overscan */
+    viewportRef?: RefObject<HTMLElement | null>;
+    /** How far into the scroller's content the layer's left edge is */
+    layerLeft?: number;
+    tone: "played" | "rest";
+}) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const loudest = useMemo(() => loudestOf(envelope.peaks), [envelope]);
+
+    const paint = useCallback<PaintCanvas>(
+        (context, span, color) => {
+            if (loudest <= 0) return;
+            context.fillStyle =
+                tone === "played"
+                    ? color("--color-accent", "#967eff")
+                    : color(
+                          "--color-text-subtitle",
+                          "rgba(208, 208, 208, 0.6)",
+                      );
+            const centerY = height / 2;
+            const { peaks, rate } = envelope;
+            const audioEnd = Math.min(
+                width,
+                (peaks.length / rate) * pixelsPerSecond,
+            );
+            context.globalAlpha = 0.25;
+            context.fillRect(0, Math.round(centerY), Math.max(0, audioEnd), 1);
+            context.globalAlpha = 1;
+            // Two-pixel bars: each the loudest moment in its slice of time. Only the bars in the
+            // drawn window, on the same two-pixel grid as from the layer's left edge
+            const bar = 2;
+            const barsEnd = Math.min(audioEnd, span.left + span.width);
+            for (
+                let x = Math.max(0, Math.floor(span.left / bar) * bar);
+                x < barsEnd;
+                x += bar
+            ) {
+                const from = Math.floor((x / pixelsPerSecond) * rate);
+                const to = Math.max(
+                    from + 1,
+                    Math.floor(((x + bar) / pixelsPerSecond) * rate),
+                );
+                let peak = 0;
+                for (let i = from; i < to && i < peaks.length; i++)
+                    if (peaks[i]! > peak) peak = peaks[i]!;
+                if (peak <= 0) continue;
+                const level = clamp(
+                    (20 * Math.log10(peak / loudest) + WAVEFORM_FLOOR_DB) /
+                        WAVEFORM_FLOOR_DB,
+                    0,
+                    1,
+                );
+                const magnitude = Math.max(0.5, level * (height / 2 - 1));
+                context.fillRect(
+                    x,
+                    centerY - magnitude,
+                    Math.max(1, bar - (pixelsPerSecond >= 60 ? 1 : 0)),
+                    magnitude * 2,
+                );
+            }
+        },
+        [envelope, height, loudest, pixelsPerSecond, tone, width],
+    );
+
+    useViewportCanvas({
+        canvasRef,
+        viewportRef,
+        layerLeft,
+        width,
+        height,
+        paint,
+    });
+
+    return (
+        <canvas
+            ref={canvasRef}
+            data-testid={
+                tone === "rest"
+                    ? "timeline-align-waveform"
+                    : "timeline-align-waveform-played"
+            }
+            role={tone === "rest" ? "img" : undefined}
+            aria-label={
+                tone === "rest" ? "Audio waveform in seconds" : undefined
+            }
+            aria-hidden={tone === "played" || undefined}
+            className="absolute top-0"
+            style={{ height }}
+        />
+    );
+});
+
+/**
+ * Count lines through the Align view's waveform (11-ui.md A): a dim 1px line on each count, a
+ * stronger 2px line on each downbeat. Page flags are drawn full height by the page lines. Counts
+ * narrower than a few pixels only get their downbeats.
+ */
+export const TimelineCountLinesCanvas = memo(function TimelineCountLinesCanvas({
+    axis,
+    downbeats,
+    width,
+    height,
+    viewportRef,
+    layerLeft,
+}: {
+    axis: TimelineXAxis;
+    downbeats: ReadonlySet<number>;
+    width: number;
+    height: number;
+    /** The timeline's scroller; the canvas draws only what it shows, plus overscan */
+    viewportRef?: RefObject<HTMLElement | null>;
+    /** How far into the scroller's content the layer's left edge is */
+    layerLeft?: number;
+}) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const paint = useCallback<PaintCanvas>(
+        (context, span, color) => {
+            context.fillStyle = color("--color-text", "rgb(208, 208, 208)");
+            const from = Math.max(-2, span.left - 2);
+            const to = Math.min(width, span.left + span.width) + 2;
+            for (let beat = 0; beat <= axis.beatCount; beat++) {
+                const downbeat = downbeats.has(beat);
+                if (!downbeat && axis.pxPerBeatAt(beat) < 4) continue;
+                const x = Math.round(axis.x(beat));
+                if (x < from || x > to) continue;
+                context.globalAlpha = downbeat ? 0.55 : 0.28;
+                context.fillRect(
+                    downbeat ? x - 1 : x,
+                    0,
+                    downbeat ? 2 : 1,
+                    height,
+                );
+            }
+            context.globalAlpha = 1;
+        },
+        [axis, downbeats, height, width],
+    );
+
+    useViewportCanvas({
+        canvasRef,
+        viewportRef,
+        layerLeft,
+        width,
+        height,
+        paint,
+    });
+
+    return (
+        <canvas
+            ref={canvasRef}
+            data-testid="timeline-align-count-lines"
+            aria-hidden="true"
+            className="pointer-events-none absolute top-0"
+            style={{ height }}
         />
     );
 });

@@ -36,6 +36,11 @@ import type {
     TimelineMenuTarget,
     TimelineMoveCommands,
 } from "./TimelineRangeMenu";
+import type { TimelineMeasureRowCommands } from "./TimelineMeasureRow";
+import type {
+    TimelineDrillFlagMove,
+    TimelinePageFlagPreview,
+} from "./TimelinePageFlagHandles";
 import type {
     TimelineClipPeel,
     TimelineMovePeel,
@@ -45,8 +50,10 @@ import type {
 import type {
     TimelineActivitySpan,
     TimelineBasicPoint,
+    TimelineAlign,
     TimelineAppendAtPlayhead,
     TimelineBeatRange,
+    TimelineCountOverlay,
     TimelineCreateTrackRequest,
     TimelineNavigation,
     TimelinePageFlagMove,
@@ -177,6 +184,12 @@ export interface TimelineProps {
     readonly transportLeadingViewControls?: ReactNode;
     /** View controls at the transport's end, such as Compact */
     readonly transportViewControls?: ReactNode;
+    /** A notice over the waveform lane, such as Tap the beat's line-up strip */
+    readonly waveformNotice?: ReactNode;
+    /** A small action at the waveform lane's right edge, such as Tap the beat's way back */
+    readonly waveformAction?: ReactNode;
+    /** Drawn over the lanes, given where a spec count position is (Tap the beat's preview) */
+    readonly countOverlay?: TimelineCountOverlay;
     readonly showTransport?: boolean;
     /** The zoom, in pixels per beat; without it the timeline keeps its own (starting at 16) */
     readonly pixelsPerBeat?: number;
@@ -269,6 +282,41 @@ export interface TimelineProps {
     readonly onRemoveBasicPoint?: (beat: number) => void;
     /** UI-19 Basic: per page id, how many marchers on it use Expert moves */
     readonly expertMarks?: ReadonlyMap<string | number, number>;
+    /** The Align view (E7); without it, there is none */
+    readonly align?: TimelineAlign;
+    /**
+     * Rehearsal marks and measure lines edited on the measure row (tempo E8), in spec beats.
+     * Without it, the row only shows them.
+     */
+    readonly measureRow?: TimelineMeasureRowCommands;
+    /**
+     * Count edits that ask what the drill should do (Tempo lab `drillChoices`, E10), in spec
+     * beats: the right-click menu's **Remove counts…** and **Add counts…**, and page flag grips.
+     */
+    readonly drillEdits?: TimelineDrillEdits;
+}
+
+/** The commands behind the timeline's count edits (E10). Beats are spec beats. */
+export interface TimelineDrillEdits {
+    /** **Remove counts…** for a dragged range, or a measure (`measure` is its label, "m41") */
+    readonly onRemoveCounts: (
+        range: TimelineBeatRange,
+        measure?: string,
+    ) => void;
+    /** **Add counts at the end of this page…** */
+    readonly onAddCountsAtFlag: (pageId: number) => void;
+    /** **Add counts at the playhead…** */
+    readonly onAddCountsAtPlayhead: () => void;
+    /** A dragged page flag grip let go at `toBeat`; resolves once the move is written */
+    readonly onMovePageFlag: (
+        pageId: number,
+        toBeat: number,
+    ) => void | Promise<unknown>;
+    /** What moving the flag there would do, for the drag's readout */
+    readonly previewPageFlagMove?: (
+        pageId: number,
+        toBeat: number,
+    ) => Promise<TimelinePageFlagPreview | null>;
 }
 
 const TimelineWaveformContext = createContext<TimelineWaveform | null>(null);
@@ -643,6 +691,7 @@ export function Timeline(props: TimelineProps) {
         onSetPageSubset,
         onOpenRange,
         keepHere,
+        drillEdits,
         pageMenuExtra,
     } = props;
     // A clip's stored spec range, else the view range mapped back (as the menu's Add does)
@@ -732,7 +781,34 @@ export function Timeline(props: TimelineProps) {
         onDeletePageFlag ||
         onDeletePageWithMoves ||
         onSetPageSubset ||
-        keepHere
+        keepHere ||
+        drillEdits
+    );
+    // Count edits (E10) in spec beats; the menu sends view beats
+    const removeCounts = useLatestCallback(
+        drillEdits
+            ? (target: TimelineMenuTarget) =>
+                  target.cut
+                      ? drillEdits.onRemoveCounts({
+                            startBeatIndex: axis.toSpec(
+                                target.cut.startBeatIndex,
+                            ),
+                            endBeatIndex: axis.toSpec(target.cut.endBeatIndex),
+                        })
+                      : drillEdits.onRemoveCounts(
+                            specRangeOf(target),
+                            target.measure,
+                        )
+            : undefined,
+    );
+    const addCountsAtFlag = useLatestCallback(
+        drillEdits
+            ? (pageId: string | number) =>
+                  drillEdits.onAddCountsAtFlag(Number(pageId))
+            : undefined,
+    );
+    const addCountsAtPlayhead = useLatestCallback(
+        drillEdits?.onAddCountsAtPlayhead,
     );
     const disabledReason = addSelectedMarchers?.disabledReason;
     const addMarchersMenu = useMemo<
@@ -742,6 +818,13 @@ export function Timeline(props: TimelineProps) {
             hasMarchersMenu
                 ? {
                       disabledReason,
+                      ...(removeCounts && addCountsAtFlag && addCountsAtPlayhead
+                          ? {
+                                onRemoveCounts: removeCounts,
+                                onAddCountsAtFlag: addCountsAtFlag,
+                                onAddCountsAtPlayhead: addCountsAtPlayhead,
+                            }
+                          : {}),
                       ...(deleteFlag ? { onDeleteFlag: deleteFlag } : {}),
                       ...(deleteWithMoves
                           ? { onDeleteWithMoves: deleteWithMoves }
@@ -753,6 +836,8 @@ export function Timeline(props: TimelineProps) {
                   }
                 : undefined,
         [
+            addCountsAtFlag,
+            addCountsAtPlayhead,
             addMarchers,
             deleteFlag,
             deleteWithMoves,
@@ -760,8 +845,20 @@ export function Timeline(props: TimelineProps) {
             hasMarchersMenu,
             keepHere,
             subsetMenu,
+            removeCounts,
             pageExtra,
         ],
+    );
+    // The measure row's beats are view beats inside; a count at view beat v is spec beat v + offset
+    const { measureRow } = props;
+    const viewMeasureRow = useMemo<TimelineMeasureRowCommands | undefined>(
+        () =>
+            measureRow && {
+                ...measureRow,
+                onStartMeasure: (beat, mark) =>
+                    measureRow.onStartMeasure(axis.toSpec(beat), mark),
+            },
+        [axis, measureRow],
     );
     // A clip's track id to its stored timeline (`linkId`), for the move commands (UI-14)
     const { moveCommands } = props;
@@ -936,6 +1033,25 @@ export function Timeline(props: TimelineProps) {
             ? (viewBeat: number) => onRemoveBasicPoint(axis.toSpec(viewBeat))
             : undefined,
     );
+    // The drill-choices flag grips (E10) work in view beats; the commands get spec beats
+    const drillFlagMove = useMemo<TimelineDrillFlagMove | undefined>(
+        () =>
+            drillEdits && {
+                onMove: (pageId, toBeat) =>
+                    drillEdits.onMovePageFlag(
+                        Number(pageId),
+                        axis.toSpec(toBeat),
+                    ),
+                preview: drillEdits.previewPageFlagMove
+                    ? (pageId, toBeat) =>
+                          drillEdits.previewPageFlagMove!(
+                              Number(pageId),
+                              axis.toSpec(toBeat),
+                          )
+                    : undefined,
+            },
+        [axis, drillEdits],
+    );
     const commonProps = {
         model,
         positionBeat,
@@ -964,6 +1080,7 @@ export function Timeline(props: TimelineProps) {
         onAddSubsetPage: useLatestCallback(props.onAddSubsetPage),
         addPageNames: props.addPageNames,
         pageFlagMove,
+        drillFlagMove,
         appendAtPlayhead: props.appendAtPlayhead,
         fitBeatCount:
             props.fitBeat === undefined
@@ -971,6 +1088,7 @@ export function Timeline(props: TimelineProps) {
                 : Math.min(axis.toView(props.fitBeat), axis.beatCount),
         onViewportExtent: useLatestCallback(props.onViewportExtent),
         onOpenRange: openRange,
+        measureRow: viewMeasureRow,
         onTimelineRangeCommit: commitRange,
         clipResize: viewClipResize,
         loop: viewLoop,
@@ -978,6 +1096,10 @@ export function Timeline(props: TimelineProps) {
         transportSecondary: props.transportSecondary,
         transportLeadingViewControls: props.transportLeadingViewControls,
         transportViewControls: props.transportViewControls,
+        waveformNotice: props.waveformNotice,
+        waveformAction: props.waveformAction,
+        countOverlay: props.countOverlay,
+        beatOffset: axis.offset,
         showTransport: props.showTransport ?? true,
         transportClock: props.transportClock,
         transportAccessories: props.transportAccessories,
@@ -987,6 +1109,7 @@ export function Timeline(props: TimelineProps) {
         basicPoints: viewBasicPoints,
         onRemoveBasicPoint: removeBasicPoint,
         expertMarks: props.expertMarks,
+        align: props.align && { ...props.align, offset: axis.offset },
     };
 
     // Read-only (Visuals mode): no window and no edits; page boxes still select, to go to their page
@@ -1013,7 +1136,11 @@ export function Timeline(props: TimelineProps) {
 
 export type {
     TimelineActivitySpan,
+    TimelineAlign,
     TimelineAppendAtPlayhead,
+    TimelineCountOverlay,
+    TimelineAlignEdit,
+    TimelinePunchTapConfig,
     TimelineBeatRange,
     TimelineCreateTrackRequest,
     TimelineSeekGesture,

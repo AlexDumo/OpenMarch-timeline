@@ -10,6 +10,7 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import { clsx } from "clsx";
 import { T } from "@tolgee/react";
 import { useMetronomeStore } from "@/stores/MetronomeStore";
+import { TapTheBeatMenuEntry } from "./TapTheBeat";
 import * as Popover from "@radix-ui/react-popover";
 import { Slider } from "@openmarch/ui";
 import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
@@ -263,6 +264,7 @@ export function TimelineSoundButton() {
                             Ctrl+M
                         </span>
                     </button>
+                    <TapTheBeatMenuEntry />
                 </Popover.Content>
             </Popover.Portal>
         </Popover.Root>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+    Checkbox,
     Select,
     SelectContent,
     SelectItem,
@@ -12,6 +13,7 @@ import { T, useTolgee } from "@tolgee/react";
 import MusicXmlSelector from "@/components/music/MusicXmlSelector";
 import { useQuery } from "@tanstack/react-query";
 import { allDatabaseMeasuresQueryOptions } from "@/hooks/queries/useMeasures";
+import { useTempoLabFlag } from "@/stores/UiSettingsStore";
 import type {
     NewShowTempoData,
     TempoOnlyTimeSignature,
@@ -38,9 +40,15 @@ function parseTempoInput(raw: string): number | null {
 interface TempoStepProps {
     tempo: NewShowTempoData | null;
     onChange: (tempo: NewShowTempoData) => void;
+    /** The show has music: the tempo becomes optional ("I don't know: I'll tap it") */
+    hasAudio?: boolean;
 }
 
-export default function TempoStep({ tempo, onChange }: TempoStepProps) {
+export default function TempoStep({
+    tempo,
+    onChange,
+    hasAudio = false,
+}: TempoStepProps) {
     const { t } = useTolgee();
     const [databaseReady, setDatabaseReady] = useState(false);
     const [checkingDatabase, setCheckingDatabase] = useState(true);
@@ -58,6 +66,13 @@ export default function TempoStep({ tempo, onChange }: TempoStepProps) {
     const [timeSignature, setTimeSignature] = useState<TempoOnlyTimeSignature>(
         tempo?.timeSignature ?? DEFAULT_TEMPO_ONLY_TIME_SIGNATURE,
     );
+    // Offered only where Tap the beat exists to follow it up (Tempo lab `tapTheBeat`)
+    const canTapLater = useTempoLabFlag("tapTheBeat") && hasAudio;
+    const [tapLater, setTapLater] = useState(
+        canTapLater && (tempo?.tapLater ?? false),
+    );
+    const tapLaterRef = useRef(tapLater);
+    tapLaterRef.current = tapLater;
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
     const hasSyncedInitial = useRef(tempo !== null);
@@ -80,6 +95,9 @@ export default function TempoStep({ tempo, onChange }: TempoStepProps) {
                 nextMethod === "tempo_only"
                     ? (nextTimeSignature ?? timeSignature)
                     : undefined,
+            ...(nextMethod === "tempo_only" && tapLaterRef.current
+                ? { tapLater: true }
+                : {}),
         });
     };
 
@@ -195,10 +213,29 @@ export default function TempoStep({ tempo, onChange }: TempoStepProps) {
                             </SelectContent>
                         </Select>
                     </WizardFormField>
-                    <WizardFormField label={t("launchpage.newShow.tempo")}>
+                    <WizardFormField
+                        label={t(
+                            hasAudio
+                                ? "launchpage.newShow.steps.tempo.tempoOptional"
+                                : "launchpage.newShow.tempo",
+                        )}
+                        helperText={
+                            hasAudio
+                                ? t(
+                                      tapLater
+                                          ? "launchpage.newShow.steps.tempo.tapLaterHelper"
+                                          : "launchpage.newShow.steps.tempo.tempoOptionalHelper",
+                                  )
+                                : undefined
+                        }
+                    >
                         <Input
                             type="number"
-                            value={tempoInput}
+                            disabled={tapLater}
+                            value={tapLater ? "" : tempoInput}
+                            placeholder={
+                                tapLater ? String(DEFAULT_TEMPO) : undefined
+                            }
                             onChange={(e) => {
                                 const raw = e.target.value;
                                 setTempoInput(raw);
@@ -226,6 +263,27 @@ export default function TempoStep({ tempo, onChange }: TempoStepProps) {
                             max={TEMPO_MAX}
                         />
                     </WizardFormField>
+                    {canTapLater && (
+                        <label className="text-body text-text flex items-center gap-8">
+                            <Checkbox
+                                data-testid="tempo-tap-later"
+                                checked={tapLater}
+                                onCheckedChange={(checked) => {
+                                    const next = checked === true;
+                                    setTapLater(next);
+                                    tapLaterRef.current = next;
+                                    emitTempo(
+                                        "tempo_only",
+                                        next
+                                            ? DEFAULT_TEMPO
+                                            : getCommittedTempo(),
+                                        timeSignature,
+                                    );
+                                }}
+                            />
+                            {t("launchpage.newShow.steps.tempo.tapLater")}
+                        </label>
+                    )}
                 </>
             )}
 

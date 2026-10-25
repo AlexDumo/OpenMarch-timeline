@@ -39,6 +39,7 @@ import { getLivePlaybackPosition } from "@/components/timeline/audio/AudioPlayer
 import TimelineIsolationBar, {
     TimelineFromStartBadge,
 } from "@/components/timeline/TimelineIsolationBar";
+import { TapTheBeatPanel } from "@/components/timeline/TapTheBeat";
 import {
     fieldBeat,
     isMarcherDimmed,
@@ -502,6 +503,7 @@ function ThreeFieldView() {
                     <TimelineIsolationBar />
                     <TimelineFromStartBadge />
                     <PropDrawingNotice />
+                    <TapTheBeatPanel />
                 </>
             )}
             <FieldBenchmark

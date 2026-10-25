@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
+import type { TimelineXAxis } from "./timelineAxis";
 import type { TimelineViewportExtent } from "./TimelineViewModel";
 
 /**
@@ -42,3 +43,12 @@ export function useViewportExtent(
         reportRef.current();
     }, [onExtent]);
 }
+
+/** The seconds Fit fits in the Align view: up to `fitBeatCount` (where playback stops), or all */
+export const fitSeconds = (
+    axis: Pick<TimelineXAxis, "extent" | "toUnit">,
+    fitBeatCount: number | undefined,
+) =>
+    fitBeatCount === undefined
+        ? axis.extent
+        : Math.min(axis.extent, axis.toUnit(fitBeatCount));

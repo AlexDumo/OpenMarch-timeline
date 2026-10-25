@@ -23,7 +23,11 @@ import {
     touchesTimelineDisplayTables,
     undoGroupTouchesDisplayTables,
 } from "./timelineDisplay";
-import { createTriggers, type HistoryType } from "./historyTriggers";
+import {
+    createTriggers,
+    tablesWithScopedHistory,
+    type HistoryType,
+} from "./historyTriggers";
 
 export {
     buildHistoryTriggerSql,
@@ -62,7 +66,9 @@ const historyChangeListeners = new Set<() => void>();
 /**
  * Calls `listener` after every committed undoable edit, undo and redo, until the returned function
  * unsubscribes it. A toast whose action undoes one edit (UI-14's delete toast) closes on the next
- * change, so its Undo can't undo something else.
+ * change, so its Undo can't undo something else. The app refreshes its Undo and Redo state from
+ * here too (`refreshHistoryOnWrites`), so a write made outside a TanStack mutation (a drill edit
+ * dialog, a page-flag grip) still enables Undo.
  */
 export function subscribeHistoryChanges(listener: () => void): () => void {
     historyChangeListeners.add(listener);
@@ -547,6 +553,14 @@ const switchTriggerModeInTransaction = async (
         await db.run(sql.raw(`DROP TRIGGER IF EXISTS ${trigger.name};`));
     }
     for (const table of tables) {
+        // Back in normal undo mode, scoped tables go without triggers again (see
+        // `tablesWithScopedHistory`)
+        if (
+            mode === "undo" &&
+            deleteRedoRows &&
+            tablesWithScopedHistory.includes(table)
+        )
+            continue;
         await createTriggers(db, table, mode, deleteRedoRows, true);
     }
     mainProcessLog(

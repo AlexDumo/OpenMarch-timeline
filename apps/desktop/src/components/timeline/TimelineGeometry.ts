@@ -7,6 +7,13 @@ import type {
     TimelineTrack,
     TimelineViewModel,
 } from "./TimelineViewModel";
+import {
+    formatPlace,
+    markAt,
+    placeMeasures,
+    spokenPlace,
+    type Place,
+} from "./placeName";
 
 export const clamp = (value: number, min: number, max: number) =>
     Math.min(Math.max(value, min), max);
@@ -261,16 +268,23 @@ export const getBeatsInSpan = (
     ),
 });
 
+/**
+ * The markers that keep `minimumSpacingPx` from the last one kept, in order. `pixelsPerBeat` is a
+ * fixed width per count, or a beat's x on another axis (the Align view's seconds).
+ */
 export const filterMarkersByMinimumSpacing = <T extends TimelineMarker>(
     markers: readonly T[],
-    pixelsPerBeat: number,
+    pixelsPerBeat: number | ((beat: BeatPosition) => number),
     minimumSpacingPx = 32,
 ): T[] => {
     const ordered = [...markers].sort((a, b) => a.atBeat - b.atBeat);
     let lastVisibleX = Number.NEGATIVE_INFINITY;
 
     return ordered.filter((marker) => {
-        const markerX = marker.atBeat * pixelsPerBeat;
+        const markerX =
+            typeof pixelsPerBeat === "function"
+                ? pixelsPerBeat(marker.atBeat)
+                : marker.atBeat * pixelsPerBeat;
         if (markerX - lastVisibleX < minimumSpacingPx) return false;
         lastVisibleX = markerX;
         return true;
@@ -326,15 +340,26 @@ const latestMarkerAt = (
         .sort((a, b) => b.atBeat - a.atBeat)[0];
 
 /**
- * The measure and its beat under a position, counted from the measure's downbeat (beat 1), or
- * null when the show has no measure there.
+ * The beat line a position belongs to: the one at or before it (docs/tempo/count-convention.md).
+ * Every surface that names a moment (the readout, the drill sheet, the video) uses this rule, so a
+ * playhead between two lines names the count and the beat it has passed, never the next ones. The
+ * tolerance keeps a live position a hair short of a line (15.9999999) on that line.
+ */
+export const getBeatLineAt = (positionBeat: BeatPosition) =>
+    Math.floor(positionBeat + 1e-6);
+
+/**
+ * The measure and its beat at a position's beat line, counted from the measure's downbeat (beat
+ * 1), or null when the show has no measure there. A line is named by the beat that starts on it,
+ * so a page flag on m9's downbeat is "m9 beat 1"; the end of the show, which no beat starts on, is
+ * named by the last beat.
  */
 export const getMeasureAt = (
     model: Pick<TimelineViewModel, "measures" | "beatCount">,
     positionBeat: BeatPosition,
 ): { readonly measure: string; readonly beat: number } | null => {
     const beat = clamp(
-        Math.floor(positionBeat),
+        getBeatLineAt(positionBeat),
         0,
         Math.max(model.beatCount - 1, 0),
     );
@@ -349,7 +374,9 @@ export const getMeasureAt = (
 /**
  * The page and count at a playhead, counted as designers count them (UI-12): a page's counts run
  * from 1 on the beat after the previous flag to N on its own flag, so the playhead on page 3's
- * flag is "Pg 3, count 8". Home (before the first timed page) is the initial page, count 0.
+ * flag is "Pg 3, count 8". Between two beat lines the playhead is on the count it has passed
+ * (`getBeatLineAt`), as the measure is. Home (before the first timed page) is the initial page,
+ * count 0.
  */
 export const getPageCountAt = (
     model: Pick<TimelineViewModel, "pages">,
@@ -366,7 +393,7 @@ export const getPageCountAt = (
     /** At home, before the first timed page (UI-13) */
     readonly home?: boolean;
 } => {
-    const beat = Math.round(positionBeat);
+    const beat = getBeatLineAt(positionBeat);
     const timed = model.pages
         .filter((page) => !page.isInitial)
         .sort((a, b) => a.atBeat - b.atBeat);
@@ -404,36 +431,62 @@ export const getPageCountAt = (
 };
 
 /**
- * The playhead's page, count and measure, as the transport shows them (UI-13): "Pg 2 · ct 7/16"
- * and "m4 beat 4", or "Home", or "END +4" past the show's end, where the counts belong to no page
- * (endless counts rule 8). `spoken` spells them out for screen readers. `measure` is null when
- * the show has no measure there.
+ * Where the playhead is, as `placeName` names a place (D6), from `getPageCountAt`: on a flag it is
+ * the page's last count and where the next page starts, with the rehearsal mark on its downbeat.
+ * Null at home.
+ */
+export const getPlayheadPlace = (
+    model: Pick<TimelineViewModel, "pages" | "measures">,
+    positionBeat: BeatPosition,
+): Place | null => {
+    const at = getPageCountAt(model, positionBeat);
+    if (at.home) return null;
+    if (at.after) return { kind: "after", page: at.pageLabel, count: at.count };
+    if (at.total != null && at.count === at.total && at.startBeat != null) {
+        const flag = at.startBeat + at.total;
+        const next = model.pages.find((p) => !p.isInitial && p.atBeat === flag);
+        return {
+            kind: "flag",
+            page: at.pageLabel,
+            count: at.count,
+            next: next?.label ?? null,
+            mark: markAt(placeMeasures(model.measures), flag),
+        };
+    }
+    return {
+        kind: "count",
+        page: at.pageLabel,
+        count: at.count,
+        ...(at.total != null ? { total: at.total } : {}),
+    };
+};
+
+/**
+ * The playhead's page, count and measure, as the transport shows them (UI-13, D6): "Pg 2 · ct
+ * 7/16" and "m4 beat 4"; on a flag "C · end of Pg 10 · Pg 11 starts" and "m9 beat 1"; or "Home",
+ * or "END +4". `compact` is the page part for a narrow transport ("Pg 10 ct 16 → 11").
+ * `spoken` spells them out for screen readers. `measure` is null when the show has no measure
+ * there.
  */
 export const getPlayheadReadout = (
     model: Pick<TimelineViewModel, "pages" | "measures" | "beatCount">,
     positionBeat: BeatPosition,
 ) => {
+    const place = getPlayheadPlace(model, positionBeat);
     const at = getPageCountAt(model, positionBeat);
-    const measureAt = at.home ? null : getMeasureAt(model, positionBeat);
-    const page = at.home
-        ? "Home"
-        : at.after
-          ? `END +${at.count}`
-          : `Pg ${at.pageLabel} · ct ${at.count}${at.total != null ? `/${at.total}` : ""}`;
+    const measureAt = place ? getMeasureAt(model, positionBeat) : null;
+    const page = place ? formatPlace(place) : "Home";
+    const compact = place ? formatPlace(place, "compact") : "Home";
     const measure = measureAt
         ? `m${measureAt.measure} beat ${measureAt.beat}`
         : null;
-    const spokenPage = at.home
-        ? `Home, page ${at.pageLabel}`
-        : at.after
-          ? at.count === 1
-              ? "1 count past the end of the show"
-              : `${at.count} counts past the end of the show`
-          : `Page ${at.pageLabel}, count ${at.count}${at.total != null ? ` of ${at.total}` : ""}`;
+    const spokenPage = place
+        ? spokenPlace(place)
+        : `Home, page ${at.pageLabel}`;
     const spoken = measureAt
         ? `${spokenPage}, measure ${measureAt.measure} beat ${measureAt.beat}`
         : spokenPage;
-    return { page, measure, spoken };
+    return { page, compact, measure, spoken };
 };
 
 /** The playhead's position in one line, as the transport's readout shows it (UI-13) */

@@ -210,6 +210,92 @@ describeDbTests("completeNewShow", (it) => {
         expect(utility?.last_page_counts).toBe(6);
     });
 
+    /** A wizard state with audio picked, and `tempo` */
+    const withAudio = (
+        id: string,
+        tempo: NewShowWizardState["tempo"],
+    ): NewShowWizardState => ({
+        start: { mode: "blank" },
+        project: {
+            projectName: "Music Show",
+            fileLocation: `/tmp/music-show-${id}.dots`,
+        },
+        ensemble: { activity: "Marching Band" },
+        field: {
+            template:
+                FieldPropertiesTemplates.COLLEGE_FOOTBALL_FIELD_NO_END_ZONES,
+            isCustom: false,
+        },
+        performers: { method: "skip", marchers: [] },
+        audio: { method: "audio" },
+        tempo,
+        draftFilePath: "/tmp/draft.dots",
+    });
+
+    it("tempo only with audio stores only the starter pages' 20 measures (endless counts, T-8)", async ({
+        task,
+        db,
+    }) => {
+        window.electron.getAudioFilesDetails = vi
+            .fn()
+            .mockResolvedValue([
+                { id: 1, path: "song.mp3", nickname: "song", selected: true },
+            ]);
+        const form = wizardStateToFormState(
+            withAudio(task.id, {
+                method: "tempo_only",
+                tempo: 120,
+                timeSignature: "4/4",
+            }),
+        );
+        await completeNewShow(form, queryClient);
+
+        const beats = await queryClient.fetchQuery(
+            allDatabaseBeatsQueryOptions(),
+        );
+        expect(beats.length).toBe(1 + 20 * 4);
+        expect(
+            (await queryClient.fetchQuery(allDatabaseMeasuresQueryOptions()))
+                .length,
+        ).toBe(20);
+        expect(
+            (await queryClient.fetchQuery(allDatabasePagesQueryOptions()))
+                .length,
+        ).toBe(6);
+        expect((await getUtility({ db }))?.last_page_counts).toBe(8);
+
+        // A retry doesn't add a second set
+        await completeNewShow(form, queryClient);
+        expect(
+            (await queryClient.fetchQuery(allDatabaseBeatsQueryOptions()))
+                .length,
+        ).toBe(1 + 20 * 4);
+    });
+
+    it("skip with audio stores the starter pages' 128 counts (endless counts, T-8)", async ({
+        task,
+        db: _db,
+    }) => {
+        window.electron.getAudioFilesDetails = vi
+            .fn()
+            .mockResolvedValue([
+                { id: 1, path: "song.mp3", nickname: "song", selected: true },
+            ]);
+        const form = wizardStateToFormState(
+            withAudio(task.id, { method: "skip" }),
+        );
+        await completeNewShow(form, queryClient);
+
+        const beats = await queryClient.fetchQuery(
+            allDatabaseBeatsQueryOptions(),
+        );
+        expect(beats.length).toBe(1 + 128);
+        const pages = await queryClient.fetchQuery(
+            allDatabasePagesQueryOptions(),
+        );
+        expect(pages.length).toBe(8);
+    });
+
     it("aborts when audio method is audio but no audio files exist", async ({
         task,
         db: _db,

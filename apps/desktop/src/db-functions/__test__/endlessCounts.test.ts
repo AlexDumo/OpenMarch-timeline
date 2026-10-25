@@ -12,6 +12,7 @@ import {
 import { performRedo, performUndo, transactionWithHistory } from "../history";
 import { readPageGrid } from "../timelineRipple";
 import { ensureCountsInTransaction, takeStoredCounts } from "../endlessCounts";
+import { editMeasureLines } from "../measureLines";
 import { appendPageOfCounts } from "../appendPages";
 import { addPageFlag, movePageFlag, pageFlagMoveLimits } from "../pageFlags";
 import { resizeTimeline } from "../timelineResize";
@@ -196,6 +197,72 @@ describeDbTests("writes past the last stored count", (it) => {
 
             expect(await beatCount(db)).toBe(130);
             expect((await grid(db)).slice(-1)).toEqual([[6, 41, 130]]);
+            await roundTrip(db, before, await snapshot(db));
+        });
+    });
+
+    describe("measure lines", () => {
+        it("a measure started past the end stores the counts up to it", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const before = await snapshot(db);
+
+            await editMeasureLines({
+                db,
+                edit: { kind: "start", beat: 110, mark: "Z" },
+            });
+
+            expect(await beatCount(db)).toBe(111);
+            const starts = await measureStarts(db);
+            expect(starts.slice(-5)).toEqual([97, 101, 105, 109, 110]);
+            const marked = await db
+                .select()
+                .from(schema.measures)
+                .where(sql`${schema.measures.rehearsal_mark} = 'Z'`)
+                .all();
+            expect(marked.length).toBe(1);
+            await roundTrip(db, before, await snapshot(db));
+        });
+
+        it("a mark on an endless downbeat stores its measure, with no extra line", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            await editMeasureLines({
+                db,
+                edit: { kind: "start", beat: 109, mark: "Q" },
+            });
+            expect((await measureStarts(db)).slice(-3)).toEqual([
+                101, 105, 109,
+            ]);
+        });
+    });
+
+    describe("measures drawn past the end", () => {
+        it("naming an endless measure's mark stores the counts and that measure", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            await setUp(db);
+            const before = await snapshot(db);
+
+            // The measure the row draws at beat 113 (endless measures are named by their beat)
+            await editMeasureLines({
+                db,
+                edit: { kind: "mark", measureId: endlessIdOf(113), mark: "K" },
+            });
+
+            expect(await beatCount(db)).toBe(114);
+            const k = await db
+                .select()
+                .from(schema.measures)
+                .where(sql`${schema.measures.rehearsal_mark} = 'K'`)
+                .all();
+            expect(k.length).toBe(1);
+            expect((await measureStarts(db)).slice(-2)).toEqual([109, 113]);
             await roundTrip(db, before, await snapshot(db));
         });
     });

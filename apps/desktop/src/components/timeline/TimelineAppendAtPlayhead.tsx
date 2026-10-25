@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { PlusIcon } from "@phosphor-icons/react";
-import { beatToX, TIMELINE_PAGE_ROW_TOP } from "./TimelineGeometry";
+import { TIMELINE_PAGE_ROW_TOP } from "./TimelineGeometry";
 import { useScrubFollow } from "./TimelinePrimitives";
 import type { TimelineLiveValue } from "./timelineLiveValue";
+import type { TimelineXAxis } from "./timelineAxis";
 import type { TimelineAppendAtPlayhead as AppendAtPlayhead } from "./TimelineViewModel";
 
 /**
@@ -18,7 +19,7 @@ export function TimelineAppendAtPlayhead({
     append,
     positionBeat,
     lastFlagBeat,
-    pixelsPerBeat,
+    axis,
     height,
     windowShowsPage,
     scrubLine,
@@ -27,7 +28,8 @@ export function TimelineAppendAtPlayhead({
     positionBeat: number;
     /** The last page's flag, where the new page starts (view beats) */
     lastFlagBeat: number;
-    pixelsPerBeat: number;
+    /** The timeline's x axis (counts: it isn't shown in the Align view) */
+    axis: TimelineXAxis;
     height: number;
     /** The window already shades the new page's range: the start flag is on the last flag */
     windowShowsPage: boolean;
@@ -38,8 +40,8 @@ export function TimelineAppendAtPlayhead({
     const [previewing, setPreviewing] = useState(false);
     const shift = useShiftHeld();
     const shown = shift && append.subset ? append.subset : append;
-    const playheadX = Math.round(beatToX(positionBeat, pixelsPerBeat));
-    useScrubFollow(ref, scrubLine, playheadX, pixelsPerBeat);
+    const playheadX = Math.round(axis.x(positionBeat));
+    useScrubFollow(ref, scrubLine, playheadX, axis);
     // Room for it on the playhead's right, else on its left; scrolling or a new spot re-measures
     const [flipped, setFlipped] = useState(false);
     useLayoutEffect(() => {
@@ -66,7 +68,7 @@ export function TimelineAppendAtPlayhead({
         viewport.addEventListener("scroll", place, { passive: true });
         return () => viewport.removeEventListener("scroll", place);
     }, [playheadX, shown.label]);
-    const startX = beatToX(lastFlagBeat, pixelsPerBeat);
+    const startX = axis.x(lastFlagBeat);
     return (
         <>
             {previewing && !windowShowsPage && (

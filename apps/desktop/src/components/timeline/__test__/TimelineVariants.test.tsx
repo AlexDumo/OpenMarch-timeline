@@ -202,6 +202,54 @@ describe("timeline views", () => {
         ).not.toBeInTheDocument();
     });
 
+    it("Ctrl+drag that starts on the playhead draws a range instead of scrubbing", () => {
+        const onSelectionChange = vi.fn();
+        const onSeek = vi.fn();
+        render(
+            <ExpandedTimeline
+                {...commonProps}
+                showTransport={false}
+                onSelectionChange={onSelectionChange}
+                onSeek={onSeek}
+            />,
+        );
+        const surface = screen.getByTestId("timeline-pointer-surface");
+        const playhead = screen.getByTestId("timeline-playhead");
+        expect(surface.contains(playhead)).toBe(true);
+        fireEvent(
+            playhead,
+            new MouseEvent("pointerdown", {
+                bubbles: true,
+                button: 0,
+                clientX: 11 * 16,
+                altKey: true,
+                ctrlKey: true,
+            }),
+        );
+        fireEvent(
+            surface,
+            new MouseEvent("pointermove", {
+                bubbles: true,
+                clientX: 15 * 16,
+                altKey: true,
+            }),
+        );
+        fireEvent(
+            surface,
+            new MouseEvent("pointerup", {
+                bubbles: true,
+                clientX: 15 * 16,
+                altKey: true,
+            }),
+        );
+        expect(onSelectionChange).toHaveBeenCalledWith({
+            kind: "range",
+            range: { startBeatIndex: 11, endBeatIndex: 15 },
+            drawn: true,
+        });
+        expect(onSeek).not.toHaveBeenCalled();
+    });
+
     it("Ctrl+drag draws a range on empty space, and a click seeks (UI-9, UI-12)", () => {
         const onSelectionChange = vi.fn();
         const onSeek = vi.fn();
@@ -1227,14 +1275,14 @@ describe("review follow-ups", () => {
                 showTransport
             />,
         );
-        // Beat 16 is page 2's flag and page 2A's first beat: both name page 2, its last count
-        expect(screen.getByTestId("timeline-readout")).toHaveTextContent(
-            "Pg 2 · ct 8/8m5 beat 1",
-        );
+        // Beat 16 is page 2's flag and page 2A's first beat: one name for the place (DN-1)
+        const readout = screen.getByTestId("timeline-readout");
+        expect(readout).toHaveTextContent("end of Pg 2 · Pg 2A starts");
+        expect(readout).toHaveTextContent("m5 beat 1");
         expect(
             screen.getByRole("button", { name: /^Playback position:/ }),
         ).toHaveAccessibleName(
-            "Playback position: Page 2, count 8 of 8, measure 5 beat 1",
+            "Playback position: End of page 2, count 8, page 2A starts, measure 5 beat 1",
         );
     });
 });
@@ -1641,8 +1689,9 @@ describe("a calmer timeline (UI-12)", () => {
                 showTransport
             />,
         );
+        // On the flag: the end of page 1, where page 2 starts (DN-1)
         expect(screen.getByTestId("timeline-readout")).toHaveTextContent(
-            "Pg 1 · ct 8/8",
+            "end of Pg 1 · Pg 2 starts",
         );
     });
 

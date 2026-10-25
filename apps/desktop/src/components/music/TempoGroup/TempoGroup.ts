@@ -1,3 +1,4 @@
+import { toastTimelineError } from "@/timeline/timelineErrorMessages";
 import { withTimelinePageRipple } from "@/db-functions/timelineRipple";
 import Measure from "../../../global/classes/Measure";
 import Beat, {
@@ -23,7 +24,6 @@ import { db } from "@/global/database/db";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { measureKeys } from "@/hooks/queries/useMeasures";
 import { beatKeys } from "@/hooks/queries";
-import { conToastError } from "@/utilities/utils";
 import { WorkspaceSettings } from "@/settings/workspaceSettings";
 
 export type TempoGroup = {
@@ -434,7 +434,7 @@ const useTempoGroupMutation = <TArgs>(
             if (callback) callback();
         },
         onError: (error) => {
-            conToastError(tolgee.t(errorKey), error);
+            toastTimelineError(error, tolgee.t(errorKey));
         },
     });
 };

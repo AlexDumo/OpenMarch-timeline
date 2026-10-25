@@ -3,7 +3,19 @@ import { generatePageNames } from "@openmarch/core";
 import * as schema from "@om-electron/database/migrations/schema";
 import { workspaceSettingsSchema } from "@/settings/workspaceSettings";
 import { DbTransaction } from "./types";
-import { mapDbErrors, refuse, TimelineWriteError } from "./timelineErrors";
+import {
+    mapDbErrors,
+    refuse,
+    TimelineWriteError,
+    type TimelineRefusalSubject,
+} from "./timelineErrors";
+import {
+    clipRefOf,
+    countSpanOf,
+    labelsInDrillOrder,
+    pageNamesOf,
+    readMarcherLabels,
+} from "./drillNames";
 import { deleteTimelineTransitionsInTransaction } from "./timelineTransitions";
 import { moveInSentence } from "@/timeline/timelineRangeWords";
 
@@ -87,6 +99,8 @@ export interface GridPage {
     end: number;
     /** The page's name ("2", "2A"), for refusals; absent where only the range matters */
     name?: string;
+    /** Whether it is a subset page ("2A"), for naming it; `readPageGrid` fills it in */
+    isSubset?: boolean;
 }
 
 /** Where every beat and page sits, by ordinal. */
@@ -141,20 +155,29 @@ export async function readPageGrid(tx: DbTransaction): Promise<PageGrid> {
     const pages = placed.map((p, i): GridPage => {
         const next = placed[i + 1];
         const name = names[i]!;
+        const isSubset = !!p.isSubset;
         if (p.id === 0)
-            return { id: p.id, start: p.start, end: p.start + 1, name };
+            return {
+                id: p.id,
+                start: p.start,
+                end: p.start + 1,
+                name,
+                isSubset,
+            };
         const last = next ? next.start : Math.min(p.start + lastPageCounts, n);
         return {
             id: p.id,
             start: p.start,
             end: last > p.start ? last : p.start + 1,
             name,
+            isSubset,
         };
     });
     return { beatIds, pages };
 }
 
-const sameGrid = (a: PageGrid, b: PageGrid) =>
+/** Whether two page grids have the same beats in the same order and the same page edges. */
+export const sameGrid = (a: PageGrid, b: PageGrid) =>
     a.beatIds.length === b.beatIds.length &&
     a.beatIds.every((id, i) => b.beatIds[i] === id) &&
     a.pages.length === b.pages.length &&
@@ -278,14 +301,98 @@ const union = (a: Range, b: Range): Range => [
 
 const sameRange = (a: Range, b: Range) => a[0] === b[0] && a[1] === b[1];
 
-const checkBeats = (r: Range, what: string) => {
+/**
+ * The row a refusal is about, by id and old range, so `describeRefusal` can name it in drill words
+ * (pages, counts, the clip's name, the marcher) once the plan has failed.
+ */
+interface RefusedRow {
+    reason: TimelineRefusalSubject["reason"];
+    timelineId?: number;
+    marcherId?: number;
+    range: Range;
+}
+
+/** The refused row of each refusal the plan throws */
+const refusedRows = new WeakMap<TimelineWriteError, RefusedRow>();
+
+/** Throws a refusal about `row` */
+const refuseRow = (code: string, message: string, row: RefusedRow): never => {
+    const error = new TimelineWriteError(code, message);
+    refusedRows.set(error, row);
+    throw error;
+};
+
+const checkBeats = (
+    r: Range,
+    what: string,
+    row: Omit<RefusedRow, "reason">,
+) => {
     if (r[0] >= r[1])
-        refuse(
+        refuseRow(
+            "E-ARGS",
             `this change would leave ${what} with no counts; delete or shorten it first`,
+            { reason: "noCounts", ...row },
         );
     if (r[0] < 0 || r[1] > MAX_BEAT)
         refuse(`this change would move ${what} outside the show`);
 };
+
+/**
+ * `error` again with its subject in drill words: the clip (its page, name or marchers), where it
+ * ran before the edit, and the marcher. Names come from the grid before the edit.
+ */
+async function describeRefusal({
+    tx,
+    error,
+    row,
+    before,
+    timelines,
+    transitions,
+    assignments,
+}: {
+    tx: DbTransaction;
+    error: TimelineWriteError;
+    row: RefusedRow;
+    before: PageGrid;
+    timelines: readonly (typeof schema.timelines.$inferSelect)[];
+    transitions: readonly (typeof schema.timeline_transitions.$inferSelect)[];
+    assignments: readonly (typeof schema.timeline_assignments.$inferSelect)[];
+}): Promise<TimelineWriteError> {
+    const labels = await readMarcherLabels(tx);
+    const names = pageNamesOf(before.pages);
+    const timeline = timelines.find((l) => l.id === row.timelineId);
+    let clip: TimelineRefusalSubject["clip"];
+    if (timeline) {
+        const ids = new Set(
+            transitions
+                .filter((t) => t.timeline_id === timeline.id)
+                .map((t) => t.id),
+        );
+        const marchers = new Set(
+            assignments
+                .filter((a) => ids.has(a.transition_id))
+                .map((a) => a.marcher_id),
+        );
+        clip = clipRefOf({
+            timeline,
+            pages: before.pages,
+            names,
+            marcherLabels: labelsInDrillOrder(marchers, labels),
+        });
+    }
+    const subject: TimelineRefusalSubject = {
+        reason: row.reason,
+        span: countSpanOf(before.pages, names, row.range[0], row.range[1]),
+        ...(clip ? { clip } : {}),
+        ...(row.marcherId !== undefined
+            ? { marcher: labels.get(row.marcherId) ?? `#${row.marcherId}` }
+            : {}),
+        ...(row.timelineId !== undefined ? { timelineId: row.timelineId } : {}),
+    };
+    return new TimelineWriteError(error.code, error.message, error.details, {
+        subject,
+    });
+}
 
 /**
  * A page move of `page`, which goes when the page goes: a shapeless transition whose assignments
@@ -297,7 +404,7 @@ const checkBeats = (r: Range, what: string) => {
  * user made, and a window move that starts before the box, even one ending at the page's flag
  * (owner decision V-149: Delete page and its moves keeps longer moves).
  */
-const isPageMove = (
+export const isPageMove = (
     t: { start_beat: number; end_beat: number; dest_shape_id: number | null },
     rows: readonly { start_beat: number; end_beat: number; layer: number }[],
     page: GridPage,
@@ -420,27 +527,42 @@ export function planTimelineRipple(
     for (const t of transitions) {
         if (removed.has(t.id)) continue;
         const r = map.range(t.start_beat, t.end_beat);
-        checkBeats(r, moveName(t));
+        const row = {
+            timelineId: t.timeline_id,
+            range: [t.start_beat, t.end_beat] as Range,
+        };
+        checkBeats(r, moveName(t), row);
         const l = newTimeline.get(t.timeline_id)!;
         if (r[0] < l[0] || r[1] > l[1])
-            throw new TimelineWriteError(
+            refuseRow(
                 "E-T1",
                 `this change would put ${moveName(t)} outside its timeline`,
+                { reason: "outsideTimeline", ...row },
             );
         newTransition.set(t.id, r);
     }
     // Checked after the transitions, so a refusal names the move rather than its timeline
-    for (const l of rippled) checkBeats(newTimeline.get(l.id)!, moveName(l));
+    for (const l of rippled)
+        checkBeats(newTimeline.get(l.id)!, moveName(l), {
+            timelineId: l.id,
+            range: [l.start_beat, l.end_beat],
+        });
     const kept = assignments.filter((a) => !removed.has(a.transition_id));
     const newAssignment = new Map<number, Range>();
     for (const a of kept) {
         const r = map.range(a.start_beat, a.end_beat);
-        checkBeats(r, partName(a));
+        const row = {
+            timelineId: transitionOf.get(a.transition_id)?.timeline_id,
+            marcherId: a.marcher_id,
+            range: [a.start_beat, a.end_beat] as Range,
+        };
+        checkBeats(r, partName(a), row);
         const t = newTransition.get(a.transition_id)!;
         if (r[0] < t[0] || r[1] > t[1])
-            throw new TimelineWriteError(
+            refuseRow(
                 "E-A1",
                 `this change would move ${partName(a)} outside that move`,
+                { reason: "outsideMove", ...row },
             );
         newAssignment.set(a.id, r);
     }
@@ -468,9 +590,16 @@ export function planTimelineRipple(
             )
                 prev[1] = cur[0];
             if (prev[1] > cur[0])
-                throw new TimelineWriteError(
+                refuseRow(
                     "E-A3",
                     `this change would overlap ${partName(chain[i - 1]!)} and its part of ${moveName(transitionOf.get(chain[i]!.transition_id)!)}`,
+                    {
+                        reason: "overlap",
+                        marcherId: chain[i]!.marcher_id,
+                        timelineId: transitionOf.get(chain[i]!.transition_id)
+                            ?.timeline_id,
+                        range: [chain[i - 1]!.start_beat, chain[i]!.end_beat],
+                    },
                 );
         }
     }
@@ -502,6 +631,24 @@ export async function rippleTimelineToPageGridInTransaction({
     if (sameGrid(before, after)) return;
     const rows = await readRippleRows(tx);
     const { transitions } = rows;
+    // A refusal names its row in drill words (`describeRefusal`)
+    let plan: ReturnType<typeof planTimelineRipple>;
+    try {
+        plan = planTimelineRipple(before, after, rows);
+    } catch (error) {
+        const row =
+            error instanceof TimelineWriteError
+                ? refusedRows.get(error)
+                : undefined;
+        if (!row) throw error;
+        throw await describeRefusal({
+            tx,
+            error: error as TimelineWriteError,
+            row,
+            before,
+            ...rows,
+        });
+    }
     const {
         removed,
         rippled,
@@ -509,7 +656,7 @@ export async function rippleTimelineToPageGridInTransaction({
         newTransition,
         newAssignment,
         chains,
-    } = planTimelineRipple(before, after, rows);
+    } = plan;
 
     const T = schema.timeline_transitions;
     const L = schema.timelines;

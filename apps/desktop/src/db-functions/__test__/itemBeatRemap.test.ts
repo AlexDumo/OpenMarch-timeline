@@ -220,7 +220,7 @@ describeDbTests("item changes when every beat is replaced", (it) => {
             const result = await _importMusicXmlFile({
                 data: {
                     fileName: "score.musicxml",
-                    parsed,
+                    report: parsed,
                     allPages: [...allPages],
                     measures: [],
                     allBeats: [...allBeats],

@@ -2,6 +2,8 @@ import { renderHook, act } from "@testing-library/react";
 import {
     UiSettings,
     defaultSettings,
+    defaultTempoLab,
+    mergeTempoLab,
     useUiSettingsStore,
 } from "../UiSettingsStore";
 import { ElectronApi } from "electron/preload";
@@ -221,5 +223,54 @@ describe("uiSettings Store", () => {
             }),
         );
         expect(renders).toBe(2);
+    });
+});
+
+describe("Tempo lab flags", () => {
+    it("are all off by default", () => {
+        expect(defaultSettings.tempoLab).toEqual({
+            alignView: false,
+            alignDragScope: "page",
+            tapTheBeat: false,
+            punchInTap: false,
+            tempoMap: false,
+            snapToAttacks: false,
+            drillChoices: false,
+            reimportInPlace: false,
+        });
+    });
+
+    it("keep stored values and drop unknown or invalid ones", () => {
+        expect(mergeTempoLab(undefined)).toEqual(defaultTempoLab);
+        expect(
+            mergeTempoLab({
+                alignView: true,
+                alignDragScope: "toSynced",
+                // Retired flags (DT-1, DT-2) are dropped
+                tapApply: "drafts",
+                tapUnit: "count",
+                tempoMap: "yes",
+                retired: true,
+            }),
+        ).toEqual({
+            ...defaultTempoLab,
+            alignView: true,
+            alignDragScope: "toSynced",
+        });
+    });
+
+    it("sets one flag and saves it", () => {
+        const { result } = renderHook(() => useUiSettingsStore());
+        act(() => result.current.setTempoLabFlag("alignDragScope", "toSynced"));
+        expect(result.current.uiSettings.tempoLab.alignDragScope).toBe(
+            "toSynced",
+        );
+        expect(result.current.uiSettings.tempoLab.alignView).toBe(false);
+        const saved = JSON.parse(
+            (localStorage.setItem as ReturnType<typeof vi.fn>).mock.calls.at(
+                -1,
+            )![1] as string,
+        ) as UiSettings;
+        expect(saved.tempoLab.alignDragScope).toBe("toSynced");
     });
 });

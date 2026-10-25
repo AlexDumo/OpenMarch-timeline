@@ -1,3 +1,4 @@
+// cspell:ignore fullkey
 /**
  * The undo/redo history triggers: which tables have them, and how they are built, created and
  * dropped. Split from `history.ts` so the main process and its convert-on-open worker (P9.8) can
@@ -48,6 +49,82 @@ export const tablesWithHistory = [
     // Which Artwork sits on each item slot (ADR 0002 D-10)
     schema.item_artwork_slots,
 ];
+
+/**
+ * Tables with "scoped" history: a write to them is recorded only when the write asks for it, by
+ * logging its own undo statement (`recordWorkspaceSettingsUndoInTransaction`). They have no
+ * standing triggers, because many of their writers run outside `transactionWithHistory` and would
+ * otherwise join the last edit's undo entry. Undo and redo still create triggers on them while
+ * replaying, so the inverse lands on the other stack, and drop them afterwards
+ * (`switchTriggerMode` in history.ts). docs/tempo/adr-synced-counts.md.
+ */
+export const tablesWithScopedHistory: readonly string[] = [
+    getTableName(schema.workspace_settings),
+];
+
+/**
+ * The JSON column of a scoped-history table. Its history restores only the top-level keys an edit
+ * changed (`scopedRestoreStatementSql`), so undoing or redoing an edit leaves alone keys that
+ * writers without history changed since then.
+ */
+export const scopedHistoryJsonColumn = "json_data";
+
+/**
+ * An SQL expression that evaluates to the statement putting a scoped-history row back as it was:
+ * every column but the JSON one as `old<column>` has it (`old` is a prefix such as `old.`), and in
+ * the JSON column only the top-level keys whose values differ between `old<json>` and `newJson`
+ * (an SQL expression), back to their old values; keys the old JSON doesn't have are removed.
+ * Other keys are left as they are when the statement runs.
+ */
+export const scopedRestoreStatementSql = (
+    tableName: string,
+    columnNames: readonly string[],
+    old: string,
+    newJson: string,
+): string => {
+    const column = scopedHistoryJsonColumn;
+    const oldJson = `${old}"${column}"`;
+    const removed = `(SELECT group_concat(',' || quote(n.fullkey), '') FROM json_each(${newJson}) n
+        WHERE json_type(${oldJson}, n.fullkey) IS NULL)`;
+    const restored = `(SELECT group_concat(',' || quote(o.fullkey) || ',json(' || quote(${oldJson} -> o.fullkey) || ')', '')
+        FROM json_each(${oldJson}) o WHERE (${newJson} -> o.fullkey) IS NOT (${oldJson} -> o.fullkey))`;
+    const others = columnNames
+        .filter((c) => c !== column)
+        .map((c) => `,"${c}"='||quote(${old}"${c}")||'`)
+        .join("");
+    return `'UPDATE "${tableName}" SET "${column}"=json_set(json_remove("${column}"' || coalesce(${removed}, '')
+        || ')' || coalesce(${restored}, '') || ')${others} WHERE rowid=' || ${old}rowid`;
+};
+
+/**
+ * The update trigger for a scoped-history table, used while undo or redo replays it: it logs the
+ * inverse of the change with `scopedRestoreStatementSql`, so the redo of an undo (and the undo of
+ * a redo) restores only the keys the edit's own undo statement does.
+ */
+function buildScopedHistoryUpdateTriggerSql(
+    tableName: string,
+    columnNames: readonly string[],
+    type: HistoryType,
+    sideEffect: string,
+): string {
+    const historyTableName =
+        type === "undo"
+            ? Constants.UndoHistoryTableName
+            : Constants.RedoHistoryTableName;
+    const groupColumn = type === "undo" ? "cur_undo_group" : "cur_redo_group";
+    const statement = scopedRestoreStatementSql(
+        tableName,
+        columnNames,
+        "old.",
+        `new."${scopedHistoryJsonColumn}"`,
+    );
+    return `CREATE TRIGGER IF NOT EXISTS '${historyTriggerNames(tableName).update}' AFTER UPDATE ON "${tableName}"
+        BEGIN
+        INSERT INTO ${historyTableName} ("sequence" , "history_group", "sql")
+            VALUES(NULL, (SELECT ${groupColumn} FROM history_stats), ${statement});
+        ${sideEffect}
+    END;`;
+}
 
 /**
  * Creates triggers for a table to record undo/redo history in the database.
@@ -194,7 +271,14 @@ export function buildHistoryTriggerSql(
 
     return {
         insert: insertTrigger,
-        update: updateTrigger,
+        update: tablesWithScopedHistory.includes(tableName)
+            ? buildScopedHistoryUpdateTriggerSql(
+                  tableName,
+                  columnNames,
+                  type,
+                  sideEffect,
+              )
+            : updateTrigger,
         delete: deleteTrigger,
     };
 }
@@ -298,7 +382,10 @@ export async function createTriggers(
         return columnName;
     });
 
-    await dropStaleHistoryTriggers(db, tableName, columnNames);
+    // A scoped table's update trigger copies only its JSON column, which the column check would
+    // take as stale. Its triggers exist only while undo or redo replays, which drops them first.
+    if (!tablesWithScopedHistory.includes(tableName))
+        await dropStaleHistoryTriggers(db, tableName, columnNames);
 
     const triggers = buildHistoryTriggerSql(
         tableName,
