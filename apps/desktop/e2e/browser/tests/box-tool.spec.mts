@@ -1159,7 +1159,7 @@ test("change: a typed 1 2/3 stays exactly 1⅔ steps and shows as 1⅔, − and 
     const { grid } = await drawBox(show);
     const S = grid.pixelsPerStep;
     const bar = page.getByTestId("shape-tool-readout");
-    /** The distinct gaps between neighbours side to side and front to back, in steps */
+    /** The distinct gaps between neighbors side to side and front to back, in steps */
     const gaps = async () => {
         const { spots } = (await shapeOverlay(page))!;
         const apart = (vs: number[]) => {
@@ -1184,7 +1184,7 @@ test("change: a typed 1 2/3 stays exactly 1⅔ steps and shows as 1⅔, − and 
     await expect(bar.getByTestId("shape-editor-across")).toHaveText("1⅔");
     allClose((await gaps()).across, 5 / 3);
 
-    // − and + around the centre come back to the same spots, not shifted a sixth of a step
+    // − and + around the center come back to the same spots, not shifted a sixth of a step
     const before = (await shapeOverlay(page))!.spots;
     for (const more of [true, false, true, false, false, true])
         await sizeButton(page, more).click();

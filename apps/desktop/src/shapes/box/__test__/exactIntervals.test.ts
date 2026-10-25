@@ -89,7 +89,7 @@ describe("the grid snap with an interval that isn't a half step", () => {
         };
     };
 
-    it("keeps the centre pivot where it was through + and − presses", () => {
+    it("keeps the center pivot where it was through + and − presses", () => {
         let p = thirds;
         for (let i = 0; i < 4; i++) {
             p = changeFiles(p, 9, 1, env());
@@ -102,7 +102,7 @@ describe("the grid snap with an interval that isn't a half step", () => {
         exact(p.across, third);
     });
 
-    it("keeps the centre pivot when the spacing is dragged back onto half steps", () => {
+    it("keeps the center pivot when the spacing is dragged back onto half steps", () => {
         // 8 px is half a step more: 2⅙, on half steps 2
         const p = scrubSpacing(thirds, "across", 8, 9, env());
         exact(p.across, 2 * STEP);
