@@ -8,6 +8,7 @@ import MobileExportModal from "../mobile/MobileExportModal";
 import AssetsModal from "@/components/assets/AssetsModal";
 import { isWebBuild } from "@/utilities/webBuild";
 import PropsModal from "@/components/items/PropsModal";
+import SketchesModal from "@/components/sketches/SketchesModal";
 
 export default function Sidebar() {
     return (
@@ -20,6 +21,8 @@ export default function Sidebar() {
                 <PropsModal />
                 <MusicModal />
                 <FieldModal />
+                {/* The Sketchpad window is Electron's for now; the web pop-up comes later. */}
+                {!isWebBuild && <SketchesModal />}
                 <MetronomeModal />
                 <AppearanceModal />
                 {/* The Library lives in main; the web build has no Library IPC. */}

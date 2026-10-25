@@ -229,6 +229,8 @@ export default defineConfig({
         // The preload reads these from Node's `process` under Electron.
         "process.platform": "globalThis.__openmarchPlatform",
         "process.env.PLAYWRIGHT_CODEGEN": JSON.stringify(""),
+        // Excalidraw (the Sketchpad window's lazy chunk) reads this at module load
+        "process.env.IS_PREACT": JSON.stringify("false"),
         "process.env.PLAYWRIGHT_SESSION": JSON.stringify(""),
         "import.meta.env.VITE_PUBLIC_WEB_BUILD": JSON.stringify("true"),
         "import.meta.env.VITE_PUBLIC_WEB_CHANNEL": JSON.stringify(channel),

@@ -2,6 +2,8 @@
 @import "@openmarch/ui/src/tailwind.css";
 
 @source "../../../../packages/ui/src/components";
+/* The Sketchpad window's components (ADR 0006); its own CSS loads only in that window */
+@source "../../../../packages/sketchpad/src";
 
 /* A clicked control keeps focus without a ring until the keyboard works it (utilities/clickFocus.ts) */
 @custom-variant focus-visible (&:focus-visible:not(:where([data-click-focus])));

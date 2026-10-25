@@ -18,8 +18,8 @@ import {
     fieldPropertiesQueryOptions,
     updateFieldPropertiesMutationOptions,
 } from "@/hooks/queries";
-import FootballTemplates from "@/global/classes/fieldTemplates/Football";
-import GridFieldTemplates from "@/global/classes/fieldTemplates/GridFields";
+import { FootballFieldTemplates as FootballTemplates } from "@openmarch/core";
+import { GridFieldTemplates } from "@openmarch/core";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDatabaseReady } from "@/hooks/useDatabaseReady";
 

@@ -71,6 +71,10 @@ const DEPENDENT_TABLE_COPY_ORDER = [
     "item_placement_marchers",
     // Artwork slot assignments after their item and beat
     "item_artwork_slots",
+    // Sketches (ADR 0006 D-5), then the pins that name a sketch and a beat
+    "sketches",
+    "sketch_files",
+    "sketch_pins",
 ];
 
 /**

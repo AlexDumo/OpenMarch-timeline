@@ -565,6 +565,24 @@ const STATIC_ACTIONS = {
         scope: "global",
         defaultBindings: [],
     },
+    // Opens the Sketchpad window on the latest sketch, or focuses it (ADR 0006). Unbound
+    openSketchpad: {
+        labelKey: "actions.ui.openSketchpad",
+        keywordsKey: "actions.ui.openSketchpadKeywords",
+        category: "ui",
+        editsDrill: false,
+        scope: "global",
+        defaultBindings: [],
+    },
+    // The Sketchpad's New sketch dialog (ux-spec §2.1). Unbound
+    newSketch: {
+        labelKey: "actions.ui.newSketch",
+        keywordsKey: "actions.ui.newSketchKeywords",
+        category: "ui",
+        editsDrill: false,
+        scope: "global",
+        defaultBindings: [],
+    },
     // Switches between the Editor and Visuals mode (performer-behavior.md section 7.1). Expert
     // only: Basic has no Visuals mode
     toggleWorkspace: {

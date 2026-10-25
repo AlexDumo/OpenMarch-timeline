@@ -27,13 +27,27 @@ const isSettingsWindow = window.location.hash === "#settings";
 // The 3D View window loads this bundle with `?view=3d` (ADR 0002 D-3). It
 // renders its own root, loaded on demand so the editor doesn't pay for
 // three.js, and skips the editor's analytics and providers.
-const isView3dWindow =
-    new URLSearchParams(window.location.search).get("view") === "3d";
+const windowView = new URLSearchParams(window.location.search).get("view");
+const isView3dWindow = windowView === "3d";
+// The Sketchpad window (ADR 0006 D-4) likewise: the editor never loads Excalidraw.
+const isSketchpadWindow = windowView === "sketchpad";
 
 if (isView3dWindow) {
     void mountView3dWindow();
+} else if (isSketchpadWindow) {
+    void mountSketchpadWindow();
 } else {
     mountEditor();
+}
+
+async function mountSketchpadWindow() {
+    const { default: SketchpadRoot } =
+        await import("./sketchpad/window/SketchpadRoot");
+    ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+        <React.StrictMode>
+            <SketchpadRoot />
+        </React.StrictMode>,
+    );
 }
 
 async function mountView3dWindow() {

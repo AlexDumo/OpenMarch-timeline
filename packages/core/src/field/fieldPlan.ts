@@ -1,15 +1,12 @@
-import {
-    FieldProperties,
-    stepMeters,
-    type Checkpoint,
-    type RgbaColor,
-} from "@openmarch/core";
+import { FieldProperties, type Checkpoint } from "./FieldProperties";
+import type { RgbaColor } from "./FieldTheme";
+import { stepMeters } from "./world";
 
 /**
  * The 2D field's layout, in field units. Everything sits exactly on its
  * coordinates. One plan for everything that draws the field flat: the drill
- * chart SVG export (`drillChartSvg.ts`) and the field
- * (`three/fieldGeometry.ts`). Change what the 2D field shows here, once.
+ * chart SVG export (`fieldSvg.ts` here and the desktop's `drillChartSvg.ts`), the desktop field
+ * (`three/fieldGeometry.ts`) and the Sketchpad underlay. Change what the 2D field shows here, once.
  *
  * Renderer-free: no three.js, no DOM.
  */

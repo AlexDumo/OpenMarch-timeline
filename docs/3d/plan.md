@@ -16,8 +16,8 @@ Paths are relative to `apps/desktop/` unless they start at the repo root.
     image settings are on the same class.
   - The theme is `FieldTheme.ts`, with RGBA colors and `rgbaToString`.
 - **Templates:** `src/global/classes/FieldProperties.templates.ts` merges
-  `fieldTemplates/Football.ts` (HS, college and pro, with and without end
-  zones) and `fieldTemplates/GridFields.ts` (indoor grids and SoundSport).
+  `packages/core/src/field/templates/Football.ts` (HS, college and pro, with and without end
+  zones) and `templates/GridFields.ts` (indoor grids and SoundSport).
 - **Field storage:** the `field_properties` table in
   `electron/database/migrations/schema.ts` is a single row with `json_data`
   plus an `image` blob.

@@ -4,6 +4,7 @@ import { useShortcutsDialogStore } from "@/stores/ShortcutsDialogStore";
 import { useIsBasicMode } from "@/stores/EditorModeStore";
 import { useWorkspaceViewStore } from "@/stores/WorkspaceViewStore";
 import { useActionHandler } from "../useActionHandler";
+import { isWebBuild } from "@/utilities/webBuild";
 
 export function useUiActionHandlers() {
     // Read when an action runs, so a settings change (such as a timeline zoom save) doesn't
@@ -37,6 +38,17 @@ export function useUiActionHandlers() {
     useActionHandler("openView3d", () => {
         void window.electron.openView3d();
     });
+    // The Sketchpad window (ADR 0006) is Electron's for now
+    useActionHandler(
+        "openSketchpad",
+        () => void window.electron.sketches.open({ kind: "window" }),
+        { enabled: !isWebBuild },
+    );
+    useActionHandler(
+        "newSketch",
+        () => void window.electron.sketches.open({ kind: "new" }),
+        { enabled: !isWebBuild },
+    );
     // The Editor or Visuals mode (performer-behavior.md section 7.1); Basic has no Visuals mode
     const basic = useIsBasicMode();
     useActionHandler(

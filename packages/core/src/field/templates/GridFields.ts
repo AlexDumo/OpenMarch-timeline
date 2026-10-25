@@ -1,4 +1,4 @@
-import { Checkpoint, FieldProperties } from "@openmarch/core";
+import { type Checkpoint, FieldProperties } from "../FieldProperties";
 
 const GridFieldTemplates = {
     INDOOR_40x60_8to5: new FieldProperties({

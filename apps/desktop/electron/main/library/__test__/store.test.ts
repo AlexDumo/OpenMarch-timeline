@@ -487,6 +487,42 @@ describe("local Library store", () => {
         );
     });
 
+    it("saves, lists, deletes and restores sketch templates, keeping the thumbnail", async () => {
+        const data = { id: SHOW_ITEM_ID, name: "Grid", pages: [] };
+        const saved = await store.saveSketchTemplate({
+            id: SHOW_ITEM_ID,
+            name: "Grid",
+            data,
+            files: {},
+            thumbnail: "iVBORw0K",
+        });
+        expect(saved.thumbnail).toBe("iVBORw0K");
+        // Saving again without a thumbnail keeps it
+        await store.saveSketchTemplate({
+            id: SHOW_ITEM_ID,
+            name: "Grid 2",
+            data,
+            files: {},
+        });
+        const [listed] = await store.listSketchTemplates();
+        expect(listed).toMatchObject({
+            id: SHOW_ITEM_ID,
+            name: "Grid 2",
+            thumbnail: "iVBORw0K",
+        });
+
+        const entry = await store.deleteSketchTemplate(SHOW_ITEM_ID);
+        expect(entry.name).toBe("Grid 2");
+        expect(await store.listSketchTemplates()).toEqual([]);
+        await expectLibraryError(
+            store.deleteSketchTemplate(SHOW_ITEM_ID),
+            "not-found",
+        );
+        expect(await store.restoreSketchTemplate(entry)).toBe(true);
+        expect(await store.readSketchTemplate(SHOW_ITEM_ID)).toEqual(entry);
+        expect(await store.restoreSketchTemplate(entry)).toBe(false);
+    });
+
     it("reports a corrupt size presets file as corrupt", async () => {
         await writeFile(path.join(root, "size-presets.json"), "not json");
         await expectLibraryError(store.listSizePresets(), "corrupt");

@@ -1,46 +1,41 @@
-import type { FieldProperties, FieldTheme, RgbaColor } from "@openmarch/core";
+import {
+    BASELINE_BELOW_CENTER,
+    fieldImagePlacement,
+    fieldSvg,
+    svgLine as line,
+    svgNum as num,
+    svgPaint as paint,
+    svgText as text,
+    type FieldProperties,
+    type FieldSvgImage,
+    type FieldSvgOptions,
+    type FieldTheme,
+    type RgbaColor,
+} from "@openmarch/core";
 import {
     resolveMarcherLook,
     type AppearanceComponentOptional,
 } from "@/entity-components/appearance";
-import {
-    BASELINE_BELOW_CENTER,
-    fieldImagePlacement,
-    planField2d,
-    textCenterY,
-    type FieldPlanText,
-} from "@/field/fieldPlan";
 
 /**
  * Drill chart SVGs drawn straight from show data, with no canvas (field renderer migration,
- * #206). The layout is the 2D field's (`fieldPlan.ts`, the marcher shapes and the pathways), and
- * everything sits exactly on its coordinates:
+ * #206). The layout is the 2D field's (`planField2d` and `fieldSvg` in `@openmarch/core`, the
+ * marcher shapes and the pathways), and everything sits exactly on its coordinates:
  *
  * - Dots, pathways, midpoints and endpoints sit on their stored coordinates.
  * - Centered text is centered by the SVG renderer (`text-anchor`), so it doesn't depend on the
  *   font measured where the export ran. Yard numbers are centered on their yard line.
  * - The border is one closed outline around the field.
  *
- * The field's layout is `planField2d` (`src/field/fieldPlan.ts`), which the new field draws too.
- *
  * The output is plain SVG 1.1 that `svg-to-pdfkit` (the PDF export) and browsers both draw.
  */
 
 /** A field image to draw under the grid: its natural size (0 if unknown) and where to load it from. */
-export interface DrillChartFieldImage {
-    href: string;
-    width: number;
-    height: number;
-    /** The floor's physical size, centered on the field; null places it by fill or fit */
-    size?: { widthM: number; heightM: number } | null;
-}
+export type DrillChartFieldImage = FieldSvgImage;
 
-export interface DrillChartFieldOptions {
-    gridLines: boolean;
-    halfLines: boolean;
-    /** Drawn when the field properties show the field image */
-    image?: DrillChartFieldImage;
-}
+export type DrillChartFieldOptions = FieldSvgOptions;
+
+export { fieldImagePlacement, fieldSvg };
 
 /** A dot on the chart: where it is and how it looks. */
 export interface DrillChartDot {
@@ -62,107 +57,6 @@ export const DOT_RADIUS = 5;
 const PATHWAY_STROKE = 2;
 const PATH_POINT_RADIUS = 3;
 const MARCHER_LABEL_FONT_SIZE = 14;
-
-const num = (n: number) => String(Math.round(n * 1000) / 1000);
-
-const escapeXml = (text: string) =>
-    text
-        // Control characters XML forbids would make the SVG invalid
-        // eslint-disable-next-line no-control-regex
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-
-/** `rgb()` plus an opacity attribute, as SVG 1.1 and `svg-to-pdfkit` expect */
-const paint = (kind: "fill" | "stroke", color: RgbaColor) =>
-    `${kind}="rgb(${color.r},${color.g},${color.b})"` +
-    (color.a < 1 ? ` ${kind}-opacity="${num(color.a)}"` : "");
-
-const line = (
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
-    color: RgbaColor,
-    width: number,
-    extra = "",
-) =>
-    `<line x1="${num(x1)}" y1="${num(y1)}" x2="${num(x2)}" y2="${num(y2)}" ${paint("stroke", color)} stroke-width="${num(width)}"${extra} />`;
-
-const text = ({
-    content,
-    x,
-    y,
-    fontSize,
-    fontFamily,
-    color,
-    anchor,
-    bold = false,
-    extra = "",
-}: {
-    content: string;
-    x: number;
-    /** Baseline */
-    y: number;
-    fontSize: number;
-    fontFamily: string;
-    color: RgbaColor;
-    anchor: "start" | "middle" | "end";
-    bold?: boolean;
-    extra?: string;
-}) =>
-    `<text x="${num(x)}" y="${num(y)}" font-family="${fontFamily}" font-size="${num(fontSize)}" font-weight="${bold ? "bold" : "normal"}" text-anchor="${anchor}" ${paint("fill", color)}${extra} xml:space="preserve">${escapeXml(content)}</text>`;
-
-export { fieldImagePlacement };
-
-export function fieldSvg(
-    fieldProperties: FieldProperties,
-    { gridLines, halfLines, image }: DrillChartFieldOptions,
-): string {
-    const plan = planField2d(fieldProperties, { gridLines, halfLines, image });
-    const out: string[] = [];
-
-    out.push(
-        `<rect x="0" y="0" width="${num(plan.width)}" height="${num(plan.height)}" ${paint("fill", plan.background)} />`,
-    );
-    if (plan.image && image) {
-        const at = plan.image;
-        out.push(
-            `<image x="${num(at.x)}" y="${num(at.y)}" width="${num(at.width)}" height="${num(at.height)}" preserveAspectRatio="none" opacity="${num(at.opacity)}" xlink:href="${escapeXml(image.href)}" />`,
-        );
-    }
-    for (const l of plan.lines)
-        out.push(line(l.x1, l.y1, l.x2, l.y2, l.color, l.width));
-    for (const t of plan.texts) out.push(fieldTextSvg(t));
-
-    const { border } = plan;
-    out.push(
-        `<rect x="${num(border.x)}" y="${num(border.y)}" width="${num(border.width)}" height="${num(border.height)}" fill="none" ${paint("stroke", border.color)} stroke-width="${num(border.strokeWidth)}" />`,
-    );
-
-    return out.join("\n");
-}
-
-/** A checkpoint label or yard number */
-function fieldTextSvg(t: FieldPlanText): string {
-    const spacing = t.letterSpacing;
-    const svg = text({
-        content: t.text,
-        // letter-spacing also follows the last character, so shift by half of it to center
-        x: spacing && t.anchor === "middle" ? t.x + spacing / 2 : t.x,
-        y: t.y,
-        fontSize: t.fontSize,
-        fontFamily: t.fontFamily,
-        color: t.color,
-        anchor: t.anchor,
-        extra: spacing ? ` letter-spacing="${num(spacing)}"` : "",
-    });
-    if (!t.flipped) return svg;
-    const centerY = textCenterY(t);
-    return `<g transform="matrix(-1 0 0 -1 ${num(2 * t.x)} ${num(2 * centerY)})">${svg}</g>`;
-}
 
 /** One dot's shape, centered on its coordinate */
 export function dotSvg(dot: DrillChartDot, theme: FieldTheme): string {

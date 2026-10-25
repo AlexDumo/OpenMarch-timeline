@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { FieldProperties } from "@openmarch/core";
-import GridFieldTemplates from "@/global/classes/fieldTemplates/GridFields";
+import { GridFieldTemplates } from "@openmarch/core";
 import {
     defaultVenueForKit,
     type VenueSettings,

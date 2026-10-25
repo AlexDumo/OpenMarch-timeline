@@ -1,16 +1,17 @@
-import type { FieldProperties, RgbaColor } from "@openmarch/core";
 import {
     BASELINE_BELOW_CENTER,
+    type FieldProperties,
+    type RgbaColor,
     planField2d,
     textCenterY,
     type FieldPlanOptions,
     type FieldPlanText,
-} from "@/field/fieldPlan";
+} from "@openmarch/core";
 
 /**
  * The field's rectangles and text in field units.
  *
- * The layout is `planField2d` (`src/field/fieldPlan.ts`), the one the drill
+ * The layout is `planField2d` (`@openmarch/core`, `packages/core/src/field/fieldPlan.ts`), the one the drill
  * chart export draws. This module only turns the plan's lines and border into
  * rectangles for one instanced draw, and its text into SDF labels. Change
  * what the field shows there, once, for both.

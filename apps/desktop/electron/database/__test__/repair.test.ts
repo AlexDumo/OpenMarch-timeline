@@ -1207,6 +1207,48 @@ describe("DatabaseSync Repair", () => {
             }
         });
 
+        it("copies sketches, their images and their pins (ADR 0006 D-5)", async () => {
+            const originalDbPath = path.join(tempDir, "sketches.dots");
+            const originalDb =
+                await createNewDatabaseWithMigrations(originalDbPath);
+            originalDb.exec(`
+                INSERT INTO beats (id, duration, position) VALUES (5, 0.5, 5);
+                INSERT INTO sketches (id, kind, name, field_json, doc_json, render_json, sort_index)
+                    VALUES ('s1', 'sketch', 'Opener idea', '{"f":1}', '{"d":1}', '{"pages":[]}', 1),
+                           ('t1', 'template', 'Grid', '{"style":{}}', '{"t":1}', NULL, 2);
+                INSERT INTO sketch_pins (id, sketch_id, page_id, beat_id, opacity, position)
+                    VALUES (1, 's1', 'p1', 5, 0.25, 'above'), (2, 's1', 'p2', NULL, 0.5, 'below');
+            `);
+            originalDb
+                .prepare("UPDATE sketches SET thumbnail = ? WHERE id = 's1'")
+                .run(new Uint8Array([137, 80, 78, 71]));
+            originalDb
+                .prepare(
+                    "INSERT INTO sketch_files (sha256, mime, data) VALUES (?, 'image/png', ?)",
+                )
+                .run("c".repeat(64), new Uint8Array([1, 2, 3]));
+            const tables = ["sketches", "sketch_files", "sketch_pins"];
+            const read = (db: DatabaseSync) =>
+                Object.fromEntries(
+                    tables.map((table) => [
+                        table,
+                        db.prepare(`SELECT * FROM "${table}"`).all(),
+                    ]),
+                );
+            const expected = read(originalDb);
+            originalDb.close();
+
+            const fixedPath = await repairDatabase(originalDbPath);
+
+            const fixedDb = new DatabaseSync(fixedPath, { readOnly: true });
+            try {
+                expect(read(fixedDb)).toEqual(expected);
+                expect(expected.sketch_pins).toHaveLength(2);
+            } finally {
+                fixedDb.close();
+            }
+        });
+
         it("orders dependent tables after the others, parents before children", () => {
             const names = [
                 "timeline_assignments",

@@ -43,6 +43,7 @@ const PREVIEW_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
     "timelineGoTo",
     "openSettings",
     "openView3d",
+    "openSketchpad",
     "showShortcuts",
     "openCommandPalette",
     "togglePreview",

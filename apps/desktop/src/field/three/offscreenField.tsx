@@ -7,7 +7,6 @@ import {
 } from "@react-three/fiber";
 import type { OrthographicCamera } from "three";
 import { createStore, type StoreApi } from "zustand";
-import type { FieldProperties } from "@openmarch/core";
 import {
     FieldContextLostError,
     NoWebGLError,
@@ -15,7 +14,7 @@ import {
     QUALITY_SETTINGS,
     type QualitySettings,
 } from "@/field/fieldQuality";
-import { planFieldImage } from "@/field/fieldPlan";
+import { planFieldImage, type FieldProperties } from "@openmarch/core";
 import type { FieldImageSize } from "@/db-functions/fieldFloor";
 import type { PositionSource } from "@/timeline/positionBuffer";
 import type { AppearanceStepsByMarcherId } from "@/services/appearance/appearanceSteps";

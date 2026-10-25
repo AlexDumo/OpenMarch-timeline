@@ -87,7 +87,7 @@ of #192's 1.5 CSS px minimum dot radius (Fabric has none).
 
 ### #200 Field themes and background image
 
-**One 2D field plan.** `apps/desktop/src/field/fieldPlan.ts` (`planField2d`)
+**One 2D field plan.** `packages/core/src/field/fieldPlan.ts` (`planField2d`, moved from the desktop app for the Sketchpad)
 lays out the flat field in field units: today's `createFieldGrid`, element
 for element, minus Fabric's half-pixel offset. It was lifted from #206's
 `drillChartSvg.ts`, which now renders it to SVG (byte-identical output for
