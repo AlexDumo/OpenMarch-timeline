@@ -6,9 +6,9 @@ import {
     withFieldCount,
     withSpacing,
 } from "../editor/boxEdits";
-import { formatSteps } from "../editor/format";
-import { parseSize, parseSteps, scrubDistance } from "../editor/scrub";
-import type { ToolParam } from "../tool/toolKind";
+import { formatSteps, parseSteps } from "../editor/format";
+import { parseSize, scrubDistance } from "../editor/scrub";
+import type { ToolEnv, ToolParam } from "../tool/toolKind";
 import { boxBlock, isSpread, shortBy, type BoxParams } from "./boxGeometry";
 
 /**
@@ -90,6 +90,9 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         const field = onField(p, n);
         return (across ? field.acrossSpacing : field.deepSpacing) / stepPx;
     };
+    /** A spacing set as typed: kept as it is (1⅔, 1.37), not on half steps (#411, #423) */
+    const typed = (p: BoxParams, n: number, steps: number, env: ToolEnv) =>
+        withSpacing(p, ownKey(p, n), steps, n, { ...env, snap: false }, true);
     return {
         key: way,
         label: across
@@ -113,13 +116,9 @@ function spacing(way: "across" | "deep"): ToolParam<BoxParams> {
         value: stepsOf,
         type(p, n, text, env) {
             const steps = parseSteps(text);
-            if (steps === null) return null;
-            // A typed spacing is kept to hundredths of a step, not half steps (#411)
-            return withSpacing(p, ownKey(p, n), steps, n, {
-                ...env,
-                snap: false,
-            });
+            return steps === null ? null : typed(p, n, steps, env);
         },
+        set: (p, n, steps, env) => typed(p, n, steps, env),
         scrub: (base, n, m, env) =>
             scrubSpacing(
                 base,

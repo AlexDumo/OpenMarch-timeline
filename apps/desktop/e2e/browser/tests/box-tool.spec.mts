@@ -1490,6 +1490,75 @@ test("change: handles snap spacings to half steps, Alt to hundredths, with a len
     await expect(bar.getByTestId("shape-editor-across")).toHaveText("2.37");
 });
 
+test("change: a typed 1 2/3 stays exactly 1⅔ steps and shows as 1⅔, − and + leave the box where it was, and Save keeps 2⅔ exactly (#423)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { grid } = await drawBox(show);
+    const S = grid.pixelsPerStep;
+    const bar = page.getByTestId("shape-tool-readout");
+    /** The distinct gaps between neighbors side to side and front to back, in steps */
+    const gaps = async () => {
+        const { spots } = (await shapeOverlay(page))!;
+        const apart = (vs: number[]) => {
+            const sorted = [...new Set(vs.map((v) => v.toFixed(6)))]
+                .map(Number)
+                .sort((a, b) => a - b);
+            return sorted.slice(1).map((v, i) => (v - sorted[i]) / S);
+        };
+        return {
+            across: apart(spots.map((p) => p.x)),
+            deep: apart(spots.map((p) => p.y)),
+        };
+    };
+    const allClose = (vs: number[], want: number) => {
+        expect(vs.length).toBeGreaterThan(0);
+        for (const v of vs) expect(Math.abs(v - want)).toBeLessThan(1e-4);
+    };
+
+    await page.getByTestId("shape-editor-across").click();
+    await page.keyboard.type("1 2/3");
+    await page.keyboard.press("Enter");
+    await expect(bar.getByTestId("shape-editor-across")).toHaveText("1⅔");
+    allClose((await gaps()).across, 5 / 3);
+
+    // − and + around the center come back to the same spots, not shifted a sixth of a step
+    const before = (await shapeOverlay(page))!.spots;
+    for (const more of [true, false, true, false, false, true])
+        await sizeButton(page, more).click();
+    const after = (await shapeOverlay(page))!.spots;
+    expect(after).toHaveLength(before.length);
+    after.forEach((p, i) => {
+        expect(Math.abs(p.x - before[i].x)).toBeLessThan(1e-6);
+        expect(Math.abs(p.y - before[i].y)).toBeLessThan(1e-6);
+    });
+
+    await page.getByTestId("shape-editor-deep").click();
+    await page.keyboard.type("2⅔");
+    await page.keyboard.press("Enter");
+    await expect(bar.getByTestId("shape-editor-deep")).toHaveText("2⅔");
+    allClose((await gaps()).deep, 8 / 3);
+
+    // Saved, the show's copy keeps the intervals exactly, not as shown
+    await page.getByTestId("shape-editor-more").click();
+    await page.getByTestId("shape-editor-save").click();
+    const name = page.getByTestId("shape-editor-save-name");
+    await expect(name).toHaveValue("Box 1⅔ × 2⅔ apart");
+    await page.keyboard.press("Enter");
+    await expect
+        .poll(
+            async () =>
+                (await show.query("SELECT id FROM saved_shapes")).length,
+        )
+        .toBe(1);
+    const [{ intervals }] = await show.query<{ intervals: string }>(
+        "SELECT intervals FROM saved_shapes",
+    );
+    const saved = JSON.parse(intervals) as { across: number; deep: number };
+    expect(Math.abs(saved.across - 5 / 3)).toBeLessThan(1e-9);
+    expect(Math.abs(saved.deep - 8 / 3)).toBeLessThan(1e-9);
+});
+
 test("change: clicking the picked kind in the Shapes tab closes the tool while nothing is drawn, and does nothing once a box is", async ({
     show,
 }) => {

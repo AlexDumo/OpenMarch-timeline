@@ -5,7 +5,7 @@ import {
     type SavedDistribution,
 } from "../distribute/distribution";
 import type { ShapeFrame } from "../frame/frame";
-import { typedValue } from "../command/shapeSteps";
+import { withValue } from "../command/shapeSteps";
 import type { AnyToolKind, ToolEnv, ToolParam } from "../tool/toolKind";
 import type { ShapeToolEntry } from "../tool/shapeTools";
 import type { XY } from "../types";
@@ -127,8 +127,8 @@ export function withSavedDistribution(
 }
 
 /**
- * `params` set to `intervals`, each through its parameter's own typing as the chip and the
- * command bar set it. An interval the kind no longer has, or can't take, is left as it is.
+ * `params` set to `intervals`, each by number through its parameter, as the chip and the command
+ * bar set it ({@link withValue}). An interval the kind no longer has, or can't take, is left as it is.
  */
 export function withIntervals(
     kind: AnyToolKind,
@@ -141,7 +141,7 @@ export function withIntervals(
     for (const param of intervalParams(kind)) {
         const steps = intervals[param.key];
         if (steps === undefined) continue;
-        next = param.type(next, n, typedValue(param, steps), env) ?? next;
+        next = withValue(param, next, n, steps, env) ?? next;
     }
     return next;
 }

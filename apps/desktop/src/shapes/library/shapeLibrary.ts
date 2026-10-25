@@ -4,7 +4,7 @@ import {
     type DistributionMode,
     type Fraction,
 } from "../distribute/distribution";
-import { formatSteps } from "../editor/format";
+import { FRACTIONS, formatSteps } from "../editor/format";
 import { RING_SLOTS, type RingShape } from "../tool/ringMachine";
 import type { ShapeToolEntry } from "../tool/shapeTools";
 import type { SavedShape } from "./savedShapes";
@@ -37,16 +37,6 @@ export function intervalNote(steps: readonly number[]): string | null {
     const same = shown.every((s) => s === shown[0]);
     return `${same ? shown[0] : shown.join(" × ")} apart`;
 }
-
-const FRACTIONS: Readonly<Record<string, string>> = {
-    "1/2": "½",
-    "1/3": "⅓",
-    "2/3": "⅔",
-    "1/4": "¼",
-    "3/4": "¾",
-    "1/6": "⅙",
-    "5/6": "⅚",
-};
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 

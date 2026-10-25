@@ -1,3 +1,4 @@
+import { fractionText, readSteps } from "./editor/format";
 import type { Path } from "./geometry/path";
 import type { IntervalRun, Slot, Spacing } from "./types";
 
@@ -16,8 +17,8 @@ export type ParsedIntervals =
     | { readonly ok: true; readonly runs: IntervalRun[] }
     | { readonly ok: false; readonly message: string };
 
-const NUMBER = String.raw`(\d+(?:\.\d+)?|\.\d+)`;
-const RUN = new RegExp(String.raw`^${NUMBER}(?:\s*[x×*]\s*(\d+))?$`, "i");
+/** A number of steps ({@link readSteps}: "2", "2⅔", "1 2/3"), then optionally a gap count */
+const RUN = /^(.+?)(?:\s*[x×*]\s*(\d+))?$/i;
 
 export function parseIntervals(text: string): ParsedIntervals {
     const parts = text
@@ -29,13 +30,13 @@ export function parseIntervals(text: string): ParsedIntervals {
     const runs: IntervalRun[] = [];
     for (const part of parts) {
         const match = RUN.exec(part);
-        if (!match) {
+        const steps = match && readSteps(match[1]!);
+        if (!match || steps === null) {
             return {
                 ok: false,
                 message: `"${part}" isn't an interval. Type steps (2), a list (4,4,2) or steps x gaps (4x3)`,
             };
         }
-        const steps = Number(match[1]);
         if (!(steps > 0))
             return {
                 ok: false,
@@ -60,7 +61,9 @@ export function parseIntervals(text: string): ParsedIntervals {
     return { ok: true, runs };
 }
 
-const trim = (n: number) => String(Number(n.toFixed(4)));
+/** Steps as a list shows them: decimals, or a glyph where decimals can't be exact (2⅔) */
+const trim = (n: number) =>
+    fractionText(n, [3, 6]) ?? String(Number(n.toFixed(4)));
 
 export function formatIntervals(runs: readonly IntervalRun[]): string {
     return runs

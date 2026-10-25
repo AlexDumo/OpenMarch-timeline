@@ -41,6 +41,22 @@ export function typedValue(param: ToolParam<unknown>, value: number): string {
 }
 
 /**
+ * `params` with `param` set to `value`, in its unit: by number where the parameter takes one, so
+ * it comes back exact (#423), else typed as the chip shows it. Null where it can't take it.
+ */
+export function withValue(
+    param: ToolParam<unknown>,
+    params: unknown,
+    n: number,
+    value: number,
+    env: ToolEnv,
+): unknown {
+    return param.set
+        ? param.set(params, n, value, env)
+        : param.type(params, n, typedValue(param, value), env);
+}
+
+/**
  * The shape after `answers`, one per step in order, and every step it asks. A step hides while
  * its parameter does (a spacing with only one marcher that way), so an answer can change the
  * steps after it. An empty answer keeps the number as it is; one that isn't understood is
@@ -67,7 +83,12 @@ export function shapeSteps(
         const initial = param.display(params, n, env.stepPx);
         const answer = answers[steps.length];
         let invalid = false;
-        if (answer !== undefined && answer.trim() !== "") {
+        // The number as shown keeps it as it is: 1⅛ shows as 1.13, which would round it
+        if (
+            answer !== undefined &&
+            answer.trim() !== "" &&
+            answer.trim() !== initial
+        ) {
             const next = param.type(params, n, answer, env);
             if (next === null) invalid = true;
             else params = next;
@@ -205,9 +226,7 @@ export function startingParams(
     for (const param of kind.params as readonly ToolParam<unknown>[]) {
         if (param.default === undefined) continue;
         if (param.shown && !param.shown(params, n)) continue;
-        params =
-            param.type(params, n, typedValue(param, param.default), env) ??
-            params;
+        params = withValue(param, params, n, param.default, env) ?? params;
     }
     return params;
 }
