@@ -1,5 +1,6 @@
 import { StartFlagPositionsButton } from "./StartFlagPositionsButton";
 import { toast } from "sonner";
+import { toastUntilNextHistoryChange } from "@/utilities/undoToast";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTolgee } from "@tolgee/react";
@@ -1044,13 +1045,17 @@ function useTimelinePunchTap(): TimelinePunchTapConfig | undefined {
             },
             blocked: () => useTapTheBeatStore.getState().open,
             otherToolOpen: tapTheBeatOpen,
+            // Closed by the next history change, so its Undo only undoes these taps
             onApplied: (message) =>
-                toast.success(message, {
-                    action: {
-                        label: t("tempo.punchTap.undo"),
-                        onClick: () => performHistoryAction("undo"),
-                    },
-                }),
+                toastUntilNextHistoryChange((handlers) =>
+                    toast.success(message, {
+                        action: {
+                            label: t("tempo.punchTap.undo"),
+                            onClick: () => performHistoryAction("undo"),
+                        },
+                        ...handlers,
+                    }),
+                ),
             onNotice: (message) => toast.info(message),
         };
     }, [enabled, performHistoryAction, setIsPlaying, t, tapTheBeatOpen]);

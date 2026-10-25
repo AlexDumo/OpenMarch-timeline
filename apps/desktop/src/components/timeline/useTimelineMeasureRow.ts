@@ -8,6 +8,7 @@ import { measureKeys } from "@/hooks/queries/useMeasures";
 import { usePerformHistoryAction } from "@/hooks/queries/useHistory";
 import type { MeasureLineEdit } from "@/timeline/measureLines";
 import { conToastError } from "@/utilities/utils";
+import { toastUntilNextHistoryChange } from "@/utilities/undoToast";
 import { useTempoLabFlag } from "@/stores/UiSettingsStore";
 import { useAudioEnvelopeStore } from "@/timeline/timelineWaveform";
 import { openTapTheBeatHere } from "./TapTheBeat";
@@ -28,6 +29,25 @@ const droppedMarksMessage = (
               "Removed rehearsal {marks} with {count, plural, one {its measure line} other {their measure lines}}",
               { marks: dropped.join(", "), count: dropped.length },
           );
+
+/**
+ * Says marks went, with Undo. It closes on the next history change, so its Undo only ever undoes
+ * the edit that removed them.
+ */
+const toastDroppedMarks = (
+    dropped: readonly string[],
+    removedMark: string | null | undefined,
+    undo: () => void,
+) =>
+    toastUntilNextHistoryChange((handlers) =>
+        toast(droppedMarksMessage(dropped, removedMark), {
+            action: {
+                label: measureRowText("toast.undo", "Undo"),
+                onClick: undo,
+            },
+            ...handlers,
+        }),
+    );
 
 /**
  * The measure row's writes for the app's timeline (tempo E8): each command is one
@@ -60,10 +80,6 @@ export function useTimelineMeasureRow(
             ),
     });
     return useMemo(() => {
-        const undoAction = {
-            label: measureRowText("toast.undo", "Undo"),
-            onClick: () => performHistoryAction("undo"),
-        };
         const markOf = (measureId: number | string) =>
             measures.find((m) => m.id === Number(measureId))?.rehearsalMark ??
             null;
@@ -74,9 +90,9 @@ export function useTimelineMeasureRow(
                         ? [removedMark]
                         : result.droppedMarks;
                     if (dropped.length === 0) return;
-                    toast(droppedMarksMessage(dropped, removedMark), {
-                        action: undoAction,
-                    });
+                    toastDroppedMarks(dropped, removedMark, () =>
+                        performHistoryAction("undo"),
+                    );
                 },
             });
         return {
