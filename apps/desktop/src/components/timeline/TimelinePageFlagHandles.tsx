@@ -141,14 +141,14 @@ export function TimelinePageFlagHandles({
     // The latest commands, so a re-render with new ones doesn't restart the readout's preview
     const moveRef = useRef(move);
     moveRef.current = move;
-    // A move being written: arrow keys wait for it, so a held key can't send the same move twice
-    const committing = useRef(false);
+    // Moves being written: arrow keys wait for them, so a held key can't send the same move twice.
+    // A drop always writes, as main's UI-16 grips do; writes queue behind the timeline write lock.
+    const committing = useRef(0);
     const commit = (pageId: string | number, toBeat: number) => {
-        if (committing.current) return;
-        committing.current = true;
+        committing.current += 1;
         void Promise.resolve(moveRef.current.onMove(pageId, toBeat)).finally(
             () => {
-                committing.current = false;
+                committing.current -= 1;
             },
         );
     };
@@ -315,7 +315,7 @@ export function TimelinePageFlagHandles({
                                 bounds.min,
                                 bounds.max,
                             );
-                            if (event.repeat || committing.current) return;
+                            if (event.repeat || committing.current > 0) return;
                             if (toBeat !== flag) commit(page.id, toBeat);
                         }}
                         className={clsx(
