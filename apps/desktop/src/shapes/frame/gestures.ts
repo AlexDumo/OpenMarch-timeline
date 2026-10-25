@@ -13,6 +13,7 @@ import {
     pivotPoint,
     rotateFrame,
     rotationDegrees,
+    ROTATION_SNAP_DEGREES,
     samePivot,
     snapRotation,
     type FlipAxis,
@@ -324,8 +325,8 @@ export function shapeOutline(
 export const ROTATION_PX_PER_DEGREE = 2;
 
 /**
- * The shape's rotation dragged `distance` px clockwise: 1° per 2 px, 15° with Shift, free with
- * Alt, from where it started
+ * The shape's rotation dragged `distance` px clockwise, 1° per 2 px from where it started: in 15°
+ * steps as the knob turns (#403), whole degrees with Shift, free with Alt
  */
 export function scrubTurn(
     kind: AnyToolKind,
@@ -338,10 +339,7 @@ export function scrubTurn(
     const turn = distance / ROTATION_PX_PER_DEGREE;
     if (Math.trunc(turn) === 0 && env.snap) return base;
     const degrees = rotationDegrees(kind.frameOf(base, n).rotation) + turn;
-    const snapped = !env.snap
-        ? degrees
-        : env.shift
-          ? Math.round(degrees / 15) * 15
-          : Math.round(degrees);
+    const step = env.shift ? 1 : ROTATION_SNAP_DEGREES;
+    const snapped = env.snap ? Math.round(degrees / step) * step : degrees;
     return turnShape(kind, base, n, snapped * DEGREE, pivot, env);
 }

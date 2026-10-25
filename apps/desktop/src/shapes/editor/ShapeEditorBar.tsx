@@ -10,6 +10,7 @@ import {
     MinusIcon,
     PlusIcon,
     ArrowClockwiseIcon,
+    PathIcon,
 } from "@phosphor-icons/react";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { DEGREE, rotationDegrees } from "../frame/frame";
@@ -46,6 +47,7 @@ import { SaveShapeButton } from "../library/SaveShapeButton";
 import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
 import { CloseUpButton } from "./CloseUpButton";
+import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 
 /** The gap between the shape's outline and the editor, in CSS px */
 const GAP_PX = 14;
@@ -293,6 +295,7 @@ function ShapeEditorBar({
                 {target.drawnOn && (
                     <span className="text-text/50">from {target.drawnOn}</span>
                 )}
+                {target.place && <PathwaysButton />}
                 <Divider />
                 <IconButton
                     label="More: turn, flip, who goes where"
@@ -551,6 +554,35 @@ function TextButton({
 
 function Divider() {
     return <span className="bg-stroke h-16 w-px" aria-hidden />;
+}
+
+/**
+ * Pathways (#403): shows or hides the open shape's walks and start rings. Off until asked for, so
+ * the shape reads clearly while it's drawn; the choice is remembered.
+ */
+function PathwaysButton() {
+    const shown = useUiSettingsStore((s) => s.uiSettings.shapeWalks ?? false);
+    return (
+        <IconButton
+            label={
+                shown
+                    ? "Hide the pathways from the start flag"
+                    : "Show the pathways from the start flag"
+            }
+            pressed={shown}
+            onClick={() => {
+                const { uiSettings, setUiSettings } =
+                    useUiSettingsStore.getState();
+                setUiSettings({
+                    ...uiSettings,
+                    shapeWalks: !(uiSettings.shapeWalks ?? false),
+                });
+            }}
+            testId="shape-editor-pathways"
+        >
+            <PathIcon size={14} />
+        </IconButton>
+    );
 }
 
 function IconButton({

@@ -246,6 +246,11 @@ export type FieldModeDrawing = {
     tip?: { at: FieldPoint; text: string };
     /** The spots are part way to where they're going: a glide is running (#387) */
     gliding?: boolean;
+    /**
+     * The pointer is away from the shape and its controls (#403): the handles, knob, center dot,
+     * pivot and gap rings are drawn faint, so the spots read clearly
+     */
+    calm?: boolean;
 };
 
 /**
@@ -269,6 +274,8 @@ export interface FieldMode {
     cancel(): void;
     /** The cursor over `pointer` with no button down, or null for the editor's. */
     cursorAt(pointer: FieldPointer): FieldCursor | null;
+    /** The pointer left the field with no button down. */
+    leave?(): void;
     /** What it draws over the field, or null for nothing. */
     drawing(): FieldModeDrawing | null;
     /** Calls `listener` when its drawing or cursor changes. Returns the unsubscribe. */
@@ -530,6 +537,7 @@ export class FieldEditor {
 
     /** The pointer left the field with no button down. */
     pointerLeave(): void {
+        this.mode?.leave?.();
         this.setHover("default");
     }
 

@@ -89,6 +89,11 @@ export interface UiSettings {
      * shape is being drawn (`drawing`) (docs/timeline/research/shapes/08-shape-system-ux.md)
      */
     shapeFocus?: ShapeFocus;
+    /**
+     * Whether an open shape shows its walks and start rings (#403): the floating editor's
+     * Pathways toggle. Off by default.
+     */
+    shapeWalks?: boolean;
     /** Whether props show their names on the canvas, unless `propNameOverrides` says otherwise */
     showPropNames: boolean;
     /** Per prop: whether its name shows. Key is the item id. */
@@ -149,6 +154,7 @@ export const defaultSettings: UiSettings = {
     marcherLabels: "auto",
     shapes: "selected",
     shapeFocus: "rest",
+    shapeWalks: false,
     showPropNames: false,
     propNameOverrides: {},
     hiddenPropIds: {},
