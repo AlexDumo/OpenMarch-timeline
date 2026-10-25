@@ -1,5 +1,9 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { StaticMarcherCoordinateSheet } from "../MarcherCoordinateSheet";
+import {
+    StaticMarcherCoordinateSheet,
+    StaticQuarterMarcherSheet,
+} from "../MarcherCoordinateSheet";
+import type Page from "@/global/classes/Page";
 import * as globalMocks from "@/__mocks__/globalMocks";
 import { FieldProperties } from "@openmarch/core";
 import Marcher from "@/global/classes/Marcher";
@@ -220,5 +224,73 @@ describe("StaticMarcherCoordinateSheet", () => {
         });
     });
 
-    /** TODO - Finish these tests */
+    /**
+     * Tempo decision DN-1: both coordinate sheets print the drill-sheet range ("5–8", leaving out
+     * a final measure whose downbeat is the set) and, with no free legend area, the range only.
+     */
+    describe("measures (DN-1)", () => {
+        const withMeasures = (
+            page: Page,
+            numbers: number[],
+            startOn: number,
+            endOn: number,
+        ): Page =>
+            ({
+                ...page,
+                measures: numbers.map((number) => ({ number, counts: 4 })),
+                measureBeatToStartOn: startOn,
+                measureBeatToEndOn: endOn,
+            }) as unknown as Page;
+        // m5's downbeat to m9's, then a page inside m9
+        const pages = [
+            withMeasures(mockPages[0], [5, 6, 7, 8, 9], 2, 1),
+            withMeasures(mockPages[1], [9], 2, 4),
+            mockPages[2],
+        ];
+        const ownPages = mockMarcherPages.filter(
+            (marcherPage) => marcherPage.marcher_id === mockMarcher.id,
+        );
+
+        it("the full sheet prints the drill-sheet range", async () => {
+            render(
+                <Providers>
+                    <StaticMarcherCoordinateSheet
+                        marcher={mockMarcher}
+                        fieldProperties={mockFieldProperties}
+                        marcherPages={ownPages}
+                        pages={pages}
+                        includeMeasures
+                    />
+                </Providers>,
+            );
+
+            const cells = await screen.findAllByLabelText("page measures");
+            expect(cells.map((cell) => cell.textContent)).toEqual([
+                "5–8",
+                "9",
+                "-",
+            ]);
+            expect(screen.queryByText(/^Measures:/)).toBeNull();
+        });
+
+        it("the compact sheet prints the same range in its Ms column", () => {
+            render(
+                <Providers>
+                    <StaticQuarterMarcherSheet
+                        marcher={mockMarcher}
+                        fieldProperties={mockFieldProperties}
+                        marcherPages={ownPages}
+                        pages={pages}
+                        quarterPageNumber={1}
+                        useXY={false}
+                        includeMeasures
+                    />
+                </Providers>,
+            );
+
+            expect(screen.getByText("5–8")).toBeTruthy();
+            expect(screen.getByText("9")).toBeTruthy();
+            expect(screen.queryByText(/^Measures:/)).toBeNull();
+        });
+    });
 });
