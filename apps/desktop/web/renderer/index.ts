@@ -21,7 +21,7 @@ import { useWebWelcomeStore } from "../../src/stores/WebWelcomeStore";
 import { storageKey } from "./channel";
 import { invokeWorker, ipcRenderer, startWorker } from "./ipc";
 import { installView3dApi, registerView3dHost } from "./view3d";
-import { isLabBuild, startLabBuild } from "./lab";
+import { isLabBuild, keepLabWidgetOut, startLabBuild } from "./lab";
 import { WEB_CHANNELS, WEB_EVENTS, type WorkerStatus } from "../protocol";
 
 declare global {
@@ -148,7 +148,9 @@ async function start() {
     window.__openmarchPlatform = detectPlatform();
     suppressBrowserContextMenu();
     if (new URLSearchParams(window.location.search).get("view") === "3d") {
-        // Like Electron's 3D View window: its own API and no preload.
+        // Like Electron's 3D View window: its own API and no preload. A lab
+        // build's feedback stays in the editor tab.
+        keepLabWidgetOut();
         installView3dApi();
         await import("@/main");
         return;
