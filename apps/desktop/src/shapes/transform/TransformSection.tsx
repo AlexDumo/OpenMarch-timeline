@@ -35,6 +35,7 @@ import { toolEnvFor } from "../tool/toolEnv";
 import type { ToolEnv } from "../tool/toolKind";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { flipSelection, selectionPivot } from "./selectionTransform";
+import { GlyphText } from "../editor/GlyphText";
 
 /**
  * The inspector's Transform section (#349, spec #344, "Editing and transforming"), whenever
@@ -233,7 +234,12 @@ function ShapeTransform({ target }: { target: ShapeEditTarget }) {
                     className="text-sub tabular-nums"
                     data-testid="transform-scale"
                 >
-                    {env ? scaleReadout(kind, params, spots, env) : ""}
+                    {env && (
+                        <GlyphText
+                            text={scaleReadout(kind, params, spots, env)}
+                            size={12}
+                        />
+                    )}
                 </span>
                 <SmallButton
                     label={`Wider: ${scaleWord} half a step more`}
@@ -306,7 +312,7 @@ function Flips({
                 data-testid="transform-flip-across"
             >
                 <FlipHorizontalIcon size={14} />
-                Flip ↔
+                <GlyphText text="Flip ↔" />
             </button>
             <button
                 type="button"
@@ -318,7 +324,7 @@ function Flips({
                 data-testid="transform-flip-deep"
             >
                 <FlipVerticalIcon size={14} />
-                Flip ↕
+                <GlyphText text="Flip ↕" />
             </button>
         </div>
     );

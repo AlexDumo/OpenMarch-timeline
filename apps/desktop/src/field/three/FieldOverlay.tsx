@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
+import { textPresentation } from "@/shapes/editor/GlyphText";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
@@ -546,7 +547,7 @@ function ModeDrawing({
                             dominantBaseline="hanging"
                             data-testid="fieldShapeTip"
                         >
-                            {drawing.tip.text}
+                            {textPresentation(drawing.tip.text)}
                         </text>
                     );
                 })()}

@@ -46,7 +46,7 @@ interface Shown {
     readonly tool: ToolState;
     readonly hover: { at: XY; text: string } | null;
     readonly over: boolean;
-    /** The walks and start rings are shown: the pathways toggle (#403) */
+    /** The walks are shown: the pathways toggle (#403) */
     readonly walks: boolean;
 }
 let shown: Shown | null = null;
@@ -101,9 +101,10 @@ const drawingOf = memoDrawing(({ tool, hover, over, walks }: Shown) => {
     const ctx = shapeContextFor(field);
     const n = tool.spots;
     const spots = slotsOf(tool, ctx);
-    // The marchers' hollow rings stand where they start the move: at the start flag (#346). The
-    // pathways toggle hides them with the walks that leave from them (#403).
-    const rings = walks ? startsOf(tool) : [];
+    // The marchers' hollow rings stand where they start the move: at the start flag (#346). They
+    // always show, so where the marchers come from reads; the pathways toggle is only the walks
+    // (owner lab feedback on #417)
+    const rings = startsOf(tool);
     if (tool.params === null)
         return { outline: null, spots, walks: [], handles: [], rings };
     // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every

@@ -10,7 +10,7 @@ questions:
   - Away from the shape, Enter and Esc do nothing to it. Did you ever press one expecting it to act on the shape?
   - Playing or switching to Visuals hides the shape until you stop or come back, without placing it. Did it come back when you expected?
   - After selecting other marchers, the shape stays open for its own marchers. Did that make sense, or did you expect something else?
-  - With a box open, the other marchers are faint dots and the box's own marchers show only as its spots. Could you still tell who is where? With pathways on, did the start rings and walk lines show where they come from clearly enough?
+  - With a box open, the other marchers are lighter but still readable, and the box's own marchers show as their spots and the rings where they start. Could you tell who is where? Is the fade about right now?
   - On another page, could you set the waiting shape aside and draw a new one, with the chip's × or by just starting a new shape? Did undo bring the old one back when you wanted it?
 ---
 
@@ -20,11 +20,14 @@ marchers, press **B** and drag a box.
 
 **New in this build** (from your feedback on the last one):
 
-- While a box is open, **everyone else is a faint dot** with no label.
+- While a box is open, **everyone else is lighter** (40%, labels too), so the
+  rest of the drill stays readable as context.
 - Once it's drawn, **the box's own marchers' dots hide**: its spots are where
-  they'll be. Turn on **Pathways** in the floating editor to see where they
-  come from (the start rings and walk lines). Placing or Esc brings every dot
-  back.
+  they'll be, and the **rings show where they start**, always. **Pathways** in
+  the floating editor now only adds the walk lines. Placing or Esc brings
+  every dot back.
+- The **↔ and ↕ marks** in the floating editor and the inspector are icons
+  now, so neither shows up as a color emoji.
 
 - The chip has a **×** that dismisses the waiting shape, as Esc would at its
   count. Undo right after brings it back.

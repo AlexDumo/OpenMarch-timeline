@@ -40,7 +40,7 @@ export class FieldDimming {
     }
 
     /**
-     * Fades every marcher but `members` to a faint dot while a shape is open; null ends it. With
+     * Fades every marcher but `members` while a shape is open; null ends it. With
      * `hideMembers` (the shape is drawn, #417) the members' own dots hide too: the shape's spots
      * show where they'll be, and its pathways where they come from.
      */
@@ -67,9 +67,9 @@ export class FieldDimming {
             : 1;
     }
 
-    /** Whether a marcher's label is drawn: not for a shape's faint dots or its hidden members */
+    /** Whether a marcher's label is drawn: not for an open shape's hidden members */
     labelShown(id: number): boolean {
-        return this.focus === null || (this.focus.has(id) && !this.hideFocus);
+        return this.opacityOf(id) > 0;
     }
 
     isDimmed(id: number): boolean {
@@ -93,5 +93,8 @@ const sameMembers = (
 /** How opaque a dimmed marcher and its label are. */
 export const DIMMED_OPACITY = 0.25;
 
-/** How opaque the marchers outside an open shape are: a faint dot, with no label (#417) */
-export const SHAPE_FADED_OPACITY = 0.12;
+/**
+ * How opaque the marchers outside an open shape and their labels are (#417): secondary but
+ * readable as context. 12% made the field look empty (owner lab feedback).
+ */
+export const SHAPE_FADED_OPACITY = 0.4;

@@ -33,7 +33,7 @@ describe("FieldDimming", () => {
         expect(dimming.version).toBe(version + 1);
     });
 
-    it("an open shape fades everyone else to a faint dot, and hides its own marchers' dots once drawn (#417)", () => {
+    it("an open shape fades everyone else, still readable, and hides its own marchers' dots once drawn (#417)", () => {
         const dimming = new FieldDimming();
         dimming.setFocus(new Set([1, 2]));
         expect([1, 2, 3].map((id) => dimming.opacityOf(id))).toEqual([
@@ -41,8 +41,10 @@ describe("FieldDimming", () => {
             1,
             SHAPE_FADED_OPACITY,
         ]);
-        expect(SHAPE_FADED_OPACITY).toBeLessThan(DIMMED_OPACITY);
-        expect(dimming.labelShown(3)).toBe(false);
+        // Context, not gone (owner: 12% "looks empty"): clearly secondary but visible
+        expect(SHAPE_FADED_OPACITY).toBeGreaterThanOrEqual(0.35);
+        expect(SHAPE_FADED_OPACITY).toBeLessThanOrEqual(0.45);
+        expect(dimming.labelShown(3)).toBe(true);
 
         dimming.setFocus(new Set([1, 2]), { hideMembers: true });
         expect([1, 2, 3].map((id) => dimming.opacityOf(id))).toEqual([

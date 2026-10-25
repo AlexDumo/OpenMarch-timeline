@@ -378,7 +378,7 @@ test("change: while a box is open everyone else fades, and nobody once it closes
     await expect.poll(dimmedIds).toEqual([]);
 });
 
-test("change: an open box fades everyone else to a faint dot and, once drawn, hides its own marchers' dots; placing or Escape brings them back", async ({
+test("change: an open box fades everyone else, still readable, and once drawn hides its own marchers' dots for its spots and start rings; placing or Escape brings them back", async ({
     show,
 }) => {
     const { page } = show;
@@ -401,7 +401,7 @@ test("change: an open box fades everyone else to a faint dot and, once drawn, hi
             .toEqual([1, 2]);
         await page.keyboard.press("b");
         // Armed, nothing drawn: the two still show where they stand
-        await expect.poll(looks).toEqual(expected("full", "faint no-label"));
+        await expect.poll(looks).toEqual(expected("full", "faint"));
         const grid = await fieldGrid(show);
         const S = grid.pixelsPerStep;
         const cf = grid.centerFront;
@@ -413,15 +413,16 @@ test("change: an open box fades everyone else to a faint dot and, once drawn, hi
         await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
     };
 
-    await showPathways(page);
     await boxTwo();
+    await expect.poll(looks).toEqual(expected("hidden no-label", "faint"));
+    // Where they come from is the start rings, pathways or not; pathways add the walks
+    expect((await shapeOverlay(page))!.rings).toHaveLength(2);
+    expect((await shapeOverlay(page))!.walks).toHaveLength(0);
+    await page.getByTestId("shape-editor-pathways").click();
     await expect
-        .poll(looks)
-        .toEqual(expected("hidden no-label", "faint no-label"));
-    // Pathways on: where they come from is the start rings and walks, no second set of dots
-    const overlay = (await shapeOverlay(page))!;
-    expect(overlay.rings).toHaveLength(2);
-    expect(overlay.walks).toHaveLength(2);
+        .poll(async () => (await shapeOverlay(page))!.walks)
+        .toHaveLength(2);
+    expect((await shapeOverlay(page))!.rings).toHaveLength(2);
     await page.keyboard.press("Escape");
     await expect.poll(looks).toEqual(expected("full", "full"));
 
@@ -429,6 +430,22 @@ test("change: an open box fades everyone else to a faint dot and, once drawn, hi
     await page.keyboard.press("Enter");
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
     await expect.poll(looks).toEqual(expected("full", "full"));
+});
+
+test("change: the chip and the Transform section draw their direction marks as icons, never as text a font may make an emoji", async ({
+    show,
+}) => {
+    const { page } = show;
+    const PICTOGRAPHIC = /\p{Extended_Pictographic}/u;
+    await drawBox(show);
+    const chip = page.getByTestId("shape-tool-readout");
+    await expect(chip.locator('[data-glyph="across"]')).toHaveCount(1);
+    await expect(chip.locator('[data-glyph="deep"]')).toHaveCount(1);
+    expect(await chip.innerText()).not.toMatch(PICTOGRAPHIC);
+    const transform = page.getByTestId("transform-section");
+    await expect(transform).toBeVisible();
+    expect(await transform.innerText()).not.toMatch(PICTOGRAPHIC);
+    await expect(transform.locator("[data-glyph]")).not.toHaveCount(0);
 });
 
 test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({
@@ -530,7 +547,7 @@ test("change: the open box's controls fade while the pointer is away from it, an
     await expect.poll(calm).toBe(true);
 });
 
-test("change: the open box starts with no pathways; the floating editor's Pathways toggle shows and hides its walks and start rings", async ({
+test("change: the open box always shows its start rings, and starts with no walks; the floating editor's Pathways toggle shows and hides the walks", async ({
     show,
 }) => {
     const { page } = show;
@@ -538,7 +555,7 @@ test("change: the open box starts with no pathways; the floating editor's Pathwa
     await drawBox(show);
     let overlay = (await shapeOverlay(page))!;
     expect(overlay.walks).toEqual([]);
-    expect(overlay.rings).toEqual([]);
+    expect(overlay.rings).toHaveLength(ALL.length);
     expect(overlay.spots).toHaveLength(ALL.length);
     await expect(pathways).toHaveAttribute("aria-pressed", "false");
 
@@ -554,7 +571,7 @@ test("change: the open box starts with no pathways; the floating editor's Pathwa
         .poll(async () => (await shapeOverlay(page))!.walks)
         .toEqual([]);
     overlay = (await shapeOverlay(page))!;
-    expect(overlay.rings).toEqual([]);
+    expect(overlay.rings).toHaveLength(ALL.length);
     await expect(pathways).toHaveAttribute("aria-pressed", "false");
 });
 

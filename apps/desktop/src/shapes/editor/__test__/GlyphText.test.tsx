@@ -1,0 +1,45 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render } from "@testing-library/react";
+import { SHAPE_TOOLS } from "../../tool/shapeTools";
+import { GlyphText, textPresentation } from "../GlyphText";
+
+/**
+ * The shape UI's direction marks (owner bug on #417: "↕" drew as a color emoji beside a plain
+ * "↔"). They render as Phosphor icons, never as text a font may draw as an emoji.
+ */
+
+afterEach(cleanup);
+
+/** Characters a platform may draw as a color emoji */
+const PICTOGRAPHIC = /\p{Extended_Pictographic}/u;
+
+describe("direction marks", () => {
+    it("draw ↔ and ↕ as icons, with the rest as text", () => {
+        const { container } = render(<GlyphText text="↔ 2 ↕ 2½ apart" />);
+        expect(container.textContent).not.toMatch(PICTOGRAPHIC);
+        expect(container.textContent?.replace(/\s+/g, " ").trim()).toBe(
+            "2 2½ apart",
+        );
+        expect(container.querySelectorAll("svg")).toHaveLength(2);
+        expect(container.querySelector('[data-glyph="across"]')).not.toBeNull();
+        expect(container.querySelector('[data-glyph="deep"]')).not.toBeNull();
+    });
+
+    it("every kind's parameter marks are ones drawn as icons", () => {
+        for (const { kind } of SHAPE_TOOLS)
+            for (const param of kind.params) {
+                if (!param.glyph) continue;
+                const { container } = render(<GlyphText text={param.glyph} />);
+                expect(container.textContent).not.toMatch(PICTOGRAPHIC);
+                expect(container.querySelectorAll("svg")).toHaveLength(1);
+                cleanup();
+            }
+    });
+
+    it("in plain text (the field's SVG tip) asks for text presentation", () => {
+        const text = textPresentation("7½ × 2 steps · ↔ 2½ ↕ 2 apart");
+        for (const [i, ch] of [...text].entries())
+            if (PICTOGRAPHIC.test(ch)) expect([...text][i + 1]).toBe("︎");
+        expect(text.replace(/︎/g, "")).toBe("7½ × 2 steps · ↔ 2½ ↕ 2 apart");
+    });
+});
