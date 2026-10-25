@@ -504,6 +504,8 @@ function ThreeFieldView() {
                 fieldImage: () => latest.current.fieldImage,
                 theme: () => latest.current.theme ?? DEFAULT_FIELD_THEME,
                 dimmed: (id) => dimming.isDimmed(id),
+                opacity: (id) => dimming.opacityOf(id),
+                labelShown: (id) => dimming.labelShown(id),
             }),
         );
         return () => installFieldTestApi(undefined);

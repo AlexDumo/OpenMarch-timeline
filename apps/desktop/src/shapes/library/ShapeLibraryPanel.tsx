@@ -15,7 +15,7 @@ import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { MAX_STARS, type ShapeLibraryRow } from "./shapeLibrary";
 import { useShapeLibraryRows, useShapeStarsStore } from "./shapeStars";
 import { kindPickGate, pickShapeKind } from "../tool/pickKind";
-import { useShapeToolStore } from "../tool/shapeToolStore";
+import { useShapeShown } from "../tool/shapeToolStore";
 import { addSavedShapeToLibrary, deleteSavedShape } from "./saveShape";
 
 export const SHAPE_LIBRARY_CONTENT_ID = "shapes";
@@ -64,8 +64,7 @@ export function ShapeLibraryContents({
     const asked = rows.find((r) => r.id === asking);
     const queryClient = useQueryClient();
     const selected = useSelectedMarchers()?.selectedMarchers ?? [];
-    const shapeOpen = useShapeToolStore((s) => s.tool !== null);
-    const pick = kindPickGate(shapeOpen, selected);
+    const pick = kindPickGate(useShapeShown(), selected);
     // The question is about this visit to the library
     useEffect(() => dismissAsk, [dismissAsk]);
 

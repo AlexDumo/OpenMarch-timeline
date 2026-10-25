@@ -33,21 +33,26 @@ import { parseDegrees, scrubDistance } from "../editor/scrub";
 import { ScrubNumber, type ScrubMove } from "../editor/ScrubNumber";
 import { toolEnvFor } from "../tool/toolEnv";
 import type { ToolEnv } from "../tool/toolKind";
-import { useShapeToolStore } from "../tool/shapeToolStore";
+import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { flipSelection, selectionPivot } from "./selectionTransform";
+import { GlyphText } from "../editor/GlyphText";
 
 /**
  * The inspector's Transform section (#349, spec #344, "Editing and transforming"), whenever
  * marchers are selected: the pivot grid, the rotation and the two flips, all around the pivot.
  * For a shape (the open one, or a selected placed one) it also scales by interval, half a step
  * per − or +, never by a percentage; the shape keeps its turn and flip in its recipe. For a plain
- * selection only positions change: no scale, no recipe. The same in Basic and Expert.
+ * selection only positions change: no scale, no recipe. The same in Basic and Expert. Hidden
+ * while the open shape waits out of sight (#416).
  */
 export function TransformSection() {
     const selected = useSelectedMarchers()?.selectedMarchers ?? [];
     const toolOpen = useShapeToolStore((s) => s.tool !== null);
+    const away = useShapeHidden();
     const tool = useToolEditTarget();
     const placed = usePlacedEditTarget();
+    // The open shape is waiting out of sight (#416): nothing here acts on it
+    if (toolOpen && away) return null;
     // A kind armed with nothing drawn yet has no shape: the selection's own controls show
     const target = toolOpen ? tool : placed;
     if (!target && selected.length === 0) return null;
@@ -229,7 +234,12 @@ function ShapeTransform({ target }: { target: ShapeEditTarget }) {
                     className="text-sub tabular-nums"
                     data-testid="transform-scale"
                 >
-                    {env ? scaleReadout(kind, params, spots, env) : ""}
+                    {env && (
+                        <GlyphText
+                            text={scaleReadout(kind, params, spots, env)}
+                            size={12}
+                        />
+                    )}
                 </span>
                 <SmallButton
                     label={`Wider: ${scaleWord} half a step more`}
@@ -302,7 +312,7 @@ function Flips({
                 data-testid="transform-flip-across"
             >
                 <FlipHorizontalIcon size={14} />
-                Flip ↔
+                <GlyphText text="Flip ↔" />
             </button>
             <button
                 type="button"
@@ -314,7 +324,7 @@ function Flips({
                 data-testid="transform-flip-deep"
             >
                 <FlipVerticalIcon size={14} />
-                Flip ↕
+                <GlyphText text="Flip ↕" />
             </button>
         </div>
     );

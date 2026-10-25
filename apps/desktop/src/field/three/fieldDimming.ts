@@ -15,6 +15,8 @@ export class FieldDimming {
      * second set beside isolation's, so each can come and go without the other.
      */
     private focus: ReadonlySet<number> | null = null;
+    /** The open shape is drawn: its own marchers' dots hide, its spots show where they'll be */
+    private hideFocus = false;
     private readonly listeners = new Set<() => void>();
 
     /** Calls `listener` after each change (a layer asks for a frame). Returns the unsubscribe. */
@@ -37,12 +39,37 @@ export class FieldDimming {
         for (const listener of this.listeners) listener();
     }
 
-    /** Dims every marcher but `members` while a shape is open; null ends it. */
-    setFocus(members: ReadonlySet<number> | null) {
-        if (sameMembers(members, this.focus)) return;
+    /**
+     * Fades every marcher but `members` while a shape is open; null ends it. With
+     * `hideMembers` (the shape is drawn, #417) the members' own dots hide too: the shape's spots
+     * show where they'll be, and its pathways where they come from.
+     */
+    setFocus(
+        members: ReadonlySet<number> | null,
+        { hideMembers = false }: { hideMembers?: boolean } = {},
+    ) {
+        const hide = members !== null && hideMembers;
+        if (sameMembers(members, this.focus) && hide === this.hideFocus) return;
         this.focus = members;
+        this.hideFocus = hide;
         this.version++;
         for (const listener of this.listeners) listener();
+    }
+
+    /** How opaque a marcher's dot is drawn: hidden 0, faded by a shape, dimmed, or 1 */
+    opacityOf(id: number): number {
+        if (this.focus !== null) {
+            if (!this.focus.has(id)) return SHAPE_FADED_OPACITY;
+            if (this.hideFocus) return 0;
+        }
+        return this.members !== null && !this.members.has(id)
+            ? DIMMED_OPACITY
+            : 1;
+    }
+
+    /** Whether a marcher's label is drawn: not for an open shape's hidden members */
+    labelShown(id: number): boolean {
+        return this.opacityOf(id) > 0;
     }
 
     isDimmed(id: number): boolean {
@@ -65,3 +92,9 @@ const sameMembers = (
 
 /** How opaque a dimmed marcher and its label are. */
 export const DIMMED_OPACITY = 0.25;
+
+/**
+ * How opaque the marchers outside an open shape and their labels are (#417): secondary but
+ * readable as context. 12% made the field look empty (owner lab feedback).
+ */
+export const SHAPE_FADED_OPACITY = 0.4;
