@@ -36,6 +36,7 @@ describe("SettingsSidebar", () => {
             "Appearance",
             "Mouse & Trackpad",
             "Timeline",
+            "Field",
             "Keyboard shortcuts",
             "Plugins",
             "Privacy",
@@ -53,6 +54,13 @@ describe("SettingsSidebar", () => {
         fireEvent.change(await search(), { target: { value: "zoom" } });
         const buttons = within(nav()).getAllByRole("button");
         expect(buttons.map((b) => b.textContent)).toEqual(["Mouse & Trackpad"]);
+    });
+
+    it("finds the field's look under Field (#418)", async () => {
+        render(<Harness />);
+        fireEvent.change(await search(), { target: { value: "half lines" } });
+        const buttons = within(nav()).getAllByRole("button");
+        expect(buttons.map((b) => b.textContent)).toEqual(["Field"]);
     });
 
     it("filters by a setting label from another section", async () => {

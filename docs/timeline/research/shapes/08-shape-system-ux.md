@@ -345,7 +345,7 @@ selected.
 - **Labels**: spot labels show for up to 24 marchers. Above that they're hidden, because they
   pile up. Crowded labels shrink rather than drop section letters, and field labels can be turned
   off (owner decision, 2026-10-11).
-- **Setting**: the View tab offers **Fade the rest** (default) or **Fade only while drawing**,
+- **Setting**: Settings › Field offers **Fade the rest** (default) or **Fade only while drawing**,
   which keeps everyone at full strength except during the drag. Owner choice, 2026-10-16.
 - **The replaced shape** (where the marchers stood before this edit, when that differs from their
   start) is hidden by default (owner decision, 2026-10-11).

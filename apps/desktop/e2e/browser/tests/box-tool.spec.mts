@@ -3,6 +3,7 @@ import { test, expect, type Show } from "../fixtures.mjs";
 import {
     clickMarcher,
     drawnMarchers,
+    openSettings,
     expectCanvasMatchesShow,
     readField,
     selectPage,
@@ -27,6 +28,8 @@ import type {
 // Placed boxes (07-placed-boxes.md): a click on a member selects the whole
 // box, a double click goes inside it, and a selected box's handles stretch it
 // and save at once. The View tab's label forms come with it.
+// The View tab keeps the toggles flipped while working; set-once looks,
+// shape focus among them, live in Settings › Field (#418).
 // Specs: docs/timeline/research/shapes/06-box-v1.md, 07-placed-boxes.md and
 // 08-shape-system-ux.md.
 
@@ -376,6 +379,72 @@ test("change: while a box is open everyone else fades, and nobody once it closes
     await expect.poll(dimmedIds).toEqual([3, 4, 5, 6, 7, 8]);
     await page.keyboard.press("Escape");
     await expect.poll(dimmedIds).toEqual([]);
+});
+
+test("change: the View tab keeps only labels, paths, shapes and 3D; the rest moved to Settings › Field", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.getByRole("tab", { name: "View" }).click();
+    // Nothing but these: grid lines, half lines, label size and position,
+    // step-size warnings and shape focus moved to Settings
+    await expect(page.getByRole("tabpanel", { name: "View" }))
+        .toMatchAriaSnapshot(`
+      - tabpanel "View":
+        - /children: equal
+        - text: Labels
+        - combobox "Labels"
+        - button "Next paths":
+          - text: Next paths
+          - img
+        - text: Shapes
+        - combobox "Shapes"
+        - button "Open 3D View":
+          - text: Open 3D View
+          - img
+    `);
+
+    const settings = await openSettings(page, "Field");
+    for (const name of ["Grid lines", "Half lines", "Step size warnings"])
+        await expect(settings.getByRole("switch", { name })).toBeVisible();
+    for (const name of ["Normal", "Above the dot", "Fade the rest"])
+        await expect(settings.getByRole("radio", { name })).toBeChecked();
+});
+
+test("change: Settings › Field › While shaping changes who fades on the open field at once", async ({
+    show,
+}) => {
+    const { page } = show;
+    const settings = await openSettings(page, "Field");
+    const dimmedIds = async () =>
+        (await drawnMarchers(page)).filter((m) => m.dimmed).map((m) => m.id);
+    await page.bringToFront();
+    await page.mouse.click(...(await screenOf(page, 1)));
+    await page.keyboard.down("Shift");
+    await page.mouse.click(...(await screenOf(page, 2)));
+    await page.keyboard.up("Shift");
+    await page.keyboard.press("b");
+    await expect.poll(dimmedIds).toEqual([3, 4, 5, 6, 7, 8]);
+
+    // Only while a drag draws it: an open box at rest fades nobody
+    await settings
+        .getByRole("radio", { name: "Fade only while drawing" })
+        .click();
+    await expect.poll(dimmedIds).toEqual([]);
+    await settings.getByRole("radio", { name: "Fade the rest" }).click();
+    await expect.poll(dimmedIds).toEqual([3, 4, 5, 6, 7, 8]);
+});
+
+test("change: Settings › Field › Grid lines redraws the open field at once", async ({
+    show,
+}) => {
+    const { page } = show;
+    const field = () => page.getByTestId("fieldCanvas").first().screenshot();
+    const settings = await openSettings(page, "Field");
+    await waitForIdle(page);
+    const withGrid = await field();
+    await settings.getByRole("switch", { name: "Grid lines" }).click();
+    await expect.poll(async () => (await field()).equals(withGrid)).toBe(false);
 });
 
 test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({
