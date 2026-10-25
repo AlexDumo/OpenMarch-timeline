@@ -56,7 +56,7 @@ export default function LabelsLayer({
     labels: ReadonlyMap<number, string>;
     theme: FieldTheme;
     atlas: GlyphAtlas;
-    /** The View tab's label form, size and position; exports keep the default. */
+    /** The View tab's label form and Settings › Field's label size and position; exports keep the default. */
     style?: LabelStyle;
     /** Keeps Auto's size as it is (during playback), so labels don't change size as marchers pass. */
     holdAutoSize?: boolean;

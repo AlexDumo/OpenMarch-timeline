@@ -91,11 +91,20 @@ async function openInBrowser(
             localStorage.setItem(key, value);
     }, storage);
     if (initScript) await context.addInitScript(initScript);
-    const page = await context.newPage();
 
-    await page.exposeFunction(
+    // On the context, not the page, so a second window (Settings, #418)
+    // reaches the same show and the same served renderer
+    await context.exposeFunction(
         "__omIpcInvoke",
         async (channel: string, args: unknown[]) => {
+            // The main process opens the Settings window; here it's a page
+            // of the same context, so it shares local storage as it does in
+            // Electron
+            if (channel === "settings:open") {
+                const settings = await context.newPage();
+                await settings.goto(`${APP_ORIGIN}/#settings`);
+                return { ok: true, value: undefined };
+            }
             try {
                 return { ok: true, value: await host.invoke(channel, args) };
             } catch (error) {
@@ -103,14 +112,14 @@ async function openInBrowser(
             }
         },
     );
-    await page.exposeFunction(
+    await context.exposeFunction(
         "__omIpcSend",
         (channel: string, args: unknown[]) => host.send(channel, args),
     );
 
     // Serve the built renderer from disk and block everything else, so a
     // test never depends on the network or on a free port.
-    await page.route("**/*", async (route) => {
+    await context.route("**/*", async (route) => {
         const url = new URL(route.request().url());
         if (url.protocol === "data:" || url.protocol === "blob:")
             return route.fallback();
@@ -124,6 +133,7 @@ async function openInBrowser(
         return route.fulfill({ path: file });
     });
 
+    const page = await context.newPage();
     await page.goto(APP_ORIGIN);
     const reader = new DatabaseSync(databasePath, { readOnly: true });
     return {
