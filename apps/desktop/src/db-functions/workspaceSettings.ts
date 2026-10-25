@@ -1,7 +1,8 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, getTableName, sql } from "drizzle-orm";
 import * as z from "zod";
 import { DbConnection, DbTransaction } from "./types";
 import { withTimelineWriteLock } from "./history";
+import { scopedRestoreStatementSql } from "./historyTriggers";
 import { schema } from "@/global/database/db";
 import {
     type WorkspaceSettings,
@@ -179,14 +180,18 @@ export async function updateWorkspaceSettingsParsed({
 }
 
 /**
- * Logs the undo statement for the workspace settings row as it is now, in the current undo group,
- * and clears the redo stack, as a history trigger would. `workspace_settings` has no standing
- * history triggers (`tablesWithScopedHistory`), so a write that should be undone with the rest of
- * its edit calls this before changing the row. Call it inside `transactionWithHistory`; at most
- * once per row per edit is needed (undo restores the row as it was at the first call).
+ * Logs, in the current undo group, the undo statement for writing `newJsonData` to the workspace
+ * settings row, and clears the redo stack, as a history trigger would. `workspace_settings` has no
+ * standing history triggers (`tablesWithScopedHistory`), so a write that should be undone with the
+ * rest of its edit calls this before changing the row. Call it inside `transactionWithHistory`.
+ *
+ * The statement restores only the top-level settings `newJsonData` changes
+ * (`scopedRestoreStatementSql`), so undo leaves alone settings changed since by writers without
+ * history (the settings dialog, say).
  */
 export async function recordWorkspaceSettingsUndoInTransaction(
     tx: DbTransaction,
+    newJsonData: string,
 ): Promise<void> {
     const columns = (
         (await tx.all(
@@ -195,16 +200,18 @@ export async function recordWorkspaceSettingsUndoInTransaction(
     ).map((c) =>
         Array.isArray(c) ? String(c[0]) : String((c as { name: string }).name),
     );
-    const assignments = columns
-        .map((c) => `"${c}"='||quote("${c}")||'`)
-        .join(",");
+    const statement = scopedRestoreStatementSql(
+        getTableName(schema.workspace_settings),
+        columns,
+        "workspace_settings.",
+        "v.new_json",
+    );
     await tx.run(
-        sql.raw(
-            `INSERT INTO ${Constants.UndoHistoryTableName} ("sequence", "history_group", "sql")
-            SELECT NULL, (SELECT cur_undo_group FROM ${Constants.HistoryStatsTableName}),
-                'UPDATE "workspace_settings" SET ${assignments} WHERE rowid='||rowid
-            FROM workspace_settings;`,
-        ),
+        sql`WITH v(new_json) AS (SELECT ${newJsonData})
+            INSERT INTO ${sql.raw(Constants.UndoHistoryTableName)} ("sequence", "history_group", "sql")
+            SELECT NULL, (SELECT cur_undo_group FROM ${sql.raw(Constants.HistoryStatsTableName)}),
+                ${sql.raw(statement)}
+            FROM v, workspace_settings;`,
     );
     await tx.run(sql.raw(`DELETE FROM ${Constants.RedoHistoryTableName};`));
     await tx.run(
@@ -239,13 +246,34 @@ export async function updateWorkspaceSettingsWithHistoryInTransaction({
             })
             .returning();
     }
-    const current = workspaceSettingsSchema.parse(JSON.parse(row.json_data));
+    const stored = JSON.parse(row.json_data) as Record<string, unknown>;
+    const current = workspaceSettingsSchema.parse(stored);
     const next = workspaceSettingsSchema.parse(update(current));
-    await recordWorkspaceSettingsUndoInTransaction(tx);
+    // Store only the settings that change, so the row (and its undo) keeps every other key as it
+    // is, defaults not written out included
+    const written = { ...stored };
+    let changed = false;
+    for (const key of new Set([
+        ...Object.keys(current),
+        ...Object.keys(next),
+    ])) {
+        const value = (next as Record<string, unknown>)[key];
+        if (
+            JSON.stringify((current as Record<string, unknown>)[key]) ===
+            JSON.stringify(value)
+        )
+            continue;
+        changed = true;
+        if (value === undefined) delete written[key];
+        else written[key] = value;
+    }
+    if (!changed) return next;
+    const jsonData = JSON.stringify(written);
+    await recordWorkspaceSettingsUndoInTransaction(tx, jsonData);
     await tx
         .update(schema.workspace_settings)
         .set({
-            json_data: JSON.stringify(next),
+            json_data: jsonData,
             updated_at: new Date().toISOString(),
         })
         .where(eq(schema.workspace_settings.id, 1));

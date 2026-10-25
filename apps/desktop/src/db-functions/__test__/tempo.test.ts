@@ -199,6 +199,46 @@ describeDbTests("tempo write path", (it) => {
             expect(await settingsTriggers(db)).toEqual([]);
         });
 
+        it("undoes and redoes only the settings the retime changed", async ({
+            db,
+            marchersAndPages,
+        }) => {
+            void marchersAndPages;
+            await setUp(db);
+            await retimeBeats({
+                db,
+                newDurationsByBeatId: new Map(),
+                originShift: 1,
+                syncedBeatIds: [17],
+            });
+            // Settings changed afterwards outside history (the settings dialog)
+            const settings = await getWorkspaceSettingsParsed({ db });
+            await updateWorkspaceSettingsParsed({
+                db,
+                settings: {
+                    ...settings,
+                    projectName: "Fall show",
+                    measurementOffset: 5,
+                },
+            });
+            const later = { projectName: "Fall show", measurementOffset: 5 };
+            for (let i = 0; i < 2; i++) {
+                expect((await performUndo(db)).success).toBe(true);
+                expect(await getWorkspaceSettingsParsed({ db })).toMatchObject({
+                    ...later,
+                    audioOffsetSeconds: 0.25,
+                });
+                expect(await readTempoSyncedBeatIds(db)).toEqual([]);
+                expect((await performRedo(db)).success).toBe(true);
+                expect(await getWorkspaceSettingsParsed({ db })).toMatchObject({
+                    ...later,
+                    audioOffsetSeconds: -0.75,
+                });
+                expect(await readTempoSyncedBeatIds(db)).toEqual([17]);
+            }
+            expect(await settingsTriggers(db)).toEqual([]);
+        });
+
         it("refuses bad input and writes nothing", async ({
             db,
             marchersAndPages,

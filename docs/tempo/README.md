@@ -33,8 +33,10 @@ Everything in the tempo core is in the timing layer.
 A retime is one `transactionWithHistory` entry. The audio offset and synced counts live in
 `workspace_settings`, which has no standing history triggers; a retime logs that row's undo
 statement itself, so one Ctrl+Z puts the durations, the offset and the synced counts back together
-(`tablesWithScopedHistory` in `db-functions/historyTriggers.ts`). Settings changed elsewhere (the
-Music modal, the workspace settings dialog) are still not undoable.
+(`tablesWithScopedHistory` in `db-functions/historyTriggers.ts`). Undo and redo restore only the
+settings keys the retime changed. Settings changed elsewhere (the Music modal, the workspace
+settings dialog) are still not undoable, and an Undo leaves them alone unless they are keys the
+retime changed too.
 
 ## Tempo lab flags
 

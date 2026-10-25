@@ -36,8 +36,9 @@ entry, and every other settings write stays out of history as before.
 
 Known limits of A:
 
-- Undoing a retime restores the whole settings row as it was, so a settings change made after the
-  retime (a project name, say) is undone with it. Rare; acceptable for a prototype.
+- Undoing a retime restores only the settings keys it changed (`scopedRestoreStatementSql`), and
+  redo the same, so a settings change made after the retime (a project name, say) stays. A later
+  change to one of those keys (the audio offset in the Music modal) is still undone with it.
 - Deleting a beat leaves its id in the list. Readers drop ids that no longer exist
   (`readTempoSyncedBeatIds`); the hook returns the raw list.
 
