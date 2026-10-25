@@ -24,7 +24,6 @@ import {
 } from "../../src/utilities/homeScreen";
 import { isAppleTouchDevice } from "./filePicking";
 import { startTouchGestureGuard } from "./touchGestures";
-import { startLayoutDebug } from "./layoutDebug";
 import { useWebWelcomeStore } from "../../src/stores/WebWelcomeStore";
 import { storageKey } from "./channel";
 import { invokeWorker, ipcRenderer, startWorker } from "./ipc";
@@ -213,7 +212,6 @@ async function start() {
     window.__openmarchPlatform = detectPlatform();
     suppressBrowserContextMenu();
     startTouchGestureGuard();
-    startLayoutDebug();
     const isSettingsTab = window.location.hash === "#settings";
     registerPageHandlers({ isSettingsTab });
 
