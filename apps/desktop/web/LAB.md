@@ -96,7 +96,9 @@ again on every push while the label is on. Merging the pull request archives
 the test: it's closed and hidden from testers. Removing the label or closing
 the pull request unmerged closes it. Its feedback stays either way. The lab
 adds its feedback widget to the page (a script before `</body>` in
-`index.html`); nothing in the build knows about it. The manifest format and
+`index.html`). The build only keeps it out of the 3D View window
+(`keepLabWidgetOut` in `renderer/lab.ts`, which claims the widget's
+`om-lab-widget` element first); Settings keeps it. The manifest format and
 the lab itself are in the `OpenMarch/om-lab` repository.
 
 ## Comparing versions
