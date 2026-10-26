@@ -19,6 +19,7 @@ import { applyAnalyticsConsent } from "@/utilities/analyticsConsent";
 import tolgee from "@/global/singletons/Tolgee";
 import { installClickFocusMarker } from "@/utilities/clickFocus";
 import { initEditorModeStore } from "@/stores/EditorModeStore";
+import { startInputModeTracking } from "@/stores/InputModeStore";
 
 installClickFocusMarker();
 
@@ -95,6 +96,9 @@ function mountEditor() {
         dsn: "https://72e6204c8e527c4cb7a680db2f9a1e0b@o4509010215239680.ingest.us.sentry.io/4509010222579712",
         enabled: false,
     });
+
+    // Touch or mouse layout (<html data-input>), for every window
+    startInputModeTracking();
 
     ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         <React.StrictMode>

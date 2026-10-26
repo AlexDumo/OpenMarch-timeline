@@ -13,8 +13,16 @@ import { View3dPublisher } from "@/view3d/sync/useView3dPublisher";
 import { AssetsHost } from "@/components/assets/AssetsModal";
 import TimelineResolverHost from "@/timeline/TimelineResolverHost";
 import LaunchPage from "@/components/launchpage/LaunchPage";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import {
+    lazy,
+    Suspense,
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
 import CommandPalette from "@/shortcuts/palette/CommandPalette";
+import LongPressGuard from "@/components/ui/LongPressGuard";
 import ExportCoordinatesModal from "@/components/exporting/ExportCoordinatesModal";
 import ShortcutDispatcher from "@/shortcuts/ShortcutDispatcher";
 import {
@@ -59,15 +67,42 @@ import ConvertShowDialog from "./components/ConvertShowDialog";
 import ShortcutsDialog from "./components/ShortcutsDialog";
 import MusicXmlChecksDialog from "./components/music/MusicXmlChecksDialog";
 import WebWelcomeModal from "./components/WebWelcomeModal";
+import WebSettingsSheet from "./components/WebSettingsSheet";
+import WebHomeScreenPrompt from "./components/web/WebHomeScreenPrompt";
+import WebVersionsDialog from "./components/web/WebVersionsDialog";
 import { isWebBuild } from "./utilities/webBuild";
 import { useLoadFileErrorHandler } from "./hooks/useLoadFileErrorHandler";
 import { toast } from "sonner";
 import { version as currentVersion } from "../package.json";
 import { shouldShowUpdateNotification } from "./utilities/updateNotification";
 import { isAnalyticsChoiceMade } from "./components/welcome/welcomeFlowSteps";
+import { useIsTouchMode } from "./stores/InputModeStore";
+import { useOnScreenKeyboard } from "./hooks/useOnScreenKeyboard";
+import { startAudioUnlock } from "./utilities/audioUnlock";
+import { audioContextRef } from "@/components/timeline/audio/AudioPlayer";
+import {
+    inspectorLayout,
+    type InspectorChoices,
+} from "./utilities/inspectorLayout";
+import InspectorDock from "@/components/layout/InspectorDock";
 
 // The field's own chunk, so the launch page doesn't load three.js
 const ThreeField = lazy(() => import("@/field/three/ThreeField"));
+
+/** The window's size, kept current. */
+function useWindowSize() {
+    const read = () => ({
+        width: window.innerWidth,
+        height: window.innerHeight,
+    });
+    const [size, setSize] = useState(read);
+    useEffect(() => {
+        const onResize = () => setSize(read());
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+    }, []);
+    return size;
+}
 
 export const queryClient = new QueryClient({
     defaultOptions: {
@@ -104,6 +139,33 @@ function App() {
     // Preview watches the show: no toolbar, sidebar or inspector
     const preview = useIsPreviewMode();
     const visuals = useIsVisualsView();
+    const isTouchMode = useIsTouchMode();
+    const windowSize = useWindowSize();
+    const [inspectorChoices, setInspectorChoices] = useState<InspectorChoices>({
+        side: null,
+        drawer: false,
+    });
+    const inspector = inspectorLayout(
+        windowSize.width,
+        windowSize.height,
+        isTouchMode,
+        inspectorChoices,
+    );
+    const drawerShown = inspector.presentation === "drawer";
+    const setInspectorOpen = useCallback(
+        (open: boolean) =>
+            setInspectorChoices((choices) =>
+                drawerShown
+                    ? { ...choices, drawer: open }
+                    : { ...choices, side: open },
+            ),
+        [drawerShown],
+    );
+
+    useOnScreenKeyboard();
+
+    // iPads and phones: audio may only start during a press.
+    useEffect(() => startAudioUnlock(() => [audioContextRef]), []);
 
     // Check if running in codegen mode
     const isCodegen = window.electron.isCodegen;
@@ -270,7 +332,7 @@ function App() {
                 <main
                     data-workspace={visuals ? "visuals" : "editor"}
                     className={clsx(
-                        "bg-bg-1 text-text outline-accent relative flex h-screen min-h-0 w-screen min-w-0 flex-col overflow-hidden font-sans",
+                        "app-frame bg-bg-1 text-text outline-accent fixed inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden font-sans",
                         // Visuals mode is its own workspace (performer-behavior.md 7.1): a tint says so
                         visuals &&
                             "before:to-accent/10 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:bg-linear-to-b before:from-transparent",
@@ -294,10 +356,14 @@ function App() {
                     <AlertModal />
                     {isWebBuild && <WebWelcomeModal />}
                     <ConvertShowDialog />
+                    {isWebBuild && <WebSettingsSheet />}
+                    {isWebBuild && <WebHomeScreenPrompt />}
+                    {isWebBuild && <WebVersionsDialog />}
                     <ShortcutDispatcher />
                     <CommandPalette />
                     <ShortcutsDialog />
                     <MusicXmlChecksDialog />
+                    <LongPressGuard />
                     {/* Always show LaunchPage when no file is selected, regardless of database state */}
                     {!databaseIsReady ? (
                         <SelectedAudioFileProvider>
@@ -329,7 +395,7 @@ function App() {
                                             <VisualsProvider>
                                                 <div
                                                     id="app"
-                                                    className="flex h-full min-h-0 w-full gap-8 px-8 pb-8"
+                                                    className="relative flex h-full min-h-0 w-full gap-8 px-8 pb-8"
                                                 >
                                                     <div
                                                         id="workspace"
@@ -381,7 +447,11 @@ function App() {
                                                         )}
                                                     </div>
                                                     {!preview && (
-                                                        <div
+                                                        <InspectorDock
+                                                            layout={inspector}
+                                                            onOpenChange={
+                                                                setInspectorOpen
+                                                            }
                                                             className={
                                                                 timelineFocussedClass
                                                             }
@@ -391,7 +461,7 @@ function App() {
                                                             ) : (
                                                                 <Inspector />
                                                             )}
-                                                        </div>
+                                                        </InspectorDock>
                                                     )}
                                                 </div>
                                             </VisualsProvider>

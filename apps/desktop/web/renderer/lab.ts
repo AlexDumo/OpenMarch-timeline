@@ -41,9 +41,6 @@ export async function startLabBuild() {
     await skipWelcomeFlow();
     if (newShowRequested()) return;
     if (await invokeWorker<boolean>("database:isReady")) return;
-    // A kept show this build couldn't reopen: the start page asks before
-    // anything replaces it.
-    if (await invokeWorker<string | null>(WEB_CHANNELS.keptShow)) return;
     const show =
         webExampleShows.find(
             (example) => example.id === import.meta.env.VITE_PUBLIC_LAB_SHOW,

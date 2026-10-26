@@ -58,6 +58,7 @@
         "@gltf-transform/core": "4.5.1",
         "@gltf-transform/extensions": "4.5.1",
         "@gltf-transform/functions": "4.5.1",
+        "@mediabunny/aac-encoder": "1.46.0",
         "@openmarch/core": "workspace:*",
         "@openmarch/metronome": "workspace:*",
         "@openmarch/musicxml-parser": "workspace:*",
