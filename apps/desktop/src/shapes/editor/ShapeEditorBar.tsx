@@ -31,7 +31,7 @@ import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { ShapeAwayChip } from "./ShapeAwayChip";
 import { GlyphText } from "./GlyphText";
-import { useEditorSurface } from "./editorSurface";
+import { useShapePointerOver } from "../tool/shapeToolMode";
 import "./ShapeEditorSurface.css";
 import {
     chipLayout,
@@ -62,9 +62,9 @@ const GAP_PX = 14;
  * change most. It moves with the shape and flips above it when there's no room below. Before a
  * shape is drawn, a hint at the top of the field says how to draw one.
  *
- * At rest it is nearly see-through, so the field shows through it, and it turns solid on hover,
- * with focus inside it or a menu of its open (`ShapeEditorSurface.css`, a lab comparison). Its
- * numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
+ * For an open shape it fades with the pointer away from both the shape and itself, so what's
+ * under it shows, and it is solid while the pointer is over either, with focus inside it or a
+ * menu of its open (`ShapeEditorSurface.css`). Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
  * For a box: `− 6 × 2 + ↻ │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`, and in Spread `↔ 2 steps Reshuffle
  * │ ⋯ │ Place`. Every number can be typed or dragged,
  * and follows the field: across is side to side however the box is turned. ⋯ opens a second row:
@@ -124,8 +124,9 @@ function ShapeEditorBar({
 }) {
     const { kind, params, spots } = target;
     const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
-    // See-through at rest, solid on hover or focus (#426 lab: ShapeEditorSurface.css)
-    const surface = useEditorSurface();
+    // An open shape's editor fades with the pointer away from it and the shape (#426)
+    const overShape = useShapePointerOver();
+    const fades = testId === "shape-tool-readout";
     // The shape's own pivot (#350), the same in Basic and Expert (spec #344)
     const pivot = pivotOf(params);
     const [more, setMore] = useState(false);
@@ -184,7 +185,8 @@ function ShapeEditorBar({
             ref={place.ref}
             className="shape-editor-surface rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal absolute z-10 flex flex-col gap-4 border px-6 py-4 whitespace-nowrap"
             style={place.style}
-            data-surface={surface}
+            data-fades={fades}
+            data-over={overShape}
             {...place.hold}
             data-testid={testId}
             data-shape-editor

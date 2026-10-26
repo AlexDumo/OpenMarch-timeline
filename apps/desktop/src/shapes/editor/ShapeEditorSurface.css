@@ -1,75 +1,30 @@
 /*
- * The floating editor's surface (#426 lab, `editorSurface.ts`). At rest it is nearly see-through,
- * so the field shows through it, with a halo keeping its text and icons readable over the field's
- * lines. It turns solid on hover, with keyboard focus inside it and while one of its menus is open
- * (a Radix trigger inside it is `data-state="open"`). A drag on the field keeps it see-through.
- * Touch screens (no hover) and people asking for less transparency always get the solid one.
+ * The open shape's floating editor (#426, owner): with the pointer away from both the shape and
+ * the editor, the whole editor fades so what's under it shows. It is solid while the pointer is
+ * over the shape (`data-over`) or the editor, with keyboard focus inside it and while one of its
+ * menus is open (a Radix trigger inside it is `data-state="open"`). A drag on the field isn't
+ * "over": the editor stays faded while a handle is dragged. A selected placed shape's editor
+ * doesn't fade. Touch screens (no hover) and people asking for less transparency keep it solid.
  */
 
 .shape-editor-surface {
-    transition:
-        background-color 120ms ease-out,
-        border-color 120ms ease-out,
-        box-shadow 120ms ease-out,
-        backdrop-filter 120ms ease-out;
+    transition: opacity 120ms ease-out;
 }
 
 @media (hover: hover) {
-    .shape-editor-surface:is(
-            [data-surface="glass"],
-            [data-surface="clear"]
-        ):not(:hover, :focus-within, :has([data-state="open"])) {
-        background-image: none;
-        border-color: transparent;
-        box-shadow: none;
-        text-shadow:
-            0 0 2px var(--color-bg-1),
-            0 0 4px var(--color-bg-1);
-    }
-    .shape-editor-surface:is(
-            [data-surface="glass"],
-            [data-surface="clear"]
-        ):not(:hover, :focus-within, :has([data-state="open"]))
-        svg {
-        filter: drop-shadow(0 0 1.5px var(--color-bg-1));
-    }
-    .shape-editor-surface[data-surface="glass"]:not(
+    .shape-editor-surface[data-fades="true"][data-over="false"]:not(
             :hover,
             :focus-within,
             :has([data-state="open"])
         ) {
-        background-color: color-mix(
-            in srgb,
-            var(--color-bg-1) 15%,
-            transparent
-        );
-        backdrop-filter: blur(8px);
-    }
-    .shape-editor-surface[data-surface="clear"]:not(
-            :hover,
-            :focus-within,
-            :has([data-state="open"])
-        ) {
-        background-color: color-mix(
-            in srgb,
-            var(--color-bg-1) 10%,
-            transparent
-        );
+        opacity: 0.4;
     }
 }
 
-/* A separate block: a browser that doesn't know this query (Firefox) keeps the see-through one */
+/* A separate block: a browser that doesn't know this query (Firefox) still fades */
 @media (prefers-reduced-transparency: reduce) {
     .shape-editor-surface.shape-editor-surface {
-        background-color: var(--color-bg-1);
-        background-image: var(--background-image-modal);
-        border-color: var(--color-stroke);
-        box-shadow: var(--shadow-modal);
-        backdrop-filter: none;
-        text-shadow: none;
-    }
-    .shape-editor-surface.shape-editor-surface svg {
-        filter: none;
+        opacity: 1;
     }
 }
 

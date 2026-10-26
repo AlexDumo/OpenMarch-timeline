@@ -598,80 +598,50 @@ test("change: the floating editor is a solid surface, an on toggle is the accent
     );
 });
 
-/** The floating editor's surface: how opaque its background is, and its blur */
-async function editorSurface(page: Page) {
-    return page.getByTestId("shape-tool-readout").evaluate((el) => {
-        const style = getComputedStyle(el);
-        const parts = style.backgroundColor.match(/[\d.]+/g)!.map(Number);
-        return {
-            alpha: parts.length > 3 ? parts[3] : 1,
-            blur: style.backdropFilter.includes("blur"),
-        };
-    });
-}
+/** How opaque the open shape's floating editor is drawn, as a whole */
+const editorOpacity = (page: Page) =>
+    page
+        .getByTestId("shape-tool-readout")
+        .evaluate((el) => Number(getComputedStyle(el).opacity));
 
-test("change: the floating editor is see-through at rest and solid on hover and with focus inside it", async ({
+test("change: the floating editor fades with the pointer away, and is solid over the box, over the editor, with focus inside it and with its menu open", async ({
     show,
 }) => {
     const { page } = show;
-    await drawBox(show);
+    const { pressed, released } = await drawBox(show);
     await page.mouse.move(5, 500);
-    // Glass by default: about 15%, blurred
-    await expect
-        .poll(async () => (await editorSurface(page)).alpha)
-        .toBeLessThan(0.3);
-    expect((await editorSurface(page)).blur).toBe(true);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
 
+    // Over the box on the field
+    const middle = await toScreen(page, {
+        x: (pressed.x + released.x) / 2,
+        y: (pressed.y + released.y) / 2,
+    });
+    await page.mouse.move(middle.x, middle.y);
+    await expect.poll(() => editorOpacity(page)).toBe(1);
+    await page.mouse.move(5, 500);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
+
+    // Over the editor
     await page.getByTestId("shape-tool-readout").hover();
-    await expect.poll(async () => (await editorSurface(page)).alpha).toBe(1);
+    await expect.poll(() => editorOpacity(page)).toBe(1);
     await page.mouse.move(5, 500);
-    await expect
-        .poll(async () => (await editorSurface(page)).alpha)
-        .toBeLessThan(0.3);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
 
-    // Typing a number keeps focus inside it: solid with the pointer away
+    // Typing a number keeps focus inside it
     await page.getByTestId("shape-editor-across").click();
     await expect(page.getByTestId("shape-editor-across-input")).toBeFocused();
     await page.mouse.move(5, 500);
-    await expect.poll(async () => (await editorSurface(page)).alpha).toBe(1);
+    await expect.poll(() => editorOpacity(page)).toBe(1);
     await page.keyboard.press("Escape");
-    await expect
-        .poll(async () => (await editorSurface(page)).alpha)
-        .toBeLessThan(0.3);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
 
-    // Its layout menu open: solid with the pointer away
+    // Its layout menu open
     await page.getByTestId("shape-layout-menu").click();
     await expect(page.getByTestId("shape-layout-picker")).toBeVisible();
     await page.mouse.move(5, 500);
-    await expect.poll(async () => (await editorSurface(page)).alpha).toBe(1);
+    await expect.poll(() => editorOpacity(page)).toBe(1);
 });
-
-for (const [variant, see] of [
-    ["clear", true],
-    ["solid", false],
-] as const)
-    test.describe(`with the lab's ${variant} editor`, () => {
-        test.use({
-            initScript: `history.replaceState(null, "", "?variant=${variant}");`,
-        });
-
-        test(`change: the floating editor at rest is ${see ? "see-through with no blur" : "solid"}`, async ({
-            show,
-        }) => {
-            const { page } = show;
-            await drawBox(show);
-            await page.mouse.move(5, 500);
-            if (see)
-                await expect
-                    .poll(async () => (await editorSurface(page)).alpha)
-                    .toBeLessThan(0.2);
-            else
-                await expect
-                    .poll(async () => (await editorSurface(page)).alpha)
-                    .toBe(1);
-            expect((await editorSurface(page)).blur).toBe(false);
-        });
-    });
 
 test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({
     show,
