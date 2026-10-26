@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import clsx from "clsx";
+import { Tip } from "./Tip";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
 import { LAYOUT_LABELS, type LayoutFamily } from "../distribute/distribution";
@@ -36,6 +37,8 @@ interface PickerProps {
     target: Target;
     /** The field's tool environment when a version is picked; null with no field */
     envFor: () => ToolEnv | null;
+    /** The look of what holds it where it sits (the floating editor's pill) */
+    className?: string;
 }
 
 /** Picks `version` for the shape, and remembers its layout for the next new box */
@@ -199,40 +202,45 @@ export function LayoutMenu(props: PickerProps) {
                 else pressed.current = false;
             }}
         >
-            <span className="flex items-center gap-4">
-                <Popover.Trigger asChild>
-                    <button
-                        type="button"
-                        aria-label={`Layout: ${LAYOUT_LABELS[now.layout.family]}`}
-                        title="Layout"
-                        onPointerDown={keepFocus}
-                        data-testid="shape-layout-menu"
-                        className="rounded-4 hover:bg-fg-2 flex items-center gap-4 px-4 py-2"
-                    >
-                        <Thumbnail
-                            version={versionOf(now.layout, now.lines)}
-                            small
-                        />
-                        <span>{LAYOUT_LABELS[now.layout.family]}</span>
-                        <CaretDownIcon size={10} />
-                    </button>
-                </Popover.Trigger>
+            <span
+                className={clsx("flex items-center gap-4", props.className)}
+                data-testid="shape-layout-pill"
+            >
+                <Tip label="Layout">
+                    <Popover.Trigger asChild>
+                        <button
+                            type="button"
+                            aria-label={`Layout: ${LAYOUT_LABELS[now.layout.family]}`}
+                            onPointerDown={keepFocus}
+                            data-testid="shape-layout-menu"
+                            className="rounded-4 hover:bg-fg-2 flex items-center gap-4 px-4 py-2"
+                        >
+                            <Thumbnail
+                                version={versionOf(now.layout, now.lines)}
+                                small
+                            />
+                            <span>{LAYOUT_LABELS[now.layout.family]}</span>
+                            <CaretDownIcon size={10} />
+                        </button>
+                    </Popover.Trigger>
+                </Tip>
                 {wanted?.hint && (
-                    <span
-                        className="text-text/40 flex items-center gap-2"
-                        title={needsTitle(wanted.label, wanted.hint, n)}
-                        data-testid="shape-layout-menu-wanted"
-                    >
-                        {wanted.preview && (
-                            <span className="opacity-40">
-                                <Thumbnail
-                                    version={wanted.preview.version}
-                                    small
-                                />
-                            </span>
-                        )}
-                        {wanted.label} · {hintText(wanted.hint)}
-                    </span>
+                    <Tip label={needsTitle(wanted.label, wanted.hint, n)}>
+                        <span
+                            className="text-text/40 flex items-center gap-2"
+                            data-testid="shape-layout-menu-wanted"
+                        >
+                            {wanted.preview && (
+                                <span className="opacity-40">
+                                    <Thumbnail
+                                        version={wanted.preview.version}
+                                        small
+                                    />
+                                </span>
+                            )}
+                            {wanted.label} · {hintText(wanted.hint)}
+                        </span>
+                    </Tip>
                 )}
             </span>
             <Popover.Portal>

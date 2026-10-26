@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { Tip } from "./Tip";
 import tolgee from "@/global/singletons/Tolgee";
 import { ArrowsInIcon } from "@phosphor-icons/react";
 import type { ShapeEditTarget } from "./editTargets";
@@ -29,17 +30,18 @@ export function CloseUpButton({
         { count: target.empty },
     );
     return (
-        <button
-            type="button"
-            title={title}
-            aria-label={compact ? title : undefined}
-            onPointerDown={keepFocus}
-            onClick={closeUp}
-            data-testid={testId}
-            className={clsx("flex items-center gap-4", className)}
-        >
-            <ArrowsInIcon size={14} />
-            {!compact && tolgee.t("shapes.edit.closeUp.label", "Close up")}
-        </button>
+        <Tip label={title}>
+            <button
+                type="button"
+                aria-label={compact ? title : undefined}
+                onPointerDown={keepFocus}
+                onClick={closeUp}
+                data-testid={testId}
+                className={clsx("flex items-center gap-4", className)}
+            >
+                <ArrowsInIcon size={14} />
+                {!compact && tolgee.t("shapes.edit.closeUp.label", "Close up")}
+            </button>
+        </Tip>
     );
 }

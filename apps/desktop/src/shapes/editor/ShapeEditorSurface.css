@@ -2,7 +2,8 @@
  * The floating editor of the open shape (#426, owner) and of a selected placed one (#430): with the pointer away from both the shape and
  * the editor, the whole editor fades so what's under it shows. It is solid while the pointer is
  * over the shape (`data-over`) or the editor, with keyboard focus inside it (typing a number
- * counts) and while one of its menus is open (a Radix trigger inside it is `data-state="open"`).
+ * counts) and while one of its menus is open (a Radix trigger inside it is `data-state="open"`,
+ * or `aria-expanded` where a tooltip on the same trigger writes its own `data-state`).
  * A drag on the field isn't "over": the editor stays faded while a handle is dragged. Touch screens (no hover) and people asking for less transparency keep it solid.
  */
 
@@ -20,7 +21,8 @@
         .shape-editor-surface[data-over="false"]:not(
                 :hover,
                 :has(:focus-visible:not([data-click-focus])),
-                :has([data-state="open"])
+                :has([data-state="open"]),
+                :has([aria-expanded="true"])
             )
     ) {
         opacity: 0.4;

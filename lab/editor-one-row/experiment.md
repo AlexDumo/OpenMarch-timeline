@@ -3,12 +3,12 @@
 # Keep `id` stable: feedback is filed under it.
 id: editor-one-row
 title: Shape editor on one row, with Recalculate
-summary: The shape's floating editor no longer has a ⋯ menu. Turn, the flips, Save and a new Recalculate button now sit on its one row. Recalculate decides again who goes where by least travel.
+summary: The shape's floating editor no longer has a ⋯ menu. Turn, the flips, Save and a new Recalculate button now sit on its one row, and a box's layout has its own pill under it. Recalculate decides again who goes where by least travel.
 status: open
 variants: []
 questions:
   - Could you find turn, flip and save without the ⋯ menu? Was anything hard to find?
-  - Can you tell the quarter turn (↻90) and the free turn (arc and degrees) apart at a glance?
+  - Can you tell the quarter turn (↻) and the free turn (arc and degrees) apart at a glance?
   - Did Recalculate do what you expected? Was it clear why it was greyed out when it was?
   - Is the editor too wide now? Which button would you give up first?
   - Did you miss choosing Least travel or Drill order?
@@ -16,11 +16,12 @@ questions:
 
 The floating editor under a shape is now **one row**. The **⋯** menu is gone,
 and everything it held sits on the row as small icon buttons. Hover any of
-them for its name.
+them for its name. A box's layout ("Short back") has its own small pill
+under the editor.
 
 **New in this build:**
 
-- **↻90** turns the shape a quarter, as before.
+- **↻** turns the shape a quarter, as before.
 - **Turn** (an arc arrow and the degrees) turns it freely. Drag the number,
   or click it and type. It snaps every 15°, and holding **Alt** turns it
   freely.
@@ -35,7 +36,7 @@ them for its name.
 **What to try**
 
 - Select some marchers, press **B** and draw a box. Turn it a quarter with
-  ↻90, then press Recalculate. Watch the pathways (the path button) change.
+  ↻, then press Recalculate. Watch the pathways (the path button) change.
   Then undo.
 - Move the box by dragging inside it. Recalculate stays greyed out: sliding a
   whole shape doesn't change who should go where.

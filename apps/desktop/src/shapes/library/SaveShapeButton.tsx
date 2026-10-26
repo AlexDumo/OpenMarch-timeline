@@ -4,6 +4,7 @@ import { useState } from "react";
 import { StarIcon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { keepFocus } from "../editor/keepFocus";
+import { Tip } from "../editor/Tip";
 import { saveShape, type SavableShape } from "./saveShape";
 import { suggestedName } from "./savedShapes";
 
@@ -35,33 +36,40 @@ export function SaveShapeButton({
 
     if (name === null)
         return (
-            <button
-                type="button"
-                title={
+            <Tip
+                label={
                     saved && compact
                         ? `Saved as ${saved}`
                         : "Save this shape to your library, starred"
                 }
-                aria-label="Save this shape to your library"
-                onPointerDown={keepFocus}
-                onClick={() => {
-                    setSaved(null);
-                    setDescription("");
-                    setName(
-                        suggestedName(
-                            shape.kind,
-                            shape.params,
-                            shape.spots,
-                            stepPx,
-                        ),
-                    );
-                }}
-                className={clsx("flex items-center gap-4", className)}
-                data-testid={testId}
             >
-                <StarIcon size={14} weight={saved ? "fill" : "regular"} />
-                {!compact && (saved ? `Saved as ${saved}` : "Save")}
-            </button>
+                <button
+                    type="button"
+                    aria-label={
+                        saved && compact
+                            ? `Saved as ${saved}`
+                            : "Save this shape to your library"
+                    }
+                    onPointerDown={keepFocus}
+                    onClick={() => {
+                        setSaved(null);
+                        setDescription("");
+                        setName(
+                            suggestedName(
+                                shape.kind,
+                                shape.params,
+                                shape.spots,
+                                stepPx,
+                            ),
+                        );
+                    }}
+                    className={clsx("flex items-center gap-4", className)}
+                    data-testid={testId}
+                >
+                    <StarIcon size={14} weight={saved ? "fill" : "regular"} />
+                    {!compact && (saved ? `Saved as ${saved}` : "Save")}
+                </button>
+            </Tip>
         );
 
     const finish = async () => {

@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { Tip } from "./Tip";
 import { useRef, useState, type PointerEvent } from "react";
 import {
     lockedAxis,
@@ -146,37 +147,38 @@ export function ScrubNumber({
 
     return (
         <span ref={wrapper} data-scrub-number>
-            <button
-                type="button"
-                aria-label={label}
-                title={`${label}: click to type, drag to change`}
-                data-testid={testId}
-                className={clsx(
-                    "rounded-4 px-2 tabular-nums select-none",
-                    dragging
-                        ? "bg-accent text-text-invert"
-                        : "hover:bg-fg-2 hover:text-accent",
-                )}
-                style={{ cursor: CURSORS[axis], touchAction: "none" }}
-                onPointerDown={down}
-                onPointerMove={move}
-                onPointerUp={() => up(true)}
-                onPointerCancel={() => up(false)}
-                onLostPointerCapture={() => up(true)}
-                onClick={(e) => {
-                    // Not a pointer (Tab from the number before, or a script): type into it
-                    if (e.detail === 0) setTyping(editText);
-                }}
-                onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setTyping(editText);
-                    }
-                }}
-            >
-                {display}
-            </button>
+            <Tip label={`${label}: click to type, drag to change`}>
+                <button
+                    type="button"
+                    aria-label={label}
+                    data-testid={testId}
+                    className={clsx(
+                        "rounded-4 px-2 tabular-nums select-none",
+                        dragging
+                            ? "bg-accent text-text-invert"
+                            : "hover:bg-fg-2 hover:text-accent",
+                    )}
+                    style={{ cursor: CURSORS[axis], touchAction: "none" }}
+                    onPointerDown={down}
+                    onPointerMove={move}
+                    onPointerUp={() => up(true)}
+                    onPointerCancel={() => up(false)}
+                    onLostPointerCapture={() => up(true)}
+                    onClick={(e) => {
+                        // Not a pointer (Tab from the number before, or a script): type into it
+                        if (e.detail === 0) setTyping(editText);
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setTyping(editText);
+                        }
+                    }}
+                >
+                    {display}
+                </button>
+            </Tip>
         </span>
     );
 }

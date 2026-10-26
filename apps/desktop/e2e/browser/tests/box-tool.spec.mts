@@ -380,8 +380,19 @@ test("change: one row with no ⋯; after a move and a quarter turn, Recalculate 
     ])
         await expect(page.getByTestId(id)).toBeVisible();
     await expect(page.getByTestId("shape-editor-order")).toHaveCount(0);
-    // Just drawn, it's least travel already
+    // The app's own tooltips, not a browser title
+    const quarter = page.getByTestId("shape-editor-quarter-turn");
+    await expect(quarter).not.toHaveAttribute("title", /./);
+    await quarter.hover();
+    await expect(page.getByRole("tooltip")).toContainText(
+        "Turn a quarter clockwise",
+    );
+    // Just drawn, it's least travel already, and its tooltip says so
     await expect(recalculate).toBeDisabled();
+    await recalculate.hover();
+    await expect(page.getByRole("tooltip")).toContainText(
+        "already least travel",
+    );
 
     // Move it, then turn it a quarter: everyone keeps their spot
     const spots = (await shapeOverlay(page))!.spots;
@@ -658,7 +669,7 @@ test("change: the floating editor is a solid surface, an on toggle is the accent
             .getByTestId(testId)
             .evaluate((el) => getComputedStyle(el).backgroundColor);
     await drawBox(show);
-    expect(alpha(await background("shape-tool-readout"))).toBe(1);
+    expect(alpha(await background("shape-tool-readout-bar"))).toBe(1);
 
     const pathways = page.getByTestId("shape-editor-pathways");
     const off = await background("shape-editor-pathways");
@@ -728,7 +739,7 @@ test("change: the floating editor fades with the pointer away, and is solid over
     await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
 
     // Over the editor
-    await page.getByTestId("shape-tool-readout").hover();
+    await page.getByTestId("shape-tool-readout-bar").hover();
     await expect.poll(() => editorOpacity(page)).toBe(1);
     await page.mouse.move(5, 500);
     await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
@@ -1385,7 +1396,7 @@ test("change: a selected placed box is calm with the pointer away, shows its con
     // Over the editor: the editor is solid, the box stays calm
     await page.mouse.move(away.x, away.y);
     await expect.poll(calm).toBe(true);
-    await bar.hover();
+    await page.getByTestId("placed-box-readout-bar").hover();
     await expect.poll(barOpacity).toBe(1);
 
     // A handle drag keeps the controls; the editor stays faded as the open box's does
@@ -3118,9 +3129,9 @@ async function saveWideBox(show: Show): Promise<string> {
     await expect(name).toHaveValue("Box 2½ × 1½ apart");
     await name.fill("Wide box");
     await page.keyboard.press("Enter");
-    // An icon on the editor's one row (#429): the words are in its tooltip
+    // An icon on the editor's one row (#429): the words are its name and tooltip
     await expect(page.getByTestId("shape-editor-save")).toHaveAttribute(
-        "title",
+        "aria-label",
         "Saved as Wide box",
     );
     // Enter named it: the box is still open

@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { Tip } from "./Tip";
 import tolgee from "@/global/singletons/Tolgee";
 import { ShuffleIcon } from "@phosphor-icons/react";
 import { distributionOf, reshuffle } from "../distribute/modes";
@@ -26,30 +27,33 @@ export function ReshuffleButton({
     const d = distributionOf(target.kind, target.params, target.spots);
     if (d?.mode !== "spread") return null;
     return (
-        <button
-            type="button"
-            title={tolgee.t(
+        <Tip
+            label={tolgee.t(
                 "shapes.edit.reshuffle.title",
                 "Reshuffle: a new layout",
             )}
-            onPointerDown={keepFocus}
-            onClick={() => {
-                const env = envFor();
-                if (!env) return;
-                const next = reshuffle(
-                    target.kind,
-                    target.params,
-                    target.spots,
-                    env,
-                );
-                if (next !== null) target.apply(next);
-            }}
-            data-testid={testId}
-            data-seed={d.seed}
-            className={clsx("flex items-center gap-4", className)}
         >
-            <ShuffleIcon size={14} />
-            {tolgee.t("shapes.edit.reshuffle.label", "Reshuffle")}
-        </button>
+            <button
+                type="button"
+                onPointerDown={keepFocus}
+                onClick={() => {
+                    const env = envFor();
+                    if (!env) return;
+                    const next = reshuffle(
+                        target.kind,
+                        target.params,
+                        target.spots,
+                        env,
+                    );
+                    if (next !== null) target.apply(next);
+                }}
+                data-testid={testId}
+                data-seed={d.seed}
+                className={clsx("flex items-center gap-4", className)}
+            >
+                <ShuffleIcon size={14} />
+                {tolgee.t("shapes.edit.reshuffle.label", "Reshuffle")}
+            </button>
+        </Tip>
     );
 }

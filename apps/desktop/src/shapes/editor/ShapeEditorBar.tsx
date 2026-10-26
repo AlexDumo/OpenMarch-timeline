@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { keepFocus } from "./keepFocus";
+import { RichTips, Tip } from "./Tip";
 import {
     ArrowArcRightIcon,
     FlipHorizontalIcon,
@@ -67,13 +68,13 @@ const GAP_PX = 14;
  * under it shows, and it is solid while the pointer is over either, with focus inside it or a
  * menu of its open (`ShapeEditorSurface.css`). Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
  * One row, no ⋯ (#429; owner: keep it compact), for a box:
- * `− 6 × 2 + ↻90 │ ↔ 2 ↕ 2 steps 🔗 │ ⤻ 0° ⇋ ⇵ Recalculate ☆ │ Place`, and in Spread
+ * `− 6 × 2 + ↻ │ ↔ 2 ↕ 2 steps 🔗 │ ⤻ 0° ⇋ ⇵ Recalculate ☆ │ Place`, and in Spread
  * `↔ 2 steps Reshuffle │ …`. Every number can be typed or dragged, and follows the field: across
- * is side to side however the box is turned. ↻90 turns the shape a quarter; ⤻ is the free turn,
+ * is side to side however the box is turned. ↻ turns the shape a quarter; ⤻ is the free turn,
  * typed or dragged. Recalculate works out who goes where again by least travel, which moving and
- * turning keep until it's pressed; Close up shows for a placed shape with holes (#392). Under the
- * numbers, a
- * box in Files has its layout menu (#387). Place shows only for a new shape; a selected placed
+ * turning keep until it's pressed; Close up shows for a placed shape with holes (#392). Its
+ * controls show the app's tooltips (`RichTips`). Under the editor, a box in Files has its layout
+ * menu in a pill of its own (#387, #429). Place shows only for a new shape; a selected placed
  * shape saves each edit on release. While the open shape waits out of sight (#416) the editor
  * hides, and away from its moment a chip goes back to it.
  */
@@ -99,11 +100,13 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     const target = toolOpen ? tool : placed;
     if (!target) return null;
     return (
-        <ShapeEditorBar
-            target={target}
-            stepPx={stepPx}
-            testId={toolOpen ? "shape-tool-readout" : "placed-box-readout"}
-        />
+        <RichTips>
+            <ShapeEditorBar
+                target={target}
+                stepPx={stepPx}
+                testId={toolOpen ? "shape-tool-readout" : "placed-box-readout"}
+            />
+        </RichTips>
     );
 }
 
@@ -183,7 +186,7 @@ function ShapeEditorBar({
     return (
         <div
             ref={place.ref}
-            className="shape-editor-surface rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal absolute z-10 flex flex-col gap-4 border px-6 py-4 whitespace-nowrap"
+            className="shape-editor-surface text-sub text-text pointer-events-none absolute z-10 flex flex-col items-center gap-4 whitespace-nowrap *:pointer-events-auto"
             style={place.style}
             data-over={overShape}
             {...place.hold}
@@ -192,7 +195,10 @@ function ShapeEditorBar({
             data-placement={place.above ? "above" : "below"}
             onPointerDown={(e) => e.stopPropagation()}
         >
-            <div className="flex items-center gap-6">
+            <div
+                className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-4"
+                data-testid={`${testId}-bar`}
+            >
                 <span
                     className="flex items-center gap-2"
                     data-testid={`${testId}-text`}
@@ -250,7 +256,6 @@ function ShapeEditorBar({
                         testId="shape-editor-quarter-turn"
                     >
                         <ArrowClockwiseIcon size={14} />
-                        <span className="text-[10px] leading-none">90</span>
                     </IconButton>
                     {target.empty > 0 && (
                         <span className="text-text/60">
@@ -314,7 +319,6 @@ function ShapeEditorBar({
                 <span className="flex items-center gap-2">
                     <span
                         className="text-text/60 flex items-center"
-                        title="Turn"
                         aria-hidden
                     >
                         <ArrowArcRightIcon size={14} />
@@ -400,6 +404,7 @@ function ShapeEditorBar({
                         testId="shape-editor-recalculate"
                     >
                         <UserSwitchIcon size={14} />
+                        Recalculate
                     </IconButton>
                     <CloseUpButton
                         target={target}
@@ -430,7 +435,13 @@ function ShapeEditorBar({
                     </>
                 )}
             </div>
-            <LayoutMenu target={target} envFor={() => envFor(PLAIN)} />
+            {/* The layout settings: a pill of their own under the editor (owner). Only the bar and
+                the pill take the pointer, not the empty space beside the pill */}
+            <LayoutMenu
+                target={target}
+                envFor={() => envFor(PLAIN)}
+                className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal border px-6 py-2"
+            />
         </div>
     );
 }
@@ -564,23 +575,29 @@ function IconButton({
     children: ReactNode;
 }) {
     return (
-        <button
-            type="button"
-            aria-label={label}
-            title={label}
-            aria-pressed={pressed}
-            disabled={disabled}
-            onPointerDown={keepFocus}
-            onClick={onClick}
-            data-testid={testId}
-            className={clsx(
-                "rounded-4 flex items-center p-2 disabled:opacity-40",
-                // On: the icon in the accent on a light accent tint, so the state is plain at a
-                // glance without reading as a solid button (owner)
-                pressed ? "bg-accent/15 text-accent" : "hover:text-accent",
-            )}
-        >
-            {children}
-        </button>
+        <Tip label={label}>
+            <button
+                type="button"
+                aria-label={label}
+                aria-pressed={pressed}
+                // aria-disabled, not disabled: a disabled button gets no pointer, so its tooltip
+                // (which says why, as Recalculate's does) wouldn't show
+                aria-disabled={disabled || undefined}
+                onPointerDown={keepFocus}
+                onClick={() => {
+                    if (!disabled) onClick();
+                }}
+                data-testid={testId}
+                className={clsx(
+                    "rounded-4 flex items-center gap-4 p-2",
+                    // On: the icon in the accent on a light accent tint, so the state is plain at a
+                    // glance without reading as a solid button (owner)
+                    pressed ? "bg-accent/15 text-accent" : "hover:text-accent",
+                    disabled && "cursor-default opacity-40 hover:text-inherit",
+                )}
+            >
+                {children}
+            </button>
+        </Tip>
     );
 }
