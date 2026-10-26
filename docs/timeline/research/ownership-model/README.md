@@ -3,7 +3,10 @@
 # Ownership model for motion: shapes, blocks and keyframes
 
 Status: **decisions taken (owner, 2026-10-26, on fork PR #436)**; nothing built. Open items and
-deferred work are at the end. The draft ADR text is in
+deferred work are at the end. **Next phase:** [placements.md](placements.md) studies shapes and
+marcher coordinates as one entity (a placement), at the owner's direction. It reframes open
+item 1. The reference shape implementation is the box editing branch (`shapes/box-v1` and its
+stack), not the shape code on `main`. The draft ADR text is in
 [adr-0001-amendment-draft.md](adr-0001-amendment-draft.md), and the cited prior art is in
 [prior-art.md](prior-art.md). The brief is fork issue #434.
 
@@ -84,7 +87,10 @@ behaviour change, is open item 5.
      So in practice _where_ lives in `timeline_slot_destinations`, one point per slot, spread over
      one transition per marcher. Converted shows share transitions instead.
 
-2. **Spec shapes, follow-the-leader and arcs are dormant in the app.** No user path creates them.
+2. **Spec shapes, follow-the-leader and arcs on `main` are leftovers, not the intended design.**
+   The owner said on 2026-10-26 that shapes and transitions are still early: the arced pathways on
+   `main` "aren't real", and the shape implementation to look at is the box editing branch
+   (`shapes/box-v1`, #181, and its stack), not `main`'s. No user path creates them.
    - #319 removed the shapes editor and path editing on 2026-10-19 (`docs/timeline/ui.md:1526`).
      `createTimelineShape` (`db-functions/timelineShapes.ts:18`) has no caller outside tests.
    - The converter writes only shapeless direct moves (ADR 0001 C-8, `:545-551`).
@@ -99,7 +105,8 @@ behaviour change, is open item 5.
    - the page-move test excludes shaped moves (`db-functions/timelineRipple.ts:300-306`).
 
    These are the "edge cases in every command". Today they guard data that only fixtures and
-   `ref/` contain, so the model can change now at almost no migration cost.
+   `ref/` contain. Nothing here needs to stay compatible with them, so the model can change now at
+   almost no migration cost.
 
 3. **The in-flight shape work already evaluates shapes on edit** (decision 1). ADR 0006
    (`docs/adr/0006-shape-recipes.md` on `shapes/host`):
@@ -182,7 +189,7 @@ always makes two blocks (decision 2).
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **direct**, own points (every live move today) | Exact. First half: points = positions at c. Second half keeps the points. Already built (`timelineSplitAtBeat.ts`).                                           | Cut at a and b, then delete m's row in the middle block. m holds there (R-6). Its slot stays vacant (D-13) or is compacted (`removeAssignmentRowsInTransaction`). Nobody else moves.                |
 | **direct**, from a shape recipe                | As above. The recipe goes with the second half, which holds the points it made. The first half gets no recipe: its points are mid-move positions, not a form. | Cut at a and b. In the middle block m leaves the recipe, and the recipe's on-leave setting applies there: `hole` moves nobody; `closeUp` or `resplit` places the middle block's other points again. |
-| **arc** (deprecated)                           | Sampled: the first half becomes direct (today).                                                                                                               | As direct.                                                                                                                                                                                          |
+| **arc** (`main`'s leftover)                    | Sampled: the first half becomes direct (today).                                                                                                               | As direct.                                                                                                                                                                                          |
 | **follow-the-leader**                          | Deferred. Until then, sampled as today.                                                                                                                       | Deferred. Until then, refused for that marcher with a reason (holds' fallback).                                                                                                                     |
 
 ## What changes
@@ -245,7 +252,8 @@ Pro Tools. Adobe quotes come from search snippets only (tagged in the notes).
 
 ## Open items
 
-1. **Where exactly the recipe is keyed (decision 3).** The points of one move are not held by one
+1. **Where exactly the recipe is keyed (decision 3).** _Reframed by [placements.md](placements.md),
+   which recommends option (a) in a fuller form: a placement is a transition with its own recipe._ The points of one move are not held by one
    transition: UI-9 gives each marcher its own one-slot transition
    (`db-functions/timelineMembership.ts:163-180`), and converted shows share transitions. So a
    box's members usually sit in several transitions of the same move. Two ways to honour "the
@@ -259,7 +267,7 @@ Pro Tools. Adobe quotes come from search snippets only (tagged in the notes).
      marcher and merge carry a recipe with its members' transitions (re-point it, or split it when
      its members end up in two moves). Cost: those two commands each learn about recipes. No
      change to 0027.
-   - **Recommend (b):** it matches decision 2's "a block is one move", it doesn't touch 0027, and
+   - **First recommendation, superseded by placements.md:** (b), because it matches decision 2's "a block is one move", it doesn't touch 0027, and
      cut already keeps the recipe on the original move, which is the half that holds its points
      (`timelineSplitAtBeat.ts:35-38`). Either way, decide before 0027 reaches `main`.
 2. **Re-split or Close up over a range of counts moves other marchers twice.** With `closeUp` or
@@ -276,8 +284,9 @@ Pro Tools. Adobe quotes come from search snippets only (tagged in the notes).
 5. **Build the block contract first, as a refactor with no behaviour change?** It moves today's
    branches on `path_style` and `dest_shape_id` into one module per style, so holds' tickets and
    the shape host call one seam.
-6. **Arcs are deprecated.** Convert them to direct on open, as the converter does for curves, or
-   leave them dormant?
+6. **Remove `main`'s leftover arcs, follow-the-leader and spec-shape code?** None of it is the
+   intended design (owner, 2026-10-26). Removing it, together with the branches in item 5, is what
+   clears the edge cases. Pathways and follow-the-leader then get designed fresh.
 
 ## Deferred: follow-the-leader
 

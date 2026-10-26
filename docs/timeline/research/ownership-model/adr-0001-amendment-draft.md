@@ -2,7 +2,7 @@
 
 # Draft: ADR 0001 amendment, ownership of motion
 
-Status: **draft**, matching the owner's decisions of 2026-10-26 ([research](README.md),
+Status: **draft**, matching the owner's decisions of 2026-10-26 and the recommended placement model (P1 in [placements.md](placements.md)) ([research](README.md),
 Decisions). Not part of ADR 0001 yet. Text in [brackets] waits on the open item named. Once
 accepted, it goes into `docs/adr/0001-timeline-motion-model.md` §2 as a dated amendment, with
 matching notes on spec §3, D-16 and R-13, and two small amendments to ADR 0006 (end of this file).
@@ -18,17 +18,22 @@ motion has one owner, and commands reach a move's motion only through its block 
 - **When: the block's counts.** Each assignment's range sits inside them.
 - **How: the block's path style,** with its parameters. Nothing outside the style's module reads
   `path_style`, `path_params` or `order_mode` to decide what an edit does.
-- **Where: the block's points, made by its recipe.** A shape is a recipe (ADR 0006): a kind, its
-  version and its parameters, which lay out N spots and know nothing of time. The shape host
-  evaluates it **when it is placed or edited** and writes the spots into the block's destinations
-  (`timeline_slot_destinations`). The recipe is saved for later edits. The resolver never reads a
-  recipe. **The recipe lives with the block that holds the points**, so a split, merge or cut
-  carries it with them. [Open item 1: keyed by `timeline_id`, with split by marcher and merge
-  carrying recipes; or by `transition_id`, with placement gathering a shape's members into one
-  transition. Settle it before migration 0027 reaches `main`.]
-- **Who: membership.** Assignments put marchers into slots over ranges. A recipe's marcher-to-spot
-  rows say which marcher stands on which spot, and a marcher not on its spot is not a member (ADR
-  0006, 2026-10-14).
+- **Where: placements.** A placement is a transition of the move with an optional recipe
+  ([placements.md](placements.md), P1) [placements question 1]:
+  - its points are the transition's destinations (`timeline_slot_destinations`), one per slot;
+  - its formula, if it has one, is a recipe (ADR 0006): a kind, its version and its parameters,
+    which lay out N spots and know nothing of time;
+  - the shape host evaluates the recipe **when it is placed or edited**, writes the spots as the
+    transition's points, and saves the recipe for later edits;
+  - placing a shape puts its members into **one** transition of the move, taking them out of the
+    ones they had there (C-12 allows one per marcher per move);
+  - a dragged marcher is a placement of one (UI-9's own one-slot transition), and a placement
+    without a recipe is freeform (a converted page, for example);
+  - the resolver never reads a recipe. The recipe lives with the block that holds the points
+    (decision 3), so a split, merge or cut carries it with the transition.
+- **Who: membership.** Assignments put marchers into a placement's slots over ranges, and they are
+  the only record of membership. A **hole** is a slot that has a point but no assignment (D-13).
+  A marcher not on its spot is not a member (ADR 0006, 2026-10-14).
 - **Keyframes: the result.** A keyframe is a visible stored move end (holds decision 13). Its
   position comes from the resolver; for a direct move it equals the block's destination exactly.
   No position over time is stored (D-2). Destinations are authored ends (D-16), whether a drag or
@@ -57,11 +62,23 @@ already does for a drag (Q-14). The resolver keeps reading the column while `ref
 `ref/` and the core API are unchanged. [Open item 4: retire `timeline_shapes` and the I-T3, I-T4,
 I-T5 and `tr_shape_set` checks with the FTL design.]
 
-**Arcs** are deprecated (owner, 2026-10-19). [Open item 6.]
+**Arcs, follow-the-leader and spec shapes on `main` are leftovers.** They were never the
+intended design (owner, 2026-10-26). [README open item 6: remove them.] Pathways and
+follow-the-leader are designed fresh later.
 
-**Schema.** No table or column changes in this record. The recipe's key is part of migration 0027
-(#181, unreleased) [open item 1]. The on-leave setting is a field of the recipe's params. The
-change log, the resolver, `ref/` and the file version are unchanged.
+**Schema.** Migration 0027 (#181, unreleased on `main`) creates `timeline_placement_recipes`
+instead of ADR 0006's two recipe tables:
+
+- `transition_id INTEGER PRIMARY KEY REFERENCES timeline_transitions(id) ON DELETE CASCADE`;
+- `kind`, `kind_version`, `params` (JSON: frame, pivot, distribution, `onLeave`, who goes where);
+- `created_at`.
+
+It has no member table. The table is in `tablesWithHistory` and has no change-log triggers, so the
+resolver never reads it. The cascade is safe under undo for the same reason as the kept-spots
+table's (2026-10-09 amendment): no trigger reads it (C-1), and its key is the rowid (C-2). It
+uses new table names and a migration date after the shape branches' old 0027 and 0028, so lab
+files that ran those apply it cleanly. The change log, the resolver, `ref/`, the core API and the
+file version are unchanged.
 
 **Consequences.**
 
@@ -78,7 +95,8 @@ change log, the resolver, `ref/` and the file version are unchanged.
 - One contract test suite, run against every block type: a cut at each whole count leaves every
   position equal (direct) or reports the change (sampled styles); removing over a range with
   `hole` changes only that marcher's positions; undo restores rows and recipes by id.
-- Split by marcher, merge and cut keep each recipe with the points it made.
+- Split by marcher, merge and cut keep each recipe with the transition that holds its points.
+- Placing a shape leaves its members in one transition of the move, with one recipe row.
 - A test that no write path outside the block modules reads `path_style` (a lint rule or a grep
   test).
 
@@ -86,8 +104,9 @@ change log, the resolver, `ref/` and the file version are unchanged.
 
 ## ADR 0006 amendments that go with it
 
-1. **Where a recipe lives.** "A recipe lives with the block that holds its points" replaces "a
-   recipe belongs to a move" in decision 2, with the key settled by open item 1.
+1. **Where a recipe lives.** Decision 2's two tables are replaced by `timeline_placement_recipes`,
+   one row per transition (placement). Membership is read from assignments and points from slot
+   destinations. Decision 4 ("a marcher belongs to at most one recipe per move") follows from C-12.
 2. **On-leave setting.** "A recipe stores what its other members do when one leaves: `hole`,
    `closeUp` or `resplit` (`params.onLeave`). The toast that follows a member leaving offers the
    other two as an override for that edit. No `onLeave` reads as the kind's default." This
