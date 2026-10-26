@@ -256,11 +256,24 @@ export function withBoxFrame<P extends BoxSize>(p: P, frame: ShapeFrame): P {
 export const halfStep = (env: ToolEnv): number => env.stepPx / 2;
 
 /**
- * An interval as drawn, stretched or typed: half steps, hundredths of a step with Alt (spec #344,
- * #411) or typed, never under half a step
+ * How finely a typed interval is kept, per step: 600ths hold hundredths, thirds, quarters, fifths
+ * and eighths (#423)
  */
-export function snapInterval(v: number, env: ToolEnv): number {
+const TYPED_PER_STEP = 600;
+
+/**
+ * An interval as drawn, stretched or typed: half steps, hundredths of a step with Alt (spec #344,
+ * #411), or as typed (`typed`: 1/600 of a step, so 1⅔ stays exact, #423); never under half a step
+ */
+export function snapInterval(v: number, env: ToolEnv, typed = false): number {
     const half = halfStep(env);
+    if (typed)
+        return Math.max(
+            half,
+            // Whole 600ths times the step, so 5/3 step at 11.25 is 18.75 exactly
+            (Math.round((v / env.stepPx) * TYPED_PER_STEP) * env.stepPx) /
+                TYPED_PER_STEP,
+        );
     const unit = env.snap ? half : env.stepPx / 100;
     return Math.max(half, Math.round(v / unit) * unit);
 }
@@ -302,11 +315,21 @@ export function splitFor(
     return best;
 }
 
+/** Which field axes something holds still: x is side to side, y front to back */
+export interface HeldAxes {
+    readonly x: boolean;
+    readonly y: boolean;
+}
+
 /**
  * `p` moved so its marchers stand on the grid: the back-left corner snaps (a spot of the full
  * grid, even when the short back rank leaves it empty), and every other marcher follows, the
  * intervals being whole half steps. Unchanged without snap, and for a box turned off the field's
  * axes, whose marchers can't all stand on the grid.
+ *
+ * On a `held` field axis the box isn't moved: the caller has put the marcher being held (a
+ * stretch's fixed edge, the pivot's spot) where it was, on the grid if it was. With an interval
+ * that isn't a half step, snapping the back-left corner instead would shift the box (#423).
  */
 export function snapToGrid(
     p: BoxParams,
@@ -314,6 +337,7 @@ export function snapToGrid(
     env: ToolEnv,
     /** Which way a corner exactly between two half steps goes; the field's rounding when absent */
     tie?: XY,
+    held?: HeldAxes,
 ): BoxParams {
     // A spread has no corner marcher: its center goes on the grid, as a circle's does
     if (env.snap && isSpread(p))
@@ -330,10 +354,33 @@ export function snapToGrid(
     return {
         ...p,
         center: {
-            x: p.center.x + snapped.x - first.x,
-            y: p.center.y + snapped.y - first.y,
+            x: p.center.x + (held?.x ? 0 : snapped.x - first.x),
+            y: p.center.y + (held?.y ? 0 : snapped.y - first.y),
         },
     };
+}
+
+/**
+ * The box's own axes (x across, y deep) on which its marchers aren't a whole number of half steps
+ * apart, so snapping its corner would shift them off where they were (#423). A single file or
+ * rank has nothing apart.
+ */
+function offHalfSteps(p: BoxParams, n: number, env: ToolEnv): HeldAxes {
+    const { files, ranks } = spanOf(p, n);
+    const off = (count: number, interval: number) => {
+        const halves = interval / halfStep(env);
+        return count > 1 && Math.abs(halves - Math.round(halves)) > 1e-6;
+    };
+    return { x: off(files, p.across), y: off(ranks, p.deep) };
+}
+
+/** Axes of the box's own (x across, y deep) as the field's, for a box square to the field */
+function toFieldAxes(p: BoxParams, n: number, own: HeldAxes): HeldAxes {
+    const frame = boxFrame(p, n);
+    const o = frameToField(frame, { x: 0, y: 0 });
+    const u = frameToField(frame, { x: 1, y: 0 });
+    const acrossIsX = Math.abs(u.x - o.x) >= Math.abs(u.y - o.y);
+    return acrossIsX ? own : { x: own.y, y: own.x };
 }
 
 /**
@@ -591,14 +638,26 @@ export function stretchBox(
         return inBoxAxes(base, n, env, (flat) =>
             reshapeSpread(flat, n, key, fieldToFrame(boxFrame(base, n), to)),
         );
-    return inBoxAxes(base, n, env, (flat, flatEnv) =>
-        stretchSquare(
-            flat,
-            n,
-            key,
-            fieldToFrame(boxFrame(base, n), to),
-            flatEnv,
-        ),
+    const movesX = key.includes("e") || key.includes("w");
+    const movesY = key.includes("n") || key.includes("s");
+    return inBoxAxes(
+        base,
+        n,
+        env,
+        (flat, flatEnv) =>
+            stretchSquare(
+                flat,
+                n,
+                key,
+                fieldToFrame(boxFrame(base, n), to),
+                flatEnv,
+            ),
+        // The fixed edge stays where it was, and so does an axis the handle doesn't move whose
+        // marchers aren't half steps apart (#423)
+        (out) => {
+            const off = offHalfSteps(out, n, env);
+            return { x: movesX || off.x, y: movesY || off.y };
+        },
     );
 }
 
@@ -612,6 +671,8 @@ function inBoxAxes(
     n: number,
     env: ToolEnv,
     change: (flat: BoxParams, flatEnv: ToolEnv) => BoxParams,
+    /** The box's own axes on which `change` holds a marcher where it was, not to be snapped */
+    held?: (out: BoxParams) => HeldAxes,
 ): BoxParams {
     const frame = boxFrame(base, n);
     const flat: BoxParams = {
@@ -620,16 +681,19 @@ function inBoxAxes(
         rotation: 0,
     };
     const out = change(flat, { ...env, gridSnap: (p) => p });
+    const placed: BoxParams = {
+        ...out,
+        center: frameToField(frame, out.center),
+        rotation: base.rotation,
+        flipX: base.flipX,
+        flipY: base.flipY,
+    };
     return snapToGrid(
-        {
-            ...out,
-            center: frameToField(frame, out.center),
-            rotation: base.rotation,
-            flipX: base.flipX,
-            flipY: base.flipY,
-        },
+        placed,
         n,
         env,
+        undefined,
+        held && toFieldAxes(placed, n, held(out)),
     );
 }
 
@@ -738,6 +802,8 @@ export function filesFor(width: number, depth: number, n: number): number {
  * The intervals with the ratio lock on: the one the drag changed most, by proportion, decides,
  * and the other keeps the box's deep-to-across ratio. Both stay on half steps (owner,
  * 2026-10-16), so the ratio is as near as half steps allow. A side handle changes only its own.
+ * A square box copies the leader as it is, and a typed leader keeps its follower as exact as
+ * itself (`typed`, #423), so 2⅔ across makes 2⅔ deep.
  */
 export function keepRatio(
     base: Pick<BoxSize, "across" | "deep">,
@@ -746,6 +812,7 @@ export function keepRatio(
     movesX: boolean,
     movesY: boolean,
     env: ToolEnv,
+    typed = false,
 ): { across: number; deep: number } {
     if (!(base.across > 0) || !(base.deep > 0)) return { across, deep };
     const ratio = base.deep / base.across;
@@ -754,9 +821,11 @@ export function keepRatio(
         (!movesY ||
             Math.abs(Math.log(across / base.across)) >=
                 Math.abs(Math.log(deep / base.deep)));
+    const follow = (v: number) =>
+        Math.abs(ratio - 1) < 1e-9 ? v : snapInterval(v, env, typed);
     return acrossLeads
-        ? { across, deep: snapInterval(across * ratio, env) }
-        : { across: snapInterval(deep / ratio, env), deep };
+        ? { across, deep: follow(across * ratio) }
+        : { across: follow(deep / ratio), deep };
 }
 
 /**
@@ -844,7 +913,14 @@ export function grownFromPivot(
             y: after.center.y + was.y - now.y,
         },
     };
-    return snapToGrid(moved, n, env, growthBias(before, moved, n));
+    // Where the marchers aren't half steps apart, the pivot stays exactly where it was (#423)
+    return snapToGrid(
+        moved,
+        n,
+        env,
+        growthBias(before, moved, n),
+        toFieldAxes(moved, n, offHalfSteps(moved, n, env)),
+    );
 }
 
 /**

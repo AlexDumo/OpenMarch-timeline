@@ -41,7 +41,8 @@ import {
     withRanks,
     withSpacing,
 } from "../editor/boxEdits";
-import { parseSize, parseSteps, scrubValue } from "../editor/scrub";
+import { parseSteps } from "../editor/format";
+import { parseSize, scrubValue } from "../editor/scrub";
 import {
     edit,
     openTool,

@@ -1,6 +1,7 @@
 import { fieldToFrame, frameToField, type ShapeFrame } from "../frame/frame";
 import { formatSteps } from "../editor/format";
-import { parseSteps, scrubDistance, scrubValue } from "../editor/scrub";
+import { parseSteps } from "../editor/format";
+import { scrubDistance, scrubValue } from "../editor/scrub";
 import type { ToolKind } from "../tool/toolKind";
 import {
     distributionFor,

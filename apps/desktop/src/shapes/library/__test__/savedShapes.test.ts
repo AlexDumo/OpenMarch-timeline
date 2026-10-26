@@ -194,6 +194,44 @@ describe("applying a saved shape to another selection", () => {
         ]);
     });
 
+    it("restores intervals by number, not by how they're shown (#423)", () => {
+        // 2⅔ across and 1⅛ deep: the chip shows 1⅛ as "1.13"
+        const t = drawn(boxTool, 6, { x: 0, y: 0 }, { x: 40, y: 20 });
+        const [, across, deep] = boxTool.params;
+        let params = across!.type(t.params, 6, "2⅔", env())!;
+        params = deep!.type(params, 6, "9/8", env())!;
+        const kind = savedToolKind(
+            boxTool,
+            savedShapeOf(boxTool, params, 6, STEP, SAVED),
+        );
+        const expectExact = (p: unknown, n: number) => {
+            const got = intervalsOf(boxTool, p, n, STEP);
+            expect(got.across).toBeCloseTo(8 / 3, 12);
+            expect(got.deep).toBeCloseTo(9 / 8, 12);
+        };
+        const placed = drawn(kind, 6, { x: 0, y: 0 }, { x: 80, y: 40 });
+        expectExact(placed.params, 6);
+        // From the command bar
+        const starts = marchers(6).map((m) => m.at);
+        expectExact(startingParams(kind, starts, 6, env()), 6);
+    });
+
+    it("keeps a command bar step's number when its answer is the number as shown", () => {
+        const kind = savedToolKind(boxTool, {
+            ...SAVED,
+            kind: boxTool.shape.id,
+            kindVersion: boxTool.shape.version,
+            intervals: { across: 9 / 8, deep: 9 / 8 },
+        });
+        const starts = marchers(6).map((m) => m.at);
+        const base = startingParams(kind, starts, 6, env());
+        const { params } = shapeSteps(kind, base, 6, env(), ["", "", "1.13"]);
+        expect(intervalsOf(boxTool, params, 6, STEP).across).toBeCloseTo(
+            9 / 8,
+            12,
+        );
+    });
+
     it("is the same kind each time, so pickers can tell it's armed", () => {
         expect(savedToolKind(boxTool, saved())).toBe(
             savedToolKind(boxTool, saved()),

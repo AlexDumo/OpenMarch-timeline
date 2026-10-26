@@ -182,14 +182,18 @@ export function grownFromPivot(
     };
 }
 
-/** The circle with `interval` field units between neighbors, in half steps, grown from the pivot */
+/**
+ * The circle with `interval` field units between neighbors, in half steps (or kept as `typed`,
+ * #423), grown from the pivot
+ */
 export function withInterval(
     p: CircleParams,
     n: number,
     interval: number,
     env: ToolEnv,
+    typed = false,
 ): CircleParams {
-    const next = snapInterval(interval, env);
+    const next = snapInterval(interval, env, typed);
     if (next === p.interval) return p;
     return grownFromPivot(p, { ...p, interval: next }, n, env);
 }

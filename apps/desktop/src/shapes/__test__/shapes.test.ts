@@ -47,6 +47,30 @@ describe("parseIntervals", () => {
         });
     });
 
+    it("reads fractions in lists and runs (#423)", () => {
+        const parsed = parseIntervals("2⅔x3,2");
+        if (!parsed.ok) throw new Error(parsed.message);
+        close(parsed.runs[0]!.steps, 8 / 3, 1e-12);
+        expect(parsed.runs.map((r) => r.count)).toEqual([3, 1]);
+        for (const text of ["1 2/3x3", "1-2/3 x 3", "5/3x3"]) {
+            const run = parseIntervals(text);
+            if (!run.ok) throw new Error(run.message);
+            close(run.runs[0]!.steps, 5 / 3, 1e-12);
+            expect(run.runs[0]!.count).toBe(3);
+        }
+        expect(formatIntervals(parsed.runs)).toBe("2⅔x3,2");
+    });
+
+    it("refuses 0, a zero denominator and junk with today's messages", () => {
+        const message = (text: string) => {
+            const parsed = parseIntervals(text);
+            return parsed.ok ? null : parsed.message;
+        };
+        expect(message("0")).toBe("An interval must be more than 0 steps");
+        expect(message("1/0")).toMatch(/isn't an interval/);
+        expect(message("abc")).toMatch(/isn't an interval/);
+    });
+
     it("refuses what it can't read, with a reason", () => {
         for (const text of ["", "x3", "2x", "0", "2x0", "abc", "4,,x"]) {
             const parsed = parseIntervals(text);
