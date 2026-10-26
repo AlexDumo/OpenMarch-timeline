@@ -181,6 +181,7 @@ timeline_held_spans
     A test after every timeline command checks them, as I-L1 does for layers. A commit-time check
     is possible, but H-1 needs the derived spans, so it would be app-side.
 - Removing `timeline_kept_assignments` (decision 1) is part of the same amendment.
+- Draft amendment text: [02-adr-amendment-draft.md](02-adr-amendment-draft.md).
 
 ## What changes, as tickets (not filed yet)
 
