@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { textPresentation } from "@/shapes/editor/GlyphText";
-import { rgbaToString, type FieldTheme, type RgbaColor } from "@openmarch/core";
+import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
 import { HANDLE_SIZE, type HandleId } from "@/field/editor/groupTransform";
