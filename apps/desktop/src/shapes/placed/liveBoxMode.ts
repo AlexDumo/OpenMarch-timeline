@@ -25,6 +25,12 @@ import { enterBox } from "./boxSelection";
 import { usePlacedBoxPreviewStore } from "./boxSelectionStore";
 import { outlineGapAt } from "../distribute/outlineGap";
 import type { AnyToolKind } from "../tool/toolKind";
+import {
+    setShapeDragging,
+    setShapePointerOver,
+    shapeCalm,
+    useShapePointerStore,
+} from "../field/shapePointer";
 
 /** An odd-count outline's gap, the spot nobody stands on by design (#390) */
 function gapsOf(kind: AnyToolKind, params: unknown, n: number) {
@@ -36,9 +42,11 @@ function gapsOf(kind: AnyToolKind, params: unknown, n: number) {
 interface Shown {
     readonly live: LiveBox;
     readonly preview: unknown;
+    /** The controls are calm: the pointer away, as on the open shape (#430) */
+    readonly calm: boolean;
 }
 
-const drawingOf = memoDrawing(({ live: saved, preview }: Shown) => {
+const drawingOf = memoDrawing(({ live: saved, preview, calm }: Shown) => {
     const live =
         preview && !saved.gesture ? { ...saved, params: preview } : saved;
     const changing = live.gesture !== null || preview !== null;
@@ -64,6 +72,7 @@ const drawingOf = memoDrawing(({ live: saved, preview }: Shown) => {
                       text: names.get(t.marcherId) ?? "",
                   }))
                 : [],
+        calm,
         handles: kind.handles(live.params, n).map((h) => h.at),
         gaps: gapsOf(kind, live.params, n),
         ...frameDrawing(
@@ -143,6 +152,10 @@ export class LiveBoxMode implements FieldMode {
         this.emit();
     }
 
+    leave(): void {
+        setShapePointerOver(false);
+    }
+
     cursorAt(pointer: FieldPointer) {
         const field = currentShapeField();
         if (!field) return null;
@@ -154,6 +167,8 @@ export class LiveBoxMode implements FieldMode {
             pointer.field,
             toolEnvFor(field, keysOf(pointer)),
         );
+        // The editor asks for the cursor as the pointer moves, so this is where hovering is seen
+        setShapePointerOver(target !== null);
         return target
             ? shapeCursor(kind, this.live.params, this.live.box.spots, target)
             : null;
@@ -161,17 +176,24 @@ export class LiveBoxMode implements FieldMode {
 
     drawing() {
         const preview = usePlacedBoxPreviewStore.getState().params;
-        if (this.shown?.live !== this.live || this.shown.preview !== preview)
-            this.shown = { live: this.live, preview };
+        const calm = shapeCalm(this.live.gesture !== null);
+        if (
+            this.shown?.live !== this.live ||
+            this.shown.preview !== preview ||
+            this.shown.calm !== calm
+        )
+            this.shown = { live: this.live, preview, calm };
         return drawingOf(this.shown);
     }
 
     subscribe(listener: () => void): () => void {
         this.listeners.add(listener);
         const unsubscribe = usePlacedBoxPreviewStore.subscribe(listener);
+        const offPointer = useShapePointerStore.subscribe(listener);
         return () => {
             this.listeners.delete(listener);
             unsubscribe();
+            offPointer();
         };
     }
 
@@ -197,6 +219,8 @@ export class LiveBoxMode implements FieldMode {
     }
 
     private emit(): void {
+        // The floating editor stays faded through a gesture, as the open shape's does (#426)
+        setShapeDragging(this.live.gesture !== null);
         for (const listener of this.listeners) listener();
     }
 }
