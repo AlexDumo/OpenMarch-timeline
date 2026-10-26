@@ -2,10 +2,11 @@
 
 # Draft: ADR 0001 amendment, ownership of motion
 
-Status: **draft**, matching the owner's decisions of 2026-10-26 and the recommended placement model (P1 in [placements.md](placements.md)) ([research](README.md),
-Decisions). Not part of ADR 0001 yet. Text in [brackets] waits on the open item named. Once
-accepted, it goes into `docs/adr/0001-timeline-motion-model.md` §2 as a dated amendment, with
-matching notes on spec §3, D-16 and R-13, and two small amendments to ADR 0006 (end of this file).
+Status: **not ready to accept.** This is a sketch to bring to the grilling session, not a proposal
+(owner, 2026-10-26: no shape or transition data model is chosen yet). Only the parts that restate
+decisions 1–5 in the [research](README.md) are settled. The placement model (P1 in
+[placements.md](placements.md)) and the block contract are options. Text in [brackets] waits on
+the open item named. Where and how stay separate, and the "how" is a straight line for now.
 
 ---
 

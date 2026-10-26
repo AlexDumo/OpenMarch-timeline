@@ -2,13 +2,23 @@
 
 # Ownership model for motion: shapes, blocks and keyframes
 
-Status: **decisions taken (owner, 2026-10-26, on fork PR #436)**; nothing built. Open items and
-deferred work are at the end. **Next phase:** [placements.md](placements.md) studies shapes and
-marcher coordinates as one entity (a placement), at the owner's direction. It reframes open
-item 1. The reference shape implementation is the box editing branch (`shapes/box-v1` and its
-stack), not the shape code on `main`. The draft ADR text is in
-[adr-0001-amendment-draft.md](adr-0001-amendment-draft.md), and the cited prior art is in
-[prior-art.md](prior-art.md). The brief is fork issue #434.
+> **Status (owner, 2026-10-26): findings and options for a grilling session. Nothing is decided
+> beyond decisions 1–5 below.** No shape or transition data model is chosen
+> yet; that needs the grilling first. Two framing points from the owner:
+>
+> - **Where and how stay separate.** Only follow-the-leader would link them, and it is deferred.
+> - **The "how" is a straight line for now.** There is no design for a "how" block yet.
+>
+> **The one time-sensitive item is #181's migration 0027**, which creates the recipe tables. The
+> owner will decide separately whether #181 waits for the grilling, or merges as-is and accepts a
+> later conversion (see [placements.md](placements.md#181-and-migration-0027) for the cost of each).
+
+Decisions 1–5 below are the owner's (2026-10-26, on fork PR #436); nothing is built. Open items and
+deferred work are at the end. [placements.md](placements.md) studies shapes and marcher
+coordinates as one entity (a placement); its questions are open. The reference shape
+implementation is the box editing branch (`shapes/box-v1` and its stack), not the shape code on
+`main`. The draft ADR text is in [adr-0001-amendment-draft.md](adr-0001-amendment-draft.md), and
+the cited prior art is in [prior-art.md](prior-art.md). The brief is fork issue #434.
 
 Code references are to fork `main` at `dc2b92c25` unless a branch is named. Paths are relative to
 `apps/desktop/src/` for app code and to the repository root otherwise. The holds design is fork
@@ -66,7 +76,7 @@ flowchart LR
 | who       | membership                             | `timeline_assignments`, and the recipe's marcher → spot rows             |
 | keyframes | the resolver (a result, never stored)  | nothing: a visible move end, positioned by the resolver (holds dec. 13)  |
 
-**The block contract.** One module per path style implements the operations that commands use:
+**The block contract** (an option for the grilling, not decided). One module per path style implements the operations that commands use:
 cut in time, and remove a marcher over a range of counts (later: add a marcher, retime). Commands
 call the contract and never branch on `path_style` or `dest_shape_id`. This is what removes the
 "edge cases in every command" (Finding 2). Whether to build it first, as a refactor with no
