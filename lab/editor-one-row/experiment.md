@@ -40,6 +40,9 @@ under the editor.
   **Alt+F** and **Alt+Shift+F** flip it, **Shift+R** recalculates. Tooltips
   show the keys.
 
+- The editor now waits half a second before fading when the pointer
+  leaves, and turns solid at once when it comes back.
+
 **What to try**
 
 - Select some marchers, press **B** and draw a box. Turn it a quarter with

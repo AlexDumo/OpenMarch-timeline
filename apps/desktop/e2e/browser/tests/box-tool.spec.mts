@@ -839,7 +839,22 @@ test("change: the floating editor fades with the pointer away, and is solid over
         y: (pressed.y + released.y) / 2,
     });
     await page.mouse.move(middle.x, middle.y);
-    await expect.poll(() => editorOpacity(page)).toBe(1);
+    // Solid with no wait: just its 120 ms fade in
+    await expect.poll(() => editorOpacity(page), { timeout: 400 }).toBe(1);
+    // It waits half a second before fading (owner): still solid a moment after leaving
+    await page.mouse.move(5, 500);
+    await page.waitForTimeout(250);
+    expect(await editorOpacity(page)).toBe(1);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
+
+    // Back within the wait: nothing visible happens
+    await page.mouse.move(middle.x, middle.y);
+    await expect.poll(() => editorOpacity(page), { timeout: 400 }).toBe(1);
+    await page.mouse.move(5, 500);
+    await page.waitForTimeout(250);
+    await page.mouse.move(middle.x, middle.y);
+    await page.waitForTimeout(500);
+    expect(await editorOpacity(page)).toBe(1);
     await page.mouse.move(5, 500);
     await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
 
