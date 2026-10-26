@@ -93,6 +93,7 @@
         <button id="cAllHeld" class="propOnly">Make all selected Held</button>
       </div>
       <div class="muted" id="selSummary" style="margin-top:6px"></div>
+      <div id="preview" style="margin-top:6px;font-size:13px"></div>
       <div class="row" style="display:none">
       </div>
       <h2 style="margin-top:12px">Steps per count <span class="muted" id="speedWho"></span></h2>
@@ -145,27 +146,40 @@ function arrivalBefore(m, b) {
   return a;
 }
 
-/** Keep H-1..H-3: marks only over gaps, starting at an arrival, not overlapping. */
-function normalize(m) {
+/**
+ * Keep holds true after an edit (04-anchors): trim where rows now cover; keep if a row ends at the
+ * start; follow a retimed row (same object, new end); delete if a row ended there before (17);
+ * otherwise it's a borrowed hold and stays. Touching or overlapping holds merge.
+ */
+function normalize(m, before) {
   sortRows(m);
-  const ends = new Set([0, ...m.rows.map((r) => r.end), ...PAGES.map((p) => p.end), ...PAGES.map((p) => p.start)]); // H-2: an arrival, 0 or a page flag
   let marks = [];
-  for (const k of m.marks) {
-    if (!ends.has(k.start)) continue; // H-2: arrival gone → hold goes (decision 17)
-    let end = k.end;
-    for (const r of m.rows) if (r.start >= k.start && r.start < end) end = r.start; // H-1: trim at a move
-    if (m.rows.some((r) => r.start < k.start && r.end > k.start)) continue;
-    if (end > k.start) marks.push({ start: k.start, end });
+  for (const k0 of m.marks) {
+    const k = { ...k0 };
+    const was = before instanceof Map ? before.get(k0) || [] : [];
+    if (!m.rows.some((r) => r.end === k.start)) {
+      const retimed = was.find((r) => m.rows.includes(r) && r.end !== k.start);
+      if (retimed) k.start = retimed.end;
+      else if (was.length) continue; // its arrival is gone (decision 17)
+    }
+    if (m.rows.some((r) => r.start < k.start && r.end > k.start)) {
+      const cover = m.rows.find((r) => r.start < k.start && r.end > k.start);
+      k.start = cover.end; // a move created over its start: trimmed, now grows out of that end
+    }
+    for (const r of m.rows) if (r.start >= k.start && r.start < k.end) k.end = r.start; // H-1
+    if (k.end > k.start) marks.push(k);
   }
   marks.sort((a, b) => a.start - b.start);
   const out = [];
   for (const k of marks) {
     const last = out[out.length - 1];
-    if (last && k.start < last.end) last.end = Math.max(last.end, k.end); // H-3
+    if (last && k.start <= last.end) last.end = Math.max(last.end, k.end); // touching or overlapping: one hold
     else out.push(k);
   }
   m.marks = out;
 }
+const arrivalHold = (m, k) => k.start === 0 || m.rows.some((r) => r.end === k.start);
+const sourceOf = (m, k) => pageName(arrivalBefore(m, k.start)) + "'s spot";
 
 // ---------- edits ----------
 let lastMsg = [];
@@ -182,9 +196,11 @@ function setPosAt(m, b, p) {
     if (k.start === 0) m.home = p;
     else if (arr) arr.dest = p;
     else {
-      const g0 = Math.max(arrivalBefore(m, k.start), k.start - 8);
+      const flagBefore = Math.floor((k.start - 1) / 8) * 8;
+      const earlierHold = Math.max(0, ...m.marks.filter((x) => x.end <= k.start && x !== k).map((x) => x.end));
+      const g0 = Math.max(arrivalBefore(m, k.start), earlierHold, flagBefore);
       m.rows.push({ start: g0, end: k.start, dest: p });
-      say(`<b>${name}: moved the whole Held hold</b> (counts ${k.start}–${k.end}). Nothing arrived at ${k.start}, so ${pageName(k.start)} got its own move (${g0}–${k.start}); earlier pages are untouched.`);
+      say(`<b>${name}: moved the whole Held hold</b>. It was borrowing its spot, so a move was added (counts ${g0}–${k.start}); it now grows out of that diamond. Earlier pages are untouched.`);
       return;
     }
     say(`<b>${name}: moved the whole Held hold</b> (counts ${k.start}–${k.end}), including where it arrives at count ${k.start}.`);
@@ -236,7 +252,6 @@ function removeKeyframe(m, b, keepLater) {
   if (next && !onFlag) msg += ` The next move still starts at ${b}, so ${m.name} stands still ${r.start}–${b}, then catches up.`;
   if (next && onFlag && mode === "proposed") msg += ` (On a page flag: not joined, so pages keep their own moves.)`;
   const heldArrival = mode === "proposed" && m.marks.some((k) => k.start === b);
-  if (heldArrival) m.marks = m.marks.filter((k) => k.start !== b); // decision 17, explicitly (a flag start alone would still pass H-2)
   if (keepLater && !heldArrival && box && !same(before, pos(m, box.end)) && !m.rows.some((x) => x.start < box.end && x.end > box.start)) {
     m.rows.push({ start: box.start, end: box.end, dest: before });
     msg += ` ${box.name} keeps its spot: a move back to it was written there.`;
@@ -310,7 +325,12 @@ function act(fn) {
   history.push(clone(marchers));
   lastMsg = [];
   let any = false;
-  for (const i of selected) { if (fn(marchers[i]) !== false) any = true; normalize(marchers[i]); }
+  for (const i of selected) {
+    const m = marchers[i];
+    const before = new Map(m.marks.map((k) => [k, m.rows.filter((r) => r.end === k.start)]));
+    if (fn(m) !== false) any = true;
+    normalize(m, before);
+  }
   if (!lastMsg.length) { history.pop(); say("Nothing to do for the selected marchers at this count."); }
   render();
 }
@@ -338,7 +358,7 @@ function renderTimeline() {
   const svg = $("tl");
   const h = TOP + LANE * 3 + 10;
   svg.setAttribute("viewBox", `0 0 ${tx(COUNTS) + 20} ${h}`);
-  svg.innerHTML = "";
+  svg.innerHTML = '<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#d1fae5"/><line x1="0" y1="0" x2="0" y2="6" stroke="#34d399" stroke-width="3"/></pattern></defs>';
   for (const p of PAGES) {
     svgEl("rect", { x: tx(p.start) + 1, y: 4, width: 8 * CW - 2, height: 18, rx: 3, fill: "#f8fafc", stroke: "#e5e7eb" }, svg);
     text(svg, (tx(p.start) + tx(p.end)) / 2, 17, p.name, { "text-anchor": "middle" });
@@ -359,7 +379,14 @@ function renderTimeline() {
         let c = a;
         for (const k of m.marks.filter((k) => k.start >= a && k.end <= nextStart).sort((p, q) => p.start - q.start)) {
           if (k.start > c) follow(svg, c, k.start, y);
-          svgEl("rect", { x: tx(k.start), y: y - 5, width: (k.end - k.start) * CW, height: 10, rx: 5, fill: "#059669" }, svg);
+          if (arrivalHold(m, k)) svgEl("rect", { x: tx(k.start), y: y - 5, width: (k.end - k.start) * CW, height: 10, rx: 5, fill: "#059669" }, svg);
+          else {
+            svgEl("rect", { x: tx(k.start), y: y - 5, width: (k.end - k.start) * CW, height: 10, rx: 5, fill: "url(#hatch)", stroke: "#059669", "stroke-width": 1.2 }, svg);
+            const chip = "Held · " + sourceOf(m, k);
+            const w = chip.length * 5.6 + 10;
+            svgEl("rect", { x: tx(k.start), y: y - 20, width: w, height: 13, rx: 6, fill: "#ecfdf5", stroke: "#6ee7b7" }, svg);
+            text(svg, tx(k.start) + 5, y - 10, chip, { fill: "#047857", "font-size": 9.5 });
+          }
           c = k.end;
         }
         if (c < nextStart) follow(svg, c, nextStart, y);
@@ -421,6 +448,20 @@ function renderField() {
   });
 }
 
+function dragWill(m, b) {
+  if (b === 0) return "moves its start position";
+  if (win !== null && win < b) {
+    const k = heldAt(m, b);
+    if (k && (winRule === "hold" || win <= k.start)) return arrivalHold(m, k) ? `moves ${pageName(k.start)}'s set (the whole hold)` : `adds a move ending at count ${k.start} (the whole hold)`;
+    return `makes a move over the window (${win}–${b})`;
+  }
+  const k = heldAt(m, b);
+  if (k) return arrivalHold(m, k) ? `moves ${pageName(k.start)}'s set (the whole hold)` : `adds a move on ${pageName(k.start)} (the whole hold)`;
+  if (rowEnding(m, b)) return "changes this keyframe";
+  if (rowInside(m, b)) return "splits its move here";
+  return "starts a new move here";
+}
+
 function lookOf(m, b) {
   const end = rowEnding(m, b);
   if (mode === "today") {
@@ -474,6 +515,7 @@ function render() {
   const held = [...selected].filter((i) => heldAt(marchers[i], ph)).length;
   $("selSummary").textContent = mode === "proposed" && selected.size ? `At count ${ph}: ${held} of ${selected.size} selected Held` : "";
   $("cAllHeld").disabled = mode !== "proposed" || held === 0 || held === selected.size;
+  $("preview").innerHTML = [...selected].map((i) => `<b>${marchers[i].name}</b>: a drag here ${dragWill(marchers[i], ph)}`).join("<br>");
   renderTimeline();
   renderField();
   renderSpeed();
@@ -637,6 +679,18 @@ const SCENARIOS = [
       ["Decided: on Page 6 (count 40), Hold from previous page holds Page 6 only (its own move is replaced); Pages 4–5 stay Following.", () => { ph = 40; act((m) => holdFromPrevious(m, 40)); }],
       ["Drag at count 36 (inside the hold): Page 5 gets its own move, the hold follows, Pages 3–4 untouched.", () => { ph = 36; act((m) => { const p = pos(m, 36); setPosAt(m, 36, [p[0] + 10, p[1] - 8]); }); }],
       ["Undo, then 'Extend hold back to last arrival': the hold now starts at 16, so Pages 4–6 are one hold.", () => { if (history.length) marchers = history.pop(); ph = 36; act((m) => extendHoldBack(m, 36)); }],
+    ],
+  },
+  {
+    name: "Anchors · Borrowed hold",
+    setup: () => [M("B1", [20, 45], [{ start: 0, end: 8, dest: [40, 25] }]), M("B2", [30, 55]), M("B3", [60, 50])],
+    sel: [0], ph: 40, mode: "proposed",
+    steps: [
+      ["B1 last moved on Page 2; Pages 3–7 are Following.", null],
+      ["On Page 6, Hold from previous page: nothing arrives at count 32, so it's a borrowed hold: hatched, with a chip naming its source ('Page 2's spot'). Read the 'a drag here…' line.", () => act((m) => holdFromPrevious(m, 40))],
+      ["Remove Page 2's keyframe (count 8): the hold stays and now borrows from Page 1.", () => { ph = 8; act((m) => removeKeyframe(m, 8, false)); ph = 36; render(); }],
+      ["Drag inside the hold (count 36): a move is added on Page 5, and the hold now grows out of that diamond (solid).", () => { ph = 36; act((m) => { const p = pos(m, 36); setPosAt(m, 36, [p[0] + 15, p[1] - 10]); }); }],
+      ["Remove that new keyframe (count 32): the hold goes with its diamond (17).", () => { ph = 32; act((m) => removeKeyframe(m, 32, false)); }],
     ],
   },
 ];
