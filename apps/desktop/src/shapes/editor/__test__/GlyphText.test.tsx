@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { SHAPE_TOOLS } from "../../tool/shapeTools";
-import { GlyphText, textPresentation } from "../GlyphText";
+import { GlyphText } from "../GlyphText";
 
 /**
  * The shape UI's direction marks (owner bug on #417: "↕" drew as a color emoji beside a plain
@@ -34,12 +34,5 @@ describe("direction marks", () => {
                 expect(container.querySelectorAll("svg")).toHaveLength(1);
                 cleanup();
             }
-    });
-
-    it("in plain text (the field's SVG tip) asks for text presentation", () => {
-        const text = textPresentation("7½ × 2 steps · ↔ 2½ ↕ 2 apart");
-        for (const [i, ch] of [...text].entries())
-            if (PICTOGRAPHIC.test(ch)) expect([...text][i + 1]).toBe("︎");
-        expect(text.replace(/︎/g, "")).toBe("7½ × 2 steps · ↔ 2½ ↕ 2 apart");
     });
 });

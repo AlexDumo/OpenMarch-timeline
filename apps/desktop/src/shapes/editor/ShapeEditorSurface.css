@@ -1,0 +1,42 @@
+/*
+ * The open shape's floating editor (#426, owner): with the pointer away from both the shape and
+ * the editor, the whole editor fades so what's under it shows. It is solid while the pointer is
+ * over the shape (`data-over`) or the editor, with keyboard focus inside it (typing a number
+ * counts) and while one of its menus is open (a Radix trigger inside it is `data-state="open"`).
+ * A drag on the field isn't "over": the editor stays faded while a handle is dragged. A selected
+ * placed shape's editor doesn't fade. Touch screens (no hover) and people asking for less transparency keep it solid.
+ */
+
+.shape-editor-surface {
+    transition: opacity 120ms ease-out;
+}
+
+@media (hover: hover) {
+    /*
+     * :where() keeps this at no specificity, so the reduced transparency block below always wins.
+     * Keyboard focus is the app's :focus-visible without click focus (utilities/clickFocus.ts):
+     * focus a menu hands back to its button after a click doesn't hold the editor solid.
+     */
+    :where(
+        .shape-editor-surface[data-fades="true"][data-over="false"]:not(
+                :hover,
+                :has(:focus-visible:not([data-click-focus])),
+                :has([data-state="open"])
+            )
+    ) {
+        opacity: 0.4;
+    }
+}
+
+/* A separate block: a browser that doesn't know this query (Firefox) still fades */
+@media (prefers-reduced-transparency: reduce) {
+    .shape-editor-surface.shape-editor-surface {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shape-editor-surface {
+        transition: none;
+    }
+}
