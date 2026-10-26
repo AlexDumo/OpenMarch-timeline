@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { textPresentation } from "@/shapes/editor/GlyphText";
-import { rgbaToString, type FieldTheme } from "@openmarch/core";
+import { rgbaToString, type FieldTheme, type RgbaColor } from "@openmarch/core";
 import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
 import type { AreaShape } from "@/field/editor/areaGestures";
 import { HANDLE_SIZE, type HandleId } from "@/field/editor/groupTransform";
@@ -18,6 +18,7 @@ import { dotSizes, SELECTION_COLOR } from "./selectionRing";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
 import { useLabVariant } from "@/lab/labVariant";
+import { guideInkFor, inkProps, type GuideInk } from "./guideInk";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -54,44 +55,15 @@ const PIVOT_COLOR = "#facc15";
 const PIVOT_MARK_ARM = 9;
 const PIVOT_MARK_RING = 5;
 /**
- * The guide along a field line a shape's edge is on (#425), and the tint of the spots on it, as
- * design tools draw their smart guides: dashed 4 on, 3 off, 1 CSS px
+ * The guide along a field line a shape's edge is on (#425, #427): a solid line across the whole
+ * canvas at any zoom, named at the canvas edge, over a dark edge that carries it on turf and
+ * images; the shape's side on it 2½ times the outline, so a snap is plain to see. Its color is
+ * the guide ink (`guideInk.ts`).
  */
-const GUIDE_COLOR = "#ec4899";
-const GUIDE_DASH = "4 3";
-/** A shape's side while it's on a guide's line: 2½ times the outline, so a snap is plain to see (owner on #427) */
+const GUIDE_WIDTH = 1.5;
+const GUIDE_CASING = "rgba(0, 0, 0, 0.35)";
+const GUIDE_CASING_WIDTH = GUIDE_WIDTH + 2;
 const GUIDE_EDGE_WIDTH = 2.5 * SHAPE_OUTLINE_WIDTH;
-/**
- * How a snap guide looks (#427). The lab tries three versions against today's dashed guide over
- * the field: `canvas-labels`, a solid line across the whole canvas with the checkpoint's name at
- * the canvas edge (the owner's idea); `canvas`, the same without the name; `pointer-name`, a
- * solid line over the field with the names in the readout by the pointer.
- */
-interface GuideLook {
-    readonly span: "field" | "canvas";
-    readonly width: number;
-    readonly dash?: string;
-    readonly labels: boolean;
-    readonly note: boolean;
-}
-const guideLook = (variant: string | null): GuideLook => {
-    switch (variant) {
-        case "canvas-labels":
-            return { span: "canvas", width: 1.5, labels: true, note: false };
-        case "canvas":
-            return { span: "canvas", width: 1.5, labels: false, note: false };
-        case "pointer-name":
-            return { span: "field", width: 1.5, labels: false, note: true };
-        default:
-            return {
-                span: "field",
-                width: 1,
-                dash: GUIDE_DASH,
-                labels: false,
-                note: false,
-            };
-    }
-};
 /** A guide's name tag at the canvas edge, in CSS px */
 const GUIDE_LABEL_PX = 12;
 const GUIDE_LABEL_HEIGHT = 20;
@@ -404,12 +376,16 @@ function GuideLabel({
     upright,
     width,
     height,
+    ink,
+    background,
 }: {
     text: string;
     at: { x: number; y: number };
     upright: boolean;
     width: number;
     height: number;
+    ink: GuideInk;
+    background: RgbaColor;
 }) {
     // About the width of the text in DM Sans at this size, with room either side
     const w = text.length * GUIDE_LABEL_PX * 0.55 + 16;
@@ -426,7 +402,7 @@ function GuideLabel({
                 width={w}
                 height={h}
                 rx={h / 2}
-                fill={GUIDE_COLOR}
+                {...inkProps(ink, background, "fill")}
             />
             <text
                 x={x + w / 2}
@@ -434,7 +410,7 @@ function GuideLabel({
                 fontSize={GUIDE_LABEL_PX}
                 fontWeight={600}
                 fontFamily="DM Sans, sans-serif"
-                fill="white"
+                fill={ink.text(background)}
                 textAnchor="middle"
                 dominantBaseline="central"
             >
@@ -464,17 +440,9 @@ function ModeDrawing({
     const half = SHAPE_HANDLE_SIZE / 2;
     const open = drawing.stage === "open";
     const dots = drawing.stage === "drawing";
-    const look = guideLook(variant);
-    // The pointer-name version adds the guides' names to the readout by the pointer (#427)
-    const note = look.note ? drawing.guideNote : undefined;
-    const tip = drawing.tip
-        ? {
-              ...drawing.tip,
-              text: note
-                  ? `${drawing.tip.text} · ${note.text}`
-                  : drawing.tip.text,
-          }
-        : note;
+    // The lab tries the guide in several colors (#427)
+    const ink = guideInkFor(variant);
+    const background = theme.background;
     // The controls fade while the pointer is away from the shape (#403), and come back over it
     const controls = {
         opacity: drawing.calm ? CALM_CONTROLS_OPACITY : 1,
@@ -536,26 +504,13 @@ function ModeDrawing({
                 );
             })}
             {drawing.guides?.map(({ from, to, label }, i) => {
-                let a = at(from);
-                let b = at(to);
-                const upright = Math.abs(a.x - b.x) < 1e-6;
-                if (look.span === "canvas") {
-                    // Across the whole canvas, at any zoom
-                    a = upright ? { x: a.x, y: 0 } : { x: 0, y: a.y };
-                    b = upright
-                        ? { x: a.x, y: view.height }
-                        : { x: view.width, y: a.y };
-                }
-                const tag =
-                    look.labels && label ? (
-                        <GuideLabel
-                            text={label}
-                            at={a}
-                            upright={upright}
-                            width={view.width}
-                            height={view.height}
-                        />
-                    ) : null;
+                const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
+                // Across the whole canvas, at any zoom
+                const p = at(from);
+                const a = upright ? { x: p.x, y: 0 } : { x: 0, y: p.y };
+                const b = upright
+                    ? { x: p.x, y: view.height }
+                    : { x: view.width, y: p.y };
                 return (
                     <g key={i} data-testid="fieldShapeGuide">
                         <line
@@ -563,11 +518,28 @@ function ModeDrawing({
                             y1={a.y}
                             x2={b.x}
                             y2={b.y}
-                            stroke={GUIDE_COLOR}
-                            strokeWidth={look.width}
-                            strokeDasharray={look.dash}
+                            stroke={GUIDE_CASING}
+                            strokeWidth={GUIDE_CASING_WIDTH}
                         />
-                        {tag}
+                        <line
+                            x1={a.x}
+                            y1={a.y}
+                            x2={b.x}
+                            y2={b.y}
+                            strokeWidth={GUIDE_WIDTH}
+                            {...inkProps(ink, background, "stroke")}
+                        />
+                        {label && (
+                            <GuideLabel
+                                text={label}
+                                at={a}
+                                upright={upright}
+                                width={view.width}
+                                height={view.height}
+                                ink={ink}
+                                background={background}
+                            />
+                        )}
                     </g>
                 );
             })}
@@ -581,8 +553,8 @@ function ModeDrawing({
                         y1={a.y}
                         x2={b.x}
                         y2={b.y}
-                        stroke={GUIDE_COLOR}
                         strokeWidth={GUIDE_EDGE_WIDTH}
+                        {...inkProps(ink, background, "stroke")}
                         strokeLinecap="round"
                         data-testid="fieldShapeGuideEdge"
                     />
@@ -596,7 +568,7 @@ function ModeDrawing({
                         cx={p.x}
                         cy={p.y}
                         r={SPOT_RADIUS * z}
-                        fill={GUIDE_COLOR}
+                        {...inkProps(ink, background, "fill")}
                         stroke="white"
                         strokeWidth={SPOT_WIDTH * z}
                     />
@@ -754,9 +726,9 @@ function ModeDrawing({
                         </g>
                     );
                 })()}
-            {tip &&
+            {drawing.tip &&
                 (() => {
-                    const p = at(tip.at);
+                    const p = at(drawing.tip.at);
                     return (
                         <text
                             x={p.x + TIP_OFFSET_PX}
@@ -770,7 +742,7 @@ function ModeDrawing({
                             dominantBaseline="hanging"
                             data-testid="fieldShapeTip"
                         >
-                            {textPresentation(tip.text)}
+                            {textPresentation(drawing.tip.text)}
                         </text>
                     );
                 })()}

@@ -185,7 +185,6 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
             to: copy(to),
             label: label ?? null,
         })),
-        guideNote: drawing.guideNote?.text ?? null,
         guideEdges: (drawing.guideEdges ?? []).map(({ from, to }) => ({
             from: copy(from),
             to: copy(to),

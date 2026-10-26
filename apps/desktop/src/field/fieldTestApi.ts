@@ -206,8 +206,6 @@ export type FieldTestShapeOverlay = {
         to: { x: number; y: number };
         label: string | null;
     }[];
-    /** The guides' names by the pointer ("on 50 yd line"), or null (#427). */
-    guideNote: string | null;
     /** The shape's sides on a guide's line, drawn thicker, field units (#425). */
     guideEdges: {
         from: { x: number; y: number };

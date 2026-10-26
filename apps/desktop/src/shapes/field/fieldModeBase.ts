@@ -123,9 +123,8 @@ export function frameDrawing(
 
 /**
  * While a draw or a handle drag has the shape's edges on the field's lines (#425): a dashed
- * guide along each, named for its checkpoint (#427), the shape's sides on it drawn thicker, its
- * spots tinted, and the names as a note by the pointer. Nothing during any other gesture, or with
- * none.
+ * guide along each, named for its checkpoint (#427), the shape's sides on it drawn thicker and its
+ * spots tinted. Nothing during any other gesture, or with none.
  */
 export function guideDrawing(
     kind: AnyToolKind,
@@ -133,10 +132,9 @@ export function guideDrawing(
     n: number,
     spots: readonly XY[],
     gesture: { readonly type: string } | null | undefined,
-    pointer: XY | null | undefined,
     env: ToolEnv,
     field: ShapeField,
-): Pick<FieldModeDrawing, "guides" | "guideEdges" | "onGuides" | "guideNote"> {
+): Pick<FieldModeDrawing, "guides" | "guideEdges" | "onGuides"> {
     if (gesture?.type !== "draw" && gesture?.type !== "handle") return {};
     const { fieldProperties } = field;
     const { width, height } = fieldProperties;
@@ -153,15 +151,7 @@ export function guideDrawing(
         const label = name?.replace(/ yard line$/, " yd line");
         return { from: g.from, to: g.to, ...(label ? { label } : {}) };
     });
-    const labels = named.flatMap((g) => (g.label ? [g.label] : []));
-    return {
-        guides: named,
-        guideEdges: edges,
-        onGuides: on,
-        ...(pointer && labels.length > 0
-            ? { guideNote: { at: pointer, text: `on ${labels.join(", ")}` } }
-            : {}),
-    };
+    return { guides: named, guideEdges: edges, onGuides: on };
 }
 
 /**
