@@ -17,6 +17,7 @@ import {
 import { dotSizes, SELECTION_COLOR } from "./selectionRing";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
+import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -52,6 +53,20 @@ const PIVOT_COLOR = "#facc15";
 /** The pivot's crosshair once it's out of the center (#350): its arms and ring, in CSS px */
 const PIVOT_MARK_ARM = 9;
 const PIVOT_MARK_RING = 5;
+/**
+ * The guide along a field line a shape's edge is on (#425, #427): a solid line across the whole
+ * canvas at any zoom, named at the canvas edge, over a dark edge that carries it on turf and
+ * images; the shape's side on it 2½ times the outline, so a snap is plain to see. In the guide
+ * ink (`guideInk.ts`).
+ */
+const GUIDE_WIDTH = 1.5;
+const GUIDE_CASING = "rgba(0, 0, 0, 0.35)";
+const GUIDE_CASING_WIDTH = GUIDE_WIDTH + 2;
+const GUIDE_EDGE_WIDTH = 2.5 * SHAPE_OUTLINE_WIDTH;
+/** A guide's name tag at the canvas edge, in CSS px */
+const GUIDE_LABEL_PX = 12;
+const GUIDE_LABEL_HEIGHT = 20;
+const GUIDE_LABEL_INSET = 6;
 /** How strong an open shape's controls are while the pointer is away from it (#403) */
 const CALM_CONTROLS_OPACITY = 0.25;
 /** Spot labels and the pointer tip, in CSS px. */
@@ -352,6 +367,56 @@ function StartMarks({
     );
 }
 
+/**
+ * A guide's name at the canvas edge (#427): at the top for a line side to side, at the left for
+ * one front to back, kept inside the canvas
+ */
+function GuideLabel({
+    text,
+    at,
+    upright,
+    width,
+    height,
+}: {
+    text: string;
+    at: { x: number; y: number };
+    upright: boolean;
+    width: number;
+    height: number;
+}) {
+    // About the width of the text in DM Sans at this size, with room either side
+    const w = text.length * GUIDE_LABEL_PX * 0.55 + 16;
+    const h = GUIDE_LABEL_HEIGHT;
+    const clamp = (v: number, max: number) =>
+        Math.max(GUIDE_LABEL_INSET, Math.min(max - GUIDE_LABEL_INSET, v));
+    const x = upright ? clamp(at.x - w / 2, width - w) : GUIDE_LABEL_INSET;
+    const y = upright ? GUIDE_LABEL_INSET : clamp(at.y - h / 2, height - h);
+    return (
+        <g data-testid="fieldShapeGuideLabel">
+            <rect
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                rx={h / 2}
+                fill={GUIDE_INK}
+            />
+            <text
+                x={x + w / 2}
+                y={y + h / 2}
+                fontSize={GUIDE_LABEL_PX}
+                fontWeight={600}
+                fontFamily="DM Sans, sans-serif"
+                fill={GUIDE_INK_TEXT}
+                textAnchor="middle"
+                dominantBaseline="central"
+            >
+                {text}
+            </text>
+        </g>
+    );
+}
+
 function ModeDrawing({
     drawing,
     theme,
@@ -427,6 +492,66 @@ function ModeDrawing({
                         // stand, unlike the hollow start rings
                         fill={dots || open ? shape : "none"}
                         stroke={dots || open ? "white" : shape}
+                        strokeWidth={SPOT_WIDTH * z}
+                    />
+                );
+            })}
+            {drawing.guides?.map(({ from, to }, i) => {
+                const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
+                // Across the whole canvas, at any zoom
+                const p = at(from);
+                const a = upright ? { x: p.x, y: 0 } : { x: 0, y: p.y };
+                const b = upright
+                    ? { x: p.x, y: view.height }
+                    : { x: view.width, y: p.y };
+                return (
+                    <g key={i} data-testid="fieldShapeGuide">
+                        <line
+                            x1={a.x}
+                            y1={a.y}
+                            x2={b.x}
+                            y2={b.y}
+                            stroke={GUIDE_CASING}
+                            strokeWidth={GUIDE_CASING_WIDTH}
+                        />
+                        <line
+                            x1={a.x}
+                            y1={a.y}
+                            x2={b.x}
+                            y2={b.y}
+                            stroke={GUIDE_INK}
+                            strokeWidth={GUIDE_WIDTH}
+                        />
+                    </g>
+                );
+            })}
+            {drawing.guideEdges?.map(({ from, to }, i) => {
+                const a = at(from);
+                const b = at(to);
+                return (
+                    <line
+                        key={i}
+                        x1={a.x}
+                        y1={a.y}
+                        x2={b.x}
+                        y2={b.y}
+                        stroke={GUIDE_INK}
+                        strokeWidth={GUIDE_EDGE_WIDTH}
+                        strokeLinecap="round"
+                        data-testid="fieldShapeGuideEdge"
+                    />
+                );
+            })}
+            {drawing.onGuides?.map((point, i) => {
+                const p = at(point);
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={SPOT_RADIUS * z}
+                        fill={GUIDE_INK}
+                        stroke="white"
                         strokeWidth={SPOT_WIDTH * z}
                     />
                 );
@@ -605,6 +730,23 @@ function ModeDrawing({
                         </foreignObject>
                     );
                 })()}
+            {/* The guides' names last, over every line, edge and spot, so nothing crosses
+                their text (owner on #427) */}
+            {drawing.guides?.map(({ from, to, label }, i) => {
+                if (!label) return null;
+                const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
+                const p = at(from);
+                return (
+                    <GuideLabel
+                        key={i}
+                        text={label}
+                        at={upright ? { x: p.x, y: 0 } : { x: 0, y: p.y }}
+                        upright={upright}
+                        width={view.width}
+                        height={view.height}
+                    />
+                );
+            })}
         </g>
     );
 }

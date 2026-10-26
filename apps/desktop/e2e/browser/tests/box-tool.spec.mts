@@ -1773,6 +1773,125 @@ test("change: a typed 1 2/3 stays exactly 1⅔ steps and shows as 1⅔, − and 
     expect(Math.abs(saved.deep - 8 / 3)).toBeLessThan(1e-9);
 });
 
+/**
+ * The snap guides' names on screen, and whether each is on top at its center (#427): the overlay
+ * ignores the pointer, so hit-testing is turned on for it while this asks
+ */
+const guideNamesOnTop = (page: Page) =>
+    page.evaluate(() => {
+        const style = document.createElement("style");
+        style.textContent =
+            '[data-testid="fieldOverlay"], [data-testid="fieldOverlay"] * { pointer-events: auto !important; }';
+        document.head.append(style);
+        const out = [
+            ...document.querySelectorAll(
+                '[data-testid="fieldShapeGuideLabel"]',
+            ),
+        ].map((label) => {
+            const r = label.getBoundingClientRect();
+            const top = document.elementFromPoint(
+                r.x + r.width / 2,
+                r.y + r.height / 2,
+            );
+            return {
+                text: label.textContent ?? "",
+                onTop: top !== null && label.contains(top),
+            };
+        });
+        style.remove();
+        return out;
+    });
+
+test("change: stretching a box's side near a yard line lands its edge on the line, the spacing exactly what that takes, with a guide while dragging (#425)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { grid, pressed } = await drawBox(show);
+    const S = grid.pixelsPerStep;
+    const bar = page.getByTestId("shape-tool-readout");
+    // 4 files from 15 steps left of the 50: the 45 on side 2 is 23 steps on, 7⅔ apart
+    const yardLine = grid.centerFront.x + 8 * S;
+    const overlay = (await shapeOverlay(page))!;
+    const xs = overlay.spots.map((p) => p.x);
+    const left = Math.min(...xs);
+    expect(Math.abs(left - pressed.x)).toBeLessThan(CLOSE);
+    const maxX = Math.max(...overlay.handles.map((h) => h.x));
+    const east = overlay.handles
+        .filter((h) => Math.abs(h.x - maxX) < 1)
+        .sort((a, b) => a.y - b.y)[1]!;
+    const target = await toScreen(page, { x: yardLine, y: grid.centerFront.y });
+
+    let guides: { from: Point; to: Point; label: string | null }[] = [];
+    let onGuides: Point[] = [];
+    let guideEdges: { from: Point; to: Point }[] = [];
+    await drag(
+        page,
+        east,
+        { x: target.x + 1, y: east.y },
+        {
+            beforeRelease: async () => {
+                const during = await page.evaluate(
+                    () => window.fieldTest!.shapeOverlay!()!,
+                );
+                guides = during.guides;
+                onGuides = during.onGuides;
+                guideEdges = during.guideEdges;
+            },
+        },
+    );
+    // While dragging, a guide along the yard line and the marchers on it tinted
+    expect(
+        guides.some(
+            (g) =>
+                Math.abs(g.from.x - yardLine) < CLOSE &&
+                Math.abs(g.to.x - yardLine) < CLOSE,
+        ),
+    ).toBe(true);
+    expect(onGuides.length).toBeGreaterThan(0);
+    // Named as the coordinate sheet writes it (#427)
+    expect(guides.map((g) => g.label)).toContain("S2: On 45");
+    // The box's own side on the line is drawn thicker (owner on #427)
+    expect(
+        guideEdges.some(
+            (e) =>
+                Math.abs(e.from.x - yardLine) < CLOSE &&
+                Math.abs(e.to.x - yardLine) < CLOSE,
+        ),
+    ).toBe(true);
+    for (const p of onGuides)
+        expect(Math.abs(p.x - yardLine)).toBeLessThan(CLOSE);
+
+    await expect(bar.getByTestId("shape-editor-across")).toHaveText("7⅔");
+    const after = (await shapeOverlay(page))!;
+    const afterXs = after.spots.map((p) => p.x);
+    // The left edge stayed, the right edge is on the line, and the guide cleared on release
+    expect(Math.abs(Math.min(...afterXs) - left)).toBeLessThan(CLOSE);
+    expect(Math.abs(Math.max(...afterXs) - yardLine)).toBeLessThan(CLOSE);
+    expect(after.guides).toEqual([]);
+
+    // Dragging the back edge onto the front hash: both guides are named, and nothing is drawn
+    // over either name (owner on #427)
+    const frontHash = grid.centerFront.y - 28 * S;
+    const minY = Math.min(...after.handles.map((h) => h.y));
+    const north = after.handles
+        .filter((h) => Math.abs(h.y - minY) < 1)
+        .sort((a, b) => a.x - b.x)[1]!;
+    const hash = await toScreen(page, { x: yardLine, y: frontHash });
+    let names: { text: string; onTop: boolean }[] = [];
+    await drag(
+        page,
+        north,
+        { x: north.x, y: hash.y },
+        {
+            beforeRelease: async () => {
+                names = await guideNamesOnTop(page);
+            },
+        },
+    );
+    expect(names.map((n) => n.text).sort()).toEqual(["On FH", "S2: On 45"]);
+    for (const name of names) expect(name.onTop, name.text).toBe(true);
+});
+
 test("change: clicking the picked kind in the Shapes tab closes the tool while nothing is drawn, and does nothing once a box is", async ({
     show,
 }) => {

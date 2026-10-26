@@ -3,6 +3,7 @@ import type { FieldMode, FieldPointer } from "@/field/editor/fieldEditor";
 import {
     drillNumbers,
     frameDrawing,
+    guideDrawing,
     keysOf,
     memoDrawing,
     shapeCursor,
@@ -51,6 +52,7 @@ const drawingOf = memoDrawing(({ live: saved, preview }: Shown) => {
         ? liveTargets(live.box, live.params, ctx).members
         : [];
     const names = drillNumbers(field);
+    const env = toolEnvFor(field, { shift: false, alt: false });
     return {
         stage: "open" as const,
         outline: shapeOutline(kind, live.params, n),
@@ -72,7 +74,16 @@ const drawingOf = memoDrawing(({ live: saved, preview }: Shown) => {
             n,
             live.gesture,
             live.pointer ?? null,
-            toolEnvFor(field, { shift: false, alt: false }),
+            env,
+        ),
+        ...guideDrawing(
+            kind,
+            live.params,
+            n,
+            targets,
+            live.gesture,
+            env,
+            field,
         ),
     };
 });
