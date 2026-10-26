@@ -2,9 +2,11 @@
 
 # Keyframe model: what a keyframe is when the show is stored as moves
 
-Status: research only, nothing decided. Started 2026-10-20 on branch `research/keyframe-model`
-off fork `main` (b87507f9c). The code read is fork PR #332 ("Set vs Following",
-`timeline/set-following`, head 9dc1fc171). Line numbers are at that head and paths are relative
+Status: **superseded by [../holds/README.md](../holds/README.md)** (owner, 2026-10-24/25), kept as
+the appendix it builds on. The owner chose not to build a keyframe model: the lasting result is
+the hold definition, the write-path inventory (01), the operations notes (02) and the prior art
+(03). The dead diamond (finding 3) is fixed by fork PR #384. Started 2026-10-20 off fork `main`
+(b87507f9c); code read at fork PR #332 (`timeline/set-following`, 9dc1fc171). Paths are relative
 to `apps/desktop/src/` unless they start with `docs/` or `apps/`.
 
 The owner wants the timeline to behave like a movie editor's keyframes. Their starting position,
