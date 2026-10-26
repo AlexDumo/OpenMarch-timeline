@@ -260,7 +260,7 @@ export type FieldModeDrawing = {
     guides?: readonly {
         from: FieldPoint;
         to: FieldPoint;
-        /** The checkpoint it's on: "50 yd line", "HS front hash" (#427) */
+        /** The line as the coordinate sheet writes it: "On 50", "12 BE BH" (#427) */
         label?: string;
     }[];
     /** The shape's sides that lie on a guide's line, drawn thicker in the guide's color */

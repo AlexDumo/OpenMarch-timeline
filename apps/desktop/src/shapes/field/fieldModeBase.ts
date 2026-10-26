@@ -12,7 +12,7 @@ import {
     type ShapeTarget,
 } from "../frame/gestures";
 import { edgeGuides } from "../frame/edgeGuides";
-import { fieldLineName } from "@/field/fieldPlan";
+import { lineCoordinate } from "./lineCoordinate";
 import { rotationDegrees } from "../frame/frame";
 import { lengthReadout } from "../frame/scale";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
@@ -123,7 +123,7 @@ export function frameDrawing(
 
 /**
  * While a draw or a handle drag has the shape's edges on the field's lines (#425): a dashed
- * guide along each, named for its checkpoint (#427), the shape's sides on it drawn thicker and its
+ * guide along each, named as the coordinate sheet writes it (#427), the shape's sides on it drawn thicker and its
  * spots tinted. Nothing during any other gesture, or with none.
  */
 export function guideDrawing(
@@ -145,10 +145,9 @@ export function guideDrawing(
         { width, height },
     );
     if (guides.length === 0) return {};
+    // Named as the coordinate sheet would write a spot on the line (owner, #427)
     const named = guides.map((g) => {
-        const name = fieldLineName(fieldProperties, g.axis, g.at);
-        // "35 yd line", as drill writers write it (owner, #427)
-        const label = name?.replace(/ yard line$/, " yd line");
+        const label = lineCoordinate(g.axis, g.at);
         return { from: g.from, to: g.to, ...(label ? { label } : {}) };
     });
     return { guides: named, guideEdges: edges, onGuides: on };

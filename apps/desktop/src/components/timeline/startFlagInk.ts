@@ -10,7 +10,4 @@ export const START_INK = {
     ring: "ring-[rgb(150,120,0)]/40 dark:ring-yellow/40",
     /** For small text: a darker ochre in light mode (above 4.5:1 on bg-1, AA for small text) */
     strongText: "text-[rgb(115,90,0)] dark:text-yellow",
-    /** For SVG lines and shapes, such as the field's snap guide in its yellow version (#427) */
-    stroke: "stroke-[rgb(150,120,0)] dark:stroke-yellow",
-    fill: "fill-[rgb(150,120,0)] dark:fill-yellow",
 } as const;

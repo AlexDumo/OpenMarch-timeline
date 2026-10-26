@@ -5,29 +5,12 @@ id: edge-pull
 title: Line a box up with yard lines and hashes
 summary: While you stretch or draw a box, an edge that comes close to a yard line, a hash or a sideline lands on it, and the spacing becomes whatever that takes (2⅔, 1⅗, 7). Away from the lines, spacing still steps by half steps.
 status: open
-# The snap guide in five colors, switched with Version (bottom left). The first is the default.
-variants:
-  - id: pink
-    label: Pink
-    description: The guide, its name tags and the snapped edge in pink.
-  - id: yellow
-    label: Yellow
-    description: The timeline's start flag yellow (ochre in the light app).
-  - id: teal
-    label: Teal
-    description: The guide in teal.
-  - id: orange
-    label: Orange
-    description: The guide in orange.
-  - id: contrast
-    label: Contrast
-    description: Black on a light field, white on a dark field or turf.
+variants: []
 questions:
   - Did the box's edge catch the yard line or hash when you wanted it to? Did you have to hunt for it?
   - Did it ever grab a line when you only wanted a half step? Where?
-  - Try each Version (color). Which one tells you most clearly that the edge snapped? Which would you keep?
-  - Did any color get lost on your field, or clash with selected marchers or other marks?
-  - Did the line's name at the screen's edge ever get in your way, or get missed?
+  - Is the orange guide easy to see on your field, without clashing with selected marchers or other marks?
+  - Does the line's name read the way you'd write it on a coordinate sheet? Did it ever get in your way, or get missed?
   - Did any spacing it gave you surprise you?
 ---
 
@@ -39,15 +22,12 @@ over 10 yards are **2⅔** apart, 11 files are **1⅗**.
 
 - **Stretching a box:** drag one of its side or corner handles toward a yard
   line, a hash or a sideline. When the edge gets within a few pixels, it lands
-  on the line. The box's edge turns **thick**, a solid line runs along the
-  line, and the edge, the line, its name and the marchers on it all take the
-  guide's color. The other side of the
-  box doesn't move.
-- The line runs **across the whole screen** at any zoom, with its **name**
-  ("45 yd line", "HS front hash") in a tag at the screen's edge.
-- **Five colors to try** (switch with **Version**, bottom left): pink, the
-  timeline's yellow, teal, orange, and Contrast (black on a light field, white
-  on a dark one).
+  on the line. The box's edge turns **thick and orange**, an orange line runs
+  along the line and the marchers on it turn orange. The other side of the box
+  doesn't move.
+- The line runs **across the whole screen** at any zoom, in **orange**, with
+  its name in a tag at the screen's edge, written the way the coordinate sheet
+  writes it: "S2: On 45", "On FH", "12 BE BH".
 - **Drawing a box:** the corner you drag toward a line catches it the same
   way. The corner you pressed stays put.
 - Away from lines, spacing **steps by half steps**, as before.

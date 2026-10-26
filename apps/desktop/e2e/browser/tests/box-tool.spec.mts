@@ -1605,8 +1605,8 @@ test("change: stretching a box's side near a yard line lands its edge on the lin
         ),
     ).toBe(true);
     expect(onGuides.length).toBeGreaterThan(0);
-    // Named for its checkpoint (#427)
-    expect(guides.map((g) => g.label)).toContain("45 yd line");
+    // Named as the coordinate sheet writes it (#427)
+    expect(guides.map((g) => g.label)).toContain("S2: On 45");
     // The box's own side on the line is drawn thicker (owner on #427)
     expect(
         guideEdges.some(

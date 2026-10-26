@@ -17,8 +17,7 @@ import {
 import { dotSizes, SELECTION_COLOR } from "./selectionRing";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
-import { useLabVariant } from "@/lab/labVariant";
-import { guideInkFor, inkProps, type GuideInk } from "./guideInk";
+import { GUIDE_INK, GUIDE_INK_TEXT } from "./guideInk";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -57,8 +56,8 @@ const PIVOT_MARK_RING = 5;
 /**
  * The guide along a field line a shape's edge is on (#425, #427): a solid line across the whole
  * canvas at any zoom, named at the canvas edge, over a dark edge that carries it on turf and
- * images; the shape's side on it 2½ times the outline, so a snap is plain to see. Its color is
- * the guide ink (`guideInk.ts`).
+ * images; the shape's side on it 2½ times the outline, so a snap is plain to see. In the guide
+ * ink (`guideInk.ts`).
  */
 const GUIDE_WIDTH = 1.5;
 const GUIDE_CASING = "rgba(0, 0, 0, 0.35)";
@@ -376,16 +375,12 @@ function GuideLabel({
     upright,
     width,
     height,
-    ink,
-    background,
 }: {
     text: string;
     at: { x: number; y: number };
     upright: boolean;
     width: number;
     height: number;
-    ink: GuideInk;
-    background: RgbaColor;
 }) {
     // About the width of the text in DM Sans at this size, with room either side
     const w = text.length * GUIDE_LABEL_PX * 0.55 + 16;
@@ -402,7 +397,7 @@ function GuideLabel({
                 width={w}
                 height={h}
                 rx={h / 2}
-                {...inkProps(ink, background, "fill")}
+                fill={GUIDE_INK}
             />
             <text
                 x={x + w / 2}
@@ -410,7 +405,7 @@ function GuideLabel({
                 fontSize={GUIDE_LABEL_PX}
                 fontWeight={600}
                 fontFamily="DM Sans, sans-serif"
-                fill={ink.text(background)}
+                fill={GUIDE_INK_TEXT}
                 textAnchor="middle"
                 dominantBaseline="central"
             >
@@ -430,7 +425,6 @@ function ModeDrawing({
     marchers: FieldMarchers;
 }) {
     const view = useFieldViewStore();
-    const variant = useLabVariant();
     const shape = rgbaToString(theme.shape);
     const walk = rgbaToString({ ...theme.shape, a: 0.4 });
     const fill = rgbaToString({ ...theme.shape, a: 0.06 });
@@ -440,9 +434,6 @@ function ModeDrawing({
     const half = SHAPE_HANDLE_SIZE / 2;
     const open = drawing.stage === "open";
     const dots = drawing.stage === "drawing";
-    // The lab tries the guide in several colors (#427)
-    const ink = guideInkFor(variant);
-    const background = theme.background;
     // The controls fade while the pointer is away from the shape (#403), and come back over it
     const controls = {
         opacity: drawing.calm ? CALM_CONTROLS_OPACITY : 1,
@@ -526,8 +517,8 @@ function ModeDrawing({
                             y1={a.y}
                             x2={b.x}
                             y2={b.y}
+                            stroke={GUIDE_INK}
                             strokeWidth={GUIDE_WIDTH}
-                            {...inkProps(ink, background, "stroke")}
                         />
                         {label && (
                             <GuideLabel
@@ -536,8 +527,6 @@ function ModeDrawing({
                                 upright={upright}
                                 width={view.width}
                                 height={view.height}
-                                ink={ink}
-                                background={background}
                             />
                         )}
                     </g>
@@ -553,8 +542,8 @@ function ModeDrawing({
                         y1={a.y}
                         x2={b.x}
                         y2={b.y}
+                        stroke={GUIDE_INK}
                         strokeWidth={GUIDE_EDGE_WIDTH}
-                        {...inkProps(ink, background, "stroke")}
                         strokeLinecap="round"
                         data-testid="fieldShapeGuideEdge"
                     />
@@ -568,7 +557,7 @@ function ModeDrawing({
                         cx={p.x}
                         cy={p.y}
                         r={SPOT_RADIUS * z}
-                        {...inkProps(ink, background, "fill")}
+                        fill={GUIDE_INK}
                         stroke="white"
                         strokeWidth={SPOT_WIDTH * z}
                     />
