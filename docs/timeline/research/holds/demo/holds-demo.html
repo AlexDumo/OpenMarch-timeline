@@ -89,6 +89,11 @@
         <button id="cPrev">Set to previous page</button>
         <button id="cHold" class="propOnly">Hold from previous page</button>
         <button id="cEndHold" class="propOnly">Split hold here (ends the hold)</button>
+        <button id="cExtend" class="propOnly">Extend hold back to last arrival</button>
+        <button id="cAllHeld" class="propOnly">Make all selected Held</button>
+      </div>
+      <div class="muted" id="selSummary" style="margin-top:6px"></div>
+      <div class="row" style="display:none">
       </div>
       <h2 style="margin-top:12px">Steps per count <span class="muted" id="speedWho"></span></h2>
       <div id="speed"></div>
@@ -143,7 +148,7 @@ function arrivalBefore(m, b) {
 /** Keep H-1..H-3: marks only over gaps, starting at an arrival, not overlapping. */
 function normalize(m) {
   sortRows(m);
-  const ends = new Set([0, ...m.rows.map((r) => r.end)]);
+  const ends = new Set([0, ...m.rows.map((r) => r.end), ...PAGES.map((p) => p.end), ...PAGES.map((p) => p.start)]); // H-2: an arrival, 0 or a page flag
   let marks = [];
   for (const k of m.marks) {
     if (!ends.has(k.start)) continue; // H-2: arrival gone → hold goes (decision 17)
@@ -173,8 +178,15 @@ function setPosAt(m, b, p) {
   if (b === 0) { m.home = p; say(`${name}: moved the start position (Page 1).`); return; }
   const k = heldAt(m, b);
   if (k) {
+    const arr = rowEnding(m, k.start);
     if (k.start === 0) m.home = p;
-    else rowEnding(m, k.start).dest = p;
+    else if (arr) arr.dest = p;
+    else {
+      const g0 = Math.max(arrivalBefore(m, k.start), k.start - 8);
+      m.rows.push({ start: g0, end: k.start, dest: p });
+      say(`<b>${name}: moved the whole Held hold</b> (counts ${k.start}–${k.end}). Nothing arrived at ${k.start}, so ${pageName(k.start)} got its own move (${g0}–${k.start}); earlier pages are untouched.`);
+      return;
+    }
     say(`<b>${name}: moved the whole Held hold</b> (counts ${k.start}–${k.end}), including where it arrives at count ${k.start}.`);
     return;
   }
@@ -224,6 +236,7 @@ function removeKeyframe(m, b, keepLater) {
   if (next && !onFlag) msg += ` The next move still starts at ${b}, so ${m.name} stands still ${r.start}–${b}, then catches up.`;
   if (next && onFlag && mode === "proposed") msg += ` (On a page flag: not joined, so pages keep their own moves.)`;
   const heldArrival = mode === "proposed" && m.marks.some((k) => k.start === b);
+  if (heldArrival) m.marks = m.marks.filter((k) => k.start !== b); // decision 17, explicitly (a flag start alone would still pass H-2)
   if (keepLater && !heldArrival && box && !same(before, pos(m, box.end)) && !m.rows.some((x) => x.start < box.end && x.end > box.start)) {
     m.rows.push({ start: box.start, end: box.end, dest: before });
     msg += ` ${box.name} keeps its spot: a move back to it was written there.`;
@@ -257,10 +270,31 @@ function holdFromPrevious(m, b) {
   const box = pageOfFlag(b);
   if (!box) return false;
   m.rows = m.rows.filter((r) => !(r.start < box.end && r.end > box.start));
-  const a = arrivalBefore(m, box.start);
-  const k = m.marks.find((x) => x.start === a);
-  if (k) k.end = Math.max(k.end, box.end); else m.marks.push({ start: a, end: box.end });
-  say(`<b>${m.name}: Held</b> from its arrival (count ${a}) through ${box.name}.`);
+  const k = m.marks.find((x) => x.end === box.start);
+  if (k) k.end = box.end; else m.marks.push({ start: box.start, end: box.end });
+  say(`<b>${m.name}: Held</b> on ${box.name} only: it shows what the page before shows. Earlier unedited pages stay Following.`);
+  return true;
+}
+
+function extendHoldBack(m, b) {
+  const k = m.marks.find((x) => x.start < b && b <= x.end) || m.marks.find((x) => x.start === b);
+  if (!k) return false;
+  const a = arrivalBefore(m, k.start);
+  if (a >= k.start) return false;
+  k.start = a;
+  say(`${m.name}: hold now starts at its last arrival (count ${a}); the pages in between are Held too.`);
+  return true;
+}
+
+function makeHeldLike(m, b) {
+  if (heldAt(m, b)) return false;
+  const ref = marchers.find((x, i) => selected.has(i) && heldAt(x, b));
+  if (!ref) return false;
+  const k = heldAt(ref, b);
+  const start = Math.max(k.start, arrivalBefore(m, b));
+  const next = Math.min(COUNTS, ...m.rows.filter((r) => r.start >= b).map((r) => r.start));
+  m.marks.push({ start, end: Math.min(k.end, next) });
+  say(`<b>${m.name}: Held</b> over counts ${start}–${Math.min(k.end, next)}, like ${ref.name}.`);
   return true;
 }
 
@@ -437,6 +471,9 @@ function render() {
     ? '<span>▭ blue: a move</span><span>◆ keyframe (every move end)</span><span style="color:#059669">▬ Held</span><span style="color:#9ca3af">┅ Following</span><span>| departure</span><span>field: solid = decided, dashed = not set; squares = set spots</span>'
     : '<span>▭ blue: a move</span><span>◆ keyframe (moves that moved)</span><span style="color:#dc2626">◇ dashed red: a move end #332 hides</span><span>field: solid only on a keyframe count</span>';
   $("log").innerHTML = lastMsg.join("<br>") || $("log").innerHTML;
+  const held = [...selected].filter((i) => heldAt(marchers[i], ph)).length;
+  $("selSummary").textContent = mode === "proposed" && selected.size ? `At count ${ph}: ${held} of ${selected.size} selected Held` : "";
+  $("cAllHeld").disabled = mode !== "proposed" || held === 0 || held === selected.size;
   renderTimeline();
   renderField();
   renderSpeed();
@@ -493,6 +530,8 @@ $("cSplit").onclick = () => act((m) => splitAt(m, ph));
 $("cPrev").onclick = () => act((m) => setToPrevious(m, ph));
 $("cHold").onclick = () => act((m) => holdFromPrevious(m, ph));
 $("cEndHold").onclick = () => act((m) => endHoldAt(m, ph));
+$("cExtend").onclick = () => act((m) => extendHoldBack(m, ph));
+$("cAllHeld").onclick = () => act((m) => makeHeldLike(m, ph));
 
 // ---------- scenarios ----------
 const M = (name, home, rows = [], marks = []) => ({ name, home, rows, marks });
@@ -560,12 +599,13 @@ const SCENARIOS = [
     ],
   },
   {
-    name: "Review B2 · Mixed drag (Held + Following)",
+    name: "B2 · Mixed drag (decided)",
     setup: () => [M("B1", [20, 45], [{ start: 8, end: 16, dest: [35, 25] }], [{ start: 16, end: 32 }]), M("B2", [30, 50], [{ start: 8, end: 16, dest: [45, 25] }]), M("B3", [60, 50])],
     sel: [0, 1], ph: 20, mode: "proposed",
     steps: [
       ["B1 and B2 arrive together at 16. B1 is Held to 32; B2 is Following. Both selected, playhead 20.", null],
-      ["Drag both right: B1 moves its whole hold (its Page 3 arrival changes); B2 starts a new move on Page 4. One gesture, two different edits. Is that OK, or should a mixed selection be refused or treated one way?", () => act((m) => { const p = pos(m, 20); setPosAt(m, 20, [p[0] + 10, p[1]]); })],
+      ["Decided: each by its own kind, no toast. The Commands card says '1 of 2 selected Held'. Drag both right: B1 moves its whole hold (its Page 3 arrival); B2 starts a new move on Page 4.", () => act((m) => { const p = pos(m, 20); setPosAt(m, 20, [p[0] + 10, p[1]]); })],
+      ["Or: Undo, then 'Make all selected Held' (explicit), then drag: both move their holds.", () => { if (history.length) marchers = history.pop(); act((m) => makeHeldLike(m, 20)); }],
     ],
   },
   {
@@ -579,7 +619,7 @@ const SCENARIOS = [
     ],
   },
   {
-    name: "Review M6 · Expert window inside a hold",
+    name: "M6 · Expert window in a hold (decided: window wins)",
     setup: () => [M("B1", [20, 45], [{ start: 8, end: 16, dest: [40, 25] }], [{ start: 16, end: 32 }]), M("B2", [30, 55]), M("B3", [60, 50])],
     sel: [0], ph: 28, mode: "proposed", win: 20,
     steps: [
@@ -589,12 +629,14 @@ const SCENARIOS = [
     ],
   },
   {
-    name: "Review M7 · Hold from previous page, later",
+    name: "M7 · Hold from previous page (decided: this page only)",
     setup: () => [M("B1", [20, 45], [{ start: 8, end: 16, dest: [40, 25] }, { start: 32, end: 40, dest: [70, 30] }]), M("B2", [30, 55]), M("B3", [60, 50])],
     sel: [0], ph: 32, mode: "proposed",
     steps: [
       ["B1 arrives at 16 (Page 3); Pages 4 and 5 are Following; Page 6 has its own move.", null],
-      ["On Page 6 (count 40): Hold from previous page. Page 6's own move is replaced, and the hold starts at B1's last arrival (16), so Pages 4–5 become Held too, not just Page 6. Wanted, or should it start at Page 6's start?", () => { ph = 40; act((m) => holdFromPrevious(m, 40)); }],
+      ["Decided: on Page 6 (count 40), Hold from previous page holds Page 6 only (its own move is replaced); Pages 4–5 stay Following.", () => { ph = 40; act((m) => holdFromPrevious(m, 40)); }],
+      ["Drag at count 36 (inside the hold): Page 5 gets its own move, the hold follows, Pages 3–4 untouched.", () => { ph = 36; act((m) => { const p = pos(m, 36); setPosAt(m, 36, [p[0] + 10, p[1] - 8]); }); }],
+      ["Undo, then 'Extend hold back to last arrival': the hold now starts at 16, so Pages 4–6 are one hold.", () => { if (history.length) marchers = history.pop(); ph = 36; act((m) => extendHoldBack(m, 36)); }],
     ],
   },
 ];

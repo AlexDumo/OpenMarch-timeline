@@ -51,8 +51,10 @@ so the mark is app data:
 - **Invariants,** checked at commit time beside `timeline_commit_violations`. They are plain SQL
   over `timeline_assignments` and need no layer derivation:
   - **H-1:** no row of the marcher overlaps the mark;
-  - **H-2:** a row of the marcher ends at the mark's start, or the start is 0;
+  - **H-2:** a row of the marcher ends at the mark's start, or the start is 0 or a page flag;
   - **H-3:** one marcher's marks don't overlap.
+- **Holds are always explicit:** only Hold from previous page, a bar drag, hold over the window and
+  Make all selected Held write marks. Nothing infers one from a selection or from positions.
 - **Upkeep:** a shared step in `transactionWithHistory`, before the drain, trims marks that rows now
   cover and deletes marks whose arrival is gone. Paths that move an arrival pass an old→new map. It
   never runs during undo/redo replay (C-6).
