@@ -1580,6 +1580,7 @@ test("change: stretching a box's side near a yard line lands its edge on the lin
 
     let guides: { from: Point; to: Point }[] = [];
     let onGuides: Point[] = [];
+    let guideEdges: { from: Point; to: Point }[] = [];
     await drag(
         page,
         east,
@@ -1591,6 +1592,7 @@ test("change: stretching a box's side near a yard line lands its edge on the lin
                 );
                 guides = during.guides;
                 onGuides = during.onGuides;
+                guideEdges = during.guideEdges;
             },
         },
     );
@@ -1603,6 +1605,14 @@ test("change: stretching a box's side near a yard line lands its edge on the lin
         ),
     ).toBe(true);
     expect(onGuides.length).toBeGreaterThan(0);
+    // The box's own side on the line is drawn thicker (owner on #427)
+    expect(
+        guideEdges.some(
+            (e) =>
+                Math.abs(e.from.x - yardLine) < CLOSE &&
+                Math.abs(e.to.x - yardLine) < CLOSE,
+        ),
+    ).toBe(true);
     for (const p of onGuides)
         expect(Math.abs(p.x - yardLine)).toBeLessThan(CLOSE);
 

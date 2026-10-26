@@ -9,7 +9,7 @@ variants: []
 questions:
   - Did the box's edge catch the yard line or hash when you wanted it to? Did you have to hunt for it?
   - Did it ever grab a line when you only wanted a half step? Where?
-  - Is the pink dashed guide, with the marchers on it tinted, clear enough to tell the edge is on the line?
+  - When an edge is on a line it turns thick and pink, with a dashed guide and the marchers on it tinted. Can you tell at a glance when it has snapped?
   - Did any spacing it gave you surprise you?
 ---
 
@@ -21,8 +21,9 @@ over 10 yards are **2⅔** apart, 11 files are **1⅗**.
 
 - **Stretching a box:** drag one of its side or corner handles toward a yard
   line, a hash or a sideline. When the edge gets within a few pixels, it lands
-  on the line. A pink dashed guide runs along the line and the marchers on it
-  turn pink. The other side of the box doesn't move.
+  on the line. The box's edge turns **thick and pink**, a pink dashed guide
+  runs along the line and the marchers on it turn pink. The other side of the
+  box doesn't move.
 - **Drawing a box:** the corner you drag toward a line catches it the same
   way. The corner you pressed stays put.
 - Away from lines, spacing **steps by half steps**, as before.

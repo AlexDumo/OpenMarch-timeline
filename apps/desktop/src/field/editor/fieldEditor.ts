@@ -258,6 +258,8 @@ export type FieldModeDrawing = {
      * guide along each such line, across the field
      */
     guides?: readonly { from: FieldPoint; to: FieldPoint }[];
+    /** The shape's sides that lie on a guide's line, drawn thicker in the guide's color */
+    guideEdges?: readonly { from: FieldPoint; to: FieldPoint }[];
     /** The spots standing on a guide, tinted */
     onGuides?: readonly FieldPoint[];
 };

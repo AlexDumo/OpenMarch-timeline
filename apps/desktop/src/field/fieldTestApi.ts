@@ -202,6 +202,11 @@ export type FieldTestShapeOverlay = {
     calm: boolean;
     /** Dashed guides along the field's lines the shape's edges are on, field units (#425). */
     guides: { from: { x: number; y: number }; to: { x: number; y: number } }[];
+    /** The shape's sides on a guide's line, drawn thicker, field units (#425). */
+    guideEdges: {
+        from: { x: number; y: number };
+        to: { x: number; y: number };
+    }[];
     /** The spots standing on a guide, tinted, field units (#425). */
     onGuides: { x: number; y: number }[];
 };

@@ -58,6 +58,8 @@ const PIVOT_MARK_RING = 5;
  */
 const GUIDE_COLOR = "#ec4899";
 const GUIDE_DASH = "4 3";
+/** A shape's side while it's on a guide's line: 2½ times the outline, so a snap is plain to see (owner on #427) */
+const GUIDE_EDGE_WIDTH = 2.5 * SHAPE_OUTLINE_WIDTH;
 /** How strong an open shape's controls are while the pointer is away from it (#403) */
 const CALM_CONTROLS_OPACITY = 0.25;
 /** Spot labels and the pointer tip, in CSS px. */
@@ -449,6 +451,23 @@ function ModeDrawing({
                         strokeWidth={1}
                         strokeDasharray={GUIDE_DASH}
                         data-testid="fieldShapeGuide"
+                    />
+                );
+            })}
+            {drawing.guideEdges?.map(({ from, to }, i) => {
+                const a = at(from);
+                const b = at(to);
+                return (
+                    <line
+                        key={i}
+                        x1={a.x}
+                        y1={a.y}
+                        x2={b.x}
+                        y2={b.y}
+                        stroke={GUIDE_COLOR}
+                        strokeWidth={GUIDE_EDGE_WIDTH}
+                        strokeLinecap="round"
+                        data-testid="fieldShapeGuideEdge"
                     />
                 );
             })}

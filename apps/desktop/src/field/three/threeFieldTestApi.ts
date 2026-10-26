@@ -184,6 +184,10 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
             from: copy(from),
             to: copy(to),
         })),
+        guideEdges: (drawing.guideEdges ?? []).map(({ from, to }) => ({
+            from: copy(from),
+            to: copy(to),
+        })),
         onGuides: (drawing.onGuides ?? []).map(copy),
     };
     function screen(at: FieldPoint) {

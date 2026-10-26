@@ -132,16 +132,16 @@ export function guideDrawing(
     gesture: { readonly type: string } | null | undefined,
     env: ToolEnv,
     field: ShapeField,
-): Pick<FieldModeDrawing, "guides" | "onGuides"> {
+): Pick<FieldModeDrawing, "guides" | "guideEdges" | "onGuides"> {
     if (gesture?.type !== "draw" && gesture?.type !== "handle") return {};
     const { width, height } = field.fieldProperties;
-    const { guides, on } = edgeGuides(
+    const { guides, edges, on } = edgeGuides(
         shapeOutline(kind, params, n),
         spots,
         env.fieldLines,
         { width, height },
     );
-    return guides.length > 0 ? { guides, onGuides: on } : {};
+    return guides.length > 0 ? { guides, guideEdges: edges, onGuides: on } : {};
 }
 
 /**
