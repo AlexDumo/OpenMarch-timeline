@@ -636,11 +636,21 @@ test("change: the floating editor fades with the pointer away, and is solid over
     await page.keyboard.press("Escape");
     await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
 
-    // Its layout menu open
+    // Its layout menu open; once a layout is picked, the editor fades again with the pointer
+    // away, though the menu hands focus back to its button
+    await page.evaluate(() =>
+        localStorage.removeItem("openmarch:shapeLastLayout"),
+    );
     await page.getByTestId("shape-layout-menu").click();
-    await expect(page.getByTestId("shape-layout-picker")).toBeVisible();
+    const menu = page.getByTestId("shape-layout-menu-content");
+    await expect(menu).toBeVisible();
     await page.mouse.move(5, 500);
     await expect.poll(() => editorOpacity(page)).toBe(1);
+    await menu.getByTestId("shape-layout-menu-row-rounded").hover();
+    await menu.getByTestId("shape-layout-menu-version-rounded-0").click();
+    await expect(menu).toBeHidden();
+    await page.mouse.move(5, 500);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
 });
 
 test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({

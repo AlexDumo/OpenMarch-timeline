@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import clsx from "clsx";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react";
@@ -167,6 +167,9 @@ export function LayoutMenu(props: PickerProps) {
     const pick = usePick(props);
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState<LayoutFamily | null>(null);
+    // Closed by a press (a layout picked, a click away): focus isn't handed back to the button,
+    // or the floating editor would stay solid with the pointer away (#426). Escape still hands it.
+    const pressed = useRef(false);
     const now = layoutOf(target.kind, target.params, target.spots);
     const rows = target.kind.closed?.layouts?.catalogue(target.spots) ?? [];
     if (now === null || rows.length === 0) return null;
@@ -193,6 +196,7 @@ export function LayoutMenu(props: PickerProps) {
             onOpenChange={(next) => {
                 setOpen(next);
                 if (!next) setActive(null);
+                else pressed.current = false;
             }}
         >
             <span className="flex items-center gap-4">
@@ -237,6 +241,15 @@ export function LayoutMenu(props: PickerProps) {
                     align="start"
                     sideOffset={6}
                     onOpenAutoFocus={(e) => e.preventDefault()}
+                    onCloseAutoFocus={(e) => {
+                        if (pressed.current) e.preventDefault();
+                    }}
+                    onPointerDownOutside={() => {
+                        pressed.current = true;
+                    }}
+                    onPointerDownCapture={() => {
+                        pressed.current = true;
+                    }}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex gap-8 border p-6"
                     data-testid="shape-layout-menu-content"

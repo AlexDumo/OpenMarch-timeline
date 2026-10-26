@@ -101,6 +101,8 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
             target={target}
             stepPx={stepPx}
             testId={toolOpen ? "shape-tool-readout" : "placed-box-readout"}
+            // An open shape's editor fades with the pointer away; a placed one's stays solid
+            fades={toolOpen}
         />
     );
 }
@@ -117,16 +119,18 @@ function ShapeEditorBar({
     target,
     stepPx,
     testId,
+    fades,
 }: {
     target: ShapeEditTarget;
     stepPx: number;
     testId: string;
+    /** Fades with the pointer away from the shape and the editor (#426) */
+    fades: boolean;
 }) {
     const { kind, params, spots } = target;
     const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
     // An open shape's editor fades with the pointer away from it and the shape (#426)
     const overShape = useShapePointerOver();
-    const fades = testId === "shape-tool-readout";
     // The shape's own pivot (#350), the same in Basic and Expert (spec #344)
     const pivot = pivotOf(params);
     const [more, setMore] = useState(false);
