@@ -404,7 +404,7 @@ function ShapeEditorBar({
                     <CloseUpButton
                         target={target}
                         compact
-                        className="rounded-4 hover:text-accent p-2"
+                        className="rounded-4 hover:text-accent flex min-h-24 min-w-24 items-center justify-center p-4"
                         testId="shape-editor-close-up"
                     />
                 </span>
@@ -417,7 +417,7 @@ function ShapeEditorBar({
                         shape={{ kind, params, spots }}
                         stepPx={stepPx}
                         compact
-                        className="rounded-4 hover:text-accent p-2"
+                        className="rounded-4 hover:text-accent flex min-h-24 min-w-24 items-center justify-center p-4"
                         testId="shape-editor-save"
                     />
                 </span>
@@ -590,7 +590,8 @@ function IconButton({
                 }}
                 data-testid={testId}
                 className={clsx(
-                    "rounded-4 flex items-center gap-4 p-2",
+                    // At least 24 px to hit (WCAG 2.2 target size; review round r429)
+                    "rounded-4 flex min-h-24 min-w-24 items-center justify-center gap-4 p-4",
                     // On: the icon in the accent on a light accent tint, so the state is plain at a
                     // glance without reading as a solid button (owner)
                     pressed ? "bg-accent/15 text-accent" : "hover:text-accent",

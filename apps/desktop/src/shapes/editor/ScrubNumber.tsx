@@ -153,7 +153,7 @@ export function ScrubNumber({
                     aria-label={label}
                     data-testid={testId}
                     className={clsx(
-                        "rounded-4 px-2 tabular-nums select-none",
+                        "rounded-4 min-h-24 px-4 tabular-nums select-none",
                         dragging
                             ? "bg-accent text-text-invert"
                             : "hover:bg-fg-2 hover:text-accent",
