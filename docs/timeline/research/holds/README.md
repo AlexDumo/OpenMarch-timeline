@@ -69,6 +69,28 @@ Every **stored move end** that is visible (its move is in charge when it ends) i
 whether or not the marcher moved (decision 13). #384 already made the keyframe test check the
 move's own end.
 
+## Scope: shapes and transitions are not covered yet
+
+This design assumes **today's move model**, where one transition bundles four things: when (its
+range), where (a shape or points), how (the path style) and who (its slots). The owner's
+direction (2026-10-26) is to separate them, and the ownership model is its own research
+(tracker issue linked in #362):
+
+- **shapes:** an equation that distributes marchers into spots, with no timing;
+- **transitions:** isolated blocks of transition logic on a track;
+- **keyframes:** each marcher's arrival, whether it was dragged or produced by a shape.
+
+So **nothing here decides how shapes or transitions behave.** Holds touch them only through a
+**two-operation contract** that every transition type, and the shapes it uses, will have to
+define:
+
+1. **Cut a block in time** at a count.
+2. **Remove a marcher from a block** for a range of counts.
+
+Holds never look inside a shape or a path style. Where a rule below mentions shapes or
+follow-the-leader (decisions 4, 16, R4, R5), it is provisional until the ownership model lands.
+Tickets built from this doc should say the same.
+
 ## Decisions
 
 Owner, 2026-10-24 and 2026-10-25. The diagrams are in [images/](images/); each one shows today,

@@ -67,5 +67,11 @@ so the mark is app data:
 - **File format:** the version stays 8 (unreleased). Files from earlier development builds get the
   empty table from the migration. A build without it shows held stretches as following.
 
+**Scope.** Holds rely on transitions only through two operations: cut a block in time at a count,
+and remove a marcher from a block for a range of counts. How shapes and transitions provide them is
+left to the shape and transition ownership model, a later amendment. Until then, a command that
+must take a marcher out of a shape or follow-the-leader move refuses for that marcher, with a
+reason.
+
 The research is `docs/timeline/research/holds/`. The interaction is a new UI-row in
 `docs/timeline/ui.md`.
