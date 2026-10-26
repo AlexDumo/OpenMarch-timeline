@@ -11,7 +11,7 @@
  * delay of the state it goes to: only the faded state has one.
  */
 
-/* Longhands, so the faded state's delay isn't reset by a shorthand that outranks it */
+/* Separate properties, so the faded state's delay isn't reset by a shorthand that outranks it */
 .shape-editor-surface {
     transition-property: opacity;
     transition-duration: 120ms;
