@@ -3,7 +3,9 @@
 # Holds: kinds, storage and display
 
 Status: decisions taken (owner, 2026-10-24 and 2026-10-25); independently reviewed 2026-10-25
-([03-review.md](03-review.md): changes made, and owner questions R1–R8); nothing built. A
+([03-review.md](03-review.md): changes made, and owner questions R1–R8); hold anchors
+(arrival and count) proposed 2026-10-26 in [04-anchors.md](04-anchors.md), under review;
+nothing built. A
 hands-on [demo](demo/holds-demo.html) (simplified: one layer, pages of 8 counts) lets you try the
 rules and today's behaviour side by side. This replaces the
 [keyframe model research](../keyframe-model/README.md), which is now an appendix. Code references
