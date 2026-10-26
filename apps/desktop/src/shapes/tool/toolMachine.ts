@@ -22,8 +22,8 @@ import type { AnyToolKind, ToolEnv } from "./toolKind";
  * - anywhere else: draw a new shape, which replaces the open one.
  *
  * Releasing ends the gesture as one undo step. Who goes where is held during every gesture. Only
- * a fresh draw, or a change in how many spots there are across or deep, works it out again
- * (Least travel or Drill order): stretching, moving, turning and flipping keep each marcher on
+ * a fresh draw, a change in how many spots there are across or deep, or Recalculate (#429) works
+ * it out again, by least travel: stretching, moving, turning and flipping keep each marcher on
  * their own spot, so a turned or flipped form is the same form (owner, 2026-10-16).
  *
  * Every function is pure; `shapeToolStore.ts` holds the state.
@@ -37,17 +37,7 @@ export interface ToolSnapshot {
     readonly params: unknown;
     /** The slot index for each marcher, in `marchers` order; null with no shape */
     readonly assignment: readonly number[] | null;
-    /** How who goes where is worked out when it is */
-    readonly order: ToolOrder;
-    /**
-     * Who goes where was kept through a turn or flip, so it's neither Least travel nor Drill
-     * order any more: the editor shows neither (owner, 2026-10-17) until one is picked again
-     */
-    readonly kept: boolean;
 }
-
-/** Least travel (the default) or drill order */
-export type ToolOrder = "nearest" | "drill";
 
 export type Gesture =
     | {
@@ -94,8 +84,6 @@ export function openTool(
         spots: marchers.length,
         params: null,
         assignment: null,
-        order: "nearest",
-        kept: false,
         gesture: null,
         past: [],
         future: [],
@@ -106,8 +94,6 @@ const snapshot = (s: ToolState): ToolSnapshot => ({
     kind: s.kind,
     params: s.params,
     assignment: s.assignment,
-    order: s.order,
-    kept: s.kept,
 });
 
 /** The spots for the open shape, in the kind's order; empty before one is drawn */
@@ -116,20 +102,19 @@ export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {
     return state.kind.shape.generate(state.params, state.spots, ctx);
 }
 
-/** Who goes where on the current shape, worked out again from where the marchers start */
+/** Who goes where on the current shape, by least travel from where the marchers start */
 function reassign(state: ToolState, ctx: ShapeContext): ToolState {
-    if (state.params === null)
-        return { ...state, assignment: null, kept: false };
+    if (state.params === null) return { ...state, assignment: null };
     const slots = slotsOf(state, ctx);
     const assignment = assignSlots({
         kind: state.kind.shape,
         params: state.params,
         slots,
         marchers: state.marchers,
-        mode: state.order,
+        mode: "nearest",
         ctx,
     });
-    return { ...state, assignment, kept: false };
+    return { ...state, assignment };
 }
 
 function pushHistory(state: ToolState, before: ToolSnapshot): ToolState {
@@ -212,20 +197,7 @@ export function release(
     const next = pushHistory(ended, g.before);
     return g.type === "draw" || !holdsSpots(state, g.before.params, ctx)
         ? reassign(next, ctx)
-        : keptThrough(next, g.before.params);
-}
-
-/** `state` holding its spots after a change from `before`: kept, if it turned or flipped */
-function keptThrough(state: ToolState, before: unknown): ToolState {
-    if (state.kept || before === null || state.params === null) return state;
-    const n = state.spots;
-    const a = state.kind.frameOf(before, n);
-    const b = state.kind.frameOf(state.params, n);
-    const turned =
-        Math.abs(a.rotation - b.rotation) > 1e-9 ||
-        a.flipX !== b.flipX ||
-        a.flipY !== b.flipY;
-    return turned ? { ...state, kept: true } : state;
+        : next;
 }
 
 /**
@@ -267,9 +239,7 @@ export function edit(
     if (state.gesture || params === state.params) return state;
     params = carryPivot(state.params, params);
     const next = pushHistory({ ...state, params }, snapshot(state));
-    return holdsSpots(next, state.params, ctx)
-        ? keptThrough(next, state.params)
-        : reassign(next, ctx);
+    return holdsSpots(next, state.params, ctx) ? next : reassign(next, ctx);
 }
 
 /** A number's drag starts: the shape follows {@link previewEdit} until {@link release} */
@@ -310,14 +280,21 @@ export function switchKind(
     );
 }
 
-/** Least travel or drill order, worked out at once: one undo step */
-export function setOrder(
-    state: ToolState,
-    order: ToolOrder,
-    ctx: ShapeContext,
-): ToolState {
-    if (state.gesture || (order === state.order && !state.kept)) return state;
-    return reassign(pushHistory({ ...state, order }, snapshot(state)), ctx);
+/**
+ * Recalculate who goes where (#429): the shape's marchers on its spots by least travel from where
+ * they come from, as one undo step. Moving, turning and flipping keep the assignment (the
+ * default); this is the one button that works it out again. Unchanged when it's already that.
+ */
+export function recalculate(state: ToolState, ctx: ShapeContext): ToolState {
+    if (state.gesture || !canRecalculate(state, ctx)) return state;
+    return reassign(pushHistory(state, snapshot(state)), ctx);
+}
+
+/** Whether {@link recalculate} would change who goes where */
+export function canRecalculate(state: ToolState, ctx: ShapeContext): boolean {
+    if (state.params === null || !state.assignment) return false;
+    const fresh = reassign(state, ctx).assignment;
+    return !!fresh && fresh.some((slot, i) => slot !== state.assignment![i]);
 }
 
 export function undo(state: ToolState): ToolState {

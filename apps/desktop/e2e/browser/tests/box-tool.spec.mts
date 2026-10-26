@@ -23,8 +23,8 @@ import type {
 // half-step grid, its handles stretch it, − and + change the files, a drag
 // inside moves it, Enter places it as one undo step and Escape cancels. The
 // shape frame (08-shape-system-ux.md): the knob turns it, the floating
-// editor's ⋯ row flips it, who goes where holds through both, and everyone
-// else fades while it's open.
+// editor's one row flips it, who goes where holds through both until
+// Recalculate (#429), and everyone else fades while it's open.
 // Placed boxes (07-placed-boxes.md): a click on a member selects the whole
 // box, a double click goes inside it, and a selected box's handles stretch it
 // and save at once. The View tab's label forms come with it.
@@ -274,7 +274,7 @@ test("handles stretch the intervals with files and ranks fixed, + adds a file, a
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
 });
 
-test("change: the knob turns the box and ⋯ flips it, each marcher keeping their spot, and the rest fade", async ({
+test("change: the knob turns the box and the editor flips it, each marcher keeping their spot, and the rest fade", async ({
     show,
 }) => {
     const { page } = show;
@@ -323,13 +323,11 @@ test("change: the knob turns the box and ⋯ flips it, each marcher keeping thei
     // The numbers follow the field: 4 × 2 turned a quarter reads 2 × 4
     expect(await readout(page)).toMatch(/^2 × 4 · /);
 
-    // ⋯ → flip side to side: mirrored about the center's line, same marchers;
-    // neither order is lit after it
+    // Flip side to side: mirrored about the center's line, same marchers
     const turned = overlay.walks;
     // The quarter turn may have moved the center a little back onto the grid
     const xs1 = turned.map((w) => w.to.x);
     const turnedMid = (Math.min(...xs1) + Math.max(...xs1)) / 2;
-    await page.getByTestId("shape-editor-more").click();
     await page.getByTestId("shape-editor-flip-across").click();
     // Those on the center's line stay; everyone else crosses to the other side
     await expect
@@ -346,12 +344,8 @@ test("change: the knob turns the box and ⋯ flips it, each marcher keeping thei
         ).toBeLessThanOrEqual(slack);
         expect(w.to.y).toBeCloseTo(turned[i].to.y, 3);
     });
-    await expect(page.getByTestId("shape-editor-order-kept")).toBeVisible();
-    await expect(
-        page.getByTestId("shape-editor-order").getByRole("radio", {
-            checked: true,
-        }),
-    ).toHaveCount(0);
+    // Who goes where was kept, so it can be worked out again (#429)
+    await expect(page.getByTestId("shape-editor-recalculate")).toBeEnabled();
 
     // Nobody moves until Place. Enter still places after a click on the
     // editor's buttons: they don't keep the focus
@@ -366,6 +360,233 @@ test("change: the knob turns the box and ⋯ flips it, each marcher keeping thei
             }),
         )
         .toEqual(ALL.map(() => true));
+});
+
+test("change: one row with no ⋯; after a move and a quarter turn, Recalculate works out who goes where again as one undo step (#429)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await showPathways(show);
+    await drawBox(show);
+    const recalculate = page.getByTestId("shape-editor-recalculate");
+    // Everything is on the one row: no ⋯, and the free turn is apart from ↻90
+    await expect(page.getByTestId("shape-editor-more")).toHaveCount(0);
+    for (const id of [
+        "shape-editor-quarter-turn",
+        "shape-editor-rotation",
+        "shape-editor-flip-across",
+        "shape-editor-flip-deep",
+        "shape-editor-save",
+    ])
+        await expect(page.getByTestId(id)).toBeVisible();
+    await expect(page.getByTestId("shape-editor-order")).toHaveCount(0);
+    // The app's own tooltips, not a browser title
+    const quarter = page.getByTestId("shape-editor-quarter-turn");
+    await expect(quarter).not.toHaveAttribute("title", /./);
+    await quarter.hover();
+    await expect(page.getByRole("tooltip")).toContainText("Turn 90° clockwise");
+    // Just drawn, it's least travel already, and its tooltip says so
+    await expect(recalculate).toBeDisabled();
+    await expect(recalculate).toHaveText("");
+    await recalculate.hover();
+    await expect(page.getByRole("tooltip")).toContainText(
+        "already least travel",
+    );
+
+    // Move it, then turn it a quarter: everyone keeps their spot
+    const spots = (await shapeOverlay(page))!.spots;
+    const inside = await toScreen(page, {
+        x: spots.reduce((a, p) => a + p.x, 0) / spots.length,
+        y: spots.reduce((a, p) => a + p.y, 0) / spots.length,
+    });
+    await drag(page, inside, { x: inside.x + 120, y: inside.y + 60 });
+    await page.getByTestId("shape-editor-quarter-turn").click();
+    await expect.poll(() => readout(page)).toMatch(/^2 × 4 · /);
+    // ↻ adds a quarter to the degrees beside it
+    await expect(page.getByTestId("shape-editor-rotation")).toHaveText("90°");
+    const kept = (await shapeOverlay(page))!.walks;
+    await expect(recalculate).toBeEnabled();
+    // Its word shows only when it would change something, and it flashes the accent as it
+    // becomes available, then settles
+    await expect(recalculate).toHaveText("Recalculate");
+    await expect(recalculate.locator("[data-flashing]")).toHaveCount(1);
+    await expect(recalculate.locator("[data-flashing]")).toHaveCount(0, {
+        timeout: 3000,
+    });
+
+    await recalculate.click();
+    // The same spots, shared out again: someone goes somewhere else
+    await expect
+        .poll(async () =>
+            (await shapeOverlay(page))!.walks.some(
+                (w, i) =>
+                    Math.hypot(w.to.x - kept[i].to.x, w.to.y - kept[i].to.y) >
+                    1,
+            ),
+        )
+        .toBe(true);
+    const again = (await shapeOverlay(page))!.walks;
+    const key = (p: Point) => `${Math.round(p.x)},${Math.round(p.y)}`;
+    expect(again.map((w) => key(w.to)).sort()).toEqual(
+        kept.map((w) => key(w.to)).sort(),
+    );
+    // Less travel than before, and nothing more to change
+    const travel = (walks: typeof kept) =>
+        walks.reduce(
+            (a, w) => a + (w.to.x - w.from.x) ** 2 + (w.to.y - w.from.y) ** 2,
+            0,
+        );
+    expect(travel(again)).toBeLessThan(travel(kept));
+    await expect(recalculate).toBeDisabled();
+
+    // One undo step: back to who went where after the turn
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect
+        .poll(async () =>
+            (await shapeOverlay(page))!.walks.map((w) => key(w.to)),
+        )
+        .toEqual(kept.map((w) => key(w.to)));
+    await expect(recalculate).toBeEnabled();
+});
+
+test("change: with less motion asked for, Recalculate's word appears at once, without the spring (#429)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await drawBox(show);
+    await page.getByTestId("shape-editor-quarter-turn").click();
+    const word = page
+        .getByTestId("shape-editor-recalculate")
+        .getByText("Recalculate");
+    await expect(word).toBeVisible();
+    // Full width and opacity straight away, not part way through a spring
+    expect(
+        await word.evaluate((el) => ({
+            maxWidth: el.style.maxWidth,
+            opacity: el.style.opacity,
+        })),
+    ).toEqual({ maxWidth: "7em", opacity: "1" });
+});
+
+test("change: with a shape open, Alt+R turns it 90°, Alt+F and Alt+Shift+F flip it, and Shift+R recalculates who goes where (#429)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await showPathways(show);
+    await drawBox(show);
+    const rotation = page.getByTestId("shape-editor-rotation");
+    const recalculate = page.getByTestId("shape-editor-recalculate");
+    const walks = async () => (await shapeOverlay(page))!.walks;
+    // Nobody is in a text field: the keys go to the shape
+    await page.mouse.move(5, 300);
+
+    // Two quick presses add up, each from the shape as it is by then (review)
+    await page.keyboard.press("Alt+R");
+    await page.keyboard.press("Alt+R");
+    await expect(rotation).toHaveText("180°");
+    await page.keyboard.press("Alt+R");
+    await expect(rotation).toHaveText("270°");
+    await expect.poll(() => readout(page)).toMatch(/^2 × 4 · /);
+
+    const turned = await walks();
+    await page.keyboard.press("Alt+F");
+    // Mirrored side to side: someone's spot moved across, nobody's moved up or down
+    await expect
+        .poll(async () =>
+            (await walks()).some(
+                (w, i) => Math.abs(w.to.x - turned[i].to.x) > 1,
+            ),
+        )
+        .toBe(true);
+    (await walks()).forEach((w, i) =>
+        expect(w.to.y).toBeCloseTo(turned[i].to.y, 3),
+    );
+    const across = await walks();
+    await page.keyboard.press("Alt+Shift+F");
+    await expect
+        .poll(async () =>
+            (await walks()).some(
+                (w, i) => Math.abs(w.to.y - across[i].to.y) > 1,
+            ),
+        )
+        .toBe(true);
+
+    // The flips kept who goes where; Shift+R works it out again, as the button does
+    await expect(recalculate).toBeEnabled();
+    const kept = await walks();
+    await page.keyboard.press("Shift+R");
+    await expect(recalculate).toBeDisabled();
+    expect(
+        (await walks()).some(
+            (w, i) =>
+                Math.hypot(w.to.x - kept[i].to.x, w.to.y - kept[i].to.y) > 1,
+        ),
+    ).toBe(true);
+    // Nobody moved yet: the keys edited the open shape, not the marchers
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+
+    // Its tooltip shows the keys
+    await recalculate.hover();
+    await expect(page.getByRole("tooltip")).toContainText("Shift");
+});
+
+test("change: on a selected placed shape, Recalculate shares its spots out again by least travel from the start flag, as one undo step (#429)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await selectPage(show, "Page 2");
+    await placeBox(show, 2);
+    const placed = await savedPositions(show, 2);
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+    const recalculate = page.getByTestId("shape-editor-recalculate");
+    await expect(recalculate).toBeDisabled();
+
+    // Two quick Alt+R presses on a placed shape add up, the second waiting for the first's save
+    // (review): a half turn, as two undo steps
+    const before = await undoSteps(show);
+    await page.mouse.move(5, 300);
+    await page.keyboard.press("Alt+R");
+    await page.keyboard.press("Alt+R");
+    await expect(page.getByTestId("shape-editor-rotation")).toHaveText("180°");
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(before + 2);
+    await page.keyboard.press("ControlOrMeta+z");
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedPositions(show, 2)).toEqual(placed);
+    await waitForIdle(page);
+    await page.getByTestId("placed-box-readout").waitFor();
+
+    // A quarter turn keeps everyone's spot
+    await page.getByTestId("shape-editor-quarter-turn").click();
+    await expect
+        .poll(async () => (await savedPositions(show, 2)).map((p) => p.x))
+        .not.toEqual(placed.map((p) => p.x));
+    await waitForIdle(page);
+    const turned = await savedPositions(show, 2);
+    await expect(recalculate).toBeEnabled();
+    const steps = await undoSteps(show);
+
+    await recalculate.click();
+    await expect.poll(() => savedPositions(show, 2)).not.toEqual(turned);
+    await waitForIdle(page);
+    const again = await savedPositions(show, 2);
+    const key = (p: Point) => `${Math.round(p.x)},${Math.round(p.y)}`;
+    // The same spots, and less travel from where everyone starts the move
+    expect(again.map(key).sort()).toEqual(turned.map(key).sort());
+    const travel = (ps: Position[]) =>
+        ps.reduce((a, p) => {
+            const [, x, y] = HOME.find(([id]) => id === p.id)!;
+            return a + (p.x - x) ** 2 + (p.y - y) ** 2;
+        }, 0);
+    expect(travel(again)).toBeLessThan(travel(turned));
+    expect(await undoSteps(show)).toBe(steps + 1);
+    await expect(recalculate).toBeDisabled();
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedPositions(show, 2)).toEqual(turned);
 });
 
 test("change: while a box is open everyone else fades, and nobody once it closes", async ({
@@ -553,7 +774,7 @@ test("change: the floating editor is a solid surface, an on toggle is the accent
             .getByTestId(testId)
             .evaluate((el) => getComputedStyle(el).backgroundColor);
     await drawBox(show);
-    expect(alpha(await background("shape-tool-readout"))).toBe(1);
+    expect(alpha(await background("shape-tool-readout-bar"))).toBe(1);
 
     const pathways = page.getByTestId("shape-editor-pathways");
     const off = await background("shape-editor-pathways");
@@ -618,12 +839,27 @@ test("change: the floating editor fades with the pointer away, and is solid over
         y: (pressed.y + released.y) / 2,
     });
     await page.mouse.move(middle.x, middle.y);
-    await expect.poll(() => editorOpacity(page)).toBe(1);
+    // Solid with no wait: just its 120 ms fade in
+    await expect.poll(() => editorOpacity(page), { timeout: 400 }).toBe(1);
+    // It waits half a second before fading (owner): still solid a moment after leaving
+    await page.mouse.move(5, 500);
+    await page.waitForTimeout(250);
+    expect(await editorOpacity(page)).toBe(1);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
+
+    // Back within the wait: nothing visible happens
+    await page.mouse.move(middle.x, middle.y);
+    await expect.poll(() => editorOpacity(page), { timeout: 400 }).toBe(1);
+    await page.mouse.move(5, 500);
+    await page.waitForTimeout(250);
+    await page.mouse.move(middle.x, middle.y);
+    await page.waitForTimeout(500);
+    expect(await editorOpacity(page)).toBe(1);
     await page.mouse.move(5, 500);
     await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
 
     // Over the editor
-    await page.getByTestId("shape-tool-readout").hover();
+    await page.getByTestId("shape-tool-readout-bar").hover();
     await expect.poll(() => editorOpacity(page)).toBe(1);
     await page.mouse.move(5, 500);
     await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
@@ -659,7 +895,6 @@ test("change: the knob turns in 15° steps, as the field's rotate handle does, a
     const { page } = show;
     await drawBox(show);
     const rotation = page.getByTestId("shape-editor-rotation");
-    await page.getByTestId("shape-editor-more").click();
     /** Drags the knob `degrees` clockwise around the box's center dot */
     const turnKnob = async (degrees: number) => {
         const overlay = (await shapeOverlay(page))!;
@@ -1083,7 +1318,6 @@ test("change: the rotation is a number in ⋯ you type, and Tab goes from number
 }) => {
     const { page } = show;
     await drawBox(show);
-    await page.getByTestId("shape-editor-more").click();
     await page.getByTestId("shape-editor-rotation").click();
     await page.keyboard.type("90");
     await page.keyboard.press("Enter");
@@ -1136,7 +1370,7 @@ test("Enter places the marchers on the spots as one undo step, and Escape cancel
 });
 
 /** Draws and places a box on every marcher, then clears the selection. */
-async function placeBox(show: Show) {
+async function placeBox(show: Show, pageId = 0) {
     const { page } = show;
     await drawBox(show);
     const spots = (await shapeOverlay(page))!.spots;
@@ -1144,7 +1378,7 @@ async function placeBox(show: Show) {
     await expect(page.getByTestId("shape-tool-readout")).toBeHidden();
     await expect
         .poll(async () =>
-            (await savedPositions(show, 0)).every((p) =>
+            (await savedPositions(show, pageId)).every((p) =>
                 spots.some((s) => Math.hypot(s.x - p.x, s.y - p.y) < CLOSE),
             ),
         )
@@ -1282,7 +1516,7 @@ test("change: a selected placed box is calm with the pointer away, shows its con
     // Over the editor: the editor is solid, the box stays calm
     await page.mouse.move(away.x, away.y);
     await expect.poll(calm).toBe(true);
-    await bar.hover();
+    await page.getByTestId("placed-box-readout-bar").hover();
     await expect.poll(barOpacity).toBe(1);
 
     // A handle drag keeps the controls; the editor stays faded as the open box's does
@@ -1357,8 +1591,7 @@ test("change: Close up shows only with holes, lays a box that lost two out for s
     await expect
         .poll(async () => (await readField(page)).selection)
         .toEqual(ALL);
-    await page.getByTestId("shape-editor-more").click();
-    await expect(page.getByTestId("shape-editor-more-row")).toBeVisible();
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
     await expect(page.getByTestId("shape-editor-close-up")).toHaveCount(0);
     await expect(page.getByTestId("shape-section-close-up")).toHaveCount(0);
     await page.keyboard.press("Escape");
@@ -1386,7 +1619,6 @@ test("change: Close up shows only with holes, lays a box that lost two out for s
     );
     await expect(page.getByTestId("shape-section-close-up")).toBeVisible();
     const steps = await undoSteps(show);
-    await page.getByTestId("shape-editor-more").click();
     await page.getByTestId("shape-editor-close-up").click();
 
     // Laid out for six: no holes left, everyone on a spot of the box
@@ -1736,7 +1968,6 @@ test("change: a typed 1 2/3 stays exactly 1⅔ steps and shows as 1⅔, − and 
     allClose((await gaps()).deep, 8 / 3);
 
     // Saved, the show's copy keeps the intervals exactly, not as shown
-    await page.getByTestId("shape-editor-more").click();
     await page.getByTestId("shape-editor-save").click();
     const name = page.getByTestId("shape-editor-save-name");
     await expect(name).toHaveValue("Box 1⅔ × 2⅔ apart");
@@ -2279,8 +2510,8 @@ test("change: the layout picker lays the box out in the version picked, the reci
     );
     const stagger = page.getByTestId("shape-layout-stagger-0");
     await expect(stagger).toHaveText("3 × 3");
-    await expect(stagger).toHaveAttribute(
-        "title",
+    await stagger.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
         "Stagger 3 × 3: 3 / 2 / 3, front to back",
     );
     await expect(stagger).toHaveAttribute("aria-pressed", "false");
@@ -2645,16 +2876,20 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
     await expect(page.getByTestId("shapes-tab-reason")).toHaveText(
         "Select marchers first",
     );
-    await expect(box.locator("..")).toHaveAttribute(
-        "title",
+    await box.locator("..").hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
         "Box: Select marchers first",
     );
+    await page.mouse.move(5, 5);
 
     await selectAll(page);
     await expect(box).toBeEnabled();
     await expect(page.getByTestId("shapes-tab-reason")).toBeHidden();
     await expect(box).toHaveAttribute("aria-pressed", "false");
-    await expect(box).toHaveAttribute("title", /Box.*\bB\b/);
+    await box.hover();
+    await expect(page.getByRole("tooltip")).toContainText("Box");
+    await expect(page.getByRole("tooltip").locator("kbd")).toHaveText("B");
+    await page.mouse.move(5, 5);
 
     // Picking it arms the box: the field draws it on the next drag
     await box.click();
@@ -3012,14 +3247,15 @@ async function saveWideBox(show: Show): Promise<string> {
     await expect.poll(() => readout(page)).toBe("4 × 2 · 2½ × 1½ steps");
 
     // Save asks for a name, offering the kind and its spacing
-    await page.getByTestId("shape-editor-more").click();
     await page.getByTestId("shape-editor-save").click();
     const name = page.getByTestId("shape-editor-save-name");
     await expect(name).toBeFocused();
     await expect(name).toHaveValue("Box 2½ × 1½ apart");
     await name.fill("Wide box");
     await page.keyboard.press("Enter");
-    await expect(page.getByTestId("shape-editor-save")).toHaveText(
+    // An icon on the editor's one row (#429): the words are its name and tooltip
+    await expect(page.getByTestId("shape-editor-save")).toHaveAttribute(
+        "aria-label",
         "Saved as Wide box",
     );
     // Enter named it: the box is still open
@@ -3208,7 +3444,9 @@ test("change: a box saved with a description reopens from the show's copy with i
     await expect(row).toContainText("this show only");
     const shown = page.getByTestId(`shape-library-description-${copy.id}`);
     await expect(shown).toHaveText(description);
-    await expect(shown).toHaveAttribute("title", description);
+    await shown.hover();
+    await expect(page.getByRole("tooltip")).toContainText(description);
+    await page.mouse.move(5, 5);
 
     // Taken into my library, it keeps the description and dates
     await page.getByTestId(`shape-library-add-${copy.id}`).click();

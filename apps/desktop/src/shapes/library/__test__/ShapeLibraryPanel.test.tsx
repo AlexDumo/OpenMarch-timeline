@@ -166,7 +166,7 @@ describeDbTests("the shape library", (it) => {
         expect(screen.queryByTestId("shape-library-add-wide")).toBeNull();
     });
 
-    it("shows a saved shape's description on one line, the whole of it in a tooltip, and its stagger in the note", ({
+    it("shows a saved shape's description on one line, the whole of it in a tooltip, and its stagger in the note", async ({
         wrapper,
     }) => {
         useSavedShapeLibrary.getState().put(described);
@@ -178,7 +178,10 @@ describeDbTests("the shape library", (it) => {
         );
         expect(description).toHaveTextContent(described.description!);
         expect(description).toHaveClass("truncate");
-        expect(description).toHaveAttribute("title", described.description);
+        await userEvent.hover(description);
+        expect((await screen.findByRole("tooltip")).textContent).toContain(
+            described.description,
+        );
         expect(
             screen.queryByTestId("shape-library-description-wide"),
         ).toBeNull();
@@ -199,11 +202,14 @@ describeDbTests("the shape library", (it) => {
         ).toEqual([described]);
     });
 
-    it("greys out picking a shape with nobody selected", ({ wrapper }) => {
+    it("greys out picking a shape with nobody selected", async ({
+        wrapper,
+    }) => {
         render(<ShapeLibraryContents />, wrapper);
-        expect(screen.getByTestId("shape-library-pick-block")).toBeDisabled();
-        expect(screen.getByTestId("shape-library-pick-block")).toHaveAttribute(
-            "title",
+        const pick = screen.getByTestId("shape-library-pick-block");
+        expect(pick).toHaveAttribute("aria-disabled", "true");
+        await userEvent.hover(pick);
+        expect((await screen.findByRole("tooltip")).textContent).toBe(
             "Select marchers first",
         );
     });

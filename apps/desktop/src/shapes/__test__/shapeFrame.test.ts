@@ -49,7 +49,7 @@ import {
     pointerMove,
     press,
     release,
-    setOrder,
+    recalculate,
     targetsOf,
 } from "../tool/toolMachine";
 import type { ToolEnv } from "../tool/toolKind";
@@ -340,13 +340,6 @@ describe("who goes where, held through turns and flips", () => {
         expect(filesOf(twoDeep.params as BoxParams)).toBe(2);
         expect(twoDeep.assignment).not.toBe(t.assignment);
     });
-
-    it("drill order lays them out again, as one undo step", () => {
-        const t = drawnTool();
-        const drill = setOrder(t, "drill", ctx);
-        expect(drill.order).toBe("drill");
-        expect(drill.past.length).toBe(t.past.length + 1);
-    });
 });
 
 describe("the floating editor's numbers", () => {
@@ -489,29 +482,27 @@ describe("the decisions of 2026-10-17", () => {
         expect(scrubRotation(b, 1, 8, "c", env())).toBe(b);
     });
 
-    it("after a turn or flip, who goes where is kept, and neither order is lit until one is picked", () => {
+    it("after a turn or flip, who goes where is kept until Recalculate (#429)", () => {
         const t = drawnTool();
-        expect(t.kept).toBe(false);
         const flipped = edit(
             t,
             flipBox(t.params as BoxParams, 8, "across", "c", env()),
             ctx,
         );
-        expect(flipped.kept).toBe(true);
-        // Least travel picked again works it out again: the flip's mirror is gone
-        const again = setOrder(flipped, "nearest", ctx);
-        expect(again.kept).toBe(false);
+        expect(flipped.assignment).toEqual(t.assignment);
+        // Recalculate works it out again: the flip's mirror is gone
+        const again = recalculate(flipped, ctx);
         targetsOf(again, ctx).forEach((a, i) =>
             close(a.to, targetsOf(t, ctx)[i]!.to),
         );
-        // A stretch keeps spots too, but it isn't a turn or flip
+        // A stretch keeps spots too
         expect(
             edit(
                 t,
                 withSpacing(t.params as BoxParams, "across", 2, 8, env()),
                 ctx,
-            ).kept,
-        ).toBe(false);
+            ).assignment,
+        ).toEqual(t.assignment);
     });
 
     it("on a turned box, + goes one wider on the field: the frame turns a quarter back first", () => {

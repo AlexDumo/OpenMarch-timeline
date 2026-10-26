@@ -290,7 +290,11 @@ the **start flag**, not where they stood on this page, so the shape shows the mo
   across or deep. Stretching, moving, turning and flipping keep each marcher on their own spot, so
   a turned or flipped form is the same form: a flip mirrors it, and whoever was on the left is on
   the right. Without this, turning a symmetric box would visibly do nothing.
-- **Drill order** is the other choice, in the inspector and the editor's ⋯ row.
+- ~~**Drill order** is the other choice, in the inspector and the editor's ⋯ row.~~ **Changed
+  2026-10-26 (#429):** drill order is gone; least travel is the only rule. **Recalculate** in the
+  floating editor (Shift+R) works it out again on demand, from where the marchers start, and is
+  lit only when it would change something. Turns, flips and uneven stretches can change it;
+  slides and even growth don't (the squared rule), and the owner kept that.
 - The rule lives behind one replaceable function (`shapes/leastTravel.ts`, `LeastTravelSolver`),
   so it can change later without touching kinds or the tool.
 
@@ -322,8 +326,9 @@ The Shape tab, top to bottom:
 5. ~~**Scale**~~: left out for now; the handles and the numbers cover size (owner, 2026-10-16).
 6. **When I resize** (box): **Stretch spacing** (default) or **Keep spacing**. Keep spacing makes
    the handles add or remove marchers across instead.
-7. **Who goes where**: **Least travel** or **Drill order**, with the longest walk and the total
-   walking distance underneath.
+7. ~~**Who goes where**: **Least travel** or **Drill order**, with the longest walk and the total
+   walking distance underneath.~~ Gone (#429): the floating editor's **Recalculate** works it out
+   again.
 8. **Place**, **Cancel** and **☆ Save**.
 
 With nothing open, the tab says how many marchers are selected and how to start a shape.
@@ -450,15 +455,19 @@ scored best, surprises worst):
   - swap to the box's own deep. Exactly 45° keeps the box's own.
 - **The rotation is a number in the ⋯ row**, typed or dragged like the inspector's (right turns
   clockwise, 1° per 2 px in 15° steps, Shift whole degrees, Alt free). The 90° turn buttons are gone.
+  **Changed 2026-10-26 (#429):** there's no ⋯ row; the editor is one row, and **↻** beside the
+  degrees adds 90° (Alt+R).
 - **Resizing grows from the pivot**, and the default pivot is the **back-left corner**, so a
   box stays where it was drawn and grows right and toward the front. The knob and flips turn
   around the same point. Basic mode, with no pivot grid, always uses back-left.
 - **Escape on an open, drawn shape** closes it and a toast offers **Undo**, which brings it back
   while the same marchers are still selected. The undo lives only in the toast.
-- **After a turn or flip**, who goes where is kept, so neither Least travel nor Drill order is
-  lit, with "Kept from your turn or flip · pick one to redo". Picking one works it out again.
-- Tab and Shift+Tab move between the bar's numbers while typing. The ⋯ row's flips have words
-  ("Flip ↔", "Flip ↕"). On shapes too big to label every spot (over 24), the spot under the
+- **After a turn or flip**, who goes where is kept, ~~so neither Least travel nor Drill order is
+  lit, with "Kept from your turn or flip · pick one to redo". Picking one works it out again.~~
+  until **Recalculate** (#429); the order picker and the "kept" note are gone.
+- Tab and Shift+Tab move between the bar's numbers while typing. ~~The ⋯ row's flips have words
+  ("Flip ↔", "Flip ↕").~~ The flips are icon buttons with the app's tooltips and keys (Alt+F,
+  Alt+Shift+F, #429). On shapes too big to label every spot (over 24), the spot under the
   pointer shows who will stand there.
 
 ## Decisions, 2026-10-18

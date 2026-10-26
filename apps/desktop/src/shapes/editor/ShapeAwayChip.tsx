@@ -6,6 +6,7 @@ import { useShapeAway, useShapeToolStore } from "../tool/shapeToolStore";
 import { goBackTo, momentLabel } from "../tool/shapeMoment";
 import { discardShapeTool } from "../tool/shapeLeave";
 import { keepFocus } from "./keepFocus";
+import { Tip } from "./Tip";
 
 /**
  * Shown at the top of the field while the paused playhead is away from the open shape's moment
@@ -39,16 +40,17 @@ export function ShapeAwayChip() {
                 <ArrowUUpLeftIcon size={14} weight="bold" />
                 Go back
             </button>
-            <button
-                type="button"
-                aria-label="Dismiss"
-                title="Dismiss the shape (undo brings it back)"
-                className="rounded-6 hover:bg-text-invert/20 flex items-center p-4"
-                onPointerDown={keepFocus}
-                onClick={discardShapeTool}
-            >
-                <XIcon size={14} weight="bold" />
-            </button>
+            <Tip label="Dismiss the shape (undo brings it back)">
+                <button
+                    type="button"
+                    aria-label="Dismiss"
+                    className="rounded-6 hover:bg-text-invert/20 flex items-center p-4"
+                    onPointerDown={keepFocus}
+                    onClick={discardShapeTool}
+                >
+                    <XIcon size={14} weight="bold" />
+                </button>
+            </Tip>
         </div>
     );
 }

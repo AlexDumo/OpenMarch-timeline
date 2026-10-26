@@ -14,6 +14,13 @@ import { useLastLayoutStore } from "../../tool/lastLayout";
 import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
 import { quarterTurn } from "../chip";
 import { LayoutMenu, LayoutPicker } from "../LayoutPicker";
+import userEvent from "@testing-library/user-event";
+
+/** The app tooltip a control shows on hover */
+async function tooltipOf(el: HTMLElement): Promise<string | null> {
+    await userEvent.hover(el);
+    return (await screen.findByRole("tooltip")).textContent;
+}
 
 /**
  * The box's layout picker (#387) and the chip's layout menu (owner lab feedback, 2026-10-23):
@@ -81,23 +88,21 @@ describe("the layout picker", () => {
         expect(screen.queryByText(/Not for/)).toBeNull();
     });
 
-    it("greys out a layout the count can't make, as a picture with what it needs", () => {
+    it("greys out a layout the count can't make, as a picture with what it needs", async () => {
         shown(boxOf(23), 23);
         const full = screen.getByTestId("shape-layout-full-missing");
-        expect(full).toBeDisabled();
+        expect(full).toHaveAttribute("aria-disabled", "true");
         expect(full).toHaveTextContent("add 1 / remove 2");
-        expect(full).toHaveAttribute(
-            "title",
+        expect(await tooltipOf(full)).toBe(
             "Full needs 24 or 21 marchers: add 1 / remove 2",
         );
         expect(full.querySelector("svg")).not.toBeNull();
     });
 
-    it("puts the counts in the tooltip and marks the shape's own version", () => {
+    it("puts the counts in the tooltip and marks the shape's own version", async () => {
         shown(boxOf(23), 23);
         const stagger = screen.getByTestId("shape-layout-stagger-1");
-        expect(stagger).toHaveAttribute(
-            "title",
+        expect(await tooltipOf(stagger)).toBe(
             "Stagger 5 × 5: 5 / 4 / 5 / 4 / 5, front to back",
         );
         // Drawn square, 23 is Short back 6 × 4
@@ -182,7 +187,7 @@ describe("the chip's layout menu", () => {
             "shape-layout-menu-row-notched",
         ]);
         const full = within(content).getByTestId("shape-layout-menu-row-full");
-        expect(full).toBeDisabled();
+        expect(full).toHaveAttribute("aria-disabled", "true");
         expect(full).toHaveTextContent("add 1 / remove 2");
     });
 

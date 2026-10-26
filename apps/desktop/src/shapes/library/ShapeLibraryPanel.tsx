@@ -17,6 +17,7 @@ import { useShapeLibraryRows, useShapeStarsStore } from "./shapeStars";
 import { kindPickGate, pickShapeKind } from "../tool/pickKind";
 import { useShapeShown } from "../tool/shapeToolStore";
 import { addSavedShapeToLibrary, deleteSavedShape } from "./saveShape";
+import { Tip } from "../editor/Tip";
 
 export const SHAPE_LIBRARY_CONTENT_ID = "shapes";
 
@@ -198,77 +199,88 @@ function LibraryRow({
             className="rounded-6 hover:bg-fg-2 group flex items-center gap-8 px-4 py-4"
             data-testid={`shape-library-row-${row.id}`}
         >
-            <button
-                type="button"
-                onClick={onStar}
-                aria-pressed={starred}
-                aria-label={`${starred ? "Unstar" : "Star"} ${row.label}`}
-                title={starred ? "Unstar" : "Star"}
-                className={clsx(
-                    "hover:text-accent duration-150 ease-out",
-                    starred ? "text-accent" : "text-text-subtitle",
-                )}
-                data-testid={`shape-library-star-${row.id}`}
+            <Tip label={starred ? "Unstar" : "Star"}>
+                <button
+                    type="button"
+                    onClick={onStar}
+                    aria-pressed={starred}
+                    aria-label={`${starred ? "Unstar" : "Star"} ${row.label}`}
+                    className={clsx(
+                        "hover:text-accent duration-150 ease-out",
+                        starred ? "text-accent" : "text-text-subtitle",
+                    )}
+                    data-testid={`shape-library-star-${row.id}`}
+                >
+                    <StarIcon size={18} weight={starred ? "fill" : "regular"} />
+                </button>
+            </Tip>
+            <Tip
+                label={canPick.ok ? `Draw a ${row.label}` : canPick.reason}
+                hint={description}
             >
-                <StarIcon size={18} weight={starred ? "fill" : "regular"} />
-            </button>
-            <button
-                type="button"
-                onClick={onPick}
-                disabled={!canPick.ok}
-                title={canPick.ok ? `Draw a ${row.label}` : canPick.reason}
-                className="flex min-w-0 flex-1 items-center gap-8 text-left disabled:opacity-60"
-                data-testid={`shape-library-pick-${row.id}`}
-            >
-                <ShapePreviewIcon
-                    kind={row.kind}
-                    size={22}
-                    className="shrink-0"
-                />
-                <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="flex min-w-0 items-center gap-8">
-                        <span className="text-body truncate">{row.label}</span>
-                        {row.note && (
-                            <span className="text-sub text-text-subtitle truncate">
-                                {row.note}
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (canPick.ok) onPick();
+                    }}
+                    // aria-disabled, not disabled: the tooltip says why it can't be drawn
+                    aria-disabled={!canPick.ok || undefined}
+                    className="flex min-w-0 flex-1 items-center gap-8 text-left aria-disabled:opacity-60"
+                    data-testid={`shape-library-pick-${row.id}`}
+                >
+                    <ShapePreviewIcon
+                        kind={row.kind}
+                        size={22}
+                        className="shrink-0"
+                    />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="flex min-w-0 items-center gap-8">
+                            <span className="text-body truncate">
+                                {row.label}
+                            </span>
+                            {row.note && (
+                                <span className="text-sub text-text-subtitle truncate">
+                                    {row.note}
+                                </span>
+                            )}
+                        </span>
+                        {description && (
+                            // One line here; the whole of it in the row's tooltip
+                            <span
+                                className="text-sub text-text-subtitle truncate"
+                                data-testid={`shape-library-description-${row.id}`}
+                            >
+                                {description}
                             </span>
                         )}
                     </span>
-                    {description && (
-                        // One line here; the whole of it in the tooltip
-                        <span
-                            className="text-sub text-text-subtitle truncate"
-                            title={description}
-                            data-testid={`shape-library-description-${row.id}`}
-                        >
-                            {description}
-                        </span>
-                    )}
-                </span>
-            </button>
-            {onAddToLibrary && (
-                <button
-                    type="button"
-                    onClick={onAddToLibrary}
-                    aria-label={`Add ${row.label} to my Library`}
-                    title="Add to my Library, for every show"
-                    className="text-text-subtitle hover:text-accent duration-150 ease-out"
-                    data-testid={`shape-library-add-${row.id}`}
-                >
-                    <DownloadSimpleIcon size={16} />
                 </button>
+            </Tip>
+            {onAddToLibrary && (
+                <Tip label="Add to my Library, for every show">
+                    <button
+                        type="button"
+                        onClick={onAddToLibrary}
+                        aria-label={`Add ${row.label} to my Library`}
+                        className="text-text-subtitle hover:text-accent duration-150 ease-out"
+                        data-testid={`shape-library-add-${row.id}`}
+                    >
+                        <DownloadSimpleIcon size={16} />
+                    </button>
+                </Tip>
             )}
             {onDelete && (
-                <button
-                    type="button"
-                    onClick={onDelete}
-                    aria-label={`Delete ${row.label}`}
-                    title="Delete this saved shape"
-                    className="text-text-subtitle hover:text-red duration-150 ease-out"
-                    data-testid={`shape-library-delete-${row.id}`}
-                >
-                    <TrashIcon size={16} />
-                </button>
+                <Tip label="Delete this saved shape">
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        aria-label={`Delete ${row.label}`}
+                        className="text-text-subtitle hover:text-red duration-150 ease-out"
+                        data-testid={`shape-library-delete-${row.id}`}
+                    >
+                        <TrashIcon size={16} />
+                    </button>
+                </Tip>
             )}
         </li>
     );

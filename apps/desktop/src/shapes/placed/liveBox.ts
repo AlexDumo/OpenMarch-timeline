@@ -1,4 +1,4 @@
-import { assignSlots, type OrderMode } from "../assign";
+import { assignSlots } from "../assign";
 import { changeFiles, type BoxParams } from "../box/boxGeometry";
 import { samePivot, type ShapeFrame } from "../frame/frame";
 import { pivotOf } from "../frame/pivot";
@@ -133,8 +133,10 @@ export function liveTargets(
     box: PlacedBox,
     params: unknown,
     ctx: ShapeContext,
-    /** Lay the members out again in this order, even with the same count across */
-    layOutAgain?: OrderMode,
+    /** Lay the members out again, by least travel, even with the same count across */
+    layOutAgain?: boolean,
+    /** Where members come from, when laying out again: their spots in the shape otherwise */
+    origins?: ReadonlyMap<number, XY>,
 ): {
     members: { marcherId: number; slot: number; x: number; y: number }[];
     spots: number;
@@ -165,9 +167,12 @@ export function liveTargets(
         marchers: members.map((m, i) => ({
             id: m.marcherId,
             at: { x: m.x, y: m.y },
+            ...(origins?.has(m.marcherId) && {
+                from: origins.get(m.marcherId)!,
+            }),
             drillRank: i,
         })),
-        mode: layOutAgain ?? orderOf(box),
+        mode: "nearest",
         ctx,
     });
     return {
@@ -180,6 +185,23 @@ export function liveTargets(
 }
 
 const xyOf = (p: XY): XY => ({ x: p.x, y: p.y });
+
+/**
+ * Recalculate who goes where (#429): the members on the shape's own spots by least travel from
+ * `origins` (where each comes from: the start flag), or null when that changes nothing. A shape
+ * with holes has Close up instead, which lays it out again by least travel.
+ */
+export function recalculatedTargets(
+    box: PlacedBox,
+    ctx: ShapeContext,
+    origins: ReadonlyMap<number, XY>,
+): { marcherId: number; slot: number; x: number; y: number }[] | null {
+    const members = box.recipe.members;
+    if (members.length !== box.spots) return null;
+    const next = liveTargets(box, box.params, ctx, true, origins).members;
+    const slotOf = new Map(members.map((m) => [m.marcherId, m.slot]));
+    return next.some((m) => m.slot !== slotOf.get(m.marcherId)) ? next : null;
+}
 
 /**
  * Whether `slots` are the box's own spots moved (each keeps its row and file, or its place round
@@ -197,11 +219,3 @@ function sameLattice(
         was.every((s, i) => s.row === slots[i]!.row && s.col === slots[i]!.col)
     );
 }
-
-/** Whether a turn or flip kept the members on their spots, so it's neither order any more */
-export const keptOf = (box: PlacedBox): boolean =>
-    box.recipe.orderMode === "kept";
-
-/** How the box's members were laid out: drill order, or Least travel (the default, and "kept") */
-export const orderOf = (box: PlacedBox): "nearest" | "drill" =>
-    box.recipe.orderMode === "drill" ? "drill" : "nearest";

@@ -12,9 +12,7 @@ export type OrderMode =
     /** Least travel (see `leastTravel.ts`), so straight moves don't pass through each other */
     | "nearest"
     /** Marchers keep their order along the shape (their current order projected onto it) */
-    | "keep"
-    /** Drill number order along the shape's natural slot order */
-    | "drill";
+    | "keep";
 
 export interface AssignMarcher {
     readonly id: number;
@@ -26,7 +24,7 @@ export interface AssignMarcher {
      * marchers really come from, not from the spots the edit replaces.
      */
     readonly from?: XY;
-    /** Sort position by drill number (drill prefix, then number) */
+    /** Sort position by drill number (drill prefix, then number): breaks ties in keep order */
     readonly drillRank: number;
 }
 
@@ -98,20 +96,14 @@ export function assignSlots<P>({
         .map((entry) => entry.index);
     if (reverse) slotOrder.reverse();
 
-    const marcherOrder =
-        mode === "drill"
-            ? marchers
-                  .map((m, index) => ({ index, rank: m.drillRank }))
-                  .sort((a, b) => a.rank - b.rank || a.index - b.index)
-                  .map((entry) => entry.index)
-            : marchers
-                  .map((m, index) => ({
-                      index,
-                      key: kind.orderKey(params, m.from ?? m.at, ctx, n),
-                      rank: m.drillRank,
-                  }))
-                  .sort((a, b) => compareKeys(a.key, b.key) || a.rank - b.rank)
-                  .map((entry) => entry.index);
+    const marcherOrder = marchers
+        .map((m, index) => ({
+            index,
+            key: kind.orderKey(params, m.from ?? m.at, ctx, n),
+            rank: m.drillRank,
+        }))
+        .sort((a, b) => compareKeys(a.key, b.key) || a.rank - b.rank)
+        .map((entry) => entry.index);
 
     const result = new Array<number>(n);
     marcherOrder.forEach((marcherIndex, i) => {

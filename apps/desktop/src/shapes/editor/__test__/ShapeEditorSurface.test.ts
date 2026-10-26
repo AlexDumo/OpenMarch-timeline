@@ -23,6 +23,24 @@ describe("the floating editor's fade", () => {
         expect(reduced).toMatch(/\.shape-editor-surface[^{]*\{\s*opacity: 1;/);
     });
 
+    it("waits 500 ms before fading and turns solid at once, also with less motion", () => {
+        const fade = css.slice(css.indexOf("@media (hover: hover)"));
+        expect(fade.slice(fade.indexOf("opacity: 0.4"))).toMatch(
+            /^opacity: 0\.4;\s*transition-delay: 500ms;/,
+        );
+        // No shorthand on the solid state, which would outrank the faded state's delay
+        const solid = css.slice(
+            css.indexOf(".shape-editor-surface {"),
+            css.indexOf("@media (hover: hover)"),
+        );
+        expect(solid).not.toMatch(/transition:|transition-delay/);
+        const lessMotion = css.slice(
+            css.indexOf("@media (prefers-reduced-motion: reduce)"),
+        );
+        expect(lessMotion).toMatch(/transition-duration: 0s;/);
+        expect(lessMotion).not.toMatch(/transition:\s*none/);
+    });
+
     it("counts keyboard focus only, not focus handed back after a click", () => {
         expect(css).toContain(":has(:focus-visible:not([data-click-focus]))");
         expect(css).not.toContain(":focus-within");

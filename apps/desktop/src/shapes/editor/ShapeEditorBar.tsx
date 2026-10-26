@@ -1,11 +1,15 @@
 import clsx from "clsx";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { keepFocus } from "./keepFocus";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
+import { getActionShortcutLabel } from "@/shortcuts/labels";
+import type { ActionId } from "@/shortcuts/definitions";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
+import { RichTips, Tip } from "./Tip";
+import { RecalculateFace, useRecalculateLook } from "./RecalculateButton";
 import {
-    DotsThreeIcon,
     FlipHorizontalIcon,
     FlipVerticalIcon,
-    LinkSimpleBreakIcon,
     LinkSimpleIcon,
     MinusIcon,
     PlusIcon,
@@ -65,13 +69,16 @@ const GAP_PX = 14;
  * It fades with the pointer away from both the shape, open or placed (#430), and itself, so what's
  * under it shows, and it is solid while the pointer is over either, with focus inside it or a
  * menu of its open (`ShapeEditorSurface.css`). Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
- * For a box: `− 6 × 2 + ↻ │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`, and in Spread `↔ 2 steps Reshuffle
- * │ ⋯ │ Place`. Every number can be typed or dragged,
- * and follows the field: across is side to side however the box is turned. ⋯ opens a second row:
- * the rotation (typed or dragged), flips, who goes where, Close up (a placed shape with holes,
- * #392) and ☆ Save. ↻ beside the numbers turns
- * the shape a quarter (owner lab feedback, 2026-10-23: few people open ⋯). Under the numbers, a
- * box in Files has its layout menu (#387). Place shows only for a new shape; a selected placed
+ * One row, no ⋯ (#429; owner: keep it compact), for a box:
+ * `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`, and in Spread
+ * `↔ 2 steps Reshuffle │ …`. Every number can be typed or dragged, and follows the field: across
+ * is side to side however the box is turned. ↻ adds a quarter turn to the degrees beside it.
+ * Recalculate works out who goes where again by least travel, which moving and turning keep until
+ * it's pressed, and shows its word only when it would change something; Close up shows for a
+ * placed shape with holes (#392). Pathways and ☆ Save, which leave the shape as it is, come last
+ * before Place. Its
+ * controls show the app's tooltips (`RichTips`). Under the editor, a box in Files has its layout
+ * menu in a pill of its own (#387, #429). Place shows only for a new shape; a selected placed
  * shape saves each edit on release. While the open shape waits out of sight (#416) the editor
  * hides, and away from its moment a chip goes back to it.
  */
@@ -97,11 +104,13 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     const target = toolOpen ? tool : placed;
     if (!target) return null;
     return (
-        <ShapeEditorBar
-            target={target}
-            stepPx={stepPx}
-            testId={toolOpen ? "shape-tool-readout" : "placed-box-readout"}
-        />
+        <RichTips>
+            <ShapeEditorBar
+                target={target}
+                stepPx={stepPx}
+                testId={toolOpen ? "shape-tool-readout" : "placed-box-readout"}
+            />
+        </RichTips>
     );
 }
 
@@ -128,7 +137,6 @@ function ShapeEditorBar({
     const overShape = useShapePointerOver();
     // The shape's own pivot (#350), the same in Basic and Expert (spec #344)
     const pivot = pivotOf(params);
-    const [more, setMore] = useState(false);
     const place = usePlacement(kind, params, spots);
     // The shape at the press of a number's drag
     const base = useRef<unknown>(params);
@@ -147,6 +155,34 @@ function ShapeEditorBar({
         const env = envFor(PLAIN);
         if (env) target.apply(change(env));
     };
+    /** A change from the shape as it is now, so quick presses add up (`ShapeEditTarget.update`) */
+    const update = (change: (params: unknown, env: ToolEnv) => unknown) => {
+        const env = envFor(PLAIN);
+        if (env) target.update((now) => change(now, env));
+    };
+    const turnQuarter = () =>
+        update((now, env) => quarterTurn(kind, now, spots, env));
+    const flip = (axis: "across" | "deep") =>
+        update((now, env) =>
+            flipShape(kind, now, spots, axis, pivotOf(now), env),
+        );
+    // The keys act on this shape while its editor shows (#429): mounted after the app's own
+    // handlers, the flips sit on top of the marchers' flips and go back when it closes. A held
+    // key doesn't repeat them (review)
+    useActionHandler("flipHorizontal", () => flip("across"), {
+        ignoreRepeat: true,
+    });
+    useActionHandler("flipVertical", () => flip("deep"), {
+        ignoreRepeat: true,
+    });
+    useActionHandler("shapeQuarterTurn", turnQuarter, { ignoreRepeat: true });
+    useActionHandler("shapeRecalculate", () => target.recalculate?.(), {
+        enabled: target.recalculate !== null,
+        ignoreRepeat: true,
+    });
+    const recalculateLook = useRecalculateLook(target.recalculate !== null);
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const keyOf = (id: ActionId) => getActionShortcutLabel(id, { overrides });
     /** A number's drag: the change from the shape at the press, previewed live */
     const scrub = (
         change: (b: unknown, m: ScrubMove, env: ToolEnv) => unknown,
@@ -182,7 +218,7 @@ function ShapeEditorBar({
     return (
         <div
             ref={place.ref}
-            className="shape-editor-surface rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal absolute z-10 flex flex-col gap-4 border px-6 py-4 whitespace-nowrap"
+            className="shape-editor-surface text-sub text-text pointer-events-none absolute z-10 flex flex-col items-center gap-4 whitespace-nowrap *:pointer-events-auto"
             style={place.style}
             data-over={overShape}
             {...place.hold}
@@ -191,7 +227,10 @@ function ShapeEditorBar({
             data-placement={place.above ? "above" : "below"}
             onPointerDown={(e) => e.stopPropagation()}
         >
-            <div className="flex items-center gap-6">
+            <div
+                className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-4"
+                data-testid={`${testId}-bar`}
+            >
                 <span
                     className="flex items-center gap-2"
                     data-testid={`${testId}-text`}
@@ -239,17 +278,6 @@ function ShapeEditorBar({
                             )}
                         </span>
                     ))}
-                    <IconButton
-                        label="Turn a quarter clockwise"
-                        onClick={() =>
-                            apply((env) =>
-                                quarterTurn(kind, params, spots, env),
-                            )
-                        }
-                        testId="shape-editor-quarter-turn"
-                    >
-                        <ArrowClockwiseIcon size={14} />
-                    </IconButton>
                     {target.empty > 0 && (
                         <span className="text-text/60">
                             · {target.empty} empty
@@ -288,11 +316,9 @@ function ShapeEditorBar({
                                     onClick={toggleRatioLock}
                                     testId="shape-editor-ratio-lock"
                                 >
-                                    {ratioLocked ? (
-                                        <LinkSimpleIcon size={14} />
-                                    ) : (
-                                        <LinkSimpleBreakIcon size={14} />
-                                    )}
+                                    {/* One chain either way, lit in the accent when locked: a broken
+                                        link didn't read as anything (owner) */}
+                                    <LinkSimpleIcon size={14} />
                                 </IconButton>
                             )}
                         </span>
@@ -307,16 +333,104 @@ function ShapeEditorBar({
                 {target.drawnOn && (
                     <span className="text-text/50">from {target.drawnOn}</span>
                 )}
-                {target.place && <PathwaysButton />}
                 <Divider />
-                <IconButton
-                    label="More: turn, flip, who goes where"
-                    pressed={more}
-                    onClick={() => setMore((m) => !m)}
-                    testId="shape-editor-more"
-                >
-                    <DotsThreeIcon size={16} weight="bold" />
-                </IconButton>
+                <span className="flex items-center gap-2">
+                    {/* The turn: ↻ adds a quarter, and the degrees beside it can be typed or
+                        dragged (owner) */}
+                    <IconButton
+                        label="Turn 90° clockwise"
+                        shortcut={keyOf("shapeQuarterTurn")}
+                        onClick={turnQuarter}
+                        testId="shape-editor-quarter-turn"
+                    >
+                        <ArrowClockwiseIcon size={14} />
+                    </IconButton>
+                    <ScrubNumber
+                        display={`${degrees}°`}
+                        editText={String(degrees)}
+                        axis="x"
+                        label="Turn, in degrees clockwise"
+                        testId="shape-editor-rotation"
+                        {...scrub((b, m, env) =>
+                            scrubTurn(
+                                kind,
+                                b,
+                                spots,
+                                scrubDistance("x", m.dx, m.dy),
+                                pivot,
+                                env,
+                            ),
+                        )}
+                        onType={(text) => {
+                            const typed = parseDegrees(text);
+                            if (typed === null) return false;
+                            apply((env) =>
+                                turnShape(
+                                    kind,
+                                    params,
+                                    spots,
+                                    typed * DEGREE,
+                                    pivot,
+                                    env,
+                                ),
+                            );
+                            return true;
+                        }}
+                    />
+                    <IconButton
+                        label="Flip side to side"
+                        shortcut={keyOf("flipHorizontal")}
+                        onClick={() => flip("across")}
+                        testId="shape-editor-flip-across"
+                    >
+                        <FlipHorizontalIcon size={14} />
+                    </IconButton>
+                    <IconButton
+                        label="Flip front to back"
+                        shortcut={keyOf("flipVertical")}
+                        onClick={() => flip("deep")}
+                        testId="shape-editor-flip-deep"
+                    >
+                        <FlipVerticalIcon size={14} />
+                    </IconButton>
+                    <IconButton
+                        label={
+                            target.recalculate
+                                ? "Recalculate who goes where, by least travel"
+                                : target.empty > 0
+                                  ? "Recalculate who goes where: close up the empty spots first"
+                                  : "Who goes where is already least travel"
+                        }
+                        disabled={!target.recalculate}
+                        shortcut={keyOf("shapeRecalculate")}
+                        className="relative"
+                        onClick={() => target.recalculate?.()}
+                        testId="shape-editor-recalculate"
+                    >
+                        {/* The word only when it can do something: greyed out, it's the widest
+                            thing on the bar for nothing (owner, review round r429) */}
+                        <RecalculateFace look={recalculateLook} />
+                    </IconButton>
+                    <CloseUpButton
+                        target={target}
+                        compact
+                        className="rounded-4 hover:text-accent flex min-h-24 min-w-24 items-center justify-center p-4"
+                        testId="shape-editor-close-up"
+                    />
+                </span>
+                {/* What doesn't change the shape itself, at the end (owner): its pathways and
+                    saving it to the library */}
+                <Divider />
+                <span className="flex items-center gap-2">
+                    {target.place && <PathwaysButton />}
+                    <SaveShapeButton
+                        shape={{ kind, params, spots }}
+                        stepPx={stepPx}
+                        compact
+                        className="rounded-4 hover:text-accent flex min-h-24 min-w-24 items-center justify-center p-4"
+                        testId="shape-editor-save"
+                    />
+                </span>
                 {target.place && (
                     <>
                         <Divider />
@@ -332,127 +446,13 @@ function ShapeEditorBar({
                     </>
                 )}
             </div>
-            <LayoutMenu target={target} envFor={() => envFor(PLAIN)} />
-            {more && (
-                <div
-                    className="flex items-center gap-6"
-                    data-testid="shape-editor-more-row"
-                >
-                    <span className="flex items-center gap-2">
-                        <span className="text-text/60">Turn</span>
-                        <ScrubNumber
-                            display={`${degrees}°`}
-                            editText={String(degrees)}
-                            axis="x"
-                            label="Rotation, in degrees clockwise"
-                            testId="shape-editor-rotation"
-                            {...scrub((b, m, env) =>
-                                scrubTurn(
-                                    kind,
-                                    b,
-                                    spots,
-                                    scrubDistance("x", m.dx, m.dy),
-                                    pivot,
-                                    env,
-                                ),
-                            )}
-                            onType={(text) => {
-                                const typed = parseDegrees(text);
-                                if (typed === null) return false;
-                                apply((env) =>
-                                    turnShape(
-                                        kind,
-                                        params,
-                                        spots,
-                                        typed * DEGREE,
-                                        pivot,
-                                        env,
-                                    ),
-                                );
-                                return true;
-                            }}
-                        />
-                    </span>
-                    <Divider />
-                    <TextButton
-                        label="Flip side to side"
-                        onClick={() =>
-                            apply((env) =>
-                                flipShape(
-                                    kind,
-                                    params,
-                                    spots,
-                                    "across",
-                                    pivot,
-                                    env,
-                                ),
-                            )
-                        }
-                        testId="shape-editor-flip-across"
-                    >
-                        <FlipHorizontalIcon size={14} />
-                        <GlyphText text="Flip ↔" />
-                    </TextButton>
-                    <TextButton
-                        label="Flip front to back"
-                        onClick={() =>
-                            apply((env) =>
-                                flipShape(
-                                    kind,
-                                    params,
-                                    spots,
-                                    "deep",
-                                    pivot,
-                                    env,
-                                ),
-                            )
-                        }
-                        testId="shape-editor-flip-deep"
-                    >
-                        <FlipVerticalIcon size={14} />
-                        <GlyphText text="Flip ↕" />
-                    </TextButton>
-                    <Divider />
-                    <span className="text-text/60">Who goes where</span>
-                    <span className="flex flex-col gap-1">
-                        <Segmented
-                            value={target.kept ? null : target.order}
-                            options={[
-                                { value: "nearest", label: "Least travel" },
-                                { value: "drill", label: "Drill order" },
-                            ]}
-                            onChange={target.setOrder}
-                            testId="shape-editor-order"
-                        />
-                        {target.kept && (
-                            <span
-                                className="text-text/60 text-xs"
-                                data-testid="shape-editor-order-kept"
-                            >
-                                Everyone kept their spot through your turn or
-                                flip · pick one to work it out again
-                            </span>
-                        )}
-                    </span>
-                    {target.closeUp && (
-                        <>
-                            <Divider />
-                            <CloseUpButton
-                                target={target}
-                                className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
-                                testId="shape-editor-close-up"
-                            />
-                        </>
-                    )}
-                    <Divider />
-                    <SaveShapeButton
-                        shape={{ kind, params, spots }}
-                        stepPx={stepPx}
-                        className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
-                        testId="shape-editor-save"
-                    />
-                </div>
-            )}
+            {/* The layout settings: a pill of their own under the editor (owner). Only the bar and
+                the pill take the pointer, not the empty space beside the pill */}
+            <LayoutMenu
+                target={target}
+                envFor={() => envFor(PLAIN)}
+                className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal border px-6 py-2"
+            />
         </div>
     );
 }
@@ -480,7 +480,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     const top = fieldToElement(view, (b.left + b.right) / 2, b.top);
     // The outline's spots have a radius and the handles stick out: clear them
     const pad = GAP_PX + 6;
-    // Its own size (the ⋯ row opens) and the field's, as they change
+    // Its own size (the Save form opens) and the field's, as they change
     useLayoutEffect(() => {
         const el = ref.current;
         const field = el?.offsetParent;
@@ -537,33 +537,6 @@ function boundsOf(points: readonly { x: number; y: number }[]) {
     };
 }
 
-/** A button in the ⋯ row: an icon and a word, so nobody has to guess (sims, F1) */
-function TextButton({
-    label,
-    onClick,
-    testId,
-    children,
-}: {
-    label: string;
-    onClick: () => void;
-    testId?: string;
-    children: ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            title={label}
-            aria-label={label}
-            onPointerDown={keepFocus}
-            onClick={onClick}
-            data-testid={testId}
-            className="rounded-4 hover:text-accent hover:bg-fg-2 flex items-center gap-4 px-4 py-2"
-        >
-            {children}
-        </button>
-    );
-}
-
 function Divider() {
     return <span className="bg-stroke h-16 w-px" aria-hidden />;
 }
@@ -599,6 +572,8 @@ function PathwaysButton() {
 
 function IconButton({
     label,
+    shortcut,
+    className,
     onClick,
     disabled,
     pressed,
@@ -606,6 +581,9 @@ function IconButton({
     children,
 }: {
     label: string;
+    /** Its keys, shown in the tooltip as keycaps */
+    shortcut?: string;
+    className?: string;
     onClick: () => void;
     disabled?: boolean;
     pressed?: boolean;
@@ -613,63 +591,31 @@ function IconButton({
     children: ReactNode;
 }) {
     return (
-        <button
-            type="button"
-            aria-label={label}
-            title={label}
-            aria-pressed={pressed}
-            disabled={disabled}
-            onPointerDown={keepFocus}
-            onClick={onClick}
-            data-testid={testId}
-            className={clsx(
-                "rounded-4 flex items-center p-2 disabled:opacity-40",
-                // On: the icon in the accent on a light accent tint, so the state is plain at a
-                // glance without reading as a solid button (owner)
-                pressed ? "bg-accent/15 text-accent" : "hover:text-accent",
-            )}
-        >
-            {children}
-        </button>
-    );
-}
-
-function Segmented<V extends string>({
-    value,
-    options,
-    onChange,
-    testId,
-}: {
-    /** Null when none is chosen */
-    value: V | null;
-    options: readonly { value: V; label: string }[];
-    onChange: (value: V) => void;
-    testId?: string;
-}) {
-    return (
-        <span
-            className="rounded-4 border-stroke flex border"
-            role="radiogroup"
-            data-testid={testId}
-        >
-            {options.map((o) => (
-                <button
-                    key={o.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={o.value === value}
-                    onPointerDown={keepFocus}
-                    onClick={() => onChange(o.value)}
-                    className={clsx(
-                        "px-6 py-1",
-                        o.value === value
-                            ? "bg-accent text-text-invert"
-                            : "hover:text-accent",
-                    )}
-                >
-                    {o.label}
-                </button>
-            ))}
-        </span>
+        <Tip label={label} shortcut={shortcut}>
+            <button
+                type="button"
+                aria-label={label}
+                aria-pressed={pressed}
+                // aria-disabled, not disabled: a disabled button gets no pointer, so its tooltip
+                // (which says why, as Recalculate's does) wouldn't show
+                aria-disabled={disabled || undefined}
+                onPointerDown={keepFocus}
+                onClick={() => {
+                    if (!disabled) onClick();
+                }}
+                data-testid={testId}
+                className={clsx(
+                    // At least 24 px to hit (WCAG 2.2 target size; review round r429)
+                    "rounded-4 flex min-h-24 min-w-24 items-center justify-center gap-4 p-4",
+                    // On: the icon in the accent on a light accent tint, so the state is plain at a
+                    // glance without reading as a solid button (owner)
+                    pressed ? "bg-accent/15 text-accent" : "hover:text-accent",
+                    disabled && "cursor-default opacity-40 hover:text-inherit",
+                    className,
+                )}
+            >
+                {children}
+            </button>
+        </Tip>
     );
 }
