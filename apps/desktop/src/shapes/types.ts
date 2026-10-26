@@ -273,7 +273,7 @@ export interface ShapeKind<P> {
      * Who goes where when the tool opens: an open path keeps the marchers' order along it, a
      * closed or filled shape has no natural start, so nearest spots usually read better
      */
-    readonly defaultOrder?: "keep" | "nearest" | "drill";
+    readonly defaultOrder?: "keep" | "nearest";
     readonly groups: readonly ParamGroup<P>[];
 
     /** Params that make a first preview land on or near the marchers' current spots. Pure. */

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { circleTool } from "../circle/circleTool";
 import { radiusOf, type CircleParams } from "../circle/circleGeometry";
-import { orderAfter } from "../placed/commitBox";
 import {
     liveTargets,
     moveLive,
@@ -202,7 +201,7 @@ describe("a placed circle", () => {
         expect(members.map((m) => m.slot)).not.toContain(2);
     });
 
-    it("a flip keeps everyone on their spot, so the order reads as kept", () => {
+    it("a flip keeps everyone on their spot, and a bigger interval makes it bigger", () => {
         const { placed } = placedCircle();
         const flipped = flipShape(
             circleTool,
@@ -212,11 +211,11 @@ describe("a placed circle", () => {
             "c",
             env,
         );
-        expect(orderAfter(placed, flipped, undefined)).toBe("kept");
-        const bigger = { ...placed.params, interval: 30 };
-        expect(orderAfter(placed, bigger, undefined)).toBe(
-            placed.recipe.orderMode,
+        const live = liveTargets(placed, flipped, ctx);
+        expect(live.members.map((m) => m.slot)).toEqual(
+            placed.recipe.members.map((m) => m.slot),
         );
+        const bigger = { ...placed.params, interval: 30 };
         expect(radiusOf(bigger, N)).toBeGreaterThan(radiusOf(placed.params, N));
     });
 });
@@ -264,9 +263,6 @@ describe("a placed fake kind", () => {
             N,
             { mode: "outline" },
             env,
-        );
-        expect(orderAfter(placed, outline, undefined)).toBe(
-            placed.recipe.orderMode,
         );
         expect(liveTargets(placed, outline, ctx).spots).toBe(N);
     });

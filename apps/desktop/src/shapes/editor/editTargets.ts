@@ -158,7 +158,7 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
                               box,
                               box.params,
                               queryClient,
-                              "nearest",
+                              true,
                               originsOf(box),
                           )
                     : null,
@@ -173,7 +173,7 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
                     );
                     // Least travel, whatever order it was laid out in (spec #385)
                     if (params !== null)
-                        void commitBox(box, params, queryClient, "nearest");
+                        void commitBox(box, params, queryClient, true);
                 },
             }),
         };

@@ -1,30 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { OrderMode } from "../assign";
 import type { XY } from "../types";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { writePlacement } from "../tool/shapePlacement";
-import { liveTargets, newLayout } from "./liveBox";
+import { liveTargets } from "./liveBox";
 import type { PlacedBox } from "./placedBox";
-
-/**
- * How the shape's members are laid out after an edit: the order picked, or "kept" when a turn or
- * flip kept everyone on their own spot (so it's neither Least travel nor Drill order any more),
- * or as it was
- */
-export function orderAfter(
-    box: PlacedBox,
-    params: unknown,
-    order: OrderMode | undefined,
-): string {
-    if (order) return order;
-    const was = box.kind.frameOf(box.params, box.spots);
-    const now = box.kind.frameOf(params, box.spots);
-    const turned =
-        now.rotation !== was.rotation ||
-        now.flipX !== was.flipX ||
-        now.flipY !== was.flipY;
-    return turned && !newLayout(box, params) ? "kept" : box.recipe.orderMode;
-}
 
 /**
  * Saves a selected placed shape drawn with `params` through `writePlacement`: its members move to
@@ -35,8 +14,8 @@ export async function commitBox(
     box: PlacedBox,
     params: unknown,
     queryClient: QueryClient,
-    /** Lay the members out again in this order (Recalculate, Close up) */
-    order?: OrderMode,
+    /** Lay the members out again by least travel (Recalculate, Close up) */
+    layOutAgain?: boolean,
     /** Where members come from when laid out again (Recalculate: the start flag) */
     origins?: ReadonlyMap<number, XY>,
 ): Promise<void> {
@@ -46,7 +25,7 @@ export async function commitBox(
         box,
         params,
         shapeContextFor(field),
-        order,
+        layOutAgain,
         origins,
     );
     await writePlacement(
@@ -54,7 +33,8 @@ export async function commitBox(
             recipe: {
                 ...box.recipe,
                 params: { ...(params as object), spots },
-                orderMode: orderAfter(box, params, order),
+                // Drill order is gone (#429); the column stays for older files
+                orderMode: "nearest",
             },
             members: targets,
             replaces: box.recipe,

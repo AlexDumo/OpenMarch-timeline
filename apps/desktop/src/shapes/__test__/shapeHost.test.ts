@@ -129,7 +129,6 @@ describe.each(KINDS)("the shape session with %s", (_name, kind) => {
         expect(near(kind.frameOf(turned.params, N).center, frame.center)).toBe(
             true,
         );
-        expect(turned.kept).toBe(true);
         expect(turned.assignment).toEqual(t.assignment);
 
         const flipped = edit(
@@ -138,7 +137,6 @@ describe.each(KINDS)("the shape session with %s", (_name, kind) => {
             ctx,
         );
         expect(kind.frameOf(flipped.params, N).flipX).toBe(true);
-        expect(flipped.kept).toBe(true);
         // A mirror: whoever stood furthest left now stands furthest right
         const xs = (s: ToolState) => goingTo(s).map((x) => x.to.x);
         const left = xs(t).indexOf(Math.min(...xs(t)));
@@ -377,11 +375,9 @@ describe.each(KINDS)(
             // The same spots, worked out fresh: what drawing it flipped would give
             expect(again.params).toBe(t.params);
             expect(again.assignment).not.toEqual(t.assignment);
-            expect(again.kept).toBe(false);
             expect(canRecalculate(again, ctx)).toBe(false);
             const back = undo(again);
             expect(back.assignment).toEqual(t.assignment);
-            expect(back.kept).toBe(true);
         });
 
         it("measures from where the marchers come from (the start flag)", () => {

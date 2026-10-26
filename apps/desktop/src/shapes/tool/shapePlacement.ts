@@ -47,7 +47,8 @@ export function placementOf(
             kindVersion: kind.version,
             // The spot count keeps holes when members leave later
             params: { ...(tool.params as object), spots: tool.spots },
-            orderMode: tool.kept ? "kept" : tool.order,
+            // Drill order is gone (#429); the column stays for older files
+            orderMode: "nearest",
             reverse: false,
         },
         members: targets.map((t) => ({

@@ -15,7 +15,6 @@ import {
     type PlacedRecipe,
 } from "../placed/placedBox";
 import { liveTargets } from "../placed/liveBox";
-import { orderAfter } from "../placed/commitBox";
 import { placementOf } from "../tool/shapePlacement";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import {
@@ -182,8 +181,7 @@ describe("Close up, a box in Files", () => {
     it("is laid out by least travel, whatever order it was placed in", () => {
         const box = placedWithout(full(), [1, 2]);
         const params = closedUpParams(box, 22, env);
-        expect(orderAfter(box, params, "nearest")).toBe("nearest");
-        const live = liveTargets(box, params, ctx, "nearest");
+        const live = liveTargets(box, params, ctx, true);
         expect(live.spots).toBe(22);
         expect(live.members).toHaveLength(22);
     });

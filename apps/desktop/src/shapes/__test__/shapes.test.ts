@@ -486,19 +486,6 @@ describe("assignSlots", () => {
             }),
         ).toEqual([0, 3, 1, 2]);
     });
-
-    it("drill order fills the shape by drill number", () => {
-        expect(
-            assignSlots({
-                kind: lineKind,
-                params,
-                slots,
-                marchers,
-                mode: "drill",
-                ctx,
-            }),
-        ).toEqual([0, 1, 2, 3]);
-    });
 });
 
 describe("validateSlots", () => {
