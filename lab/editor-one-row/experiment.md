@@ -30,7 +30,7 @@ under the editor.
   where again, so everyone travels the least from where they start the move.
   It's one undo step. When the order is already least travel it's just a
   greyed-out icon. When it can change something, the word "Recalculate"
-  springs open and the button flashes purple for a moment.
+  springs open and the button lights up purple for a moment.
 - **Close up** for a placed shape with empty spots.
 - At the end, before Place: the **pathways** toggle and **☆ Save**. They
   don't change the shape itself.

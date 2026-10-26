@@ -7,13 +7,16 @@ import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 const WORD_SPRING = { tension: 320, friction: 26 };
 /** The accent flash fading back to the editor's normal look */
 const FLASH_MS = 1200;
+/** The flash's tint, as the editor's toggles have when on (bg-accent/15) */
+const TINT = 0.15;
 /** Wider than the word, so its width never clips it */
 const WORD_MAX = "7em";
 
 /**
  * The floating editor's Recalculate (#429): its icon alone while it would change nothing, and its
- * word too once it can act. The word springs open, and the button flashes the accent and fades
- * back, only when it becomes available, not when it shows up already available or re-renders
+ * word too once it can act. The word springs open, and the button flashes accent text on a faint
+ * accent tint that fades back to its normal look (owner: readable all the way through, unlike
+ * inverted text on a solid accent), only when it becomes available, not when it shows up already available or re-renders
  * (owner). With reduced motion the word appears at once and only the color fades. During a drag
  * the edit target holds what it last knew (`useToolEditTarget`), so a drag doesn't flash it.
  */
@@ -58,16 +61,16 @@ export function RecalculateFace({
             <animated.span
                 aria-hidden
                 className="bg-accent rounded-4 pointer-events-none absolute inset-0"
-                style={{ opacity: flash.p }}
+                style={{ opacity: flash.p.to((p) => p * TINT) }}
             />
             <animated.span
                 className="relative flex items-center gap-4"
                 data-flashing={flashing || undefined}
                 style={{
-                    // The accent's own text color while it shows, back to the editor's
+                    // Accent text, fading back to the editor's
                     color: flash.p.to((p) =>
                         p > 0.01
-                            ? `color-mix(in srgb, var(--color-text-invert) ${Math.round(p * 100)}%, var(--color-text))`
+                            ? `color-mix(in srgb, var(--color-accent) ${Math.round(p * 100)}%, var(--color-text))`
                             : "",
                     ),
                 }}
