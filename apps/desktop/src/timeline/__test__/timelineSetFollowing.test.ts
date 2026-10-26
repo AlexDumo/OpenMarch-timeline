@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { XY } from "@openmarch/core";
+import { createResolver, type XY } from "@openmarch/core";
 import {
     followingAt,
     isSetAt,
@@ -105,6 +105,102 @@ describe("one marcher's Set counts", () => {
         const beats = marcherSetBeats(kept, moves, new Set([7]));
         expect(isSetAt(beats, 9)).toBe(true);
         expect(isSetAt(beats, 17)).toBe(false);
+    });
+});
+
+describe("a count where a later move cuts in", () => {
+    // Row 1 runs over [1, 17); row 2 starts inside it at 9, so row 1's first span stops at 9
+    const cut = (start: number, end: number, id: number, rowEnd: number) => ({
+        ...own(start, end, id),
+        assignmentEnd: rowEnd,
+    });
+    const walking = at([
+        [0, [0, 0]],
+        [9, [4, 0]],
+        [13, [4, 4]],
+        [17, [8, 0]],
+    ]);
+
+    it("is not Set where the cut stops a span: no move of the marcher's ends there", () => {
+        const spans = [
+            hold(-Infinity, 1),
+            cut(1, 9, 1, 17),
+            cut(9, 13, 2, 13),
+            cut(13, 17, 1, 17),
+            hold(17, Infinity),
+        ];
+        expect(marcherSetBeats(spans, walking)).toEqual([13, 17]);
+    });
+
+    it("is Set where one move ends and the next starts on the same count (a split)", () => {
+        const spans = [
+            hold(-Infinity, 1),
+            cut(1, 9, 1, 9),
+            cut(9, 17, 2, 17),
+            hold(17, Infinity),
+        ];
+        expect(marcherSetBeats(spans, walking)).toEqual([9, 17]);
+    });
+});
+
+describe("Set counts from the resolver's spans", () => {
+    /** One marcher, home at 0,0, with direct moves of its own in shapeless one-slot transitions. */
+    const resolverOf = (
+        moves: readonly (readonly [
+            start: number,
+            end: number,
+            layer: number,
+            to: XY,
+        ])[],
+    ) =>
+        createResolver({
+            marchers: [{ id: 1, home: [0, 0] }],
+            shapes: {},
+            transitions: Object.fromEntries(
+                moves.map(([start, end, , to], i) => [
+                    i + 1,
+                    {
+                        id: i + 1,
+                        start,
+                        end,
+                        dest: null,
+                        points: [to],
+                        slots: 1,
+                        style: "direct",
+                        order: "inherit",
+                        params: null,
+                    },
+                ]),
+            ),
+            assignments: moves.map(([start, end, layer], i) => ({
+                id: i + 1,
+                marcher: 1,
+                transition: i + 1,
+                slot: 0,
+                start,
+                end,
+                layer,
+            })),
+        });
+    const setBeats = (r: ReturnType<typeof createResolver>) =>
+        marcherSetBeats(r.spanInfos(1), (beat) => r.positionAt(1, beat));
+
+    it("a move inside another: Set where each ends, not where the inner one starts", () => {
+        // Spec G3's shape: [0, 16) on layer 0, [4, 12) on layer 1
+        const r = resolverOf([
+            [0, 16, 0, [16, 0]],
+            [4, 12, 1, [0, 8]],
+        ]);
+        expect(setBeats(r)).toEqual([12, 16]);
+    });
+
+    it("a move cut off for good by a later one: its own end is never reached, so not Set", () => {
+        // L-3: [0, 12) is cut at 8 by [8, 16) and never resumes
+        const r = resolverOf([
+            [0, 12, 0, [12, 0]],
+            [8, 16, 1, [0, 8]],
+        ]);
+        expect(setBeats(r)).toEqual([16]);
     });
 });
 
