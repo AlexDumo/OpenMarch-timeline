@@ -3,7 +3,6 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { keepFocus } from "./keepFocus";
 import { RichTips, Tip } from "./Tip";
 import {
-    ArrowArcRightIcon,
     FlipHorizontalIcon,
     FlipVerticalIcon,
     LinkSimpleBreakIcon,
@@ -68,11 +67,13 @@ const GAP_PX = 14;
  * under it shows, and it is solid while the pointer is over either, with focus inside it or a
  * menu of its open (`ShapeEditorSurface.css`). Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
  * One row, no ⋯ (#429; owner: keep it compact), for a box:
- * `− 6 × 2 + ↻ │ ↔ 2 ↕ 2 steps 🔗 │ ⤻ 0° ⇋ ⇵ Recalculate ☆ │ Place`, and in Spread
+ * `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`, and in Spread
  * `↔ 2 steps Reshuffle │ …`. Every number can be typed or dragged, and follows the field: across
- * is side to side however the box is turned. ↻ turns the shape a quarter; ⤻ is the free turn,
- * typed or dragged. Recalculate works out who goes where again by least travel, which moving and
- * turning keep until it's pressed; Close up shows for a placed shape with holes (#392). Its
+ * is side to side however the box is turned. ↻ adds a quarter turn to the degrees beside it.
+ * Recalculate works out who goes where again by least travel, which moving and turning keep until
+ * it's pressed, and shows its word only when it would change something; Close up shows for a
+ * placed shape with holes (#392). Pathways and ☆ Save, which leave the shape as it is, come last
+ * before Place. Its
  * controls show the app's tooltips (`RichTips`). Under the editor, a box in Files has its layout
  * menu in a pill of its own (#387, #429). Place shows only for a new shape; a selected placed
  * shape saves each edit on release. While the open shape waits out of sight (#416) the editor
@@ -246,17 +247,6 @@ function ShapeEditorBar({
                             )}
                         </span>
                     ))}
-                    <IconButton
-                        label="Turn a quarter clockwise"
-                        onClick={() =>
-                            apply((env) =>
-                                quarterTurn(kind, params, spots, env),
-                            )
-                        }
-                        testId="shape-editor-quarter-turn"
-                    >
-                        <ArrowClockwiseIcon size={14} />
-                    </IconButton>
                     {target.empty > 0 && (
                         <span className="text-text/60">
                             · {target.empty} empty
@@ -314,15 +304,21 @@ function ShapeEditorBar({
                 {target.drawnOn && (
                     <span className="text-text/50">from {target.drawnOn}</span>
                 )}
-                {target.place && <PathwaysButton />}
                 <Divider />
                 <span className="flex items-center gap-2">
-                    <span
-                        className="text-text/60 flex items-center"
-                        aria-hidden
+                    {/* The turn: ↻ adds a quarter, and the degrees beside it can be typed or
+                        dragged (owner) */}
+                    <IconButton
+                        label="Turn 90° clockwise"
+                        onClick={() =>
+                            apply((env) =>
+                                quarterTurn(kind, params, spots, env),
+                            )
+                        }
+                        testId="shape-editor-quarter-turn"
                     >
-                        <ArrowArcRightIcon size={14} />
-                    </span>
+                        <ArrowClockwiseIcon size={14} />
+                    </IconButton>
                     <ScrubNumber
                         display={`${degrees}°`}
                         editText={String(degrees)}
@@ -404,7 +400,9 @@ function ShapeEditorBar({
                         testId="shape-editor-recalculate"
                     >
                         <UserSwitchIcon size={14} />
-                        Recalculate
+                        {/* The word only when it can do something: greyed out, it's the widest
+                            thing on the bar for nothing (owner, review round r429) */}
+                        {target.recalculate && "Recalculate"}
                     </IconButton>
                     <CloseUpButton
                         target={target}
@@ -412,6 +410,12 @@ function ShapeEditorBar({
                         className="rounded-4 hover:text-accent p-2"
                         testId="shape-editor-close-up"
                     />
+                </span>
+                {/* What doesn't change the shape itself, at the end (owner): its pathways and
+                    saving it to the library */}
+                <Divider />
+                <span className="flex items-center gap-2">
+                    {target.place && <PathwaysButton />}
                     <SaveShapeButton
                         shape={{ kind, params, spots }}
                         stepPx={stepPx}

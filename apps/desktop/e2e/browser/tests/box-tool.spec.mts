@@ -384,11 +384,10 @@ test("change: one row with no ⋯; after a move and a quarter turn, Recalculate 
     const quarter = page.getByTestId("shape-editor-quarter-turn");
     await expect(quarter).not.toHaveAttribute("title", /./);
     await quarter.hover();
-    await expect(page.getByRole("tooltip")).toContainText(
-        "Turn a quarter clockwise",
-    );
+    await expect(page.getByRole("tooltip")).toContainText("Turn 90° clockwise");
     // Just drawn, it's least travel already, and its tooltip says so
     await expect(recalculate).toBeDisabled();
+    await expect(recalculate).toHaveText("");
     await recalculate.hover();
     await expect(page.getByRole("tooltip")).toContainText(
         "already least travel",
@@ -403,8 +402,12 @@ test("change: one row with no ⋯; after a move and a quarter turn, Recalculate 
     await drag(page, inside, { x: inside.x + 120, y: inside.y + 60 });
     await page.getByTestId("shape-editor-quarter-turn").click();
     await expect.poll(() => readout(page)).toMatch(/^2 × 4 · /);
+    // ↻ adds a quarter to the degrees beside it
+    await expect(page.getByTestId("shape-editor-rotation")).toHaveText("90°");
     const kept = (await shapeOverlay(page))!.walks;
     await expect(recalculate).toBeEnabled();
+    // Its word shows only when it would change something
+    await expect(recalculate).toHaveText("Recalculate");
 
     await recalculate.click();
     // The same spots, shared out again: someone goes somewhere else

@@ -8,7 +8,7 @@ status: open
 variants: []
 questions:
   - Could you find turn, flip and save without the ⋯ menu? Was anything hard to find?
-  - Can you tell the quarter turn (↻) and the free turn (arc and degrees) apart at a glance?
+  - Is ↻ next to the degrees (it adds 90°) clear? Did you try typing or dragging the degrees too?
   - Did Recalculate do what you expected? Was it clear why it was greyed out when it was?
   - Is the editor too wide now? Which button would you give up first?
   - Did you miss choosing Least travel or Drill order?
@@ -21,16 +21,18 @@ under the editor.
 
 **New in this build:**
 
-- **↻** turns the shape a quarter, as before.
-- **Turn** (an arc arrow and the degrees) turns it freely. Drag the number,
-  or click it and type. It snaps every 15°, and holding **Alt** turns it
+- **Turn:** **↻** adds 90° to the degrees beside it. Drag the degrees, or
+  click them and type. They snap every 15°, and holding **Alt** turns it
   freely.
 - **Flip side to side** and **flip front to back**.
 - **Recalculate** (a person with arrows): moving, turning or flipping a
   shape keeps everyone on their own spot. Recalculate works out who goes
   where again, so everyone travels the least from where they start the move.
-  It's one undo step. It's greyed out when the order is already least travel.
-- **☆ Save**, and **Close up** for a placed shape with empty spots.
+  It's one undo step. When the order is already least travel it's just a
+  greyed-out icon; the word "Recalculate" shows when it can change something.
+- **Close up** for a placed shape with empty spots.
+- At the end, before Place: the **pathways** toggle and **☆ Save**. They
+  don't change the shape itself.
 - The **Least travel / Drill order** choice is gone for now.
 
 **What to try**
