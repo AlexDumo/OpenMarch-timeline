@@ -102,6 +102,8 @@
             "circle": "Shape: Circle",
             "ring": "Favorites ring: hold to pick a shape, tap to keep it open",
             "apply": "Place marchers on the shape",
+            "quarterTurn": "Shape: Turn 90° clockwise",
+            "recalculate": "Shape: Recalculate who goes where",
             "keywords": "shape form formation set place"
         },
         "swap": {

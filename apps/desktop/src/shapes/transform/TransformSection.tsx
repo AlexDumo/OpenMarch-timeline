@@ -36,6 +36,7 @@ import type { ToolEnv } from "../tool/toolKind";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { flipSelection, selectionPivot } from "./selectionTransform";
 import { GlyphText } from "../editor/GlyphText";
+import { Tip } from "../editor/Tip";
 
 /**
  * The inspector's Transform section (#349, spec #344, "Editing and transforming"), whenever
@@ -117,27 +118,30 @@ function PivotGrid({
             data-testid="transform-pivot"
         >
             {PIVOT_KEYS.map((key) => (
-                <button
+                <Tip
                     key={key}
-                    type="button"
-                    role="radio"
-                    aria-checked={key === pivot}
-                    aria-label={`Pivot: ${PIVOT_NAMES[key]}`}
-                    title={`Turn, flip and scale around the ${PIVOT_NAMES[key]}`}
-                    onPointerDown={keepFocus}
-                    onClick={() => onPick(key)}
-                    data-testid={`transform-pivot-${key}`}
-                    className="flex size-16 items-center justify-center"
+                    label={`Turn, flip and scale around the ${PIVOT_NAMES[key]}`}
                 >
-                    <span
-                        className={clsx(
-                            "block rounded-full",
-                            key === pivot
-                                ? "bg-accent size-8"
-                                : "bg-text/30 hover:bg-accent/60 size-6",
-                        )}
-                    />
-                </button>
+                    <button
+                        type="button"
+                        role="radio"
+                        aria-checked={key === pivot}
+                        aria-label={`Pivot: ${PIVOT_NAMES[key]}`}
+                        onPointerDown={keepFocus}
+                        onClick={() => onPick(key)}
+                        data-testid={`transform-pivot-${key}`}
+                        className="flex size-16 items-center justify-center"
+                    >
+                        <span
+                            className={clsx(
+                                "block rounded-full",
+                                key === pivot
+                                    ? "bg-accent size-8"
+                                    : "bg-text/30 hover:bg-accent/60 size-6",
+                            )}
+                        />
+                    </button>
+                </Tip>
             ))}
         </div>
     );
@@ -302,30 +306,32 @@ function Flips({
     );
     return (
         <div className="flex gap-4">
-            <button
-                type="button"
-                className={button}
-                disabled={disabled}
-                title="Flip side to side around the pivot"
-                onPointerDown={keepFocus}
-                onClick={() => onFlip("across")}
-                data-testid="transform-flip-across"
-            >
-                <FlipHorizontalIcon size={14} />
-                <GlyphText text="Flip ↔" />
-            </button>
-            <button
-                type="button"
-                className={button}
-                disabled={disabled}
-                title="Flip front to back around the pivot"
-                onPointerDown={keepFocus}
-                onClick={() => onFlip("deep")}
-                data-testid="transform-flip-deep"
-            >
-                <FlipVerticalIcon size={14} />
-                <GlyphText text="Flip ↕" />
-            </button>
+            <Tip label="Flip side to side around the pivot">
+                <button
+                    type="button"
+                    className={button}
+                    disabled={disabled}
+                    onPointerDown={keepFocus}
+                    onClick={() => onFlip("across")}
+                    data-testid="transform-flip-across"
+                >
+                    <FlipHorizontalIcon size={14} />
+                    <GlyphText text="Flip ↔" />
+                </button>
+            </Tip>
+            <Tip label="Flip front to back around the pivot">
+                <button
+                    type="button"
+                    className={button}
+                    disabled={disabled}
+                    onPointerDown={keepFocus}
+                    onClick={() => onFlip("deep")}
+                    data-testid="transform-flip-deep"
+                >
+                    <FlipVerticalIcon size={14} />
+                    <GlyphText text="Flip ↕" />
+                </button>
+            </Tip>
         </div>
     );
 }
@@ -353,17 +359,18 @@ function SmallButton({
     children: ReactNode;
 }) {
     return (
-        <button
-            type="button"
-            aria-label={label}
-            title={label}
-            disabled={disabled}
-            onPointerDown={keepFocus}
-            onClick={onClick}
-            data-testid={testId}
-            className="rounded-4 hover:text-accent flex items-center p-2 disabled:opacity-40"
-        >
-            {children}
-        </button>
+        <Tip label={label}>
+            <button
+                type="button"
+                aria-label={label}
+                disabled={disabled}
+                onPointerDown={keepFocus}
+                onClick={onClick}
+                data-testid={testId}
+                className="rounded-4 hover:text-accent flex items-center p-2 disabled:opacity-40"
+            >
+                {children}
+            </button>
+        </Tip>
     );
 }

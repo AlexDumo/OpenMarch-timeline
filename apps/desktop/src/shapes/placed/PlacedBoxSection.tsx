@@ -16,6 +16,7 @@ import { placedBoxesAt, usePlacedBoxStore } from "./placedBoxStore";
 import { selectOnField } from "./boxSelection";
 import { stepPlacedBoxFiles, steppedParam } from "./PlacedBoxKeys";
 import { setInsideBox } from "./boxSelectionStore";
+import { Tip } from "../editor/Tip";
 
 /**
  * The inspector's view of placed shapes (07-placed-boxes.md): the selected shape's numbers, with
@@ -49,16 +50,17 @@ export function PlacedBoxSection() {
                 data-testid="placed-box-summary"
             >
                 {stepper && (
-                    <button
-                        type="button"
-                        aria-label={stepper.less}
-                        title={stepper.less}
-                        className={button}
-                        disabled={!can(-1)}
-                        onClick={() => stepPlacedBoxFiles(-1, queryClient)}
-                    >
-                        <MinusIcon size={14} />
-                    </button>
+                    <Tip label={stepper.less}>
+                        <button
+                            type="button"
+                            aria-label={stepper.less}
+                            className={button}
+                            disabled={!can(-1)}
+                            onClick={() => stepPlacedBoxFiles(-1, queryClient)}
+                        >
+                            <MinusIcon size={14} />
+                        </button>
+                    </Tip>
                 )}
                 <p className="text-sub text-text/80">
                     {box.kind.shape.label} ·{" "}
@@ -68,16 +70,17 @@ export function PlacedBoxSection() {
                     )}
                 </p>
                 {stepper && (
-                    <button
-                        type="button"
-                        aria-label={stepper.more}
-                        title={stepper.more}
-                        className={button}
-                        disabled={!can(1)}
-                        onClick={() => stepPlacedBoxFiles(1, queryClient)}
-                    >
-                        <PlusIcon size={14} />
-                    </button>
+                    <Tip label={stepper.more}>
+                        <button
+                            type="button"
+                            aria-label={stepper.more}
+                            className={button}
+                            disabled={!can(1)}
+                            onClick={() => stepPlacedBoxFiles(1, queryClient)}
+                        >
+                            <PlusIcon size={14} />
+                        </button>
+                    </Tip>
                 )}
             </div>
         );

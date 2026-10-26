@@ -143,20 +143,23 @@ function MissingButton({
 }) {
     const hint = row.hint ?? { more: null, fewer: null };
     return (
-        <button
-            type="button"
-            disabled
-            title={needsTitle(row.label, hint, n)}
-            data-testid={testId}
-            className="rounded-4 text-text/40 flex flex-col items-center gap-2 p-4"
-        >
-            {row.preview && (
-                <span className="opacity-40">
-                    <Thumbnail version={row.preview.version} />
-                </span>
-            )}
-            <span className="text-xs">{hintText(hint)}</span>
-        </button>
+        <Tip label={needsTitle(row.label, hint, n)}>
+            <button
+                type="button"
+                // aria-disabled, not disabled: a disabled button gets no pointer, so the
+                // tooltip saying why wouldn't show
+                aria-disabled
+                data-testid={testId}
+                className="rounded-4 text-text/40 flex flex-col items-center gap-2 p-4"
+            >
+                {row.preview && (
+                    <span className="opacity-40">
+                        <Thumbnail version={row.preview.version} />
+                    </span>
+                )}
+                <span className="text-xs">{hintText(hint)}</span>
+            </button>
+        </Tip>
     );
 }
 
@@ -278,11 +281,8 @@ export function LayoutMenu(props: PickerProps) {
                                             "bg-fg-2",
                                     )}
                                 >
-                                    <button
-                                        type="button"
-                                        role="menuitem"
-                                        disabled={missing}
-                                        title={
+                                    <Tip
+                                        label={
                                             missing && row.hint
                                                 ? needsTitle(
                                                       row.label,
@@ -291,46 +291,54 @@ export function LayoutMenu(props: PickerProps) {
                                                   )
                                                 : undefined
                                         }
-                                        onPointerEnter={() => {
-                                            if (!missing) setActive(row.family);
-                                        }}
-                                        onClick={() => {
-                                            if (picture && !missing)
-                                                choose(picture);
-                                        }}
-                                        data-testid={`shape-layout-menu-row-${row.family}`}
-                                        className={clsx(
-                                            "flex min-w-40 items-center gap-6 px-4 py-2 text-left",
-                                            missing
-                                                ? "text-text/40"
-                                                : now.layout.family ===
-                                                    row.family
-                                                  ? "text-accent"
-                                                  : "hover:text-accent",
-                                        )}
                                     >
-                                        <span
+                                        <button
+                                            type="button"
+                                            role="menuitem"
+                                            // aria-disabled, not disabled: the tooltip says why
+                                            aria-disabled={missing || undefined}
+                                            onPointerEnter={() => {
+                                                if (!missing)
+                                                    setActive(row.family);
+                                            }}
+                                            onClick={() => {
+                                                if (picture && !missing)
+                                                    choose(picture);
+                                            }}
+                                            data-testid={`shape-layout-menu-row-${row.family}`}
                                             className={clsx(
-                                                "flex w-24 justify-center",
-                                                missing && "opacity-40",
+                                                "flex min-w-40 items-center gap-6 px-4 py-2 text-left",
+                                                missing
+                                                    ? "text-text/40"
+                                                    : now.layout.family ===
+                                                        row.family
+                                                      ? "text-accent"
+                                                      : "hover:text-accent",
                                             )}
                                         >
-                                            {picture && (
-                                                <Thumbnail
-                                                    version={picture}
-                                                    small
-                                                />
-                                            )}
-                                        </span>
-                                        <span className="grow">
-                                            {row.label}
-                                        </span>
-                                        {missing && row.hint && (
-                                            <span className="text-xs">
-                                                {hintText(row.hint)}
+                                            <span
+                                                className={clsx(
+                                                    "flex w-24 justify-center",
+                                                    missing && "opacity-40",
+                                                )}
+                                            >
+                                                {picture && (
+                                                    <Thumbnail
+                                                        version={picture}
+                                                        small
+                                                    />
+                                                )}
                                             </span>
-                                        )}
-                                    </button>
+                                            <span className="grow">
+                                                {row.label}
+                                            </span>
+                                            {missing && row.hint && (
+                                                <span className="text-xs">
+                                                    {hintText(row.hint)}
+                                                </span>
+                                            )}
+                                        </button>
+                                    </Tip>
                                     {!missing && (
                                         <button
                                             type="button"
@@ -390,28 +398,29 @@ function VersionButton({
     caption?: string;
 }) {
     return (
-        <button
-            type="button"
-            aria-label={name}
-            aria-pressed={on}
-            title={`${name}: ${version.tooltip}`}
-            onPointerDown={keepFocus}
-            onClick={onPick}
-            data-testid={testId}
-            className={clsx(
-                "rounded-4 flex flex-col items-center gap-2 border p-4",
-                on
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "hover:bg-fg-2 text-text border-transparent",
-            )}
-        >
-            <Thumbnail version={version} />
-            {caption && (
-                <span className={clsx("text-xs", !on && "text-text/60")}>
-                    {caption}
-                </span>
-            )}
-        </button>
+        <Tip label={`${name}: ${version.tooltip}`}>
+            <button
+                type="button"
+                aria-label={name}
+                aria-pressed={on}
+                onPointerDown={keepFocus}
+                onClick={onPick}
+                data-testid={testId}
+                className={clsx(
+                    "rounded-4 flex flex-col items-center gap-2 border p-4",
+                    on
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "hover:bg-fg-2 text-text border-transparent",
+                )}
+            >
+                <Thumbnail version={version} />
+                {caption && (
+                    <span className={clsx("text-xs", !on && "text-text/60")}>
+                        {caption}
+                    </span>
+                )}
+            </button>
+        </Tip>
     );
 }
 

@@ -1,6 +1,10 @@
 import clsx from "clsx";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { keepFocus } from "./keepFocus";
+import { useActionHandler } from "@/shortcuts/useActionHandler";
+import { getActionShortcutLabel } from "@/shortcuts/labels";
+import type { ActionId } from "@/shortcuts/definitions";
+import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { RichTips, Tip } from "./Tip";
 import {
     FlipHorizontalIcon,
@@ -151,6 +155,20 @@ function ShapeEditorBar({
         const env = envFor(PLAIN);
         if (env) target.apply(change(env));
     };
+    const turnQuarter = () =>
+        apply((env) => quarterTurn(kind, params, spots, env));
+    const flip = (axis: "across" | "deep") =>
+        apply((env) => flipShape(kind, params, spots, axis, pivot, env));
+    // The keys act on this shape while its editor shows (#429): mounted after the app's own
+    // handlers, the flips sit on top of the marchers' flips and go back when it closes
+    useActionHandler("flipHorizontal", () => flip("across"));
+    useActionHandler("flipVertical", () => flip("deep"));
+    useActionHandler("shapeQuarterTurn", turnQuarter);
+    useActionHandler("shapeRecalculate", () => target.recalculate?.(), {
+        enabled: target.recalculate !== null,
+    });
+    const overrides = useShortcutOverridesStore((s) => s.overrides);
+    const keyOf = (id: ActionId) => getActionShortcutLabel(id, { overrides });
     /** A number's drag: the change from the shape at the press, previewed live */
     const scrub = (
         change: (b: unknown, m: ScrubMove, env: ToolEnv) => unknown,
@@ -307,11 +325,8 @@ function ShapeEditorBar({
                         dragged (owner) */}
                     <IconButton
                         label="Turn 90° clockwise"
-                        onClick={() =>
-                            apply((env) =>
-                                quarterTurn(kind, params, spots, env),
-                            )
-                        }
+                        shortcut={keyOf("shapeQuarterTurn")}
+                        onClick={turnQuarter}
                         testId="shape-editor-quarter-turn"
                     >
                         <ArrowClockwiseIcon size={14} />
@@ -350,36 +365,16 @@ function ShapeEditorBar({
                     />
                     <IconButton
                         label="Flip side to side"
-                        onClick={() =>
-                            apply((env) =>
-                                flipShape(
-                                    kind,
-                                    params,
-                                    spots,
-                                    "across",
-                                    pivot,
-                                    env,
-                                ),
-                            )
-                        }
+                        shortcut={keyOf("flipHorizontal")}
+                        onClick={() => flip("across")}
                         testId="shape-editor-flip-across"
                     >
                         <FlipHorizontalIcon size={14} />
                     </IconButton>
                     <IconButton
                         label="Flip front to back"
-                        onClick={() =>
-                            apply((env) =>
-                                flipShape(
-                                    kind,
-                                    params,
-                                    spots,
-                                    "deep",
-                                    pivot,
-                                    env,
-                                ),
-                            )
-                        }
+                        shortcut={keyOf("flipVertical")}
+                        onClick={() => flip("deep")}
                         testId="shape-editor-flip-deep"
                     >
                         <FlipVerticalIcon size={14} />
@@ -393,6 +388,7 @@ function ShapeEditorBar({
                                   : "Who goes where is already least travel"
                         }
                         disabled={!target.recalculate}
+                        shortcut={keyOf("shapeRecalculate")}
                         onClick={() => target.recalculate?.()}
                         testId="shape-editor-recalculate"
                     >
@@ -562,6 +558,7 @@ function PathwaysButton() {
 
 function IconButton({
     label,
+    shortcut,
     onClick,
     disabled,
     pressed,
@@ -569,6 +566,8 @@ function IconButton({
     children,
 }: {
     label: string;
+    /** Its keys, shown in the tooltip as keycaps */
+    shortcut?: string;
     onClick: () => void;
     disabled?: boolean;
     pressed?: boolean;
@@ -576,7 +575,7 @@ function IconButton({
     children: ReactNode;
 }) {
     return (
-        <Tip label={label}>
+        <Tip label={label} shortcut={shortcut}>
             <button
                 type="button"
                 aria-label={label}

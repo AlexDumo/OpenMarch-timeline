@@ -13,6 +13,7 @@ import { SHAPE_TOOLS } from "./shapeTools";
 import { useShapeShown, useShapeToolStore } from "./shapeToolStore";
 import { useStarredShapes } from "./starredShapes";
 import ShapePreviewIcon from "../preview/ShapePreviewIcon";
+import { Tip } from "../editor/Tip";
 
 /** Shapes show as pictures only, so many fit (#378): the name is the tooltip and the label */
 const PREVIEW_SIZE = 26;
@@ -50,35 +51,50 @@ export default function ShapesTab() {
                 {SHAPE_TOOLS.map(({ kind, action }) => {
                     const on = kind === armed;
                     return (
-                        // A disabled button gets no hover, so its reason sits on the wrapper
-                        <span
+                        // A disabled button gets no hover, so the tooltip sits on the wrapper: the
+                        // name and key, or why it can't be picked
+                        <Tip
                             key={kind.shape.id}
-                            title={greyedTitle(kind.shape.label)}
+                            label={
+                                greyedTitle(kind.shape.label) ??
+                                kind.shape.label
+                            }
+                            shortcut={
+                                gate.ok
+                                    ? getActionShortcutLabel(action, {
+                                          overrides,
+                                      })
+                                    : undefined
+                            }
                         >
-                            <ActionButton
-                                action={action}
-                                disabled={!gate.ok}
-                                // The picked kind again closes the tool if nothing is drawn (#411)
-                                onClick={(event) => {
-                                    if (!on) return;
-                                    event.preventDefault();
-                                    clickPickedKind();
-                                }}
-                                aria-pressed={on}
-                                aria-label={kind.shape.label}
-                                data-testid={`shapes-tab-${kind.shape.id}`}
-                                className={clsx(
-                                    "flex items-center",
-                                    on ? "text-accent" : "text-text",
-                                )}
-                            >
-                                <ShapePreviewIcon
-                                    kind={kind}
-                                    size={PREVIEW_SIZE}
-                                    picked={on}
-                                />
-                            </ActionButton>
-                        </span>
+                            <span>
+                                <ActionButton
+                                    action={action}
+                                    // The app tooltip above, not the button's own title
+                                    tooltip=""
+                                    disabled={!gate.ok}
+                                    // The picked kind again closes the tool if nothing is drawn (#411)
+                                    onClick={(event) => {
+                                        if (!on) return;
+                                        event.preventDefault();
+                                        clickPickedKind();
+                                    }}
+                                    aria-pressed={on}
+                                    aria-label={kind.shape.label}
+                                    data-testid={`shapes-tab-${kind.shape.id}`}
+                                    className={clsx(
+                                        "flex items-center",
+                                        on ? "text-accent" : "text-text",
+                                    )}
+                                >
+                                    <ShapePreviewIcon
+                                        kind={kind}
+                                        size={PREVIEW_SIZE}
+                                        picked={on}
+                                    />
+                                </ActionButton>
+                            </span>
+                        </Tip>
                     );
                 })}
                 <span
@@ -89,43 +105,50 @@ export default function ShapesTab() {
                 {starred.map((shape) => {
                     const on = shape.kind === armed;
                     return (
-                        <span key={shape.id} title={greyedTitle(shape.label)}>
-                            <button
-                                type="button"
-                                disabled={!gate.ok}
-                                onClick={() =>
-                                    on
-                                        ? clickPickedKind()
-                                        : pickShapeKind(shape.kind, performers)
-                                }
-                                title={gate.ok ? shape.label : undefined}
-                                aria-label={shape.label}
-                                aria-pressed={on}
-                                className={clsx(
-                                    BUTTON,
-                                    on ? "text-accent" : "text-text",
-                                )}
-                                data-testid={`shapes-tab-starred-${shape.id}`}
-                            >
-                                <ShapePreviewIcon
-                                    kind={shape.kind}
-                                    size={PREVIEW_SIZE}
-                                    picked={on}
-                                />
-                            </button>
-                        </span>
+                        <Tip key={shape.id} label={greyedTitle(shape.label)}>
+                            <span>
+                                <Tip label={gate.ok ? shape.label : undefined}>
+                                    <button
+                                        type="button"
+                                        disabled={!gate.ok}
+                                        onClick={() =>
+                                            on
+                                                ? clickPickedKind()
+                                                : pickShapeKind(
+                                                      shape.kind,
+                                                      performers,
+                                                  )
+                                        }
+                                        aria-label={shape.label}
+                                        aria-pressed={on}
+                                        className={clsx(
+                                            BUTTON,
+                                            on ? "text-accent" : "text-text",
+                                        )}
+                                        data-testid={`shapes-tab-starred-${shape.id}`}
+                                    >
+                                        <ShapePreviewIcon
+                                            kind={shape.kind}
+                                            size={PREVIEW_SIZE}
+                                            picked={on}
+                                        />
+                                    </button>
+                                </Tip>
+                            </span>
+                        </Tip>
                     );
                 })}
-                <button
-                    type="button"
-                    onClick={showShapeLibrary}
-                    title="Open the shape library, to star shapes"
-                    className={clsx(BUTTON, "text-text")}
-                    data-testid="shapes-tab-library"
-                >
-                    <ShapesIcon size={22} />
-                    Library
-                </button>
+                <Tip label="Open the shape library, to star shapes">
+                    <button
+                        type="button"
+                        onClick={showShapeLibrary}
+                        className={clsx(BUTTON, "text-text")}
+                        data-testid="shapes-tab-library"
+                    >
+                        <ShapesIcon size={22} />
+                        Library
+                    </button>
+                </Tip>
             </ToolbarSection>
             {/* The ring has no button, so the tab says how to open it (sims, ring round 1) */}
             {ringKey && (

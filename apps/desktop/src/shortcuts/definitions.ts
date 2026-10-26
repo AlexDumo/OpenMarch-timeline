@@ -693,6 +693,25 @@ const STATIC_ACTIONS = {
         scope: "canvas",
         defaultBindings: ["Enter"],
     },
+    // The floating editor's turn and Recalculate (#429), for the open or selected shape only. While
+    // one is shown, Alt+F and Alt+Shift+F (flipHorizontal/flipVertical) flip the shape instead of
+    // the marchers (shapes/editor/ShapeEditorBar)
+    shapeQuarterTurn: {
+        labelKey: "actions.shape.quarterTurn",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["Alt+R"],
+    },
+    shapeRecalculate: {
+        labelKey: "actions.shape.recalculate",
+        keywordsKey: "actions.shape.keywords",
+        category: "shape",
+        editsDrill: true,
+        scope: "canvas",
+        defaultBindings: ["Shift+R"],
+    },
 
     // Cursor mode
     cancelAlignmentUpdates: {

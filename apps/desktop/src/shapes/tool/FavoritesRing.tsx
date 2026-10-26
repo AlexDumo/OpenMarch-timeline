@@ -24,6 +24,7 @@ import { kindPickGate, pickShapeKind } from "./pickKind";
 import { SHAPE_TOOLS } from "./shapeTools";
 import { useShapeShown } from "./shapeToolStore";
 import { useStarredShapes } from "./starredShapes";
+import { Tip } from "../editor/Tip";
 
 /** The open ring, if any */
 const useRingStore = create<{ ring: RingState | null }>(() => ({
@@ -247,38 +248,39 @@ function RingSlot({
 }) {
     return (
         // aria-disabled, not disabled, so a click on a greyed-out shape still dismisses the ring
-        <button
-            type="button"
-            tabIndex={-1}
-            aria-disabled={disabled}
-            title={title}
-            data-testid={`shape-ring-slot-${slot.id}`}
-            data-hot={hot}
-            data-starred={starred}
-            className={clsx(
-                "border-stroke text-body pointer-events-auto absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-6 rounded-full border px-12 py-6 whitespace-nowrap",
-                hot && !disabled
-                    ? "bg-accent text-text-invert"
-                    : "bg-modal text-text",
-                BUTTON_SHADOW,
-                disabled && "opacity-50",
-            )}
-            style={{
-                left: Math.cos(angle) * RING_RADIUS,
-                top: Math.sin(angle) * RING_RADIUS,
-            }}
-            onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onPick();
-            }}
-        >
-            <ShapePreviewIcon kind={slot.kind} size={20} picked={hot} />
-            {slot.label}
-            {starred && (
-                <StarIcon size={12} weight="fill" aria-label="Starred" />
-            )}
-        </button>
+        <Tip label={title}>
+            <button
+                type="button"
+                tabIndex={-1}
+                aria-disabled={disabled}
+                data-testid={`shape-ring-slot-${slot.id}`}
+                data-hot={hot}
+                data-starred={starred}
+                className={clsx(
+                    "border-stroke text-body pointer-events-auto absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-6 rounded-full border px-12 py-6 whitespace-nowrap",
+                    hot && !disabled
+                        ? "bg-accent text-text-invert"
+                        : "bg-modal text-text",
+                    BUTTON_SHADOW,
+                    disabled && "opacity-50",
+                )}
+                style={{
+                    left: Math.cos(angle) * RING_RADIUS,
+                    top: Math.sin(angle) * RING_RADIUS,
+                }}
+                onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onPick();
+                }}
+            >
+                <ShapePreviewIcon kind={slot.kind} size={20} picked={hot} />
+                {slot.label}
+                {starred && (
+                    <StarIcon size={12} weight="fill" aria-label="Starred" />
+                )}
+            </button>
+        </Tip>
     );
 }
 

@@ -11,7 +11,7 @@ questions:
   - Is ↻ next to the degrees (it adds 90°) clear? Did you try typing or dragging the degrees too?
   - Did Recalculate do what you expected? Was it clear why it was greyed out when it was?
   - Is the editor too wide now? Which button would you give up first?
-  - Did you miss choosing Least travel or Drill order?
+  - Did you use the keys (Alt+R, Alt+F, Shift+R)? Are those the right keys?
 ---
 
 The floating editor under a shape is now **one row**. The **⋯** menu is gone,
@@ -34,6 +34,10 @@ under the editor.
 - At the end, before Place: the **pathways** toggle and **☆ Save**. They
   don't change the shape itself.
 - The **Least travel / Drill order** choice is gone for now.
+
+- **Keys** while a shape is open or selected: **Alt+R** turns it 90°,
+  **Alt+F** and **Alt+Shift+F** flip it, **Shift+R** recalculates. Tooltips
+  show the keys.
 
 **What to try**
 

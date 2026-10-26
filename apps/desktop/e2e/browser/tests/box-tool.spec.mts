@@ -444,6 +444,64 @@ test("change: one row with no ⋯; after a move and a quarter turn, Recalculate 
     await expect(recalculate).toBeEnabled();
 });
 
+test("change: with a shape open, Alt+R turns it 90°, Alt+F and Alt+Shift+F flip it, and Shift+R recalculates who goes where (#429)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await showPathways(show);
+    await drawBox(show);
+    const rotation = page.getByTestId("shape-editor-rotation");
+    const recalculate = page.getByTestId("shape-editor-recalculate");
+    const walks = async () => (await shapeOverlay(page))!.walks;
+    // Nobody is in a text field: the keys go to the shape
+    await page.mouse.move(5, 300);
+
+    await page.keyboard.press("Alt+R");
+    await expect(rotation).toHaveText("90°");
+    await expect.poll(() => readout(page)).toMatch(/^2 × 4 · /);
+
+    const turned = await walks();
+    await page.keyboard.press("Alt+F");
+    // Mirrored side to side: someone's spot moved across, nobody's moved up or down
+    await expect
+        .poll(async () =>
+            (await walks()).some(
+                (w, i) => Math.abs(w.to.x - turned[i].to.x) > 1,
+            ),
+        )
+        .toBe(true);
+    (await walks()).forEach((w, i) =>
+        expect(w.to.y).toBeCloseTo(turned[i].to.y, 3),
+    );
+    const across = await walks();
+    await page.keyboard.press("Alt+Shift+F");
+    await expect
+        .poll(async () =>
+            (await walks()).some(
+                (w, i) => Math.abs(w.to.y - across[i].to.y) > 1,
+            ),
+        )
+        .toBe(true);
+
+    // The flips kept who goes where; Shift+R works it out again, as the button does
+    await expect(recalculate).toBeEnabled();
+    const kept = await walks();
+    await page.keyboard.press("Shift+R");
+    await expect(recalculate).toBeDisabled();
+    expect(
+        (await walks()).some(
+            (w, i) =>
+                Math.hypot(w.to.x - kept[i].to.x, w.to.y - kept[i].to.y) > 1,
+        ),
+    ).toBe(true);
+    // Nobody moved yet: the keys edited the open shape, not the marchers
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+
+    // Its tooltip shows the keys
+    await recalculate.hover();
+    await expect(page.getByRole("tooltip")).toContainText("Shift");
+});
+
 test("change: on a selected placed shape, Recalculate shares its spots out again by least travel from the start flag, as one undo step (#429)", async ({
     show,
 }) => {
@@ -2393,8 +2451,8 @@ test("change: the layout picker lays the box out in the version picked, the reci
     );
     const stagger = page.getByTestId("shape-layout-stagger-0");
     await expect(stagger).toHaveText("3 × 3");
-    await expect(stagger).toHaveAttribute(
-        "title",
+    await stagger.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
         "Stagger 3 × 3: 3 / 2 / 3, front to back",
     );
     await expect(stagger).toHaveAttribute("aria-pressed", "false");
@@ -2759,16 +2817,20 @@ test("the Shapes tab lists the kinds, greyed out until marchers are selected; pi
     await expect(page.getByTestId("shapes-tab-reason")).toHaveText(
         "Select marchers first",
     );
-    await expect(box.locator("..")).toHaveAttribute(
-        "title",
+    await box.locator("..").hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
         "Box: Select marchers first",
     );
+    await page.mouse.move(5, 5);
 
     await selectAll(page);
     await expect(box).toBeEnabled();
     await expect(page.getByTestId("shapes-tab-reason")).toBeHidden();
     await expect(box).toHaveAttribute("aria-pressed", "false");
-    await expect(box).toHaveAttribute("title", /Box.*\bB\b/);
+    await box.hover();
+    await expect(page.getByRole("tooltip")).toContainText("Box");
+    await expect(page.getByRole("tooltip").locator("kbd")).toHaveText("B");
+    await page.mouse.move(5, 5);
 
     // Picking it arms the box: the field draws it on the next drag
     await box.click();
@@ -3323,7 +3385,9 @@ test("change: a box saved with a description reopens from the show's copy with i
     await expect(row).toContainText("this show only");
     const shown = page.getByTestId(`shape-library-description-${copy.id}`);
     await expect(shown).toHaveText(description);
-    await expect(shown).toHaveAttribute("title", description);
+    await shown.hover();
+    await expect(page.getByRole("tooltip")).toContainText(description);
+    await page.mouse.move(5, 5);
 
     // Taken into my library, it keeps the description and dates
     await page.getByTestId(`shape-library-add-${copy.id}`).click();
