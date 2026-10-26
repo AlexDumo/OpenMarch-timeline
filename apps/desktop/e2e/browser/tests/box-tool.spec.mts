@@ -1337,6 +1337,88 @@ test("a selected box's handle stretches it and saves at once, as one undo step",
     await expectCanvasMatchesShow(show);
 });
 
+test("change: a selected placed box is calm with the pointer away, shows its controls over it, during a handle drag and with keyboard focus in its editor, and its editor fades as the open box's does (#430)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const cf = grid.centerFront;
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    const bar = page.getByTestId("placed-box-readout");
+    await expect(bar).toBeVisible();
+    const calm = async () => (await shapeOverlay(page))!.calm;
+    const handleOpacity = () =>
+        page
+            .getByTestId("fieldShapeHandle")
+            .first()
+            .evaluate((el) => getComputedStyle(el).opacity);
+    const boxFill = () =>
+        page
+            .getByTestId("fieldShapeMode")
+            .locator("polygon")
+            .first()
+            .getAttribute("fill");
+    const barOpacity = () =>
+        bar.evaluate((el) => Number(getComputedStyle(el).opacity));
+
+    // Away from the box, on empty field: faint controls, no fill, a faded editor
+    const away = await toScreen(page, { x: cf.x + 20 * S, y: cf.y - 5 * S });
+    await page.mouse.move(away.x, away.y);
+    await expect.poll(calm).toBe(true);
+    await expect.poll(handleOpacity).toBe("0.25");
+    await expect.poll(boxFill).toBe("none");
+    await expect.poll(barOpacity).toBeLessThan(0.6);
+
+    // Over a member inside the box: full strength, a solid editor
+    await page.mouse.move(t1.x, t1.y);
+    await expect.poll(calm).toBe(false);
+    await expect.poll(handleOpacity).toBe("1");
+    await expect.poll(boxFill).not.toBe("none");
+    await expect.poll(barOpacity).toBe(1);
+
+    // Over the editor: the editor is solid, the box stays calm
+    await page.mouse.move(away.x, away.y);
+    await expect.poll(calm).toBe(true);
+    await bar.hover();
+    await expect.poll(barOpacity).toBe(1);
+
+    // A handle drag keeps the controls; the editor stays faded as the open box's does
+    await page.mouse.move(away.x, away.y);
+    await expect.poll(calm).toBe(true);
+    const handles = (await shapeOverlay(page))!.handles;
+    const se = handles.reduce((a, b) => (b.x + b.y > a.x + a.y ? b : a));
+    await drag(
+        page,
+        se,
+        { x: se.x + 60, y: se.y + 30 },
+        {
+            beforeRelease: async () => {
+                await expect.poll(calm).toBe(false);
+                await expect.poll(barOpacity).toBeLessThan(0.6);
+            },
+        },
+    );
+    await waitForIdle(page);
+    await page.mouse.move(away.x, away.y);
+    await expect.poll(calm).toBe(true);
+
+    // Typing a number in its editor shows the controls with the pointer away
+    await bar.getByTestId("shape-editor-across").click();
+    await expect(bar.getByTestId("shape-editor-across-input")).toBeFocused();
+    await page.mouse.move(away.x, away.y);
+    await expect.poll(calm).toBe(false);
+    await expect.poll(barOpacity).toBe(1);
+    await page.keyboard.press("Escape");
+    await expect.poll(calm).toBe(true);
+    await expect.poll(barOpacity).toBeLessThan(0.6);
+});
+
 /** The latest recipe saved: its params and how many members it has */
 async function latestRecipe(show: Show) {
     const [row] = await show.query<{ params: string; members: number }>(

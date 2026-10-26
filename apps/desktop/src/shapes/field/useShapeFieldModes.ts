@@ -18,6 +18,7 @@ import { isAwayFrom } from "../tool/shapeMoment";
 import { forgetDiscardedShape } from "../tool/shapeLeave";
 import { subscribeHistoryChanges } from "@/db-functions/history";
 import { shapeToolMode } from "../tool/shapeToolMode";
+import { resetShapePointer, watchShapeEditorFocus } from "./shapePointer";
 
 /**
  * Puts the shapes on the field's editor (#204): the open Shape tool takes every edit press
@@ -54,9 +55,13 @@ export function useShapeFieldModes(
     }, [live, box]);
 
     useEffect(() => {
+        // The pointer was over the last shape, if any; the next cursor check finds the new one
+        resetShapePointer();
         editor.setMode(toolOpen ? (hidden ? null : shapeToolMode) : live);
     }, [editor, toolOpen, hidden, live]);
     useEffect(() => () => editor.setMode(null), [editor]);
+    // Keyboard focus in the floating editor shows the shape's controls (#430)
+    useEffect(() => watchShapeEditorFocus(), []);
 
     useShapeWaits(isPlaying, toolOpen);
 }
