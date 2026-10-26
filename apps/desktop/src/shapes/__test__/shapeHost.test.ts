@@ -12,10 +12,12 @@ import {
 import { kindPickGate } from "../tool/pickKind";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import {
+    canRecalculate,
     edit,
     openTool,
     pointerMove,
     press,
+    recalculate,
     release,
     slotsOf,
     switchKind,
@@ -352,3 +354,50 @@ describe("picking a kind", () => {
         expect(kindPickGate(true, [])).toEqual({ ok: true });
     });
 });
+
+describe.each(KINDS)(
+    "Recalculate who goes where with %s (#429)",
+    (_name, kind) => {
+        const N = 6;
+        const open = () => drawn(kind, N, { x: 0, y: 0 }, { x: 100, y: 40 });
+        const flipped = (t: ToolState) =>
+            edit(t, flipShape(kind, t.params, N, "across", "c", env()), ctx);
+
+        it("has nothing to change right after drawing: it's least travel already", () => {
+            const t = open();
+            expect(canRecalculate(t, ctx)).toBe(false);
+            expect(recalculate(t, ctx)).toBe(t);
+        });
+
+        it("reassigns by least travel after a flip kept everyone's spot, as one undo step", () => {
+            const t = flipped(open());
+            expect(t.assignment).toEqual(open().assignment);
+            expect(canRecalculate(t, ctx)).toBe(true);
+            const again = recalculate(t, ctx);
+            // The same spots, worked out fresh: what drawing it flipped would give
+            expect(again.params).toBe(t.params);
+            expect(again.assignment).not.toEqual(t.assignment);
+            expect(again.kept).toBe(false);
+            expect(canRecalculate(again, ctx)).toBe(false);
+            const back = undo(again);
+            expect(back.assignment).toEqual(t.assignment);
+            expect(back.kept).toBe(true);
+        });
+
+        it("measures from where the marchers come from (the start flag)", () => {
+            // Everyone starts the move mirrored: the leftmost comes from the right
+            let t = openTool(
+                kind,
+                marchers(N).map((m, i) => ({
+                    ...m,
+                    from: { x: 335 - i * 7, y: 300 },
+                })),
+            );
+            t = press(t, { x: 0, y: 0 }, env());
+            t = pointerMove(t, { x: 100, y: 40 }, env());
+            t = release(t, ctx);
+            expect(canRecalculate(t, ctx)).toBe(false);
+            expect(canRecalculate(flipped(t), ctx)).toBe(true);
+        });
+    },
+);

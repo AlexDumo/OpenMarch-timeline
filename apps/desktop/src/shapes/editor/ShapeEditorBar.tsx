@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { keepFocus } from "./keepFocus";
 import {
-    DotsThreeIcon,
+    ArrowArcRightIcon,
     FlipHorizontalIcon,
     FlipVerticalIcon,
     LinkSimpleBreakIcon,
@@ -11,6 +11,7 @@ import {
     PlusIcon,
     ArrowClockwiseIcon,
     PathIcon,
+    UserSwitchIcon,
 } from "@phosphor-icons/react";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { DEGREE, rotationDegrees } from "../frame/frame";
@@ -65,12 +66,13 @@ const GAP_PX = 14;
  * For an open shape it fades with the pointer away from both the shape and itself, so what's
  * under it shows, and it is solid while the pointer is over either, with focus inside it or a
  * menu of its open (`ShapeEditorSurface.css`). Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
- * For a box: `− 6 × 2 + ↻ │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`, and in Spread `↔ 2 steps Reshuffle
- * │ ⋯ │ Place`. Every number can be typed or dragged,
- * and follows the field: across is side to side however the box is turned. ⋯ opens a second row:
- * the rotation (typed or dragged), flips, who goes where, Close up (a placed shape with holes,
- * #392) and ☆ Save. ↻ beside the numbers turns
- * the shape a quarter (owner lab feedback, 2026-10-23: few people open ⋯). Under the numbers, a
+ * One row, no ⋯ (#429; owner: keep it compact), for a box:
+ * `− 6 × 2 + ↻90 │ ↔ 2 ↕ 2 steps 🔗 │ ⤻ 0° ⇋ ⇵ Recalculate ☆ │ Place`, and in Spread
+ * `↔ 2 steps Reshuffle │ …`. Every number can be typed or dragged, and follows the field: across
+ * is side to side however the box is turned. ↻90 turns the shape a quarter; ⤻ is the free turn,
+ * typed or dragged. Recalculate works out who goes where again by least travel, which moving and
+ * turning keep until it's pressed; Close up shows for a placed shape with holes (#392). Under the
+ * numbers, a
  * box in Files has its layout menu (#387). Place shows only for a new shape; a selected placed
  * shape saves each edit on release. While the open shape waits out of sight (#416) the editor
  * hides, and away from its moment a chip goes back to it.
@@ -133,7 +135,6 @@ function ShapeEditorBar({
     const overShape = useShapePointerOver();
     // The shape's own pivot (#350), the same in Basic and Expert (spec #344)
     const pivot = pivotOf(params);
-    const [more, setMore] = useState(false);
     const place = usePlacement(kind, params, spots);
     // The shape at the press of a number's drag
     const base = useRef<unknown>(params);
@@ -255,6 +256,7 @@ function ShapeEditorBar({
                         testId="shape-editor-quarter-turn"
                     >
                         <ArrowClockwiseIcon size={14} />
+                        <span className="text-[10px] leading-none">90</span>
                     </IconButton>
                     {target.empty > 0 && (
                         <span className="text-text/60">
@@ -315,72 +317,47 @@ function ShapeEditorBar({
                 )}
                 {target.place && <PathwaysButton />}
                 <Divider />
-                <IconButton
-                    label="More: turn, flip, who goes where"
-                    pressed={more}
-                    onClick={() => setMore((m) => !m)}
-                    testId="shape-editor-more"
-                >
-                    <DotsThreeIcon size={16} weight="bold" />
-                </IconButton>
-                {target.place && (
-                    <>
-                        <Divider />
-                        <button
-                            type="button"
-                            className="bg-accent text-text-invert rounded-4 px-8 py-2 font-medium hover:opacity-90"
-                            onPointerDown={keepFocus}
-                            onClick={target.place}
-                            data-testid="shape-editor-place"
-                        >
-                            Place
-                        </button>
-                    </>
-                )}
-            </div>
-            <LayoutMenu target={target} envFor={() => envFor(PLAIN)} />
-            {more && (
-                <div
-                    className="flex items-center gap-6"
-                    data-testid="shape-editor-more-row"
-                >
-                    <span className="flex items-center gap-2">
-                        <span className="text-text/60">Turn</span>
-                        <ScrubNumber
-                            display={`${degrees}°`}
-                            editText={String(degrees)}
-                            axis="x"
-                            label="Rotation, in degrees clockwise"
-                            testId="shape-editor-rotation"
-                            {...scrub((b, m, env) =>
-                                scrubTurn(
+                <span className="flex items-center gap-2">
+                    <span
+                        className="text-text/60 flex items-center"
+                        title="Turn"
+                        aria-hidden
+                    >
+                        <ArrowArcRightIcon size={14} />
+                    </span>
+                    <ScrubNumber
+                        display={`${degrees}°`}
+                        editText={String(degrees)}
+                        axis="x"
+                        label="Turn, in degrees clockwise"
+                        testId="shape-editor-rotation"
+                        {...scrub((b, m, env) =>
+                            scrubTurn(
+                                kind,
+                                b,
+                                spots,
+                                scrubDistance("x", m.dx, m.dy),
+                                pivot,
+                                env,
+                            ),
+                        )}
+                        onType={(text) => {
+                            const typed = parseDegrees(text);
+                            if (typed === null) return false;
+                            apply((env) =>
+                                turnShape(
                                     kind,
-                                    b,
+                                    params,
                                     spots,
-                                    scrubDistance("x", m.dx, m.dy),
+                                    typed * DEGREE,
                                     pivot,
                                     env,
                                 ),
-                            )}
-                            onType={(text) => {
-                                const typed = parseDegrees(text);
-                                if (typed === null) return false;
-                                apply((env) =>
-                                    turnShape(
-                                        kind,
-                                        params,
-                                        spots,
-                                        typed * DEGREE,
-                                        pivot,
-                                        env,
-                                    ),
-                                );
-                                return true;
-                            }}
-                        />
-                    </span>
-                    <Divider />
-                    <TextButton
+                            );
+                            return true;
+                        }}
+                    />
+                    <IconButton
                         label="Flip side to side"
                         onClick={() =>
                             apply((env) =>
@@ -397,9 +374,8 @@ function ShapeEditorBar({
                         testId="shape-editor-flip-across"
                     >
                         <FlipHorizontalIcon size={14} />
-                        <GlyphText text="Flip ↔" />
-                    </TextButton>
-                    <TextButton
+                    </IconButton>
+                    <IconButton
                         label="Flip front to back"
                         onClick={() =>
                             apply((env) =>
@@ -416,49 +392,51 @@ function ShapeEditorBar({
                         testId="shape-editor-flip-deep"
                     >
                         <FlipVerticalIcon size={14} />
-                        <GlyphText text="Flip ↕" />
-                    </TextButton>
-                    <Divider />
-                    <span className="text-text/60">Who goes where</span>
-                    <span className="flex flex-col gap-1">
-                        <Segmented
-                            value={target.kept ? null : target.order}
-                            options={[
-                                { value: "nearest", label: "Least travel" },
-                                { value: "drill", label: "Drill order" },
-                            ]}
-                            onChange={target.setOrder}
-                            testId="shape-editor-order"
-                        />
-                        {target.kept && (
-                            <span
-                                className="text-text/60 text-xs"
-                                data-testid="shape-editor-order-kept"
-                            >
-                                Everyone kept their spot through your turn or
-                                flip · pick one to work it out again
-                            </span>
-                        )}
-                    </span>
-                    {target.closeUp && (
-                        <>
-                            <Divider />
-                            <CloseUpButton
-                                target={target}
-                                className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
-                                testId="shape-editor-close-up"
-                            />
-                        </>
-                    )}
-                    <Divider />
+                    </IconButton>
+                    <IconButton
+                        label={
+                            target.recalculate
+                                ? "Recalculate who goes where: least travel from where everyone comes from"
+                                : target.empty > 0
+                                  ? "Recalculate who goes where: close up the empty spots first"
+                                  : "Who goes where is already least travel"
+                        }
+                        disabled={!target.recalculate}
+                        onClick={() => target.recalculate?.()}
+                        testId="shape-editor-recalculate"
+                    >
+                        <UserSwitchIcon size={14} />
+                    </IconButton>
+                    <CloseUpButton
+                        target={target}
+                        compact
+                        className="rounded-4 hover:text-accent p-2"
+                        testId="shape-editor-close-up"
+                    />
                     <SaveShapeButton
                         shape={{ kind, params, spots }}
                         stepPx={stepPx}
-                        className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
+                        compact
+                        className="rounded-4 hover:text-accent p-2"
                         testId="shape-editor-save"
                     />
-                </div>
-            )}
+                </span>
+                {target.place && (
+                    <>
+                        <Divider />
+                        <button
+                            type="button"
+                            className="bg-accent text-text-invert rounded-4 px-8 py-2 font-medium hover:opacity-90"
+                            onPointerDown={keepFocus}
+                            onClick={target.place}
+                            data-testid="shape-editor-place"
+                        >
+                            Place
+                        </button>
+                    </>
+                )}
+            </div>
+            <LayoutMenu target={target} envFor={() => envFor(PLAIN)} />
         </div>
     );
 }
@@ -486,7 +464,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     const top = fieldToElement(view, (b.left + b.right) / 2, b.top);
     // The outline's spots have a radius and the handles stick out: clear them
     const pad = GAP_PX + 6;
-    // Its own size (the ⋯ row opens) and the field's, as they change
+    // Its own size (the Save form opens) and the field's, as they change
     useLayoutEffect(() => {
         const el = ref.current;
         const field = el?.offsetParent;
@@ -541,33 +519,6 @@ function boundsOf(points: readonly { x: number; y: number }[]) {
         top: Math.min(...ys),
         bottom: Math.max(...ys),
     };
-}
-
-/** A button in the ⋯ row: an icon and a word, so nobody has to guess (sims, F1) */
-function TextButton({
-    label,
-    onClick,
-    testId,
-    children,
-}: {
-    label: string;
-    onClick: () => void;
-    testId?: string;
-    children: ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            title={label}
-            aria-label={label}
-            onPointerDown={keepFocus}
-            onClick={onClick}
-            data-testid={testId}
-            className="rounded-4 hover:text-accent hover:bg-fg-2 flex items-center gap-4 px-4 py-2"
-        >
-            {children}
-        </button>
-    );
 }
 
 function Divider() {
@@ -637,45 +588,5 @@ function IconButton({
         >
             {children}
         </button>
-    );
-}
-
-function Segmented<V extends string>({
-    value,
-    options,
-    onChange,
-    testId,
-}: {
-    /** Null when none is chosen */
-    value: V | null;
-    options: readonly { value: V; label: string }[];
-    onChange: (value: V) => void;
-    testId?: string;
-}) {
-    return (
-        <span
-            className="rounded-4 border-stroke flex border"
-            role="radiogroup"
-            data-testid={testId}
-        >
-            {options.map((o) => (
-                <button
-                    key={o.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={o.value === value}
-                    onPointerDown={keepFocus}
-                    onClick={() => onChange(o.value)}
-                    className={clsx(
-                        "px-6 py-1",
-                        o.value === value
-                            ? "bg-accent text-text-invert"
-                            : "hover:text-accent",
-                    )}
-                >
-                    {o.label}
-                </button>
-            ))}
-        </span>
     );
 }

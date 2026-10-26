@@ -6,35 +6,40 @@ import { keepFocus } from "./keepFocus";
 
 /**
  * Close up (#392, spec #385): a placed shape with holes laid out again for the members it has
- * left, in its mode and settings, by least travel. In the floating editor's ⋯ row and the
+ * left, in its mode and settings, by least travel. In the floating editor (an icon) and the
  * inspector; shown only while the shape has holes. One change (one undo step).
  */
 export function CloseUpButton({
     target,
     className,
+    compact = false,
     testId,
 }: {
     target: Pick<ShapeEditTarget, "closeUp" | "empty">;
     className?: string;
+    /** The icon alone, its words in the tooltip (the floating editor, #429) */
+    compact?: boolean;
     testId: string;
 }) {
     const { closeUp } = target;
     if (!closeUp) return null;
+    const title = tolgee.t(
+        "shapes.edit.closeUp.title",
+        "Close up: fill the {count, plural, one {# empty spot} other {# empty spots}} with the marchers left",
+        { count: target.empty },
+    );
     return (
         <button
             type="button"
-            title={tolgee.t(
-                "shapes.edit.closeUp.title",
-                "Close up: fill the {count, plural, one {# empty spot} other {# empty spots}} with the marchers left",
-                { count: target.empty },
-            )}
+            title={title}
+            aria-label={compact ? title : undefined}
             onPointerDown={keepFocus}
             onClick={closeUp}
             data-testid={testId}
             className={clsx("flex items-center gap-4", className)}
         >
             <ArrowsInIcon size={14} />
-            {tolgee.t("shapes.edit.closeUp.label", "Close up")}
+            {!compact && tolgee.t("shapes.edit.closeUp.label", "Close up")}
         </button>
     );
 }

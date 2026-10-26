@@ -8,7 +8,7 @@ import { saveShape, type SavableShape } from "./saveShape";
 import { suggestedName } from "./savedShapes";
 
 /**
- * ☆ Save (#353, spec #344 story 26–27): in the chip's ⋯ row and at the bottom of the inspector's
+ * ☆ Save (#353, spec #344 story 26–27): in the floating editor (an icon, #429) and at the bottom of the inspector's
  * shape section. It asks for a name in place, offering the kind, its spacing and how it's filled,
  * and an optional description (#393), then keeps the shape's kind, intervals and distribution in
  * the user's library and the show, starred.
@@ -17,12 +17,15 @@ export function SaveShapeButton({
     shape,
     stepPx,
     className,
+    compact = false,
     testId = "save-shape",
 }: {
     shape: SavableShape;
     stepPx: number;
     /** The button's look where it sits */
     className?: string;
+    /** The star alone, its words in the tooltip (the floating editor, #429) */
+    compact?: boolean;
     testId?: string;
 }) {
     const queryClient = useQueryClient();
@@ -34,7 +37,11 @@ export function SaveShapeButton({
         return (
             <button
                 type="button"
-                title="Save this shape to your library, starred"
+                title={
+                    saved && compact
+                        ? `Saved as ${saved}`
+                        : "Save this shape to your library, starred"
+                }
                 aria-label="Save this shape to your library"
                 onPointerDown={keepFocus}
                 onClick={() => {
@@ -52,8 +59,8 @@ export function SaveShapeButton({
                 className={clsx("flex items-center gap-4", className)}
                 data-testid={testId}
             >
-                <StarIcon size={14} />
-                {saved ? `Saved as ${saved}` : "Save"}
+                <StarIcon size={14} weight={saved ? "fill" : "regular"} />
+                {!compact && (saved ? `Saved as ${saved}` : "Save")}
             </button>
         );
 

@@ -8,6 +8,7 @@ import {
     moveLive,
     openLive,
     pressLive,
+    recalculatedTargets,
     releaseLive,
 } from "../placed/liveBox";
 import { withoutMembers, type PlacedBox } from "../placed/placedBox";
@@ -135,5 +136,40 @@ describe("a selected placed box", () => {
         expect(new Set(out.members.map((m) => m.slot))).toEqual(
             new Set([0, 1, 2]),
         );
+    });
+});
+
+describe("Recalculate who goes where on a placed shape (#429)", () => {
+    const own = (box: PlacedBox) =>
+        new Map(
+            box.recipe.members.map((m) => [m.marcherId, { x: m.x, y: m.y }]),
+        );
+
+    it("has nothing to change when everyone's spot is least travel from where they come from", () => {
+        const box = placed();
+        expect(recalculatedTargets(box, ctx, own(box))).toBeNull();
+    });
+
+    it("reassigns the spots by least travel from where the members come from", () => {
+        const box = placed();
+        // Everyone comes from the spot mirrored side to side
+        const mirrored = new Map(
+            box.recipe.members.map((m) => [
+                m.marcherId,
+                { x: 20 - m.x, y: m.y },
+            ]),
+        );
+        const next = recalculatedTargets(box, ctx, mirrored)!;
+        expect(next).not.toBeNull();
+        for (const m of next) {
+            const from = mirrored.get(m.marcherId)!;
+            expect({ x: m.x, y: m.y }).toEqual(from);
+        }
+    });
+
+    it("leaves a shape with holes to Close up", () => {
+        const box = placed();
+        const holed = { ...box, recipe: withoutMembers(box.recipe, [1]) };
+        expect(recalculatedTargets(holed, ctx, new Map())).toBeNull();
     });
 });

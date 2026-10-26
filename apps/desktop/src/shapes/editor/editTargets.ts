@@ -7,19 +7,25 @@ import {
     useBoxSelectionStore,
     usePlacedBoxPreviewStore,
 } from "../placed/boxSelectionStore";
+import { originsAtStart } from "../field/previewContext";
 import { commitBox } from "../placed/commitBox";
-import { keptOf, orderOf } from "../placed/liveBox";
-import { canCloseUp, closedUpParams } from "../placed/placedBox";
+import { recalculatedTargets } from "../placed/liveBox";
+import {
+    canCloseUp,
+    closedUpParams,
+    type PlacedBox,
+} from "../placed/placedBox";
+import { useTimelineSelectionStore } from "@/stores/TimelineSelectionStore";
 import { toolEnvFor } from "../tool/toolEnv";
 import { useDrawnOnPage } from "../placed/placedBoxText";
 import {
     beginEdit,
     cancelGesture,
     edit,
+    canRecalculate,
     previewEdit,
+    recalculate,
     release,
-    setOrder,
-    type ToolOrder,
 } from "../tool/toolMachine";
 import {
     updateTool,
@@ -42,9 +48,6 @@ export interface ShapeEditTarget {
     readonly spots: number;
     /** Spots no member stands on any more (a placed shape's holes) */
     readonly empty: number;
-    readonly order: ToolOrder;
-    /** Who goes where was kept through a turn or flip: neither order is lit */
-    readonly kept: boolean;
     /** Place, for a new shape; absent for a placed one */
     readonly place?: () => void;
     /** "Page 3", when a placed shape was drawn on an earlier page than the one shown */
@@ -55,7 +58,12 @@ export interface ShapeEditTarget {
     end(keep: boolean): void;
     /** One change at once: a typed number, a button */
     apply(params: unknown): void;
-    setOrder(order: ToolOrder): void;
+    /**
+     * Recalculate who goes where (#429): the marchers on the shape's spots by least travel from
+     * where they come from, as one change. Null when that changes nothing, so the button is
+     * disabled; moving and turning keep who goes where until it's pressed.
+     */
+    readonly recalculate: (() => void) | null;
     /**
      * Close up (#392): a placed closed shape with holes laid out again for its members, as one
      * change. Absent for a new shape, and for a placed one with no holes or an open kind.
@@ -83,8 +91,6 @@ export function useToolEditTarget(): ShapeEditTarget | null {
             params: tool.params,
             spots: tool.spots,
             empty: 0,
-            order: tool.order,
-            kept: tool.kept,
             place: () => void place(),
             drawnOn: null,
             begin: () => updateTool(beginEdit),
@@ -95,8 +101,10 @@ export function useToolEditTarget(): ShapeEditTarget | null {
                     : updateTool(cancelGesture),
             apply: (params) =>
                 withField((ctx) => updateTool((t) => edit(t, params, ctx))),
-            setOrder: (order) =>
-                withField((ctx) => updateTool((t) => setOrder(t, order, ctx))),
+            recalculate: toolCanRecalculate(tool)
+                ? () =>
+                      withField((ctx) => updateTool((t) => recalculate(t, ctx)))
+                : null,
         };
     }, [tool, away, place]);
 }
@@ -109,6 +117,14 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
     const box = useBoxSelectionStore((s) => s.selected);
     const queryClient = useQueryClient();
     const drawnOn = useDrawnOnPage(box);
+    // Where the members come from moves with the start flag
+    const startFlag = useTimelineSelectionStore((s) =>
+        s.isolation
+            ? s.isolation.start
+            : s.selection.kind === "range"
+              ? s.selection.start
+              : null,
+    );
     return useMemo(() => {
         if (!box) return null;
         const save = (params: unknown) =>
@@ -121,8 +137,6 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
             params: box.params,
             spots: box.spots,
             empty: box.spots - box.recipe.members.length,
-            order: orderOf(box),
-            kept: keptOf(box),
             drawnOn,
             begin: () => previewPlacedBox(box.params),
             preview: (params) =>
@@ -136,8 +150,18 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
                 if (params !== box.params)
                     void save(carryPivot(box.params, params));
             },
-            setOrder: (order) =>
-                void commitBox(box, box.params, queryClient, order),
+            // With no start flag (at home) there's nowhere else to come from
+            recalculate:
+                startFlag !== null && placedCanRecalculate(box)
+                    ? () =>
+                          void commitBox(
+                              box,
+                              box.params,
+                              queryClient,
+                              "nearest",
+                              originsOf(box),
+                          )
+                    : null,
             ...(canCloseUp(box) && {
                 closeUp: () => {
                     const field = currentShapeField();
@@ -153,5 +177,26 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
                 },
             }),
         };
-    }, [box, queryClient, drawnOn]);
+    }, [box, queryClient, drawnOn, startFlag]);
 }
+
+/** Not worked out during a drag: it's a full least-travel solve */
+const toolCanRecalculate = (tool: Parameters<typeof canRecalculate>[0]) => {
+    const field = currentShapeField();
+    return (
+        !tool.gesture && !!field && canRecalculate(tool, shapeContextFor(field))
+    );
+};
+
+/** Where a placed shape's members come from: the start flag */
+const originsOf = (box: PlacedBox) =>
+    originsAtStart(box.recipe.members.map((m) => m.marcherId));
+
+const placedCanRecalculate = (box: PlacedBox) => {
+    const field = currentShapeField();
+    return (
+        !!field &&
+        recalculatedTargets(box, shapeContextFor(field), originsOf(box)) !==
+            null
+    );
+};

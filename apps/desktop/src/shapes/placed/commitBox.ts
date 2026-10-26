@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { OrderMode } from "../assign";
+import type { XY } from "../types";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
 import { writePlacement } from "../tool/shapePlacement";
 import { liveTargets, newLayout } from "./liveBox";
@@ -34,8 +35,10 @@ export async function commitBox(
     box: PlacedBox,
     params: unknown,
     queryClient: QueryClient,
-    /** Lay the members out again in this order (the editor's Least travel / Drill order) */
+    /** Lay the members out again in this order (Recalculate, Close up) */
     order?: OrderMode,
+    /** Where members come from when laid out again (Recalculate: the start flag) */
+    origins?: ReadonlyMap<number, XY>,
 ): Promise<void> {
     const field = currentShapeField();
     if (!field) return;
@@ -44,6 +47,7 @@ export async function commitBox(
         params,
         shapeContextFor(field),
         order,
+        origins,
     );
     await writePlacement(
         {

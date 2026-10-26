@@ -135,6 +135,8 @@ export function liveTargets(
     ctx: ShapeContext,
     /** Lay the members out again in this order, even with the same count across */
     layOutAgain?: OrderMode,
+    /** Where members come from, when laying out again: their spots in the shape otherwise */
+    origins?: ReadonlyMap<number, XY>,
 ): {
     members: { marcherId: number; slot: number; x: number; y: number }[];
     spots: number;
@@ -165,6 +167,9 @@ export function liveTargets(
         marchers: members.map((m, i) => ({
             id: m.marcherId,
             at: { x: m.x, y: m.y },
+            ...(origins?.has(m.marcherId) && {
+                from: origins.get(m.marcherId)!,
+            }),
             drillRank: i,
         })),
         mode: layOutAgain ?? orderOf(box),
@@ -180,6 +185,23 @@ export function liveTargets(
 }
 
 const xyOf = (p: XY): XY => ({ x: p.x, y: p.y });
+
+/**
+ * Recalculate who goes where (#429): the members on the shape's own spots by least travel from
+ * `origins` (where each comes from: the start flag), or null when that changes nothing. A shape
+ * with holes has Close up instead, which lays it out again by least travel.
+ */
+export function recalculatedTargets(
+    box: PlacedBox,
+    ctx: ShapeContext,
+    origins: ReadonlyMap<number, XY>,
+): { marcherId: number; slot: number; x: number; y: number }[] | null {
+    const members = box.recipe.members;
+    if (members.length !== box.spots) return null;
+    const next = liveTargets(box, box.params, ctx, "nearest", origins).members;
+    const slotOf = new Map(members.map((m) => [m.marcherId, m.slot]));
+    return next.some((m) => m.slot !== slotOf.get(m.marcherId)) ? next : null;
+}
 
 /**
  * Whether `slots` are the box's own spots moved (each keeps its row and file, or its place round

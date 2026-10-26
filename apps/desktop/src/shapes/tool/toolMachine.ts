@@ -320,6 +320,26 @@ export function setOrder(
     return reassign(pushHistory({ ...state, order }, snapshot(state)), ctx);
 }
 
+/**
+ * Recalculate who goes where (#429): the shape's marchers on its spots by least travel from where
+ * they come from, as one undo step. Moving, turning and flipping keep the assignment (the
+ * default); this is the one button that works it out again. Unchanged when it's already that.
+ */
+export function recalculate(state: ToolState, ctx: ShapeContext): ToolState {
+    if (state.gesture || !canRecalculate(state, ctx)) return state;
+    return reassign(
+        pushHistory({ ...state, order: "nearest" }, snapshot(state)),
+        ctx,
+    );
+}
+
+/** Whether {@link recalculate} would change who goes where */
+export function canRecalculate(state: ToolState, ctx: ShapeContext): boolean {
+    if (state.params === null || !state.assignment) return false;
+    const fresh = reassign({ ...state, order: "nearest" }, ctx).assignment;
+    return !!fresh && fresh.some((slot, i) => slot !== state.assignment![i]);
+}
+
 export function undo(state: ToolState): ToolState {
     const previous = state.past.at(-1);
     if (state.gesture || !previous) return state;
