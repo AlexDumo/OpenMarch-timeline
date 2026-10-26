@@ -165,6 +165,7 @@ const drawingOf = memoDrawing(({ tool, hover, over, walks }: Shown) => {
             n,
             spots,
             tool.gesture,
+            tool.pointer,
             env,
             field,
         ),

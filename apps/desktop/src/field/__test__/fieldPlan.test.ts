@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FieldProperties, stepMeters } from "@openmarch/core";
 import FieldPropertiesTemplates from "@/global/classes/FieldProperties.templates";
 import {
+    fieldLineName,
     fieldReferenceLines,
     planField2d,
     planFieldImage,
@@ -196,5 +197,25 @@ describe("fieldReferenceLines (#425)", () => {
             }),
         );
         expect(steps(base, none.x, "x")).not.toContain(4);
+    });
+});
+
+describe("fieldLineName (#427)", () => {
+    const x = (steps: number) =>
+        base.centerFrontPoint.xPixels + steps * base.pixelsPerStep;
+    const y = (steps: number) =>
+        base.centerFrontPoint.yPixels + steps * base.pixelsPerStep;
+
+    it("names a checkpoint line by its checkpoint", () => {
+        expect(fieldLineName(base, "x", x(0))).toBe("50 yard line");
+        expect(fieldLineName(base, "x", x(-24))).toBe("35 yard line");
+        expect(fieldLineName(base, "y", y(-28))).toBe("HS front hash");
+        expect(fieldLineName(base, "y", y(0))).toBe("front sideline");
+    });
+
+    it("calls a half line a half line, and anything else nothing", () => {
+        const custom = new FieldProperties({ ...base, halfLineXInterval: 4 });
+        expect(fieldLineName(custom, "x", x(4))).toBe("half line");
+        expect(fieldLineName(base, "x", x(3))).toBeNull();
     });
 });

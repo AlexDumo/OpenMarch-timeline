@@ -1578,7 +1578,8 @@ test("change: stretching a box's side near a yard line lands its edge on the lin
         .sort((a, b) => a.y - b.y)[1]!;
     const target = await toScreen(page, { x: yardLine, y: grid.centerFront.y });
 
-    let guides: { from: Point; to: Point }[] = [];
+    let guides: { from: Point; to: Point; label: string | null }[] = [];
+    let guideNote: string | null = null;
     let onGuides: Point[] = [];
     let guideEdges: { from: Point; to: Point }[] = [];
     await drag(
@@ -1591,6 +1592,7 @@ test("change: stretching a box's side near a yard line lands its edge on the lin
                     () => window.fieldTest!.shapeOverlay!()!,
                 );
                 guides = during.guides;
+                guideNote = during.guideNote;
                 onGuides = during.onGuides;
                 guideEdges = during.guideEdges;
             },
@@ -1605,6 +1607,9 @@ test("change: stretching a box's side near a yard line lands its edge on the lin
         ),
     ).toBe(true);
     expect(onGuides.length).toBeGreaterThan(0);
+    // Named for its checkpoint, also as a note by the pointer (#427)
+    expect(guides.map((g) => g.label)).toContain("45 yd line");
+    expect(guideNote).toBe("on 45 yd line");
     // The box's own side on the line is drawn thicker (owner on #427)
     expect(
         guideEdges.some(

@@ -5,11 +5,22 @@ id: edge-pull
 title: Line a box up with yard lines and hashes
 summary: While you stretch or draw a box, an edge that comes close to a yard line, a hash or a sideline lands on it, and the spacing becomes whatever that takes (2⅔, 1⅗, 7). Away from the lines, spacing still steps by half steps.
 status: open
-variants: []
+# Three ways to show the snap, switched with Version (bottom left). The first is the default.
+variants:
+  - id: canvas-labels
+    label: Line + name
+    description: A solid pink line across the whole screen, with the line's name ("50 yd line", "HS front hash") at the screen's edge.
+  - id: pointer-name
+    label: Name by pointer
+    description: A solid pink line over the field, with the line's name in the readout next to the pointer.
+  - id: canvas
+    label: Line only
+    description: A solid pink line across the whole screen, with no name.
 questions:
   - Did the box's edge catch the yard line or hash when you wanted it to? Did you have to hunt for it?
   - Did it ever grab a line when you only wanted a half step? Where?
-  - When an edge is on a line it turns thick and pink, with a dashed guide and the marchers on it tinted. Can you tell at a glance when it has snapped?
+  - Try each Version. Which one told you most clearly that the edge snapped, and onto which line? Which would you keep for everyday use?
+  - Did a name at the screen's edge, or in the readout by the pointer, ever get in your way or get missed?
   - Did any spacing it gave you surprise you?
 ---
 
@@ -21,9 +32,13 @@ over 10 yards are **2⅔** apart, 11 files are **1⅗**.
 
 - **Stretching a box:** drag one of its side or corner handles toward a yard
   line, a hash or a sideline. When the edge gets within a few pixels, it lands
-  on the line. The box's edge turns **thick and pink**, a pink dashed guide
+  on the line. The box's edge turns **thick and pink**, a solid pink line
   runs along the line and the marchers on it turn pink. The other side of the
   box doesn't move.
+- **Three versions of the line** (switch with **Version**, bottom left):
+  - **Line + name:** across the whole screen, named at the screen's edge.
+  - **Name by pointer:** over the field, named in the readout by the pointer.
+  - **Line only:** across the whole screen, no name.
 - **Drawing a box:** the corner you drag toward a line catches it the same
   way. The corner you pressed stays put.
 - Away from lines, spacing **steps by half steps**, as before.

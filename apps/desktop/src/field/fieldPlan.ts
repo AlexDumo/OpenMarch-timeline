@@ -192,6 +192,26 @@ export function fieldReferenceLines(fp: FieldProperties): {
     return { x: once(x), y: once(y) };
 }
 
+/**
+ * What a line from {@link fieldReferenceLines} is called, for a guide's label (#427): its
+ * checkpoint's name ("35 yard line", "HS front hash"), "half line", or null for none
+ */
+export function fieldLineName(
+    fp: FieldProperties,
+    axis: "x" | "y",
+    at: number,
+): string | null {
+    const near = (v: number) => Math.abs(v - at) < 1e-3;
+    const checkpoint = (axis === "x" ? fp.xCheckpoints : fp.yCheckpoints).find(
+        (c) =>
+            c.useAsReference &&
+            near(axis === "x" ? checkpointX(fp, c) : checkpointY(fp, c)),
+    );
+    if (checkpoint) return checkpoint.name;
+    const lines = fieldReferenceLines(fp);
+    return (axis === "x" ? lines.x : lines.y).some(near) ? "half line" : null;
+}
+
 /** Where a field image goes, fit or fill */
 export const fieldImagePlacement = (
     fieldProperties: Pick<

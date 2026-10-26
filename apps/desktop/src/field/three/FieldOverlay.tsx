@@ -17,6 +17,7 @@ import {
 import { dotSizes, SELECTION_COLOR } from "./selectionRing";
 import { DOT_RADIUS } from "@/field/editor/hitTest";
 import { resolveMarcherLook } from "@/entity-components/appearance";
+import { useLabVariant } from "@/lab/labVariant";
 
 /** The selection border width, in CSS px. */
 const BOX_WIDTH = 2;
@@ -60,6 +61,41 @@ const GUIDE_COLOR = "#ec4899";
 const GUIDE_DASH = "4 3";
 /** A shape's side while it's on a guide's line: 2½ times the outline, so a snap is plain to see (owner on #427) */
 const GUIDE_EDGE_WIDTH = 2.5 * SHAPE_OUTLINE_WIDTH;
+/**
+ * How a snap guide looks (#427). The lab tries three versions against today's dashed guide over
+ * the field: `canvas-labels`, a solid line across the whole canvas with the checkpoint's name at
+ * the canvas edge (the owner's idea); `canvas`, the same without the name; `pointer-name`, a
+ * solid line over the field with the names in the readout by the pointer.
+ */
+interface GuideLook {
+    readonly span: "field" | "canvas";
+    readonly width: number;
+    readonly dash?: string;
+    readonly labels: boolean;
+    readonly note: boolean;
+}
+const guideLook = (variant: string | null): GuideLook => {
+    switch (variant) {
+        case "canvas-labels":
+            return { span: "canvas", width: 1.5, labels: true, note: false };
+        case "canvas":
+            return { span: "canvas", width: 1.5, labels: false, note: false };
+        case "pointer-name":
+            return { span: "field", width: 1.5, labels: false, note: true };
+        default:
+            return {
+                span: "field",
+                width: 1,
+                dash: GUIDE_DASH,
+                labels: false,
+                note: false,
+            };
+    }
+};
+/** A guide's name tag at the canvas edge, in CSS px */
+const GUIDE_LABEL_PX = 12;
+const GUIDE_LABEL_HEIGHT = 20;
+const GUIDE_LABEL_INSET = 6;
 /** How strong an open shape's controls are while the pointer is away from it (#403) */
 const CALM_CONTROLS_OPACITY = 0.25;
 /** Spot labels and the pointer tip, in CSS px. */
@@ -358,6 +394,56 @@ function StartMarks({
     );
 }
 
+/**
+ * A guide's name at the canvas edge (#427): at the top for a line side to side, at the left for
+ * one front to back, kept inside the canvas
+ */
+function GuideLabel({
+    text,
+    at,
+    upright,
+    width,
+    height,
+}: {
+    text: string;
+    at: { x: number; y: number };
+    upright: boolean;
+    width: number;
+    height: number;
+}) {
+    // About the width of the text in DM Sans at this size, with room either side
+    const w = text.length * GUIDE_LABEL_PX * 0.55 + 16;
+    const h = GUIDE_LABEL_HEIGHT;
+    const clamp = (v: number, max: number) =>
+        Math.max(GUIDE_LABEL_INSET, Math.min(max - GUIDE_LABEL_INSET, v));
+    const x = upright ? clamp(at.x - w / 2, width - w) : GUIDE_LABEL_INSET;
+    const y = upright ? GUIDE_LABEL_INSET : clamp(at.y - h / 2, height - h);
+    return (
+        <g data-testid="fieldShapeGuideLabel">
+            <rect
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                rx={h / 2}
+                fill={GUIDE_COLOR}
+            />
+            <text
+                x={x + w / 2}
+                y={y + h / 2}
+                fontSize={GUIDE_LABEL_PX}
+                fontWeight={600}
+                fontFamily="DM Sans, sans-serif"
+                fill="white"
+                textAnchor="middle"
+                dominantBaseline="central"
+            >
+                {text}
+            </text>
+        </g>
+    );
+}
+
 function ModeDrawing({
     drawing,
     theme,
@@ -368,6 +454,7 @@ function ModeDrawing({
     marchers: FieldMarchers;
 }) {
     const view = useFieldViewStore();
+    const variant = useLabVariant();
     const shape = rgbaToString(theme.shape);
     const walk = rgbaToString({ ...theme.shape, a: 0.4 });
     const fill = rgbaToString({ ...theme.shape, a: 0.06 });
@@ -377,6 +464,17 @@ function ModeDrawing({
     const half = SHAPE_HANDLE_SIZE / 2;
     const open = drawing.stage === "open";
     const dots = drawing.stage === "drawing";
+    const look = guideLook(variant);
+    // The pointer-name version adds the guides' names to the readout by the pointer (#427)
+    const note = look.note ? drawing.guideNote : undefined;
+    const tip = drawing.tip
+        ? {
+              ...drawing.tip,
+              text: note
+                  ? `${drawing.tip.text} · ${note.text}`
+                  : drawing.tip.text,
+          }
+        : note;
     // The controls fade while the pointer is away from the shape (#403), and come back over it
     const controls = {
         opacity: drawing.calm ? CALM_CONTROLS_OPACITY : 1,
@@ -437,21 +535,40 @@ function ModeDrawing({
                     />
                 );
             })}
-            {drawing.guides?.map(({ from, to }, i) => {
-                const a = at(from);
-                const b = at(to);
+            {drawing.guides?.map(({ from, to, label }, i) => {
+                let a = at(from);
+                let b = at(to);
+                const upright = Math.abs(a.x - b.x) < 1e-6;
+                if (look.span === "canvas") {
+                    // Across the whole canvas, at any zoom
+                    a = upright ? { x: a.x, y: 0 } : { x: 0, y: a.y };
+                    b = upright
+                        ? { x: a.x, y: view.height }
+                        : { x: view.width, y: a.y };
+                }
+                const tag =
+                    look.labels && label ? (
+                        <GuideLabel
+                            text={label}
+                            at={a}
+                            upright={upright}
+                            width={view.width}
+                            height={view.height}
+                        />
+                    ) : null;
                 return (
-                    <line
-                        key={i}
-                        x1={a.x}
-                        y1={a.y}
-                        x2={b.x}
-                        y2={b.y}
-                        stroke={GUIDE_COLOR}
-                        strokeWidth={1}
-                        strokeDasharray={GUIDE_DASH}
-                        data-testid="fieldShapeGuide"
-                    />
+                    <g key={i} data-testid="fieldShapeGuide">
+                        <line
+                            x1={a.x}
+                            y1={a.y}
+                            x2={b.x}
+                            y2={b.y}
+                            stroke={GUIDE_COLOR}
+                            strokeWidth={look.width}
+                            strokeDasharray={look.dash}
+                        />
+                        {tag}
+                    </g>
                 );
             })}
             {drawing.guideEdges?.map(({ from, to }, i) => {
@@ -637,9 +754,9 @@ function ModeDrawing({
                         </g>
                     );
                 })()}
-            {drawing.tip &&
+            {tip &&
                 (() => {
-                    const p = at(drawing.tip.at);
+                    const p = at(tip.at);
                     return (
                         <text
                             x={p.x + TIP_OFFSET_PX}
@@ -653,7 +770,7 @@ function ModeDrawing({
                             dominantBaseline="hanging"
                             data-testid="fieldShapeTip"
                         >
-                            {textPresentation(drawing.tip.text)}
+                            {textPresentation(tip.text)}
                         </text>
                     );
                 })()}

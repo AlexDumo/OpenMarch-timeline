@@ -24,8 +24,13 @@ describe("edgeGuides", () => {
     it("draws a guide across the field along each line an edge is on, and tints its spots", () => {
         const { guides, edges, on } = edgeGuides(outline, spots, lines, field);
         expect(guides).toEqual([
-            { from: { x: 80, y: 0 }, to: { x: 80, y: 200 } },
-            { from: { x: 160, y: 0 }, to: { x: 160, y: 200 } },
+            { axis: "x", at: 80, from: { x: 80, y: 0 }, to: { x: 80, y: 200 } },
+            {
+                axis: "x",
+                at: 160,
+                from: { x: 160, y: 0 },
+                to: { x: 160, y: 200 },
+            },
         ]);
         expect(edges).toEqual([
             { from: { x: 160, y: -40 }, to: { x: 160, y: -10 } },
@@ -61,7 +66,12 @@ describe("edgeGuides", () => {
             { x: 10, y: -60 },
         ];
         expect(edgeGuides(back, [], lines, field).guides).toEqual([
-            { from: { x: 0, y: -100 }, to: { x: 300, y: -100 } },
+            {
+                axis: "y",
+                at: -100,
+                from: { x: 0, y: -100 },
+                to: { x: 300, y: -100 },
+            },
         ]);
     });
 });

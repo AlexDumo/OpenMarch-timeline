@@ -180,10 +180,12 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
         tip: drawing.tip?.text ?? null,
         gliding: drawing.gliding === true,
         calm: drawing.calm === true,
-        guides: (drawing.guides ?? []).map(({ from, to }) => ({
+        guides: (drawing.guides ?? []).map(({ from, to, label }) => ({
             from: copy(from),
             to: copy(to),
+            label: label ?? null,
         })),
+        guideNote: drawing.guideNote?.text ?? null,
         guideEdges: (drawing.guideEdges ?? []).map(({ from, to }) => ({
             from: copy(from),
             to: copy(to),

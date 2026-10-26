@@ -257,7 +257,14 @@ export type FieldModeDrawing = {
      * While a stretch or a draw has the shape's edge on one of the field's lines (#425): a dashed
      * guide along each such line, across the field
      */
-    guides?: readonly { from: FieldPoint; to: FieldPoint }[];
+    guides?: readonly {
+        from: FieldPoint;
+        to: FieldPoint;
+        /** The checkpoint it's on: "50 yd line", "HS front hash" (#427) */
+        label?: string;
+    }[];
+    /** The guides' names by the pointer: "on 50 yd line, HS front hash" (#427) */
+    guideNote?: { at: FieldPoint; text: string };
     /** The shape's sides that lie on a guide's line, drawn thicker in the guide's color */
     guideEdges?: readonly { from: FieldPoint; to: FieldPoint }[];
     /** The spots standing on a guide, tinted */

@@ -201,7 +201,13 @@ export type FieldTestShapeOverlay = {
     /** The controls are faint: the pointer is away from the shape (#403). */
     calm: boolean;
     /** Dashed guides along the field's lines the shape's edges are on, field units (#425). */
-    guides: { from: { x: number; y: number }; to: { x: number; y: number } }[];
+    guides: {
+        from: { x: number; y: number };
+        to: { x: number; y: number };
+        label: string | null;
+    }[];
+    /** The guides' names by the pointer ("on 50 yd line"), or null (#427). */
+    guideNote: string | null;
     /** The shape's sides on a guide's line, drawn thicker, field units (#425). */
     guideEdges: {
         from: { x: number; y: number };

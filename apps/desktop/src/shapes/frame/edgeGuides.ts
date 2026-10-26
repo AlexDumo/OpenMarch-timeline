@@ -1,6 +1,14 @@
 import type { FieldLines } from "../tool/toolKind";
 import type { XY } from "../types";
 
+/** A guide along one of the field's lines: x for a line side to side, at that x */
+export interface EdgeGuide {
+    readonly axis: "x" | "y";
+    readonly at: number;
+    readonly from: XY;
+    readonly to: XY;
+}
+
 /** How near a field line an edge must be to be on it, in field units */
 const ON_LINE = 1e-3;
 
@@ -14,7 +22,7 @@ export function edgeGuides(
     spots: readonly XY[],
     lines: FieldLines | undefined,
     field: { readonly width: number; readonly height: number },
-): { guides: { from: XY; to: XY }[]; edges: { from: XY; to: XY }[]; on: XY[] } {
+): { guides: EdgeGuide[]; edges: { from: XY; to: XY }[]; on: XY[] } {
     if (!outline || !lines || outline.length < 2)
         return { guides: [], edges: [], on: [] };
     const near = (v: number, line: number) => Math.abs(v - line) < ON_LINE;
@@ -39,10 +47,14 @@ export function edgeGuides(
     const byValue = (a: number, b: number) => a - b;
     const guides = [
         ...[...xs].sort(byValue).map((x) => ({
+            axis: "x" as const,
+            at: x,
             from: { x, y: 0 },
             to: { x, y: field.height },
         })),
         ...[...ys].sort(byValue).map((y) => ({
+            axis: "y" as const,
+            at: y,
             from: { x: 0, y },
             to: { x: field.width, y },
         })),

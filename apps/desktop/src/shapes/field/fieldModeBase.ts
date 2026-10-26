@@ -12,6 +12,7 @@ import {
     type ShapeTarget,
 } from "../frame/gestures";
 import { edgeGuides } from "../frame/edgeGuides";
+import { fieldLineName } from "@/field/fieldPlan";
 import { rotationDegrees } from "../frame/frame";
 import { lengthReadout } from "../frame/scale";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
@@ -122,7 +123,9 @@ export function frameDrawing(
 
 /**
  * While a draw or a handle drag has the shape's edges on the field's lines (#425): a dashed
- * guide along each, and its spots tinted. Nothing during any other gesture, or with none.
+ * guide along each, named for its checkpoint (#427), the shape's sides on it drawn thicker, its
+ * spots tinted, and the names as a note by the pointer. Nothing during any other gesture, or with
+ * none.
  */
 export function guideDrawing(
     kind: AnyToolKind,
@@ -130,18 +133,35 @@ export function guideDrawing(
     n: number,
     spots: readonly XY[],
     gesture: { readonly type: string } | null | undefined,
+    pointer: XY | null | undefined,
     env: ToolEnv,
     field: ShapeField,
-): Pick<FieldModeDrawing, "guides" | "guideEdges" | "onGuides"> {
+): Pick<FieldModeDrawing, "guides" | "guideEdges" | "onGuides" | "guideNote"> {
     if (gesture?.type !== "draw" && gesture?.type !== "handle") return {};
-    const { width, height } = field.fieldProperties;
+    const { fieldProperties } = field;
+    const { width, height } = fieldProperties;
     const { guides, edges, on } = edgeGuides(
         shapeOutline(kind, params, n),
         spots,
         env.fieldLines,
         { width, height },
     );
-    return guides.length > 0 ? { guides, guideEdges: edges, onGuides: on } : {};
+    if (guides.length === 0) return {};
+    const named = guides.map((g) => {
+        const name = fieldLineName(fieldProperties, g.axis, g.at);
+        // "35 yd line", as drill writers write it (owner, #427)
+        const label = name?.replace(/ yard line$/, " yd line");
+        return { from: g.from, to: g.to, ...(label ? { label } : {}) };
+    });
+    const labels = named.flatMap((g) => (g.label ? [g.label] : []));
+    return {
+        guides: named,
+        guideEdges: edges,
+        onGuides: on,
+        ...(pointer && labels.length > 0
+            ? { guideNote: { at: pointer, text: `on ${labels.join(", ")}` } }
+            : {}),
+    };
 }
 
 /**

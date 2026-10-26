@@ -82,6 +82,7 @@ const drawingOf = memoDrawing(({ live: saved, preview }: Shown) => {
             n,
             targets,
             live.gesture,
+            live.pointer,
             env,
             field,
         ),
