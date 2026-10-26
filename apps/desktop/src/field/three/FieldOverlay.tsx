@@ -494,7 +494,7 @@ function ModeDrawing({
                     />
                 );
             })}
-            {drawing.guides?.map(({ from, to, label }, i) => {
+            {drawing.guides?.map(({ from, to }, i) => {
                 const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
                 // Across the whole canvas, at any zoom
                 const p = at(from);
@@ -520,15 +520,6 @@ function ModeDrawing({
                             stroke={GUIDE_INK}
                             strokeWidth={GUIDE_WIDTH}
                         />
-                        {label && (
-                            <GuideLabel
-                                text={label}
-                                at={a}
-                                upright={upright}
-                                width={view.width}
-                                height={view.height}
-                            />
-                        )}
                     </g>
                 );
             })}
@@ -735,6 +726,23 @@ function ModeDrawing({
                         </text>
                     );
                 })()}
+            {/* The guides' names last, over every line, edge and spot, so nothing crosses
+                their text (owner on #427) */}
+            {drawing.guides?.map(({ from, to, label }, i) => {
+                if (!label) return null;
+                const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
+                const p = at(from);
+                return (
+                    <GuideLabel
+                        key={i}
+                        text={label}
+                        at={upright ? { x: p.x, y: 0 } : { x: 0, y: p.y }}
+                        upright={upright}
+                        width={view.width}
+                        height={view.height}
+                    />
+                );
+            })}
         </g>
     );
 }

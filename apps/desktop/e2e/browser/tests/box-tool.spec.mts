@@ -1559,6 +1559,35 @@ test("change: a typed 1 2/3 stays exactly 1⅔ steps and shows as 1⅔, − and 
     expect(Math.abs(saved.deep - 8 / 3)).toBeLessThan(1e-9);
 });
 
+/**
+ * The snap guides' names on screen, and whether each is on top at its center (#427): the overlay
+ * ignores the pointer, so hit-testing is turned on for it while this asks
+ */
+const guideNamesOnTop = (page: Page) =>
+    page.evaluate(() => {
+        const style = document.createElement("style");
+        style.textContent =
+            '[data-testid="fieldOverlay"], [data-testid="fieldOverlay"] * { pointer-events: auto !important; }';
+        document.head.append(style);
+        const out = [
+            ...document.querySelectorAll(
+                '[data-testid="fieldShapeGuideLabel"]',
+            ),
+        ].map((label) => {
+            const r = label.getBoundingClientRect();
+            const top = document.elementFromPoint(
+                r.x + r.width / 2,
+                r.y + r.height / 2,
+            );
+            return {
+                text: label.textContent ?? "",
+                onTop: top !== null && label.contains(top),
+            };
+        });
+        style.remove();
+        return out;
+    });
+
 test("change: stretching a box's side near a yard line lands its edge on the line, the spacing exactly what that takes, with a guide while dragging (#425)", async ({
     show,
 }) => {
@@ -1625,6 +1654,28 @@ test("change: stretching a box's side near a yard line lands its edge on the lin
     expect(Math.abs(Math.min(...afterXs) - left)).toBeLessThan(CLOSE);
     expect(Math.abs(Math.max(...afterXs) - yardLine)).toBeLessThan(CLOSE);
     expect(after.guides).toEqual([]);
+
+    // Dragging the back edge onto the front hash: both guides are named, and nothing is drawn
+    // over either name (owner on #427)
+    const frontHash = grid.centerFront.y - 28 * S;
+    const minY = Math.min(...after.handles.map((h) => h.y));
+    const north = after.handles
+        .filter((h) => Math.abs(h.y - minY) < 1)
+        .sort((a, b) => a.x - b.x)[1]!;
+    const hash = await toScreen(page, { x: yardLine, y: frontHash });
+    let names: { text: string; onTop: boolean }[] = [];
+    await drag(
+        page,
+        north,
+        { x: north.x, y: hash.y },
+        {
+            beforeRelease: async () => {
+                names = await guideNamesOnTop(page);
+            },
+        },
+    );
+    expect(names.map((n) => n.text).sort()).toEqual(["On FH", "S2: On 45"]);
+    for (const name of names) expect(name.onTop, name.text).toBe(true);
 });
 
 test("change: clicking the picked kind in the Shapes tab closes the tool while nothing is drawn, and does nothing once a box is", async ({
