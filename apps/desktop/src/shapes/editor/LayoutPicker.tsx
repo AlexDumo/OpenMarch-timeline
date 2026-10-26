@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import clsx from "clsx";
 import { Tip } from "./Tip";
 import * as Popover from "@radix-ui/react-popover";
@@ -20,6 +20,7 @@ import { useLastLayoutStore } from "../tool/lastLayout";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 import { keepFocus } from "./keepFocus";
+import { arrowFocus, useMenuFocus } from "./menuFocus";
 
 /**
  * The box's layout menu (#387, spec #385; owner lab feedback, 2026-10-23), on the floating
@@ -85,8 +86,12 @@ export function LayoutMenu(props: PickerProps) {
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState<LayoutFamily | null>(null);
     // Closed by a press (a layout picked, a click away): focus isn't handed back to the button,
-    // or the floating editor would stay solid with the pointer away (#426). Escape still hands it.
-    const pressed = useRef(false);
+    // or the floating editor would stay solid with the pointer away (#426). Opened by keyboard,
+    // focus goes to the shape's layout, the arrows move up and down the list, and Escape or a
+    // pick hands focus back (review)
+    const focus = useMenuFocus((el) =>
+        el.querySelector<HTMLElement>('[role="menuitem"][data-current]'),
+    );
     const now = layoutOf(target.kind, target.params, target.spots);
     const rows = target.kind.closed?.layouts?.catalogue(target.spots) ?? [];
     if (now === null || rows.length === 0) return null;
@@ -113,7 +118,6 @@ export function LayoutMenu(props: PickerProps) {
             onOpenChange={(next) => {
                 setOpen(next);
                 if (!next) setActive(null);
-                else pressed.current = false;
             }}
         >
             <span
@@ -125,7 +129,7 @@ export function LayoutMenu(props: PickerProps) {
                         <button
                             type="button"
                             aria-label={`Layout: ${LAYOUT_LABELS[now.layout.family]}`}
-                            onPointerDown={keepFocus}
+                            {...focus.trigger}
                             data-testid="shape-layout-menu"
                             className="rounded-4 hover:bg-fg-2 flex items-center gap-4 px-4 py-2"
                         >
@@ -162,21 +166,22 @@ export function LayoutMenu(props: PickerProps) {
                     side="bottom"
                     align="start"
                     sideOffset={6}
-                    onOpenAutoFocus={(e) => e.preventDefault()}
-                    onCloseAutoFocus={(e) => {
-                        if (pressed.current) e.preventDefault();
-                    }}
-                    onPointerDownOutside={() => {
-                        pressed.current = true;
-                    }}
-                    onPointerDownCapture={() => {
-                        pressed.current = true;
-                    }}
+                    {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex gap-8 border p-6"
                     data-testid="shape-layout-menu-content"
                 >
-                    <div className="flex flex-col gap-1" role="menu">
+                    <div
+                        className="flex flex-col gap-1"
+                        role="menu"
+                        onKeyDown={(e) =>
+                            arrowFocus(e, [
+                                ...e.currentTarget.querySelectorAll<HTMLElement>(
+                                    '[role="menuitem"]:not([aria-disabled])',
+                                ),
+                            ])
+                        }
+                    >
                         {rows.map((row) => {
                             const missing = row.versions.length === 0;
                             const picture = missing
@@ -208,7 +213,16 @@ export function LayoutMenu(props: PickerProps) {
                                             role="menuitem"
                                             // aria-disabled, not disabled: the tooltip says why
                                             aria-disabled={missing || undefined}
+                                            data-current={
+                                                now.layout.family ===
+                                                    row.family || undefined
+                                            }
                                             onPointerEnter={() => {
+                                                if (!missing)
+                                                    setActive(row.family);
+                                            }}
+                                            // The versions follow the keyboard as the pointer
+                                            onFocus={() => {
                                                 if (!missing)
                                                     setActive(row.family);
                                             }}

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import clsx from "clsx";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon } from "@phosphor-icons/react";
@@ -10,6 +10,7 @@ import {
 } from "../frame/frame";
 import { keepFocus } from "./keepFocus";
 import { Tip } from "./Tip";
+import { arrowFocus, useMenuFocus } from "./menuFocus";
 
 export const PIVOT_NAMES: Record<PivotKey, string> = {
     nw: "back left",
@@ -37,10 +38,24 @@ export function PivotGrid({
     onPick: (key: PivotKey) => void;
     testId?: string;
 }) {
+    // One stop for Tab, on the pivot picked (the center for one dragged on the field); the arrows
+    // move between the nine, Enter or Space picks (review)
+    const stop = isPivotKey(pivot) ? pivot : "c";
     return (
         <div
             role="radiogroup"
             aria-label="Pivot"
+            onKeyDown={(e) =>
+                arrowFocus(
+                    e,
+                    [
+                        ...e.currentTarget.querySelectorAll<HTMLElement>(
+                            '[role="radio"]',
+                        ),
+                    ],
+                    3,
+                )
+            }
             className="rounded-4 border-stroke grid shrink-0 grid-cols-3 gap-2 border p-4"
             data-testid={testId}
         >
@@ -53,6 +68,7 @@ export function PivotGrid({
                         type="button"
                         role="radio"
                         aria-checked={key === pivot}
+                        tabIndex={key === stop ? 0 : -1}
                         aria-label={`Pivot: ${PIVOT_NAMES[key]}`}
                         onPointerDown={keepFocus}
                         onClick={() => onPick(key)}
@@ -109,26 +125,21 @@ export function PivotMenu({
     testId: string;
 }) {
     const [open, setOpen] = useState(false);
-    // Closed by a press (a pivot picked, a click away): focus isn't handed back to the button, or
-    // the floating editor would stay solid with the pointer away (#426), as the layout menu does
-    const pressed = useRef(false);
+    // Opened by keyboard, focus goes to the pivot picked now (review)
+    const focus = useMenuFocus((el) =>
+        el.querySelector<HTMLElement>('[role="radio"][tabindex="0"]'),
+    );
     const label = isPivotKey(pivot)
         ? `Pivot: ${PIVOT_NAMES[pivot]}`
         : "Pivot: where it was dragged on the field";
     return (
-        <Popover.Root
-            open={open}
-            onOpenChange={(next) => {
-                setOpen(next);
-                if (next) pressed.current = false;
-            }}
-        >
+        <Popover.Root open={open} onOpenChange={setOpen}>
             <Tip label={label}>
                 <Popover.Trigger asChild>
                     <button
                         type="button"
                         aria-label={label}
-                        onPointerDown={keepFocus}
+                        {...focus.trigger}
                         data-testid={testId}
                         data-pivot={isPivotKey(pivot) ? pivot : "custom"}
                         className="rounded-4 hover:text-accent flex min-h-24 items-center justify-center gap-2 p-4"
@@ -143,16 +154,7 @@ export function PivotMenu({
                     side="bottom"
                     align="center"
                     sideOffset={6}
-                    onOpenAutoFocus={(e) => e.preventDefault()}
-                    onCloseAutoFocus={(e) => {
-                        if (pressed.current) e.preventDefault();
-                    }}
-                    onPointerDownOutside={() => {
-                        pressed.current = true;
-                    }}
-                    onPointerDownCapture={() => {
-                        pressed.current = true;
-                    }}
+                    {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal z-50 border p-4"
                 >

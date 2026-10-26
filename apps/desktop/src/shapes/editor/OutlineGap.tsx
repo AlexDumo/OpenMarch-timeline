@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon } from "@phosphor-icons/react";
 import { SegmentedTextSwitch } from "@openmarch/ui";
@@ -12,7 +12,7 @@ import { gapAsSeen } from "../distribute/outline";
 import { outlineGapOf, withOddGap } from "../distribute/outlineGap";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
-import { keepFocus } from "./keepFocus";
+import { useMenuFocus } from "./menuFocus";
 import { Tip } from "./Tip";
 
 const SIDE_LABELS: Readonly<Record<GapSide, string>> = {
@@ -49,9 +49,13 @@ export function OutlineGap({
 }) {
     const { kind, params, spots } = target;
     const [open, setOpen] = useState(false);
-    // Closed by a press (a click away): focus isn't handed back to the button, or the floating
-    // editor would stay solid with the pointer away (#426), as the layout menu does
-    const pressed = useRef(false);
+    // Opened by keyboard, focus goes to the side picked now; the arrows move along each switch
+    // (Radix toggle groups) and Tab to the next (review)
+    const focus = useMenuFocus((el) =>
+        el.querySelector<HTMLElement>(
+            '[data-testid="outline-gap-side"] [data-state="on"]',
+        ),
+    );
     const now = outlineGapOf(kind, params, spots);
     if (!now) return null;
     const { gap, stored, sides } = now;
@@ -65,18 +69,12 @@ export function OutlineGap({
     };
     const title = `${tolgee.t("shapes.edit.gap.menu", "Leftover")}: ${sideLabel(seen.side)}`;
     return (
-        <Popover.Root
-            open={open}
-            onOpenChange={(next) => {
-                setOpen(next);
-                if (next) pressed.current = false;
-            }}
-        >
+        <Popover.Root open={open} onOpenChange={setOpen}>
             <Tip label={`${title}, ${styleLabel(gap.style).toLowerCase()}`}>
                 <Popover.Trigger asChild>
                     <button
                         type="button"
-                        onPointerDown={keepFocus}
+                        {...focus.trigger}
                         data-testid="outline-gap-menu"
                         className="rounded-4 hover:bg-fg-2 flex min-h-24 items-center gap-4 px-4 py-2"
                     >
@@ -90,13 +88,7 @@ export function OutlineGap({
                     side="bottom"
                     align="start"
                     sideOffset={6}
-                    onOpenAutoFocus={(e) => e.preventDefault()}
-                    onCloseAutoFocus={(e) => {
-                        if (pressed.current) e.preventDefault();
-                    }}
-                    onPointerDownOutside={() => {
-                        pressed.current = true;
-                    }}
+                    {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 border p-8"
                 >

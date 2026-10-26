@@ -2279,6 +2279,67 @@ test("change: the editor's second row holds the mode switch left of the layout m
     );
 });
 
+test("change: from the keyboard, Tab reaches the pivot button, Enter opens the grid on the pivot, an arrow and Enter pick another, and the shape stays open (#435)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    const pivotButton = editor.getByTestId("shape-editor-pivot");
+    await editor.getByTestId("shape-editor-rotation").focus();
+    await page.keyboard.press("Tab");
+    await expect(pivotButton).toBeFocused();
+    await page.keyboard.press("Enter");
+    const grid = page.getByTestId("shape-editor-pivot-grid");
+    await expect(grid.getByTestId("shape-editor-pivot-grid-c")).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(grid.getByTestId("shape-editor-pivot-grid-w")).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(grid.getByTestId("shape-editor-pivot-grid-nw")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(grid).toBeHidden();
+    await expect(pivotButton).toHaveAttribute("data-pivot", "nw");
+    await expect(pivotButton).toBeFocused();
+    // Enter picked the pivot: it didn't place the shape
+    await expect(editor).toBeVisible();
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+});
+
+test("change: from the keyboard, Tab reaches the layout menu, Enter opens it on the box's layout, and an arrow and Enter pick another (#435)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.evaluate(() =>
+        localStorage.removeItem("openmarch:shapeLastLayout"),
+    );
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    const layout = editor.getByTestId("shape-layout-menu");
+    await expect(layout).toHaveText(/Short back/);
+    await page.getByTestId("shape-mode-files").focus();
+    await page.keyboard.press("Tab");
+    await expect(layout).toBeFocused();
+    await page.keyboard.press("Enter");
+    const menu = page.getByTestId("shape-layout-menu-content");
+    await expect(
+        menu.getByTestId("shape-layout-menu-row-shortBack"),
+    ).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(
+        menu.getByTestId("shape-layout-menu-row-rounded"),
+    ).toBeFocused();
+    // The versions follow the keyboard
+    await expect(
+        menu.getByTestId("shape-layout-menu-version-rounded-0"),
+    ).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(menu).toBeHidden();
+    await expect(layout).toHaveText(/Rounded/);
+    await expect(layout).toBeFocused();
+    await expect(editor).toBeVisible();
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+});
+
 // Outline (#390): spots round the edge at the interval with one on every
 // corner, in the space the box took up. An odd count takes one spot out of a
 // side: by default the back spreads evenly; "Leaves a gap" shows the gap as a
@@ -2368,6 +2429,35 @@ async function outlineOnSeven(show: Show) {
     );
     return { open, gap: gap!, back, isCorner, steps };
 }
+
+test("change: from the keyboard, Tab reaches the Leftover menu, Enter opens it on the gap's side, an arrow and Enter pick another, and Escape hands focus back (#435)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await outlineOnSeven(show);
+    const menuButton = page.getByTestId("outline-gap-menu");
+    // outlineOnSeven left the menu open from a click
+    await menuButton.click();
+    await expect(page.getByTestId("outline-gap-side")).toHaveCount(0);
+    await page.getByTestId("shape-mode-outline").focus();
+    await page.keyboard.press("Tab");
+    await expect(menuButton).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("outline-gap-back")).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("outline-gap-front")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("outline-gap-front")).toHaveAttribute(
+        "data-state",
+        "on",
+    );
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("outline-gap-side")).toHaveCount(0);
+    await expect(menuButton).toBeFocused();
+    await expect(menuButton).toHaveText(/Front/);
+    // Escape closed the menu, not the shape
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+});
 
 test("change: Outline on 7 spreads the back by default, leaves its middle out on request, a click on a spot between corners moves the gap, and the placed box keeps it", async ({
     show,
