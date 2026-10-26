@@ -5,7 +5,6 @@ import { RichTips, Tip } from "./Tip";
 import {
     FlipHorizontalIcon,
     FlipVerticalIcon,
-    LinkSimpleBreakIcon,
     LinkSimpleIcon,
     MinusIcon,
     PlusIcon,
@@ -285,11 +284,9 @@ function ShapeEditorBar({
                                     onClick={toggleRatioLock}
                                     testId="shape-editor-ratio-lock"
                                 >
-                                    {ratioLocked ? (
-                                        <LinkSimpleIcon size={14} />
-                                    ) : (
-                                        <LinkSimpleBreakIcon size={14} />
-                                    )}
+                                    {/* One chain either way, lit in the accent when locked: a broken
+                                        link didn't read as anything (owner) */}
+                                    <LinkSimpleIcon size={14} />
                                 </IconButton>
                             )}
                         </span>
