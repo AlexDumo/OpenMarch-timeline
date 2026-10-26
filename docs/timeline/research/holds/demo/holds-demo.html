@@ -261,6 +261,56 @@ function removeKeyframe(m, b, keepLater) {
   return true;
 }
 
+/** R4 today: a group's split halves; removing for part of the group leaves stand-still-then-rush. */
+function splitGroupAt(b) {
+  for (const m of marchers) {
+    const r = rowInside(m, b);
+    if (!r) continue;
+    const p = pos(m, b);
+    m.rows = m.rows.filter((x) => x !== r);
+    m.rows.push({ start: r.start, end: b, dest: p, group: r.group ? r.group + "a" : null }, { start: b, end: r.end, dest: r.dest, group: r.group ? r.group + "b" : null });
+  }
+  say(`Split the group's move at count ${b}: everyone in it now has two halves.`);
+}
+/** R4 lead: pull the selected marcher out of both halves, then join (others keep their split). */
+function pullOutAndJoin(m, b) {
+  const r = rowEnding(m, b), next = rowStarting(m, b);
+  if (!r || !next) return false;
+  next.start = r.start; next.group = null; next.own = true;
+  m.rows = m.rows.filter((x) => x !== r);
+  say(`<b>${m.name}: pulled out of the group's move and joined</b>: its own move, counts ${next.start}–${next.end}, even speed. The rest of the group keeps its split.`);
+  return true;
+}
+/** R6: only this page (#158) before editing an earlier page: writes the current spot as an ordinary move. */
+function onlyThisPage(m, b) {
+  const box = pageOfFlag(b);
+  if (!box || m.rows.some((r) => r.start < box.end && r.end > box.start)) return false;
+  m.rows.push({ start: box.start, end: box.end, dest: pos(m, box.end) });
+  say(`${m.name}: ${box.name} unlinked (only this page): it keeps its current spot as an ordinary move with a keyframe. Nothing marks it as a "keep".`);
+  return true;
+}
+/** R7: clip drag of the move ending at b, earlier by n counts. */
+function shiftMoveEarlier(m, b, n) {
+  const r = rowEnding(m, b);
+  if (!r || r.start - n < 0) return false;
+  r.start -= n; r.end -= n;
+  say(`${m.name}: its move now runs ${r.start}–${r.end} (clip dragged ${n} counts earlier).`);
+  return true;
+}
+/** R8: hold over the window [s, b); lead removes moves inside it, alternative refuses. */
+function holdOverWindow(m, s, b, refuse) {
+  const inside = m.rows.filter((r) => r.start < b && r.end > s);
+  if (refuse && inside.length) { say(`${m.name}: <b>refused</b>: it has a move inside the window (counts ${inside.map((r) => r.start + "–" + r.end).join(", ")}). Delete it first.`); return false; }
+  for (const r of inside) {
+    if (r.start < s) { const p = pos(m, s); r.end = s; r.dest = p; }
+    else if (r.end > b) { r.start = b; }
+    else m.rows = m.rows.filter((x) => x !== r);
+  }
+  m.marks.push({ start: s, end: b });
+  say(`<b>${m.name}: Held over the window</b> (counts ${s}–${b})` + (inside.length ? `; the move inside it was removed.` : "."));
+  return true;
+}
+
 function splitAt(m, b) {
   const r = rowInside(m, b);
   if (!r) return false;
@@ -398,6 +448,8 @@ function renderTimeline() {
       svgEl("rect", { x: tx(r.start) + 1, y: y - 9, width: (r.end - r.start) * CW - 2, height: 18, rx: 4,
         fill: still ? "#f3f4f6" : "#dbeafe", stroke: still ? "#9ca3af" : "#3b82f6", "stroke-width": 1.5 }, svg);
       if (still) text(svg, (tx(r.start) + tx(r.end)) / 2, y + 4, "goes nowhere", { "text-anchor": "middle", "font-size": 10 });
+      else if (r.group) text(svg, (tx(r.start) + tx(r.end)) / 2, y + 4, r.group, { "text-anchor": "middle", "font-size": 10, fill: "#1d4ed8" });
+      else if (r.own) text(svg, (tx(r.start) + tx(r.end)) / 2, y + 4, "own move", { "text-anchor": "middle", "font-size": 10, fill: "#b45309" });
     }
     // diamonds (selected only, as in the app)
     if (sel) for (const r of m.rows) {
@@ -691,6 +743,47 @@ const SCENARIOS = [
       ["Remove Page 2's keyframe (count 8): the hold stays and now borrows from Page 1.", () => { ph = 8; act((m) => removeKeyframe(m, 8, false)); ph = 36; render(); }],
       ["Drag inside the hold (count 36): a move is added on Page 5, and the hold now grows out of that diamond (solid).", () => { ph = 36; act((m) => { const p = pos(m, 36); setPosAt(m, 36, [p[0] + 15, p[1] - 10]); }); }],
       ["Remove that new keyframe (count 32): the hold goes with its diamond (17).", () => { ph = 32; act((m) => removeKeyframe(m, 32, false)); }],
+    ],
+  },
+  {
+    name: "R4 · Join after a split, part of the group",
+    setup: () => [M("B1", [15, 40], [{ start: 8, end: 16, dest: [75, 12], group: "Move 3" }]), M("B2", [15, 48], [{ start: 8, end: 16, dest: [75, 20], group: "Move 3" }]), M("B3", [15, 56], [{ start: 8, end: 16, dest: [75, 28], group: "Move 3" }])],
+    sel: [0], ph: 12, mode: "proposed",
+    steps: [
+      ["B1–B3 walk together as one group move ('Move 3') over Page 3.", null],
+      ["Split the group's move at count 12 (Split at playhead splits everyone).", () => { history.push(clone(marchers)); lastMsg = []; splitGroupAt(12); render(); }],
+      ["Today's rule (and the lead's fallback): Remove keyframe at 12 with only B1 selected → no join, because the rest of the group still uses the halves. B1 stands still 8–12, then rushes (see Steps per count).", () => act((m) => { const r = rowEnding(m, 12); m.rows = m.rows.filter((x) => x !== r); say(`${m.name}: removed its keyframe at 12; the second half still starts at 12, so it stands still, then rushes.`); })],
+      ["Lead: Undo, then Remove → B1 is pulled out of both halves into its own move and joined: even speed. B2 and B3 keep their split.", () => { if (history.length) marchers = history.pop(); act((m) => pullOutAndJoin(m, 12)); }],
+    ],
+  },
+  {
+    name: "R6 · 'Only this page' copies go stale",
+    setup: () => [M("B1", [20, 45], [{ start: 0, end: 8, dest: [35, 30] }]), M("B2", [30, 55], [{ start: 0, end: 8, dest: [45, 35] }]), M("B3", [60, 50])],
+    sel: [0, 1], ph: 32, mode: "proposed",
+    steps: [
+      ["B1 and B2 last moved on Page 2; Pages 3–7 follow it.", null],
+      ["Before editing Page 2, unlink Page 5 (count 32) — 'only this page': Page 5 keeps its spot as an ordinary move.", () => act((m) => onlyThisPage(m, 32))],
+      ["Edit Page 2 (shift the block right): Pages 3–4 follow, Page 5 keeps the old spot (walks back). As intended.", () => { ph = 8; act((m) => { const p = pos(m, 8); setPosAt(m, 8, [p[0] + 20, p[1]]); }); }],
+      ["Months later, shift the block again on Page 2: Page 5 is still at the very first spot, now unrelated to its neighbours, and nothing says it was a 'keep'. That's the cost of #158 (the lead accepts it; the alternative is keeping stored kept spots).", () => { ph = 8; act((m) => { const p = pos(m, 8); setPosAt(m, 8, [p[0] + 15, p[1] - 10]); }); ph = 32; render(); }],
+    ],
+  },
+  {
+    name: "R7 · Clip drag lengthens a hold backwards",
+    setup: () => [M("B1", [20, 45], [{ start: 16, end: 24, dest: [45, 25] }], [{ start: 24, end: 40 }]), M("B2", [30, 55]), M("B3", [60, 50])],
+    sel: [0], ph: 24, mode: "proposed",
+    steps: [
+      ["B1 walks on Page 4 (16–24) and is Held from 24 to 40.", null],
+      ["Drag that move's clip 8 counts earlier (it now runs 8–16): the hold follows its arrival and now starts at 16, so Page 4 became Held too (lead: accept — the hold is 'from the arrival').", () => act((m) => shiftMoveEarlier(m, 24, 8))],
+    ],
+  },
+  {
+    name: "R8 · Hold over a window with a move inside",
+    setup: () => [M("B1", [20, 45], [{ start: 0, end: 8, dest: [35, 30] }, { start: 20, end: 26, dest: [60, 20] }]), M("B2", [30, 55]), M("B3", [60, 50])],
+    sel: [0], ph: 32, mode: "proposed", win: 16,
+    steps: [
+      ["B1 has a short move at counts 20–26. The Expert window runs from the start flag at 16 to the playhead at 32.", null],
+      ["Lead: Hold over the window → the move inside is removed and B1 holds 16–32.", () => act((m) => holdOverWindow(m, 16, 32, false))],
+      ["Alternative: Undo, then try again with 'refuse' → nothing changes and it says which move is in the way.", () => { if (history.length) marchers = history.pop(); act((m) => holdOverWindow(m, 16, 32, true)); }],
     ],
   },
 ];
