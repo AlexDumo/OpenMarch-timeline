@@ -41,7 +41,7 @@ so the mark is app data:
   - **H-1:** a span lies where the marcher has no move in charge;
   - **H-2:** it starts at the marcher's arrival (a visible move end, or beat 0);
   - **H-3:** one marcher's spans don't overlap.
-    The rules per write path are in `docs/timeline/research/holds/01-edit-rules.md`.
+- **The rules per write path** are in `docs/timeline/research/holds/01-edit-rules.md`.
 - **The converter writes no spans.**
 - **File format:** the version stays 8 (unreleased). Files from earlier development builds get the
   empty table from the migration. A build without it shows held stretches as following.
