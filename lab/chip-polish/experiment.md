@@ -3,7 +3,7 @@
 # Keep `id` stable: feedback is filed under it.
 id: chip-polish
 title: A clearer floating editor
-summary: The floating editor under an open shape is a solid surface, its Pathways and link toggles show an accent background when on, and the spacing readout while you drag a handle sits on a solid pill.
+summary: The floating editor under an open shape is a solid surface, its Pathways and link toggles show the icon in the accent on a light accent tint when on, and the spacing readout while you drag a handle sits on a solid pill.
 status: open
 variants: []
 questions:
@@ -18,7 +18,8 @@ marchers, press **B** and drag a box.
 **What to try**
 
 - Click **Pathways** (the path icon) and the **link** between the two
-  spacings. When either is on, its icon sits on an **accent background**.
+  spacings. When either is on, its icon turns the **accent color on a light accent
+  tint**.
 - Look at the floating editor over the field lines and the faded marchers.
   It's a **solid surface** now in both themes. Switch themes in the settings
   to compare.

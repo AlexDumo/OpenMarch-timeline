@@ -539,7 +539,7 @@ test("change: start positions show as faint dots in the marchers' own color", as
     await expect(ghosts.first()).toHaveAttribute("fill", fill!);
 });
 
-test("change: the floating editor is a solid surface, an on toggle has the accent background, and the drag readout is a solid pill", async ({
+test("change: the floating editor is a solid surface, an on toggle is the accent on a light accent tint, and the drag readout is a solid pill", async ({
     show,
 }) => {
     const { page } = show;
@@ -559,16 +559,27 @@ test("change: the floating editor is a solid surface, an on toggle has the accen
     const off = await background("shape-editor-pathways");
     await pathways.click();
     await expect(pathways).toHaveAttribute("aria-pressed", "true");
-    const accent = await page.evaluate(() => {
-        const probe = document.createElement("div");
-        probe.className = "bg-accent";
-        document.body.append(probe);
-        const color = getComputedStyle(probe).backgroundColor;
-        probe.remove();
-        return color;
-    });
-    expect(await background("shape-editor-pathways")).toBe(accent);
-    expect(off).not.toBe(accent);
+    // On: the icon in the accent, on a light tint of it rather than a solid fill
+    const [tint, accent] = await page.evaluate(() =>
+        ["bg-accent/15", "text-accent"].map((className) => {
+            const probe = document.createElement("div");
+            probe.className = className;
+            document.body.append(probe);
+            const style = getComputedStyle(probe);
+            const color =
+                className === "text-accent"
+                    ? style.color
+                    : style.backgroundColor;
+            probe.remove();
+            return color;
+        }),
+    );
+    expect(await background("shape-editor-pathways")).toBe(tint);
+    expect(alpha(tint)).toBeLessThan(0.3);
+    expect(await pathways.evaluate((el) => getComputedStyle(el).color)).toBe(
+        accent,
+    );
+    expect(off).not.toBe(tint);
 
     // A handle drag shows the spacing readout by the pointer
     const handle = (await shapeOverlay(page))!.handles.at(-1)!;

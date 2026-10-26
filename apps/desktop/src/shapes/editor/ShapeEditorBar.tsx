@@ -618,8 +618,9 @@ function IconButton({
             data-testid={testId}
             className={clsx(
                 "rounded-4 flex items-center p-2 disabled:opacity-40",
-                // On is the accent, so a toggle's state is plain at a glance (owner)
-                pressed ? "bg-accent text-text-invert" : "hover:text-accent",
+                // On: the icon in the accent on a light accent tint, so the state is plain at a
+                // glance without reading as a solid button (owner)
+                pressed ? "bg-accent/15 text-accent" : "hover:text-accent",
             )}
         >
             {children}
