@@ -254,8 +254,8 @@ export type FieldModeDrawing = {
      */
     calm?: boolean;
     /**
-     * While a stretch or a draw has the shape's edge on one of the field's lines (#425): a dashed
-     * guide along each such line, across the field
+     * While a stretch or a draw has the shape's edge on one of the field's lines (#425): a guide
+     * along each such line, drawn across the whole canvas
      */
     guides?: readonly {
         from: FieldPoint;

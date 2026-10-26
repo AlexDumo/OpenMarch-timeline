@@ -826,15 +826,10 @@ function stretchSquare(
         ({ across, deep } = equalized(across, deep, env));
     else if (env.ratioLocked)
         // A pulled value drives the other spacing exactly (#425)
-        ({ across, deep } = keepRatio(
-            base,
-            across,
-            deep,
-            movesX,
-            movesY,
-            env,
-            x?.pulled === true || y?.pulled === true,
-        ));
+        ({ across, deep } = keepRatio(base, across, deep, movesX, movesY, env, {
+            across: x?.pulled === true,
+            deep: y?.pulled === true,
+        }));
     // A side handle keeps the other axis where it was; past the fixed edge, the box flips over it
     const sign = {
         x: movesX ? signOf(to.x - anchor.x) : 1,
@@ -914,8 +909,9 @@ export function filesFor(width: number, depth: number, n: number): number {
  * The intervals with the ratio lock on: the one the drag changed most, by proportion, decides,
  * and the other keeps the box's deep-to-across ratio. Both stay on half steps (owner,
  * 2026-10-16), so the ratio is as near as half steps allow. A side handle changes only its own.
- * A square box copies the leader as it is, and a typed leader keeps its follower as exact as
- * itself (`typed`, #423), so 2⅔ across makes 2⅔ deep.
+ * A square box copies the leader as it is, and a typed (or pulled) leader keeps its follower as
+ * exact as itself (`typed`, #423, #425), so 2⅔ across makes 2⅔ deep. `typed` says which of the
+ * two are exact, or both; it counts only for the one that leads.
  */
 export function keepRatio(
     base: Pick<BoxSize, "across" | "deep">,
@@ -924,7 +920,9 @@ export function keepRatio(
     movesX: boolean,
     movesY: boolean,
     env: ToolEnv,
-    typed = false,
+    typed:
+        | boolean
+        | { readonly across: boolean; readonly deep: boolean } = false,
 ): { across: number; deep: number } {
     if (!(base.across > 0) || !(base.deep > 0)) return { across, deep };
     const ratio = base.deep / base.across;
@@ -933,8 +931,15 @@ export function keepRatio(
         (!movesY ||
             Math.abs(Math.log(across / base.across)) >=
                 Math.abs(Math.log(deep / base.deep)));
+    // A leader on the ladder keeps its follower there too, whatever the other axis was
+    const exact =
+        typeof typed === "boolean"
+            ? typed
+            : acrossLeads
+              ? typed.across
+              : typed.deep;
     const follow = (v: number) =>
-        Math.abs(ratio - 1) < 1e-9 ? v : snapInterval(v, env, typed);
+        Math.abs(ratio - 1) < 1e-9 ? v : snapInterval(v, env, exact);
     return acrossLeads
         ? { across, deep: follow(across * ratio) }
         : { across: follow(deep / ratio), deep };

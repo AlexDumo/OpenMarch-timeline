@@ -155,6 +155,24 @@ describe("stretching a box onto a line", () => {
         exact(p.deep, (8 / 3) * STEP);
     });
 
+    it("with the ratio lock, a pulled axis that doesn't lead leaves the other on half steps", () => {
+        // 7 × 2, 2 across and 1½ deep (deep is ¾ of across), its left edge on the 0 line. The
+        // corner goes 2 px from the 160 line, but deep grows more (to 2½), so deep leads: across
+        // follows it on half steps, not as an exact value off both the line and the ladder
+        const base: BoxParams = { ...row(7), deep: 1.5 * STEP };
+        const top = base.center.y - (1.5 * STEP) / 2;
+        const p = stretch(
+            base,
+            14,
+            "se",
+            { x: 162, y: top + 2.5 * STEP },
+            { ratioLocked: true },
+        );
+        exact(p.deep, 2.5 * STEP);
+        onHalves(p.across);
+        exact(edges(p, 14).left, 0);
+    });
+
     it("on a box turned a quarter, its own across follows the field's front-to-back lines", () => {
         const turned: BoxParams = { ...row(5), rotation: Math.PI / 2 };
         // Put the box's own west end on the front sideline (y = 0)

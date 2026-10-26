@@ -122,8 +122,8 @@ export function frameDrawing(
 }
 
 /**
- * While a draw or a handle drag has the shape's edges on the field's lines (#425): a dashed
- * guide along each, named as the coordinate sheet writes it (#427), the shape's sides on it drawn thicker and its
+ * While a draw or a handle drag has the shape's edges on the field's lines (#425): a guide
+ * along each, named as the coordinate sheet writes it (#427), the shape's sides on it drawn thicker and its
  * spots tinted. Nothing during any other gesture, or with none.
  */
 export function guideDrawing(
