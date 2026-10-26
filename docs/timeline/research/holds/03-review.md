@@ -53,3 +53,24 @@ The storage reviewer confirmed:
 | R6  | **"Only this page" writes plain copies (#158),** so if the earlier block later shifts, the copy stays at the old spot, and nothing marks it as a keep.                                                                                  | Accept, and record it in the ADR as the cost of #158                                                                                                                                                                      | –                                         |
 | R7  | **A clip drag that moves an arrival earlier** stretches its Held mark back over pages that were Following.                                                                                                                              | Accept: the hold is "from the arrival"                                                                                                                                                                                    | –                                         |
 | R8  | **Hold over the window when moves are inside the window.**                                                                                                                                                                              | Remove them for those marchers, with a toast                                                                                                                                                                              | –                                         |
+
+## Anchor review, 2026-10-26
+
+Three more reviewers read [04-anchors.md](04-anchors.md): model consistency, storage and code fit,
+and simulated designers (4 personas, about 15 of 24 tasks right on the first display). All three:
+**sound with fixes**. Adopted:
+
+- **What you see decides.** Arrival or borrowed follows from the rows (no stored anchor). A drag
+  inside a borrowed hold makes it an arrival hold. All three reviewers asked for this.
+- **Snapshot-based upkeep,** in a fixed order: trim, keep, move with a retimed row, delete. Split
+  at playhead depends on that order.
+- **The ripple:** an arrival hold's start follows its row by id; a borrowed hold's start stays on
+  its beat.
+- **Drags inside a borrowed hold never cover a neighbouring hold,** and touching holds merge.
+- **Decision 6 wins for Expert windows** over the "move created over a hold's start" trim.
+- **Basic's `planMerge` sweep stops at a hold's start.**
+- **Display:** a hatched, lighter fill with a source chip for borrowed holds; the source line only
+  on hover or selection; a drag preview in place and in the inspector ("moves Page 2's set" or
+  "adds a move on Page 5"); plain Held in Basic.
+- **Commit check:** H-1 and H-3 in the `timeline_commit_violations` view, with error messages for
+  them; H-2 dropped.

@@ -49,17 +49,19 @@ so the mark is app data:
   - It is in `DISPLAY_TABLES` and the query invalidation map, so mark-only edits refresh the
     views.
 - **Invariants,** checked at commit time beside `timeline_commit_violations`. They are plain SQL
-  over `timeline_assignments` and need no layer derivation:
+  over `timeline_assignments` and need no layer derivation (H-2 was dropped 2026-10-26: a mark
+  may start anywhere, and whether it is an arrival hold follows from the rows):
   - **H-1:** no row of the marcher overlaps the mark;
-  - **H-2:** a row of the marcher ends at the mark's start, or the start is 0 or a page flag;
   - **H-3:** one marcher's marks don't overlap.
 - **Holds are always explicit:** only Hold from previous page, a bar drag, hold over the window and
   Make all selected Held write marks. Nothing infers one from a selection or from positions.
-- **Upkeep:** a shared step in `transactionWithHistory`, before the drain, trims marks that rows now
-  cover and deletes marks whose arrival is gone. Paths that move an arrival pass an old→new map. It
-  never runs during undo/redo replay (C-6).
-- **Page and beat edits:** the ripple maps a mark's start like a row end and its end like a row
-  start.
+- **Upkeep:** a shared step in `transactionWithHistory`, before the drain, snapshots the row ids
+  ending at each mark's start. After the edit it trims marks that rows now cover, keeps marks that a
+  row still ends at, moves marks whose row was retimed, and deletes marks whose arrival is gone
+  (decision 17). It never runs during undo/redo replay (C-6). The rules are in
+  `docs/timeline/research/holds/04-anchors.md`.
+- **Page and beat edits:** an arrival mark's start takes its row's planned new end; a borrowed
+  mark's start stays on its beat. This is computed in `planTimelineRipple`.
 - **The rules per write path** are in `docs/timeline/research/holds/01-edit-rules.md`.
 - **The converter writes no marks.**
 - **File format:** the version stays 8 (unreleased). Files from earlier development builds get the

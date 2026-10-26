@@ -4,7 +4,7 @@
 
 Status: decisions taken (owner, 2026-10-24 and 2026-10-25); independently reviewed 2026-10-25
 ([03-review.md](03-review.md): changes made, and owner questions R1–R8); hold anchors
-(arrival and count) proposed 2026-10-26 in [04-anchors.md](04-anchors.md), under review;
+(arrival and borrowed holds) accepted with the review's fixes 2026-10-26 in [04-anchors.md](04-anchors.md);
 nothing built. A
 hands-on [demo](demo/holds-demo.html) (simplified: one layer, pages of 8 counts) lets you try the
 rules and today's behaviour side by side. This replaces the
@@ -203,8 +203,8 @@ timeline_held_marks
   writes it is one undo step with the rows it belongs to.
 - **Invariants,** kept by the write paths, which [01-edit-rules.md](01-edit-rules.md) lists:
   - **H-1:** no row of the marcher overlaps the mark;
-  - **H-2:** a row of the marcher ends at the mark's start, or the start is 0 or a page flag
-    (a hold from Hold from previous page, 3);
+  - (H-2, "starts at an arrival", was dropped 2026-10-26: a hold may start anywhere, and whether
+    it grows out of a move end follows from the rows. See [04-anchors.md](04-anchors.md).)
   - **H-3:** one marcher's marks don't overlap.
 - **These are plain SQL over `timeline_assignments`,** with no derived spans needed: if any row
   covers a count, some row is in charge there (review, storage M1). So they are checked **at
