@@ -314,7 +314,8 @@ export function resplit(
         { x: -frame.halfWidth, y: -frame.halfDepth },
         { x: frame.halfWidth, y: frame.halfDepth },
         marchers.length,
-        { ...env, gridSnap: (p) => p },
+        // In the box's own axes, where the field's grid and lines don't apply
+        { ...env, gridSnap: (p) => p, fieldLines: undefined },
     );
     const redrawn = flat
         ? snapToGrid(

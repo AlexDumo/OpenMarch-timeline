@@ -7,9 +7,12 @@ import { ReadableCoords } from "@/global/classes/ReadableCoords";
 import type { XY } from "../types";
 import {
     frameControls,
+    shapeOutline,
     type ShapeGesture,
     type ShapeTarget,
 } from "../frame/gestures";
+import { edgeGuides } from "../frame/edgeGuides";
+import { lineCoordinate } from "./lineCoordinate";
 import { rotationDegrees } from "../frame/frame";
 import { lengthReadout } from "../frame/scale";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
@@ -116,6 +119,38 @@ export function frameDrawing(
         return text ? { ...out, tip: { at: pointer, text } } : out;
     }
     return out;
+}
+
+/**
+ * While a draw or a handle drag has the shape's edges on the field's lines (#425): a guide
+ * along each, named as the coordinate sheet writes it (#427), the shape's sides on it drawn thicker and its
+ * spots tinted. Nothing during any other gesture, or with none.
+ */
+export function guideDrawing(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    spots: readonly XY[],
+    gesture: { readonly type: string } | null | undefined,
+    env: ToolEnv,
+    field: ShapeField,
+): Pick<FieldModeDrawing, "guides" | "guideEdges" | "onGuides"> {
+    if (gesture?.type !== "draw" && gesture?.type !== "handle") return {};
+    const { fieldProperties } = field;
+    const { width, height } = fieldProperties;
+    const { guides, edges, on } = edgeGuides(
+        shapeOutline(kind, params, n),
+        spots,
+        env.fieldLines,
+        { width, height },
+    );
+    if (guides.length === 0) return {};
+    // Named as the coordinate sheet would write a spot on the line (owner, #427)
+    const named = guides.map((g) => {
+        const label = lineCoordinate(g.axis, g.at);
+        return { from: g.from, to: g.to, ...(label ? { label } : {}) };
+    });
+    return { guides: named, guideEdges: edges, onGuides: on };
 }
 
 /**

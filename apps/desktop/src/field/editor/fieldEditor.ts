@@ -253,6 +253,20 @@ export type FieldModeDrawing = {
      * pivot and gap rings are drawn faint, so the spots read clearly
      */
     calm?: boolean;
+    /**
+     * While a stretch or a draw has the shape's edge on one of the field's lines (#425): a guide
+     * along each such line, drawn across the whole canvas
+     */
+    guides?: readonly {
+        from: FieldPoint;
+        to: FieldPoint;
+        /** The line as the coordinate sheet writes it: "On 50", "12 BE BH" (#427) */
+        label?: string;
+    }[];
+    /** The shape's sides that lie on a guide's line, drawn thicker in the guide's color */
+    guideEdges?: readonly { from: FieldPoint; to: FieldPoint }[];
+    /** The spots standing on a guide, tinted */
+    onGuides?: readonly FieldPoint[];
 };
 
 /**

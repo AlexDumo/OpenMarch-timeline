@@ -40,6 +40,20 @@ export interface ToolEnv {
      * absent
      */
     readonly layout?: LayoutFamily;
+    /**
+     * The field's lines a box's edge is pulled onto while its handle is dragged or it's drawn
+     * (#425), in field units: x for lines side to side (yard lines), y for front to back (hashes,
+     * sidelines). None when absent.
+     */
+    readonly fieldLines?: FieldLines;
+    /** How near a line a moving edge must come to be pulled onto it, in field units (#425) */
+    readonly pullRadius?: number;
+}
+
+/** Lines across the field at these x (side to side) and y (front to back) values */
+export interface FieldLines {
+    readonly x: readonly number[];
+    readonly y: readonly number[];
 }
 
 /** A handle the canvas draws, and the cursor it shows on hover */
