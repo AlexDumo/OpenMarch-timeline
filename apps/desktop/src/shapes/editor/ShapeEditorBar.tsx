@@ -382,7 +382,7 @@ function ShapeEditorBar({
                     <IconButton
                         label={
                             target.recalculate
-                                ? "Recalculate who goes where: least travel from where everyone comes from"
+                                ? "Recalculate who goes where, by least travel"
                                 : target.empty > 0
                                   ? "Recalculate who goes where: close up the empty spots first"
                                   : "Who goes where is already least travel"
