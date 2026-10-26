@@ -74,7 +74,7 @@ move's own end.
 This design assumes **today's move model**, where one transition bundles four things: when (its
 range), where (a shape or points), how (the path style) and who (its slots). The owner's
 direction (2026-10-26) is to separate them, and the ownership model is its own research
-(tracker issue linked in #362):
+(fork issue #434):
 
 - **shapes:** an equation that distributes marchers into spots, with no timing;
 - **transitions:** isolated blocks of transition logic on a track;
