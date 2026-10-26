@@ -43,6 +43,16 @@ const useSpotHover = create<{
     over: false,
 }));
 
+/**
+ * Whether the pointer is over the open shape or one of its controls, with no gesture under way
+ * (#403): the floating editor is solid then, and fades with the pointer away (#426)
+ */
+export function useShapePointerOver(): boolean {
+    const over = useSpotHover((s) => s.over);
+    const gesture = useShapeToolStore((s) => !!s.tool?.gesture);
+    return over && !gesture;
+}
+
 interface Shown {
     readonly tool: ToolState;
     readonly hover: { at: XY; text: string } | null;

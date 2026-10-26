@@ -539,6 +539,120 @@ test("change: start positions show as faint dots in the marchers' own color", as
     await expect(ghosts.first()).toHaveAttribute("fill", fill!);
 });
 
+test("change: the floating editor is a solid surface, an on toggle is the accent on a light accent tint, and the drag readout is a solid pill", async ({
+    show,
+}) => {
+    const { page } = show;
+    /** A computed CSS color's alpha: 1 for a solid color */
+    const alpha = (color: string) => {
+        const parts = color.match(/[\d.]+/g)!.map(Number);
+        return parts.length > 3 ? parts[3] : 1;
+    };
+    const background = (testId: string) =>
+        page
+            .getByTestId(testId)
+            .evaluate((el) => getComputedStyle(el).backgroundColor);
+    await drawBox(show);
+    expect(alpha(await background("shape-tool-readout"))).toBe(1);
+
+    const pathways = page.getByTestId("shape-editor-pathways");
+    const off = await background("shape-editor-pathways");
+    await pathways.click();
+    await expect(pathways).toHaveAttribute("aria-pressed", "true");
+    // On: the icon in the accent, on a light tint of it rather than a solid fill
+    const [tint, accent] = await page.evaluate(() =>
+        ["bg-accent/15", "text-accent"].map((className) => {
+            const probe = document.createElement("div");
+            probe.className = className;
+            document.body.append(probe);
+            const style = getComputedStyle(probe);
+            const color =
+                className === "text-accent"
+                    ? style.color
+                    : style.backgroundColor;
+            probe.remove();
+            return color;
+        }),
+    );
+    expect(await background("shape-editor-pathways")).toBe(tint);
+    expect(alpha(tint)).toBeLessThan(0.3);
+    expect(await pathways.evaluate((el) => getComputedStyle(el).color)).toBe(
+        accent,
+    );
+    expect(off).not.toBe(tint);
+
+    // A handle drag shows the spacing readout by the pointer
+    const handle = (await shapeOverlay(page))!.handles.at(-1)!;
+    await drag(
+        page,
+        handle,
+        { x: handle.x + 45, y: handle.y + 25 },
+        {
+            beforeRelease: async () => {
+                const tip = page.getByTestId("fieldShapeTip");
+                await expect(tip).toBeVisible();
+                expect(alpha(await background("fieldShapeTip"))).toBe(1);
+                await expect(tip.locator("[data-glyph]")).not.toHaveCount(0);
+            },
+        },
+    );
+});
+
+/** How opaque the open shape's floating editor is drawn, as a whole */
+const editorOpacity = (page: Page) =>
+    page
+        .getByTestId("shape-tool-readout")
+        .evaluate((el) => Number(getComputedStyle(el).opacity));
+
+test("change: the floating editor fades with the pointer away, and is solid over the box, over the editor, with focus inside it and with its menu open", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { pressed, released } = await drawBox(show);
+    await page.mouse.move(5, 500);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
+
+    // Over the box on the field
+    const middle = await toScreen(page, {
+        x: (pressed.x + released.x) / 2,
+        y: (pressed.y + released.y) / 2,
+    });
+    await page.mouse.move(middle.x, middle.y);
+    await expect.poll(() => editorOpacity(page)).toBe(1);
+    await page.mouse.move(5, 500);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
+
+    // Over the editor
+    await page.getByTestId("shape-tool-readout").hover();
+    await expect.poll(() => editorOpacity(page)).toBe(1);
+    await page.mouse.move(5, 500);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
+
+    // Typing a number keeps focus inside it
+    await page.getByTestId("shape-editor-across").click();
+    await expect(page.getByTestId("shape-editor-across-input")).toBeFocused();
+    await page.mouse.move(5, 500);
+    await expect.poll(() => editorOpacity(page)).toBe(1);
+    await page.keyboard.press("Escape");
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
+
+    // Its layout menu open; once a layout is picked, the editor fades again with the pointer
+    // away, though the menu hands focus back to its button
+    await page.evaluate(() =>
+        localStorage.removeItem("openmarch:shapeLastLayout"),
+    );
+    await page.getByTestId("shape-layout-menu").click();
+    const menu = page.getByTestId("shape-layout-menu-content");
+    await expect(menu).toBeVisible();
+    await page.mouse.move(5, 500);
+    await expect.poll(() => editorOpacity(page)).toBe(1);
+    await menu.getByTestId("shape-layout-menu-row-rounded").hover();
+    await menu.getByTestId("shape-layout-menu-version-rounded-0").click();
+    await expect(menu).toBeHidden();
+    await page.mouse.move(5, 500);
+    await expect.poll(() => editorOpacity(page)).toBeLessThan(0.6);
+});
+
 test("change: the knob turns in 15° steps, as the field's rotate handle does, and freely with Alt", async ({
     show,
 }) => {

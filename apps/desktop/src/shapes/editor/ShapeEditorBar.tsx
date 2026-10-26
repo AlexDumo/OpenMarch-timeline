@@ -31,6 +31,8 @@ import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { useShapeHidden, useShapeToolStore } from "../tool/shapeToolStore";
 import { ShapeAwayChip } from "./ShapeAwayChip";
 import { GlyphText } from "./GlyphText";
+import { useShapePointerOver } from "../tool/shapeToolMode";
+import "./ShapeEditorSurface.css";
 import {
     chipLayout,
     quarterTurn,
@@ -60,7 +62,9 @@ const GAP_PX = 14;
  * change most. It moves with the shape and flips above it when there's no room below. Before a
  * shape is drawn, a hint at the top of the field says how to draw one.
  *
- * Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
+ * For an open shape it fades with the pointer away from both the shape and itself, so what's
+ * under it shows, and it is solid while the pointer is over either, with focus inside it or a
+ * menu of its open (`ShapeEditorSurface.css`). Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
  * For a box: `− 6 × 2 + ↻ │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`, and in Spread `↔ 2 steps Reshuffle
  * │ ⋯ │ Place`. Every number can be typed or dragged,
  * and follows the field: across is side to side however the box is turned. ⋯ opens a second row:
@@ -83,7 +87,7 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
     if (armed)
         return (
             <div
-                className="rounded-6 border-stroke bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
+                className="rounded-6 border-stroke bg-bg-1 bg-modal text-body text-text shadow-modal pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 border px-12 py-6"
                 data-testid="shape-tool-hint"
             >
                 Drag on the field to draw a {armed.shape.label.toLowerCase()} ·
@@ -97,6 +101,8 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
             target={target}
             stepPx={stepPx}
             testId={toolOpen ? "shape-tool-readout" : "placed-box-readout"}
+            // An open shape's editor fades with the pointer away; a placed one's stays solid
+            fades={toolOpen}
         />
     );
 }
@@ -113,13 +119,18 @@ function ShapeEditorBar({
     target,
     stepPx,
     testId,
+    fades,
 }: {
     target: ShapeEditTarget;
     stepPx: number;
     testId: string;
+    /** Fades with the pointer away from the shape and the editor (#426) */
+    fades: boolean;
 }) {
     const { kind, params, spots } = target;
     const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
+    // An open shape's editor fades with the pointer away from it and the shape (#426)
+    const overShape = useShapePointerOver();
     // The shape's own pivot (#350), the same in Basic and Expert (spec #344)
     const pivot = pivotOf(params);
     const [more, setMore] = useState(false);
@@ -176,8 +187,10 @@ function ShapeEditorBar({
     return (
         <div
             ref={place.ref}
-            className="rounded-6 border-stroke bg-modal text-sub text-text shadow-modal absolute z-10 flex flex-col gap-4 border px-6 py-4 whitespace-nowrap"
+            className="shape-editor-surface rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal absolute z-10 flex flex-col gap-4 border px-6 py-4 whitespace-nowrap"
             style={place.style}
+            data-fades={fades}
+            data-over={overShape}
             {...place.hold}
             data-testid={testId}
             data-shape-editor
@@ -617,7 +630,9 @@ function IconButton({
             data-testid={testId}
             className={clsx(
                 "rounded-4 flex items-center p-2 disabled:opacity-40",
-                pressed ? "text-accent bg-fg-2" : "hover:text-accent",
+                // On: the icon in the accent on a light accent tint, so the state is plain at a
+                // glance without reading as a solid button (owner)
+                pressed ? "bg-accent/15 text-accent" : "hover:text-accent",
             )}
         >
             {children}
