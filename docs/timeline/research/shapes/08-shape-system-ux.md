@@ -112,7 +112,7 @@ and its first size are chosen. (Reworked 2026-10-20.)
 - One star puts a shape in both the ring and the Shapes tab. At most 8; starring a ninth asks the
   user to unstar one first. Stars are a per-user preference, so they follow the user across
   shows.
-- **☆ Save** (in the chip's ⋯ row and the inspector) asks for a name and stars the shape. A saved
+- **☆ Save** (in the floating editor) asks for a name and stars the shape. A saved
   shape keeps its kind and intervals, not its size or marcher count, so it fits any selection.
 - Saved shapes live in the user's library across shows, with a copy in each show that uses one,
   following the Assets **This show** / **My Library** pattern.
@@ -153,7 +153,16 @@ editing a shape. Owner choice, 2026-10-15.
 
 - It sits under the shape's outline, centered, and moves with the shape. It flips above the
   shape when there's no room below.
-- For a box: `6 × 2 │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`.
+- **Changed 2026-10-26 (#429, #435):** one row with no ⋯, and a second row under it for how
+  the shape is filled. For a box:
+  `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⌖▾ ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`, and under it
+  `Grid · Outline · Spread  Layout ▾`. The second row holds the **mode switch** first, then what
+  that mode has: the box's **layout menu** in Grid, the **leftover menu** ("Leftover: Back",
+  the odd spot's side and gap or spread) in Outline, **Reshuffle** in Spread. A kind with none of
+  these has no second row. **⌖▾** is the pivot: its icon is the 3 × 3 grid with the pivot lit
+  (none for a pivot dragged on the field), and it opens the grid. Everything the inspector did
+  for a shape is here, so the inspector shows nothing of an open or selected shape.
+- Before 2026-10-26, for a box: `6 × 2 │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`.
 - For a path kind (line, arc and others): `Line │ 2 steps apart │ ⋯ │ Place`.
 - What appears is the kind's **primary** parameters, declared by the kind
   ([The kind contract](#the-kind-contract)); the chip knows nothing else about the kind. Sizes
@@ -173,13 +182,13 @@ Every number in the editor works the same way. Owner choice, 2026-10-16.
 - **Click** a number to type over it. Enter applies it, Esc cancels, and clicking away applies it.
 - **Drag** a number to change it. Each number has a drag direction:
 
-  | Number                      | Drag                                                                                                        | Step            |
-  | --------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------- |
-  | Side-to-side spacing (↔)    | Right for more, left for less                                                                               | ½ step per 8 px |
-  | Front-to-back spacing (↕)   | Up for more, down for less                                                                                  | ½ step per 8 px |
-  | Any other single value      | Up for more, down for less                                                                                  | ½ step per 8 px |
-  | A box's size (6 × 2)        | Sideways for more or fewer across, up or down for more or fewer deep. It locks to the first direction moved | 1 per 16 px     |
-  | Rotation (in the inspector) | Right turns clockwise                                                                                       | 1° per 2 px     |
+  | Number                    | Drag                                                                                                        | Step            |
+  | ------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------- |
+  | Side-to-side spacing (↔)  | Right for more, left for less                                                                               | ½ step per 8 px |
+  | Front-to-back spacing (↕) | Up for more, down for less                                                                                  | ½ step per 8 px |
+  | Any other single value    | Up for more, down for less                                                                                  | ½ step per 8 px |
+  | A box's size (6 × 2)      | Sideways for more or fewer across, up or down for more or fewer deep. It locks to the first direction moved | 1 per 16 px     |
+  | Rotation (in the editor)  | Right turns clockwise                                                                                       | 1° per 2 px     |
 
 - **Alt** while dragging a spacing gives hundredths of a step (#411). A dragged rotation snaps to 15°
   (#403), whole degrees with **Shift**.
@@ -222,14 +231,17 @@ Guardrails for shapes with unassigned spots later (#358):
 
 ## Transforms
 
-- **The Transform section** in the inspector shows whenever marchers are selected: the pivot,
-  rotation, flips and, for shapes, scale. A plain selection (not a shape) can be turned and
-  flipped too; that writes positions only, with no recipe, and has no scale control.
-- **Scale by interval**, never by percentage: − and + change the spacing by half a step. A shape
+- **The Transform section** in the inspector is for a **plain selection** (not a shape): the
+  pivot grid, rotation and flips, writing positions only, with no recipe. **Changed 2026-10-26
+  (#435):** a shape, open or placed and selected, turns, flips and picks its pivot in the floating
+  editor, so the section hides then. The inspector's ½-step scale (closer / wider) is gone: the
+  editor's spacings cover it.
+- **Scale by interval**, never by percentage: spacings change in half steps. A shape
   with uneven gaps (4, 4, 2) changes every gap by half a step. Footprint kinds scale their
   footprint in half steps. Resize handles snap the spacing to half steps (Alt for hundredths), with a
   length readout while dragging a long shape. There are no percentage scale buttons anywhere.
-- **The pivot.** A 3 × 3 grid in the inspector, the center by default. On the field, Cmd/Ctrl-drag
+- **The pivot.** A 3 × 3 grid (the floating editor's pivot menu for a shape, the inspector for a
+  plain selection), the center by default. On the field, Cmd/Ctrl-drag
   from the center dot pulls the pivot out into its own yellow crosshair, which can then be
   dragged directly; double-click sends it back to the center. It snaps to marchers, the frame's 9
   points and half steps; Alt turns snapping off. Turning, flipping and scaling all go around it,
@@ -261,7 +273,7 @@ the **start flag**, not where they stood on this page, so the shape shows the mo
   - It turns with the shape, so after a 90° turn it's on the side (owner, 2026-10-16).
 - **Just outside a corner** also rotates, as in design apps: diagonally past the corner, within a
   short reach of it. Past an edge is still the body, which has a margin.
-- Both rotations turn **around the pivot** chosen in the inspector. While rotating, the pivot
+- Both rotations turn **around the pivot** chosen in the editor's pivot menu. While rotating, the pivot
   shows as a yellow dot with a dashed line to the cursor, and a tip shows the angle. It snaps
   to 15° (#403), whole degrees with Shift.
 - **A center dot** (white, with an accent ring) moves the whole shape in half steps. While
@@ -299,6 +311,12 @@ the **start flag**, not where they stood on this page, so the shape shows the mo
   so it can change later without touching kinds or the tool.
 
 ## The inspector
+
+**Changed 2026-10-26 (#435):** the inspector has no shape parts while a shape is open or a placed
+one is selected: the mode, layout, leftover, Reshuffle, Close up and ☆ Save are in the floating
+editor, and so are the shape's pivot, turn and flips. What stays is for a plain selection: the
+**Box** button (B) with **Select box** when the selection is part of a placed shape, and the
+Transform section (pivot grid, rotation, flips). The sections below are kept for history.
 
 **Changed 2026-10-20:** the inspector shows the open shape and a **Transform** section for any
 selection ([Transforms](#transforms)). The 2026-10-16 tab plan below is kept for history; scale

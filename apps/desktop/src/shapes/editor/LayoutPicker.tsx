@@ -22,10 +22,10 @@ import type { ShapeEditTarget } from "./editTargets";
 import { keepFocus } from "./keepFocus";
 
 /**
- * The box's layout picker (#387, spec #385) and the chip's layout menu (owner lab feedback,
- * 2026-10-23). Full · Stagger · Rounded · Short back · Notched always keep their places: a layout
- * the count can't make shows greyed, as a picture of it at the nearest count it makes, with what
- * it needs ("add 1 / remove 2"). Each version is a live thumbnail labelled by its block
+ * The box's layout menu (#387, spec #385; owner lab feedback, 2026-10-23), on the floating
+ * editor's second row (#435). Full · Stagger · Rounded · Short back · Notched always keep their
+ * places: a layout the count can't make shows greyed, as a picture of it at the nearest count it
+ * makes, with what it needs ("add 1 / remove 2"). Each version is a live thumbnail labelled by its block
  * ("5 × 5"), the counts in its tooltip. A shape and its quarter turn are one version: the chip's
  * turn button makes the other. Picking a version is one change of the shape and becomes the
  * layout a new box starts in.
@@ -72,95 +72,6 @@ function needsTitle(label: string, hint: LayoutHint, n: number): string {
     return counts.length > 0
         ? `${label} needs ${counts.join(" or ")} marchers: ${hintText(hint)}`
         : `${label} can't make ${n}`;
-}
-
-/** The inspector's picker, in the shape section under the mode switch */
-export function LayoutPicker(props: PickerProps) {
-    const { target } = props;
-    const pick = usePick(props);
-    const now = layoutOf(target.kind, target.params, target.spots);
-    const rows = target.kind.closed?.layouts?.catalogue(target.spots) ?? [];
-    if (now === null || rows.length === 0) return null;
-    return (
-        <div
-            className="flex flex-col gap-4"
-            role="group"
-            aria-label="Layout"
-            data-testid="shape-layout-picker"
-        >
-            {rows.map((row) => (
-                <div
-                    key={row.family}
-                    className="flex items-start gap-8"
-                    data-testid={`shape-layout-row-${row.family}`}
-                >
-                    <span
-                        className={clsx(
-                            "text-sub w-[4.5rem] shrink-0 pt-6",
-                            row.versions.length > 0
-                                ? "text-text/70"
-                                : "text-text/40",
-                        )}
-                    >
-                        {row.label}
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                        {row.versions.length > 0 ? (
-                            row.versions.map((version, i) => (
-                                <VersionButton
-                                    key={i}
-                                    name={`${row.label} ${version.label}`}
-                                    version={version}
-                                    on={isOwn(version, now)}
-                                    onPick={() => pick(version)}
-                                    testId={`shape-layout-${row.family}-${i}`}
-                                    caption={version.label}
-                                />
-                            ))
-                        ) : (
-                            <MissingButton
-                                row={row}
-                                n={target.spots}
-                                testId={`shape-layout-${row.family}-missing`}
-                            />
-                        )}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-/** A layout the count can't make: its picture greyed, with what it needs, which can't be picked */
-function MissingButton({
-    row,
-    n,
-    testId,
-}: {
-    row: LayoutRow;
-    n: number;
-    testId: string;
-}) {
-    const hint = row.hint ?? { more: null, fewer: null };
-    return (
-        <Tip label={needsTitle(row.label, hint, n)}>
-            <button
-                type="button"
-                // aria-disabled, not disabled: a disabled button gets no pointer, so the
-                // tooltip saying why wouldn't show
-                aria-disabled
-                data-testid={testId}
-                className="rounded-4 text-text/40 flex flex-col items-center gap-2 p-4"
-            >
-                {row.preview && (
-                    <span className="opacity-40">
-                        <Thumbnail version={row.preview.version} />
-                    </span>
-                )}
-                <span className="text-xs">{hintText(hint)}</span>
-            </button>
-        </Tip>
-    );
 }
 
 /**

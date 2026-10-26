@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { test, expect, type Show } from "../fixtures.mjs";
 import {
     clickMarcher,
@@ -729,7 +729,7 @@ test("change: an open box fades everyone else, still readable, and once drawn hi
     await expect.poll(looks).toEqual(expected("full", "full"));
 });
 
-test("change: the chip and the Transform section draw their direction marks as icons, never as text a font may make an emoji", async ({
+test("change: the chip and the plain selection's Transform section draw their direction marks as icons, never as text a font may make an emoji", async ({
     show,
 }) => {
     const { page } = show;
@@ -739,6 +739,9 @@ test("change: the chip and the Transform section draw their direction marks as i
     await expect(chip.locator('[data-glyph="across"]')).toHaveCount(1);
     await expect(chip.locator('[data-glyph="deep"]')).toHaveCount(1);
     expect(await chip.innerText()).not.toMatch(PICTOGRAPHIC);
+    // A plain selection's Transform section
+    await page.keyboard.press("Escape");
+    await selectAll(page);
     const transform = page.getByTestId("transform-section");
     await expect(transform).toBeVisible();
     expect(await transform.innerText()).not.toMatch(PICTOGRAPHIC);
@@ -1593,7 +1596,6 @@ test("change: Close up shows only with holes, lays a box that lost two out for s
         .toEqual(ALL);
     await expect(page.getByTestId("placed-box-readout")).toBeVisible();
     await expect(page.getByTestId("shape-editor-close-up")).toHaveCount(0);
-    await expect(page.getByTestId("shape-section-close-up")).toHaveCount(0);
     await page.keyboard.press("Escape");
 
     // Two leave: their spots stay empty, and the toast offers Close up
@@ -1617,7 +1619,7 @@ test("change: Close up shows only with holes, lays a box that lost two out for s
     await expect(page.getByTestId("placed-box-readout")).toContainText(
         "2 empty",
     );
-    await expect(page.getByTestId("shape-section-close-up")).toBeVisible();
+    await expect(page.getByTestId("shape-editor-close-up")).toBeVisible();
     const steps = await undoSteps(show);
     await page.getByTestId("shape-editor-close-up").click();
 
@@ -1631,7 +1633,7 @@ test("change: Close up shows only with holes, lays a box that lost two out for s
     await expect(page.getByTestId("placed-box-readout")).not.toContainText(
         "empty",
     );
-    await expect(page.getByTestId("shape-section-close-up")).toHaveCount(0);
+    await expect(page.getByTestId("shape-editor-close-up")).toHaveCount(0);
     const closed = await savedPositions(show, 0);
     // Each member stands on a spot of its own in the recipe saved
     const placed = await show.query<{
@@ -1855,21 +1857,28 @@ test("change: with a kind armed and nothing drawn yet, the Transform section sho
     await expect(section.getByTestId("transform-scale-more")).toHaveCount(0);
 });
 
-test("change: a box's − and + in the Transform section change its spacing by half a step", async ({
+test("change: the inspector shows no shape section while a shape is open or a placed one is selected (#435)", async ({
     show,
 }) => {
     const { page } = show;
+    const inspectorShape = async () => {
+        for (const id of [
+            "shape-tool-section",
+            "transform-section",
+            "placed-box-summary",
+            "shape-layout-picker",
+        ])
+            await expect(page.getByTestId(id)).toHaveCount(0);
+    };
     await drawBox(show);
-    const section = page.getByTestId("transform-section");
-    const [across, deep] = await spacings(page);
-
-    await section.getByTestId("transform-scale-more").click();
-    await expect.poll(() => spacings(page)).toEqual([across + 0.5, deep + 0.5]);
-    await section.getByTestId("transform-scale-less").click();
-    await section.getByTestId("transform-scale-less").click();
-    await expect.poll(() => spacings(page)).toEqual([across - 0.5, deep - 0.5]);
-    // Still open: nobody moves until Place
-    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
+    await inspectorShape();
+    await page.keyboard.press("Escape");
+    await placeBox(show);
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect(page.getByTestId("placed-box-readout")).toBeVisible();
+    await inspectorShape();
 });
 
 test("change: handles snap spacings to half steps, Alt to hundredths, with a length readout while dragging, and a typed spacing keeps hundredths", async ({
@@ -2146,12 +2155,14 @@ test("change: a placed box comes back turned and flipped when selected again", a
 }) => {
     const { page } = show;
     await drawBox(show);
-    const section = page.getByTestId("transform-section");
-    await section.getByTestId("transform-rotation").click();
-    await page.getByTestId("transform-rotation-input").fill("30");
-    await page.getByTestId("transform-rotation-input").press("Enter");
-    await section.getByTestId("transform-flip-deep").click();
-    const turned = await section.getByTestId("transform-rotation").innerText();
+    const editor = page.getByTestId("shape-tool-readout");
+    await editor.getByTestId("shape-editor-rotation").click();
+    await page.getByTestId("shape-editor-rotation-input").fill("30");
+    await page.getByTestId("shape-editor-rotation-input").press("Enter");
+    await editor.getByTestId("shape-editor-flip-deep").click();
+    const turned = await editor
+        .getByTestId("shape-editor-rotation")
+        .innerText();
     expect(turned).not.toBe("0°");
 
     await page.keyboard.press("Enter");
@@ -2172,19 +2183,26 @@ test("change: a placed box comes back turned and flipped when selected again", a
     await expect
         .poll(async () => (await readField(page)).selection)
         .toEqual(ALL);
-    await expect(section.getByTestId("transform-rotation")).toHaveText(turned);
+    await expect(
+        page
+            .getByTestId("placed-box-readout")
+            .getByTestId("shape-editor-rotation"),
+    ).toHaveText(turned);
 });
 
 // How a shape is filled (#386, spec #385): the host's distributor lays the
 // box out in Files, Short back, as it always was, and the recipe keeps the
-// distribution. The inspector's mode switch offers Grid, Outline and Spread.
+// distribution. The floating editor's mode switch, on its second row (#435),
+// offers Grid, Outline and Spread.
 
 test("change: a placed box keeps its distribution, Files with the short rank at the back, and the mode switch shows Grid", async ({
     show,
 }) => {
     const { page } = show;
     await drawBox(show);
-    await expect(page.getByTestId("shape-tool-section")).toBeVisible();
+    await expect(
+        page.getByTestId("shape-tool-readout").getByTestId("shape-mode-switch"),
+    ).toBeVisible();
     await expect(page.getByTestId("shape-mode-files")).toHaveAttribute(
         "data-state",
         "on",
@@ -2227,10 +2245,54 @@ test("change: a placed box keeps its distribution, Files with the short rank at 
     );
 });
 
+test("change: the editor's second row holds the mode switch left of the layout menu, the gap menu only in Outline and Reshuffle only in Spread (#435)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    const bar = editor.getByTestId("shape-tool-readout-bar");
+    const row = editor.getByTestId("shape-tool-readout-fill");
+    const modes = row.getByTestId("shape-mode-switch");
+    const layout = row.getByTestId("shape-layout-menu");
+    await expect(modes).toBeVisible();
+    await expect(layout).toBeVisible();
+    await expect(bar.getByTestId("shape-mode-switch")).toHaveCount(0);
+    const box = async (l: Locator) => (await l.boundingBox())!;
+    // Under the bar, the switch first
+    expect((await box(row)).y).toBeGreaterThan((await box(bar)).y);
+    expect((await box(modes)).x).toBeLessThan((await box(layout)).x);
+    await expect(row.getByTestId("outline-gap-menu")).toHaveCount(0);
+    await expect(editor.getByTestId("shape-editor-reshuffle")).toHaveCount(0);
+
+    // Outline on 8 has no gap to place: no gap menu, and no layout
+    await page.getByTestId("shape-mode-outline").click();
+    await expect(layout).toHaveCount(0);
+    await expect(row.getByTestId("outline-gap-menu")).toHaveCount(0);
+
+    // Spread: Reshuffle on the second row, not the bar
+    await page.getByTestId("shape-mode-spread").click();
+    await expect(row.getByTestId("shape-editor-reshuffle")).toBeVisible();
+    await expect(bar.getByTestId("shape-editor-reshuffle")).toHaveCount(0);
+    expect((await box(modes)).x).toBeLessThan(
+        (await box(row.getByTestId("shape-editor-reshuffle"))).x,
+    );
+});
+
 // Outline (#390): spots round the edge at the interval with one on every
 // corner, in the space the box took up. An odd count takes one spot out of a
 // side: by default the back spreads evenly; "Leaves a gap" shows the gap as a
 // dashed ring, and a click on another spot between corners moves it there.
+
+/**
+ * An option of the outline gap (#390), in the floating editor's gap menu on its second row
+ * (#435): opens the menu first when it's closed.
+ */
+async function gapOption(page: Page, testId: string) {
+    if ((await page.getByTestId("outline-gap-side").count()) === 0)
+        await page.getByTestId("outline-gap-menu").click();
+    return page.getByTestId(testId);
+}
 
 /**
  * Opens the box tool on T1–T7 (an odd count), draws a box, switches it to
@@ -2259,12 +2321,12 @@ async function outlineOnSeven(show: Show) {
     await page.getByTestId("shape-mode-outline").click();
     // The short side spreads evenly by default, with no gap to show; "Leaves
     // a gap" shows the gap
-    await expect(page.getByTestId("outline-gap-spread")).toHaveAttribute(
+    await expect(await gapOption(page, "outline-gap-spread")).toHaveAttribute(
         "data-state",
         "on",
     );
     expect((await shapeOverlay(page))!.gaps).toEqual([]);
-    await page.getByTestId("outline-gap-gap").click();
+    await (await gapOption(page, "outline-gap-gap")).click();
     await expect
         .poll(async () => (await shapeOverlay(page))?.gaps.length)
         .toBe(1);
@@ -2300,7 +2362,7 @@ async function outlineOnSeven(show: Show) {
     expect(Math.abs(gap!.x - (left + right) / 2)).toBeLessThanOrEqual(
         across / 2 + CLOSE,
     );
-    await expect(page.getByTestId("outline-gap-back")).toHaveAttribute(
+    await expect(await gapOption(page, "outline-gap-back")).toHaveAttribute(
         "data-state",
         "on",
     );
@@ -2338,7 +2400,7 @@ test("change: Outline on 7 spreads the back by default, leaves its middle out on
     ).toBe(true);
 
     // "Spreads evenly" spreads that side and leaves no gap to show
-    await page.getByTestId("outline-gap-spread").click();
+    await (await gapOption(page, "outline-gap-spread")).click();
     await expect
         .poll(async () => (await shapeOverlay(page))!.gaps.length)
         .toBe(0);
@@ -2448,7 +2510,7 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
         count: ALL.length,
     });
 
-    // Selected again, it reopens in Spread at its seed; the inspector's
+    // Selected again, it reopens in Spread at its seed; the editor's
     // Reshuffle saves the next layout as one undo step
     await page.keyboard.press("Escape");
     const t1 = await marcherScreen(page, 1);
@@ -2460,7 +2522,9 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
         "data-state",
         "on",
     );
-    const again = page.getByTestId("shape-section-reshuffle");
+    const again = page
+        .getByTestId("placed-box-readout")
+        .getByTestId("shape-editor-reshuffle");
     await expect(again).toHaveAttribute("data-seed", "2");
     await again.click();
     await expect
@@ -2473,10 +2537,9 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
 });
 
 // The box's layouts (#387, spec #385; owner lab feedback 2026-10-23): the
-// inspector lists Full · Stagger · Rounded · Short back · Notched with live
-// thumbnails, a layout the count can't make greyed in its place with what it
-// needs; a layout menu sits under the chip, and ↻ beside the size turns the box
-// a quarter. Picking a version lays the box out in it, the recipe keeps it, and
+// layout menu on the editor's second row lists Full · Stagger · Rounded ·
+// Short back · Notched with live thumbnails, a layout the count can't make
+// greyed in its place with what it needs, and ↻ turns the box a quarter. Picking a version lays the box out in it, the recipe keeps it, and
 // the next box starts in it.
 
 /** How many spots stand on each line across, back first */
@@ -2489,7 +2552,7 @@ const rankCounts = (spots: readonly Point[]) => {
     return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c);
 };
 
-test("change: the layout picker lays the box out in the version picked, the recipe keeps it, and the next box starts in it", async ({
+test("change: the layout menu lays the box out in the version picked, the recipe keeps it, and the next box starts in it", async ({
     show,
 }) => {
     const { page } = show;
@@ -2497,18 +2560,11 @@ test("change: the layout picker lays the box out in the version picked, the reci
         localStorage.removeItem("openmarch:shapeLastLayout"),
     );
     await drawBox(show);
-    const picker = page.getByTestId("shape-layout-picker");
-    await expect(picker).toBeVisible();
-    // 8 marchers: every layout but Notched, which stays in its place greyed
-    // with what would make it
-    await expect(page.getByTestId("shape-layout-row-full")).toBeVisible();
-    await expect(
-        page.getByTestId("shape-layout-notched-missing"),
-    ).toBeDisabled();
-    await expect(page.getByTestId("shape-layout-notched-missing")).toHaveText(
-        "add 2",
-    );
-    const stagger = page.getByTestId("shape-layout-stagger-0");
+    const bar = page.getByTestId("shape-tool-readout");
+    await bar.getByTestId("shape-layout-menu").click();
+    const menu = page.getByTestId("shape-layout-menu-content");
+    await menu.getByTestId("shape-layout-menu-row-stagger").hover();
+    const stagger = menu.getByTestId("shape-layout-menu-version-stagger-0");
     await expect(stagger).toHaveText("3 × 3");
     await stagger.hover();
     await expect(page.getByRole("tooltip")).toHaveText(
@@ -2517,8 +2573,7 @@ test("change: the layout picker lays the box out in the version picked, the reci
     await expect(stagger).toHaveAttribute("aria-pressed", "false");
 
     await stagger.click();
-    await expect(stagger).toHaveAttribute("aria-pressed", "true");
-    const bar = page.getByTestId("shape-tool-readout");
+    await expect(menu).toBeHidden();
     await expect(bar.getByTestId("shape-editor-size")).toHaveText("3 × 3");
     await expect(bar.getByTestId("shape-layout-menu")).toHaveText(/Stagger/);
     const spots = (await shapeOverlay(page))!.spots;
@@ -2548,10 +2603,9 @@ test("change: the layout picker lays the box out in the version picked, the reci
     // The next box starts in the layout picked last
     await page.keyboard.press("Escape");
     await drawBox(show);
-    await expect(page.getByTestId("shape-layout-stagger-0")).toHaveAttribute(
-        "aria-pressed",
-        "true",
-    );
+    await expect(
+        page.getByTestId("shape-tool-readout").getByTestId("shape-layout-menu"),
+    ).toHaveText(/Stagger/);
     expect(rankCounts((await shapeOverlay(page))!.spots)).toEqual([3, 2, 3]);
 });
 
@@ -2670,7 +2724,9 @@ test("change: Cmd/Ctrl-drag from the center dot pulls the pivot out onto a march
 }) => {
     const { page } = show;
     await drawBox(show);
-    const section = page.getByTestId("transform-section");
+    const editor = page.getByTestId("shape-tool-readout");
+    const pivotButton = editor.getByTestId("shape-editor-pivot");
+    await expect(pivotButton).toHaveAttribute("data-pivot", "c");
     let overlay = (await shapeOverlay(page))!;
     expect(overlay.pivotMark).toBeNull();
     const center = overlay.centerDot!;
@@ -2684,13 +2740,20 @@ test("change: Cmd/Ctrl-drag from the center dot pulls the pivot out onto a march
     overlay = (await shapeOverlay(page))!;
     expect(near(overlay.pivotMark!, t1)).toBe(true);
     expect(near(overlay.centerDot!, center)).toBe(true);
-    // Off the grid's 9 points, so none of them is lit
-    await expect(section.locator('[aria-checked="true"]')).toHaveCount(0);
+    // Off the grid's 9 points, so none of them is lit, in the button's icon
+    // or in its menu
+    await expect(pivotButton).toHaveAttribute("data-pivot", "custom");
+    await pivotButton.click();
+    const grid = page.getByTestId("shape-editor-pivot-grid");
+    await expect(grid).toBeVisible();
+    await expect(grid.locator('[aria-checked="true"]')).toHaveCount(0);
+    await pivotButton.click();
+    await expect(grid).toBeHidden();
 
     // A quarter turn swings the box around T1; the crosshair stays put
-    await section.getByTestId("transform-rotation").click();
-    await page.getByTestId("transform-rotation-input").fill("90");
-    await page.getByTestId("transform-rotation-input").press("Enter");
+    await editor.getByTestId("shape-editor-rotation").click();
+    await page.getByTestId("shape-editor-rotation-input").fill("90");
+    await page.getByTestId("shape-editor-rotation-input").press("Enter");
     overlay = (await shapeOverlay(page))!;
     expect(near(overlay.pivotMark!, t1)).toBe(true);
     const swung = {
@@ -2736,10 +2799,47 @@ test("change: Cmd/Ctrl-drag from the center dot pulls the pivot out onto a march
         .toBeNull();
     await expect.poll(stored).toBeUndefined();
     expect(await undoSteps(show)).toBe(steps + 1);
-    await expect(section.getByTestId("transform-pivot-c")).toHaveAttribute(
+    await expect(
+        page
+            .getByTestId("placed-box-readout")
+            .getByTestId("shape-editor-pivot"),
+    ).toHaveAttribute("data-pivot", "c");
+});
+
+test("change: the editor's pivot menu picks a corner of the 3 × 3 grid, its icon shows it, and turns go around it (#435)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    const pivotButton = editor.getByTestId("shape-editor-pivot");
+    await pivotButton.click();
+    const grid = page.getByTestId("shape-editor-pivot-grid");
+    await expect(grid.getByRole("radio")).toHaveCount(9);
+    await expect(grid.getByTestId("shape-editor-pivot-grid-c")).toHaveAttribute(
         "aria-checked",
         "true",
     );
+    // Picking one closes the menu, and the button's icon lights it
+    await grid.getByTestId("shape-editor-pivot-grid-nw").click();
+    await expect(grid).toBeHidden();
+    await expect(pivotButton).toHaveAttribute("data-pivot", "nw");
+
+    // The back-left corner stays where it is through a quarter turn
+    const outline = (await shapeOverlay(page))!.outline!;
+    const corner = {
+        x: Math.min(...outline.map((p) => p.x)),
+        y: Math.min(...outline.map((p) => p.y)),
+    };
+    await editor.getByTestId("shape-editor-rotation").click();
+    await page.getByTestId("shape-editor-rotation-input").fill("90");
+    await page.getByTestId("shape-editor-rotation-input").press("Enter");
+    await expect(editor.getByTestId("shape-editor-rotation")).toHaveText("90°");
+    const turned = (await shapeOverlay(page))!.outline!;
+    expect(
+        turned.some((p) => Math.hypot(p.x - corner.x, p.y - corner.y) < CLOSE),
+    ).toBe(true);
+    expect(turned).not.toEqual(outline);
 });
 
 // The command bar (#354): `/` and ⌘K open one bar; Shape › Box docks it at the
@@ -3348,7 +3448,7 @@ test("change: ☆ Save keeps a box's spacing as a starred saved shape that draws
     await expect(page.getByTestId("shape-library-saved-empty")).toBeVisible();
 });
 
-test("change: ☆ Save at the bottom of the inspector's shape section saves a selected placed box, starred in the library", async ({
+test("change: ☆ Save in the floating editor saves a selected placed box, starred in the library", async ({
     show,
 }) => {
     const { page } = show;
@@ -3357,13 +3457,14 @@ test("change: ☆ Save at the bottom of the inspector's shape section saves a se
     await page.mouse.click(t3.x, t3.y);
     await expect(page.getByTestId("placed-box-readout")).toBeVisible();
 
-    const section = page.getByTestId("shape-tool-section");
-    await section.getByTestId("shape-section-save").click();
-    const name = section.getByTestId("shape-section-save-name");
+    const editor = page.getByTestId("placed-box-readout");
+    await editor.getByTestId("shape-editor-save").click();
+    const name = page.getByTestId("shape-editor-save-name");
     await expect(name).toBeFocused();
     await name.fill("Placed box");
-    await section.getByTestId("shape-section-save-confirm").click();
-    await expect(section.getByTestId("shape-section-save")).toHaveText(
+    await page.getByTestId("shape-editor-save-confirm").click();
+    await expect(editor.getByTestId("shape-editor-save")).toHaveAttribute(
+        "aria-label",
         "Saved as Placed box",
     );
 
@@ -3396,17 +3497,16 @@ test("change: a box saved with a description reopens from the show's copy with i
     await page.mouse.click(t3.x, t3.y);
     await expect(page.getByTestId("placed-box-readout")).toBeVisible();
 
-    const section = page.getByTestId("shape-tool-section");
-    await section.getByTestId("shape-section-save").click();
-    const name = section.getByTestId("shape-section-save-name");
+    const editor = page.getByTestId("placed-box-readout");
+    await editor.getByTestId("shape-editor-save").click();
+    const name = page.getByTestId("shape-editor-save-name");
     await expect(name).toBeFocused();
     await name.fill("Opener block");
     const description = "Company front for the opener, then into the arc";
-    await section
-        .getByTestId("shape-section-save-description")
-        .fill(description);
+    await page.getByTestId("shape-editor-save-description").fill(description);
     await page.keyboard.press("Enter");
-    await expect(section.getByTestId("shape-section-save")).toHaveText(
+    await expect(editor.getByTestId("shape-editor-save")).toHaveAttribute(
+        "aria-label",
         "Saved as Opener block",
     );
 
@@ -3563,8 +3663,7 @@ test("change: O opens the circle tool; a drag from the center draws it, its hand
     const steps = await undoSteps(show);
     await selectAll(page);
     await page.keyboard.press("o");
-    await expect(page.getByTestId("shape-tool-hint")).toBeVisible();
-    await expect(page.getByTestId("shape-tool-section")).toContainText(
+    await expect(page.getByTestId("shape-tool-hint")).toContainText(
         "draw a circle",
     );
 
@@ -3590,8 +3689,10 @@ test("change: O opens the circle tool; a drag from the center draws it, its hand
                 Math.abs(p.y - (center.y + r)) < CLOSE,
         ),
     ).toBe(true);
-    // Outline and Spread, Outline on (and never Grid)
-    await expect(page.getByTestId("shape-tool-section")).toBeVisible();
+    // Outline and Spread on the editor's second row, Outline on (and never Grid)
+    await expect(
+        page.getByTestId("shape-tool-readout").getByTestId("shape-mode-switch"),
+    ).toBeVisible();
     await expect(page.getByTestId("shape-mode-outline")).toHaveAttribute(
         "data-state",
         "on",
@@ -3736,12 +3837,11 @@ test("change: a click on a placed circle's member selects it whole, its handle c
         .poll(async () => (await shapeOverlay(page))?.handles.length)
         .toBe(1);
     expect((await readField(page)).handles).toBeNull();
-    await expect(page.getByTestId("placed-box-summary")).toHaveText(
-        "Circle · 6 steps",
-    );
     // A circle has no count across to step
     await expect(
-        page.getByTestId("placed-box-summary").getByRole("button"),
+        page
+            .getByTestId("placed-box-readout")
+            .getByRole("button", { name: /across/ }),
     ).toHaveCount(0);
     await expect(
         page
@@ -3772,9 +3872,11 @@ test("change: a click on a placed circle's member selects it whole, its handle c
     for (const chord of chords(after, center))
         expect(Math.abs(chord - 9 * S)).toBeLessThan(CLOSE);
     expect((await readField(page)).selection).toEqual(ALL);
-    await expect(page.getByTestId("placed-box-summary")).toHaveText(
-        "Circle · 9 steps",
-    );
+    await expect(
+        page
+            .getByTestId("placed-box-readout")
+            .getByTestId("shape-editor-interval"),
+    ).toHaveText("9");
     await expectCanvasMatchesShow(show);
 
     // Inside it, the outline of the rest is drawn and labelled

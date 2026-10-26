@@ -6,8 +6,8 @@ import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 
 /**
- * How the shape is filled (spec #385): Files, Outline or Spread, in the inspector's shape section.
- * Only the kind's own modes show, and nothing while it has one. Picking one is one change of the
+ * How the shape is filled (spec #385): Grid, Outline or Spread, first on the floating editor's
+ * second row (#435). Only the kind's own modes show, and nothing while it has one. Picking one is one change of the
  * shape (one undo step, or one save for a placed shape).
  */
 export function ModeSwitch({
@@ -25,7 +25,9 @@ export function ModeSwitch({
         <SegmentedTextSwitch
             ariaLabel={tolgee.t("shapes.edit.mode.label", "Fill")}
             testId="shape-mode-switch"
-            className="self-start"
+            // Sized for the editor's row: no inset well, 24 px targets
+            className="border-0 bg-transparent p-0 shadow-none"
+            itemClassName="min-h-24"
             options={modes.map((mode) => ({
                 value: mode,
                 label: tolgee.t(`shapes.edit.mode.${mode}`, MODE_LABELS[mode]),

@@ -7,7 +7,7 @@ import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
 import { ModeSwitch } from "../ModeSwitch";
 import { DEFAULT_ODD_GAP } from "../../distribute/distribution";
 
-/** The inspector's mode switch (#386): only the kind's modes, hidden with one */
+/** The editor's mode switch (#386, #435): only the kind's modes, hidden with one */
 
 afterEach(cleanup);
 

@@ -18,7 +18,7 @@ import {
 } from "@phosphor-icons/react";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { DEGREE, rotationDegrees } from "../frame/frame";
-import { pivotOf } from "../frame/pivot";
+import { pivotOf, withPivot } from "../frame/pivot";
 import {
     flipShape,
     scrubTurn,
@@ -54,6 +54,9 @@ import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
 import { SaveShapeButton } from "../library/SaveShapeButton";
 import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
+import { ModeSwitch } from "./ModeSwitch";
+import { OutlineGap } from "./OutlineGap";
+import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 
@@ -70,15 +73,16 @@ const GAP_PX = 14;
  * under it shows, and it is solid while the pointer is over either, with focus inside it or a
  * menu of its open (`ShapeEditorSurface.css`). Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
  * One row, no ⋯ (#429; owner: keep it compact), for a box:
- * `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`, and in Spread
- * `↔ 2 steps Reshuffle │ …`. Every number can be typed or dragged, and follows the field: across
- * is side to side however the box is turned. ↻ adds a quarter turn to the degrees beside it.
+ * `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⌖▾ ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`. Every number can be
+ * typed or dragged, and follows the field: across is side to side however the box is turned. ↻
+ * adds a quarter turn to the degrees beside it, and ⌖▾ opens the pivot grid (#435).
  * Recalculate works out who goes where again by least travel, which moving and turning keep until
  * it's pressed, and shows its word only when it would change something; Close up shows for a
  * placed shape with holes (#392). Pathways and ☆ Save, which leave the shape as it is, come last
- * before Place. Its
- * controls show the app's tooltips (`RichTips`). Under the editor, a box in Files has its layout
- * menu in a pill of its own (#387, #429). Place shows only for a new shape; a selected placed
+ * before Place. Its controls show the app's tooltips (`RichTips`). Under the editor, a pill of
+ * its own says how the shape is filled (#435): `Grid · Outline · Spread`, then the box's layout
+ * menu in Grid, the leftover menu in Outline, or Reshuffle in Spread. With it, the editor has
+ * everything the inspector had for a shape. Place shows only for a new shape; a selected placed
  * shape saves each edit on release. While the open shape waits out of sight (#416) the editor
  * hides, and away from its moment a chip goes back to it.
  */
@@ -324,12 +328,6 @@ function ShapeEditorBar({
                         </span>
                     </>
                 )}
-                <ReshuffleButton
-                    target={target}
-                    envFor={() => envFor(PLAIN)}
-                    className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
-                    testId="shape-editor-reshuffle"
-                />
                 {target.drawnOn && (
                     <span className="text-text/50">from {target.drawnOn}</span>
                 )}
@@ -376,6 +374,11 @@ function ShapeEditorBar({
                             );
                             return true;
                         }}
+                    />
+                    <PivotMenu
+                        pivot={pivot}
+                        onPick={(key) => update((now) => withPivot(now, key))}
+                        testId="shape-editor-pivot"
                     />
                     <IconButton
                         label="Flip side to side"
@@ -446,13 +449,24 @@ function ShapeEditorBar({
                     </>
                 )}
             </div>
-            {/* The layout settings: a pill of their own under the editor (owner). Only the bar and
-                the pill take the pointer, not the empty space beside the pill */}
-            <LayoutMenu
-                target={target}
-                envFor={() => envFor(PLAIN)}
-                className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal border px-6 py-2"
-            />
+            {/* How it's filled: a pill of its own under the editor (owner, #435), the mode switch
+                first, then what that mode has (a box's layout in Grid, the gap in Outline,
+                Reshuffle in Spread). Hidden when the kind has none of them. Only the bar and the
+                pill take the pointer, not the empty space beside the pill */}
+            <div
+                className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2 empty:hidden"
+                data-testid={`${testId}-fill`}
+            >
+                <ModeSwitch target={target} envFor={() => envFor(PLAIN)} />
+                <LayoutMenu target={target} envFor={() => envFor(PLAIN)} />
+                <OutlineGap target={target} envFor={() => envFor(PLAIN)} />
+                <ReshuffleButton
+                    target={target}
+                    envFor={() => envFor(PLAIN)}
+                    className="rounded-4 hover:text-accent hover:bg-fg-2 min-h-24 px-4 py-2"
+                    testId="shape-editor-reshuffle"
+                />
+            </div>
         </div>
     );
 }
