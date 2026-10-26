@@ -23,7 +23,14 @@ removed.** _(Part 1, ticket A/B.)_
   - This reverses the 2026-10-09 amendment, whose purpose the stored move ends now serve: a later
     page with its own move never follows an earlier edit.
 - **Set to previous page leaves the page with no move of the marcher's own.** For a marcher in a
-  shared or longer move, its slot is split out of the move first, as Split by marcher does.
+  shared or longer move, the move is cut in time at the page's flags, and the marcher is removed
+  from that page's part, compacting the slot. The Expert drag back in a shared move does the same.
+  Shape and follow-the-leader members are refused, with a message naming them.
+- **Migration:** a new migration (numbered after main's latest) drops the table and **prunes stored
+  undo groups that name it**. Fork nightlies and the lab build already ship migration 0018, so
+  testers' files may hold kept rows and kept steps in their history. An older nightly opening a
+  migrated file errors on its kept queries.
+- The 2026-10-16 amendment's list of page-move writers loses "kept spots".
 
 **Amendment (2026-10-2x, project owner): Held holds are stored.** _(Part 2, ticket D.)_
 
@@ -32,17 +39,27 @@ then moves the whole hold, by editing the move that arrives at its start. An unm
 **following**: an edit inside it starts a new move there. Both are holds to the resolver (spec R-6),
 so the mark is app data:
 
-- A new table, `timeline_held_spans` (`id INTEGER PRIMARY KEY`, `marcher_id` referencing `marchers`
-  `ON DELETE CASCADE`, `start_beat`, `end_beat`, with `end_beat > start_beat`).
+- A new table, `timeline_held_marks`:
+  - `id INTEGER PRIMARY KEY`;
+  - `marcher_id`, referencing `marchers` `ON DELETE CASCADE`;
+  - `start_beat >= 0`, and `end_beat > start_beat`;
+  - `UNIQUE (marcher_id, start_beat)`.
   - It isn't in `timeline_change_log`, and the resolver never reads it.
   - It is in `tablesWithHistory`. The id is the rowid, so undo restores the same row (C-2).
-- **Invariants,** kept by the write functions in the same edit, and checked by a test after every
-  timeline command (as I-L1):
-  - **H-1:** a span lies where the marcher has no move in charge;
-  - **H-2:** it starts at the marcher's arrival (a visible move end, or beat 0);
-  - **H-3:** one marcher's spans don't overlap.
+  - It is in `DISPLAY_TABLES` and the query invalidation map, so mark-only edits refresh the
+    views.
+- **Invariants,** checked at commit time beside `timeline_commit_violations`. They are plain SQL
+  over `timeline_assignments` and need no layer derivation:
+  - **H-1:** no row of the marcher overlaps the mark;
+  - **H-2:** a row of the marcher ends at the mark's start, or the start is 0;
+  - **H-3:** one marcher's marks don't overlap.
+- **Upkeep:** a shared step in `transactionWithHistory`, before the drain, trims marks that rows now
+  cover and deletes marks whose arrival is gone. Paths that move an arrival pass an old→new map. It
+  never runs during undo/redo replay (C-6).
+- **Page and beat edits:** the ripple maps a mark's start like a row end and its end like a row
+  start.
 - **The rules per write path** are in `docs/timeline/research/holds/01-edit-rules.md`.
-- **The converter writes no spans.**
+- **The converter writes no marks.**
 - **File format:** the version stays 8 (unreleased). Files from earlier development builds get the
   empty table from the migration. A build without it shows held stretches as following.
 
