@@ -62,7 +62,7 @@ const GAP_PX = 14;
  * change most. It moves with the shape and flips above it when there's no room below. Before a
  * shape is drawn, a hint at the top of the field says how to draw one.
  *
- * For an open shape it fades with the pointer away from both the shape and itself, so what's
+ * It fades with the pointer away from both the shape, open or placed (#430), and itself, so what's
  * under it shows, and it is solid while the pointer is over either, with focus inside it or a
  * menu of its open (`ShapeEditorSurface.css`). Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
  * For a box: `− 6 × 2 + ↻ │ ↔ 2 ↕ 2 steps 🔗 │ ⋯ │ Place`, and in Spread `↔ 2 steps Reshuffle
@@ -101,8 +101,6 @@ export function ShapeEditor({ stepPx }: { stepPx: number }) {
             target={target}
             stepPx={stepPx}
             testId={toolOpen ? "shape-tool-readout" : "placed-box-readout"}
-            // An open shape's editor fades with the pointer away; a placed one's stays solid
-            fades={toolOpen}
         />
     );
 }
@@ -119,17 +117,14 @@ function ShapeEditorBar({
     target,
     stepPx,
     testId,
-    fades,
 }: {
     target: ShapeEditTarget;
     stepPx: number;
     testId: string;
-    /** Fades with the pointer away from the shape and the editor (#426) */
-    fades: boolean;
 }) {
     const { kind, params, spots } = target;
     const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
-    // An open shape's editor fades with the pointer away from it and the shape (#426)
+    // The editor fades with the pointer away from it and the shape (#426, #430)
     const overShape = useShapePointerOver();
     // The shape's own pivot (#350), the same in Basic and Expert (spec #344)
     const pivot = pivotOf(params);
@@ -189,7 +184,6 @@ function ShapeEditorBar({
             ref={place.ref}
             className="shape-editor-surface rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal absolute z-10 flex flex-col gap-4 border px-6 py-4 whitespace-nowrap"
             style={place.style}
-            data-fades={fades}
             data-over={overShape}
             {...place.hold}
             data-testid={testId}
