@@ -156,6 +156,42 @@ const backFrom = (from: number, interval: number) => {
     return out;
 };
 
+/**
+ * The field's lines a shape's edge can be pulled onto (#425), in field units: x for lines side to
+ * side, y for front to back. The checkpoints used as references, visible or not (a front
+ * sideline is invisible but still a line), and the half lines where the field has them. Not the
+ * step grid.
+ */
+export function fieldReferenceLines(fp: FieldProperties): {
+    x: number[];
+    y: number[];
+} {
+    const x = fp.xCheckpoints
+        .filter((c) => c.useAsReference)
+        .map((c) => checkpointX(fp, c));
+    const y = fp.yCheckpoints
+        .filter((c) => c.useAsReference)
+        .map((c) => checkpointY(fp, c));
+    // The half lines where the 2D plan draws them
+    if (fp.halfLineXInterval)
+        x.push(
+            ...linesFrom(
+                fp.centerFrontPoint.xPixels,
+                fp.pixelsPerStep * fp.halfLineXInterval,
+                fp.width,
+            ),
+        );
+    if (fp.halfLineYInterval) {
+        const interval = fp.pixelsPerStep * fp.halfLineYInterval;
+        y.push(...backFrom(gridStartY(fp) - interval, interval));
+    }
+    const once = (values: number[]) =>
+        values
+            .sort((a, b) => a - b)
+            .filter((v, i, all) => i === 0 || v - all[i - 1]! > 1e-6);
+    return { x: once(x), y: once(y) };
+}
+
 /** Where a field image goes, fit or fill */
 export const fieldImagePlacement = (
     fieldProperties: Pick<

@@ -200,6 +200,19 @@ export type FieldTestShapeOverlay = {
     gliding: boolean;
     /** The controls are faint: the pointer is away from the shape (#403). */
     calm: boolean;
+    /** Guides along the field's lines the shape's edges are on, field units (#425). */
+    guides: {
+        from: { x: number; y: number };
+        to: { x: number; y: number };
+        label: string | null;
+    }[];
+    /** The shape's sides on a guide's line, drawn thicker, field units (#425). */
+    guideEdges: {
+        from: { x: number; y: number };
+        to: { x: number; y: number };
+    }[];
+    /** The spots standing on a guide, tinted, field units (#425). */
+    onGuides: { x: number; y: number }[];
 };
 
 /** A placed box outlined on the field. */
