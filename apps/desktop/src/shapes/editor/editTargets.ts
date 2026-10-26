@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useTimelineResolverStore } from "@/timeline/timelineStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { carryPivot } from "../frame/pivot";
 import { currentShapeField, shapeContextFor } from "../field/shapeFieldContext";
@@ -59,6 +60,12 @@ export interface ShapeEditTarget {
     /** One change at once: a typed number, a button */
     apply(params: unknown): void;
     /**
+     * One change worked out from the shape as it is now, not as the editor last drew it: a key
+     * pressed twice before the editor redraws turns it twice (review). A placed shape takes no
+     * new change while the last one is still being saved.
+     */
+    update(change: (params: unknown) => unknown): void;
+    /**
      * Recalculate who goes where (#429): the marchers on the shape's spots by least travel from
      * where they come from, as one change. Null when that changes nothing, so the button is
      * disabled; moving and turning keep who goes where until it's pressed.
@@ -84,8 +91,13 @@ export function useToolEditTarget(): ShapeEditTarget | null {
     const tool = useShapeToolStore((s) => s.tool);
     const away = useShapeHidden();
     const place = useApplyShape();
+    // During a drag it isn't worked out (a full least-travel solve): it keeps what it last was,
+    // so the button doesn't go off and flash back on around every drag (#429)
+    const lastCan = useRef(false);
     return useMemo(() => {
         if (!tool || tool.params === null || away) return null;
+        const can = tool.gesture ? lastCan.current : toolCanRecalculate(tool);
+        lastCan.current = can;
         return {
             kind: tool.kind,
             params: tool.params,
@@ -101,7 +113,15 @@ export function useToolEditTarget(): ShapeEditTarget | null {
                     : updateTool(cancelGesture),
             apply: (params) =>
                 withField((ctx) => updateTool((t) => edit(t, params, ctx))),
-            recalculate: toolCanRecalculate(tool)
+            update: (change) =>
+                withField((ctx) =>
+                    updateTool((t) =>
+                        t.params === null || t.gesture
+                            ? t
+                            : edit(t, change(t.params), ctx),
+                    ),
+                ),
+            recalculate: can
                 ? () =>
                       withField((ctx) => updateTool((t) => recalculate(t, ctx)))
                 : null,
@@ -112,11 +132,59 @@ export function useToolEditTarget(): ShapeEditTarget | null {
 /** How long a saved drag's preview may outlast the save before the box is read back */
 const PREVIEW_HOLD_MS = 1000;
 
+/**
+ * Runs a write of `box`, unless one started from it is still going: until it's read back, `box`
+ * is the old one, and a change worked out from it would undo the last (review)
+ */
+const oneWriteAtATime =
+    (
+        writing: { current: PlacedBox | null },
+        queued: { current: Change[] },
+        box: PlacedBox,
+    ) =>
+    (run: () => Promise<void>) => {
+        if (writing.current === box) return;
+        writing.current = box;
+        void run()
+            .catch(() => undefined)
+            .finally(() =>
+                // Read back normally moves on first (a new box); a failed write mustn't stick,
+                // nor the changes waiting for it
+                setTimeout(() => {
+                    if (writing.current !== box) return;
+                    writing.current = null;
+                    queued.current = [];
+                }, PREVIEW_HOLD_MS),
+            );
+    };
+
+type Change = (params: unknown) => unknown;
+
+/** The box read back after a write: the changes that waited for it, as one more change */
+function useWaitingChanges(
+    target: ShapeEditTarget | null,
+    queued: { current: Change[] },
+) {
+    useEffect(() => {
+        if (!target || queued.current.length === 0) return;
+        const changes = queued.current;
+        queued.current = [];
+        target.update((params) =>
+            changes.reduce<unknown>((p, change) => change(p), params),
+        );
+    }, [target, queued]);
+}
+
 /** The selected placed shape, of any kind, or null with none selected */
 export function usePlacedEditTarget(): ShapeEditTarget | null {
     const box = useBoxSelectionStore((s) => s.selected);
     const queryClient = useQueryClient();
     const drawnOn = useDrawnOnPage(box);
+    const resolverVersion = useTimelineResolverStore((s) => s.version);
+    /** The box a write started from, until a newer one is read back */
+    const writing = useRef<PlacedBox | null>(null);
+    /** Changes asked for while it was being written, for the box read back */
+    const queued = useRef<Change[]>([]);
     // Where the members come from moves with the start flag
     const startFlag = useTimelineSelectionStore((s) =>
         s.isolation
@@ -125,12 +193,15 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
               ? s.selection.start
               : null,
     );
-    return useMemo(() => {
+    const target = useMemo((): ShapeEditTarget | null => {
         if (!box) return null;
+        const write = oneWriteAtATime(writing, queued, box);
         const save = (params: unknown) =>
-            commitBox(box, params, queryClient).finally(() =>
-                // Normally the box read back replaces the preview first (useShapeFieldModes)
-                setTimeout(() => previewPlacedBox(null), PREVIEW_HOLD_MS),
+            write(() =>
+                commitBox(box, params, queryClient).finally(() =>
+                    // Normally the box read back replaces the preview first (useShapeFieldModes)
+                    setTimeout(() => previewPlacedBox(null), PREVIEW_HOLD_MS),
+                ),
             );
         return {
             kind: box.kind,
@@ -143,23 +214,33 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
                 previewPlacedBox(carryPivot(box.params, params)),
             end: (keep) => {
                 const { params } = usePlacedBoxPreviewStore.getState();
-                if (keep && params && params !== box.params) void save(params);
+                if (keep && params && params !== box.params) save(params);
                 else previewPlacedBox(null);
             },
             apply: (params) => {
-                if (params !== box.params)
-                    void save(carryPivot(box.params, params));
+                if (params !== box.params) save(carryPivot(box.params, params));
+            },
+            update: (change) => {
+                // Mid-write, the change waits for the box read back, so presses add up
+                if (writing.current === box) {
+                    queued.current.push(change);
+                    return;
+                }
+                const params = change(box.params);
+                if (params !== box.params) save(carryPivot(box.params, params));
             },
             // With no start flag (at home) there's nowhere else to come from
             recalculate:
                 startFlag !== null && placedCanRecalculate(box)
                     ? () =>
-                          void commitBox(
-                              box,
-                              box.params,
-                              queryClient,
-                              true,
-                              originsOf(box),
+                          write(() =>
+                              commitBox(
+                                  box,
+                                  box.params,
+                                  queryClient,
+                                  true,
+                                  originsOf(box),
+                              ),
                           )
                     : null,
             ...(canCloseUp(box) && {
@@ -173,19 +254,21 @@ export function usePlacedEditTarget(): ShapeEditTarget | null {
                     );
                     // Least travel, whatever order it was laid out in (spec #385)
                     if (params !== null)
-                        void commitBox(box, params, queryClient, true);
+                        write(() => commitBox(box, params, queryClient, true));
                 },
             }),
         };
-    }, [box, queryClient, drawnOn, startFlag]);
+        // `resolverVersion` changes whenever the resolver's answers may have: where members come
+        // from moves with an undo or redo at the start flag too (review)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [box, queryClient, drawnOn, startFlag, resolverVersion]);
+    useWaitingChanges(target, queued);
+    return target;
 }
 
-/** Not worked out during a drag: it's a full least-travel solve */
 const toolCanRecalculate = (tool: Parameters<typeof canRecalculate>[0]) => {
     const field = currentShapeField();
-    return (
-        !tool.gesture && !!field && canRecalculate(tool, shapeContextFor(field))
-    );
+    return !!field && canRecalculate(tool, shapeContextFor(field));
 };
 
 /** Where a placed shape's members come from: the start flag */

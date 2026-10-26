@@ -703,6 +703,8 @@ const STATIC_ACTIONS = {
         editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Alt+R"],
+        // One press, one turn or recalculation: a held key doesn't repeat it (review)
+        ignoreRepeat: true,
     },
     shapeRecalculate: {
         labelKey: "actions.shape.recalculate",
@@ -711,6 +713,8 @@ const STATIC_ACTIONS = {
         editsDrill: true,
         scope: "canvas",
         defaultBindings: ["Shift+R"],
+        // One press, one turn or recalculation: a held key doesn't repeat it (review)
+        ignoreRepeat: true,
     },
 
     // Cursor mode

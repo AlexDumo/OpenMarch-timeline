@@ -6,6 +6,7 @@ import { getActionShortcutLabel } from "@/shortcuts/labels";
 import type { ActionId } from "@/shortcuts/definitions";
 import { useShortcutOverridesStore } from "@/stores/ShortcutOverridesStore";
 import { RichTips, Tip } from "./Tip";
+import { RecalculateFace, useRecalculateLook } from "./RecalculateButton";
 import {
     FlipHorizontalIcon,
     FlipVerticalIcon,
@@ -14,7 +15,6 @@ import {
     PlusIcon,
     ArrowClockwiseIcon,
     PathIcon,
-    UserSwitchIcon,
 } from "@phosphor-icons/react";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { DEGREE, rotationDegrees } from "../frame/frame";
@@ -155,18 +155,32 @@ function ShapeEditorBar({
         const env = envFor(PLAIN);
         if (env) target.apply(change(env));
     };
+    /** A change from the shape as it is now, so quick presses add up (`ShapeEditTarget.update`) */
+    const update = (change: (params: unknown, env: ToolEnv) => unknown) => {
+        const env = envFor(PLAIN);
+        if (env) target.update((now) => change(now, env));
+    };
     const turnQuarter = () =>
-        apply((env) => quarterTurn(kind, params, spots, env));
+        update((now, env) => quarterTurn(kind, now, spots, env));
     const flip = (axis: "across" | "deep") =>
-        apply((env) => flipShape(kind, params, spots, axis, pivot, env));
+        update((now, env) =>
+            flipShape(kind, now, spots, axis, pivotOf(now), env),
+        );
     // The keys act on this shape while its editor shows (#429): mounted after the app's own
-    // handlers, the flips sit on top of the marchers' flips and go back when it closes
-    useActionHandler("flipHorizontal", () => flip("across"));
-    useActionHandler("flipVertical", () => flip("deep"));
-    useActionHandler("shapeQuarterTurn", turnQuarter);
+    // handlers, the flips sit on top of the marchers' flips and go back when it closes. A held
+    // key doesn't repeat them (review)
+    useActionHandler("flipHorizontal", () => flip("across"), {
+        ignoreRepeat: true,
+    });
+    useActionHandler("flipVertical", () => flip("deep"), {
+        ignoreRepeat: true,
+    });
+    useActionHandler("shapeQuarterTurn", turnQuarter, { ignoreRepeat: true });
     useActionHandler("shapeRecalculate", () => target.recalculate?.(), {
         enabled: target.recalculate !== null,
+        ignoreRepeat: true,
     });
+    const recalculateLook = useRecalculateLook(target.recalculate !== null);
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const keyOf = (id: ActionId) => getActionShortcutLabel(id, { overrides });
     /** A number's drag: the change from the shape at the press, previewed live */
@@ -389,13 +403,13 @@ function ShapeEditorBar({
                         }
                         disabled={!target.recalculate}
                         shortcut={keyOf("shapeRecalculate")}
+                        className="relative"
                         onClick={() => target.recalculate?.()}
                         testId="shape-editor-recalculate"
                     >
-                        <UserSwitchIcon size={14} />
                         {/* The word only when it can do something: greyed out, it's the widest
                             thing on the bar for nothing (owner, review round r429) */}
-                        {target.recalculate && "Recalculate"}
+                        <RecalculateFace look={recalculateLook} />
                     </IconButton>
                     <CloseUpButton
                         target={target}
@@ -559,6 +573,7 @@ function PathwaysButton() {
 function IconButton({
     label,
     shortcut,
+    className,
     onClick,
     disabled,
     pressed,
@@ -568,6 +583,7 @@ function IconButton({
     label: string;
     /** Its keys, shown in the tooltip as keycaps */
     shortcut?: string;
+    className?: string;
     onClick: () => void;
     disabled?: boolean;
     pressed?: boolean;
@@ -595,6 +611,7 @@ function IconButton({
                     // glance without reading as a solid button (owner)
                     pressed ? "bg-accent/15 text-accent" : "hover:text-accent",
                     disabled && "cursor-default opacity-40 hover:text-inherit",
+                    className,
                 )}
             >
                 {children}

@@ -940,8 +940,6 @@
             "orderNearestHelp": "Each marcher goes to a spot near where they stand, with the least travel overall.",
             "orderKeep": "Keep order",
             "orderKeepHelp": "Marchers keep their order along the shape.",
-            "orderDrill": "Drill number",
-            "orderDrillHelp": "Marchers fill the shape by drill number, from its start.",
             "reverse": "Reverse",
             "apply": "Place",
             "cancel": "Cancel",

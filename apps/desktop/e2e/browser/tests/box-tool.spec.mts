@@ -406,8 +406,13 @@ test("change: one row with no ⋯; after a move and a quarter turn, Recalculate 
     await expect(page.getByTestId("shape-editor-rotation")).toHaveText("90°");
     const kept = (await shapeOverlay(page))!.walks;
     await expect(recalculate).toBeEnabled();
-    // Its word shows only when it would change something
+    // Its word shows only when it would change something, and it flashes the accent as it
+    // becomes available, then settles
     await expect(recalculate).toHaveText("Recalculate");
+    await expect(recalculate.locator("[data-flashing]")).toHaveCount(1);
+    await expect(recalculate.locator("[data-flashing]")).toHaveCount(0, {
+        timeout: 3000,
+    });
 
     await recalculate.click();
     // The same spots, shared out again: someone goes somewhere else
@@ -444,6 +449,26 @@ test("change: one row with no ⋯; after a move and a quarter turn, Recalculate 
     await expect(recalculate).toBeEnabled();
 });
 
+test("change: with less motion asked for, Recalculate's word appears at once, without the spring (#429)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await drawBox(show);
+    await page.getByTestId("shape-editor-quarter-turn").click();
+    const word = page
+        .getByTestId("shape-editor-recalculate")
+        .getByText("Recalculate");
+    await expect(word).toBeVisible();
+    // Full width and opacity straight away, not part way through a spring
+    expect(
+        await word.evaluate((el) => ({
+            maxWidth: el.style.maxWidth,
+            opacity: el.style.opacity,
+        })),
+    ).toEqual({ maxWidth: "7em", opacity: "1" });
+});
+
 test("change: with a shape open, Alt+R turns it 90°, Alt+F and Alt+Shift+F flip it, and Shift+R recalculates who goes where (#429)", async ({
     show,
 }) => {
@@ -456,8 +481,12 @@ test("change: with a shape open, Alt+R turns it 90°, Alt+F and Alt+Shift+F flip
     // Nobody is in a text field: the keys go to the shape
     await page.mouse.move(5, 300);
 
+    // Two quick presses add up, each from the shape as it is by then (review)
     await page.keyboard.press("Alt+R");
-    await expect(rotation).toHaveText("90°");
+    await page.keyboard.press("Alt+R");
+    await expect(rotation).toHaveText("180°");
+    await page.keyboard.press("Alt+R");
+    await expect(rotation).toHaveText("270°");
     await expect.poll(() => readout(page)).toMatch(/^2 × 4 · /);
 
     const turned = await walks();
@@ -514,6 +543,21 @@ test("change: on a selected placed shape, Recalculate shares its spots out again
     await expect(page.getByTestId("placed-box-readout")).toBeVisible();
     const recalculate = page.getByTestId("shape-editor-recalculate");
     await expect(recalculate).toBeDisabled();
+
+    // Two quick Alt+R presses on a placed shape add up, the second waiting for the first's save
+    // (review): a half turn, as two undo steps
+    const before = await undoSteps(show);
+    await page.mouse.move(5, 300);
+    await page.keyboard.press("Alt+R");
+    await page.keyboard.press("Alt+R");
+    await expect(page.getByTestId("shape-editor-rotation")).toHaveText("180°");
+    await waitForIdle(page);
+    expect(await undoSteps(show)).toBe(before + 2);
+    await page.keyboard.press("ControlOrMeta+z");
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(() => savedPositions(show, 2)).toEqual(placed);
+    await waitForIdle(page);
+    await page.getByTestId("placed-box-readout").waitFor();
 
     // A quarter turn keeps everyone's spot
     await page.getByTestId("shape-editor-quarter-turn").click();

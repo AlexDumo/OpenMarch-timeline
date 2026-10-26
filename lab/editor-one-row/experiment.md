@@ -9,7 +9,7 @@ variants: []
 questions:
   - Could you find turn, flip and save without the ⋯ menu? Was anything hard to find?
   - Is ↻ next to the degrees (it adds 90°) clear? Did you try typing or dragging the degrees too?
-  - Did Recalculate do what you expected? Was it clear why it was greyed out when it was?
+  - Did Recalculate do what you expected? Did you notice when it became available? Was it clear why it was greyed out when it was?
   - Is the editor too wide now? Which button would you give up first?
   - Did you use the keys (Alt+R, Alt+F, Shift+R)? Are those the right keys?
 ---
@@ -29,7 +29,8 @@ under the editor.
   shape keeps everyone on their own spot. Recalculate works out who goes
   where again, so everyone travels the least from where they start the move.
   It's one undo step. When the order is already least travel it's just a
-  greyed-out icon; the word "Recalculate" shows when it can change something.
+  greyed-out icon. When it can change something, the word "Recalculate"
+  springs open and the button flashes purple for a moment.
 - **Close up** for a placed shape with empty spots.
 - At the end, before Place: the **pathways** toggle and **☆ Save**. They
   don't change the shape itself.
