@@ -327,4 +327,46 @@ describe("stretching a turned box onto a line (#446)", () => {
             hasCorner(stretch(near, N, "e", t, { snap: false }), { x: 80 }),
         ).toBe(false);
     });
+
+    describe("at a shallow turn, an edge running nearly along a hash (review of #448)", () => {
+        const N5 = 10;
+        // 5 files by 2 ranks, 2 steps apart: own half sizes 40 across, 10 deep
+        const W = 40;
+        const D = 10;
+        for (const degrees of [15, 5, 1]) {
+            it(`at ${degrees}°, travels no farther than the radius to catch it, and every half step stays reachable`, () => {
+                const base: BoxParams = {
+                    center: { x: 0, y: 0 },
+                    rotation: (degrees * Math.PI) / 180,
+                    files: 5,
+                    across: 2 * STEP,
+                    deep: 2 * STEP,
+                };
+                const c = frameToField(boxFrame(base, N5), { x: W, y: -D });
+                // Its back-east corner 1 from the front hash
+                const p = {
+                    ...base,
+                    center: { x: 40 - c.x, y: -281 - c.y },
+                };
+                const radius = 5; // 6 px, capped at a quarter of 4 gaps' half step
+                const seen = new Set<string>();
+                for (let ex = W - 20; ex <= W + 20; ex += 0.05) {
+                    const to = frameToField(boxFrame(p, N5), { x: ex, y: 0 });
+                    const out = stretch(p, N5, "e", to);
+                    const edge = -W + 4 * out.across;
+                    const onHalves =
+                        Math.abs(
+                            out.across / half - Math.round(out.across / half),
+                        ) < 1e-9;
+                    if (!onHalves)
+                        expect(Math.abs(edge - ex)).toBeLessThanOrEqual(
+                            radius + 1e-6,
+                        );
+                    seen.add(out.across.toFixed(6));
+                }
+                for (const across of [15, 20, 25])
+                    expect(seen.has(across.toFixed(6)), `${across}`).toBe(true);
+            });
+        }
+    });
 });
