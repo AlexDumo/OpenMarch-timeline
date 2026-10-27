@@ -1,4 +1,4 @@
-import { evenSpread, type SpreadLayout } from "./spread";
+import { evenSpread, spreadSize, type SpreadLayout } from "./spread";
 import type {
     Distribution,
     FilesDistribution,
@@ -49,8 +49,8 @@ export interface DistributeInput {
  * The spots, in a fixed order that recipes store slot numbers by: Files goes line by line from
  * the back rank (the left file when turned), along each from left (back) to right (front);
  * Outline clockwise from the back-left corner; Spread from the back, left to right. A spread's
- * spots are `across` apart at the closest pair, filling `region`'s shape at the size
- * {@link spreadScale} gives (its own size doesn't count).
+ * spots are no closer than `across`, filling `region`'s shape at the size {@link spreadScale}
+ * gives (its own size doesn't count), the same for every seed.
  */
 export function distribute(input: DistributeInput): FrameSpot[] {
     if (input.n <= 0) return [];
@@ -126,7 +126,7 @@ function spreadLayout(
         spreads.set(key, known);
         return known;
     }
-    const layout = evenSpread(region, n, d.seed, from);
+    const layout = evenSpread(region, n, d.seed, from, d.generator);
     spreads.set(key, layout);
     if (spreads.size > SPREADS_KEPT)
         spreads.delete(spreads.keys().next().value!);
@@ -135,7 +135,8 @@ function spreadLayout(
 
 /**
  * How big a Spread of `n` spots `interval` apart is: `region`'s shape times this. A spread's size
- * follows its count and interval, never the region's own size, so a kind sizes its frame by it.
+ * follows its count and interval, never the region's own size or (from generator 2) its seed, so
+ * a kind sizes its frame by it.
  */
 export function spreadScale(
     region: Region,
@@ -143,7 +144,12 @@ export function spreadScale(
     d: SpreadDistribution,
     interval: number,
 ): number {
-    return spreadLayout(region, Math.max(1, n), d).scale * interval;
+    // Generator 1 is as big as its seed's layout; later ones as their shape and count (#439),
+    // so the frame doesn't wait for a layout (a handle drag asks at every file count)
+    if (d.generator === 1)
+        return spreadLayout(region, Math.max(1, n), d).scale * interval;
+    if (!(region.area > 0)) return 0;
+    return spreadSize(region, Math.max(1, n)) * interval;
 }
 
 /** A Files layout as lines of marchers: how wide a full line is, and how many stand in each */

@@ -68,6 +68,11 @@ const closest = (spots: readonly XY[]) =>
         ...spots.flatMap((p, i) => spots.slice(i + 1).map((q) => dist(p, q))),
     );
 const xyOf = (spots: readonly XY[]) => spots.map((s) => [s.x, s.y]);
+/** A spread's closest pair: never under the interval, and not much over it (#439) */
+function expectSpacing(spots: readonly XY[], interval: number) {
+    expect(closest(spots)).toBeGreaterThanOrEqual(interval * (1 - 1e-6));
+    expect(closest(spots)).toBeLessThan(interval * 1.2);
+}
 
 /** What placing `t` saves, through JSON as the database keeps it, read back as a placed shape */
 function reopened(t: ToolState, change?: (params: object) => object) {
@@ -111,12 +116,12 @@ describe("a box in Spread", () => {
         );
     });
 
-    it("stands its marchers inside its frame, the closest pair one across interval apart", () => {
+    it("stands its marchers inside its frame, no closer than the across interval", () => {
         const s = spreadOf(box());
         const p = s.params as BoxParams;
         const spots = slotsOf(s, ctx);
         expect(spots).toHaveLength(N);
-        expect(closest(spots)).toBeCloseTo(p.across, 9);
+        expectSpacing(spots, p.across);
         const frame = boxTool.frameOf(p, N);
         for (const spot of spots) {
             const local = fieldToFrame(frame, spot);
@@ -145,7 +150,7 @@ describe("a box in Spread", () => {
         const after = s.params as BoxParams;
         expect(filesOf(after)).toBeGreaterThan(filesOf(before));
         expect(after.across).toBe(before.across);
-        expect(closest(slotsOf(s, ctx))).toBeCloseTo(after.across, 9);
+        expectSpacing(slotsOf(s, ctx), after.across);
         const now = boxTool.frameOf(after, N);
         // The west side, where it was (to the half-step grid the center snaps to)
         expect(
@@ -160,10 +165,7 @@ describe("a box in Spread", () => {
             (distributionOf(boxTool, r.params, N) as SpreadDistribution).seed,
         ).toBe(2);
         expect(xyOf(slotsOf(r, ctx))).not.toEqual(xyOf(slotsOf(s, ctx)));
-        expect(closest(slotsOf(r, ctx))).toBeCloseTo(
-            (r.params as BoxParams).across,
-            9,
-        );
+        expectSpacing(slotsOf(r, ctx), (r.params as BoxParams).across);
         expect(xyOf(slotsOf(undo(r), ctx))).toEqual(xyOf(slotsOf(s, ctx)));
     });
 
@@ -189,6 +191,23 @@ describe("a box in Spread", () => {
         // Its numbers are its spacing: no files, ranks or short rank
         const across = (s.params as BoxParams).across / STEP;
         expect(placedBoxSummary(shapes[0]!, STEP)).toBe(`${across} steps`);
+    });
+
+    it("reopens a generator 1 spread laid out as it was placed, closest pair exactly one interval (#439)", () => {
+        const s = spreadOf(box());
+        const { shapes, stored } = reopened(s, (params) => ({
+            ...params,
+            distribution: {
+                ...(params as { distribution: object }).distribution,
+                generator: 1,
+            },
+        }));
+        expect(shapes).toHaveLength(1);
+        expect(boxDistribution(shapes[0]!.params as BoxParams)).toMatchObject({
+            generator: 1,
+        });
+        const spots = boxTool.shape.generate(shapes[0]!.params, N, ctx);
+        expect(closest(spots)).toBeCloseTo(stored.across as number, 9);
     });
 
     it("stays plain positions when its generator is one this app doesn't have", () => {
@@ -246,12 +265,12 @@ describe("a circle in Spread", () => {
         expect(xyOf(slotsOf(undo(s), ctx))).toEqual(xyOf(slotsOf(t, ctx)));
     });
 
-    it("fills its disc, the closest pair one interval apart", () => {
+    it("fills its disc, no closer than the interval", () => {
         const s = spreadOf(circle());
         const p = s.params as CircleParams;
         const spots = slotsOf(s, ctx);
         expect(spots).toHaveLength(N);
-        expect(closest(spots)).toBeCloseTo(p.interval, 9);
+        expectSpacing(spots, p.interval);
         const r = radiusOf(p, N);
         for (const spot of spots) expect(dist(spot, p.center)).toBeLessThan(r);
         // Not a ring: some stand well inside
@@ -271,7 +290,7 @@ describe("a circle in Spread", () => {
         expect(after.interval).toBeGreaterThan(before.interval);
         // The rim lands near the cursor: within a half step's worth of interval
         expect(radiusOf(after, N)).toBeGreaterThan(radiusOf(before, N) + 20);
-        expect(closest(slotsOf(s, ctx))).toBeCloseTo(after.interval, 9);
+        expectSpacing(slotsOf(s, ctx), after.interval);
     });
 
     it("reshuffles and reopens like the box", () => {

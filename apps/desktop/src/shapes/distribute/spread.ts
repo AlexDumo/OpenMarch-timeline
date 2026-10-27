@@ -4,8 +4,9 @@ import type { Region } from "./region";
 
 /*
  * Even spread (#391, spec #385): the same idea as `naturalFill` (`geometry/naturalFill.ts`), rebased on the interval and
- * on any closed `Region`. Seeded best candidate, then a push-apart relaxation, scaled so the
- * closest pair is exactly one interval. Each marcher keeps its own seeded distance from the edge,
+ * on any closed `Region`. Seeded best candidate, then a push-apart relaxation, fitted to a frame
+ * the shape and count size, no pair closer than one interval (generator 1 scaled each seed's
+ * layout to its closest pair instead). Each marcher keeps its own seeded distance from the edge,
  * so no rows form along straight edges.
  *
  * Determinism: the layout loop uses only + − × ÷, `Math.sqrt`, `Math.min`/`max`/`abs`/`floor`
@@ -17,8 +18,23 @@ import type { Region } from "./region";
 /**
  * Which spread algorithm this is. Recipes store it, so a reopened shape is laid out by the
  * algorithm that placed it; change it whenever the spots for a seed would change.
+ *
+ * 1 (#391) put the closest pair exactly one interval apart, so the spread's size, and with it the
+ * shape's frame, changed with the seed. 2 (#439) sizes the frame by the shape and count alone and
+ * fits each seed's spots inside it, so Reshuffle never moves the frame; the interval is then the
+ * closest any pair stands, for every seed.
  */
-export const SPREAD_GENERATOR = 1;
+export const SPREAD_GENERATOR = 2;
+
+/** The generators this app lays out: older ones stay, so placed spreads don't move on reopen */
+export const SPREAD_GENERATORS: readonly number[] = [1, 2];
+
+/**
+ * Generator 2: one interval is this many hex spacings of the frame. Low enough that every seed's
+ * closest pair reaches the interval (0.9 is a little too tight at 100), and as big a frame as
+ * generator 1's on average (#439).
+ */
+const CLOSEST_OF_HEX = 0.88;
 
 /** Every marcher's distance from the edge lies in this band, in spacings (RESEARCH.md §5) */
 const MARGIN_MIN = 0.15;
@@ -266,16 +282,17 @@ const median = (values: readonly number[]): number =>
 /**
  * Pairs nearer than `floor` (by default {@link FLOOR} of the median neighbor distance) step
  * apart, each half the shortfall, held inside their margins (or only the least anyone keeps, when
- * `squeezed`), until none are (or the rounds run out)
+ * `squeezed`), until none are (or the rounds run out). Generator 1 leaves a pair alone (`least`).
  */
 function raiseFloor(
     w: Work,
     floor = FLOOR * median(nearestDistances(w.points)),
     squeezed = false,
+    least = 3,
 ) {
     const { points, margins } = w;
     const n = points.length;
-    if (n < 3) return;
+    if (n < least) return;
     const mx = new Float64Array(n);
     const my = new Float64Array(n);
     for (let round = 0; round < FLOOR_ROUNDS; round++) {
@@ -360,19 +377,33 @@ function freshWork(region: Region, n: number, seed: number): Work {
 }
 
 /**
- * `n` spots spread evenly over `region`'s shape, one interval (1) apart at the closest pair.
- * The region's size doesn't matter, only its shape: the spread's own size follows the count.
+ * How big a generator 2 spread of `n` is at an interval of 1: `region` times this. Only the
+ * shape and count decide it, never the seed, so it needs no layout: the region holds the spots
+ * {@link CLOSEST_OF_HEX} hex spacings apart.
+ */
+export function spreadSize(region: Region, n: number): number {
+    const k = workScale(region, n);
+    return k / (CLOSEST_OF_HEX * hexSpacing(region.area * k * k, n));
+}
+
+/**
+ * `n` spots spread evenly over `region`'s shape at an interval of 1. The region's size doesn't
+ * matter, only its shape: the spread's own size follows the count. Generator 1 puts the closest
+ * pair exactly 1 apart, so its size follows the seed too; generator 2's size follows only the
+ * shape and count, every seed filling the same edge with no pair closer than 1.
  *
  * @param seed which layout (a whole number; the same one gives the same spots)
  * @param from the count `seed` was laid out for, when it differs from `n`: the spots relax from
  *   that layout, new ones placed by best candidate and extra ones taken from the most crowded
  *   spots, so a count change nudges the spread instead of reshuffling it
+ * @param generator which algorithm ({@link SPREAD_GENERATORS}), the one the spread was placed with
  */
 export function evenSpread(
     region: Region,
     n: number,
     seed: number,
     from: number = n,
+    generator: number = SPREAD_GENERATOR,
 ): SpreadLayout {
     if (n <= 0 || !(region.area > 0)) return { spots: [], scale: 0 };
     let w: Work;
@@ -405,10 +436,19 @@ export function evenSpread(
         if (closestPair(w.points) < closest * (1 - 1e-6))
             raiseFloor(w, closest, true);
     }
-    if (n === 1) return { spots: [{ x: 0, y: 0 }], scale: w.k };
+    // Generator 2: an interval is the spacing the shape and count give, whatever the seed
+    const fixed = generator === 1 ? null : spreadSize(region, n) / w.k;
+    if (n === 1) return { spots: [{ x: 0, y: 0 }], scale: w.k * (fixed ?? 1) };
+    if (fixed !== null) {
+        // Pairs closer than the interval step apart where there's room, inside their margins
+        // first, then as near the edge as anyone stands
+        raiseFloor(w, 1 / fixed, false, 2);
+        if (closestPair(w.points) * fixed < 1 - 1e-6)
+            raiseFloor(w, 1 / fixed, true, 2);
+    }
     // Two marchers on one spot can't be scaled apart: lay it out afresh (never seen; a guard)
     if (!(closestPair(w.points) > 0)) w = freshWork(region, n, seed);
-    const unit = 1 / closestPair(w.points);
+    const unit = fixed ?? 1 / closestPair(w.points);
     const spots = w.points
         .map((p) => ({ x: p.x * unit, y: p.y * unit }))
         // Back to front, then left to right, so slot numbers read like a page

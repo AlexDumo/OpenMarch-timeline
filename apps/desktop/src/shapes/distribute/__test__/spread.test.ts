@@ -57,6 +57,12 @@ const REGIONS: Record<string, Region> = {
 
 const dist = (a: XY, b: XY) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 
+/** A spread's closest pair: never under the interval, and not much over it */
+function expectSpacing(closest: number, interval: number, what?: string) {
+    expect(closest, what).toBeGreaterThanOrEqual(interval * (1 - 1e-6));
+    expect(closest, what).toBeLessThan(interval * 1.2);
+}
+
 /** Each spot's distance to its nearest neighbor */
 function nearest(spots: readonly XY[]): number[] {
     return spots.map((p, i) =>
@@ -109,11 +115,52 @@ describe("Even spread", () => {
             }
     });
 
-    it("puts the closest pair exactly one interval apart", () => {
+    it("puts no pair closer than one interval, and from 12 the closest within 20% of it", () => {
+        // A few marchers have too few neighbors to even out with: they stand as far apart as
+        // the frame lets them, at least the interval
         for (const region of Object.values(REGIONS))
-            for (const n of [2, 5, 12, 36, 100, 300]) {
-                const closest = Math.min(...nearest(spread(region, n)));
-                expect(closest).toBeCloseTo(INTERVAL, 9);
+            for (const n of [2, 3, 5, 12, 36, 100, 300])
+                for (const seed of [1, 2, 3]) {
+                    const what = `${region.key} ${n} ${seed}`;
+                    const closest = Math.min(
+                        ...nearest(
+                            spread(region, n, spreadDistribution(seed, n)),
+                        ),
+                    );
+                    if (n >= 12) expectSpacing(closest, INTERVAL, what);
+                    else
+                        expect(closest, what).toBeGreaterThanOrEqual(
+                            INTERVAL * (1 - 1e-6),
+                        );
+                }
+    });
+
+    it("keeps one size for every seed, so Reshuffle keeps the shape's frame (#439)", () => {
+        for (const region of Object.values(REGIONS))
+            for (const n of [1, 2, 12, 36, 100]) {
+                const scale = spreadScale(
+                    region,
+                    n,
+                    spreadDistribution(1, n),
+                    1,
+                );
+                for (const seed of [2, 3, 7])
+                    expect(
+                        spreadScale(region, n, spreadDistribution(seed, n), 1),
+                    ).toBe(scale);
+            }
+    });
+
+    it("lays out a generator 1 spread as it always did, its closest pair exactly one interval", () => {
+        for (const region of Object.values(REGIONS))
+            for (const n of [5, 36]) {
+                const d = { ...spreadDistribution(2, n), generator: 1 };
+                expect(Math.min(...nearest(spread(region, n, d)))).toBeCloseTo(
+                    INTERVAL,
+                    9,
+                );
+                const layout = evenSpread(region, n, 2, n, 1);
+                expect(spreadScale(region, n, d, 1)).toBe(layout.scale);
             }
     });
 
@@ -267,10 +314,7 @@ describe("Even spread", () => {
                             little / moved.length,
                             `${region.key} ${n}→${m}`,
                         ).toBeGreaterThan(0.75);
-                        expect(Math.min(...nearest(after))).toBeCloseTo(
-                            INTERVAL,
-                            9,
-                        );
+                        expectSpacing(Math.min(...nearest(after)), INTERVAL);
                     }
                 }
         });
@@ -302,6 +346,15 @@ describe("Even spread", () => {
                 generator: SPREAD_GENERATOR,
                 count: 30,
             });
+        });
+
+        it("reads a generator 1 spread (#391) as one, so it lays out as placed", () => {
+            expect(
+                storedDistribution(
+                    { distribution: { mode: "spread", seed: 3, generator: 1 } },
+                    1,
+                ),
+            ).toEqual({ mode: "spread", seed: 3, generator: 1 });
         });
 
         it("reads a spread from a generator this app doesn't have as none", () => {

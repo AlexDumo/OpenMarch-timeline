@@ -2370,9 +2370,10 @@ test("change: Outline on 7 spreads the back by default, leaves its middle out on
     ).toBe(true);
 });
 
-// Even spread (#391, spec #385): a scatter with no visible files, the closest
-// pair one interval apart. Reshuffle in the chip and the inspector moves to the
-// next seed as one undo step, and the recipe keeps the seed and generator.
+// Even spread (#391, spec #385): a scatter with no visible files, no pair closer
+// than one interval. Reshuffle in the chip and the inspector moves to the next
+// seed as one undo step, keeping the shape's frame and outline (#439), and the
+// recipe keeps the seed and generator.
 
 /** The closest distance between any two spots */
 const closestPair = (spots: readonly Point[]) =>
@@ -2386,7 +2387,7 @@ const sameSpots = (a: readonly Point[], b: readonly Point[]) =>
     a.length === b.length &&
     a.every((p, i) => Math.hypot(p.x - b[i].x, p.y - b[i].y) < CLOSE);
 
-test("change: Spread scatters the box one interval apart, Reshuffle gives a new layout as one undo step, and the placed box reshuffles again", async ({
+test("change: Spread scatters the box one interval apart, Reshuffle gives a new layout in the same outline as one undo step, and the placed box reshuffles again", async ({
     show,
 }) => {
     const { page } = show;
@@ -2408,18 +2409,22 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     const text = await bar.getByTestId("shape-editor-across").innerText();
     const across =
         Number(text.replace("½", "") || 0) + (text.includes("½") ? 0.5 : 0);
-    const first = (await shapeOverlay(page))!.spots;
+    const opened = (await shapeOverlay(page))!;
+    const first = opened.spots;
     expect(first).toHaveLength(ALL.length);
-    expect(Math.abs(closestPair(first) - across * S)).toBeLessThan(CLOSE);
+    expect(closestPair(first)).toBeGreaterThan(across * S - CLOSE);
+    expect(closestPair(first)).toBeLessThan(across * S * 1.2);
 
-    // Reshuffle in the chip: a new layout, still one interval apart
+    // Reshuffle in the chip: a new layout in the same outline, no closer
     const reshuffle = bar.getByTestId("shape-editor-reshuffle");
     await expect(reshuffle).toHaveAttribute("data-seed", "1");
     await reshuffle.click();
     await expect(reshuffle).toHaveAttribute("data-seed", "2");
-    const second = (await shapeOverlay(page))!.spots;
+    const reshuffled = (await shapeOverlay(page))!;
+    const second = reshuffled.spots;
     expect(sameSpots(first, second)).toBe(false);
-    expect(Math.abs(closestPair(second) - across * S)).toBeLessThan(CLOSE);
+    expect(sameSpots(reshuffled.outline!, opened.outline!)).toBe(true);
+    expect(closestPair(second)).toBeGreaterThan(across * S - CLOSE);
 
     // One undo step brings the first layout back, redo the second
     await page.keyboard.press("ControlOrMeta+z");
@@ -2444,7 +2449,7 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     expect((await recipeParams()).distribution).toEqual({
         mode: "spread",
         seed: 2,
-        generator: 1,
+        generator: 2,
         count: ALL.length,
     });
 
