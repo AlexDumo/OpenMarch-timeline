@@ -113,7 +113,7 @@ export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {
  */
 const solvedFor = new WeakMap<
     readonly number[],
-    { params: unknown; marchers: ToolState["marchers"] }
+    { params: unknown; marchers: ToolState["marchers"]; ctx: ShapeContext }
 >();
 
 /** Who goes where on the current shape, by least travel from where the marchers start */
@@ -132,6 +132,7 @@ function reassign(state: ToolState, ctx: ShapeContext): ToolState {
         solvedFor.set(assignment, {
             params: state.params,
             marchers: state.marchers,
+            ctx,
         });
     return { ...state, assignment };
 }
@@ -316,7 +317,8 @@ export function canRecalculate(state: ToolState, ctx: ShapeContext): boolean {
     if (
         solved !== undefined &&
         solved.params === state.params &&
-        solved.marchers === state.marchers
+        solved.marchers === state.marchers &&
+        solved.ctx === ctx
     )
         return false;
     const fresh = reassign(state, ctx).assignment;

@@ -20,8 +20,6 @@ export const usePlacedBoxStore = create<{
 
 let reading: Promise<void> | null = null;
 let again = false;
-/** The resolver version the last read started at */
-let readAt: number | null = null;
 
 /** The same recipes read back keep the array, so nothing re-renders for them (#455) */
 const sameRecipes = (a: readonly PlacedRecipe[], b: readonly PlacedRecipe[]) =>
@@ -34,7 +32,6 @@ export function invalidatePlacedBoxes(): void {
         again = true;
         return;
     }
-    readAt = useTimelineResolverStore.getState().version;
     reading = readAllShapeRecipes(db)
         .then((recipes) => {
             if (!sameRecipes(usePlacedBoxStore.getState().recipes, recipes))
@@ -75,24 +72,6 @@ export function placedBoxesAt(
             }
         },
     });
-}
-
-/**
- * Whether no placed shape has any of `marcherIds` as a member, known without reading: the
- * recipes were read since the resolver's last change and no read is under way. A coordinate
- * edit of only such marchers can't touch a shape (#455)
- */
-export function inNoPlacedBox(marcherIds: readonly number[]): boolean {
-    if (
-        reading ||
-        again ||
-        readAt !== useTimelineResolverStore.getState().version
-    )
-        return false;
-    const ids = new Set(marcherIds);
-    return usePlacedBoxStore
-        .getState()
-        .recipes.every((r) => r.members.every((m) => !ids.has(m.marcherId)));
 }
 
 /**

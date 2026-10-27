@@ -327,17 +327,20 @@ const StartMarks = memo(function StartMarks({
     drawing,
     theme,
     marchers,
+    looks,
     scale,
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
     marchers: FieldMarchers;
+    /** The marchers' appearance version */
+    looks: number;
     /** The dots' size step at this zoom (`dotSizes`) */
     scale: number;
 }) {
     const ringIds = drawing.ringIds;
     const ringKey = ringIds?.join(",");
-    const { appearanceVersion, ids } = marchers;
+    const { ids } = marchers;
     // Each ring's color, worked out again only when whose rings or their looks change (#455)
     const colors = useMemo(() => {
         const shape = rgbaToString(theme.shape);
@@ -356,7 +359,7 @@ const StartMarks = memo(function StartMarks({
         });
         // ringIds by content, marchers by their versions
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ringKey, theme, marchers, appearanceVersion, ids]);
+    }, [ringKey, theme, marchers, looks, ids]);
     const shape = rgbaToString(theme.shape);
     const r = DOT_RADIUS * scale;
     return (
@@ -440,11 +443,14 @@ const ShapeBody = memo(function ShapeBody({
     drawing,
     theme,
     marchers,
+    looks,
     scale,
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
     marchers: FieldMarchers;
+    /** The marchers' appearance version: their looks changed, so the ghosts redraw */
+    looks: number;
     scale: number;
 }) {
     const shape = rgbaToString(theme.shape);
@@ -471,6 +477,7 @@ const ShapeBody = memo(function ShapeBody({
                 drawing={drawing}
                 theme={theme}
                 marchers={marchers}
+                looks={looks}
                 scale={scale}
             />
             {drawing.walks.map(({ from: a, to: b }, i) => {
@@ -576,6 +583,7 @@ function ModeDrawing({
                     drawing={drawing}
                     theme={theme}
                     marchers={marchers}
+                    looks={marchers.appearanceVersion}
                     scale={dotSizes(z).scale}
                 />
             </g>

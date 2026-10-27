@@ -34,10 +34,7 @@ import { toastPassThrough } from "./timelinePassThrough";
 import { offerOnlyThisPage, ownMovers } from "./timelineOnlyThisPage";
 import { boxMembershipEdit } from "@/shapes/placed/boxMembership";
 import { showLeftBoxToast } from "@/shapes/placed/leftBoxToast";
-import {
-    inNoPlacedBox,
-    invalidatePlacedBoxes,
-} from "@/shapes/placed/placedBoxStore";
+import { invalidatePlacedBoxes } from "@/shapes/placed/placedBoxStore";
 import { editingPositionAt } from "./timelineIsolationPlan";
 import {
     resolverSpans,
@@ -405,9 +402,7 @@ function membershipFor(
     moves: readonly TimelineMarcherMove[],
 ) {
     const beat = beatOfTarget(target);
-    // Marchers in no box have none to follow them, and read nothing for them (#455)
-    if (beat === undefined || inNoPlacedBox(moves.map((m) => m.marcherId)))
-        return null;
+    if (beat === undefined) return null;
     return boxMembershipEdit({
         moves,
         beat,
