@@ -62,7 +62,15 @@ describe("the Reshuffle button", () => {
         fireEvent.click(screen.getByTestId("reshuffle-seed"));
         const input = screen.getByTestId("reshuffle-seed-input");
         expect(input).toHaveValue("2");
-        expect(screen.getByText("Same seed, same spread")).toBeVisible();
+        // The seed holds for this count and shape: both said beside it
+        expect(screen.getByTestId("reshuffle-seed-count")).toHaveTextContent(
+            `for ${N} marchers`,
+        );
+        expect(
+            screen.getByText(
+                "Same seed and count in the same shape: same spread. The spacing only scales it.",
+            ),
+        ).toBeVisible();
         fireEvent.change(input, { target: { value: "1" } });
         fireEvent.keyDown(input, { key: "Enter" });
         expect(apply).toHaveBeenCalledTimes(1);

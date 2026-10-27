@@ -2712,7 +2712,10 @@ test("change: Reshuffle's caret opens the spread's seed, and typing an earlier s
     await expect(input).toHaveValue("2");
     await expect(
         page.getByTestId("shape-editor-reshuffle-seed-menu"),
-    ).toContainText("Same seed, same spread");
+    ).toContainText("Same seed and count in the same shape: same spread");
+    await expect(
+        page.getByTestId("shape-editor-reshuffle-seed-count"),
+    ).toHaveText("for 8 marchers");
 
     await input.fill("1");
     await page.keyboard.press("Enter");

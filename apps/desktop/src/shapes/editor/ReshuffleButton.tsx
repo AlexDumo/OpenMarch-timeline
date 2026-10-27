@@ -21,7 +21,9 @@ type Target = Pick<ShapeEditTarget, "kind" | "params" | "spots" | "apply">;
  * Reshuffle (spec #385): a spread's next layout, on the floating editor's second row. Shown only
  * while the shape is an even spread. One change of the shape (one undo step, or one save for a
  * placed shape). A split button (#437): its caret opens the spread's seed, for people who want a
- * spread back exactly, to type or copy.
+ * spread back exactly, to type or copy. A spread is its seed, its count and its shape's
+ * proportions (a box's across × deep); the spacing only scales it, and the size it was drawn at
+ * doesn't count (`spreadScale`), so the seed shows with the count and the hint says so (owner).
  */
 export function ReshuffleButton({
     target,
@@ -172,6 +174,16 @@ function SeedMenu({
                                 e.currentTarget.removeAttribute("aria-invalid");
                             }}
                         />
+                        <span
+                            className="text-text/60"
+                            data-testid={`${testId}-count`}
+                        >
+                            {tolgee.t(
+                                "shapes.edit.seed.count",
+                                "for {count} marchers",
+                                { count: target.spots },
+                            )}
+                        </span>
                         <Tip
                             label={
                                 copied
@@ -199,10 +211,10 @@ function SeedMenu({
                             </button>
                         </Tip>
                     </div>
-                    <p className="text-text/60 text-xs">
+                    <p className="text-text/60 max-w-[15rem] text-xs">
                         {tolgee.t(
                             "shapes.edit.seed.hint",
-                            "Same seed, same spread",
+                            "Same seed and count in the same shape: same spread. The spacing only scales it.",
                         )}
                     </p>
                 </Popover.Content>
