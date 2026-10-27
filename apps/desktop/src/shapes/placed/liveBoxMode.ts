@@ -32,6 +32,7 @@ import {
     setShapePointerOver,
     shapeCalm,
     useShapePointerStore,
+    guideGesture,
 } from "../field/shapePointer";
 
 /** An odd-count outline's gap, the spot nobody stands on by design (#390) */
@@ -48,62 +49,66 @@ interface Shown {
     readonly calm: boolean;
     /** The pivot a cell of the editor's pivot menu points at (#437), drawn by `frameDrawing` */
     readonly pivotPreview: PivotKey | null;
+    /** A spacing number is being dragged: guides as for a move (#452) */
+    readonly scrubbing: boolean;
 }
 
-const drawingOf = memoDrawing(({ live: saved, preview, calm }: Shown) => {
-    const live =
-        preview && !saved.gesture ? { ...saved, params: preview } : saved;
-    const changing = live.gesture !== null || preview !== null;
-    const field = currentShapeField();
-    if (!field) return null;
-    const { kind, spots: n } = live.box;
-    const ctx = shapeContextFor(field);
-    // Each member keeps their spot (or the box is laid out again for a new count across); a
-    // spread drafts its spots while a handle is dragged (#439), and the commit lays them out
-    const targets = changing
-        ? liveTargets(
-              live.box,
-              live.params,
-              live.gesture ? { ...ctx, draft: true } : ctx,
-          ).members
-        : [];
-    const names = drillNumbers(field);
-    const env = toolEnvFor(field, { shift: false, alt: false });
-    return {
-        stage: "open" as const,
-        outline: shapeOutline(kind, live.params, n),
-        // While a gesture goes, where the marchers will stand, and who
-        spots: targets,
-        walks: [],
-        labels:
-            targets.length <= SPOT_LABEL_LIMIT
-                ? targets.map((t) => ({
-                      at: t,
-                      text: names.get(t.marcherId) ?? "",
-                  }))
-                : [],
-        calm,
-        handles: kind.handles(live.params, n).map((h) => h.at),
-        gaps: gapsOf(kind, live.params, n),
-        ...frameDrawing(
-            kind,
-            live.params,
-            n,
-            live.gesture,
-            live.pointer ?? null,
-            env,
-        ),
-        ...guideDrawing(
-            kind,
-            live.params,
-            n,
-            targets,
-            live.gesture,
-            env,
-            field,
-        ),
-    };
-});
+const drawingOf = memoDrawing(
+    ({ live: saved, preview, calm, scrubbing }: Shown) => {
+        const live =
+            preview && !saved.gesture ? { ...saved, params: preview } : saved;
+        const changing = live.gesture !== null || preview !== null;
+        const field = currentShapeField();
+        if (!field) return null;
+        const { kind, spots: n } = live.box;
+        const ctx = shapeContextFor(field);
+        // Each member keeps their spot (or the box is laid out again for a new count across); a
+        // spread drafts its spots while a handle is dragged (#439), and the commit lays them out
+        const targets = changing
+            ? liveTargets(
+                  live.box,
+                  live.params,
+                  live.gesture ? { ...ctx, draft: true } : ctx,
+              ).members
+            : [];
+        const names = drillNumbers(field);
+        const env = toolEnvFor(field, { shift: false, alt: false });
+        return {
+            stage: "open" as const,
+            outline: shapeOutline(kind, live.params, n),
+            // While a gesture goes, where the marchers will stand, and who
+            spots: targets,
+            walks: [],
+            labels:
+                targets.length <= SPOT_LABEL_LIMIT
+                    ? targets.map((t) => ({
+                          at: t,
+                          text: names.get(t.marcherId) ?? "",
+                      }))
+                    : [],
+            calm,
+            handles: kind.handles(live.params, n).map((h) => h.at),
+            gaps: gapsOf(kind, live.params, n),
+            ...frameDrawing(
+                kind,
+                live.params,
+                n,
+                live.gesture,
+                live.pointer ?? null,
+                env,
+            ),
+            ...guideDrawing(
+                kind,
+                live.params,
+                n,
+                targets,
+                guideGesture(live.gesture, scrubbing),
+                env,
+                field,
+            ),
+        };
+    },
+);
 
 /**
  * A selected placed shape of any kind, edited in place (07-placed-boxes.md), as a field editor
@@ -196,14 +201,21 @@ export class LiveBoxMode implements FieldMode {
     drawing() {
         const preview = usePlacedBoxPreviewStore.getState().params;
         const calm = shapeCalm(this.live.gesture !== null);
-        const { pivotPreview } = useShapePointerStore.getState();
+        const { pivotPreview, scrubbing } = useShapePointerStore.getState();
         if (
             this.shown?.live !== this.live ||
             this.shown.preview !== preview ||
             this.shown.calm !== calm ||
-            this.shown.pivotPreview !== pivotPreview
+            this.shown.pivotPreview !== pivotPreview ||
+            this.shown.scrubbing !== scrubbing
         )
-            this.shown = { live: this.live, preview, calm, pivotPreview };
+            this.shown = {
+                live: this.live,
+                preview,
+                calm,
+                pivotPreview,
+                scrubbing,
+            };
         return drawingOf(this.shown);
     }
 

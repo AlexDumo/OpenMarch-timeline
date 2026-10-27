@@ -2309,6 +2309,53 @@ test("change: moving a box turned 15° lands its front corner on the 40, with th
     expect(Math.abs((await frontCorner()).x - forty)).toBeGreaterThan(CLOSE);
 });
 
+test("change: dragging a 45° box's across spacing lands a corner on a line, with the guide named and the corner ringed, and the spacing stays where it landed (#452)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    await editor.getByTestId("shape-editor-rotation").click();
+    await page.getByTestId("shape-editor-rotation-input").fill("45");
+    await page.getByTestId("shape-editor-rotation-input").press("Enter");
+    await expect(editor.getByTestId("shape-editor-rotation")).toHaveText("45°");
+    const across = editor.getByTestId("shape-editor-across");
+    const box = (await across.boundingBox())!;
+    const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    // Half a pixel at a time until a corner lands on a line: spacings step by half steps every
+    // 8 px, so a line comes within reach well before 160 px
+    let held: HeldGuides | null = null;
+    for (let px = 0.5; px <= 160; px += 0.5) {
+        await page.mouse.move(start.x + px, start.y);
+        const now = await heldGuides(page);
+        if (now.guides.length > 0) {
+            held = now;
+            break;
+        }
+    }
+    expect(held).not.toBeNull();
+    // Named as on the coordinate sheet, the corner ringed: a turned side isn't on the line
+    expect(held!.guides.every((g) => (g.label ?? "").length > 0)).toBe(true);
+    expect(held!.guideMarks.length).toBeGreaterThan(0);
+    const shown = await across.innerText();
+    await page.mouse.up();
+    // Released where it landed: the guide goes, the spacing stays, and a spot is on the line
+    await expect(across).toHaveText(shown);
+    const after = (await shapeOverlay(page))!;
+    expect(after.guides).toEqual([]);
+    const guide = held!.guides[0]!;
+    const upright = Math.abs(guide.from.x - guide.to.x) < CLOSE;
+    expect(
+        after.spots.some((p) =>
+            upright
+                ? Math.abs(p.x - guide.from.x) < CLOSE
+                : Math.abs(p.y - guide.from.y) < CLOSE,
+        ),
+    ).toBe(true);
+});
+
 test("change: moving a selected placed box shows the guide where its edge lands on a line, and saves it there (#444)", async ({
     show,
 }) => {

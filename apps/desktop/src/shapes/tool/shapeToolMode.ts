@@ -34,6 +34,7 @@ import {
     setShapePointerOver,
     shapeCalm,
     useShapePointerStore,
+    guideGesture,
 } from "../field/shapePointer";
 
 /**
@@ -66,6 +67,8 @@ interface Shown {
     readonly walks: boolean;
     /** The pivot a cell of the editor's pivot menu points at (#437), drawn by `frameDrawing` */
     readonly pivotPreview: PivotKey | null;
+    /** A spacing number is being dragged: guides as for a move (#452) */
+    readonly scrubbing: boolean;
 }
 let shown: Shown | null = null;
 const shownNow = (): Shown | null => {
@@ -74,15 +77,16 @@ const shownNow = (): Shown | null => {
     const { hover } = useSpotHover.getState();
     const calm = shapeCalm(!!tool.gesture);
     const walks = useUiSettingsStore.getState().uiSettings.shapeWalks ?? false;
-    const { pivotPreview } = useShapePointerStore.getState();
+    const { pivotPreview, scrubbing } = useShapePointerStore.getState();
     if (
         shown?.tool !== tool ||
         shown.hover !== hover ||
         shown.calm !== calm ||
         shown.walks !== walks ||
-        shown.pivotPreview !== pivotPreview
+        shown.pivotPreview !== pivotPreview ||
+        shown.scrubbing !== scrubbing
     )
-        shown = { tool, hover, calm, walks, pivotPreview };
+        shown = { tool, hover, calm, walks, pivotPreview, scrubbing };
     return shown;
 };
 
@@ -111,84 +115,88 @@ function hoverAt(tool: ToolState, at: XY, radius: number): void {
         useSpotHover.setState({ hover });
 }
 
-const drawingOf = memoDrawing(({ tool, hover, calm, walks }: Shown) => {
-    const field = currentShapeField();
-    if (!field) return null;
-    const ctx = shapeContextFor(field);
-    const n = tool.spots;
-    const spots = slotsOf(tool, ctx);
-    // The marchers' ghosts stand where they start the move: at the start flag (#346, #417). They
-    // always show, so where the marchers come from reads; the pathways toggle is only the walks
-    // (owner lab feedback on #417)
-    const rings = startsOf(tool);
-    const ringIds = tool.marchers.map((m) => m.id);
-    if (tool.params === null)
+const drawingOf = memoDrawing(
+    ({ tool, hover, calm, walks, scrubbing }: Shown) => {
+        const field = currentShapeField();
+        if (!field) return null;
+        const ctx = shapeContextFor(field);
+        const n = tool.spots;
+        const spots = slotsOf(tool, ctx);
+        // The marchers' ghosts stand where they start the move: at the start flag (#346, #417). They
+        // always show, so where the marchers come from reads; the pathways toggle is only the walks
+        // (owner lab feedback on #417)
+        const rings = startsOf(tool);
+        const ringIds = tool.marchers.map((m) => m.id);
+        if (tool.params === null)
+            return {
+                outline: null,
+                spots,
+                walks: [],
+                handles: [],
+                rings,
+                ringIds,
+            };
+        // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every
+        // other gesture holds who goes where, so the walks follow it live.
+        const drawing = tool.gesture?.type === "draw";
+        const targets = drawing ? [] : targetsOf(tool, ctx);
+        const names = drillNumbers(field);
+        const env = toolEnvFor(field, { shift: false, alt: false });
+        const gap = drawing ? null : outlineGapAt(tool.kind, tool.params, n);
+        const g =
+            tool.gesture &&
+            tool.gesture.type !== "draw" &&
+            tool.gesture.type !== "edit"
+                ? tool.gesture
+                : null;
         return {
-            outline: null,
+            stage: drawing ? ("drawing" as const) : ("open" as const),
+            outline: shapeOutline(tool.kind, tool.params, n),
             spots,
-            walks: [],
-            handles: [],
+            walks: walks
+                ? targets.map((t) => ({ from: t.from, to: t.to }))
+                : [],
             rings,
             ringIds,
+            // The controls stay at full strength while the pointer is on the shape, a gesture runs or
+            // the keyboard is in its editor
+            calm,
+            gaps: gap ? [gap] : [],
+            labels:
+                n <= SPOT_LABEL_LIMIT
+                    ? targets.map((t) => ({
+                          at: t.to,
+                          text: names.get(t.id) ?? "",
+                      }))
+                    : [],
+            handles: drawing
+                ? []
+                : tool.kind.handles(tool.params, n).map((h) => h.at),
+            ...(drawing
+                ? {}
+                : frameDrawing(
+                      tool.kind,
+                      tool.params,
+                      n,
+                      g,
+                      tool.pointer ?? null,
+                      env,
+                  )),
+            ...guideDrawing(
+                tool.kind,
+                tool.params,
+                n,
+                spots,
+                guideGesture(tool.gesture, scrubbing),
+                env,
+                field,
+            ),
+            ...(hover && !tool.gesture
+                ? { labels: [{ at: hover.at, text: hover.text }] }
+                : {}),
         };
-    // While a drag draws a new shape: its spots and a dashed outline, no walks yet (06). Every
-    // other gesture holds who goes where, so the walks follow it live.
-    const drawing = tool.gesture?.type === "draw";
-    const targets = drawing ? [] : targetsOf(tool, ctx);
-    const names = drillNumbers(field);
-    const env = toolEnvFor(field, { shift: false, alt: false });
-    const gap = drawing ? null : outlineGapAt(tool.kind, tool.params, n);
-    const g =
-        tool.gesture &&
-        tool.gesture.type !== "draw" &&
-        tool.gesture.type !== "edit"
-            ? tool.gesture
-            : null;
-    return {
-        stage: drawing ? ("drawing" as const) : ("open" as const),
-        outline: shapeOutline(tool.kind, tool.params, n),
-        spots,
-        walks: walks ? targets.map((t) => ({ from: t.from, to: t.to })) : [],
-        rings,
-        ringIds,
-        // The controls stay at full strength while the pointer is on the shape, a gesture runs or
-        // the keyboard is in its editor
-        calm,
-        gaps: gap ? [gap] : [],
-        labels:
-            n <= SPOT_LABEL_LIMIT
-                ? targets.map((t) => ({
-                      at: t.to,
-                      text: names.get(t.id) ?? "",
-                  }))
-                : [],
-        handles: drawing
-            ? []
-            : tool.kind.handles(tool.params, n).map((h) => h.at),
-        ...(drawing
-            ? {}
-            : frameDrawing(
-                  tool.kind,
-                  tool.params,
-                  n,
-                  g,
-                  tool.pointer ?? null,
-                  env,
-              )),
-        ...guideDrawing(
-            tool.kind,
-            tool.params,
-            n,
-            spots,
-            tool.gesture,
-            env,
-            field,
-        ),
-        ...(hover && !tool.gesture
-            ? { labels: [{ at: hover.at, text: hover.text }] }
-            : {}),
-    };
-});
+    },
+);
 
 /**
  * The open shape's marchers glide to their new spots when it changes without a gesture (a press

@@ -13,7 +13,7 @@ import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { editorPlacement } from "./editorPlacement";
 import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
-import { useShapePointerStore } from "../field/shapePointer";
+import { setShapeScrubbing, useShapePointerStore } from "../field/shapePointer";
 import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { getActionShortcutLabel } from "@/shortcuts/labels";
@@ -213,19 +213,27 @@ function ShapeEditorBar({
     const recalculateLook = useRecalculateLook(target.recalculate !== null);
     const overrides = useShortcutOverridesStore((s) => s.overrides);
     const keyOf = (id: ActionId) => getActionShortcutLabel(id, { overrides });
-    /** A number's drag: the change from the shape at the press, previewed live */
+    /**
+     * A number's drag: the change from the shape at the press, previewed live. A spacing's
+     * (`guides`) shows the field lines a corner or the center lands on while it goes (#452).
+     */
     const scrub = (
         change: (b: unknown, m: ScrubMove, env: ToolEnv) => unknown,
+        guides = false,
     ) => ({
         onScrubStart: () => {
             base.current = params;
             target.begin();
+            if (guides) setShapeScrubbing(true);
         },
         onScrub: (m: ScrubMove) => {
             const env = envFor(m);
             if (env) target.preview(change(base.current, m, env));
         },
-        onScrubEnd: (keep: boolean) => target.end(keep),
+        onScrubEnd: (keep: boolean) => {
+            setShapeScrubbing(false);
+            target.end(keep);
+        },
     });
     /** A declared number, typed or dragged */
     const number = ({ param, display }: ChipNumber) => (
@@ -234,7 +242,10 @@ function ShapeEditorBar({
             axis={param.drag}
             label={param.label}
             testId={`shape-editor-${param.key}`}
-            {...scrub((b, m, env) => param.scrub(b, spots, m, env))}
+            {...scrub(
+                (b, m, env) => param.scrub(b, spots, m, env),
+                param.interval === true,
+            )}
             onType={(text) => {
                 const env = envFor(PLAIN);
                 const next = env && param.type(params, spots, text, env);
