@@ -1,4 +1,4 @@
-import { SPREAD_GENERATOR } from "./spread";
+import { SPREAD_GENERATOR, SPREAD_GENERATORS } from "./spread";
 
 /**
  * How a closed shape is filled (spec #385): one host-owned object in a recipe's `params`, beside
@@ -112,14 +112,17 @@ export interface OutlineDistribution {
 }
 
 /**
- * Even spread (#391): a seeded scatter with no visible files, the closest pair one interval
- * apart. Reshuffle moves to the next seed.
+ * Even spread (#391): a seeded scatter with no visible files filling the shape's frame, about one
+ * interval apart. Reshuffle moves to the next seed and keeps the frame (#439).
  */
 export interface SpreadDistribution {
     readonly mode: "spread";
     /** Which layout: a whole number from 1; the same one gives the same spots */
     readonly seed: number;
-    /** The algorithm that laid it out (`SPREAD_GENERATOR`); another reads as plain positions */
+    /**
+     * The algorithm that laid it out (`SPREAD_GENERATOR`, or an older one in `SPREAD_GENERATORS`);
+     * one this app doesn't have reads as plain positions
+     */
     readonly generator: number;
     /**
      * The count the seed was laid out for. At another count the spots relax from that layout
@@ -210,7 +213,8 @@ function readOddGap(v: unknown): OddGap {
  */
 function readSpread(d: object): SpreadDistribution | undefined {
     const { seed, generator, count } = d as Partial<Record<string, unknown>>;
-    if (generator !== SPREAD_GENERATOR) return undefined;
+    if (typeof generator !== "number" || !SPREAD_GENERATORS.includes(generator))
+        return undefined;
     return {
         mode: "spread",
         seed: isWhole(seed) && seed >= 1 ? seed : 1,

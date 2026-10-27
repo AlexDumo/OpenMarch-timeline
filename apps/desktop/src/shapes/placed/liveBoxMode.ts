@@ -58,9 +58,14 @@ const drawingOf = memoDrawing(({ live: saved, preview, calm }: Shown) => {
     if (!field) return null;
     const { kind, spots: n } = live.box;
     const ctx = shapeContextFor(field);
-    // Each member keeps their spot (or the box is laid out again for a new count across)
+    // Each member keeps their spot (or the box is laid out again for a new count across); a
+    // spread drafts its spots while a handle is dragged (#439), and the commit lays them out
     const targets = changing
-        ? liveTargets(live.box, live.params, ctx).members
+        ? liveTargets(
+              live.box,
+              live.params,
+              live.gesture ? { ...ctx, draft: true } : ctx,
+          ).members
         : [];
     const names = drillNumbers(field);
     const env = toolEnvFor(field, { shift: false, alt: false });

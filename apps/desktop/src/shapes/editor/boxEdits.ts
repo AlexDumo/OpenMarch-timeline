@@ -3,6 +3,7 @@ import {
     boxDistribution,
     boxOutlineSides,
     filesOf,
+    isSpread,
     keepRatio,
     ranksOf,
     snapInterval,
@@ -32,6 +33,7 @@ import type { ToolEnv } from "../tool/toolKind";
 import { filesDistribution } from "../distribute/distribution";
 import { layoutOrientations, type LayoutVersion } from "../distribute/layouts";
 import { COUNT_RATE, spacingRate, scrubValue } from "./scrub";
+import { formatSteps, parseSteps } from "./format";
 
 /**
  * What the floating editor's numbers and buttons do to a box (08-shape-system-ux.md, "The floating
@@ -89,6 +91,15 @@ export function withSpacing(
     typed = false,
 ): BoxParams {
     const value = snapInterval(steps * env.stepPx, env, typed);
+    // A spread's interval is whatever fits its frame (#439): typing back the one shown keeps it
+    if (typed && isSpread(p)) {
+        const shown = parseSteps(formatSteps(p.across / env.stepPx));
+        if (
+            shown !== null &&
+            Math.abs(snapInterval(shown * env.stepPx, env, true) - value) < 1e-9
+        )
+            return p;
+    }
     let across = which === "across" ? value : p.across;
     let deep = which === "deep" ? value : p.deep;
     if (env.ratioLocked)
