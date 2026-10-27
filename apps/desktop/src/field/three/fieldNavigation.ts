@@ -173,6 +173,52 @@ export function glideToFit() {
     });
 }
 
+/**
+ * Glides from the current view to `next`, within the zoom and pan limits, as
+ * the floating editor does to keep a shape in view (#441). Like the glide to
+ * the fit, any navigation or a press on the field stops it where it is, and
+ * with reduced motion or in low quality it jumps. Returns the glide's number
+ * for `isGliding`, or null when it jumped.
+ */
+export function glideTo(next: FieldView): number | null {
+    const current = view();
+    const to = clampPan({ ...next, zoom: clampZoom(next.zoom) }, current.field);
+    if (prefersReducedMotion() || !currentQualitySettings().animateView) {
+        setView(to);
+        return null;
+    }
+    const from: FieldView = {
+        width: current.width,
+        height: current.height,
+        zoom: current.zoom,
+        panX: current.panX,
+        panY: current.panY,
+    };
+    stopGlide();
+    rebaseOnResize = false;
+    const id = ++glides;
+    gliding = id;
+    navigated = true;
+    glide.set(0);
+    void glide.start({
+        to: 1,
+        config: GLIDE_CONFIG,
+        onChange: () => {
+            if (gliding === id)
+                useFieldViewStore.setState(viewBetween(from, to, glide.get()));
+        },
+        onRest: ({ finished }) => {
+            if (gliding !== id) return;
+            gliding = null;
+            if (finished) useFieldViewStore.setState(viewBetween(from, to, 1));
+        },
+    });
+    return id;
+}
+
+/** Whether the glide `glideTo` returned is still under way */
+export const isGliding = (id: number | null) => id !== null && gliding === id;
+
 /** How long a switch's glide waits for the pane's new size before going anyway. */
 const RESIZE_WAIT_MS = 100;
 

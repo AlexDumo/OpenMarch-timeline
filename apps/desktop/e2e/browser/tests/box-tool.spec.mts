@@ -3012,12 +3012,209 @@ test.describe("the glide", () => {
     });
 });
 
-// The pivot on the field (#350): Cmd/Ctrl-drag from the center dot pulls it
-// out into a yellow crosshair, it snaps to marchers, turns go around it, it is
-// saved with the box, and a double click sends it back to the center.
+// Keeping the shape and its editor in view (#441, owner: a turned box went
+// partly off the canvas unnoticed). Two lab versions: "Keep in view", the
+// default, pans just far enough to bring the shape and editor back after an
+// edit or a drag; "Hold the editor still" (`?variant=hold-editor`) pans so
+// the editor stays where it was on screen after an edit. Never during a drag.
+
+/** The field element's box in the viewport */
+const fieldRect = async (page: Page) =>
+    (await page.getByTestId("fieldCanvas").boundingBox())!;
+
+/** The view's pan once it has stopped gliding */
+async function settledPan(page: Page): Promise<Point> {
+    let last = "";
+    for (;;) {
+        const { pan } = (await readField(page)).viewport;
+        const now = `${pan.x.toFixed(1)},${pan.y.toFixed(1)}`;
+        if (now === last) return pan;
+        last = now;
+        await page.waitForTimeout(150);
+    }
+}
+
+/** Right-drags the field by (dx, dy) from near its bottom left, away from the box */
+async function panField(page: Page, dx: number, dy: number) {
+    const field = await fieldRect(page);
+    const from = { x: field.x + 40, y: field.y + field.height - 40 };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down({ button: "right" });
+    await page.mouse.move(from.x + dx, from.y + dy, { steps: 8 });
+    await page.mouse.up({ button: "right" });
+}
+
+/** The open shape's outline on screen */
+async function outlineOnScreen(page: Page) {
+    const outline = (await shapeOverlay(page))!.outline!;
+    const points: Point[] = [];
+    for (const p of outline) points.push(await toScreen(page, p));
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    return {
+        left: Math.min(...xs),
+        right: Math.max(...xs),
+        top: Math.min(...ys),
+        bottom: Math.max(...ys),
+    };
+}
+
+/**
+ * Where the floating editor settles, its top middle (it widens about its middle as words come
+ * and go): the same two frames apart, any hold after a press over
+ */
+async function settledEditor(page: Page): Promise<Point> {
+    const editor = page.getByTestId("shape-tool-readout");
+    await expect(editor).toHaveAttribute("data-held", "false");
+    let last: Point | null = null;
+    for (;;) {
+        const b = (await editor.boundingBox())!;
+        const now = { x: b.x + b.width / 2, y: b.y };
+        if (last && near(now, last, 0.5)) return now;
+        last = now;
+        await page.waitForTimeout(150);
+    }
+}
+
+/** Pans the field so the open box's top is `px` below the field's top */
+async function boxTopAt(page: Page, px: number) {
+    const field = await fieldRect(page);
+    const { top } = await outlineOnScreen(page);
+    await panField(page, 0, field.y + px - top);
+    await settledPan(page);
+    expect(
+        Math.abs((await outlineOnScreen(page)).top - (field.y + px)),
+    ).toBeLessThan(1);
+}
 
 const near = (a: Point, b: Point, px = 1.5) =>
     Math.hypot(a.x - b.x, a.y - b.y) <= px;
+
+test("change: Keep in view: a turn that would push the box's corner off the field pans just far enough to bring it back (#441)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    // The 10 × 6 step box just inside the top margin: a quarter turn stands it up past the top
+    await boxTopAt(page, 28);
+    const before = await settledPan(page);
+    const { zoom } = (await readField(page)).viewport;
+    await page.getByTestId("shape-editor-quarter-turn").click();
+    await expect(page.getByTestId("shape-editor-rotation")).toHaveText("90°");
+    const after = await settledPan(page);
+    // Only down, and just far enough: the top ends 24 px inside the field
+    expect(after.y).toBeGreaterThan(before.y + 5);
+    expect(after.x).toBeCloseTo(before.x, 1);
+    const field = await fieldRect(page);
+    expect(
+        Math.abs((await outlineOnScreen(page)).top - (field.y + 24)),
+    ).toBeLessThan(1.5);
+    expect((await readField(page)).viewport.zoom).toBe(zoom);
+});
+
+test("change: Keep in view: an edit that leaves the box and editor in view doesn't pan (#441)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const size = page.getByTestId("shape-editor-size");
+    const before = await settledPan(page);
+    const { zoom } = (await readField(page)).viewport;
+    await sizeButton(page, true).click();
+    await expect(size).not.toHaveText("4 × 2");
+    await page.getByTestId("shape-editor-quarter-turn").click();
+    await expect(page.getByTestId("shape-editor-rotation")).toHaveText("90°");
+    expect(await settledPan(page)).toEqual(before);
+    expect((await readField(page)).viewport.zoom).toBe(zoom);
+});
+
+test("change: Keep in view: the view holds still during a drag on the field, and brings the box back once it ends (#441)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const field = await fieldRect(page);
+    const before = await settledPan(page);
+    const { top } = await outlineOnScreen(page);
+    const spots = (await shapeOverlay(page))!.spots;
+    const inside = await toScreen(page, {
+        x: spots.reduce((a, p) => a + p.x, 0) / spots.length,
+        y: spots.reduce((a, p) => a + p.y, 0) / spots.length,
+    });
+    // Moved until its top is 30 px above the field's
+    const up = top - field.y + 30;
+    await drag(
+        page,
+        inside,
+        { x: inside.x, y: inside.y - up },
+        {
+            beforeRelease: async () => {
+                await page.waitForTimeout(300);
+                expect((await readField(page)).viewport.pan).toEqual(before);
+            },
+        },
+    );
+    const after = await settledPan(page);
+    expect(after.y).toBeGreaterThan(before.y);
+    expect(
+        Math.abs((await outlineOnScreen(page)).top - (field.y + 24)),
+    ).toBeLessThan(1.5);
+});
+
+test.describe("Hold the editor still", () => {
+    test.use({
+        initScript: `history.replaceState(null, "", "?variant=hold-editor")`,
+    });
+
+    test("change: the floating editor stays at the same spot on screen after + and after a turn, the field moving under it (#441)", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await drawBox(show);
+        const at = await settledEditor(page);
+        const pan = await settledPan(page);
+
+        await sizeButton(page, true).click();
+        await expect(page.getByTestId("shape-editor-size")).not.toHaveText(
+            "4 × 2",
+        );
+        expect(near(await settledEditor(page), at, 1)).toBe(true);
+
+        // A quarter turn makes the box deeper: the field glides up so the editor stays put
+        await page.getByTestId("shape-editor-quarter-turn").click();
+        await expect(page.getByTestId("shape-editor-rotation")).toHaveText(
+            "90°",
+        );
+        const turned = await settledPan(page);
+        expect(turned.y).not.toBeCloseTo(pan.y, 0);
+        expect(near(await settledEditor(page), at, 1)).toBe(true);
+    });
+
+    test("change: a drag on the field doesn't pan the view, before or after it ends (#441)", async ({
+        show,
+    }) => {
+        const { page } = show;
+        await drawBox(show);
+        const field = await fieldRect(page);
+        const before = await settledPan(page);
+        const { top } = await outlineOnScreen(page);
+        const spots = (await shapeOverlay(page))!.spots;
+        const inside = await toScreen(page, {
+            x: spots.reduce((a, p) => a + p.x, 0) / spots.length,
+            y: spots.reduce((a, p) => a + p.y, 0) / spots.length,
+        });
+        await drag(page, inside, {
+            x: inside.x,
+            y: inside.y - (top - field.y + 30),
+        });
+        await page.waitForTimeout(500);
+        expect(await settledPan(page)).toEqual(before);
+    });
+});
+
+// The pivot on the field (#350): Cmd/Ctrl-drag from the center dot pulls it
+// out into a yellow crosshair, it snaps to marchers, turns go around it, it is
+// saved with the box, and a double click sends it back to the center.
 
 test("change: Cmd/Ctrl-drag from the center dot pulls the pivot out onto a marcher, turns go around it, and the placed box keeps it until a double click", async ({
     show,
