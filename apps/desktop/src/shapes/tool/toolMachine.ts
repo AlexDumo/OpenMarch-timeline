@@ -107,6 +107,15 @@ export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {
     );
 }
 
+/**
+ * Each assignment worked out by least travel, with the shape and marchers it was worked out for:
+ * {@link canRecalculate} knows it can't change without solving again (#455)
+ */
+const solvedFor = new WeakMap<
+    readonly number[],
+    { params: unknown; marchers: ToolState["marchers"] }
+>();
+
 /** Who goes where on the current shape, by least travel from where the marchers start */
 function reassign(state: ToolState, ctx: ShapeContext): ToolState {
     if (state.params === null) return { ...state, assignment: null };
@@ -119,6 +128,11 @@ function reassign(state: ToolState, ctx: ShapeContext): ToolState {
         mode: "nearest",
         ctx,
     });
+    if (assignment && !state.gesture)
+        solvedFor.set(assignment, {
+            params: state.params,
+            marchers: state.marchers,
+        });
     return { ...state, assignment };
 }
 
@@ -298,6 +312,13 @@ export function recalculate(state: ToolState, ctx: ShapeContext): ToolState {
 /** Whether {@link recalculate} would change who goes where */
 export function canRecalculate(state: ToolState, ctx: ShapeContext): boolean {
     if (state.params === null || !state.assignment) return false;
+    const solved = solvedFor.get(state.assignment);
+    if (
+        solved !== undefined &&
+        solved.params === state.params &&
+        solved.marchers === state.marchers
+    )
+        return false;
     const fresh = reassign(state, ctx).assignment;
     return !!fresh && fresh.some((slot, i) => slot !== state.assignment![i]);
 }

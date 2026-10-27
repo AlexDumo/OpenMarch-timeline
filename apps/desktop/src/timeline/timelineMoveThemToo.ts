@@ -34,7 +34,10 @@ import { toastPassThrough } from "./timelinePassThrough";
 import { offerOnlyThisPage, ownMovers } from "./timelineOnlyThisPage";
 import { boxMembershipEdit } from "@/shapes/placed/boxMembership";
 import { showLeftBoxToast } from "@/shapes/placed/leftBoxToast";
-import { invalidatePlacedBoxes } from "@/shapes/placed/placedBoxStore";
+import {
+    inNoPlacedBox,
+    invalidatePlacedBoxes,
+} from "@/shapes/placed/placedBoxStore";
 import { editingPositionAt } from "./timelineIsolationPlan";
 import {
     resolverSpans,
@@ -349,7 +352,8 @@ export async function moveMarchersAndOfferFollowUp({
     });
     const mark = editHistoryMark();
     toastLockedMarchers(editable.locked.length, true);
-    invalidatePlacedBoxes();
+    // The resolver's change re-reads them (`PlacedBoxesOverlay`), except where nobody moves (#455)
+    if (writesShapes) invalidatePlacedBoxes();
     if (membership && membership.leaves.length > 0)
         showLeftBoxToast(membership.leaves, (refill, save) =>
             moveMarchersAndOfferFollowUp({
@@ -401,7 +405,9 @@ function membershipFor(
     moves: readonly TimelineMarcherMove[],
 ) {
     const beat = beatOfTarget(target);
-    if (beat === undefined) return null;
+    // Marchers in no box have none to follow them, and read nothing for them (#455)
+    if (beat === undefined || inNoPlacedBox(moves.map((m) => m.marcherId)))
+        return null;
     return boxMembershipEdit({
         moves,
         beat,

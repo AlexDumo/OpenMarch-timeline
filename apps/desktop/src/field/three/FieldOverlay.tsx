@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { memo, useCallback, useMemo, useSyncExternalStore } from "react";
 import { GlyphText } from "@/shapes/editor/GlyphText";
 import { rgbaToString, type FieldTheme } from "@openmarch/core";
 import type { FieldEditor, FieldModeDrawing } from "@/field/editor/fieldEditor";
@@ -323,52 +323,58 @@ const GHOST_OPACITY = 0.35;
  * Where an open shape's marchers start (#346, #417): a faint, see-through dot in each marcher's
  * own color, at the start flag
  */
-function StartMarks({
+const StartMarks = memo(function StartMarks({
     drawing,
     theme,
     marchers,
-    at,
-    zoom,
+    scale,
 }: {
     drawing: FieldModeDrawing;
     theme: FieldTheme;
     marchers: FieldMarchers;
-    at: (point: { x: number; y: number }) => { x: number; y: number };
-    zoom: number;
+    /** The dots' size step at this zoom (`dotSizes`) */
+    scale: number;
 }) {
+    const ringIds = drawing.ringIds;
+    const ringKey = ringIds?.join(",");
+    const { appearanceVersion, ids } = marchers;
+    // Each ring's color, worked out again only when whose rings or their looks change (#455)
+    const colors = useMemo(() => {
+        const shape = rgbaToString(theme.shape);
+        const index = new Map(marchers.ids.map((id, i) => [id, i]));
+        return (ringIds ?? []).map((id) => {
+            const row = index.get(id);
+            const look =
+                row === undefined
+                    ? null
+                    : resolveMarcherLook(marchers.stacks[row] ?? [], theme);
+            return look
+                ? rgbaToString(
+                      look.shape === "cross" ? look.crossColor : look.fill,
+                  )
+                : shape;
+        });
+        // ringIds by content, marchers by their versions
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ringKey, theme, marchers, appearanceVersion, ids]);
     const shape = rgbaToString(theme.shape);
-    const index = new Map(marchers.ids.map((id, i) => [id, i]));
-    const r = DOT_RADIUS * dotSizes(zoom).scale * zoom;
+    const r = DOT_RADIUS * scale;
     return (
         <>
-            {drawing.rings?.map((point, i) => {
-                const p = at(point);
-                const id = drawing.ringIds?.[i];
-                const row = id === undefined ? undefined : index.get(id);
-                const look =
-                    row === undefined
-                        ? null
-                        : resolveMarcherLook(marchers.stacks[row] ?? [], theme);
-                const color = look
-                    ? rgbaToString(
-                          look.shape === "cross" ? look.crossColor : look.fill,
-                      )
-                    : shape;
-                return (
-                    <circle
-                        key={i}
-                        cx={p.x}
-                        cy={p.y}
-                        r={r}
-                        fill={color}
-                        opacity={GHOST_OPACITY}
-                        data-testid="fieldShapeStartGhost"
-                    />
-                );
-            })}
+            {drawing.rings?.map((point, i) => (
+                <circle
+                    key={i}
+                    cx={point.x}
+                    cy={point.y}
+                    r={r}
+                    fill={colors[i] ?? shape}
+                    opacity={GHOST_OPACITY}
+                    data-testid="fieldShapeStartGhost"
+                />
+            ))}
         </>
     );
-}
+});
 
 /**
  * A guide's name at the canvas edge (#427): at the top for a line side to side, at the left for
@@ -420,6 +426,130 @@ function GuideLabel({
     );
 }
 
+/** The controls fade while the pointer is away from the shape (#403), and come back over it */
+const controlsStyle = (calm: boolean | undefined) => ({
+    opacity: calm ? CALM_CONTROLS_OPACITY : 1,
+    transition: "opacity 150ms ease-out",
+});
+
+/**
+ * The shape's outline, where its marchers start, their walks and its spots, in field units
+ * under the view's transform: the outline's stroke stays in CSS px (#455)
+ */
+const ShapeBody = memo(function ShapeBody({
+    drawing,
+    theme,
+    marchers,
+    scale,
+}: {
+    drawing: FieldModeDrawing;
+    theme: FieldTheme;
+    marchers: FieldMarchers;
+    scale: number;
+}) {
+    const shape = rgbaToString(theme.shape);
+    const walk = rgbaToString({ ...theme.shape, a: 0.4 });
+    const fill = rgbaToString({ ...theme.shape, a: 0.06 });
+    const open = drawing.stage === "open";
+    const dots = drawing.stage === "drawing";
+    return (
+        <>
+            {drawing.outline && (
+                <polygon
+                    points={drawing.outline
+                        .map((p) => `${p.x},${p.y}`)
+                        .join(" ")}
+                    // The faint fill shows with the controls, on hover (#403)
+                    fill={open && !drawing.calm ? fill : "none"}
+                    stroke={shape}
+                    strokeWidth={SHAPE_OUTLINE_WIDTH}
+                    strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
+                    vectorEffect="non-scaling-stroke"
+                />
+            )}
+            <StartMarks
+                drawing={drawing}
+                theme={theme}
+                marchers={marchers}
+                scale={scale}
+            />
+            {drawing.walks.map(({ from: a, to: b }, i) => {
+                return (
+                    <line
+                        key={i}
+                        x1={a.x}
+                        y1={a.y}
+                        x2={b.x}
+                        y2={b.y}
+                        stroke={walk}
+                        strokeWidth={WALK_WIDTH}
+                    />
+                );
+            })}
+            {drawing.spots.map((p, i) => {
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={SPOT_RADIUS}
+                        // Solid while drawn and once open (#403): the spots are where everyone will
+                        // stand, unlike the hollow start rings
+                        fill={dots || open ? shape : "none"}
+                        stroke={dots || open ? "white" : shape}
+                        strokeWidth={SPOT_WIDTH}
+                    />
+                );
+            })}
+        </>
+    );
+});
+
+/** The spots on a guide and an outline's gaps, in field units over the guides (#455) */
+const ShapeOnGuides = memo(function ShapeOnGuides({
+    drawing,
+    theme,
+}: {
+    drawing: FieldModeDrawing;
+    theme: FieldTheme;
+}) {
+    const shape = rgbaToString(theme.shape);
+    const controls = controlsStyle(drawing.calm);
+    return (
+        <>
+            {drawing.onGuides?.map((p, i) => {
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={SPOT_RADIUS}
+                        fill={GUIDE_INK}
+                        stroke="white"
+                        strokeWidth={SPOT_WIDTH}
+                    />
+                );
+            })}
+            {drawing.gaps?.map((p, i) => {
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={SPOT_RADIUS}
+                        fill="none"
+                        stroke={shape}
+                        strokeWidth={SPOT_WIDTH}
+                        strokeDasharray="1.5 1.5"
+                        style={controls}
+                        data-testid="fieldShapeGap"
+                    />
+                );
+            })}
+        </>
+    );
+});
+
 function ModeDrawing({
     drawing,
     theme,
@@ -431,74 +561,24 @@ function ModeDrawing({
 }) {
     const view = useFieldViewStore();
     const shape = rgbaToString(theme.shape);
-    const walk = rgbaToString({ ...theme.shape, a: 0.4 });
-    const fill = rgbaToString({ ...theme.shape, a: 0.06 });
     const z = view.zoom;
     const at = (point: { x: number; y: number }) =>
         fieldToElement(view, point.x, point.y);
     const half = SHAPE_HANDLE_SIZE / 2;
-    const open = drawing.stage === "open";
-    const dots = drawing.stage === "drawing";
-    // The controls fade while the pointer is away from the shape (#403), and come back over it
-    const controls = {
-        opacity: drawing.calm ? CALM_CONTROLS_OPACITY : 1,
-        transition: "opacity 150ms ease-out",
-    };
+    const controls = controlsStyle(drawing.calm);
+    // What scales with the field is drawn in field units under the view's transform, and redrawn
+    // only when the drawing changes, not on every pan or zoom frame (#455)
+    const transform = `translate(${view.panX} ${view.panY}) scale(${z})`;
     return (
         <g data-testid="fieldShapeMode" data-stage={drawing.stage}>
-            {drawing.outline && (
-                <polygon
-                    points={drawing.outline
-                        .map((point) => {
-                            const p = at(point);
-                            return `${p.x},${p.y}`;
-                        })
-                        .join(" ")}
-                    // The faint fill shows with the controls, on hover (#403)
-                    fill={open && !drawing.calm ? fill : "none"}
-                    stroke={shape}
-                    strokeWidth={SHAPE_OUTLINE_WIDTH}
-                    strokeDasharray={open ? undefined : SHAPE_OUTLINE_DASH}
+            <g transform={transform}>
+                <ShapeBody
+                    drawing={drawing}
+                    theme={theme}
+                    marchers={marchers}
+                    scale={dotSizes(z).scale}
                 />
-            )}
-            <StartMarks
-                drawing={drawing}
-                theme={theme}
-                marchers={marchers}
-                at={at}
-                zoom={z}
-            />
-            {drawing.walks.map(({ from, to }, i) => {
-                const a = at(from);
-                const b = at(to);
-                return (
-                    <line
-                        key={i}
-                        x1={a.x}
-                        y1={a.y}
-                        x2={b.x}
-                        y2={b.y}
-                        stroke={walk}
-                        strokeWidth={WALK_WIDTH * z}
-                    />
-                );
-            })}
-            {drawing.spots.map((point, i) => {
-                const p = at(point);
-                return (
-                    <circle
-                        key={i}
-                        cx={p.x}
-                        cy={p.y}
-                        r={SPOT_RADIUS * z}
-                        // Solid while drawn and once open (#403): the spots are where everyone will
-                        // stand, unlike the hollow start rings
-                        fill={dots || open ? shape : "none"}
-                        stroke={dots || open ? "white" : shape}
-                        strokeWidth={SPOT_WIDTH * z}
-                    />
-                );
-            })}
+            </g>
             {drawing.guides?.map(({ from, to }, i) => {
                 const upright = Math.abs(at(from).x - at(to).x) < 1e-6;
                 // Across the whole canvas, at any zoom
@@ -561,37 +641,9 @@ function ModeDrawing({
                     />
                 );
             })}
-            {drawing.onGuides?.map((point, i) => {
-                const p = at(point);
-                return (
-                    <circle
-                        key={i}
-                        cx={p.x}
-                        cy={p.y}
-                        r={SPOT_RADIUS * z}
-                        fill={GUIDE_INK}
-                        stroke="white"
-                        strokeWidth={SPOT_WIDTH * z}
-                    />
-                );
-            })}
-            {drawing.gaps?.map((point, i) => {
-                const p = at(point);
-                return (
-                    <circle
-                        key={i}
-                        cx={p.x}
-                        cy={p.y}
-                        r={SPOT_RADIUS * z}
-                        fill="none"
-                        stroke={shape}
-                        strokeWidth={SPOT_WIDTH * z}
-                        strokeDasharray={`${1.5 * z} ${1.5 * z}`}
-                        style={controls}
-                        data-testid="fieldShapeGap"
-                    />
-                );
-            })}
+            <g transform={transform}>
+                <ShapeOnGuides drawing={drawing} theme={theme} />
+            </g>
             {drawing.labels?.map(({ at: point, text }, i) => {
                 const p = at(point);
                 return (
