@@ -2346,11 +2346,12 @@ test("change: from the keyboard, Tab reaches the mode menu, Enter opens it on Gr
     await page.keyboard.press("Enter");
     const menu = page.getByTestId("shape-mode-menu-content");
     await expect(menu.getByTestId("shape-mode-files")).toBeFocused();
-    // Each mode pictured by an example, not this box's 8 marchers, which
-    // are all on its edge
-    await expect(
-        menu.getByTestId("shape-mode-preview-outline"),
-    ).toHaveAttribute("data-spots", "12");
+    // Each mode pictured by one example shared by every kind, not this box's
+    // 8 marchers, which are all on its edge
+    await expect(menu.getByTestId("shape-mode-preview-files")).toHaveAttribute(
+        "data-spots",
+        "12",
+    );
     await page.keyboard.press("ArrowDown");
     await expect(menu.getByTestId("shape-mode-outline")).toBeFocused();
     await page.keyboard.press("Enter");

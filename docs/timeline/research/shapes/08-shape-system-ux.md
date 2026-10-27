@@ -157,8 +157,8 @@ editing a shape. Owner choice, 2026-10-15.
   the shape is filled. For a box:
   `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⌖▾ ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`, and under it
   `Grid ▾ │ Short back ▾`. The second row holds the **mode menu** first (owner, 2026-10-27: a
-  menu like the layout menu, its button naming the mode; each row pictures this shape filled
-  that way, drawn live from its geometry, beside the mode's name), then a divider and what that
+  menu like the layout menu, its button naming the mode; each row has one hand-drawn example of
+  that mode, the same for every kind, beside the mode's name), then a divider and what that
   mode has: the box's **layout menu** in Grid, the **leftover menu** ("Leftover: Back",
   the odd spot's side and gap or spread) in Outline, **Reshuffle** in Spread. A kind with none of
   these has no second row. **⌖▾** is the pivot: its icon is the 3 × 3 grid with the pivot lit

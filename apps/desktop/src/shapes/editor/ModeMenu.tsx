@@ -5,8 +5,8 @@ import { CaretDownIcon } from "@phosphor-icons/react";
 import tolgee from "@/global/singletons/Tolgee";
 import { MODE_LABELS, type DistributionMode } from "../distribute/distribution";
 import { distributionOf, switchModes, withMode } from "../distribute/modes";
-import { MODE_PREVIEW, modePreview } from "../preview/shapePreview";
-import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
+import { ModePicture } from "./modePictures";
+import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 import { arrowFocus, useMenuFocus } from "./menuFocus";
 import { Tip } from "./Tip";
@@ -17,8 +17,8 @@ const modeLabel = (mode: DistributionMode) =>
 /**
  * How the shape is filled (spec #385): Grid, Outline or Spread, first on the floating editor's
  * second row (#435). A menu like the layout menu (owner): its button names the mode, and each row
- * shows an example of the kind filled that way beside the mode's name (`modePreview`). Only the
- * kind's own modes show, and nothing while it has one. Picking one is one change of the shape
+ * shows one example of that mode, the same for every kind (`modePictures`), beside its name.
+ * Only the kind's own modes show, and nothing while it has one. Picking one is one change of the shape
  * (one undo step, or one save for a placed shape).
  */
 export function ModeMenu({
@@ -107,7 +107,7 @@ export function ModeMenu({
                                         : "hover:text-accent",
                                 )}
                             >
-                                <ModePicture kind={target.kind} mode={mode} />
+                                <ModePicture mode={mode} />
                                 <span>{modeLabel(mode)}</span>
                             </button>
                         ))}
@@ -115,51 +115,5 @@ export function ModeMenu({
                 </Popover.Content>
             </Popover.Portal>
         </Popover.Root>
-    );
-}
-
-/** An example of `kind` filled in `mode`, as small dots inside its outline (`modePreview`) */
-function ModePicture({
-    kind,
-    mode,
-}: {
-    kind: AnyToolKind;
-    mode: DistributionMode;
-}) {
-    const preview = modePreview(kind, mode);
-    const { width, height } = MODE_PREVIEW;
-    return (
-        <svg
-            width={width}
-            height={height}
-            viewBox={`0 0 ${width} ${height}`}
-            aria-hidden
-            focusable={false}
-            className="shrink-0"
-            data-testid={`shape-mode-preview-${mode}`}
-            data-spots={preview?.spots.length ?? 0}
-        >
-            {preview?.outline && (
-                <polygon
-                    points={preview.outline
-                        .map(({ x, y }) => `${x},${y}`)
-                        .join(" ")}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeOpacity={0.35}
-                    strokeWidth={0.75}
-                    strokeLinejoin="round"
-                />
-            )}
-            {preview?.spots.map(({ x, y }, i) => (
-                <circle
-                    key={i}
-                    cx={x}
-                    cy={y}
-                    r={preview.radius}
-                    fill="currentColor"
-                />
-            ))}
-        </svg>
     );
 }

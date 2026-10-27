@@ -1,6 +1,4 @@
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
-import type { DistributionMode } from "../distribute/distribution";
-import { withMode } from "../distribute/modes";
 import type { ShapeContext, XY } from "../types";
 
 /**
@@ -81,15 +79,11 @@ export function shapePreview(kind: AnyToolKind): ShapePreview {
  * `outline` pushed outward by {@link OUTLINE_GAP} of the spots' size, each corner along its two
  * edges' normals so every edge moves the same distance
  */
-function standOff(
-    outline: readonly XY[],
-    spots: readonly XY[],
-    share = OUTLINE_GAP,
-): XY[] {
+function standOff(outline: readonly XY[], spots: readonly XY[]): XY[] {
     const xs = spots.map((p) => p.x);
     const ys = spots.map((p) => p.y);
     const gap =
-        share *
+        OUTLINE_GAP *
         Math.max(
             Math.max(...xs) - Math.min(...xs),
             Math.max(...ys) - Math.min(...ys),
@@ -128,9 +122,6 @@ function standOff(
 function fitToView(
     spots: readonly XY[],
     outline: readonly XY[] | null,
-    viewWidth: number = PREVIEW_VIEW,
-    viewHeight: number = PREVIEW_VIEW,
-    pad: number = PAD,
 ): ShapePreview {
     const all = [...spots, ...(outline ?? [])];
     const xs = all.map((p) => p.x);
@@ -139,115 +130,16 @@ function fitToView(
     const minY = Math.min(...ys);
     const width = Math.max(...xs) - minX;
     const depth = Math.max(...ys) - minY;
-    const k = Math.min(
-        width > 0 ? (viewWidth - 2 * pad) / width : Infinity,
-        depth > 0 ? (viewHeight - 2 * pad) / depth : Infinity,
-    );
-    const scale = Number.isFinite(k) ? k : 0;
-    const offsetX = (viewWidth - width * scale) / 2;
-    const offsetY = (viewHeight - depth * scale) / 2;
+    const room = PREVIEW_VIEW - 2 * PAD;
+    const k = Math.max(width, depth) > 0 ? room / Math.max(width, depth) : 0;
+    const offsetX = (PREVIEW_VIEW - width * k) / 2;
+    const offsetY = (PREVIEW_VIEW - depth * k) / 2;
     const place = ({ x, y }: XY): XY => ({
-        x: offsetX + (x - minX) * scale,
-        y: offsetY + (y - minY) * scale,
+        x: offsetX + (x - minX) * k,
+        y: offsetY + (y - minY) * k,
     });
     return {
         spots: spots.map(place),
         outline: outline && outline.map(place),
     };
-}
-
-/** A mode's picture, in the mode menu (#435): wider than tall, as the menu's rows are */
-export const MODE_PREVIEW = { width: 24, height: 16 } as const;
-
-/**
- * How many spots a mode's picture shows: enough that a box's Grid has a middle row its Outline
- * leaves empty (4 × 3 against 10 round the edge)
- */
-const MODE_SPOTS = 12;
-/**
- * A spread's example has more spots: 12 at picture size settle into rows and read as an
- * unfinished grid (owner); 20 read as an even scatter over the whole shape
- */
-const SPREAD_SPOTS = 20;
-/** How far a spread's outline stands off its spots, as a share of its size */
-const SPREAD_GAP = 0.06;
-
-export interface ModePreview extends ShapePreview {
-    /** The dots' radius, in picture units */
-    readonly radius: number;
-}
-
-const MODE_PREVIEWS = new WeakMap<
-    AnyToolKind,
-    Map<DistributionMode, ModePreview | null>
->();
-
-/**
- * An example of a shape of `kind` filled in `mode` (#435), fitted into {@link MODE_PREVIEW}: a
- * shape a little wider than deep with {@link MODE_SPOTS} spots, not the shape being edited, so
- * the three modes always look different (owner: a 4 × 2 of 8 is all edge, and its Grid and
- * Outline looked the same). Drawn from the kind's geometry, so a circle's examples are circles.
- * Null when the kind can't be filled that way. The same kind and mode give the same picture.
- */
-export function modePreview(
-    kind: AnyToolKind,
-    mode: DistributionMode,
-): ModePreview | null {
-    let byMode = MODE_PREVIEWS.get(kind);
-    if (!byMode) MODE_PREVIEWS.set(kind, (byMode = new Map()));
-    if (byMode.has(mode)) return byMode.get(mode)!;
-    const preview = drawMode(kind, mode);
-    byMode.set(mode, preview);
-    return preview;
-}
-
-function drawMode(
-    kind: AnyToolKind,
-    mode: DistributionMode,
-): ModePreview | null {
-    if (!kind.closed?.modes.includes(mode)) return null;
-    const n = mode === "spread" ? SPREAD_SPOTS : MODE_SPOTS;
-    const params = kind.fromFrame(
-        {
-            center: { x: 0, y: 0 },
-            halfWidth: 6,
-            halfDepth: 4,
-            rotation: 0,
-            flipX: false,
-            flipY: false,
-        },
-        n,
-        ENV,
-    );
-    const filled = withMode(kind, params, n, mode, ENV);
-    const spots = kind.shape
-        .generate(filled, n, CTX)
-        .map(({ x, y }): XY => ({ x, y }));
-    if (spots.length === 0) return null;
-    const outline = kind.outline?.(filled, n) ?? null;
-    // A spread keeps its own distance from the edge: the outline stood off only a little shows it
-    // filling the shape, where the other modes' gap made it look bunched in the middle
-    const edge =
-        outline &&
-        standOff(outline, spots, mode === "spread" ? SPREAD_GAP : OUTLINE_GAP);
-    const fitted = fitToView(
-        spots,
-        edge,
-        MODE_PREVIEW.width,
-        MODE_PREVIEW.height,
-        1.5,
-    );
-    return { ...fitted, radius: dotRadius(fitted.spots) };
-}
-
-/** Half the closest two dots' distance, kept between a speck and a clear dot */
-function dotRadius(spots: readonly XY[]): number {
-    let closest = Infinity;
-    for (let i = 0; i < spots.length; i++)
-        for (let j = i + 1; j < spots.length; j++)
-            closest = Math.min(
-                closest,
-                Math.hypot(spots[i].x - spots[j].x, spots[i].y - spots[j].y),
-            );
-    return Math.min(1.2, Math.max(0.4, closest * 0.35));
 }
