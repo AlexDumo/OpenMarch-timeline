@@ -194,6 +194,15 @@ export function glideTo(next: FieldView): number | null {
         panX: current.panX,
         panY: current.panY,
     };
+    // A resize along the way keeps the pane's own size, as the glide to the fit does
+    const along = (t: number) => {
+        const { width, height } = view();
+        return viewBetween(
+            { ...from, width, height },
+            { ...to, width, height },
+            t,
+        );
+    };
     stopGlide();
     rebaseOnResize = false;
     const id = ++glides;
@@ -204,13 +213,12 @@ export function glideTo(next: FieldView): number | null {
         to: 1,
         config: GLIDE_CONFIG,
         onChange: () => {
-            if (gliding === id)
-                useFieldViewStore.setState(viewBetween(from, to, glide.get()));
+            if (gliding === id) useFieldViewStore.setState(along(glide.get()));
         },
         onRest: ({ finished }) => {
             if (gliding !== id) return;
             gliding = null;
-            if (finished) useFieldViewStore.setState(viewBetween(from, to, 1));
+            if (finished) useFieldViewStore.setState(along(1));
         },
     });
     return id;

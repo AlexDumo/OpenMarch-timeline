@@ -3144,6 +3144,36 @@ test("change: Keep in view: the view holds still during a drag on the field, and
     ).toBeLessThan(1.5);
 });
 
+test("change: Keep in view: an edit that changes nothing doesn't make the next undo move the view (#441 review)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const deep = page.getByTestId("shape-editor-deep");
+    const typeDeep = async (steps: string) => {
+        await deep.click();
+        const input = page.getByTestId("shape-editor-deep-input");
+        await input.fill(steps);
+        await input.press("Enter");
+        await expect(input).toBeHidden();
+    };
+    // Deeper, then back: undo makes it deeper again, about its middle
+    const was = (await deep.innerText()).replace(/[^0-9.]/g, "");
+    const deeper = String(Number(was) + 4);
+    await typeDeep(deeper);
+    await expect(deep).toContainText(deeper);
+    await typeDeep(was);
+    await boxTopAt(page, 28);
+    const before = await settledPan(page);
+    // Typing the spacing it already has, then undo at once: the undone box pokes past the top
+    // margin, but the undo isn't an edit made in the editor
+    await typeDeep(was);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(deep).toContainText(deeper);
+    await page.waitForTimeout(500);
+    expect(await settledPan(page)).toEqual(before);
+});
+
 /** Zooms in at the open box's middle, with Ctrl + wheel, until the view is `times` closer */
 async function zoomInOnBox(page: Page, times: number) {
     const { zoom } = (await readField(page)).viewport;

@@ -163,8 +163,9 @@ function ShapeEditorBar({
     const place = usePlacement(kind, params, spots);
     // Every edit made here is noted, so the view follows it (#441)
     const { noteEdit } = place;
+    const numberDrag = useRef<NumberDrag | null>(null);
     const target = useMemo(
-        () => notedTarget(shape, noteEdit),
+        () => notedTarget(shape, noteEdit, numberDrag),
         [shape, noteEdit],
     );
     // The shape at the press of a number's drag
@@ -630,23 +631,29 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params, fieldDrag]);
 
-    const shown = useRef<{ view: unknown; placed: boolean; gliding: boolean }>({
-        view,
+    const shown = useRef({
+        view: view as unknown,
         placed: false,
         gliding: false,
+        held: false,
     });
     useLayoutEffect(() => {
         const gliding = isGliding(glide.current);
-        if (held || room.width === 0) return;
+        if (held || room.width === 0) {
+            shown.current.held = held;
+            return;
+        }
         // A pan or zoom, the first placing and reduced motion jump; the shape's changes spring,
-        // and so does the editor's own glide, to its end
+        // and so do the editor's own glide, to its end, and the end of a hold, which a view glide
+        // after a click on the editor outlasts (review)
         const jump =
             !shown.current.placed ||
             (shown.current.view !== view &&
                 !gliding &&
-                !shown.current.gliding) ||
+                !shown.current.gliding &&
+                !shown.current.held) ||
             prefersReducedMotion();
-        shown.current = { view, placed: true, gliding };
+        shown.current = { view, placed: true, gliding, held: false };
         void api.start({
             left: target.left,
             top: target.top,
@@ -671,26 +678,54 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     };
 }
 
-/** `target` with each of its edits noted first (`usePlacement`'s `noteEdit`) */
+/** A number's drag in the editor: the shape at its start and as last previewed */
+interface NumberDrag {
+    readonly from: unknown;
+    to: unknown;
+}
+
+/** Whether two of a kind's params are the same: they're plain data */
+const sameParams = (a: unknown, b: unknown) =>
+    a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * `target` with each of its edits that changes the shape noted first (`usePlacement`'s
+ * `noteEdit`). One that changes nothing isn't, so a following undo or selection doesn't move the
+ * view (review). Recalculate and Close up are only there when they change something.
+ */
 function notedTarget(
     target: ShapeEditTarget,
     note: () => void,
+    drag: { current: NumberDrag | null },
 ): ShapeEditTarget {
     const { recalculate, closeUp } = target;
     return {
         ...target,
+        begin: () => {
+            drag.current = { from: target.params, to: target.params };
+            target.begin();
+        },
+        preview: (params) => {
+            if (drag.current) drag.current.to = params;
+            target.preview(params);
+        },
         end: (keep) => {
-            if (keep) note();
+            const moved =
+                drag.current && !sameParams(drag.current.from, drag.current.to);
+            drag.current = null;
+            if (keep && moved) note();
             target.end(keep);
         },
         apply: (params) => {
-            note();
+            if (!sameParams(params, target.params)) note();
             target.apply(params);
         },
-        update: (change) => {
-            note();
-            target.update(change);
-        },
+        update: (change) =>
+            target.update((now) => {
+                const next = change(now);
+                if (!sameParams(next, now)) note();
+                return next;
+            }),
         recalculate: recalculate
             ? () => {
                   note();
