@@ -54,7 +54,7 @@ import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
 import { SaveShapeButton } from "../library/SaveShapeButton";
 import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
-import { ModeSwitch } from "./ModeSwitch";
+import { ModeMenu } from "./ModeMenu";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
@@ -80,9 +80,10 @@ const GAP_PX = 14;
  * it's pressed, and shows its word only when it would change something; Close up shows for a
  * placed shape with holes (#392). Pathways and ☆ Save, which leave the shape as it is, come last
  * before Place. Its controls show the app's tooltips (`RichTips`). Under the editor, a pill of
- * its own says how the shape is filled (#435): `Grid · Outline · Spread`, then the box's layout
- * menu in Grid, the leftover menu in Outline, or Reshuffle in Spread. With it, the editor has
- * everything the inspector had for a shape. Place shows only for a new shape; a selected placed
+ * its own says how the shape is filled (#435): the mode menu (Grid, Outline, Spread, each with a
+ * picture of this shape in it), then after a divider the box's layout menu in Grid, the leftover
+ * menu in Outline, or Reshuffle in Spread. With it, the editor has everything the inspector had
+ * for a shape. Place shows only for a new shape; a selected placed
  * shape saves each edit on release. While the open shape waits out of sight (#416) the editor
  * hides, and away from its moment a chip goes back to it.
  */
@@ -457,15 +458,22 @@ function ShapeEditorBar({
                 className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2 empty:hidden"
                 data-testid={`${testId}-fill`}
             >
-                <ModeSwitch target={target} envFor={() => envFor(PLAIN)} />
-                <LayoutMenu target={target} envFor={() => envFor(PLAIN)} />
-                <OutlineGap target={target} envFor={() => envFor(PLAIN)} />
-                <ReshuffleButton
-                    target={target}
-                    envFor={() => envFor(PLAIN)}
-                    className="rounded-4 hover:text-accent hover:bg-fg-2 min-h-24 px-4 py-2"
-                    testId="shape-editor-reshuffle"
-                />
+                <ModeMenu target={target} envFor={() => envFor(PLAIN)} />
+                {/* What the mode has, after a divider (owner); nothing, and no divider, when it
+                    has none */}
+                <span
+                    className="border-stroke flex items-center gap-6 border-l pl-6 empty:hidden"
+                    data-testid={`${testId}-mode-extras`}
+                >
+                    <LayoutMenu target={target} envFor={() => envFor(PLAIN)} />
+                    <OutlineGap target={target} envFor={() => envFor(PLAIN)} />
+                    <ReshuffleButton
+                        target={target}
+                        envFor={() => envFor(PLAIN)}
+                        className="rounded-4 hover:text-accent hover:bg-fg-2 min-h-24 px-4 py-2"
+                        testId="shape-editor-reshuffle"
+                    />
+                </span>
             </div>
         </div>
     );

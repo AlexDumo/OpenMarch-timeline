@@ -1,4 +1,6 @@
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
+import type { DistributionMode } from "../distribute/distribution";
+import { withMode } from "../distribute/modes";
 import type { ShapeContext, XY } from "../types";
 
 /**
@@ -122,6 +124,9 @@ function standOff(outline: readonly XY[], spots: readonly XY[]): XY[] {
 function fitToView(
     spots: readonly XY[],
     outline: readonly XY[] | null,
+    viewWidth: number = PREVIEW_VIEW,
+    viewHeight: number = PREVIEW_VIEW,
+    pad: number = PAD,
 ): ShapePreview {
     const all = [...spots, ...(outline ?? [])];
     const xs = all.map((p) => p.x);
@@ -130,16 +135,70 @@ function fitToView(
     const minY = Math.min(...ys);
     const width = Math.max(...xs) - minX;
     const depth = Math.max(...ys) - minY;
-    const room = PREVIEW_VIEW - 2 * PAD;
-    const k = Math.max(width, depth) > 0 ? room / Math.max(width, depth) : 0;
-    const offsetX = (PREVIEW_VIEW - width * k) / 2;
-    const offsetY = (PREVIEW_VIEW - depth * k) / 2;
+    const k = Math.min(
+        width > 0 ? (viewWidth - 2 * pad) / width : Infinity,
+        depth > 0 ? (viewHeight - 2 * pad) / depth : Infinity,
+    );
+    const scale = Number.isFinite(k) ? k : 0;
+    const offsetX = (viewWidth - width * scale) / 2;
+    const offsetY = (viewHeight - depth * scale) / 2;
     const place = ({ x, y }: XY): XY => ({
-        x: offsetX + (x - minX) * k,
-        y: offsetY + (y - minY) * k,
+        x: offsetX + (x - minX) * scale,
+        y: offsetY + (y - minY) * scale,
     });
     return {
         spots: spots.map(place),
         outline: outline && outline.map(place),
     };
+}
+
+/** A mode's picture, in the mode menu (#435): wider than tall, as the menu's rows are */
+export const MODE_PREVIEW = { width: 24, height: 16 } as const;
+
+export interface ModePreview extends ShapePreview {
+    /** The dots' radius, in picture units: smaller as the spots crowd together */
+    readonly radius: number;
+}
+
+/**
+ * The shape as it is, filled in `mode` (#435): its own spots and outline laid out as picking that
+ * mode would, fitted into {@link MODE_PREVIEW}. Drawn from the kind's geometry, so a circle's Grid
+ * looks like a circle's. Null when the kind can't be filled that way.
+ */
+export function modePreview(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    mode: DistributionMode,
+    env: ToolEnv,
+): ModePreview | null {
+    if (!kind.closed?.modes.includes(mode)) return null;
+    const filled = withMode(kind, params, n, mode, env);
+    const spots = kind.shape
+        .generate(filled, n, { stepPx: env.stepPx, snapPoint: env.gridSnap })
+        .map(({ x, y }): XY => ({ x, y }));
+    if (spots.length === 0) return null;
+    const outline = kind.outline?.(filled, n) ?? null;
+    const fitted = fitToView(
+        spots,
+        outline && standOff(outline, spots),
+        MODE_PREVIEW.width,
+        MODE_PREVIEW.height,
+        1.5,
+    );
+    return { ...fitted, radius: dotRadius(fitted.spots) };
+}
+
+/** Half the closest two dots' distance, kept between a speck and a clear dot */
+function dotRadius(spots: readonly XY[]): number {
+    // Many marchers make specks anyway: no need to measure them all
+    if (spots.length > 200) return 0.4;
+    let closest = Infinity;
+    for (let i = 0; i < spots.length; i++)
+        for (let j = i + 1; j < spots.length; j++)
+            closest = Math.min(
+                closest,
+                Math.hypot(spots[i].x - spots[j].x, spots[i].y - spots[j].y),
+            );
+    return Math.min(1.2, Math.max(0.4, closest * 0.35));
 }

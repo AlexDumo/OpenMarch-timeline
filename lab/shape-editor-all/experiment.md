@@ -3,12 +3,12 @@
 # Keep `id` stable: feedback is filed under it.
 id: shape-editor-all
 title: Everything for a shape is in its floating editor
-summary: The inspector no longer has shape sections. The floating editor's second row now has the Grid · Outline · Spread switch, then the layout menu (Grid), the leftover menu (Outline) or Reshuffle (Spread). A pivot button beside the turn opens the 3 × 3 pivot grid.
+summary: The inspector no longer has shape sections. The floating editor's second row now starts with a Grid / Outline / Spread menu that pictures your shape in each mode, then the layout menu (Grid), the leftover menu (Outline) or Reshuffle (Spread). A pivot button beside the turn opens the 3 × 3 pivot grid.
 status: open
 variants: []
 questions:
   - Could you find everything you used to do in the inspector for a shape (switching Grid, Outline and Spread, the layout, the leftover side, Reshuffle, the pivot)?
-  - Does the second row under the editor read clearly? Is the mode switch in the right place, left of the layout menu?
+  - Does the second row under the editor read clearly? Do the mode menu's pictures help you pick Grid, Outline or Spread?
   - Does the pivot button's icon tell you which pivot is picked?
   - Do you miss the inspector's closer / wider (half a step) scale buttons?
 ---
@@ -19,8 +19,9 @@ selected shape is now in its floating editor. Select some marchers, press
 
 **New in this build**
 
-- Under the editor's row, a second row starts with **Grid · Outline ·
-  Spread**. Next to it: the **layout** menu in Grid, a **Leftover** menu in
+- Under the editor's row, a second row starts with a **mode menu** (Grid,
+  Outline, Spread). Each choice shows a small picture of your shape filled
+  that way. After a divider: the **layout** menu in Grid, a **Leftover** menu in
   Outline (which side the odd spot is left out of, and whether it leaves a
   gap or spreads evenly), and **Reshuffle** in Spread.
 - Beside the turn degrees, a small **pivot** button shows the pivot as a

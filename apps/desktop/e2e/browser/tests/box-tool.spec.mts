@@ -142,6 +142,27 @@ const onHalfSteps = (v: number, origin: number, step: number) =>
     CLOSE;
 
 /**
+ * Fills the open or selected shape in `mode` from the floating editor's mode menu (#435), and
+ * waits for the menu to close.
+ */
+async function pickMode(page: Page, mode: "files" | "outline" | "spread") {
+    await page.getByTestId("shape-mode-menu").click();
+    await page.getByTestId(`shape-mode-${mode}`).click();
+    await expect(page.getByTestId("shape-mode-menu-content")).toBeHidden();
+}
+
+/** The mode menu's names, read with the menu opened and closed again */
+async function modeNames(page: Page): Promise<string[]> {
+    await page.getByTestId("shape-mode-menu").click();
+    const rows = page.getByRole("menuitemradio");
+    await expect(rows.first()).toBeVisible();
+    const names = await rows.allInnerTexts();
+    await page.getByTestId("shape-mode-menu").click();
+    await expect(page.getByTestId("shape-mode-menu-content")).toBeHidden();
+    return names.map((n) => n.trim());
+}
+
+/**
  * Opens the box tool on every marcher and draws a box 10 steps wide and 6
  * deep, its back-left corner 15 steps left of center front and 25 back.
  * Returns the corners pressed and released, in field units.
@@ -2201,13 +2222,13 @@ test("change: a placed box keeps its distribution, Files with the short rank at 
     const { page } = show;
     await drawBox(show);
     await expect(
-        page.getByTestId("shape-tool-readout").getByTestId("shape-mode-switch"),
+        page.getByTestId("shape-tool-readout").getByTestId("shape-mode-menu"),
     ).toBeVisible();
-    await expect(page.getByTestId("shape-mode-files")).toHaveAttribute(
-        "data-state",
-        "on",
+    await expect(page.getByTestId("shape-mode-menu")).toHaveAttribute(
+        "data-mode",
+        "files",
     );
-    await expect(page.getByTestId("shape-mode-outline")).toBeVisible();
+    expect(await modeNames(page)).toEqual(["Grid", "Outline", "Spread"]);
     const spots = (await shapeOverlay(page))!.spots;
 
     await page.keyboard.press("Enter");
@@ -2239,13 +2260,13 @@ test("change: a placed box keeps its distribution, Files with the short rank at 
     await expect
         .poll(async () => (await readField(page)).selection)
         .toEqual(ALL);
-    await expect(page.getByTestId("shape-mode-files")).toHaveAttribute(
-        "data-state",
-        "on",
+    await expect(page.getByTestId("shape-mode-menu")).toHaveAttribute(
+        "data-mode",
+        "files",
     );
 });
 
-test("change: the editor's second row holds the mode switch left of the layout menu, the gap menu only in Outline and Reshuffle only in Spread (#435)", async ({
+test("change: the editor's second row holds the mode menu, a divider and then the layout menu, the gap menu only in Outline and Reshuffle only in Spread (#435)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2253,25 +2274,32 @@ test("change: the editor's second row holds the mode switch left of the layout m
     const editor = page.getByTestId("shape-tool-readout");
     const bar = editor.getByTestId("shape-tool-readout-bar");
     const row = editor.getByTestId("shape-tool-readout-fill");
-    const modes = row.getByTestId("shape-mode-switch");
+    const modes = row.getByTestId("shape-mode-menu");
     const layout = row.getByTestId("shape-layout-menu");
     await expect(modes).toBeVisible();
     await expect(layout).toBeVisible();
-    await expect(bar.getByTestId("shape-mode-switch")).toHaveCount(0);
+    await expect(bar.getByTestId("shape-mode-menu")).toHaveCount(0);
     const box = async (l: Locator) => (await l.boundingBox())!;
-    // Under the bar, the switch first
+    // Under the bar, the mode menu first, then a divider before the layout menu
     expect((await box(row)).y).toBeGreaterThan((await box(bar)).y);
     expect((await box(modes)).x).toBeLessThan((await box(layout)).x);
+    const extras = row.getByTestId("shape-tool-readout-mode-extras");
+    await expect(extras.getByTestId("shape-layout-menu")).toBeVisible();
+    expect(
+        await extras.evaluate((el) => getComputedStyle(el).borderLeftWidth),
+    ).toBe("1px");
     await expect(row.getByTestId("outline-gap-menu")).toHaveCount(0);
     await expect(editor.getByTestId("shape-editor-reshuffle")).toHaveCount(0);
 
     // Outline on 8 has no gap to place: no gap menu, and no layout
-    await page.getByTestId("shape-mode-outline").click();
+    await pickMode(page, "outline");
     await expect(layout).toHaveCount(0);
     await expect(row.getByTestId("outline-gap-menu")).toHaveCount(0);
+    // Nothing after the menu: no divider either
+    await expect(extras).toBeHidden();
 
     // Spread: Reshuffle on the second row, not the bar
-    await page.getByTestId("shape-mode-spread").click();
+    await pickMode(page, "spread");
     await expect(row.getByTestId("shape-editor-reshuffle")).toBeVisible();
     await expect(bar.getByTestId("shape-editor-reshuffle")).toHaveCount(0);
     expect((await box(modes)).x).toBeLessThan(
@@ -2305,6 +2333,33 @@ test("change: from the keyboard, Tab reaches the pivot button, Enter opens the g
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
 });
 
+test("change: from the keyboard, Tab reaches the mode menu, Enter opens it on Grid, and an arrow and Enter fill the box in Outline (#435)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    const modes = editor.getByTestId("shape-mode-menu");
+    await editor.getByTestId("shape-editor-place").focus();
+    await page.keyboard.press("Tab");
+    await expect(modes).toBeFocused();
+    await page.keyboard.press("Enter");
+    const menu = page.getByTestId("shape-mode-menu-content");
+    await expect(menu.getByTestId("shape-mode-files")).toBeFocused();
+    // Each mode pictured with this box's 8 marchers
+    await expect(
+        menu.getByTestId("shape-mode-preview-outline"),
+    ).toHaveAttribute("data-spots", "8");
+    await page.keyboard.press("ArrowDown");
+    await expect(menu.getByTestId("shape-mode-outline")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(menu).toBeHidden();
+    await expect(modes).toHaveAttribute("data-mode", "outline");
+    await expect(modes).toBeFocused();
+    await expect(editor).toBeVisible();
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+});
+
 test("change: from the keyboard, Tab reaches the layout menu, Enter opens it on the box's layout, and an arrow and Enter pick another (#435)", async ({
     show,
 }) => {
@@ -2316,7 +2371,7 @@ test("change: from the keyboard, Tab reaches the layout menu, Enter opens it on 
     const editor = page.getByTestId("shape-tool-readout");
     const layout = editor.getByTestId("shape-layout-menu");
     await expect(layout).toHaveText(/Short back/);
-    await page.getByTestId("shape-mode-files").focus();
+    await page.getByTestId("shape-mode-menu").focus();
     await page.keyboard.press("Tab");
     await expect(layout).toBeFocused();
     await page.keyboard.press("Enter");
@@ -2379,7 +2434,7 @@ async function outlineOnSeven(show: Show) {
     );
     await expect(page.getByTestId("shape-tool-readout")).toBeVisible();
     const steps = await undoSteps(show);
-    await page.getByTestId("shape-mode-outline").click();
+    await pickMode(page, "outline");
     // The short side spreads evenly by default, with no gap to show; "Leaves
     // a gap" shows the gap
     await expect(await gapOption(page, "outline-gap-spread")).toHaveAttribute(
@@ -2439,7 +2494,7 @@ test("change: from the keyboard, Tab reaches the Leftover menu, Enter opens it o
     // outlineOnSeven left the menu open from a click
     await menuButton.click();
     await expect(page.getByTestId("outline-gap-side")).toHaveCount(0);
-    await page.getByTestId("shape-mode-outline").focus();
+    await page.getByTestId("shape-mode-menu").focus();
     await page.keyboard.press("Tab");
     await expect(menuButton).toBeFocused();
     await page.keyboard.press("Enter");
@@ -2548,10 +2603,10 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     const bar = page.getByTestId("shape-tool-readout");
     await expect(page.getByTestId("shape-editor-reshuffle")).toHaveCount(0);
 
-    await page.getByTestId("shape-mode-spread").click();
-    await expect(page.getByTestId("shape-mode-spread")).toHaveAttribute(
-        "data-state",
-        "on",
+    await pickMode(page, "spread");
+    await expect(page.getByTestId("shape-mode-menu")).toHaveAttribute(
+        "data-mode",
+        "spread",
     );
     // A spread has no files or ranks: the chip shows its one spacing
     await expect(bar.getByTestId("shape-editor-size")).toHaveCount(0);
@@ -2608,9 +2663,9 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     await expect
         .poll(async () => (await readField(page)).selection)
         .toEqual(ALL);
-    await expect(page.getByTestId("shape-mode-spread")).toHaveAttribute(
-        "data-state",
-        "on",
+    await expect(page.getByTestId("shape-mode-menu")).toHaveAttribute(
+        "data-mode",
+        "spread",
     );
     const again = page
         .getByTestId("placed-box-readout")
@@ -3781,14 +3836,13 @@ test("change: O opens the circle tool; a drag from the center draws it, its hand
     ).toBe(true);
     // Outline and Spread on the editor's second row, Outline on (and never Grid)
     await expect(
-        page.getByTestId("shape-tool-readout").getByTestId("shape-mode-switch"),
+        page.getByTestId("shape-tool-readout").getByTestId("shape-mode-menu"),
     ).toBeVisible();
-    await expect(page.getByTestId("shape-mode-outline")).toHaveAttribute(
-        "data-state",
-        "on",
+    await expect(page.getByTestId("shape-mode-menu")).toHaveAttribute(
+        "data-mode",
+        "outline",
     );
-    await expect(page.getByTestId("shape-mode-spread")).toBeVisible();
-    await expect(page.getByTestId("shape-mode-files")).toHaveCount(0);
+    expect(await modeNames(page)).toEqual(["Outline", "Spread"]);
 
     // One handle, on the rim: dragged out to 12 steps it makes the marchers 9
     // steps apart, the center kept
