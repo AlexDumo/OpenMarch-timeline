@@ -2145,13 +2145,13 @@ async function screenPerUnit(page: Page, at: Point): Promise<number> {
 /** The guides, thick edges and tinted spots while a drag is held */
 type HeldGuides = Pick<
     FieldTestShapeOverlay,
-    "guides" | "guideEdges" | "onGuides"
+    "guides" | "guideEdges" | "guideMarks" | "onGuides"
 >;
 const heldGuides = (page: Page): Promise<HeldGuides> =>
     page.evaluate(() => {
-        const { guides, guideEdges, onGuides } =
+        const { guides, guideEdges, guideMarks, onGuides } =
             window.fieldTest!.shapeOverlay!()!;
-        return { guides, guideEdges, onGuides };
+        return { guides, guideEdges, guideMarks, onGuides };
     });
 
 test("change: moving an open box near the front hash lands its front edge on it, with the guide named as on the coordinate sheet; away from lines no guide, and Alt doesn't pull (#444)", async ({
@@ -2233,6 +2233,80 @@ test("change: moving an open box near the front hash lands its front edge on it,
     expect(held.guides).toEqual([]);
     e = await edgesOf();
     expect(Math.abs(e.front - frontHash)).toBeGreaterThan(CLOSE);
+});
+
+test("change: moving a box turned 15° lands its front corner on the 40, with the guide named and the corner ringed; Alt doesn't pull (#446)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { grid } = await drawBox(show);
+    const S = grid.pixelsPerStep;
+    const editor = page.getByTestId("shape-tool-readout");
+    await editor.getByTestId("shape-editor-rotation").click();
+    await page.getByTestId("shape-editor-rotation-input").fill("15");
+    await page.getByTestId("shape-editor-rotation-input").press("Enter");
+    await expect(editor.getByTestId("shape-editor-rotation")).toHaveText("15°");
+    // The 40 on side 1: 16 steps left of the 50
+    const forty = grid.centerFront.x - 16 * S;
+    /** The box's front corner: the spot farthest to the front */
+    const frontCorner = async () =>
+        (await shapeOverlay(page))!.spots.reduce((a, b) => (b.y > a.y ? b : a));
+    const perUnit = await screenPerUnit(page, grid.centerFront);
+    const near = Math.min(3, (S / 4) * perUnit * 0.8) / perUnit;
+    /** Drags the box from inside by `by` in field units */
+    const moveBy = async (by: Point, alt = false) => {
+        const { spots } = (await shapeOverlay(page))!;
+        // 3 steps out along its width, turned with it, well clear of the center dot
+        const turn = (15 * Math.PI) / 180;
+        const grab = {
+            x:
+                spots.reduce((t, p) => t + p.x, 0) / spots.length +
+                3 * S * Math.cos(turn),
+            y:
+                spots.reduce((t, p) => t + p.y, 0) / spots.length +
+                3 * S * Math.sin(turn),
+        };
+        let held: HeldGuides | null = null;
+        if (alt) await page.keyboard.down("Alt");
+        await drag(
+            page,
+            await toScreen(page, grab),
+            await toScreen(page, { x: grab.x + by.x, y: grab.y + by.y }),
+            {
+                beforeRelease: async () => {
+                    held = await heldGuides(page);
+                },
+            },
+        );
+        if (alt) await page.keyboard.up("Alt");
+        return held!;
+    };
+    /**
+     * Drags the box so its front corner would end `near` past the 40, away from the 50. From
+     * this side its center stays out of reach of the half line 4 outside the 40, which would
+     * otherwise be nearer and win.
+     */
+    const moveOnto40 = async (alt = false) =>
+        moveBy({ x: forty - (await frontCorner()).x - near, y: 0 }, alt);
+
+    const held = await moveOnto40();
+    expect(held.guides.map((g) => g.label)).toContain("S1: On 40");
+    // A turned side isn't on the line, so the corner is ringed instead of a thick edge
+    expect(held.guideMarks.some((m) => Math.abs(m.x - forty) < CLOSE)).toBe(
+        true,
+    );
+    expect(
+        held.guideEdges.some((e) => Math.abs(e.from.x - forty) < CLOSE),
+    ).toBe(false);
+    expect(Math.abs((await frontCorner()).x - forty)).toBeLessThan(CLOSE);
+    await expect(editor.getByTestId("shape-editor-rotation")).toHaveText("15°");
+    expect((await shapeOverlay(page))!.guides).toEqual([]);
+
+    // Moved away and back with Alt: no pull and no guide
+    await moveBy({ x: 2 * S, y: 0 });
+    const alt = await moveOnto40(true);
+    expect(alt.guides).toEqual([]);
+    expect(Math.abs((await frontCorner()).x - forty)).toBeGreaterThan(CLOSE);
 });
 
 test("change: moving a selected placed box shows the guide where its edge lands on a line, and saves it there (#444)", async ({
