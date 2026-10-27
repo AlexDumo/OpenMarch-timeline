@@ -1686,6 +1686,41 @@ test("change: Close up shows only with holes, lays a box that lost two out for s
     await expectCanvasMatchesShow(show);
 });
 
+test("change: Close up after an edit in the editor keeps the edit: the spacing typed stays (#455)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    await dragOutOfBox(page, 7, { x: 0, y: 160 });
+    await page.keyboard.press("Escape");
+    await expect.poll(async () => (await latestRecipe(show)).members).toBe(7);
+
+    const t2 = await marcherScreen(page, 2);
+    await page.mouse.click(t2.x, t2.y);
+    const editor = page.getByTestId("placed-box-readout");
+    await expect(editor).toContainText("1 empty");
+    const deep = editor.getByTestId("shape-editor-deep");
+    const before = await deep.innerText();
+    const typed = before === "3" ? "4" : "3";
+    // A new front-to-back spacing, saved on Enter
+    await deep.click();
+    await page.getByTestId("shape-editor-deep-input").fill(typed);
+    await page.getByTestId("shape-editor-deep-input").press("Enter");
+    await expect(deep).toHaveText(typed);
+    await waitForIdle(page);
+    // Past the save's hold, so Close up writes rather than waiting on the spacing's save
+    await page.waitForTimeout(1500);
+
+    // Close up lays out the box as it is now, the new spacing included
+    await editor.getByTestId("shape-editor-close-up").click();
+    await expect
+        .poll(async () => (await latestRecipe(show)).params.spots)
+        .toBe(7);
+    await waitForIdle(page);
+    await expect(editor).not.toContainText("empty");
+    await expect(deep).toHaveText(typed);
+});
+
 test("the View tab's numbers-only labels draw drill order, not drill numbers", async ({
     show,
 }) => {
