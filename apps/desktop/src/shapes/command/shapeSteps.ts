@@ -7,6 +7,7 @@ import {
     layoutOrientations,
     parseLayout,
     shapeKey,
+    shownFamily,
 } from "../distribute/layouts";
 import {
     distributionOf,
@@ -157,8 +158,7 @@ export function layoutStep(kind: AnyToolKind): ToolParam<unknown> | null {
                 if (shapeKey(v.lines, v.layout.byFile) === key)
                     return `${row.label} ${v.label}`;
         // Outside the catalogue (past 3:1, say): its block, a full one called Full
-        const full = now.lines.every((l) => l === now.lines[0]);
-        return `${LAYOUT_LABELS[full ? "full" : now.layout.family]} ${now.across} × ${now.deep}`;
+        return `${LAYOUT_LABELS[shownFamily(now)]} ${now.across} × ${now.deep}`;
     };
     return {
         key: "layout",

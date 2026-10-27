@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { Tip } from "./Tip";
 import * as Popover from "@radix-ui/react-popover";
@@ -8,6 +8,7 @@ import {
     hintText,
     isVersionAnyTurn,
     nearestVersion,
+    shownFamily,
     versionDots,
     versionOf,
     type LayoutHint,
@@ -20,18 +21,22 @@ import { useLastLayoutStore } from "../tool/lastLayout";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 import { keepFocus } from "./keepFocus";
+import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 
 /**
- * The box's layout picker (#387, spec #385) and the chip's layout menu (owner lab feedback,
- * 2026-10-23). Full · Stagger · Rounded · Short back · Notched always keep their places: a layout
- * the count can't make shows greyed, as a picture of it at the nearest count it makes, with what
- * it needs ("add 1 / remove 2"). Each version is a live thumbnail labelled by its block
+ * The box's layout menu (#387, spec #385; owner lab feedback, 2026-10-23), on the floating
+ * editor's second row (#435). Full · Stagger · Rounded · Short back · Notched always keep their
+ * places: a layout the count can't make shows greyed, as a picture of it at the nearest count it
+ * makes, with what it needs ("add 1 / remove 2"). Each version is a live thumbnail labelled by its block
  * ("5 × 5"), the counts in its tooltip. A shape and its quarter turn are one version: the chip's
  * turn button makes the other. Picking a version is one change of the shape and becomes the
  * layout a new box starts in.
  */
 
 type Target = Pick<ShapeEditTarget, "kind" | "params" | "spots" | "apply">;
+
+/** The layout menu's height, in CSS px: the five layouts, and two or three versions beside them */
+const LAYOUT_MENU_HEIGHT = 240;
 
 interface PickerProps {
     target: Target;
@@ -41,12 +46,23 @@ interface PickerProps {
     className?: string;
 }
 
-/** Picks `version` for the shape, and remembers its layout for the next new box */
+/**
+ * Picks `version` for the shape, and remembers its layout for the next new box. Picking what the
+ * box already shows is nothing: a Short back block that reads as Full stays Short back underneath
+ * when Full's same version is picked (#437)
+ */
 function usePick({ target, envFor }: PickerProps) {
     const remember = useLastLayoutStore((s) => s.remember);
     return (version: LayoutVersion) => {
         const env = envFor();
         if (!env) return;
+        const now = layoutOf(target.kind, target.params, target.spots);
+        if (
+            now &&
+            shownFamily(now) === version.layout.family &&
+            isOwn(version, now)
+        )
+            return;
         remember(version.layout.family);
         const next = withLayout(
             target.kind,
@@ -74,117 +90,36 @@ function needsTitle(label: string, hint: LayoutHint, n: number): string {
         : `${label} can't make ${n}`;
 }
 
-/** The inspector's picker, in the shape section under the mode switch */
-export function LayoutPicker(props: PickerProps) {
-    const { target } = props;
-    const pick = usePick(props);
-    const now = layoutOf(target.kind, target.params, target.spots);
-    const rows = target.kind.closed?.layouts?.catalogue(target.spots) ?? [];
-    if (now === null || rows.length === 0) return null;
-    return (
-        <div
-            className="flex flex-col gap-4"
-            role="group"
-            aria-label="Layout"
-            data-testid="shape-layout-picker"
-        >
-            {rows.map((row) => (
-                <div
-                    key={row.family}
-                    className="flex items-start gap-8"
-                    data-testid={`shape-layout-row-${row.family}`}
-                >
-                    <span
-                        className={clsx(
-                            "text-sub w-[4.5rem] shrink-0 pt-6",
-                            row.versions.length > 0
-                                ? "text-text/70"
-                                : "text-text/40",
-                        )}
-                    >
-                        {row.label}
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                        {row.versions.length > 0 ? (
-                            row.versions.map((version, i) => (
-                                <VersionButton
-                                    key={i}
-                                    name={`${row.label} ${version.label}`}
-                                    version={version}
-                                    on={isOwn(version, now)}
-                                    onPick={() => pick(version)}
-                                    testId={`shape-layout-${row.family}-${i}`}
-                                    caption={version.label}
-                                />
-                            ))
-                        ) : (
-                            <MissingButton
-                                row={row}
-                                n={target.spots}
-                                testId={`shape-layout-${row.family}-missing`}
-                            />
-                        )}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-}
-
-/** A layout the count can't make: its picture greyed, with what it needs, which can't be picked */
-function MissingButton({
-    row,
-    n,
-    testId,
-}: {
-    row: LayoutRow;
-    n: number;
-    testId: string;
-}) {
-    const hint = row.hint ?? { more: null, fewer: null };
-    return (
-        <Tip label={needsTitle(row.label, hint, n)}>
-            <button
-                type="button"
-                // aria-disabled, not disabled: a disabled button gets no pointer, so the
-                // tooltip saying why wouldn't show
-                aria-disabled
-                data-testid={testId}
-                className="rounded-4 text-text/40 flex flex-col items-center gap-2 p-4"
-            >
-                {row.preview && (
-                    <span className="opacity-40">
-                        <Thumbnail version={row.preview.version} />
-                    </span>
-                )}
-                <span className="text-xs">{hintText(hint)}</span>
-            </button>
-        </Tip>
-    );
-}
-
 /**
- * The chip's layout menu: the layout on its button (and, when the count can't make the one
- * picked, that one greyed with what it needs). Open, it lists every layout, greyed where the count
- * can't make it; hovering a layout or clicking its arrow shows its versions beside the list.
+ * The chip's layout menu: the layout the box has on its button, and nothing more when the count
+ * can't make the one picked (owner, #435): open, it lists every layout, greyed with what it needs
+ * where the count can't make it; hovering a layout or clicking its arrow shows its versions beside
+ * the list.
  */
 export function LayoutMenu(props: PickerProps) {
     const { target } = props;
     const pick = usePick(props);
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useEditorMenu();
     const [active, setActive] = useState<LayoutFamily | null>(null);
+    // Closed any way (another of the editor's menus opening too), it opens next on the box's own
+    useEffect(() => {
+        if (!open) setActive(null);
+    }, [open]);
     // Closed by a press (a layout picked, a click away): focus isn't handed back to the button,
-    // or the floating editor would stay solid with the pointer away (#426). Escape still hands it.
-    const pressed = useRef(false);
+    // or the floating editor would stay solid with the pointer away (#426). Opened by keyboard,
+    // focus goes to the shape's layout, the arrows move up and down the list, and Escape or a
+    // pick hands focus back (review)
+    const focus = useMenuFocus((el) =>
+        el.querySelector<HTMLElement>('[role="menuitem"][data-current]'),
+    );
     const now = layoutOf(target.kind, target.params, target.spots);
     const rows = target.kind.closed?.layouts?.catalogue(target.spots) ?? [];
     if (now === null || rows.length === 0) return null;
     const n = target.spots;
     const aspect = now.across / now.deep;
-    const showing = active ?? now.layout.family;
-    const wanted = now.fellBack
-        ? rows.find((r) => r.family === now.fellBack)
-        : undefined;
+    // Short back with nothing short reads as Full (#437)
+    const family = shownFamily(now);
+    const showing = active ?? family;
     const choose = (version: LayoutVersion) => {
         pick(version);
         setOpen(false);
@@ -197,14 +132,7 @@ export function LayoutMenu(props: PickerProps) {
         undefined;
     const shownRow = rows.find((r) => r.family === showing);
     return (
-        <Popover.Root
-            open={open}
-            onOpenChange={(next) => {
-                setOpen(next);
-                if (!next) setActive(null);
-                else pressed.current = false;
-            }}
-        >
+        <Popover.Root open={open} onOpenChange={setOpen}>
             <span
                 className={clsx("flex items-center gap-4", props.className)}
                 data-testid="shape-layout-pill"
@@ -213,8 +141,8 @@ export function LayoutMenu(props: PickerProps) {
                     <Popover.Trigger asChild>
                         <button
                             type="button"
-                            aria-label={`Layout: ${LAYOUT_LABELS[now.layout.family]}`}
-                            onPointerDown={keepFocus}
+                            aria-label={`Layout: ${LAYOUT_LABELS[family]}`}
+                            {...focus.trigger}
                             data-testid="shape-layout-menu"
                             className="rounded-4 hover:bg-fg-2 flex items-center gap-4 px-4 py-2"
                         >
@@ -222,50 +150,38 @@ export function LayoutMenu(props: PickerProps) {
                                 version={versionOf(now.layout, now.lines)}
                                 small
                             />
-                            <span>{LAYOUT_LABELS[now.layout.family]}</span>
+                            <span>{LAYOUT_LABELS[family]}</span>
                             <CaretDownIcon size={10} />
                         </button>
                     </Popover.Trigger>
                 </Tip>
-                {wanted?.hint && (
-                    <Tip label={needsTitle(wanted.label, wanted.hint, n)}>
-                        <span
-                            className="text-text/40 flex items-center gap-2"
-                            data-testid="shape-layout-menu-wanted"
-                        >
-                            {wanted.preview && (
-                                <span className="opacity-40">
-                                    <Thumbnail
-                                        version={wanted.preview.version}
-                                        small
-                                    />
-                                </span>
-                            )}
-                            {wanted.label} · {hintText(wanted.hint)}
-                        </span>
-                    </Tip>
-                )}
             </span>
             <Popover.Portal>
                 <Popover.Content
                     side="bottom"
                     align="start"
                     sideOffset={6}
-                    onOpenAutoFocus={(e) => e.preventDefault()}
-                    onCloseAutoFocus={(e) => {
-                        if (pressed.current) e.preventDefault();
-                    }}
-                    onPointerDownOutside={() => {
-                        pressed.current = true;
-                    }}
-                    onPointerDownCapture={() => {
-                        pressed.current = true;
-                    }}
+                    {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex gap-8 border p-6"
+                    // One height whatever's hovered, so it doesn't jump: every layout and two or
+                    // three versions, less where the screen has no room (owner)
+                    style={{
+                        height: `min(${LAYOUT_MENU_HEIGHT}px, var(--radix-popover-content-available-height))`,
+                    }}
                     data-testid="shape-layout-menu-content"
                 >
-                    <div className="flex flex-col gap-1" role="menu">
+                    <div
+                        className="flex flex-col gap-1 overflow-y-auto"
+                        role="menu"
+                        onKeyDown={(e) =>
+                            arrowFocus(e, [
+                                ...e.currentTarget.querySelectorAll<HTMLElement>(
+                                    '[role="menuitem"]:not([aria-disabled])',
+                                ),
+                            ])
+                        }
+                    >
                         {rows.map((row) => {
                             const missing = row.versions.length === 0;
                             const picture = missing
@@ -297,7 +213,16 @@ export function LayoutMenu(props: PickerProps) {
                                             role="menuitem"
                                             // aria-disabled, not disabled: the tooltip says why
                                             aria-disabled={missing || undefined}
+                                            data-current={
+                                                family === row.family ||
+                                                undefined
+                                            }
                                             onPointerEnter={() => {
+                                                if (!missing)
+                                                    setActive(row.family);
+                                            }}
+                                            // The versions follow the keyboard as the pointer
+                                            onFocus={() => {
                                                 if (!missing)
                                                     setActive(row.family);
                                             }}
@@ -310,8 +235,7 @@ export function LayoutMenu(props: PickerProps) {
                                                 "flex min-w-40 items-center gap-6 px-4 py-2 text-left",
                                                 missing
                                                     ? "text-text/40"
-                                                    : now.layout.family ===
-                                                        row.family
+                                                    : family === row.family
                                                       ? "text-accent"
                                                       : "hover:text-accent",
                                             )}
@@ -357,12 +281,15 @@ export function LayoutMenu(props: PickerProps) {
                             );
                         })}
                     </div>
-                    {shownRow && shownRow.versions.length > 0 && (
+                    {/* The versions in a panel as tall as the list and of one width, scrolling
+                        when a layout has more (owner: the menu jumped as Short back's tall list
+                        grew it) */}
+                    <div className="border-stroke relative w-[96px] shrink-0 self-stretch border-l">
                         <div
-                            className="border-stroke flex max-w-64 flex-wrap content-start gap-2 border-l pl-8"
+                            className="absolute inset-0 flex flex-wrap content-start gap-2 overflow-y-auto pl-8"
                             data-testid="shape-layout-menu-versions"
                         >
-                            {shownRow.versions.map((version, i) => (
+                            {shownRow?.versions.map((version, i) => (
                                 <VersionButton
                                     key={i}
                                     name={`${shownRow.label} ${version.label}`}
@@ -374,7 +301,7 @@ export function LayoutMenu(props: PickerProps) {
                                 />
                             ))}
                         </div>
-                    )}
+                    </div>
                 </Popover.Content>
             </Popover.Portal>
         </Popover.Root>

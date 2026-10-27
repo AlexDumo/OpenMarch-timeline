@@ -13,7 +13,8 @@ import {
 } from "../frame/gestures";
 import { edgeGuides } from "../frame/edgeGuides";
 import { lineCoordinate } from "./lineCoordinate";
-import { rotationDegrees } from "../frame/frame";
+import { pivotPoint, rotationDegrees } from "../frame/frame";
+import { useShapePointerStore } from "./shapePointer";
 import { lengthReadout } from "../frame/scale";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import type { ShapeField } from "./shapeField";
@@ -77,7 +78,7 @@ export function drillTerms(p: XY): string | null {
 
 type FrameDrawing = Pick<
     FieldModeDrawing,
-    "knob" | "centerDot" | "pivotMark" | "pivot" | "tip"
+    "knob" | "centerDot" | "pivotMark" | "pivotPreview" | "pivot" | "tip"
 >;
 
 /**
@@ -95,10 +96,17 @@ export function frameDrawing(
     env: ToolEnv,
 ): FrameDrawing {
     const controls = frameControls(kind, params, n, env);
+    // The pivot a cell of the editor's pivot menu points at (#437)
+    const preview = useShapePointerStore.getState().pivotPreview;
     const out: FrameDrawing = {
         knob: { at: controls.knob, stem: controls.stem },
         centerDot: controls.center,
         ...(controls.pivot ? { pivotMark: controls.pivot } : {}),
+        ...(preview
+            ? {
+                  pivotPreview: pivotPoint(kind.frameOf(params, n), preview),
+              }
+            : {}),
     };
     if (!gesture || !pointer) return out;
     if (gesture.type === "rotate") {

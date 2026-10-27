@@ -242,6 +242,11 @@ export type FieldModeDrawing = {
      * own. At the center the center dot is the pivot.
      */
     pivotMark?: FieldPoint;
+    /**
+     * Where the pivot a cell of the shape editor's pivot menu points at would be (#437): a
+     * preview only, drawn at full strength even while the shape is calm
+     */
+    pivotPreview?: FieldPoint;
     /** While turning: what it turns around, and the pointer */
     pivot?: { at: FieldPoint; to: FieldPoint };
     /** A note by the pointer: the angle, or where the shape is in drill terms */

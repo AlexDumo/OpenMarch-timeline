@@ -682,6 +682,51 @@ function ModeDrawing({
                         </g>
                     );
                 })()}
+            {drawing.pivotPreview &&
+                (() => {
+                    // A cell of the editor's pivot menu pointed at (#437): the pivot mark a
+                    // little larger on a soft halo, at full strength even while the shape is calm
+                    const p = at(drawing.pivotPreview);
+                    const r = PIVOT_MARK_ARM * 1.3;
+                    const ring = PIVOT_MARK_RING * 1.3;
+                    const cross = `M ${p.x - r} ${p.y} H ${p.x + r} M ${p.x} ${p.y - r} V ${p.y + r}`;
+                    return (
+                        <g
+                            data-testid="fieldShapePivotPreview"
+                            pointerEvents="none"
+                        >
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={r + 4}
+                                fill={PIVOT_COLOR}
+                                fillOpacity={0.25}
+                            />
+                            <path d={cross} stroke="black" strokeWidth={4} />
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={ring}
+                                fill="none"
+                                stroke="black"
+                                strokeWidth={4}
+                            />
+                            <path
+                                d={cross}
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={2}
+                            />
+                            <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r={ring}
+                                fill="none"
+                                stroke={PIVOT_COLOR}
+                                strokeWidth={2}
+                            />
+                        </g>
+                    );
+                })()}
             {drawing.pivot &&
                 (() => {
                     const a = at(drawing.pivot.at);

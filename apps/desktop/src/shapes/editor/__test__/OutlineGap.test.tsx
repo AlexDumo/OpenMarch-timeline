@@ -3,12 +3,12 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { boxTool } from "../../box/boxTool";
 import { drawBox, type BoxParams } from "../../box/boxGeometry";
 import { withMode } from "../../distribute/modes";
-import { outlineGapOf } from "../../distribute/outlineGap";
+import { outlineGapOf, withOddGap } from "../../distribute/outlineGap";
 import { flipBox } from "../boxEdits";
 import type { ToolEnv } from "../../tool/toolKind";
 import { OutlineGap } from "../OutlineGap";
 
-/** The inspector's outline gap (#390): the side as seen, and leaves a gap / spreads evenly */
+/** The editor's outline gap menu (#390, #435): the side as seen, and leaves a gap / spreads evenly */
 
 afterEach(cleanup);
 
@@ -30,18 +30,59 @@ const outline = (n: number) =>
         env,
     ) as BoxParams;
 
-const shown = (params: unknown, spots: number, apply = vi.fn()) =>
-    render(
+/** The gap menu for `params`, opened when the shape has a gap */
+const shown = (
+    params: unknown,
+    spots: number,
+    apply = vi.fn(),
+    clickToMove = false,
+) => {
+    const view = render(
         <OutlineGap
             target={{ kind: boxTool, params, spots, apply }}
             envFor={() => env}
+            clickToMove={clickToMove}
         />,
     );
+    const menu = screen.queryByTestId("outline-gap-menu");
+    if (menu) fireEvent.click(menu);
+    return view;
+};
 
 const on = (testId: string) =>
     expect(screen.getByTestId(testId)).toHaveAttribute("data-state", "on");
 
 describe("the outline gap", () => {
+    it("tells an open shape a click on the field moves the gap, in the words of its style, and a placed one nothing", () => {
+        shown(outline(13), 13, vi.fn(), true);
+        // Spreads evenly by default
+        expect(screen.getByTestId("outline-gap-tip")).toHaveTextContent(
+            "Click a marcher on another side (not a corner) to spread that side instead.",
+        );
+        cleanup();
+        const gapped = withOddGap(
+            boxTool,
+            outline(13),
+            13,
+            { side: "back", at: null, style: "gap" },
+            env,
+        );
+        shown(gapped, 13, vi.fn(), true);
+        expect(screen.getByTestId("outline-gap-tip")).toHaveTextContent(
+            "Click a marcher on the outline (not a corner) to move the gap there.",
+        );
+        cleanup();
+        shown(outline(13), 13);
+        expect(screen.queryByTestId("outline-gap-tip")).toBeNull();
+    });
+
+    it("names the leftover side on its button", () => {
+        shown(outline(13), 13);
+        expect(screen.getByTestId("outline-gap-menu")).toHaveTextContent(
+            "Leftover: Back",
+        );
+    });
+
     it("shows the gap's side and style for an odd count, the back spread evenly by default", () => {
         shown(outline(13), 13);
         const sides = screen.getByRole("group", { name: "Gap side" });

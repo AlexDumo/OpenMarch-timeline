@@ -1,5 +1,14 @@
 import clsx from "clsx";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
+import { animated, useSpring } from "@react-spring/web";
+import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
+import { editorPlacement } from "./editorPlacement";
 import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { getActionShortcutLabel } from "@/shortcuts/labels";
@@ -18,7 +27,7 @@ import {
 } from "@phosphor-icons/react";
 import { fieldToElement, useFieldViewStore } from "@/field/three/fieldView";
 import { DEGREE, rotationDegrees } from "../frame/frame";
-import { pivotOf } from "../frame/pivot";
+import { pivotOf, withPivot } from "../frame/pivot";
 import {
     flipShape,
     scrubTurn,
@@ -54,11 +63,16 @@ import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
 import { SaveShapeButton } from "../library/SaveShapeButton";
 import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
+import { ModeMenu } from "./ModeMenu";
+import { OutlineGap } from "./OutlineGap";
+import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 
-/** The gap between the shape's outline and the editor, in CSS px */
-const GAP_PX = 14;
+/** How long the editor stays still after a press on it ends, so a second click lands */
+const PRESS_HOLD_MS = 450;
+/** A gentle spring that doesn't overshoot (#437) */
+const EDITOR_SPRING = { tension: 210, friction: 26, clamp: true };
 
 /**
  * The floating editor (08-shape-system-ux.md, "The floating editor"), the main place for editing
@@ -70,15 +84,17 @@ const GAP_PX = 14;
  * under it shows, and it is solid while the pointer is over either, with focus inside it or a
  * menu of its open (`ShapeEditorSurface.css`). Its numbers are the kind's primary parameters (#344, `chipLayout`), so it works for any kind.
  * One row, no ⋯ (#429; owner: keep it compact), for a box:
- * `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`, and in Spread
- * `↔ 2 steps Reshuffle │ …`. Every number can be typed or dragged, and follows the field: across
- * is side to side however the box is turned. ↻ adds a quarter turn to the degrees beside it.
+ * `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⌖▾ ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`. Every number can be
+ * typed or dragged, and follows the field: across is side to side however the box is turned. ↻
+ * adds a quarter turn to the degrees beside it, and ⌖▾ opens the pivot grid (#435).
  * Recalculate works out who goes where again by least travel, which moving and turning keep until
  * it's pressed, and shows its word only when it would change something; Close up shows for a
  * placed shape with holes (#392). Pathways and ☆ Save, which leave the shape as it is, come last
- * before Place. Its
- * controls show the app's tooltips (`RichTips`). Under the editor, a box in Files has its layout
- * menu in a pill of its own (#387, #429). Place shows only for a new shape; a selected placed
+ * before Place. Its controls show the app's tooltips (`RichTips`). Under the editor, a pill of
+ * its own says how the shape is filled (#435): the mode menu (Grid, Outline, Spread, each with a
+ * picture of this shape in it), then after a divider the box's layout menu in Grid, the leftover
+ * menu in Outline, or Reshuffle in Spread. With it, the editor has everything the inspector had
+ * for a shape. Place shows only for a new shape; a selected placed
  * shape saves each edit on release. While the open shape waits out of sight (#416) the editor
  * hides, and away from its moment a chip goes back to it.
  */
@@ -216,7 +232,7 @@ function ShapeEditorBar({
     );
 
     return (
-        <div
+        <animated.div
             ref={place.ref}
             className="shape-editor-surface text-sub text-text pointer-events-none absolute z-10 flex flex-col items-center gap-4 whitespace-nowrap *:pointer-events-auto"
             style={place.style}
@@ -225,6 +241,7 @@ function ShapeEditorBar({
             data-testid={testId}
             data-shape-editor
             data-placement={place.above ? "above" : "below"}
+            data-held={place.held}
             onPointerDown={(e) => e.stopPropagation()}
         >
             <div
@@ -324,12 +341,6 @@ function ShapeEditorBar({
                         </span>
                     </>
                 )}
-                <ReshuffleButton
-                    target={target}
-                    envFor={() => envFor(PLAIN)}
-                    className="rounded-4 hover:text-accent hover:bg-fg-2 px-4 py-2"
-                    testId="shape-editor-reshuffle"
-                />
                 {target.drawnOn && (
                     <span className="text-text/50">from {target.drawnOn}</span>
                 )}
@@ -376,6 +387,12 @@ function ShapeEditorBar({
                             );
                             return true;
                         }}
+                    />
+                    <PivotMenu
+                        pivot={pivot}
+                        rotation={kind.frameOf(params, spots).rotation}
+                        onPick={(key) => update((now) => withPivot(now, key))}
+                        testId="shape-editor-pivot"
                     />
                     <IconButton
                         label="Flip side to side"
@@ -446,22 +463,45 @@ function ShapeEditorBar({
                     </>
                 )}
             </div>
-            {/* The layout settings: a pill of their own under the editor (owner). Only the bar and
-                the pill take the pointer, not the empty space beside the pill */}
-            <LayoutMenu
-                target={target}
-                envFor={() => envFor(PLAIN)}
-                className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal border px-6 py-2"
-            />
-        </div>
+            {/* How it's filled: a pill of its own under the editor (owner, #435), the mode switch
+                first, then what that mode has (a box's layout in Grid, the gap in Outline,
+                Reshuffle in Spread). Hidden when the kind has none of them. Only the bar and the
+                pill take the pointer, not the empty space beside the pill */}
+            <div
+                className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2 empty:hidden"
+                data-testid={`${testId}-fill`}
+            >
+                <ModeMenu target={target} envFor={() => envFor(PLAIN)} />
+                {/* What the mode has, after a divider (owner); nothing, and no divider, when it
+                    has none */}
+                <span
+                    className="border-stroke flex items-center gap-6 border-l pl-6 empty:hidden"
+                    data-testid={`${testId}-mode-extras`}
+                >
+                    <LayoutMenu target={target} envFor={() => envFor(PLAIN)} />
+                    <OutlineGap
+                        target={target}
+                        envFor={() => envFor(PLAIN)}
+                        clickToMove={target.place !== undefined}
+                    />
+                    <ReshuffleButton
+                        target={target}
+                        envFor={() => envFor(PLAIN)}
+                        className="rounded-4 hover:text-accent hover:bg-fg-2 min-h-24 px-4 py-2"
+                        testId="shape-editor-reshuffle"
+                    />
+                </span>
+            </div>
+        </animated.div>
     );
 }
 
 /**
- * Where the editor sits: under the shape's outline, centered, and above it when there's no room
- * below in the field, kept inside the field side to side. Follows the field as it pans and zooms,
- * but holds still while the pointer is on it, so a button doesn't slide away between two clicks
- * as the numbers change (sims, F3: 5 of 8 clicked the wrong thing).
+ * Where the editor sits (`editorPlacement`), sprung there whenever the shape or the editor's own
+ * size moves it, gently and without overshoot (#437, owner: predictable motion, no jump when the
+ * pointer leaves). A pan or zoom moves it at once, as only the shape's changes animate, and so
+ * does reduced motion. It holds still while a press on it is under way and a moment after, so
+ * quick clicks on − or + land on the same button (owner), but never just because it's hovered.
  */
 function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     const view = useFieldViewStore();
@@ -472,14 +512,6 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         fieldWidth: Infinity,
         fieldHeight: Infinity,
     });
-    const [held, setHeld] = useState<{ left: number; top: number } | null>(
-        null,
-    );
-    const b = boundsOf(shapeOutline(kind, params, spots));
-    const bottom = fieldToElement(view, (b.left + b.right) / 2, b.bottom);
-    const top = fieldToElement(view, (b.left + b.right) / 2, b.top);
-    // The outline's spots have a radius and the handles stick out: clear them
-    const pad = GAP_PX + 6;
     // Its own size (the Save form opens) and the field's, as they change
     useLayoutEffect(() => {
         const el = ref.current;
@@ -498,42 +530,79 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         observer.observe(field);
         return () => observer.disconnect();
     }, []);
-    const above =
-        bottom.y + pad + room.height > room.fieldHeight &&
-        top.y - pad - room.height > 0;
-    const anchor = above ? top : bottom;
-    const margin = 4;
-    const left = Math.max(
-        margin,
-        Math.min(
-            anchor.x - room.width / 2,
-            room.fieldWidth - room.width - margin,
+    const target = editorPlacement({
+        outline: shapeOutline(kind, params, spots).map((p) =>
+            fieldToElement(view, p.x, p.y),
         ),
+        width: room.width,
+        height: room.height,
+        fieldWidth: room.fieldWidth,
+        fieldHeight: room.fieldHeight,
+    });
+
+    // Still while a press on the editor is under way, and a moment after it
+    const [pressing, setPressing] = useState(false);
+    const release = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        if (!pressing) return;
+        const up = () => {
+            if (release.current) clearTimeout(release.current);
+            release.current = setTimeout(
+                () => setPressing(false),
+                PRESS_HOLD_MS,
+            );
+        };
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
+        return () => {
+            window.removeEventListener("pointerup", up);
+            window.removeEventListener("pointercancel", up);
+        };
+    }, [pressing]);
+    useEffect(
+        () => () => {
+            if (release.current) clearTimeout(release.current);
+        },
+        [],
     );
-    const at = held ?? {
-        left,
-        top: above ? top.y - pad - room.height : bottom.y + pad,
-    };
+    const held = pressing;
+
+    const [spring, api] = useSpring(() => ({
+        left: target.left,
+        top: target.top,
+    }));
+    const shown = useRef<{ view: unknown; placed: boolean }>({
+        view,
+        placed: false,
+    });
+    useLayoutEffect(() => {
+        if (held || room.width === 0) return;
+        // A pan or zoom, the first placing and reduced motion jump; the shape's changes spring
+        const jump =
+            !shown.current.placed ||
+            shown.current.view !== view ||
+            prefersReducedMotion();
+        shown.current = { view, placed: true };
+        void api.start({
+            left: target.left,
+            top: target.top,
+            immediate: jump,
+            config: EDITOR_SPRING,
+        });
+    }, [api, held, room.width, target.left, target.top, view]);
     return {
         ref,
-        above,
-        style: at,
+        above: target.above,
+        held,
+        style: spring,
         hold: {
-            onPointerEnter: () => setHeld(at),
-            onPointerLeave: () => setHeld(null),
+            onPointerDownCapture: () => {
+                if (release.current) clearTimeout(release.current);
+                // Stopped where it is, a glide under way included, so the press lands
+                api.stop();
+                setPressing(true);
+            },
         },
-    };
-}
-
-/** The field-square rectangle around an outline */
-function boundsOf(points: readonly { x: number; y: number }[]) {
-    const xs = points.map((p) => p.x);
-    const ys = points.map((p) => p.y);
-    return {
-        left: Math.min(...xs),
-        right: Math.max(...xs),
-        top: Math.min(...ys),
-        bottom: Math.max(...ys),
     };
 }
 

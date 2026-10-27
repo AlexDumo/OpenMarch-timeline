@@ -447,6 +447,19 @@ export function resolveLayout(layout: FilesLayout, n: number): ResolvedLayout {
     );
 }
 
+/**
+ * The layout a box reads as (#437, owner): a Short back with no short line (the width divides the
+ * count, or everyone fits on one line) is a whole block, so it shows as Full in the layout menu,
+ * the chip and the command bar. Display only: the recipe keeps Short back, so − and + still step
+ * one across at a time. The other layouts always leave a spot out, so they read as themselves.
+ */
+export function shownFamily(r: ResolvedLayout): LayoutFamily {
+    return r.layout.family === "shortBack" &&
+        r.lines.every((l) => l === r.lines[0])
+        ? "full"
+        : r.layout.family;
+}
+
 /** "Stagger", "short" or "short back" names a layout: the start of its name, spaces ignored */
 function familyNamed(words: string): LayoutFamily | null {
     const typed = words.replace(/\s+/g, "").toLowerCase();

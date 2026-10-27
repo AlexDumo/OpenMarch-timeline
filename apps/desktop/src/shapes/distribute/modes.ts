@@ -2,6 +2,8 @@ import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import {
     MODE_LABELS,
     reshuffled,
+    SEED_MAX,
+    spreadDistribution,
     type Distribution,
     type DistributionMode,
     type FilesLayout,
@@ -67,6 +69,35 @@ export function reshuffle(
     const d = closed?.distribution(params, n);
     if (!closed || d?.mode !== "spread") return null;
     return closed.withDistribution(params, n, reshuffled(d, n), env);
+}
+
+/**
+ * A spread laid out with `seed` for the `n` spots there are now (#437, for advanced users): the
+ * same seed gives the same spread. Null when the shape isn't a spread or the seed isn't a whole
+ * number from 1 to `SEED_MAX`. One change, so one undo step.
+ */
+export function withSeed(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    seed: number,
+    env: ToolEnv,
+): unknown {
+    const closed = kind.closed;
+    const d = closed?.distribution(params, n);
+    if (!closed || d?.mode !== "spread") return null;
+    if (!Number.isSafeInteger(seed) || seed < 1 || seed > SEED_MAX) return null;
+    return closed.withDistribution(params, n, spreadDistribution(seed, n), env);
+}
+
+/** A typed seed: a whole number from 1 to `SEED_MAX`, or null */
+export function parseSeed(text: string): number | null {
+    const t = text.trim();
+    if (!/^\d+$/.test(t)) return null;
+    const seed = Number(t);
+    return Number.isSafeInteger(seed) && seed >= 1 && seed <= SEED_MAX
+        ? seed
+        : null;
 }
 
 /** The mode a typed answer names among `modes`: its label or the start of it ("out") */
