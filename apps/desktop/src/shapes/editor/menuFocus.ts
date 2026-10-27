@@ -34,11 +34,20 @@ export function useMenuFocus(
             onOpenAutoFocus: (e: Event) => {
                 e.preventDefault();
                 keyboard.current = !pressed.current;
-                if (pressed.current || !content.current) return;
-                const el = content.current;
-                (
-                    focusTarget(el) ?? el.querySelector<HTMLElement>("button")
-                )?.focus();
+                if (pressed.current) return;
+                // Again for a few frames until it holds: as the menu settles, its button's
+                // tooltip closing can take the focus back (seen in 1 of 8 browser runs)
+                let frames = 6;
+                const into = () => {
+                    const el = content.current;
+                    if (el && !el.contains(document.activeElement))
+                        (
+                            focusTarget(el) ??
+                            el.querySelector<HTMLElement>("button")
+                        )?.focus();
+                    if (--frames > 0) requestAnimationFrame(into);
+                };
+                into();
             },
             // Back to the button, found afresh: its tooltip may have drawn it again while open
             onCloseAutoFocus: (e: Event) => {
