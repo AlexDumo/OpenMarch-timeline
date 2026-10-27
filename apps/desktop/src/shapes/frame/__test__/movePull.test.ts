@@ -1,0 +1,200 @@
+import { describe, expect, it } from "vitest";
+import { boxFrame, type BoxParams } from "../../box/boxGeometry";
+import { boxTool } from "../../box/boxTool";
+import { circleTool } from "../../circle/circleTool";
+import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
+import type { XY } from "../../types";
+import { dragShape, startShapeGesture } from "../gestures";
+
+/**
+ * The edge pull while moving a whole shape (#444): a side (or the center line) that comes within a
+ * few pixels of one of the field's lines lands on it, one snap per axis. Away from lines the
+ * half-step grid still decides.
+ */
+
+const STEP = 10;
+const half = STEP / 2;
+const snapHalf = (v: number) => Math.round(v / half) * half;
+/** Yard lines every 8 steps side to side; front sideline, front and back hash front to back */
+const LINES = {
+    x: [-160, -80, 0, 80, 160],
+    y: [0, -280, -560],
+};
+const env = (over: Partial<ToolEnv> = {}): ToolEnv => ({
+    stepPx: STEP,
+    snap: true,
+    shift: false,
+    gridSnap: (p) => ({ x: snapHalf(p.x), y: snapHalf(p.y) }),
+    hitRadius: 3,
+    fieldLines: LINES,
+    pullRadius: 1.2,
+    ...over,
+});
+const exact = (a: number, b: number) =>
+    expect(Math.abs(a - b)).toBeLessThan(1e-9);
+
+/** 4 files by 3 ranks, 1⅗ steps apart, so its far edges are off the half steps */
+const N = 12;
+const box: BoxParams = {
+    center: { x: 30, y: -150 },
+    rotation: 0,
+    files: 4,
+    across: 1.6 * STEP,
+    deep: 1.6 * STEP,
+};
+const edges = (p: BoxParams) => {
+    const f = boxFrame(p, N);
+    return {
+        left: f.center.x - f.halfWidth,
+        right: f.center.x + f.halfWidth,
+        back: f.center.y - f.halfDepth,
+        front: f.center.y + f.halfDepth,
+        center: f.center,
+    };
+};
+
+/** `p` dragged from inside by `by` */
+function move(
+    kind: AnyToolKind,
+    p: unknown,
+    by: XY,
+    over: Partial<ToolEnv> = {},
+    n = N,
+) {
+    // Off the center dot, which is a gesture of its own
+    const c = kind.frameOf(p, n).center;
+    const grab = { x: c.x + 6, y: c.y + 7 };
+    const gesture = startShapeGesture(kind, p, n, grab, env(over));
+    expect(gesture?.type).toBe("move");
+    return dragShape(
+        kind,
+        n,
+        gesture!,
+        { x: grab.x + by.x, y: grab.y + by.y },
+        env(over),
+    );
+}
+
+describe("moving a box onto a line", () => {
+    it("lands its front edge on the front sideline when it comes within the pull", () => {
+        const before = edges(box);
+        // The front edge ends 0.8 short of the sideline
+        const p = move(boxTool, box, { x: 0, y: -before.front - 0.8 });
+        exact(edges(p as BoxParams).front, 0);
+    });
+
+    it("lands its right edge on a yard line, the nearest of either side", () => {
+        const before = edges(box);
+        const p = move(boxTool, box, { x: 80 - before.right + 1, y: 0 });
+        exact(edges(p as BoxParams).right, 80);
+    });
+
+    it("snaps each axis on its own", () => {
+        const before = edges(box);
+        const p = move(boxTool, box, {
+            x: 80 - before.right - 0.5,
+            y: -280 - before.front + 0.7,
+        }) as BoxParams;
+        exact(edges(p).right, 80);
+        exact(edges(p).front, -280);
+    });
+
+    it("lands its center on a line (on the 50)", () => {
+        // An odd number of files, so a center marcher stands on the line, off the half steps
+        const odd: BoxParams = { ...box, files: 3 };
+        const c = boxFrame(odd, 9).center;
+        const p = move(boxTool, odd, { x: -c.x + 0.6, y: 0 }, {}, 9);
+        exact(boxFrame(p as BoxParams, 9).center.x, 0);
+    });
+
+    it("keeps the half-step grid away from lines", () => {
+        const p = move(boxTool, box, { x: 23, y: -31 }) as BoxParams;
+        const free = { x: 30 + 23, y: -150 - 31 };
+        // The back-left corner is on the half steps, as before #444
+        const e = edges(p);
+        exact(e.left, snapHalf(e.left));
+        exact(e.back, snapHalf(e.back));
+        expect(Math.abs(e.center.x - free.x)).toBeLessThan(half);
+    });
+
+    it("doesn't pull with Alt (no snap)", () => {
+        const before = edges(box);
+        const p = move(
+            boxTool,
+            box,
+            { x: 0, y: -before.front - 0.8 },
+            { snap: false },
+        );
+        exact(edges(p as BoxParams).front, -0.8);
+    });
+
+    it("doesn't pull past the radius", () => {
+        const before = edges(box);
+        const p = move(boxTool, box, { x: 80 - before.right + 2, y: 0 });
+        expect(Math.abs(edges(p as BoxParams).right - 80)).toBeGreaterThan(
+            1e-6,
+        );
+    });
+
+    it("pulls from no farther than a quarter step, however far the pixels reach", () => {
+        const before = edges(box);
+        const far = { pullRadius: 6 };
+        const at = (off: number) =>
+            edges(
+                move(
+                    boxTool,
+                    box,
+                    { x: 80 - before.right + off, y: 0 },
+                    far,
+                ) as BoxParams,
+            ).right;
+        exact(at(2.4), 80);
+        expect(Math.abs(at(2.6) - 80)).toBeGreaterThan(1e-6);
+    });
+
+    it("pulls a quarter-turned box by its own sides", () => {
+        const turned: BoxParams = { ...box, rotation: Math.PI / 2 };
+        const f = boxFrame(turned, N);
+        // Turned a quarter, its depth runs side to side; either side lands (one is off the grid)
+        for (const side of [-1, 1]) {
+            const x = f.center.x + side * f.halfDepth;
+            const p = move(boxTool, turned, { x: 80 - x - 0.9, y: 0 });
+            const g = boxFrame(p as BoxParams, N);
+            exact(g.center.x + side * g.halfDepth, 80);
+        }
+    });
+
+    it("leaves a box turned off the field's axes alone", () => {
+        const turned: BoxParams = { ...box, rotation: Math.PI / 6 };
+        const free = move(
+            boxTool,
+            turned,
+            { x: 13, y: 0 },
+            { fieldLines: undefined },
+        );
+        const p = move(boxTool, turned, { x: 13, y: 0 });
+        expect(p).toEqual(free);
+    });
+
+    it("doesn't pull a circle", () => {
+        const circle = circleTool.fromFrame(
+            {
+                center: { x: 0.4, y: -100 },
+                halfWidth: 30,
+                halfDepth: 30,
+                rotation: 0,
+            },
+            8,
+            env(),
+        );
+        const free = move(
+            circleTool,
+            circle,
+            { x: 0, y: 0.3 },
+            { fieldLines: undefined },
+            8,
+        );
+        const p = move(circleTool, circle, { x: 0, y: 0.3 }, {}, 8);
+        expect(p).toEqual(free);
+    });
+});

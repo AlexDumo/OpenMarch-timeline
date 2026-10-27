@@ -74,4 +74,34 @@ describe("edgeGuides", () => {
             },
         ]);
     });
+
+    it("draws a guide along a line a moved shape's center is on, but not a turned one's", () => {
+        // Centered on the 80 front to back, its sides between lines
+        const centered = [
+            { x: 60, y: -40 },
+            { x: 100, y: -40 },
+            { x: 100, y: -10 },
+            { x: 60, y: -10 },
+        ];
+        const center = { x: 80, y: -25 };
+        const { guides, edges } = edgeGuides(
+            centered,
+            [],
+            lines,
+            field,
+            center,
+        );
+        expect(guides).toEqual([
+            { axis: "x", at: 80, from: { x: 80, y: 0 }, to: { x: 80, y: 200 } },
+        ]);
+        expect(edges).toEqual([]);
+        const turned = [
+            { x: 80, y: -45 },
+            { x: 100, y: -25 },
+            { x: 80, y: -5 },
+            { x: 60, y: -25 },
+        ];
+        expect(edgeGuides(turned, [], lines, field, center).guides).toEqual([]);
+        expect(edgeGuides(centered, [], lines, field).guides).toEqual([]);
+    });
 });

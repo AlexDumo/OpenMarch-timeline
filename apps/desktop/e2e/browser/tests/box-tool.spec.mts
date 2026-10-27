@@ -2135,6 +2135,151 @@ test("change: stretching a box's side near a yard line lands its edge on the lin
     for (const name of names) expect(name.onTop, name.text).toBe(true);
 });
 
+/** Screen pixels per field unit, which the edge pull's radius is measured in (#425) */
+async function screenPerUnit(page: Page, at: Point): Promise<number> {
+    const a = await toScreen(page, at);
+    const b = await toScreen(page, { x: at.x + 100, y: at.y });
+    return (b.x - a.x) / 100;
+}
+
+/** The guides, thick edges and tinted spots while a drag is held */
+type HeldGuides = Pick<
+    FieldTestShapeOverlay,
+    "guides" | "guideEdges" | "onGuides"
+>;
+const heldGuides = (page: Page): Promise<HeldGuides> =>
+    page.evaluate(() => {
+        const { guides, guideEdges, onGuides } =
+            window.fieldTest!.shapeOverlay!()!;
+        return { guides, guideEdges, onGuides };
+    });
+
+test("change: moving an open box near the front hash lands its front edge on it, with the guide named as on the coordinate sheet; away from lines no guide, and Alt doesn't pull (#444)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { grid } = await drawBox(show);
+    const S = grid.pixelsPerStep;
+    const bar = page.getByTestId("shape-tool-readout");
+    // 2⅔ steps deep, so the front edge is off the half steps whenever the back edge is on them
+    await bar.getByTestId("shape-editor-deep").click();
+    await page.keyboard.type("2 2/3");
+    await page.keyboard.press("Enter");
+    await expect(bar.getByTestId("shape-editor-deep")).toHaveText("2⅔");
+    const frontHash = grid.centerFront.y - 28 * S;
+    const edgesOf = async () => {
+        const { spots } = (await shapeOverlay(page))!;
+        const xs = spots.map((p) => p.x);
+        const ys = spots.map((p) => p.y);
+        return {
+            left: Math.min(...xs),
+            back: Math.min(...ys),
+            front: Math.max(...ys),
+        };
+    };
+    /** A point inside the box between its marchers, off the center dot */
+    const grabOf = async () => {
+        const e = await edgesOf();
+        return { x: e.left + (5 / 3) * S, y: (e.back + e.front) / 2 };
+    };
+    // A few screen pixels, within the pull: never more than a quarter step (#444)
+    const perUnit = await screenPerUnit(page, grid.centerFront);
+    const nearPx = Math.min(3, (S / 4) * perUnit * 0.8);
+    expect(nearPx).toBeGreaterThan(1);
+    const near = nearPx / perUnit;
+
+    /** Drags the box from inside so its front edge would end `by` field units from where it is */
+    const moveBy = async (by: Point, alt = false) => {
+        const grab = await grabOf();
+        const from = await toScreen(page, grab);
+        const to = await toScreen(page, { x: grab.x + by.x, y: grab.y + by.y });
+        let held: HeldGuides | null = null;
+        if (alt) await page.keyboard.down("Alt");
+        await drag(page, from, to, {
+            beforeRelease: async () => {
+                held = await heldGuides(page);
+            },
+        });
+        if (alt) await page.keyboard.up("Alt");
+        return held!;
+    };
+
+    // Near the front hash: the front edge lands on it, and the guide is named "On FH"
+    let e = await edgesOf();
+    let held = await moveBy({ x: 0, y: frontHash - e.front + near });
+    expect(held.guides.map((g) => g.label)).toEqual(["On FH"]);
+    expect(
+        held.guideEdges.some(
+            (g) =>
+                Math.abs(g.from.y - frontHash) < CLOSE &&
+                Math.abs(g.to.y - frontHash) < CLOSE,
+        ),
+    ).toBe(true);
+    expect(held.onGuides.length).toBeGreaterThan(0);
+    e = await edgesOf();
+    expect(Math.abs(e.front - frontHash)).toBeLessThan(CLOSE);
+    expect((await shapeOverlay(page))!.guides).toEqual([]);
+
+    // Away from lines: no guide, and the box is back on the half-step grid
+    held = await moveBy({ x: 0, y: 2 * S });
+    expect(held.guides).toEqual([]);
+    e = await edgesOf();
+    expect(Math.abs(e.front - frontHash)).toBeGreaterThan(S / 2);
+    expect(onHalfSteps(e.back, grid.centerFront.y, S)).toBe(true);
+    expect(onHalfSteps(e.left, grid.centerFront.x, S)).toBe(true);
+
+    // With Alt, near the hash again: no pull and no guide
+    held = await moveBy({ x: 0, y: frontHash - e.front + near }, true);
+    expect(held.guides).toEqual([]);
+    e = await edgesOf();
+    expect(Math.abs(e.front - frontHash)).toBeGreaterThan(CLOSE);
+});
+
+test("change: moving a selected placed box shows the guide where its edge lands on a line, and saves it there (#444)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await placeBox(show);
+    const grid = await fieldGrid(show);
+    const S = grid.pixelsPerStep;
+    const frontHash = grid.centerFront.y - 28 * S;
+    const t1 = await marcherScreen(page, 1);
+    await page.mouse.click(t1.x, t1.y);
+    await expect
+        .poll(async () => (await readField(page)).selection)
+        .toEqual(ALL);
+    const before = await savedPositions(show, 0);
+    const front = Math.max(...before.map((p) => p.y));
+    const left = Math.min(...before.map((p) => p.x));
+    const back = Math.min(...before.map((p) => p.y));
+    // Between the marchers, off the center dot
+    const grab = { x: left + (5 / 3) * S, y: (back + front) / 2 };
+    const perUnit = await screenPerUnit(page, grid.centerFront);
+    const near = Math.min(3, (S / 4) * perUnit * 0.8) / perUnit;
+    let held: HeldGuides | null = null;
+    await drag(
+        page,
+        await toScreen(page, grab),
+        await toScreen(page, {
+            x: grab.x,
+            y: grab.y + frontHash - front + near,
+        }),
+        {
+            beforeRelease: async () => {
+                held = await heldGuides(page);
+            },
+        },
+    );
+    expect(held!.guides.map((g) => g.label)).toEqual(["On FH"]);
+    await expect
+        .poll(async () =>
+            Math.max(...(await savedPositions(show, 0)).map((p) => p.y)),
+        )
+        .toBeCloseTo(frontHash, 3);
+    await waitForIdle(page);
+    expect((await shapeOverlay(page))!.guides).toEqual([]);
+});
+
 test("change: clicking the picked kind in the Shapes tab closes the tool while nothing is drawn, and does nothing once a box is", async ({
     show,
 }) => {
