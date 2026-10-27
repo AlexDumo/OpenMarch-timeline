@@ -13,7 +13,7 @@ import { padTool, type PadParams } from "../../__test__/fakeRowKind";
 import { useLastLayoutStore } from "../../tool/lastLayout";
 import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
 import { quarterTurn } from "../chip";
-import { LayoutMenu, LayoutPicker } from "../LayoutPicker";
+import { LayoutMenu } from "../LayoutPicker";
 import userEvent from "@testing-library/user-event";
 
 /** The app tooltip a control shows on hover */
@@ -23,7 +23,7 @@ async function tooltipOf(el: HTMLElement): Promise<string | null> {
 }
 
 /**
- * The box's layout picker (#387) and the chip's layout menu (owner lab feedback, 2026-10-23):
+ * The box's layout menu (#387; owner lab feedback, 2026-10-23), on the floating editor's second row:
  * every layout in its place, the ones the count can't make greyed with what they need, what's
  * on, and what picking does.
  */
@@ -49,68 +49,45 @@ const target = (
     kind: AnyToolKind = boxTool,
 ) => ({ kind, params, spots, apply });
 
-const shown = (
+const menu = (
     params: unknown,
     spots: number,
     apply = vi.fn(),
     kind: AnyToolKind = boxTool,
 ) =>
     render(
-        <LayoutPicker
+        <LayoutMenu
             target={target(params, spots, apply, kind)}
             envFor={() => env}
         />,
     );
-
-const labelsIn = (family: string) =>
-    [
-        ...screen
-            .getByTestId(`shape-layout-row-${family}`)
-            .querySelectorAll("button"),
-    ].map((b) => b.textContent);
-
-describe("the layout picker", () => {
-    it("keeps every layout in its place, in the fixed order", () => {
-        shown(boxOf(23), 23);
-        const rows = [
-            ...screen
-                .getByTestId("shape-layout-picker")
-                .querySelectorAll("[data-testid^=shape-layout-row-]"),
-        ].map((r) => r.getAttribute("data-testid"));
-        expect(rows).toEqual([
-            "shape-layout-row-full",
-            "shape-layout-row-stagger",
-            "shape-layout-row-rounded",
-            "shape-layout-row-shortBack",
-            "shape-layout-row-notched",
-        ]);
-        expect(labelsIn("stagger")).toEqual(["8 × 3", "5 × 5", "3 × 9"]);
-        expect(screen.queryByText(/Not for/)).toBeNull();
+const open = () => {
+    act(() => {
+        fireEvent.click(screen.getByTestId("shape-layout-menu"));
     });
+    return screen.getByTestId("shape-layout-menu-content");
+};
 
-    it("greys out a layout the count can't make, as a picture with what it needs", async () => {
-        shown(boxOf(23), 23);
-        const full = screen.getByTestId("shape-layout-full-missing");
-        expect(full).toHaveAttribute("aria-disabled", "true");
-        expect(full).toHaveTextContent("add 1 / remove 2");
-        expect(await tooltipOf(full)).toBe(
-            "Full needs 24 or 21 marchers: add 1 / remove 2",
-        );
-        expect(full.querySelector("svg")).not.toBeNull();
-    });
-
+describe("the layout menu's versions", () => {
     it("puts the counts in the tooltip and marks the shape's own version", async () => {
-        shown(boxOf(23), 23);
-        const stagger = screen.getByTestId("shape-layout-stagger-1");
+        menu(boxOf(23), 23);
+        const content = open();
+        // Drawn square, 23 is Short back 6 × 4
+        expect(
+            within(content).getByTestId(
+                "shape-layout-menu-version-shortBack-2",
+            ),
+        ).toHaveAttribute("aria-pressed", "true");
+        fireEvent.pointerEnter(
+            within(content).getByTestId("shape-layout-menu-row-stagger"),
+        );
+        const stagger = within(content).getByTestId(
+            "shape-layout-menu-version-stagger-1",
+        );
+        expect(stagger).toHaveAttribute("aria-pressed", "false");
         expect(await tooltipOf(stagger)).toBe(
             "Stagger 5 × 5: 5 / 4 / 5 / 4 / 5, front to back",
         );
-        // Drawn square, 23 is Short back 6 × 4
-        expect(screen.getByTestId("shape-layout-shortBack-2")).toHaveAttribute(
-            "aria-pressed",
-            "true",
-        );
-        expect(stagger).toHaveAttribute("aria-pressed", "false");
     });
 
     it("marks a version turned a quarter as that version", () => {
@@ -124,51 +101,26 @@ describe("the layout picker", () => {
             },
             env,
         );
-        shown(quarterTurn(boxTool, full, 24, env), 24);
-        expect(screen.getByTestId("shape-layout-full-0")).toHaveAttribute(
-            "aria-pressed",
-            "true",
-        );
-    });
-
-    it("lays the shape out in the version picked, and remembers its layout", () => {
-        const apply = vi.fn();
-        shown(boxOf(23), 23, apply);
-        fireEvent.click(screen.getByTestId("shape-layout-stagger-1"));
-        expect(apply).toHaveBeenCalledTimes(1);
-        const next = apply.mock.calls[0]![0] as BoxParams;
-        expect(boxBlock(next, 23).lines).toEqual([5, 4, 5, 4, 5]);
-        expect(useLastLayoutStore.getState().family).toBe("stagger");
+        menu(quarterTurn(boxTool, full, 24, env), 24);
+        const content = open();
+        expect(
+            within(content).getByTestId("shape-layout-menu-version-full-0"),
+        ).toHaveAttribute("aria-pressed", "true");
     });
 
     it("is hidden for a kind without layouts", () => {
         const pad: PadParams = { center: { x: 0, y: 0 }, gap: 20, rotation: 0 };
-        const { container } = shown(pad, 5, vi.fn(), padTool);
+        const { container } = menu(pad, 5, vi.fn(), padTool);
         expect(container).toBeEmptyDOMElement();
     });
 });
 
 describe("the chip's layout menu", () => {
-    const menu = (params: unknown, spots: number, apply = vi.fn()) =>
-        render(
-            <LayoutMenu
-                target={target(params, spots, apply)}
-                envFor={() => env}
-            />,
-        );
-    const open = () => {
-        act(() => {
-            fireEvent.click(screen.getByTestId("shape-layout-menu"));
-        });
-        return screen.getByTestId("shape-layout-menu-content");
-    };
-
     it("shows the box's layout on its button", () => {
         menu(boxOf(23), 23);
         expect(screen.getByTestId("shape-layout-menu")).toHaveTextContent(
             "Short back",
         );
-        expect(screen.queryByTestId("shape-layout-menu-wanted")).toBeNull();
     });
 
     it("lists every layout, greying out those the count can't make with what they need", () => {
@@ -247,7 +199,7 @@ describe("the chip's layout menu", () => {
         ).toBe("notched");
     });
 
-    it("shows a layout the count can't make greyed on its button, with what it needs", () => {
+    it("shows only the layout the box has on its button when the one picked can't be made, which the menu greys with what it needs", () => {
         const wanted = boxTool.closed!.withDistribution(
             boxOf(23),
             23,
@@ -258,9 +210,58 @@ describe("the chip's layout menu", () => {
             },
             env,
         );
-        menu(wanted, 23);
-        const tag = screen.getByTestId("shape-layout-menu-wanted");
-        expect(tag).toHaveTextContent("Full");
-        expect(tag).toHaveTextContent("add 1 / remove 2");
+        const { container } = menu(wanted, 23);
+        const button = screen.getByTestId("shape-layout-menu");
+        expect(button).not.toHaveTextContent("Full");
+        expect(container).not.toHaveTextContent("add 1");
+        const full = within(open()).getByTestId("shape-layout-menu-row-full");
+        expect(full).toHaveAttribute("aria-disabled", "true");
+        expect(full).toHaveTextContent("add 1 / remove 2");
+    });
+
+    it("names a Short back with nothing short Full, and picking Full's same version is nothing (#437)", () => {
+        // 15 at 3 across: five whole lines, a Full 3 × 5 stored as Short back
+        const block = boxTool.closed!.withDistribution(
+            boxOf(15),
+            15,
+            {
+                mode: "files",
+                layout: { family: "shortBack", files: 3, byFile: false },
+                stagger: [0, 1],
+            },
+            env,
+        );
+        const apply = vi.fn();
+        menu(block, 15, apply);
+        expect(screen.getByTestId("shape-layout-menu")).toHaveTextContent(
+            "Full",
+        );
+        const content = open();
+        expect(
+            within(content).getByTestId("shape-layout-menu-row-full"),
+        ).toHaveClass("text-accent");
+        const own = within(content)
+            .getAllByRole("button", { pressed: true })
+            .filter((b) => b.getAttribute("aria-label")?.startsWith("Full"));
+        expect(own).toHaveLength(1);
+        fireEvent.click(own[0]!);
+        expect(apply).not.toHaveBeenCalled();
+    });
+
+    it("still names a Short back with a short line Short back", () => {
+        const short = boxTool.closed!.withDistribution(
+            boxOf(15),
+            15,
+            {
+                mode: "files",
+                layout: { family: "shortBack", files: 4, byFile: false },
+                stagger: [0, 1],
+            },
+            env,
+        );
+        menu(short, 15);
+        expect(screen.getByTestId("shape-layout-menu")).toHaveTextContent(
+            "Short back",
+        );
     });
 });

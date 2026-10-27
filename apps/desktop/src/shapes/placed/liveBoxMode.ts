@@ -1,3 +1,4 @@
+import type { PivotKey } from "../frame/frame";
 import type { QueryClient } from "@tanstack/react-query";
 import type { FieldMode, FieldPointer } from "@/field/editor/fieldEditor";
 import {
@@ -45,6 +46,8 @@ interface Shown {
     readonly preview: unknown;
     /** The controls are calm: the pointer away, as on the open shape (#430) */
     readonly calm: boolean;
+    /** The pivot a cell of the editor's pivot menu points at (#437), drawn by `frameDrawing` */
+    readonly pivotPreview: PivotKey | null;
 }
 
 const drawingOf = memoDrawing(({ live: saved, preview, calm }: Shown) => {
@@ -188,12 +191,14 @@ export class LiveBoxMode implements FieldMode {
     drawing() {
         const preview = usePlacedBoxPreviewStore.getState().params;
         const calm = shapeCalm(this.live.gesture !== null);
+        const { pivotPreview } = useShapePointerStore.getState();
         if (
             this.shown?.live !== this.live ||
             this.shown.preview !== preview ||
-            this.shown.calm !== calm
+            this.shown.calm !== calm ||
+            this.shown.pivotPreview !== pivotPreview
         )
-            this.shown = { live: this.live, preview, calm };
+            this.shown = { live: this.live, preview, calm, pivotPreview };
         return drawingOf(this.shown);
     }
 

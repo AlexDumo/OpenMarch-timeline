@@ -192,6 +192,8 @@ export type FieldTestShapeOverlay = {
     centerDot: ScreenPoint | null;
     /** The pivot's crosshair once it's out of the center (#350), or null at the center */
     pivotMark: ScreenPoint | null;
+    /** The pivot a cell of the editor's pivot menu points at (#437), in field units; null without one */
+    pivotPreview: { x: number; y: number } | null;
     /** Who will stand on each spot, as labeled. */
     labels: string[];
     /** The readout by the pointer during a gesture ("7½ × 2 steps · ↔ 2½ ↕ 2 apart"), or null. */

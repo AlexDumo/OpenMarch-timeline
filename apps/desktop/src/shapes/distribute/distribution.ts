@@ -288,11 +288,18 @@ export const spreadDistribution = (
     count: Math.max(1, n),
 });
 
-/** Reshuffle: the next seed, laid out for the `n` spots there are now */
+/**
+ * The largest seed (2³¹ − 1): the seeded generator (`seeded`, geometry/naturalFill.ts) stops
+ * telling seeds apart well beyond 32 bits, and a whole number stays exact (review)
+ */
+export const SEED_MAX = 2 ** 31 - 1;
+
+/** Reshuffle: the next seed, back to 1 after {@link SEED_MAX}, laid out for the `n` spots there are now */
 export const reshuffled = (
     d: SpreadDistribution,
     n: number,
-): SpreadDistribution => spreadDistribution(d.seed + 1, n);
+): SpreadDistribution =>
+    spreadDistribution(d.seed >= SEED_MAX ? 1 : d.seed + 1, n);
 
 /**
  * The distribution a shape of `n` spots switched to `mode` starts with: Files takes `files`

@@ -1,5 +1,6 @@
 import { LAYOUT_LABELS } from "../distribute/distribution";
 import { layoutOf } from "../distribute/modes";
+import { shownFamily } from "../distribute/layouts";
 import {
     displayedBeat,
     useTimelineSelectionStore,
@@ -30,7 +31,8 @@ export function placedNumbers(box: PlacedBox, stepPx: number) {
         .filter((p) => p.unit === "count")
         .map((p) => p.display(params, spots, stepPx));
     // A layout other than Short back is named first, as the picker names it (#387)
-    const family = layoutOf(kind, params, spots)?.layout.family;
+    const resolved = layoutOf(kind, params, spots);
+    const family = resolved && shownFamily(resolved);
     if (family && family !== "shortBack" && counts.length > 0)
         counts[0] = `${LAYOUT_LABELS[family]} ${counts[0]}`;
     const intervals = kind.params
