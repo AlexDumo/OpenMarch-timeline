@@ -8,6 +8,7 @@ import {
     hintText,
     isVersionAnyTurn,
     nearestVersion,
+    shownFamily,
     versionDots,
     versionOf,
     type LayoutHint,
@@ -45,12 +46,23 @@ interface PickerProps {
     className?: string;
 }
 
-/** Picks `version` for the shape, and remembers its layout for the next new box */
+/**
+ * Picks `version` for the shape, and remembers its layout for the next new box. Picking what the
+ * box already shows is nothing: a Short back block that reads as Full stays Short back underneath
+ * when Full's same version is picked (#437)
+ */
 function usePick({ target, envFor }: PickerProps) {
     const remember = useLastLayoutStore((s) => s.remember);
     return (version: LayoutVersion) => {
         const env = envFor();
         if (!env) return;
+        const now = layoutOf(target.kind, target.params, target.spots);
+        if (
+            now &&
+            shownFamily(now) === version.layout.family &&
+            isOwn(version, now)
+        )
+            return;
         remember(version.layout.family);
         const next = withLayout(
             target.kind,
@@ -105,7 +117,9 @@ export function LayoutMenu(props: PickerProps) {
     if (now === null || rows.length === 0) return null;
     const n = target.spots;
     const aspect = now.across / now.deep;
-    const showing = active ?? now.layout.family;
+    // Short back with nothing short reads as Full (#437)
+    const family = shownFamily(now);
+    const showing = active ?? family;
     const choose = (version: LayoutVersion) => {
         pick(version);
         setOpen(false);
@@ -127,7 +141,7 @@ export function LayoutMenu(props: PickerProps) {
                     <Popover.Trigger asChild>
                         <button
                             type="button"
-                            aria-label={`Layout: ${LAYOUT_LABELS[now.layout.family]}`}
+                            aria-label={`Layout: ${LAYOUT_LABELS[family]}`}
                             {...focus.trigger}
                             data-testid="shape-layout-menu"
                             className="rounded-4 hover:bg-fg-2 flex items-center gap-4 px-4 py-2"
@@ -136,7 +150,7 @@ export function LayoutMenu(props: PickerProps) {
                                 version={versionOf(now.layout, now.lines)}
                                 small
                             />
-                            <span>{LAYOUT_LABELS[now.layout.family]}</span>
+                            <span>{LAYOUT_LABELS[family]}</span>
                             <CaretDownIcon size={10} />
                         </button>
                     </Popover.Trigger>
@@ -200,8 +214,8 @@ export function LayoutMenu(props: PickerProps) {
                                             // aria-disabled, not disabled: the tooltip says why
                                             aria-disabled={missing || undefined}
                                             data-current={
-                                                now.layout.family ===
-                                                    row.family || undefined
+                                                family === row.family ||
+                                                undefined
                                             }
                                             onPointerEnter={() => {
                                                 if (!missing)
@@ -221,8 +235,7 @@ export function LayoutMenu(props: PickerProps) {
                                                 "flex min-w-40 items-center gap-6 px-4 py-2 text-left",
                                                 missing
                                                     ? "text-text/40"
-                                                    : now.layout.family ===
-                                                        row.family
+                                                    : family === row.family
                                                       ? "text-accent"
                                                       : "hover:text-accent",
                                             )}

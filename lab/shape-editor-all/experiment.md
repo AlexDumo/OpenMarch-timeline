@@ -5,16 +5,9 @@ id: shape-editor-all
 title: Everything for a shape is in its floating editor
 summary: The inspector no longer has shape sections. The floating editor's second row now starts with a Grid / Outline / Spread menu that pictures your shape in each mode, then the layout menu (Grid), the leftover menu (Outline) or Reshuffle (Spread). A pivot button beside the turn opens the 3 × 3 pivot grid.
 status: open
-variants:
-  - id: glide
-    label: Glide
-    description: The editor always springs to where it's going, gently, and never waits for your pointer to leave
-  - id: steady
-    label: Steady
-    description: The editor keeps a calmer spot under the shape that turning doesn't move, flips above only when there's clearly no room, and stays still while you click it
+variants: []
 questions:
-  - "Glide or Steady: which floating editor moved more predictably? Did either one fly around or catch you out?"
-  - "In Glide, clicking − or + quickly (or double-clicking) can move the editor under your pointer as the box grows. Did a second click ever land on the wrong button? Did Steady feel better there?"
+  - "When you change the box, does the floating editor glide to its new place predictably? Clicking − or + quickly, does each click land on the same button?"
   - Could you find everything you used to do in the inspector for a shape (switching Grid, Outline and Spread, the layout, the leftover side, Reshuffle, the pivot)?
   - Does the second row under the editor read clearly? Do the mode menu's pictures help you pick Grid, Outline or Spread?
   - Does the pivot button's icon tell you which pivot is picked?
@@ -42,14 +35,10 @@ selected shape is now in its floating editor. Select some marchers, press
 - The inspector's closer / wider scale buttons are gone. The editor's
   spacings cover them.
 
-**Two versions of how the editor moves** (the **Version** switch, bottom
-left):
-
-- **Glide**: whenever the box changes, the editor springs gently to its new
-  place under it. It no longer waits for your pointer to leave.
-- **Steady**: the editor sits under a point that turning the box doesn't
-  move, only flips above the box when there's clearly no room below, and
-  stays still while you're clicking it.
+**The editor glides**: whenever the box changes, the floating editor
+springs gently to its new place under it. It no longer waits for your
+pointer to leave, and while you're clicking it, it stays put until a moment
+after your last click.
 
 **What to try**
 
@@ -58,4 +47,4 @@ left):
 - Pick a corner pivot, then turn the box.
 - Place the box, select it again, and do the same.
 - Click − and + a few times quickly, turn the box, and stretch it near the
-  bottom of the field, in each version.
+  bottom of the field.

@@ -218,4 +218,50 @@ describe("the chip's layout menu", () => {
         expect(full).toHaveAttribute("aria-disabled", "true");
         expect(full).toHaveTextContent("add 1 / remove 2");
     });
+
+    it("names a Short back with nothing short Full, and picking Full's same version is nothing (#437)", () => {
+        // 15 at 3 across: five whole lines, a Full 3 × 5 stored as Short back
+        const block = boxTool.closed!.withDistribution(
+            boxOf(15),
+            15,
+            {
+                mode: "files",
+                layout: { family: "shortBack", files: 3, byFile: false },
+                stagger: [0, 1],
+            },
+            env,
+        );
+        const apply = vi.fn();
+        menu(block, 15, apply);
+        expect(screen.getByTestId("shape-layout-menu")).toHaveTextContent(
+            "Full",
+        );
+        const content = open();
+        expect(
+            within(content).getByTestId("shape-layout-menu-row-full"),
+        ).toHaveClass("text-accent");
+        const own = within(content)
+            .getAllByRole("button", { pressed: true })
+            .filter((b) => b.getAttribute("aria-label")?.startsWith("Full"));
+        expect(own).toHaveLength(1);
+        fireEvent.click(own[0]!);
+        expect(apply).not.toHaveBeenCalled();
+    });
+
+    it("still names a Short back with a short line Short back", () => {
+        const short = boxTool.closed!.withDistribution(
+            boxOf(15),
+            15,
+            {
+                mode: "files",
+                layout: { family: "shortBack", files: 4, byFile: false },
+                stagger: [0, 1],
+            },
+            env,
+        );
+        menu(short, 15);
+        expect(screen.getByTestId("shape-layout-menu")).toHaveTextContent(
+            "Short back",
+        );
+    });
 });

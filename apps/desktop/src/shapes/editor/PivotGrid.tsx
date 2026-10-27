@@ -11,6 +11,7 @@ import {
 import { keepFocus } from "./keepFocus";
 import { Tip } from "./Tip";
 import { setPivotPreview } from "../field/shapePointer";
+import { screenCellOf, shapeKeyAt } from "./pivotScreen";
 import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 
 export const PIVOT_NAMES: Record<PivotKey, string> = {
@@ -121,17 +122,24 @@ function PivotGlyph({ pivot }: { pivot: Pivot }) {
 
 /**
  * The floating editor's pivot (#435): a small button beside the turn whose icon shows the pivot,
- * opening the 3 × 3 grid. Picking one closes it.
+ * opening the 3 × 3 grid. Picking one closes it. The grid is in screen terms (#437): its top-left
+ * cell is whichever of the shape's points is at the top left now, however the shape is turned.
  */
 export function PivotMenu({
     pivot,
+    rotation,
     onPick,
     testId,
 }: {
+    /** The shape's pivot, in its own terms */
     pivot: Pivot;
+    /** The shape's turn: the grid shows its points as they sit on screen (#437) */
+    rotation: number;
     onPick: (key: PivotKey) => void;
     testId: string;
 }) {
+    // The grid, its icon and its preview in screen terms; what's picked back in the shape's
+    const shown = isPivotKey(pivot) ? screenCellOf(rotation, pivot) : pivot;
     const [open, setOpen] = useEditorMenu();
     // The pivot a cell points at shows on the field until the menu closes (#437)
     useEffect(() => {
@@ -142,8 +150,8 @@ export function PivotMenu({
     const focus = useMenuFocus((el) =>
         el.querySelector<HTMLElement>('[role="radio"][tabindex="0"]'),
     );
-    const label = isPivotKey(pivot)
-        ? `Pivot: ${PIVOT_NAMES[pivot]}`
+    const label = isPivotKey(shown)
+        ? `Pivot: ${PIVOT_NAMES[shown]}`
         : "Pivot: where it was dragged on the field";
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
@@ -157,7 +165,7 @@ export function PivotMenu({
                         data-pivot={isPivotKey(pivot) ? pivot : "custom"}
                         className="rounded-4 hover:text-accent flex min-h-24 items-center justify-center gap-2 p-4"
                     >
-                        <PivotGlyph pivot={pivot} />
+                        <PivotGlyph pivot={shown} />
                         <CaretDownIcon size={8} />
                     </button>
                 </Popover.Trigger>
@@ -172,12 +180,14 @@ export function PivotMenu({
                     className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal z-50 border p-4"
                 >
                     <PivotGrid
-                        pivot={pivot}
-                        onPick={(key) => {
-                            onPick(key);
+                        pivot={shown}
+                        onPick={(cell) => {
+                            onPick(shapeKeyAt(rotation, cell));
                             setOpen(false);
                         }}
-                        onPreview={setPivotPreview}
+                        onPreview={(cell) =>
+                            setPivotPreview(cell && shapeKeyAt(rotation, cell))
+                        }
                         testId={`${testId}-grid`}
                     />
                 </Popover.Content>

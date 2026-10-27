@@ -8,8 +8,7 @@ import {
 } from "react";
 import { animated, useSpring } from "@react-spring/web";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
-import { useLabVariant } from "@/lab/labVariant";
-import { editorPlacement, type EditorMotion } from "./editorPlacement";
+import { editorPlacement } from "./editorPlacement";
 import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { getActionShortcutLabel } from "@/shortcuts/labels";
@@ -70,7 +69,7 @@ import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 
-/** Steady: how long the editor stays still after a press on it ends, so a second click lands */
+/** How long the editor stays still after a press on it ends, so a second click lands */
 const PRESS_HOLD_MS = 450;
 /** A gentle spring that doesn't overshoot (#437) */
 const EDITOR_SPRING = { tension: 210, friction: 26, clamp: true };
@@ -242,7 +241,7 @@ function ShapeEditorBar({
             data-testid={testId}
             data-shape-editor
             data-placement={place.above ? "above" : "below"}
-            data-motion={place.motion}
+            data-held={place.held}
             onPointerDown={(e) => e.stopPropagation()}
         >
             <div
@@ -391,6 +390,7 @@ function ShapeEditorBar({
                     />
                     <PivotMenu
                         pivot={pivot}
+                        rotation={kind.frameOf(params, spots).rotation}
                         onPick={(key) => update((now) => withPivot(now, key))}
                         testId="shape-editor-pivot"
                     />
@@ -500,14 +500,11 @@ function ShapeEditorBar({
  * Where the editor sits (`editorPlacement`), sprung there whenever the shape or the editor's own
  * size moves it, gently and without overshoot (#437, owner: predictable motion, no jump when the
  * pointer leaves). A pan or zoom moves it at once, as only the shape's changes animate, and so
- * does reduced motion. Two versions are tried in the lab: Glide follows every change; Steady
- * keeps a calmer anchor and holds still while a press on the editor is under way, and a moment
- * after, so a second click lands where the first did.
+ * does reduced motion. It holds still while a press on it is under way and a moment after, so
+ * quick clicks on − or + land on the same button (owner), but never just because it's hovered.
  */
 function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     const view = useFieldViewStore();
-    const motion: EditorMotion =
-        useLabVariant() === "steady" ? "steady" : "glide";
     const ref = useRef<HTMLDivElement>(null);
     const [room, setRoom] = useState({
         width: 0,
@@ -533,22 +530,17 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         observer.observe(field);
         return () => observer.disconnect();
     }, []);
-    const wasAbove = useRef(false);
-    const toElement = (p: { x: number; y: number }) =>
-        fieldToElement(view, p.x, p.y);
     const target = editorPlacement({
-        motion,
-        outline: shapeOutline(kind, params, spots).map(toElement),
-        center: toElement(kind.frameOf(params, spots).center),
+        outline: shapeOutline(kind, params, spots).map((p) =>
+            fieldToElement(view, p.x, p.y),
+        ),
         width: room.width,
         height: room.height,
         fieldWidth: room.fieldWidth,
         fieldHeight: room.fieldHeight,
-        wasAbove: wasAbove.current,
     });
-    wasAbove.current = target.above;
 
-    // Steady: still while a press on the editor is under way, and a moment after it
+    // Still while a press on the editor is under way, and a moment after it
     const [pressing, setPressing] = useState(false);
     const release = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => {
@@ -573,7 +565,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         },
         [],
     );
-    const held = motion === "steady" && pressing;
+    const held = pressing;
 
     const [spring, api] = useSpring(() => ({
         left: target.left,
@@ -601,11 +593,13 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     return {
         ref,
         above: target.above,
-        motion,
+        held,
         style: spring,
         hold: {
             onPointerDownCapture: () => {
                 if (release.current) clearTimeout(release.current);
+                // Stopped where it is, a glide under way included, so the press lands
+                api.stop();
                 setPressing(true);
             },
         },

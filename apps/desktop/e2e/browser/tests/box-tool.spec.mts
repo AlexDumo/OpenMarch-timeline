@@ -2372,26 +2372,25 @@ test("change: from the keyboard, Tab reaches the layout menu, Enter opens it on 
     await drawBox(show);
     const editor = page.getByTestId("shape-tool-readout");
     const layout = editor.getByTestId("shape-layout-menu");
-    await expect(layout).toHaveText(/Short back/);
+    // 8 in a 4 × 2 is a whole block: it reads as Full (#437)
+    await expect(layout).toHaveText(/Full/);
     await page.getByTestId("shape-mode-menu").focus();
     await page.keyboard.press("Tab");
     await expect(layout).toBeFocused();
     await page.keyboard.press("Enter");
     const menu = page.getByTestId("shape-layout-menu-content");
+    await expect(menu.getByTestId("shape-layout-menu-row-full")).toBeFocused();
+    await page.keyboard.press("ArrowDown");
     await expect(
-        menu.getByTestId("shape-layout-menu-row-shortBack"),
-    ).toBeFocused();
-    await page.keyboard.press("ArrowUp");
-    await expect(
-        menu.getByTestId("shape-layout-menu-row-rounded"),
+        menu.getByTestId("shape-layout-menu-row-stagger"),
     ).toBeFocused();
     // The versions follow the keyboard
     await expect(
-        menu.getByTestId("shape-layout-menu-version-rounded-0"),
+        menu.getByTestId("shape-layout-menu-version-stagger-0"),
     ).toBeVisible();
     await page.keyboard.press("Enter");
     await expect(menu).toBeHidden();
-    await expect(layout).toHaveText(/Rounded/);
+    await expect(layout).toHaveText(/Stagger/);
     await expect(layout).toBeFocused();
     await expect(editor).toBeVisible();
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
@@ -2910,9 +2909,9 @@ test("change: the floating editor ends up in the same place after a change wheth
     const { page } = show;
     await drawBox(show);
     const editor = page.getByTestId("shape-tool-readout");
-    await expect(editor).toHaveAttribute("data-motion", "glide");
-    /** Where it settles: the same box two frames apart */
+    /** Where it settles: the same box two frames apart, any hold after a press over */
     const settled = async () => {
+        await expect(editor).toHaveAttribute("data-held", "false");
         let last = "";
         for (;;) {
             const b = (await editor.boundingBox())!;
@@ -2938,6 +2937,26 @@ test("change: the floating editor ends up in the same place after a change wheth
     await page.mouse.move(5, 5);
     await sizeButton(page, true).evaluate((el: HTMLElement) => el.click());
     expect(await settled()).toBe(hovered);
+});
+
+test("change: quick clicks on + all land on +: the editor holds still while it's being clicked, then glides (#437)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const size = page
+        .getByTestId("shape-tool-readout")
+        .getByTestId("shape-editor-size");
+    const before = await size.innerText();
+    const across = Number(before.split("×")[0]!.trim());
+    const plus = (await sizeButton(page, true).boundingBox())!;
+    const at = { x: plus.x + plus.width / 2, y: plus.y + plus.height / 2 };
+    // Three quick clicks at the same spot, without moving the pointer
+    for (let i = 0; i < 3; i++) {
+        await page.mouse.click(at.x, at.y);
+        await page.waitForTimeout(120);
+    }
+    await expect(size).toHaveText(new RegExp(`^${across + 3} ×`));
 });
 
 test("change: − and + come back to the same spots, so the box doesn't creep", async ({
@@ -3124,6 +3143,35 @@ test("change: pointing at a cell of the pivot menu previews that pivot on the sh
     await expect(grid).toBeHidden();
     await expect.poll(preview).toBeNull();
     await expect(page.getByTestId("fieldShapePivotPreview")).toHaveCount(0);
+
+    // The grid is in screen terms: after a half turn, its top-left cell still
+    // previews the point at the top left on screen, and picking it stores the
+    // shape's own front right
+    await editor.getByTestId("shape-editor-rotation").click();
+    await page.getByTestId("shape-editor-rotation-input").fill("180");
+    await page.getByTestId("shape-editor-rotation-input").press("Enter");
+    await expect(editor.getByTestId("shape-editor-rotation")).toHaveText(
+        "180°",
+    );
+    const turned = (await shapeOverlay(page))!.outline!;
+    const topLeft = {
+        x: Math.min(...turned.map((p) => p.x)),
+        y: Math.min(...turned.map((p) => p.y)),
+    };
+    await pivotButton.click();
+    await grid.getByTestId("shape-editor-pivot-grid-nw").hover();
+    await expect
+        .poll(async () => {
+            const p = await preview();
+            return p && Math.hypot(p.x - topLeft.x, p.y - topLeft.y);
+        })
+        .toBeLessThan(CLOSE);
+    await grid.getByTestId("shape-editor-pivot-grid-nw").click();
+    await expect(pivotButton).toHaveAttribute("data-pivot", "se");
+    await pivotButton.click();
+    await expect(
+        grid.getByTestId("shape-editor-pivot-grid-nw"),
+    ).toHaveAttribute("aria-checked", "true");
 });
 
 test("change: one of the editor's menus open at a time: opening another closes it (#437)", async ({
