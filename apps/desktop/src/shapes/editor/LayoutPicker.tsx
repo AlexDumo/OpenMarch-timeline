@@ -76,9 +76,10 @@ function needsTitle(label: string, hint: LayoutHint, n: number): string {
 }
 
 /**
- * The chip's layout menu: the layout on its button (and, when the count can't make the one
- * picked, that one greyed with what it needs). Open, it lists every layout, greyed where the count
- * can't make it; hovering a layout or clicking its arrow shows its versions beside the list.
+ * The chip's layout menu: the layout the box has on its button, and nothing more when the count
+ * can't make the one picked (owner, #435): open, it lists every layout, greyed with what it needs
+ * where the count can't make it; hovering a layout or clicking its arrow shows its versions beside
+ * the list.
  */
 export function LayoutMenu(props: PickerProps) {
     const { target } = props;
@@ -98,9 +99,6 @@ export function LayoutMenu(props: PickerProps) {
     const n = target.spots;
     const aspect = now.across / now.deep;
     const showing = active ?? now.layout.family;
-    const wanted = now.fellBack
-        ? rows.find((r) => r.family === now.fellBack)
-        : undefined;
     const choose = (version: LayoutVersion) => {
         pick(version);
         setOpen(false);
@@ -142,24 +140,6 @@ export function LayoutMenu(props: PickerProps) {
                         </button>
                     </Popover.Trigger>
                 </Tip>
-                {wanted?.hint && (
-                    <Tip label={needsTitle(wanted.label, wanted.hint, n)}>
-                        <span
-                            className="text-text/40 flex items-center gap-2"
-                            data-testid="shape-layout-menu-wanted"
-                        >
-                            {wanted.preview && (
-                                <span className="opacity-40">
-                                    <Thumbnail
-                                        version={wanted.preview.version}
-                                        small
-                                    />
-                                </span>
-                            )}
-                            {wanted.label} · {hintText(wanted.hint)}
-                        </span>
-                    </Tip>
-                )}
             </span>
             <Popover.Portal>
                 <Popover.Content

@@ -121,7 +121,6 @@ describe("the chip's layout menu", () => {
         expect(screen.getByTestId("shape-layout-menu")).toHaveTextContent(
             "Short back",
         );
-        expect(screen.queryByTestId("shape-layout-menu-wanted")).toBeNull();
     });
 
     it("lists every layout, greying out those the count can't make with what they need", () => {
@@ -200,7 +199,7 @@ describe("the chip's layout menu", () => {
         ).toBe("notched");
     });
 
-    it("shows a layout the count can't make greyed on its button, with what it needs", () => {
+    it("shows only the layout the box has on its button when the one picked can't be made, which the menu greys with what it needs", () => {
         const wanted = boxTool.closed!.withDistribution(
             boxOf(23),
             23,
@@ -211,9 +210,12 @@ describe("the chip's layout menu", () => {
             },
             env,
         );
-        menu(wanted, 23);
-        const tag = screen.getByTestId("shape-layout-menu-wanted");
-        expect(tag).toHaveTextContent("Full");
-        expect(tag).toHaveTextContent("add 1 / remove 2");
+        const { container } = menu(wanted, 23);
+        const button = screen.getByTestId("shape-layout-menu");
+        expect(button).not.toHaveTextContent("Full");
+        expect(container).not.toHaveTextContent("add 1");
+        const full = within(open()).getByTestId("shape-layout-menu-row-full");
+        expect(full).toHaveAttribute("aria-disabled", "true");
+        expect(full).toHaveTextContent("add 1 / remove 2");
     });
 });
