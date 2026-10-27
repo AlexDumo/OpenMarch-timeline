@@ -2756,6 +2756,31 @@ test("change: the layout menu lays the box out in the version picked, the recipe
     expect(rankCounts((await shapeOverlay(page))!.spots)).toEqual([3, 2, 3]);
 });
 
+test("change: the layout menu keeps one size as each layout's versions show, scrolling a long list (#435)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    await page.getByTestId("shape-layout-menu").click();
+    const menu = page.getByTestId("shape-layout-menu-content");
+    await expect(menu).toBeVisible();
+    const sizes = new Set<string>();
+    for (const family of ["full", "stagger", "rounded", "shortBack"]) {
+        await menu.getByTestId(`shape-layout-menu-row-${family}`).hover();
+        await expect(
+            menu.getByTestId(`shape-layout-menu-version-${family}-0`),
+        ).toBeVisible();
+        const box = (await menu.boundingBox())!;
+        sizes.add(`${box.x},${box.y},${box.width},${box.height}`);
+    }
+    expect([...sizes]).toHaveLength(1);
+    // Short back has more versions than fit: they scroll
+    const versions = menu.getByTestId("shape-layout-menu-versions");
+    expect(
+        await versions.evaluate((el) => el.scrollHeight > el.clientHeight),
+    ).toBe(true);
+});
+
 test("change: the layout menu under the chip switches layout, ↻ turns the box a quarter, and undo puts each back", async ({
     show,
 }) => {

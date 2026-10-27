@@ -262,12 +262,15 @@ export function LayoutMenu(props: PickerProps) {
                             );
                         })}
                     </div>
-                    {shownRow && shownRow.versions.length > 0 && (
+                    {/* The versions in a panel as tall as the list and of one width, scrolling
+                        when a layout has more (owner: the menu jumped as Short back's tall list
+                        grew it) */}
+                    <div className="border-stroke relative w-[76px] shrink-0 self-stretch border-l">
                         <div
-                            className="border-stroke flex max-w-64 flex-wrap content-start gap-2 border-l pl-8"
+                            className="absolute inset-0 flex flex-wrap content-start gap-2 overflow-y-auto pl-8"
                             data-testid="shape-layout-menu-versions"
                         >
-                            {shownRow.versions.map((version, i) => (
+                            {shownRow?.versions.map((version, i) => (
                                 <VersionButton
                                     key={i}
                                     name={`${shownRow.label} ${version.label}`}
@@ -279,7 +282,7 @@ export function LayoutMenu(props: PickerProps) {
                                 />
                             ))}
                         </div>
-                    )}
+                    </div>
                 </Popover.Content>
             </Popover.Portal>
         </Popover.Root>
