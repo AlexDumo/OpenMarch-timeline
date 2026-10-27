@@ -1,4 +1,3 @@
-import { useState } from "react";
 import clsx from "clsx";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon } from "@phosphor-icons/react";
@@ -8,7 +7,7 @@ import { distributionOf, switchModes, withMode } from "../distribute/modes";
 import { ModePicture } from "./modePictures";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
-import { arrowFocus, useMenuFocus } from "./menuFocus";
+import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 import { Tip } from "./Tip";
 
 const modeLabel = (mode: DistributionMode) =>
@@ -29,7 +28,7 @@ export function ModeMenu({
     /** The field's tool environment when the mode is picked; null with no field */
     envFor: () => ToolEnv | null;
 }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useEditorMenu();
     // Opened by keyboard, focus goes to the mode the shape is in now
     const focus = useMenuFocus((el) =>
         el.querySelector<HTMLElement>(

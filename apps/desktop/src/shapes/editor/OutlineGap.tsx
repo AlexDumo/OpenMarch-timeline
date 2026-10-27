@@ -1,4 +1,3 @@
-import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon } from "@phosphor-icons/react";
 import { SegmentedTextSwitch } from "@openmarch/ui";
@@ -12,7 +11,7 @@ import { gapAsSeen } from "../distribute/outline";
 import { outlineGapOf, withOddGap } from "../distribute/outlineGap";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
-import { useMenuFocus } from "./menuFocus";
+import { useEditorMenu, useMenuFocus } from "./menuFocus";
 import { Tip } from "./Tip";
 
 const SIDE_LABELS: Readonly<Record<GapSide, string>> = {
@@ -52,7 +51,7 @@ export function OutlineGap({
     clickToMove?: boolean;
 }) {
     const { kind, params, spots } = target;
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useEditorMenu();
     // Opened by keyboard, focus goes to the side picked now; the arrows move along each switch
     // (Radix toggle groups) and Tab to the next (review)
     const focus = useMenuFocus((el) =>

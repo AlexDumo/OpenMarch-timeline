@@ -1,18 +1,33 @@
 import { create } from "zustand";
 import { CLICK_FOCUS_ATTRIBUTE } from "@/utilities/clickFocus";
+import type { PivotKey } from "../frame/frame";
 
 /**
  * Where the pointer and keyboard are for the shape on the field: the open shape, or the selected
  * placed one (#403, #430). One signal for both, so they calm down and come back the same way.
  * `over`: the pointer is over the shape or one of its controls. `dragging`: a placed shape's
  * gesture is under way (the open shape's own gesture is in its tool state). `editorFocus`:
- * keyboard focus is inside the floating editor, typing a number counting.
+ * keyboard focus is inside the floating editor, typing a number counting. `pivotPreview`: the
+ * pivot a cell of the editor's pivot menu points at, under the pointer or keyboard focus (#437):
+ * shown on the field, never stored.
  */
 export const useShapePointerStore = create<{
     over: boolean;
     dragging: boolean;
     editorFocus: boolean;
-}>(() => ({ over: false, dragging: false, editorFocus: false }));
+    pivotPreview: PivotKey | null;
+}>(() => ({
+    over: false,
+    dragging: false,
+    editorFocus: false,
+    pivotPreview: null,
+}));
+
+/** Shows where a pivot would be on the field while its cell is pointed at; null hides it */
+export function setPivotPreview(pivotPreview: PivotKey | null): void {
+    if (useShapePointerStore.getState().pivotPreview !== pivotPreview)
+        useShapePointerStore.setState({ pivotPreview });
+}
 
 /** Notes whether the pointer is over the shape or one of its controls */
 export function setShapePointerOver(over: boolean): void {
@@ -30,6 +45,7 @@ export function setShapeDragging(dragging: boolean): void {
 export function resetShapePointer(): void {
     setShapePointerOver(false);
     setShapeDragging(false);
+    setPivotPreview(null);
 }
 
 /**

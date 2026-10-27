@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { Tip } from "./Tip";
 import * as Popover from "@radix-ui/react-popover";
@@ -20,7 +20,7 @@ import { useLastLayoutStore } from "../tool/lastLayout";
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 import { keepFocus } from "./keepFocus";
-import { arrowFocus, useMenuFocus } from "./menuFocus";
+import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 
 /**
  * The box's layout menu (#387, spec #385; owner lab feedback, 2026-10-23), on the floating
@@ -33,6 +33,9 @@ import { arrowFocus, useMenuFocus } from "./menuFocus";
  */
 
 type Target = Pick<ShapeEditTarget, "kind" | "params" | "spots" | "apply">;
+
+/** The layout menu's height, in CSS px: the five layouts, and two or three versions beside them */
+const LAYOUT_MENU_HEIGHT = 240;
 
 interface PickerProps {
     target: Target;
@@ -84,8 +87,12 @@ function needsTitle(label: string, hint: LayoutHint, n: number): string {
 export function LayoutMenu(props: PickerProps) {
     const { target } = props;
     const pick = usePick(props);
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useEditorMenu();
     const [active, setActive] = useState<LayoutFamily | null>(null);
+    // Closed any way (another of the editor's menus opening too), it opens next on the box's own
+    useEffect(() => {
+        if (!open) setActive(null);
+    }, [open]);
     // Closed by a press (a layout picked, a click away): focus isn't handed back to the button,
     // or the floating editor would stay solid with the pointer away (#426). Opened by keyboard,
     // focus goes to the shape's layout, the arrows move up and down the list, and Escape or a
@@ -111,13 +118,7 @@ export function LayoutMenu(props: PickerProps) {
         undefined;
     const shownRow = rows.find((r) => r.family === showing);
     return (
-        <Popover.Root
-            open={open}
-            onOpenChange={(next) => {
-                setOpen(next);
-                if (!next) setActive(null);
-            }}
-        >
+        <Popover.Root open={open} onOpenChange={setOpen}>
             <span
                 className={clsx("flex items-center gap-4", props.className)}
                 data-testid="shape-layout-pill"
@@ -149,10 +150,15 @@ export function LayoutMenu(props: PickerProps) {
                     {...focus.content}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex gap-8 border p-6"
+                    // One height whatever's hovered, so it doesn't jump: every layout and two or
+                    // three versions, less where the screen has no room (owner)
+                    style={{
+                        height: `min(${LAYOUT_MENU_HEIGHT}px, var(--radix-popover-content-available-height))`,
+                    }}
                     data-testid="shape-layout-menu-content"
                 >
                     <div
-                        className="flex flex-col gap-1"
+                        className="flex flex-col gap-1 overflow-y-auto"
                         role="menu"
                         onKeyDown={(e) =>
                             arrowFocus(e, [
@@ -265,7 +271,7 @@ export function LayoutMenu(props: PickerProps) {
                     {/* The versions in a panel as tall as the list and of one width, scrolling
                         when a layout has more (owner: the menu jumped as Short back's tall list
                         grew it) */}
-                    <div className="border-stroke relative w-[76px] shrink-0 self-stretch border-l">
+                    <div className="border-stroke relative w-[96px] shrink-0 self-stretch border-l">
                         <div
                             className="absolute inset-0 flex flex-wrap content-start gap-2 overflow-y-auto pl-8"
                             data-testid="shape-layout-menu-versions"

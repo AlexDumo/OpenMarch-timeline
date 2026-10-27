@@ -1,3 +1,4 @@
+import type { PivotKey } from "../frame/frame";
 import { create } from "zustand";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 import type { FieldMode, FieldPointer } from "@/field/editor/fieldEditor";
@@ -63,6 +64,8 @@ interface Shown {
     readonly calm: boolean;
     /** The walks are shown: the pathways toggle (#403) */
     readonly walks: boolean;
+    /** The pivot a cell of the editor's pivot menu points at (#437), drawn by `frameDrawing` */
+    readonly pivotPreview: PivotKey | null;
 }
 let shown: Shown | null = null;
 const shownNow = (): Shown | null => {
@@ -71,13 +74,15 @@ const shownNow = (): Shown | null => {
     const { hover } = useSpotHover.getState();
     const calm = shapeCalm(!!tool.gesture);
     const walks = useUiSettingsStore.getState().uiSettings.shapeWalks ?? false;
+    const { pivotPreview } = useShapePointerStore.getState();
     if (
         shown?.tool !== tool ||
         shown.hover !== hover ||
         shown.calm !== calm ||
-        shown.walks !== walks
+        shown.walks !== walks ||
+        shown.pivotPreview !== pivotPreview
     )
-        shown = { tool, hover, calm, walks };
+        shown = { tool, hover, calm, walks, pivotPreview };
     return shown;
 };
 

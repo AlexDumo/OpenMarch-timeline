@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import clsx from "clsx";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon } from "@phosphor-icons/react";
@@ -10,7 +10,8 @@ import {
 } from "../frame/frame";
 import { keepFocus } from "./keepFocus";
 import { Tip } from "./Tip";
-import { arrowFocus, useMenuFocus } from "./menuFocus";
+import { setPivotPreview } from "../field/shapePointer";
+import { arrowFocus, useEditorMenu, useMenuFocus } from "./menuFocus";
 
 export const PIVOT_NAMES: Record<PivotKey, string> = {
     nw: "back left",
@@ -32,10 +33,13 @@ export const PIVOT_NAMES: Record<PivotKey, string> = {
 export function PivotGrid({
     pivot,
     onPick,
+    onPreview,
     testId = "transform-pivot",
 }: {
     pivot: Pivot;
     onPick: (key: PivotKey) => void;
+    /** A cell pointed at or keyboard-focused, and null as it's left: shown, not picked (#437) */
+    onPreview?: (key: PivotKey | null) => void;
     testId?: string;
 }) {
     // One stop for Tab, on the pivot picked (the center for one dragged on the field); the arrows
@@ -72,6 +76,10 @@ export function PivotGrid({
                         aria-label={`Pivot: ${PIVOT_NAMES[key]}`}
                         onPointerDown={keepFocus}
                         onClick={() => onPick(key)}
+                        onPointerEnter={() => onPreview?.(key)}
+                        onPointerLeave={() => onPreview?.(null)}
+                        onFocus={() => onPreview?.(key)}
+                        onBlur={() => onPreview?.(null)}
                         data-testid={`${testId}-${key}`}
                         className="flex size-16 items-center justify-center"
                     >
@@ -124,7 +132,12 @@ export function PivotMenu({
     onPick: (key: PivotKey) => void;
     testId: string;
 }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useEditorMenu();
+    // The pivot a cell points at shows on the field until the menu closes (#437)
+    useEffect(() => {
+        if (!open) setPivotPreview(null);
+        return () => setPivotPreview(null);
+    }, [open]);
     // Opened by keyboard, focus goes to the pivot picked now (review)
     const focus = useMenuFocus((el) =>
         el.querySelector<HTMLElement>('[role="radio"][tabindex="0"]'),
@@ -164,6 +177,7 @@ export function PivotMenu({
                             onPick(key);
                             setOpen(false);
                         }}
+                        onPreview={setPivotPreview}
                         testId={`${testId}-grid`}
                     />
                 </Popover.Content>

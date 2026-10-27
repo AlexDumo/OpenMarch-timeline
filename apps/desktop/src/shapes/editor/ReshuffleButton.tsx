@@ -13,7 +13,7 @@ import {
 import type { ToolEnv } from "../tool/toolKind";
 import type { ShapeEditTarget } from "./editTargets";
 import { keepFocus } from "./keepFocus";
-import { useMenuFocus } from "./menuFocus";
+import { useEditorMenu, useMenuFocus } from "./menuFocus";
 
 type Target = Pick<
     ShapeEditTarget,
@@ -94,7 +94,7 @@ function SeedMenu({
     seed: number;
     testId: string;
 }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useEditorMenu();
     // What's typed, kept in the one input (never remounted, so it keeps the focus) and shown
     // afresh when the seed changes: Reshuffle, undo, a seed applied (review)
     const [text, setText] = useState(String(seed));
@@ -106,6 +106,19 @@ function SeedMenu({
         setText(String(seed));
         setInvalid(false);
     }, [seed]);
+    // Closed, by Escape, a click away or another of the editor's menus opening: Escape cancels
+    // what's typed, any other way commits it
+    const wasOpen = useRef(false);
+    useEffect(() => {
+        if (wasOpen.current && !open) {
+            if (escaped.current || !commit(text)) setText(String(seed));
+            setInvalid(false);
+            escaped.current = false;
+        }
+        wasOpen.current = open;
+        // Only the change of open matters: text and seed are read as they are then
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
     // Opened by keyboard, focus goes to the seed
     const focus = useMenuFocus((el) => el.querySelector<HTMLElement>("input"));
     const label = tolgee.t("shapes.edit.seed.label", "Seed");
@@ -132,11 +145,6 @@ function SeedMenu({
         <Popover.Root
             open={open}
             onOpenChange={(next) => {
-                if (!next) {
-                    if (escaped.current || !commit(text)) setText(String(seed));
-                    setInvalid(false);
-                }
-                escaped.current = false;
                 setOpen(next);
                 setCopy("idle");
             }}

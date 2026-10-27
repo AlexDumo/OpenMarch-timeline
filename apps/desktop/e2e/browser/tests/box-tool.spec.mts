@@ -2815,7 +2815,7 @@ test("change: the layout menu lays the box out in the version picked, the recipe
     expect(rankCounts((await shapeOverlay(page))!.spots)).toEqual([3, 2, 3]);
 });
 
-test("change: the layout menu keeps one size as each layout's versions show, scrolling a long list (#435)", async ({
+test("change: the layout menu keeps one size as each layout's versions show, every layout and two versions whole (#435)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2833,11 +2833,25 @@ test("change: the layout menu keeps one size as each layout's versions show, scr
         sizes.add(`${box.x},${box.y},${box.width},${box.height}`);
     }
     expect([...sizes]).toHaveLength(1);
-    // Short back has more versions than fit: they scroll
+    // Tall enough for every layout and at least two whole versions (owner):
+    // Short back's are the most
+    const inside = async (l: Locator, outer: Locator) => {
+        const a = (await l.boundingBox())!;
+        const b = (await outer.boundingBox())!;
+        return a.y >= b.y - 0.5 && a.y + a.height <= b.y + b.height + 0.5;
+    };
+    for (const family of ["full", "stagger", "rounded", "shortBack", "notched"])
+        expect(
+            await inside(
+                menu.getByTestId(`shape-layout-menu-row-${family}`),
+                menu,
+            ),
+        ).toBe(true);
     const versions = menu.getByTestId("shape-layout-menu-versions");
-    expect(
-        await versions.evaluate((el) => el.scrollHeight > el.clientHeight),
-    ).toBe(true);
+    let whole = 0;
+    for (const v of await versions.getByRole("button").all())
+        if (await inside(v, versions)) whole++;
+    expect(whole).toBeGreaterThanOrEqual(2);
 });
 
 test("change: the layout menu under the chip switches layout, ↻ turns the box a quarter, and undo puts each back", async ({
@@ -3035,6 +3049,69 @@ test("change: Cmd/Ctrl-drag from the center dot pulls the pivot out onto a march
             .getByTestId("placed-box-readout")
             .getByTestId("shape-editor-pivot"),
     ).toHaveAttribute("data-pivot", "c");
+});
+
+test("change: pointing at a cell of the pivot menu previews that pivot on the shape, and leaving it or closing the menu takes the preview away (#437)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    const pivotButton = editor.getByTestId("shape-editor-pivot");
+    const outline = (await shapeOverlay(page))!.outline!;
+    const backLeft = {
+        x: Math.min(...outline.map((p) => p.x)),
+        y: Math.min(...outline.map((p) => p.y)),
+    };
+    const preview = async () => (await shapeOverlay(page))!.pivotPreview;
+    await pivotButton.click();
+    const grid = page.getByTestId("shape-editor-pivot-grid");
+    await grid.getByTestId("shape-editor-pivot-grid-nw").hover();
+    await expect
+        .poll(async () => {
+            const p = await preview();
+            return p && Math.hypot(p.x - backLeft.x, p.y - backLeft.y);
+        })
+        .toBeLessThan(CLOSE);
+    await expect(page.getByTestId("fieldShapePivotPreview")).toBeVisible();
+    // A preview only: the shape's pivot is still the center
+    await expect(pivotButton).toHaveAttribute("data-pivot", "c");
+    expect((await shapeOverlay(page))!.pivotMark).toBeNull();
+
+    // Off the cell, gone; on another, there
+    await page.mouse.move(0, 0);
+    await expect.poll(preview).toBeNull();
+    await grid.getByTestId("shape-editor-pivot-grid-c").hover();
+    await expect.poll(preview).not.toBeNull();
+    // Closed, gone
+    await pivotButton.click();
+    await expect(grid).toBeHidden();
+    await expect.poll(preview).toBeNull();
+    await expect(page.getByTestId("fieldShapePivotPreview")).toHaveCount(0);
+});
+
+test("change: one of the editor's menus open at a time: opening another closes it (#437)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    await editor.getByTestId("shape-mode-menu").click();
+    await expect(page.getByTestId("shape-mode-menu-content")).toBeVisible();
+    await editor.getByTestId("shape-layout-menu").click();
+    await expect(page.getByTestId("shape-layout-menu-content")).toBeVisible();
+    await expect(page.getByTestId("shape-mode-menu-content")).toBeHidden();
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("shape-layout-menu-content")).toBeHidden();
+    await pickMode(page, "spread");
+    await editor.getByTestId("shape-editor-pivot").click();
+    await expect(page.getByTestId("shape-editor-pivot-grid")).toBeVisible();
+    await editor.getByTestId("shape-editor-reshuffle-seed").click();
+    await expect(
+        page.getByTestId("shape-editor-reshuffle-seed-menu"),
+    ).toBeVisible();
+    await expect(page.getByTestId("shape-editor-pivot-grid")).toBeHidden();
 });
 
 test("change: the editor's pivot menu picks a corner of the 3 × 3 grid, its icon shows it, and turns go around it (#435)", async ({

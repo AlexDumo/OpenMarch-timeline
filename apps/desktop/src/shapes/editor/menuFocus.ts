@@ -1,5 +1,27 @@
-import { useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { useId, useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { create } from "zustand";
 import { keepFocus } from "./keepFocus";
+
+/**
+ * The floating editor's one open menu (#437, owner): the mode, layout, Leftover, pivot and seed
+ * menus share it, so opening one closes any other. Their popovers don't see a press on another's
+ * button as outside them (the editor keeps its presses to itself), so this is what closes them.
+ */
+const useEditorMenuStore = create<{ open: string | null }>(() => ({
+    open: null,
+}));
+
+/** A menu of the floating editor's open state, shared so only one is open at a time */
+export function useEditorMenu(): [boolean, (open: boolean) => void] {
+    const id = useId();
+    const open = useEditorMenuStore((s) => s.open === id);
+    const setOpen = (next: boolean) => {
+        if (next) useEditorMenuStore.setState({ open: id });
+        else if (useEditorMenuStore.getState().open === id)
+            useEditorMenuStore.setState({ open: null });
+    };
+    return [open, setOpen];
+}
 
 /**
  * Focus for the floating editor's small menus (the pivot, Leftover and the layout, #435). Opened
@@ -52,7 +74,12 @@ export function useMenuFocus(
             // Back to the button, found afresh: its tooltip may have drawn it again while open
             onCloseAutoFocus: (e: Event) => {
                 e.preventDefault();
-                if (!pressed.current) button.current?.focus();
+                // Not when another menu opening closed it: focus stays with that one
+                if (
+                    !pressed.current &&
+                    useEditorMenuStore.getState().open === null
+                )
+                    button.current?.focus();
             },
             onPointerDownOutside: () => {
                 pressed.current = true;
