@@ -177,6 +177,11 @@ export interface ToolKind<P> {
     dragHandle(base: P, n: number, key: string, to: XY, env: ToolEnv): P;
     /** The shape's outline on the field; the frame's four corners when absent */
     outline?(params: P, n: number): readonly XY[];
+    /**
+     * The points pulled onto the field's lines while the shape is moved (#446): a box's corners,
+     * then its center. None when absent, so the shape moves on the grid alone.
+     */
+    snapPoints?(params: P, n: number): readonly XY[];
     /** Whether a press at `at` grabs the whole shape to move it */
     contains(params: P, n: number, at: XY): boolean;
     /** `base` moved by `delta` */

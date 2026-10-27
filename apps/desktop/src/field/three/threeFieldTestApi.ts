@@ -190,6 +190,7 @@ function shapeOverlayOf(field: ThreeFieldState): FieldTestShapeOverlay | null {
             from: copy(from),
             to: copy(to),
         })),
+        guideMarks: (drawing.guideMarks ?? []).map(copy),
         onGuides: (drawing.onGuides ?? []).map(copy),
     };
     function screen(at: FieldPoint) {

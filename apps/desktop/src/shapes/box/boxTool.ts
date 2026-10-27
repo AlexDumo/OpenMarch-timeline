@@ -55,6 +55,10 @@ export const boxTool: ToolKind<BoxParams> = {
     dragHandle: (base, n, key, to, env) =>
         stretchBox(base, n, key as BoxHandleKey, to, env),
     outline: boxCorners,
+    snapPoints: (params, n) => [
+        ...boxCorners(params, n),
+        boxFrame(params, n).center,
+    ],
     contains: insideBox,
     move: moveBox,
     frameOf: boxFrame,
