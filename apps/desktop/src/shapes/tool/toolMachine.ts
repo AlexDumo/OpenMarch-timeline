@@ -99,7 +99,12 @@ const snapshot = (s: ToolState): ToolSnapshot => ({
 /** The spots for the open shape, in the kind's order; empty before one is drawn */
 export function slotsOf(state: ToolState, ctx: ShapeContext): Slot[] {
     if (state.params === null) return [];
-    return state.kind.shape.generate(state.params, state.spots, ctx);
+    // Mid-gesture the spots only show where the shape is going: a spread drafts them (#439)
+    return state.kind.shape.generate(
+        state.params,
+        state.spots,
+        state.gesture ? { ...ctx, draft: true } : ctx,
+    );
 }
 
 /** Who goes where on the current shape, by least travel from where the marchers start */

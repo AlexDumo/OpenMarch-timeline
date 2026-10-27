@@ -13,6 +13,7 @@ import {
     type ResolvedLayout,
 } from "../distribute/layouts";
 import { spreadScale } from "../distribute/distribute";
+import { SPREAD_GENERATOR } from "../distribute/spread";
 import { rectRegion, type Region } from "../distribute/region";
 import {
     acrossRange,
@@ -52,6 +53,13 @@ export type BoxSize = Pick<
  */
 export type BoxParams = BoxSize & {
     readonly distribution?: Distribution;
+    /**
+     * A spread's frame, width over depth (#439): the shape the designer drew, which a mode switch
+     * and Reshuffle keep and a handle reshapes freely; its size is the interval times the
+     * spread's scale for the count. Absent (a spread stored before #439): the block's
+     * proportions, files by ranks.
+     */
+    readonly spreadAspect?: number;
     /**
      * Recipes stored before the distributor (#386) say how the box was filled this way: always
      * a grid with the short rank at the back, centered, which reads as Files, Short back. A box
@@ -196,17 +204,83 @@ export const isSpread = (p: BoxParams): boolean =>
  * switching between Files and Spread keeps how wide and deep the shape is
  */
 export function spreadShapeOf(p: BoxParams, n: number): Region {
+    const aspect = p.spreadAspect;
+    if (aspect !== undefined && aspect > 0)
+        return rectRegion(aspect / 2, 1 / 2);
     return rectRegion(filesOf(p) / 2, ranksOf(p, n) / 2);
+}
+
+/**
+ * A spread's frame `width` × `depth`, as its aspect and interval, and (`refile`) the file count
+ * nearest it, which Files starts from
+ */
+function spreadSized(
+    p: BoxParams,
+    n: number,
+    width: number,
+    depth: number,
+    refile: boolean,
+): BoxParams {
+    const spreadAspect = width / depth;
+    const was = boxDistribution(p);
+    if (was.mode !== "spread") throw new Error("Not a spread");
+    // Reshaped, a spread from before #439 takes the generator whose frame is its own
+    const d = { ...was, generator: SPREAD_GENERATOR };
+    const scale = spreadScale(rectRegion(spreadAspect / 2, 1 / 2), n, d, 1);
+    return {
+        ...(refile ? withFileCount(p, filesFor(width, depth, n)) : p),
+        distribution: d,
+        spreadAspect,
+        // The frame is `scale` intervals deep: the interval is what fits the count in it
+        across: depth / scale,
+    };
+}
+
+/**
+ * `next` (the box switched to Spread) filling the frame `params` has (#439): its center, size and
+ * turn kept, the interval whatever fits the count in it. A box with no area (a single rank or
+ * file) has no frame to fill: undefined, and it keeps its interval.
+ */
+export function spreadIn(
+    params: BoxParams,
+    next: BoxParams,
+    n: number,
+): BoxParams | undefined {
+    const { halfWidth, halfDepth } = boxFrame(params, n);
+    if (!(halfWidth > 0) || !(halfDepth > 0)) return undefined;
+    // Its file count stays, so back in Files it is the box it was
+    return spreadSized(next, n, 2 * halfWidth, 2 * halfDepth, false);
+}
+
+/**
+ * `next` (a spread switched to Files, laid out `files` across) in the space the spread took up
+ * (#439), each interval refitted to it in half steps; a single file or rank keeps its interval
+ */
+export function filesIn(
+    params: BoxParams,
+    next: BoxParams,
+    n: number,
+    env: ToolEnv,
+): BoxParams {
+    const { halfWidth, halfDepth } = boxFrame(params, n);
+    const { across: a, deep: b } = boxBlock(next, n);
+    const across =
+        a > 1 ? snapInterval((2 * halfWidth) / (a - 1), env) : next.across;
+    const deep =
+        b > 1 ? snapInterval((2 * halfDepth) / (b - 1), env) : next.deep;
+    const { spreadAspect: _aspect, ...rest } = next;
+    return { ...rest, across, deep };
 }
 
 /** How far a spread box reaches either side of its center, and front to back */
 function spreadHalves(p: BoxParams, n: number) {
     const d = boxDistribution(p);
     if (d.mode !== "spread") throw new Error("Not a spread");
-    const scale = spreadScale(spreadShapeOf(p, n), n, d, p.across);
+    const region = spreadShapeOf(p, n);
+    const scale = spreadScale(region, n, d, p.across);
     return {
-        halfWidth: (filesOf(p) / 2) * scale,
-        halfDepth: (ranksOf(p, n) / 2) * scale,
+        halfWidth: region.bounds.right * scale,
+        halfDepth: region.bounds.bottom * scale,
     };
 }
 
@@ -340,8 +414,17 @@ export function snapToGrid(
     held?: HeldAxes,
 ): BoxParams {
     // A spread has no corner marcher: its center goes on the grid, as a circle's does
-    if (env.snap && isSpread(p))
-        return { ...p, center: env.gridSnap(p.center) };
+    if (env.snap && isSpread(p)) {
+        const snapped = env.gridSnap(p.center);
+        // Held: a handle keeps the opposite side where it was (#439)
+        return {
+            ...p,
+            center: {
+                x: held?.x ? p.center.x : snapped.x,
+                y: held?.y ? p.center.y : snapped.y,
+            },
+        };
+    }
     if (!env.snap || !squareToField(p.rotation)) return p;
     const frame = boxFrame(p, n);
     const first = frameToField(frame, {
@@ -702,8 +785,23 @@ export function stretchBox(
     env: ToolEnv,
 ): BoxParams {
     if (isSpread(base))
-        return inBoxAxes(base, n, env, (flat) =>
-            reshapeSpread(flat, n, key, fieldToFrame(boxFrame(base, n), to)),
+        return inBoxAxes(
+            base,
+            n,
+            env,
+            (flat) =>
+                reshapeSpread(
+                    flat,
+                    n,
+                    key,
+                    fieldToFrame(boxFrame(base, n), to),
+                    env,
+                ),
+            // The opposite side stays exactly where it was: the center isn't snapped that way
+            () => ({
+                x: key.includes("e") || key.includes("w"),
+                y: key.includes("n") || key.includes("s"),
+            }),
         );
     const movesX = key.includes("e") || key.includes("w");
     const movesY = key.includes("n") || key.includes("s");
@@ -852,16 +950,16 @@ function stretchSquare(
 }
 
 /**
- * {@link stretchBox} for a spread square to the field, `to` in its axes: the interval stays and
- * the size follows the count, so a handle reshapes it. The opposite corner or side stays put and
- * the file count (which sets the proportions) is the one nearest the shape the drag asks for: a
- * side handle keeps the other side's length as asked.
+ * {@link stretchBox} for a spread square to the field, `to` in its axes (#439): the frame follows
+ * the handle, the opposite corner or side staying put, its edges on half steps (with snap), and
+ * the interval is what fits the count in it. A side handle keeps the other side as it was.
  */
 function reshapeSpread(
     base: BoxParams,
     n: number,
     key: BoxHandleKey,
     to: XY,
+    env: ToolEnv,
 ): BoxParams {
     const frame = boxFrame(base, n);
     const movesX = key.includes("e") || key.includes("w");
@@ -870,18 +968,22 @@ function reshapeSpread(
         x: key.includes("e") ? -frame.halfWidth : frame.halfWidth,
         y: key.includes("s") ? -frame.halfDepth : frame.halfDepth,
     };
-    const width = movesX ? Math.abs(to.x - anchor.x) : 2 * frame.halfWidth;
-    const depth = movesY ? Math.abs(to.y - anchor.y) : 2 * frame.halfDepth;
-    const files = filesFor(width, depth, n);
-    if (files === filesOf(base)) return base;
-    const next = withFileCount(base, files);
-    const half = boxFrame(next, n);
+    const least = halfStep(env);
+    const side = (v: number) =>
+        Math.max(least, env.snap ? Math.round(v / least) * least : v);
+    const width = movesX
+        ? side(Math.abs(to.x - anchor.x))
+        : 2 * frame.halfWidth;
+    const depth = movesY
+        ? side(Math.abs(to.y - anchor.y))
+        : 2 * frame.halfDepth;
+    const next = spreadSized(base, n, width, depth, true);
     // Grown away from the fixed corner or side, toward the handle (past it, the other way)
     return {
         ...next,
         center: {
-            x: movesX ? anchor.x + signOf(to.x - anchor.x) * half.halfWidth : 0,
-            y: movesY ? anchor.y + signOf(to.y - anchor.y) * half.halfDepth : 0,
+            x: movesX ? anchor.x + signOf(to.x - anchor.x) * (width / 2) : 0,
+            y: movesY ? anchor.y + signOf(to.y - anchor.y) * (depth / 2) : 0,
         },
     };
 }

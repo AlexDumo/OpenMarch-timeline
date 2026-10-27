@@ -43,6 +43,8 @@ export interface DistributeInput {
     /** The kind's interval side to side and front to back, in field units */
     readonly across: number;
     readonly deep: number;
+    /** Mid-gesture: a spread may be its last layout stretched to `region` ({@link spreadLayout}) */
+    readonly draft?: boolean;
 }
 
 /**
@@ -57,16 +59,19 @@ export function distribute(input: DistributeInput): FrameSpot[] {
     const { distribution } = input;
     if (distribution.mode === "outline") return outlineOf(input, distribution);
     if (distribution.mode === "spread")
-        return spreadLayout(input.region, input.n, distribution).spots.map(
-            (s, k) => ({
-                x: s.x * input.across,
-                y: s.y * input.across,
-                // One layout's spots: a new seed is a new layout, so who goes where is worked out
-                // again rather than kept by spot number
-                row: distribution.seed,
-                col: k,
-            }),
-        );
+        return spreadLayout(
+            input.region,
+            input.n,
+            distribution,
+            input.draft,
+        ).spots.map((s, k) => ({
+            x: s.x * input.across,
+            y: s.y * input.across,
+            // One layout's spots: a new seed is a new layout, so who goes where is worked out
+            // again rather than kept by spot number
+            row: distribution.seed,
+            col: k,
+        }));
     return filesSpots(
         distribution.mode === "files"
             ? distribution
@@ -110,15 +115,25 @@ function outlineOf(
 /** Spread layouts recently worked out: a shape asks for its spots, frame and outline in turn */
 const spreads = new Map<string, SpreadLayout>();
 const SPREADS_KEPT = 24;
+/** The last layout worked out for each spread (generator, count, seed), whatever its region */
+const lastOf = new Map<string, { region: Region; layout: SpreadLayout }>();
 
-/** The spread for `n` spots over `region`'s shape at an interval of 1, worked out once */
+/**
+ * The spread for `n` spots over `region`'s shape at an interval of 1, worked out once. With
+ * `draft` (mid-gesture, #439), a region not worked out yet takes the spread's last layout
+ * stretched to its frame instead, so a handle drag doesn't lay out again on every move: only what
+ * the drag shows comes from it, never what's saved, and generator 1 (whose size is the layout's)
+ * always lays out.
+ */
 function spreadLayout(
     region: Region,
     n: number,
     d: SpreadDistribution,
+    draft = false,
 ): SpreadLayout {
     const from = d.count ?? n;
-    const key = `${d.generator} ${region.key} ${n} ${d.seed} ${from}`;
+    const family = `${d.generator} ${n} ${d.seed} ${from}`;
+    const key = `${family} ${region.key}`;
     const known = spreads.get(key);
     if (known) {
         // Most recently used last, so the oldest goes first
@@ -126,11 +141,44 @@ function spreadLayout(
         spreads.set(key, known);
         return known;
     }
+    const last = lastOf.get(family);
+    if (draft && last && d.generator !== 1)
+        return stretched(last.layout, last.region, region, n);
     const layout = evenSpread(region, n, d.seed, from, d.generator);
     spreads.set(key, layout);
     if (spreads.size > SPREADS_KEPT)
         spreads.delete(spreads.keys().next().value!);
+    lastOf.delete(family);
+    lastOf.set(family, { region, layout });
+    if (lastOf.size > SPREADS_KEPT) lastOf.delete(lastOf.keys().next().value!);
     return layout;
+}
+
+/** `layout` (over `was`) stretched side to side and front to back onto `region`'s frame */
+function stretched(
+    layout: SpreadLayout,
+    was: Region,
+    region: Region,
+    n: number,
+): SpreadLayout {
+    const scale = spreadSize(region, n);
+    const a = was.bounds;
+    const b = region.bounds;
+    const sx =
+        ((b.right - b.left) * scale) / ((a.right - a.left) * layout.scale);
+    const sy =
+        ((b.bottom - b.top) * scale) / ((a.bottom - a.top) * layout.scale);
+    const ax = ((a.left + a.right) / 2) * layout.scale;
+    const ay = ((a.top + a.bottom) / 2) * layout.scale;
+    const bx = ((b.left + b.right) / 2) * scale;
+    const by = ((b.top + b.bottom) / 2) * scale;
+    return {
+        spots: layout.spots.map((s) => ({
+            x: bx + (s.x - ax) * sx,
+            y: by + (s.y - ay) * sy,
+        })),
+        scale,
+    };
 }
 
 /**

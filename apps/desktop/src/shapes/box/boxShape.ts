@@ -43,9 +43,10 @@ function toField(p: BoxParams, x: number, y: number): XY {
     };
 }
 
-/** The box's spots in its own axes, from the distributor */
-const localSpots = (p: BoxParams, n: number) =>
+/** The box's spots in its own axes, from the distributor (a spread's drafted mid-gesture) */
+const localSpots = (p: BoxParams, n: number, draft = false) =>
     distribute({
+        draft,
         // A spread fills the block's shape at the size its count and interval give
         region: isSpread(p) ? spreadShapeOf(p, n) : boxRegion(p, n),
         n,
@@ -54,8 +55,8 @@ const localSpots = (p: BoxParams, n: number) =>
         deep: p.deep,
     });
 
-export function boxSpots(p: BoxParams, n: number): Slot[] {
-    return localSpots(p, n).map((s) => ({
+export function boxSpots(p: BoxParams, n: number, draft = false): Slot[] {
+    return localSpots(p, n, draft).map((s) => ({
         ...toField(p, s.x, s.y),
         row: s.row,
         col: s.col,
@@ -68,7 +69,7 @@ export const boxShape: ShapeKind<BoxParams> = {
         if (n <= 0) return [];
         return isPreBox(p)
             ? blockKind.generate(p as BlockParams, n, ctx)
-            : boxSpots(p, n);
+            : boxSpots(p, n, ctx.draft === true);
     },
     /** The rectangle around the spots, as the block drew it; a spread's edge */
     outline(p, n, ctx) {

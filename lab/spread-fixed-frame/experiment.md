@@ -2,10 +2,12 @@
 # The lab reads this file when this branch's test build is published.
 # Keep `id` stable: feedback is filed under it.
 id: spread-fixed-frame
-title: Reshuffle a spread without moving the box
-summary: Reshuffle now keeps the box or circle exactly where and as big as you drew it, and only picks a different even layout inside it.
+title: Spread fills the box you drew
+summary: Switching to Spread, Reshuffle and typing a seed now keep the box or circle exactly where and as big as you drew it. Spread's handles reshape the box freely, and the spacing is whatever fits.
 status: open
 questions:
+  - When you switched a box from Grid to Spread (or back), did it keep the space it took up?
+  - Could you resize a Spread box by its handles the way you wanted? Did it keep up with the pointer?
   - When you pressed Reshuffle, did the box or circle stay exactly where it was and the same size?
   - Did the marchers fill the whole shape every time, with no empty strip along one side?
   - Did any layout look crowded, or have someone left alone?
@@ -13,10 +15,11 @@ questions:
   - Did typing a seed bring back the layout you expected, without moving the box?
 ---
 
-Before this build, each **Reshuffle** on a Spread box made the box a
-little bigger or smaller and moved its edges. Now the shape you drew
-stays put: Reshuffle only changes which even arrangement of marchers
-fills it.
+Spread now fills the shape you drew. Switching a box from Grid or Outline
+to Spread keeps its outline, and the spacing becomes whatever fits your
+marchers in it. Reshuffle and a typed seed only change which even
+arrangement fills it. Spread's handles move a side wherever you drag it,
+the other sides staying put.
 
 **What to try**
 
@@ -27,14 +30,19 @@ fills it.
   outline and handles. They shouldn't move.
 - Open the arrow beside Reshuffle, type an earlier seed and press
   **Enter**. That layout comes back, and the box still stays put.
-- Try a circle too (**O**), switched to Spread.
-- Change the spacing or drag a handle, then Reshuffle again.
+- Drag a side or corner handle of the Spread box. The side should follow
+  the pointer smoothly, even with a lot of marchers, and the marchers
+  settle into their places when you let go.
+- Switch back to **Grid**: the box keeps the space the spread took up.
+- Try a circle too (**O**), switched between Outline and Spread.
 
 **Good to know**
 
-- No two marchers stand closer than the spacing. Some layouts stand a
-  little looser than others, because the shape no longer stretches to
-  fit each one.
+- No two marchers stand closer than the spacing. A spread in the space a
+  grid took up is a little tighter than the grid was, since the grid's
+  box runs through its outside marchers.
+- While you drag a handle, the marchers stretch with the box. They take
+  their exact places when you let go.
 - Spreads placed before this build reopen exactly as they were. The
   first Reshuffle on one of them may resize it once, and after that
   Reshuffle keeps it.

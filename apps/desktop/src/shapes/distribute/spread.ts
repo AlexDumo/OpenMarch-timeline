@@ -41,9 +41,9 @@ const ROW_PITCH = Math.sqrt(3) / 2;
 const EDGE_ROOM = 0.2;
 /** …and the frame this much bigger than rows need, since a scatter packs looser than rows */
 const ROWS_SLACK = 1.1;
-/** Generator 2's floor: passes of parting tight pairs before it settles for what it has */
-const FLOOR_PASSES = 4;
-/** …each first pushing apart everyone nearer than this share over the interval, for this many rounds */
+/** Generator 2's floor: the share of their own margin marchers keep, pass by pass, when jammed */
+const SQUEEZES = [1, 0.6, 0.3, 0.1, 0];
+/** …each pass first pushing apart everyone nearer than this share over the interval, for this many rounds */
 const JAM_TARGET = 1.05;
 const JAM_ROUNDS = 20;
 
@@ -53,6 +53,7 @@ const MARGIN_SPAN = 0.7;
 /** Best candidate: candidates per point already placed, and at most this many per point */
 const CANDIDATES_PER_POINT = 10;
 const MAX_CANDIDATES = 300;
+
 /** Tries to find a random point inside before giving up and using the center */
 const SAMPLE_TRIES = 64;
 /** Push-apart rounds for a new layout, and for one relaxed from a previous count */
@@ -148,11 +149,13 @@ function addByBestCandidate(w: Work, until: number, random: () => number) {
         let bestD = -1;
         for (let t = 0; t < tries; t++) {
             const c = sample(w, margin, random);
+            // Its nearest point, given up on once nearer than the best's: it can't win then
             let d = Infinity;
             for (const p of points) {
                 const dx = c.x - p.x;
                 const dy = c.y - p.y;
                 d = Math.min(d, dx * dx + dy * dy);
+                if (d <= bestD) break;
             }
             if (d > bestD) {
                 bestD = d;
@@ -200,10 +203,9 @@ function removeMostCrowded(w: Work, until: number) {
 
 /**
  * Push apart: neighbors nearer than `target` (the hex spacing when absent) push each other
- * off, each move held at least the marcher's own margin inside the edge, or only `squeeze` when
- * given (halved until it is)
+ * off, each move held at least the marcher's own margin inside the edge (halved until it is)
  */
-function pushApart(w: Work, rounds: number, target?: number, squeeze?: number) {
+function pushApart(w: Work, rounds: number, target?: number) {
     const { points, margins } = w;
     const n = points.length;
     target ??= hexSpacing(w.region.area * w.k * w.k, n);
@@ -219,6 +221,8 @@ function pushApart(w: Work, rounds: number, target?: number, squeeze?: number) {
             for (let j = i + 1; j < n; j++) {
                 const b = points[j]!;
                 const dx = b.x - a.x;
+                // Too far apart side to side to touch: skipped before the rest is worked out
+                if (dx >= target || dx <= -target) continue;
                 const dy = b.y - a.y;
                 const dd = dx * dx + dy * dy;
                 if (dd >= target * target) continue;
@@ -239,11 +243,7 @@ function pushApart(w: Work, rounds: number, target?: number, squeeze?: number) {
             const p = points[i]!;
             for (let h = 1; h > 0.01; h /= 2) {
                 const q = { x: p.x + mx[i]! * h, y: p.y + my[i]! * h };
-                const keep =
-                    squeeze === undefined
-                        ? margins[i]!
-                        : Math.min(squeeze, margins[i]!);
-                if (depth(w, q) >= keep) {
+                if (depth(w, q) >= margins[i]!) {
                     points[i] = q;
                     break;
                 }
@@ -318,6 +318,7 @@ function raiseFloor(
         for (let i = 0; i < n; i++)
             for (let j = i + 1; j < n; j++) {
                 const dx = points[j]!.x - points[i]!.x;
+                if (dx >= floor || dx <= -floor) continue;
                 const dy = points[j]!.y - points[i]!.y;
                 const dd = dx * dx + dy * dy;
                 if (dd >= floor * floor || dd === 0) continue;
@@ -382,19 +383,23 @@ function capMargins(region: Region, k: number, margins: number[]): number[] {
 }
 
 /**
- * Generator 2's floor: pairs closer than `interval` (work units) step apart, inside their margins
- * first, then as far as the edge itself (#439: edge marchers sit on or near it), a few passes so
- * a crowd or a long chain settles
+ * Generator 2's floor: pairs closer than `interval` (work units) step apart. When they're jammed,
+ * the crowd around them makes room first, everyone held a shrinking share of their own distance
+ * from the edge ({@link SQUEEZES}), so a pair can part near the edge (#439: edge marchers sit on or
+ * near it) without a row forming along it
  */
 function floorAt(w: Work, interval: number) {
     // A hair over, so pairs settle on the interval rather than just under it
     const floor = interval * (1 + 1e-4);
     raiseFloor(w, floor, undefined, 2);
-    for (let t = 0; t < FLOOR_PASSES; t++) {
+    for (const share of SQUEEZES) {
         if (closestPair(w.points) >= interval) return;
-        // Jammed: the crowd around the tight pair makes room together, then the pair parts
-        pushApart(w, JAM_ROUNDS, floor * JAM_TARGET, 0);
-        raiseFloor(w, floor, 0, 2);
+        const squeezed: Work = {
+            ...w,
+            margins: w.margins.map((m) => m * share),
+        };
+        pushApart(squeezed, JAM_ROUNDS, floor * JAM_TARGET);
+        raiseFloor(squeezed, floor, undefined, 2);
     }
 }
 

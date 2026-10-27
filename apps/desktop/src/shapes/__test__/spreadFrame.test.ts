@@ -7,7 +7,12 @@ import {
     withMode,
     withSeed,
 } from "../distribute/modes";
-import type { SpreadDistribution } from "../distribute/distribution";
+import type {
+    DistributionMode,
+    SpreadDistribution,
+} from "../distribute/distribution";
+import type { BoxParams } from "../box/boxGeometry";
+import type { ShapeFrame } from "../frame/frame";
 import { fieldToFrame } from "../frame/frame";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import {
@@ -59,6 +64,13 @@ function reshuffledTimes(t: ToolState, times: number): ToolState {
         t = edit(t, reshuffle(t.kind, t.params, t.spots, env), ctx);
     return t;
 }
+
+const closestOf = (spots: readonly XY[]) =>
+    Math.min(
+        ...spots.flatMap((p, i) =>
+            spots.slice(i + 1).map((q) => Math.hypot(q.x - p.x, q.y - p.y)),
+        ),
+    );
 
 const seedOf = (t: ToolState) =>
     (distributionOf(t.kind, t.params, t.spots) as SpreadDistribution).seed;
@@ -129,6 +141,90 @@ describe.each(Object.entries(SHAPES))("a %s in Spread", (_, drawn) => {
                     interval,
                 );
             }
+        });
+    });
+});
+
+/** Two frames the same, to a millionth of a field unit */
+function expectSameFrame(a: ShapeFrame, b: ShapeFrame) {
+    expect(a.center.x).toBeCloseTo(b.center.x, 6);
+    expect(a.center.y).toBeCloseTo(b.center.y, 6);
+    expect(a.halfWidth).toBeCloseTo(b.halfWidth, 6);
+    expect(a.halfDepth).toBeCloseTo(b.halfDepth, 6);
+    expect(a.rotation).toBe(b.rotation);
+}
+
+function drawnIn(kind: AnyToolKind, n: number, from: XY, to: XY) {
+    let t = openTool(kind, marchers(n));
+    t = press(t, from, env);
+    t = pointerMove(t, to, env);
+    return release(t, ctx);
+}
+
+const switched = (t: ToolState, mode: DistributionMode) =>
+    edit(t, withMode(t.kind, t.params, t.spots, mode, env), ctx);
+
+describe("a mode switch keeps the frame the designer drew (#439)", () => {
+    describe.each([12, 24, 48])("at %i marchers", (n) => {
+        it("Grid → Spread → Grid: the same frame and outline, and back to the box it was", () => {
+            const grid = drawnIn(boxTool, n, { x: 0, y: 0 }, { x: 90, y: 40 });
+            const frame = boxTool.frameOf(grid.params as BoxParams, n);
+            const spread = switched(grid, "spread");
+            expectSameFrame(
+                boxTool.frameOf(spread.params as BoxParams, n),
+                frame,
+            );
+            // The marchers fill it, no closer than its interval
+            const across = (spread.params as BoxParams).across;
+            const spots = slotsOf(spread, ctx);
+            for (const p of spots.map((s) => fieldToFrame(frame, s))) {
+                expect(Math.abs(p.x)).toBeLessThanOrEqual(frame.halfWidth);
+                expect(Math.abs(p.y)).toBeLessThanOrEqual(frame.halfDepth);
+            }
+            expect(closestOf(spots)).toBeGreaterThanOrEqual(
+                across * (1 - 1e-6),
+            );
+            const back = switched(spread, "files");
+            expect(back.params).toEqual(
+                expect.objectContaining({
+                    center: (grid.params as BoxParams).center,
+                    files: (grid.params as BoxParams).files,
+                    across: (grid.params as BoxParams).across,
+                    deep: (grid.params as BoxParams).deep,
+                }),
+            );
+        });
+
+        it("Outline → Spread and back: the same frame", () => {
+            const outline = switched(
+                drawnIn(boxTool, n, { x: 0, y: 0 }, { x: 90, y: 40 }),
+                "outline",
+            );
+            const frame = boxTool.frameOf(outline.params as BoxParams, n);
+            const spread = switched(outline, "spread");
+            expectSameFrame(
+                boxTool.frameOf(spread.params as BoxParams, n),
+                frame,
+            );
+        });
+
+        it("a circle, Outline → Spread → Outline: the same radius", () => {
+            const outline = drawnIn(
+                circleTool,
+                n,
+                { x: 0, y: 0 },
+                { x: 50, y: 0 },
+            );
+            const frame = circleTool.frameOf(outline.params, n);
+            const spread = switched(outline, "spread");
+            expectSameFrame(circleTool.frameOf(spread.params, n), frame);
+            const was = circleTool.outline!(outline.params, n);
+            circleTool.outline!(spread.params, n).forEach((p, k) => {
+                expect(p.x).toBeCloseTo(was[k]!.x, 6);
+                expect(p.y).toBeCloseTo(was[k]!.y, 6);
+            });
+            const back = switched(spread, "outline");
+            expectSameFrame(circleTool.frameOf(back.params, n), frame);
         });
     });
 });

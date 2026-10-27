@@ -86,6 +86,21 @@ function intervalAt(p: CircleParams, r: number, n: number): number {
         : intervalFor(r, Math.max(1, n));
 }
 
+/**
+ * `after` (the circle in another mode) at the radius `before` has (#439): Spread fills the circle
+ * drawn, and Outline goes round it, the interval whatever that takes. A circle with no radius
+ * (one marcher) keeps its interval.
+ */
+export function keepingRadius(
+    before: CircleParams,
+    after: CircleParams,
+    n: number,
+): CircleParams {
+    const r = radiusOf(before, n);
+    if (!(r > 0)) return after;
+    return { ...after, interval: intervalAt(after, r, n) };
+}
+
 /** The circle's frame: its center, the radius both ways, its turn and flip */
 export function circleFrame(p: CircleParams, n: number): ShapeFrame {
     const r = radiusOf(p, n);

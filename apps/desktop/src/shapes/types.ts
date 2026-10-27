@@ -28,6 +28,12 @@ export interface ShapeContext {
      * timeline's no-snap modifier).
      */
     readonly snapPoint: (p: XY) => XY;
+    /**
+     * Mid-gesture (a handle drag): the spots only show where the shape is going, so a spread may
+     * stretch its last layout to the new frame instead of laying out again each move (#439). The
+     * gesture's end asks without it, and gets the exact spots.
+     */
+    readonly draft?: boolean;
     /** The field's size in field units (from 0, 0), to warn about spots off it */
     readonly field?: { readonly width: number; readonly height: number };
     /**

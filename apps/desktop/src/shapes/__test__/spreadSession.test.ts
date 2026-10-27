@@ -138,24 +138,63 @@ describe("a box in Spread", () => {
         expect(shown).toEqual(["across"]);
     });
 
-    it("keeps its interval when a handle reshapes it, the opposite side staying put", () => {
+    it("follows a handle, the opposite side staying put, the interval what fits (#439)", () => {
         let s = spreadOf(box());
         const before = s.params as BoxParams;
         const frame = boxTool.frameOf(before, N);
-        const west = fieldToFrame(frame, frame.center).x - frame.halfWidth;
         const e = boxTool.handles(s.params, N).find((h) => h.key === "e")!;
         s = press(s, e.at, env);
         s = pointerMove(s, { x: e.at.x + 60, y: e.at.y }, env);
         s = release(s, ctx);
         const after = s.params as BoxParams;
-        expect(filesOf(after)).toBeGreaterThan(filesOf(before));
-        expect(after.across).toBe(before.across);
-        expectSpacing(slotsOf(s, ctx), after.across);
         const now = boxTool.frameOf(after, N);
-        // The west side, where it was (to the half-step grid the center snaps to)
-        expect(
-            Math.abs(now.center.x - now.halfWidth - (frame.center.x + west)),
-        ).toBeLessThanOrEqual(half / 2 + 1e-9);
+        // The east side went where it was dragged, the west and the depth stayed
+        expect(now.center.x - now.halfWidth).toBeCloseTo(
+            frame.center.x - frame.halfWidth,
+            9,
+        );
+        expect(now.center.x + now.halfWidth).toBeCloseTo(
+            frame.center.x + frame.halfWidth + 60,
+            9,
+        );
+        expect(now.halfDepth).toBeCloseTo(frame.halfDepth, 9);
+        // A bigger frame for the same marchers: a wider interval, no pair closer than it
+        expect(after.across).toBeGreaterThan(before.across);
+        expectSpacing(slotsOf(s, ctx), after.across);
+        for (const spot of slotsOf(s, ctx)) {
+            const local = fieldToFrame(now, spot);
+            expect(Math.abs(local.x)).toBeLessThanOrEqual(now.halfWidth);
+            expect(Math.abs(local.y)).toBeLessThanOrEqual(now.halfDepth);
+        }
+    });
+
+    it("drafts its spots during a handle drag and lays them out exactly on release (#439)", () => {
+        let s = spreadOf(box());
+        const e = boxTool.handles(s.params, N).find((h) => h.key === "e")!;
+        s = press(s, e.at, env);
+        s = pointerMove(s, { x: e.at.x + 37, y: e.at.y }, env);
+        // Mid-drag: inside the new frame, though not the exact layout
+        const frame = boxTool.frameOf(s.params, N);
+        const drafted = slotsOf(s, ctx);
+        expect(drafted).toHaveLength(N);
+        for (const spot of drafted) {
+            const local = fieldToFrame(frame, spot);
+            expect(Math.abs(local.x)).toBeLessThanOrEqual(
+                frame.halfWidth + 1e-9,
+            );
+            expect(Math.abs(local.y)).toBeLessThanOrEqual(
+                frame.halfDepth + 1e-9,
+            );
+        }
+        s = release(s, ctx);
+        // Released: the spots a fresh look at the params gives, no pair closer than the interval
+        const exact = boxTool.shape.generate(
+            JSON.parse(JSON.stringify(s.params)),
+            N,
+            ctx,
+        );
+        expect(xyOf(slotsOf(s, ctx))).toEqual(xyOf(exact));
+        expectSpacing(exact, (s.params as BoxParams).across);
     });
 
     it("reshuffles to the next seed as one undo step", () => {
@@ -190,7 +229,9 @@ describe("a box in Spread", () => {
         );
         // Its numbers are its spacing: no files, ranks or short rank
         const across = (s.params as BoxParams).across / STEP;
-        expect(placedBoxSummary(shapes[0]!, STEP)).toBe(`${across} steps`);
+        expect(placedBoxSummary(shapes[0]!, STEP)).toBe(
+            `${Math.round(across * 100) / 100} steps`,
+        );
     });
 
     it("reopens a generator 1 spread laid out as it was placed, closest pair exactly one interval (#439)", () => {
