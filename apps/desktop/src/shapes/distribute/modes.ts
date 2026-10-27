@@ -1,5 +1,6 @@
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import { edgeSplit, takesEdge } from "./distribute";
+import { SPREAD_GENERATOR } from "./spread";
 import {
     MODE_LABELS,
     reshuffled,
@@ -164,7 +165,8 @@ export function withEdge(
     if (!closed || d?.mode !== "spread") return null;
     if (!takesEdge(closed.region(params, n))) return null;
     if ((d.edge === true) === on) return params;
-    const { edge: _edge, ...plain } = d;
+    // Toggled, a spread from before #439 takes the generator that has an edge, as on Reshuffle
+    const { edge: _edge, ...plain } = { ...d, generator: SPREAD_GENERATOR };
     return closed.withDistribution(
         params,
         n,

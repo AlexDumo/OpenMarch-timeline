@@ -164,15 +164,89 @@ describe("Spread with an edge, as stored", () => {
         });
     });
 
-    it("leaves a plain spread as it was", () => {
-        for (const region of Object.values(REGIONS)) {
-            const plain = spreadDistribution(2, 30);
-            expect(spots(region, 30, plain)).toEqual(
-                spots(region, 30, { ...plain }),
-            );
-            expect(spreadScale(region, 30, plain, 1)).not.toBe(
-                spreadScale(region, 30, edged(2, 30), 1),
-            );
+    it("leaves a plain spread as it was: the same spots as before edges existed", () => {
+        // Generator 2, a 3:2 box of 6 at seed 2, laid out on shapes/host before #450
+        const before = [
+            [28.889219, -12.933143],
+            [9.125152, -9.821382],
+            [-10.876513, -9.705548],
+            [18.291688, 9.285398],
+            [-1.709547, 9.460269],
+            [-21.078771, 14.451579],
+        ];
+        spots(rectRegion(3, 2), 6, spreadDistribution(2, 6)).forEach((p, i) => {
+            expect(p.x).toBeCloseTo(before[i]![0]!, 5);
+            expect(p.y).toBeCloseTo(before[i]![1]!, 5);
+        });
+        for (const region of Object.values(REGIONS))
+            expect(
+                spreadScale(region, 30, spreadDistribution(2, 30), 1),
+            ).not.toBe(spreadScale(region, 30, edged(2, 30), 1));
+    });
+});
+
+describe("Spread with an edge, its size (#450 review)", () => {
+    it("never shrinks for a bigger count", () => {
+        for (const region of [...Object.values(REGIONS), rectRegion(10, 0.5)]) {
+            let was = 0;
+            for (let n = 3; n <= 100; n++) {
+                const scale = spreadScale(region, n, edged(1, n), 1);
+                expect(scale, `${region.key} ${n}`).toBeGreaterThanOrEqual(
+                    was * (1 - 1e-6),
+                );
+                was = scale;
+            }
         }
+    });
+
+    it("is the least that holds: the edge's spots stand close to one interval apart", () => {
+        for (const [region, counts] of [
+            [rectRegion(1, 1), [8, 9, 10]],
+            [rectRegion(10, 0.5), [30, 31, 32, 33, 34]],
+        ] as const)
+            for (const n of counts) {
+                const { edge } = edgeSplit(region, n);
+                const ring = spots(region, n, edged(1, n)).slice(0, edge);
+                const nearest = ring.map((p, i) =>
+                    Math.min(
+                        ...ring
+                            .filter((_, j) => j !== i)
+                            .map((q) => dist(p, q)),
+                    ),
+                );
+                expect(
+                    Math.min(...nearest),
+                    `${region.key} ${n}`,
+                ).toBeGreaterThanOrEqual(INTERVAL * (1 - 1e-6));
+                expect(Math.min(...nearest), `${region.key} ${n}`).toBeLessThan(
+                    1.25 * INTERVAL,
+                );
+            }
+    });
+});
+
+describe("Spread with an edge, drafted mid-gesture", () => {
+    it("stretches its own last layout, then lays out exactly once asked without the draft", () => {
+        const d = edged(5, 30);
+        const was = rectRegion(2, 1);
+        const exact = spots(was, 30, d);
+        const now = rectRegion(2.3, 1);
+        const draft = distribute({
+            region: now,
+            n: 30,
+            distribution: d,
+            across: INTERVAL,
+            deep: INTERVAL,
+            draft: true,
+        }).map(({ x, y }) => ({ x, y }));
+        const sx =
+            (2.3 * spreadScale(now, 30, d, 1)) /
+            (2 * spreadScale(was, 30, d, 1));
+        const sy = spreadScale(now, 30, d, 1) / spreadScale(was, 30, d, 1);
+        draft.forEach((p, i) => {
+            expect(p.x).toBeCloseTo(exact[i]!.x * sx, 6);
+            expect(p.y).toBeCloseTo(exact[i]!.y * sy, 6);
+        });
+        expect(spots(now, 30, d)).not.toEqual(draft);
     });
 });

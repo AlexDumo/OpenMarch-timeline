@@ -10,6 +10,7 @@ import {
     withSeed,
 } from "../distribute/modes";
 import type { SpreadDistribution } from "../distribute/distribution";
+import { SPREAD_GENERATOR } from "../distribute/spread";
 import type { ShapeFrame } from "../frame/frame";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
 import {
@@ -134,6 +135,20 @@ describe.each(Object.entries(SHAPES))(
         });
     },
 );
+
+it("moves a generator 1 spread to generator 2 when Edge is pressed, as Reshuffle does", () => {
+    const s = SHAPES.box!(24);
+    const d = dOf(s);
+    const old = {
+        ...(s.params as object),
+        distribution: { ...d, generator: 1 },
+    };
+    const on = withEdge(boxTool, old, 24, true, env);
+    expect(distributionOf(boxTool, on, 24)).toMatchObject({
+        generator: SPREAD_GENERATOR,
+        edge: true,
+    });
+});
 
 it("has no Edge outside Spread", () => {
     let t = openTool(boxTool, marchers(12));

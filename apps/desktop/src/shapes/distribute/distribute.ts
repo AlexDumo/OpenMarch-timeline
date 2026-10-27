@@ -279,28 +279,50 @@ function insideOf(region: Region, scale: number): Region | null {
 const edgeSizes = new Map<string, number>();
 
 /**
- * How big a spread of `n` with an edge is at an interval of 1 (#450): the least size, in steps of
- * a hundredth from the plain spread's, at which its sides are an interval long or more, the edge
- * holds its spots one interval apart and the rest fit inside it, {@link EDGE_INSET} in, no closer
- * than the interval. Seed-free, like a plain spread's.
+ * How big a spread of `n` with an edge is at an interval of 1 (#450): the least size, found by
+ * halving to a millionth, at which the sides are an interval long or more (opposite sides' spots
+ * would stand closer otherwise) and either the edge holds everyone one interval apart, or the
+ * rest fit inside it, {@link EDGE_INSET} in, no closer than the interval. The rest counts the edge
+ * at its least ({@link edgeAtLeast}), which only grows with the size, so the size changes smoothly
+ * with the shape's proportions (a handle drag doesn't step as the edge's count flips) and never
+ * shrinks for a bigger count. Seed-free, like a plain spread's.
  */
 export function edgeSize(region: Region, n: number): number {
     const key = `${region.key} ${n}`;
     const known = edgeSizes.get(key);
     if (known !== undefined) return known;
-    let scale = spreadSize(region, n) * 0.8;
-    for (let i = 0; i < 1000; i++, scale *= 1.01) {
-        // Opposite sides an interval apart or more, or their spots would stand closer
+    const fits = (scale: number) => {
         const { w, h } = edgeSides(region, scale);
-        if (2 * Math.min(w, h) < 1) continue;
-        const rest = n - edgeHolds(region, scale);
-        if (rest <= 0) break;
+        if (2 * Math.min(w, h) < 1) return false;
+        if (edgeHolds(region, scale) >= n) return true;
         const inside = insideOf(region, scale);
-        if (inside && spreadSize(inside, rest) <= 1) break;
+        const rest = n - edgeAtLeast(region, scale);
+        return inside !== null && (rest <= 0 || spreadSize(inside, rest) <= 1);
+    };
+    // Too small: a side under an interval. Then doubled until it fits, and halved between
+    const short = Math.min(region.bounds.right, region.bounds.bottom);
+    let lo = 0.5 / short;
+    let hi = lo;
+    while (!fits(hi)) hi *= 2;
+    for (let i = 0; i < 60 && hi - lo > hi * 1e-6; i++) {
+        const mid = (lo + hi) / 2;
+        if (fits(mid)) hi = mid;
+        else lo = mid;
     }
-    edgeSizes.set(key, scale);
+    edgeSizes.set(key, hi);
     if (edgeSizes.size > 200) edgeSizes.delete(edgeSizes.keys().next().value!);
-    return scale;
+    return hi;
+}
+
+/**
+ * The least the edge holds at size `scale`, as a smooth function of it: a box's sides less one
+ * interval each, a circle's rim less one spot. The edge always holds at least this many.
+ */
+function edgeAtLeast(region: Region, scale: number): number {
+    const { w, h } = edgeSides(region, scale);
+    if (edgeKind(region) === "circle")
+        return w < 0.5 ? 0 : Math.PI / Math.asin(1 / (2 * w)) - 1;
+    return 2 * (2 * w - 1) + 2 * (2 * h - 1);
 }
 
 /**
