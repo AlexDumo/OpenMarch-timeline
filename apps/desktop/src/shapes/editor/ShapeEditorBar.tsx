@@ -68,6 +68,7 @@ import { ScrubNumber, type ScrubMove } from "./ScrubNumber";
 import { SaveShapeButton } from "../library/SaveShapeButton";
 import { LayoutMenu } from "./LayoutPicker";
 import { ReshuffleButton } from "./ReshuffleButton";
+import { EdgeToggle } from "./EdgeToggle";
 import { ModeMenu } from "./ModeMenu";
 import { OutlineGap } from "./OutlineGap";
 import { PivotMenu } from "./PivotGrid";
@@ -479,7 +480,7 @@ function ShapeEditorBar({
             </div>
             {/* How it's filled: a pill of its own under the editor (owner, #435), the mode switch
                 first, then what that mode has (a box's layout in Grid, the gap in Outline,
-                Reshuffle in Spread). Hidden when the kind has none of them. Only the bar and the
+                Reshuffle and Edge in Spread). Hidden when the kind has none of them. Only the bar and the
                 pill take the pointer, not the empty space beside the pill */}
             <div
                 className="rounded-6 border-stroke bg-bg-1 bg-modal shadow-modal flex items-center gap-6 border px-6 py-2 empty:hidden"
@@ -503,6 +504,12 @@ function ShapeEditorBar({
                         envFor={() => envFor(PLAIN)}
                         className="rounded-4 hover:text-accent hover:bg-fg-2 min-h-24 px-4 py-2"
                         testId="shape-editor-reshuffle"
+                    />
+                    <EdgeToggle
+                        target={target}
+                        envFor={() => envFor(PLAIN)}
+                        className="rounded-4 hover:text-accent hover:bg-fg-2 min-h-24 px-4 py-2"
+                        testId="shape-editor-edge"
                     />
                 </span>
             </div>

@@ -99,7 +99,12 @@ export const boxTool: ToolKind<BoxParams> = {
             if (filled.mode === "spread") {
                 const next: BoxParams = { ...rest, distribution: filled };
                 // Reshuffle and a typed seed: the same frame, another layout in it
-                if (was === "spread") return next;
+                const before = boxDistribution(params);
+                if (
+                    before.mode === "spread" &&
+                    (before.edge === true) === (filled.edge === true)
+                )
+                    return next;
                 // Spread fills the frame the box had (#439); a single rank or file has none
                 const kept = spreadIn(params, next, n, env);
                 if (kept) return kept;

@@ -1,7 +1,7 @@
 import { resizeCursor } from "../frame/frame";
 import { formatSteps, parseSteps } from "../editor/format";
 import { scrubDistance, scrubValue, spacingRate } from "../editor/scrub";
-import { distributionFor } from "../distribute/distribution";
+import { distributionFor, type Distribution } from "../distribute/distribution";
 import type { ToolEnv, ToolKind, ToolParam } from "../tool/toolKind";
 import { circleShape } from "./circleShape";
 import {
@@ -79,6 +79,13 @@ const INTERVAL: ToolParam<CircleParams> = {
 X
  * distributor, in Outline or Even spread.
  */
+/** Whether `b` fills the circle at the size `a` does: the same mode, and the same edge (#450) */
+const sameSize = (a: Distribution, b: Distribution) =>
+    a.mode === b.mode &&
+    (a.mode !== "spread" ||
+        b.mode !== "spread" ||
+        (a.edge === true) === (b.edge === true));
+
 export const circleTool: ToolKind<CircleParams> = {
     shape: circleShape,
     params: [INTERVAL],
@@ -110,7 +117,7 @@ export const circleTool: ToolKind<CircleParams> = {
         // A new mode resizes the circle: it grows from the pivot
         withDistribution: (params, n, distribution) =>
             // Another mode keeps the circle drawn (#439); Reshuffle and a seed change nothing else
-            circleDistribution(params).mode === distribution.mode
+            sameSize(circleDistribution(params), distribution)
                 ? { ...params, distribution }
                 : keepingRadius(params, { ...params, distribution }, n),
     },

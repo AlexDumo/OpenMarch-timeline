@@ -1,4 +1,5 @@
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
+import { edgeSplit, takesEdge } from "./distribute";
 import {
     MODE_LABELS,
     reshuffled,
@@ -87,7 +88,12 @@ export function withSeed(
     const d = closed?.distribution(params, n);
     if (!closed || d?.mode !== "spread") return null;
     if (!Number.isSafeInteger(seed) || seed < 1 || seed > SEED_MAX) return null;
-    return closed.withDistribution(params, n, spreadDistribution(seed, n), env);
+    return closed.withDistribution(
+        params,
+        n,
+        spreadDistribution(seed, n, d.edge === true),
+        env,
+    );
 }
 
 /** A typed seed: a whole number from 1 to `SEED_MAX`, or null */
@@ -140,4 +146,44 @@ export function withLayout(
     const d = closed.distribution(params, n);
     if (d.mode !== "files") return params;
     return closed.withDistribution(params, n, { ...d, layout }, env);
+}
+
+/**
+ * Spread with an edge on or off (#450), the frame kept: one change, so one undo step. Null when
+ * the shape isn't a spread, or its region has no edge to follow.
+ */
+export function withEdge(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+    on: boolean,
+    env: ToolEnv,
+): unknown {
+    const closed = kind.closed;
+    const d = closed?.distribution(params, n);
+    if (!closed || d?.mode !== "spread") return null;
+    if (!takesEdge(closed.region(params, n))) return null;
+    if ((d.edge === true) === on) return params;
+    const { edge: _edge, ...plain } = d;
+    return closed.withDistribution(
+        params,
+        n,
+        on ? { ...plain, edge: true } : plain,
+        env,
+    );
+}
+
+/**
+ * How a spread with an edge stands its `n` marchers (#450): on the edge and inside (none inside
+ * when there are too few for both). Null when the shape isn't a spread whose region has an edge.
+ */
+export function edgeSplitOf(
+    kind: AnyToolKind,
+    params: unknown,
+    n: number,
+): { readonly edge: number; readonly inside: number } | null {
+    const closed = kind.closed;
+    if (closed?.distribution(params, n).mode !== "spread") return null;
+    const region = closed.region(params, n);
+    return takesEdge(region) ? edgeSplit(region, n) : null;
 }
