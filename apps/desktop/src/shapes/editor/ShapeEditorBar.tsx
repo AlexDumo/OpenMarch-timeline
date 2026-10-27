@@ -1,7 +1,9 @@
 import clsx from "clsx";
 import {
+    useCallback,
     useEffect,
     useLayoutEffect,
+    useMemo,
     useRef,
     useState,
     type ReactNode,
@@ -9,6 +11,9 @@ import {
 import { animated, useSpring } from "@react-spring/web";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { editorPlacement } from "./editorPlacement";
+import { keepInView } from "./keepInView";
+import { glideTo, isGliding } from "@/field/three/fieldNavigation";
+import { useShapePointerStore } from "../field/shapePointer";
 import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { getActionShortcutLabel } from "@/shortcuts/labels";
@@ -73,6 +78,8 @@ import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 const PRESS_HOLD_MS = 450;
 /** A gentle spring that doesn't overshoot (#437) */
 const EDITOR_SPRING = { tension: 210, friction: 26, clamp: true };
+/** How long after an edit in the editor its change still counts as that edit (a placed shape saves first) */
+const EDIT_WINDOW_MS = 1000;
 
 /**
  * The floating editor (08-shape-system-ux.md, "The floating editor"), the main place for editing
@@ -139,7 +146,7 @@ const envFor = (keys: { alt: boolean; shift: boolean }): ToolEnv | null => {
 const PLAIN = { alt: false, shift: false };
 
 function ShapeEditorBar({
-    target,
+    target: shape,
     stepPx,
     testId,
 }: {
@@ -147,13 +154,20 @@ function ShapeEditorBar({
     stepPx: number;
     testId: string;
 }) {
-    const { kind, params, spots } = target;
+    const { kind, params, spots } = shape;
     const ratioLocked = useShapeEditorStore((s) => s.ratioLocked);
     // The editor fades with the pointer away from it and the shape (#426, #430)
     const overShape = useShapePointerOver();
     // The shape's own pivot (#350), the same in Basic and Expert (spec #344)
     const pivot = pivotOf(params);
     const place = usePlacement(kind, params, spots);
+    // Every edit made here is noted, so the view follows it (#441)
+    const { noteEdit } = place;
+    const numberDrag = useRef<NumberDrag | null>(null);
+    const target = useMemo(
+        () => notedTarget(shape, noteEdit, numberDrag),
+        [shape, noteEdit],
+    );
     // The shape at the press of a number's drag
     const base = useRef<unknown>(params);
 
@@ -505,6 +519,10 @@ function ShapeEditorBar({
  */
 function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     const view = useFieldViewStore();
+    // A drag on the field: the open shape's gesture or a placed shape's
+    const toolGesture = useShapeToolStore((s) => !!s.tool?.gesture);
+    const placedDrag = useShapePointerStore((s) => s.dragging);
+    const fieldDrag = toolGesture || placedDrag;
     const ref = useRef<HTMLDivElement>(null);
     const [room, setRoom] = useState({
         width: 0,
@@ -571,18 +589,71 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         left: target.left,
         top: target.top,
     }));
-    const shown = useRef<{ view: unknown; placed: boolean }>({
-        view,
+
+    // After an edit made in the editor, and after a drag on the field ends, the view glides to keep
+    // the shape and the editor in view, zooming out if they no longer fit (#441). Never during a
+    // drag. Runs before the spring below, so the editor springs along from the first frame.
+    const edited = useRef(0);
+    const noteEdit = useCallback(() => {
+        edited.current = performance.now();
+    }, []);
+    const glide = useRef<number | null>(null);
+    const wasDragging = useRef(fieldDrag);
+    useLayoutEffect(() => {
+        const dragEnded = wasDragging.current && !fieldDrag;
+        wasDragging.current = fieldDrag;
+        if (fieldDrag || room.width === 0) return;
+        const edit = performance.now() - edited.current < EDIT_WINDOW_MS;
+        if (!edit && !dragEnded) return;
+        edited.current = 0;
+        const now = useFieldViewStore.getState();
+        const from = {
+            width: now.width,
+            height: now.height,
+            zoom: now.zoom,
+            panX: now.panX,
+            panY: now.panY,
+        };
+        const to = keepInView({
+            view: from,
+            outline: shapeOutline(kind, params, spots),
+            width: room.width,
+            height: room.height,
+        });
+        if (
+            to.zoom === from.zoom &&
+            Math.abs(to.panX - from.panX) < 1 &&
+            Math.abs(to.panY - from.panY) < 1
+        )
+            return;
+        glide.current = glideTo(to);
+        // Only the shape's change and the drag's end start it
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [params, fieldDrag]);
+
+    const shown = useRef({
+        view: view as unknown,
         placed: false,
+        gliding: false,
+        held: false,
     });
     useLayoutEffect(() => {
-        if (held || room.width === 0) return;
-        // A pan or zoom, the first placing and reduced motion jump; the shape's changes spring
+        const gliding = isGliding(glide.current);
+        if (held || room.width === 0) {
+            shown.current.held = held;
+            return;
+        }
+        // A pan or zoom, the first placing and reduced motion jump; the shape's changes spring,
+        // and so do the editor's own glide, to its end, and the end of a hold, which a view glide
+        // after a click on the editor outlasts (review)
         const jump =
             !shown.current.placed ||
-            shown.current.view !== view ||
+            (shown.current.view !== view &&
+                !gliding &&
+                !shown.current.gliding &&
+                !shown.current.held) ||
             prefersReducedMotion();
-        shown.current = { view, placed: true };
+        shown.current = { view, placed: true, gliding, held: false };
         void api.start({
             left: target.left,
             top: target.top,
@@ -594,6 +665,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         ref,
         above: target.above,
         held,
+        noteEdit,
         style: spring,
         hold: {
             onPointerDownCapture: () => {
@@ -603,6 +675,69 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
                 setPressing(true);
             },
         },
+    };
+}
+
+/** A number's drag in the editor: the shape at its start and as last previewed */
+interface NumberDrag {
+    readonly from: unknown;
+    to: unknown;
+}
+
+/** Whether two of a kind's params are the same: they're plain data */
+const sameParams = (a: unknown, b: unknown) =>
+    a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * `target` with each of its edits that changes the shape noted first (`usePlacement`'s
+ * `noteEdit`). One that changes nothing isn't, so a following undo or selection doesn't move the
+ * view (review). Recalculate and Close up are only there when they change something.
+ */
+function notedTarget(
+    target: ShapeEditTarget,
+    note: () => void,
+    drag: { current: NumberDrag | null },
+): ShapeEditTarget {
+    const { recalculate, closeUp } = target;
+    return {
+        ...target,
+        begin: () => {
+            drag.current = { from: target.params, to: target.params };
+            target.begin();
+        },
+        preview: (params) => {
+            if (drag.current) drag.current.to = params;
+            target.preview(params);
+        },
+        end: (keep) => {
+            const moved =
+                drag.current && !sameParams(drag.current.from, drag.current.to);
+            drag.current = null;
+            if (keep && moved) note();
+            target.end(keep);
+        },
+        apply: (params) => {
+            if (!sameParams(params, target.params)) note();
+            target.apply(params);
+        },
+        update: (change) =>
+            target.update((now) => {
+                const next = change(now);
+                if (!sameParams(next, now)) note();
+                return next;
+            }),
+        recalculate: recalculate
+            ? () => {
+                  note();
+                  recalculate();
+              }
+            : null,
+        closeUp: closeUp
+            ? () => {
+                  note();
+                  closeUp();
+              }
+            : undefined,
     };
 }
 
