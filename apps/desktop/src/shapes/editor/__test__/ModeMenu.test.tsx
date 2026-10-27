@@ -68,9 +68,10 @@ describe("the mode switch", () => {
         expect(names()).toEqual(["Grid", "Outline", "Spread"]);
     });
 
-    it("pictures this shape in each mode: Grid fills the middle, Outline leaves it empty", () => {
-        const box = drawBox({ x: 0, y: 0 }, { x: 60, y: 40 }, 12, env);
-        shown(boxTool, box, vi.fn(), 12);
+    it("pictures an example of each mode, whatever the shape: Grid fills the middle, Outline leaves it empty", () => {
+        // A 4 × 2 of 8 is all edge: its own Grid and Outline would look the same
+        const box = drawBox({ x: 0, y: 0 }, { x: 40, y: 20 }, 8, env);
+        shown(boxTool, box, vi.fn(), 8);
         const dots = (mode: string) => {
             const svg = screen.getByTestId(`shape-mode-preview-${mode}`);
             expect(svg).toHaveAttribute("data-spots", "12");

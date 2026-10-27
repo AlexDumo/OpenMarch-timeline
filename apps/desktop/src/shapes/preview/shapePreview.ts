@@ -155,27 +155,62 @@ function fitToView(
 /** A mode's picture, in the mode menu (#435): wider than tall, as the menu's rows are */
 export const MODE_PREVIEW = { width: 24, height: 16 } as const;
 
+/**
+ * How many spots a mode's picture shows: enough that a box's Grid has a middle row its Outline
+ * leaves empty (4 × 3 against 10 round the edge)
+ */
+const MODE_SPOTS = 12;
+
 export interface ModePreview extends ShapePreview {
-    /** The dots' radius, in picture units: smaller as the spots crowd together */
+    /** The dots' radius, in picture units */
     readonly radius: number;
 }
 
+const MODE_PREVIEWS = new WeakMap<
+    AnyToolKind,
+    Map<DistributionMode, ModePreview | null>
+>();
+
 /**
- * The shape as it is, filled in `mode` (#435): its own spots and outline laid out as picking that
- * mode would, fitted into {@link MODE_PREVIEW}. Drawn from the kind's geometry, so a circle's Grid
- * looks like a circle's. Null when the kind can't be filled that way.
+ * An example of a shape of `kind` filled in `mode` (#435), fitted into {@link MODE_PREVIEW}: a
+ * shape a little wider than deep with {@link MODE_SPOTS} spots, not the shape being edited, so
+ * the three modes always look different (owner: a 4 × 2 of 8 is all edge, and its Grid and
+ * Outline looked the same). Drawn from the kind's geometry, so a circle's examples are circles.
+ * Null when the kind can't be filled that way. The same kind and mode give the same picture.
  */
 export function modePreview(
     kind: AnyToolKind,
-    params: unknown,
-    n: number,
     mode: DistributionMode,
-    env: ToolEnv,
+): ModePreview | null {
+    let byMode = MODE_PREVIEWS.get(kind);
+    if (!byMode) MODE_PREVIEWS.set(kind, (byMode = new Map()));
+    if (byMode.has(mode)) return byMode.get(mode)!;
+    const preview = drawMode(kind, mode);
+    byMode.set(mode, preview);
+    return preview;
+}
+
+function drawMode(
+    kind: AnyToolKind,
+    mode: DistributionMode,
 ): ModePreview | null {
     if (!kind.closed?.modes.includes(mode)) return null;
-    const filled = withMode(kind, params, n, mode, env);
+    const n = MODE_SPOTS;
+    const params = kind.fromFrame(
+        {
+            center: { x: 0, y: 0 },
+            halfWidth: 6,
+            halfDepth: 4,
+            rotation: 0,
+            flipX: false,
+            flipY: false,
+        },
+        n,
+        ENV,
+    );
+    const filled = withMode(kind, params, n, mode, ENV);
     const spots = kind.shape
-        .generate(filled, n, { stepPx: env.stepPx, snapPoint: env.gridSnap })
+        .generate(filled, n, CTX)
         .map(({ x, y }): XY => ({ x, y }));
     if (spots.length === 0) return null;
     const outline = kind.outline?.(filled, n) ?? null;
@@ -191,8 +226,6 @@ export function modePreview(
 
 /** Half the closest two dots' distance, kept between a speck and a clear dot */
 function dotRadius(spots: readonly XY[]): number {
-    // Many marchers make specks anyway: no need to measure them all
-    if (spots.length > 200) return 0.4;
     let closest = Infinity;
     for (let i = 0; i < spots.length; i++)
         for (let j = i + 1; j < spots.length; j++)

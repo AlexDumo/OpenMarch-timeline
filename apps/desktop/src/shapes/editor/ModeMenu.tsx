@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import clsx from "clsx";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon } from "@phosphor-icons/react";
@@ -17,7 +17,7 @@ const modeLabel = (mode: DistributionMode) =>
 /**
  * How the shape is filled (spec #385): Grid, Outline or Spread, first on the floating editor's
  * second row (#435). A menu like the layout menu (owner): its button names the mode, and each row
- * shows this shape filled that way, drawn from its own geometry, beside the mode's name. Only the
+ * shows an example of the kind filled that way beside the mode's name (`modePreview`). Only the
  * kind's own modes show, and nothing while it has one. Picking one is one change of the shape
  * (one undo step, or one save for a placed shape).
  */
@@ -107,13 +107,7 @@ export function ModeMenu({
                                         : "hover:text-accent",
                                 )}
                             >
-                                <ModePicture
-                                    kind={target.kind}
-                                    params={target.params}
-                                    n={target.spots}
-                                    mode={mode}
-                                    envFor={envFor}
-                                />
+                                <ModePicture kind={target.kind} mode={mode} />
                                 <span>{modeLabel(mode)}</span>
                             </button>
                         ))}
@@ -124,26 +118,15 @@ export function ModeMenu({
     );
 }
 
-/** This shape filled in `mode`, as small dots inside its outline (`modePreview`) */
+/** An example of `kind` filled in `mode`, as small dots inside its outline (`modePreview`) */
 function ModePicture({
     kind,
-    params,
-    n,
     mode,
-    envFor,
 }: {
     kind: AnyToolKind;
-    params: unknown;
-    n: number;
     mode: DistributionMode;
-    envFor: () => ToolEnv | null;
 }) {
-    // envFor reads the field as it is now; the shape is what changes the picture
-    const preview = useMemo(() => {
-        const env = envFor();
-        return env && modePreview(kind, params, n, mode, env);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [kind, params, n, mode]);
+    const preview = modePreview(kind, mode);
     const { width, height } = MODE_PREVIEW;
     return (
         <svg
