@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { fieldToFrame, frameToField } from "../../frame/frame";
 import {
+    boxCorners,
     boxFrame,
     boxHandlePoint,
     drawBox,
@@ -123,7 +125,7 @@ describe("stretching a box onto a line", () => {
         onHalves(stretch(three, 3, "e", { x: 83, y: -100 }).across);
     });
 
-    it("doesn't pull with Alt or Shift, or on a box turned 45°", () => {
+    it("doesn't pull with Alt or Shift, or a 45° box with no corner near a line", () => {
         const alt = stretch(
             row(7),
             7,
@@ -236,5 +238,135 @@ describe("drawing a box onto a line", () => {
             env({ snap: false }),
         )!;
         expect(Math.abs(alt.across - (8 / 3) * STEP)).toBeGreaterThan(1e-3);
+    });
+});
+
+describe("stretching a turned box onto a line (#446)", () => {
+    const N = 12;
+    /** 4 files by 3 ranks, 2 steps apart, turned `degrees`, own corner `own` at field `at` */
+    const turned = (degrees: number, own: XY, at: XY): BoxParams => {
+        const p: BoxParams = {
+            center: { x: 0, y: 0 },
+            rotation: (degrees * Math.PI) / 180,
+            files: 4,
+            across: 2 * STEP,
+            deep: 2 * STEP,
+        };
+        const c = frameToField(boxFrame(p, N), own);
+        return { ...p, center: { x: at.x - c.x, y: at.y - c.y } };
+    };
+    // Own half sizes: 3 gaps × 20 across, 2 × 20 deep
+    const HW = 30;
+    const HD = 20;
+    /** Where own point `own` of `p` is on the field */
+    const field = (p: BoxParams, own: XY) => frameToField(boxFrame(p, N), own);
+    /** The own point of `p` a field point `at` is, worked out on its frame */
+    const ownOf = (p: BoxParams, at: XY) => fieldToFrame(boxFrame(p, N), at);
+    const hasCorner = (p: BoxParams, at: Partial<XY>) =>
+        boxCorners(p, N).some(
+            (c) =>
+                (at.x === undefined || Math.abs(c.x - at.x) < 1e-9) &&
+                (at.y === undefined || Math.abs(c.y - at.y) < 1e-9),
+        );
+    const sameCorner = (p: BoxParams, at: XY) =>
+        expect(hasCorner(p, at)).toBe(true);
+
+    it("a 15° box's east handle lands its corner on a yard line, the west side staying", () => {
+        // Its back-east corner 4 short of the 50
+        const p = turned(15, { x: HW, y: -HD }, { x: 76, y: -150 });
+        const west = [
+            field(p, { x: -HW, y: -HD }),
+            field(p, { x: -HW, y: HD }),
+        ];
+        // The east edge where the corner is on the 50, then 1 short of it
+        const u = field(p, { x: HW + 1, y: -HD }).x - 76;
+        const onLine = HW + 4 / u;
+        const to = field(p, { x: onLine - 1, y: 0 });
+        const out = stretch(p, N, "e", to);
+        expect(hasCorner(out, { x: 80 })).toBe(true);
+        for (const w of west) sameCorner(out, w);
+        exact(out.rotation, p.rotation);
+        // Spacing is exactly what that takes
+        exact(out.across, (onLine + HW) / 3);
+    });
+
+    it("a 30° box's back handle lands a corner on the back hash", () => {
+        const p = turned(30, { x: HW, y: -HD }, { x: 40, y: -277 });
+        const front = [field(p, { x: -HW, y: HD }), field(p, { x: HW, y: HD })];
+        // Each unit the back edge moves back (own −y) moves that corner's y by dy
+        const dy = field(p, { x: HW, y: -HD - 1 }).y - -277;
+        const onLine = -HD - -3 / dy;
+        const to = field(p, { x: 0, y: onLine + 1 });
+        const out = stretch(p, N, "n", to);
+        expect(hasCorner(out, { y: -280 })).toBe(true);
+        for (const f of front) sameCorner(out, f);
+        exact(out.deep, (HD - onLine) / 2);
+    });
+
+    it("a 15° box's corner handle lands its corner on a yard line and the back hash at once", () => {
+        const p = turned(15, { x: HW, y: -HD }, { x: 77.5, y: -277.5 });
+        const anchor = field(p, { x: -HW, y: HD });
+        // The own spot the crossing is, then dragged a little short of it
+        const cross = ownOf(p, { x: 80, y: -280 });
+        const to = field(p, { x: cross.x - 0.6, y: cross.y + 0.6 });
+        const out = stretch(p, N, "ne", to);
+        sameCorner(out, { x: 80, y: -280 });
+        sameCorner(out, anchor);
+        exact(out.across, (cross.x + HW) / 3);
+        exact(out.deep, (HD - cross.y) / 2);
+    });
+
+    it("steps by half steps away from lines, and Alt doesn't pull", () => {
+        const p = turned(15, { x: HW, y: -HD }, { x: 50, y: -150 });
+        const to = field(p, { x: HW + 9, y: 0 });
+        onHalves(stretch(p, N, "e", to).across);
+        const near = turned(15, { x: HW, y: -HD }, { x: 76, y: -150 });
+        const u = field(near, { x: HW + 1, y: -HD }).x - 76;
+        const t = field(near, { x: HW + 4 / u - 1, y: 0 });
+        expect(
+            hasCorner(stretch(near, N, "e", t, { snap: false }), { x: 80 }),
+        ).toBe(false);
+    });
+
+    describe("at a shallow turn, an edge running nearly along a hash (review of #448)", () => {
+        const N5 = 10;
+        // 5 files by 2 ranks, 2 steps apart: own half sizes 40 across, 10 deep
+        const W = 40;
+        const D = 10;
+        for (const degrees of [15, 5, 1]) {
+            it(`at ${degrees}°, travels no farther than the radius to catch it, and every half step stays reachable`, () => {
+                const base: BoxParams = {
+                    center: { x: 0, y: 0 },
+                    rotation: (degrees * Math.PI) / 180,
+                    files: 5,
+                    across: 2 * STEP,
+                    deep: 2 * STEP,
+                };
+                const c = frameToField(boxFrame(base, N5), { x: W, y: -D });
+                // Its back-east corner 1 from the front hash
+                const p = {
+                    ...base,
+                    center: { x: 40 - c.x, y: -281 - c.y },
+                };
+                const radius = 5; // 6 px, capped at a quarter of 4 gaps' half step
+                const seen = new Set<string>();
+                for (let ex = W - 20; ex <= W + 20; ex += 0.05) {
+                    const to = frameToField(boxFrame(p, N5), { x: ex, y: 0 });
+                    const out = stretch(p, N5, "e", to);
+                    const edge = -W + 4 * out.across;
+                    const onHalves =
+                        Math.abs(
+                            out.across / half - Math.round(out.across / half),
+                        ) < 1e-9;
+                    if (!onHalves)
+                        expect(Math.abs(edge - ex)).toBeLessThanOrEqual(
+                            radius + 1e-6,
+                        );
+                    seen.add(out.across.toFixed(6));
+                }
+                for (const across of [15, 20, 25])
+                    expect(seen.has(across.toFixed(6)), `${across}`).toBe(true);
+            });
+        }
     });
 });

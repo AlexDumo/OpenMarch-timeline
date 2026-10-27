@@ -130,10 +130,11 @@ export function frameDrawing(
 }
 
 /**
- * While a draw, a handle drag or a move has the shape's edges on the field's lines (#425, #444;
- * a move's center line too): a guide along each, named as the coordinate sheet writes it (#427),
- * the shape's sides on it drawn thicker and its spots tinted. Nothing during any other gesture,
- * or with none.
+ * While a draw, a handle drag or a move has the shape's snap points on the field's lines (#425,
+ * #444, #446): a guide along each, named as the coordinate sheet writes it (#427), the shape's
+ * sides on it drawn thicker, a point on it with no such side ringed, and its spots tinted. The
+ * points are the kind's corners, and its center while it's moved (it's pulled only then).
+ * Nothing during any other gesture, for a kind with no snap points, or with none on a line.
  */
 export function guideDrawing(
     kind: AnyToolKind,
@@ -143,19 +144,21 @@ export function guideDrawing(
     gesture: { readonly type: string } | null | undefined,
     env: ToolEnv,
     field: ShapeField,
-): Pick<FieldModeDrawing, "guides" | "guideEdges" | "onGuides"> {
+): Pick<FieldModeDrawing, "guides" | "guideEdges" | "guideMarks" | "onGuides"> {
     const type = gesture?.type;
     const moving = type === "move" || type === "center";
     if (type !== "draw" && type !== "handle" && !moving) return {};
+    if (!kind.snapPoints) return {};
     const { fieldProperties } = field;
     const { width, height } = fieldProperties;
-    const { guides, edges, on } = edgeGuides(
-        shapeOutline(kind, params, n),
+    const outline = shapeOutline(kind, params, n);
+    const { guides, edges, marks, on } = edgeGuides(
+        outline,
+        // A move lands its center on a line too (#444)
+        moving ? kind.snapPoints(params, n) : outline,
         spots,
         env.fieldLines,
         { width, height },
-        // A move lands its center on a line too (#444)
-        moving ? kind.frameOf(params, n).center : undefined,
     );
     if (guides.length === 0) return {};
     // Named as the coordinate sheet would write a spot on the line (owner, #427)
@@ -163,7 +166,12 @@ export function guideDrawing(
         const label = lineCoordinate(g.axis, g.at);
         return { from: g.from, to: g.to, ...(label ? { label } : {}) };
     });
-    return { guides: named, guideEdges: edges, onGuides: on };
+    return {
+        guides: named,
+        guideEdges: edges,
+        ...(marks.length > 0 ? { guideMarks: marks } : {}),
+        onGuides: on,
+    };
 }
 
 /**

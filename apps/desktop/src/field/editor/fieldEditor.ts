@@ -259,7 +259,8 @@ export type FieldModeDrawing = {
      */
     calm?: boolean;
     /**
-     * While a stretch or a draw has the shape's edge on one of the field's lines (#425): a guide
+     * While a stretch, a draw or a move has the shape's corner, edge or center on one of the
+     * field's lines (#425, #446): a guide
      * along each such line, drawn across the whole canvas
      */
     guides?: readonly {
@@ -270,6 +271,11 @@ export type FieldModeDrawing = {
     }[];
     /** The shape's sides that lie on a guide's line, drawn thicker in the guide's color */
     guideEdges?: readonly { from: FieldPoint; to: FieldPoint }[];
+    /**
+     * The shape's corners or center on a guide's line with no side along it (a turned box's
+     * corner, a center), ringed in the guide's color (#446)
+     */
+    guideMarks?: readonly FieldPoint[];
     /** The spots standing on a guide, tinted */
     onGuides?: readonly FieldPoint[];
 };

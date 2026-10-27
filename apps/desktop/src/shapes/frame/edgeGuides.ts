@@ -13,45 +13,58 @@ export interface EdgeGuide {
 const ON_LINE = 1e-3;
 
 /**
- * The guides while a stretch, a draw or a move has a shape's edges on the field's lines (#425,
- * #444): a line across the field along each line one of the outline's sides lies on (or, for a
- * move, its center), those sides (drawn thicker, so a snapped edge is plain to see: owner on
- * #427), and the spots standing on those lines. A side lies on a line when both its ends do, so a
- * turned shape has none.
+ * The guides while a stretch, a draw or a move has a shape's snap points on the field's lines
+ * (#425, #444, #446): a line across the field along each line one of `points` (the shape's
+ * corners, and its center while it's moved) lies on; the outline's sides lying whole on such a
+ * line (drawn thicker, so a snapped edge is plain to see: owner on #427); the points on a line
+ * that aren't on a thick side (a turned box's corner, a center: ringed instead, #446); and the
+ * spots standing on those lines.
  */
 export function edgeGuides(
     outline: readonly XY[] | null,
+    points: readonly XY[],
     spots: readonly XY[],
     lines: FieldLines | undefined,
     field: { readonly width: number; readonly height: number },
-    /** A moved shape's center (#444): a guide along a line it's on, for a shape square to the field */
-    center?: XY,
-): { guides: EdgeGuide[]; edges: { from: XY; to: XY }[]; on: XY[] } {
-    if (!outline || !lines || outline.length < 2)
-        return { guides: [], edges: [], on: [] };
+): {
+    guides: EdgeGuide[];
+    edges: { from: XY; to: XY }[];
+    marks: XY[];
+    on: XY[];
+} {
+    const none = { guides: [], edges: [], marks: [], on: [] };
+    if (!lines || points.length === 0) return none;
     const near = (v: number, line: number) => Math.abs(v - line) < ON_LINE;
+    const onX = (p: XY) => lines.x.find((line) => near(p.x, line));
+    const onY = (p: XY) => lines.y.find((line) => near(p.y, line));
     const xs = new Set<number>();
     const ys = new Set<number>();
-    const edges: { from: XY; to: XY }[] = [];
-    outline.forEach((a, i) => {
-        const b = outline[(i + 1) % outline.length]!;
-        let on = false;
-        for (const line of lines.x)
-            if (near(a.x, line) && near(b.x, line)) {
-                xs.add(line);
-                on = true;
-            }
-        for (const line of lines.y)
-            if (near(a.y, line) && near(b.y, line)) {
-                ys.add(line);
-                on = true;
-            }
-        if (on) edges.push({ from: a, to: b });
-    });
-    if (center && squareSides(outline)) {
-        for (const line of lines.x) if (near(center.x, line)) xs.add(line);
-        for (const line of lines.y) if (near(center.y, line)) ys.add(line);
+    for (const p of points) {
+        const x = onX(p);
+        const y = onY(p);
+        if (x !== undefined) xs.add(x);
+        if (y !== undefined) ys.add(y);
     }
+    if (xs.size === 0 && ys.size === 0) return none;
+    const edges: { from: XY; to: XY }[] = [];
+    const ring = outline ?? [];
+    const same = (a: number | undefined, b: number | undefined) =>
+        a !== undefined && a === b;
+    if (ring.length >= 2)
+        ring.forEach((a, i) => {
+            const b = ring[(i + 1) % ring.length]!;
+            if (same(onX(a), onX(b)) || same(onY(a), onY(b)))
+                edges.push({ from: a, to: b });
+        });
+    const onEdge = (p: XY) =>
+        edges.some(
+            (e) =>
+                Math.hypot(e.from.x - p.x, e.from.y - p.y) < ON_LINE ||
+                Math.hypot(e.to.x - p.x, e.to.y - p.y) < ON_LINE,
+        );
+    const marks = points.filter(
+        (p) => (onX(p) !== undefined || onY(p) !== undefined) && !onEdge(p),
+    );
     const byValue = (a: number, b: number) => a - b;
     const guides = [
         ...[...xs].sort(byValue).map((x) => ({
@@ -72,56 +85,57 @@ export function edgeGuides(
             [...xs].some((x) => near(p.x, x)) ||
             [...ys].some((y) => near(p.y, y)),
     );
-    return { guides, edges, on };
+    return { guides, edges, marks, on };
 }
 
 /**
- * How far a moved shape shifts so its side or center line nearest one of the field's lines lands
- * on it (#444), x and y apart: null on an axis where nothing is within `radius`. Only a shape
- * whose sides all run along the field's axes (a box square to the field, or turned a quarter) is
- * pulled, by those sides and its center; a side wins over the center at the same distance.
+ * How far a moved shape shifts so its snap point nearest one of the field's lines lands on it
+ * (#444, #446), x and y apart: null on an axis where nothing is within `radius`. A point within
+ * reach of a line each way lands on their crossing, the nearest such point winning; otherwise
+ * each axis takes its nearest point, an earlier point winning a tie (a corner over the center).
+ * For a box square to the field a corner on a line is a side on it, so this is #444's side rule.
  */
 export function linePull(
-    outline: readonly XY[],
-    center: XY,
+    points: readonly XY[],
     lines: FieldLines,
     radius: number,
 ): { x: number | null; y: number | null } {
-    const sides = squareSides(outline);
-    if (!sides) return { x: null, y: null };
-    const { xs, ys } = sides;
-    const nearest = (values: number[], toward: readonly number[]) => {
+    const nearest = (v: number, toward: readonly number[]) => {
         let best: number | null = null;
-        for (const v of values)
-            for (const line of toward) {
-                const d = line - v;
-                if (Math.abs(d) > radius) continue;
-                if (best === null || Math.abs(d) < Math.abs(best) - ON_LINE)
-                    best = d;
-            }
+        for (const line of toward) {
+            const d = line - v;
+            if (Math.abs(d) > radius) continue;
+            if (best === null || Math.abs(d) < Math.abs(best) - ON_LINE)
+                best = d;
+        }
         return best;
     };
-    return {
-        x: nearest([...xs, center.x], lines.x),
-        y: nearest([...ys, center.y], lines.y),
+    const each = points.map((p) => ({
+        x: nearest(p.x, lines.x),
+        y: nearest(p.y, lines.y),
+    }));
+    let crossing: { x: number; y: number } | null = null;
+    for (const d of each)
+        if (
+            d.x !== null &&
+            d.y !== null &&
+            (crossing === null ||
+                Math.hypot(d.x, d.y) <
+                    Math.hypot(crossing.x, crossing.y) - ON_LINE)
+        )
+            crossing = { x: d.x, y: d.y };
+    if (crossing) return crossing;
+    const best = (axis: "x" | "y") => {
+        let out: number | null = null;
+        for (const d of each) {
+            const v = d[axis];
+            if (
+                v !== null &&
+                (out === null || Math.abs(v) < Math.abs(out) - ON_LINE)
+            )
+                out = v;
+        }
+        return out;
     };
-}
-
-/**
- * Where the outline's sides run, when all of them run along the field's axes: x for a side front
- * to back, at its x. Null for a turned shape, or a curve.
- */
-function squareSides(
-    outline: readonly XY[],
-): { xs: number[]; ys: number[] } | null {
-    if (outline.length < 2) return null;
-    const xs: number[] = [];
-    const ys: number[] = [];
-    for (const [i, a] of outline.entries()) {
-        const b = outline[(i + 1) % outline.length]!;
-        if (Math.abs(a.x - b.x) < ON_LINE) xs.push(a.x);
-        else if (Math.abs(a.y - b.y) < ON_LINE) ys.push(a.y);
-        else return null;
-    }
-    return { xs, ys };
+    return { x: best("x"), y: best("y") };
 }

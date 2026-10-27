@@ -213,6 +213,8 @@ export type FieldTestShapeOverlay = {
         from: { x: number; y: number };
         to: { x: number; y: number };
     }[];
+    /** The shape's corners or center on a guide with no side along it, ringed, field units (#446). */
+    guideMarks: { x: number; y: number }[];
     /** The spots standing on a guide, tinted, field units (#425). */
     onGuides: { x: number; y: number }[];
 };

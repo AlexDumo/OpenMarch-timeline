@@ -232,8 +232,9 @@ function dragged(
 }
 
 /**
- * `base` moved by `delta`, a side or its center line landing on a field line within the pull
- * radius (#444), as a stretch's edge does (#425); the kind's own grid snap on an axis with none.
+ * `base` moved by `delta`, one of its snap points (a corner or the center, at any turn) landing
+ * on a field line within the pull radius (#444, #446), or on two lines' crossing, as a stretch's
+ * edge does (#425); the kind's own grid snap on an axis with none.
  * The radius is never more than a quarter step (half the grid's detent), so every half step near
  * a line can still be reached: a stretch's quarter of its detent (#425) would be under a pixel for
  * a move at the fitted zoom. Alt (no snap) doesn't pull.
@@ -247,11 +248,11 @@ function moveOntoLines(
 ): unknown {
     const snapped = kind.move(base, n, delta, env);
     if (!env.snap || !env.fieldLines) return snapped;
+    if (!kind.snapPoints) return snapped;
     const free = kind.move(base, n, delta, { ...env, snap: false });
     const at = kind.frameOf(free, n).center;
     const pull = linePull(
-        shapeOutline(kind, free, n),
-        at,
+        kind.snapPoints(free, n),
         env.fieldLines,
         Math.min(env.pullRadius ?? 0, env.stepPx / 4),
     );
