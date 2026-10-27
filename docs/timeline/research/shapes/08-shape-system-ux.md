@@ -153,6 +153,13 @@ editing a shape. Owner choice, 2026-10-15.
 
 - It sits under the shape's outline, centered, and moves with the shape. It flips above the
   shape when there's no room below.
+- **Kept in view (#441, owner 2026-10-27, picked in a lab A/B over holding the editor still):**
+  after a discrete edit (a turn, a flip, − / +, a typed or dragged number, the mode or layout,
+  Recalculate, Reshuffle) or the end of a drag on the field, the field glides just far enough to
+  bring the shape's outline and the editor back inside it with 24 px to spare; nothing moves if
+  they're in view. When they no longer fit, it zooms out just enough in the same glide, never in,
+  down to the field's least zoom. Never during a drag; panning or zooming stops the glide;
+  reduced motion jumps.
 - **Changed 2026-10-26 (#429, #435):** one row with no ⋯, and a second row under it for how
   the shape is filled. For a box:
   `− 6 × 2 + │ ↔ 2 ↕ 2 steps 🔗 │ ↻ 0° ⌖▾ ⇋ ⇵ Recalculate │ ⌇ ☆ │ Place`, and under it
