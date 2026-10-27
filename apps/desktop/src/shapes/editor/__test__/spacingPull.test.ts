@@ -4,6 +4,7 @@ import { BOX_PARAMS } from "../../box/boxParams";
 import { boxTool } from "../../box/boxTool";
 import type { ToolEnv } from "../../tool/toolKind";
 import type { XY } from "../../types";
+import { withMode } from "../../distribute/modes";
 import { scrubSpacing, withSpacing } from "../boxEdits";
 
 /**
@@ -158,5 +159,117 @@ describe("dragging a spacing onto a line", () => {
         expect(Math.abs(right - 80)).toBeLessThan(1e-9);
         expect(dragged.across).toBeCloseTo(65 / 3, 9);
         expect(boxFrame(dragged, N).rotation).toBe(0);
+    });
+
+    it("with the ratio lock, never takes the other spacing under half a step, and keeps the ratio (review)", () => {
+        // 4 files 1 step apart, ½ deep, its right edge just past the 80, growing from back-left: a
+        // landing on the 80 would take the spacing just under 1 step, and deep under ½
+        const p: BoxParams = {
+            center: { x: 80.1 - 15, y: -150 },
+            rotation: 0,
+            files: 4,
+            across: STEP,
+            deep: half,
+        };
+        const locked = { ratioLocked: true, pivot: "nw" as const };
+        for (let px = -40; px <= 40; px += 0.25) {
+            const out = drag(p, px, locked);
+            expect(out.deep).toBeGreaterThanOrEqual(half - 1e-9);
+            expect(out.across).toBeGreaterThanOrEqual(half - 1e-9);
+            if (!onHalves(out.across))
+                expect(out.deep / out.across).toBeCloseTo(0.5, 9);
+        }
+    });
+
+    describe("the cases the review probed", () => {
+        const spread = (degrees: number) => {
+            // 6 files by 4 ranks, so the frame is half as wide again as deep, then spread out
+            const files: BoxParams = {
+                center: { x: 30, y: -270 },
+                rotation: (degrees * Math.PI) / 180,
+                files: 6,
+                across: 2 * STEP,
+                deep: 2 * STEP,
+            };
+            return withMode(boxTool, files, 24, "spread", env()) as BoxParams;
+        };
+        const cases: {
+            name: string;
+            p: BoxParams;
+            n?: number;
+            which?: "across" | "deep";
+            over?: Partial<ToolEnv>;
+        }[] = [
+            { name: "nw pivot at 45°", p: turned(45), over: { pivot: "nw" } },
+            {
+                name: "nw pivot at 0°",
+                p: turned(0, { x: 52, y: -273 }),
+                over: { pivot: "nw" },
+            },
+            {
+                name: "a 90° deep drag",
+                p: turned(90, { x: 76, y: -150 }),
+                which: "deep",
+            },
+            {
+                name: "ratio 2:1",
+                p: { ...turned(30), deep: 4 * STEP },
+                over: { ratioLocked: true },
+            },
+            {
+                name: "ratio 1:3",
+                p: { ...turned(30), across: 3 * STEP, deep: STEP },
+                over: { ratioLocked: true },
+            },
+            { name: "a Spread at 37°, centered", p: spread(37), n: 24 },
+            {
+                name: "a Spread at 37°, nw",
+                p: spread(37),
+                n: 24,
+                over: { pivot: "nw" },
+            },
+        ];
+        for (const { name, p, n = N, which = "across", over = {} } of cases)
+            it(`${name}: half steps or a point exactly on a line, the landing point within the radius, nothing under half a step`, () => {
+                const own = (q: BoxParams) =>
+                    which === "across" ? q.across : q.deep;
+                const pts = (q: BoxParams) => boxTool.snapPoints!(q, n);
+                for (let px = -60; px <= 120; px += 0.5) {
+                    const out = scrubSpacing(p, which, px, n, env(over));
+                    expect(out.across).toBeGreaterThanOrEqual(half - 1e-9);
+                    expect(out.deep).toBeGreaterThanOrEqual(half - 1e-9);
+                    if (onHalves(own(out)) || out === p) continue;
+                    expect(pts(out).some(onLine)).toBe(true);
+                    if (over.ratioLocked)
+                        expect(out.deep / out.across).toBeCloseTo(
+                            p.deep / p.across,
+                            9,
+                        );
+                    const free = pts(
+                        withSpacing(
+                            p,
+                            which,
+                            own(p) / STEP + (px / 8) * 0.5,
+                            n,
+                            env({ ...over, snap: false }),
+                            true,
+                        ),
+                    );
+                    // The point that landed moved no more than the radius; the spacing never more
+                    // than a quarter of a half step, so points farther from the pivot stay close too
+                    const landed = pts(out)
+                        .map((q, k) => ({ q, k }))
+                        .filter(({ q }) => onLine(q))
+                        .map(({ q, k }) =>
+                            Math.hypot(q.x - free[k]!.x, q.y - free[k]!.y),
+                        );
+                    // (the reference keeps a typed spacing to 600ths of a step, hence the slack)
+                    expect(Math.min(...landed)).toBeLessThanOrEqual(6 + 0.05);
+                    const raw = own(p) + (px / 8) * 0.5 * STEP;
+                    expect(Math.abs(own(out) - raw)).toBeLessThanOrEqual(
+                        half / 4 + 1e-2,
+                    );
+                }
+            });
     });
 });

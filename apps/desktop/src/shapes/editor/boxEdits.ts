@@ -357,7 +357,8 @@ function exactSpacing(
  * with none near. Grown from the pivot, each point moves in a straight line as the spacing
  * changes, so each line gives one spacing. Near is the point's travel on screen, never more than
  * a quarter of how far it moves per half step of spacing, so the half steps stay reachable and a
- * point moving nearly along a line doesn't jump (#448). Never under half a step.
+ * point moving nearly along a line doesn't jump (#448). Never under half a step, the ratio lock's
+ * other spacing included.
  */
 export function spacingOnLine(
     base: BoxParams,
@@ -374,6 +375,21 @@ export function spacingOnLine(
             exactSpacing(base, which, value, spots, { ...env, snap: false }),
             spots,
         );
+    // The spacing, and with the ratio lock the other one it moves exactly, never under half a
+    // step: a landing that would take either below is left out, so the ratio stays (review)
+    const ratio =
+        env.ratioLocked && base.across > 0 && base.deep > 0
+            ? base.deep / base.across
+            : null;
+    const atLeastHalf = (value: number) => {
+        const other =
+            ratio === null
+                ? half
+                : which === "across"
+                  ? value * ratio
+                  : value / ratio;
+        return value >= half - 1e-9 && other >= half - 1e-9;
+    };
     const s1 = Math.max(raw, half);
     const s2 = s1 + env.stepPx;
     const at1 = free(s1);
@@ -394,7 +410,7 @@ export function spacingOnLine(
             for (const line of lines[axis]) {
                 const value = s1 + (line - p[axis]) / slope[axis];
                 const travel = Math.abs(value - raw) * speed;
-                if (travel > radius + 1e-9 || value < half - 1e-9) continue;
+                if (travel > radius + 1e-9 || !atLeastHalf(value)) continue;
                 if (best === null || travel < best.travel - 1e-9)
                     best = { value, travel };
             }
