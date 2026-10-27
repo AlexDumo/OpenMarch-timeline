@@ -2,13 +2,15 @@ import { resizeCursor } from "../frame/frame";
 import type { ToolEnv, ToolKind } from "../tool/toolKind";
 import { distributionFor, type Distribution } from "../distribute/distribution";
 import { layoutCatalogue, resolveLayout } from "../distribute/layouts";
-import { nearestSides, OUTLINE_MIN } from "../distribute/outline";
+import { acrossRange, nearestSides, OUTLINE_MIN } from "../distribute/outline";
 import { BOX_PARAMS } from "./boxParams";
 import { boxRegion, boxShape } from "./boxShape";
 import {
     boxBlock,
     filesIn,
     spreadIn,
+    SPLIT_BAND,
+    halfStep,
     boxDistribution,
     filesOf,
     grownFromPivot,
@@ -105,17 +107,19 @@ export const boxTool: ToolKind<BoxParams> = {
                 if (kept) return kept;
             }
             const next: BoxParams = { ...flat, distribution: filled };
-            // Out of Spread: the drawn box stays, the lines or the outline refitted to it (#439)
-            if (was === "spread" && filled.mode === "files")
+            // Into another mode, the drawn box stays: its center, and its size as near as
+            // half-step intervals allow (#439, #449)
+            if (was !== "files" && filled.mode === "files")
                 return filesIn(
                     params,
                     withFileCount(next, filled.layout.files),
                     n,
                     env,
                 );
-            if (was === "spread" && filled.mode === "outline")
+            if (was !== "outline" && filled.mode === "outline")
                 return outlineIn(params, next, n, filled, env);
-            // A new mode resizes the shape: it grows from the pivot
+            // The same mode laid out another way (a layout, a gap), or a box with no frame to
+            // keep: it grows from the pivot
             return grownFromPivot(
                 params,
                 filled.mode === "files"
@@ -133,9 +137,11 @@ export const boxTool: ToolKind<BoxParams> = {
 /**
  * `next` (the box with its new distribution) sized for Outline. One already in Outline keeps its
  * spots across. Otherwise it keeps the space the box takes up (owner, lab feedback 2026-10-23:
- * designers care about the space, then adjust the interval): the sides with the space's
- * proportions, each interval refitted to it in half steps. A single rank or file has no space
- * to keep, so it keeps its intervals and goes round as wide (or deep) as it can.
+ * designers care about the space, then adjust the interval; #449: every switch keeps the frame):
+ * the sides with the space's proportions, each interval refitted to it in half steps; or, when
+ * those miss the frame by more than half a step a side, of the splits whose cells are within 2×
+ * of square, the one whose half-step intervals come nearest it. A single rank or file
+ * has no space to keep, so it keeps its intervals and goes round as wide (or deep) as it can.
  */
 function outlineIn(
     params: BoxParams,
@@ -152,10 +158,25 @@ function outlineIn(
         const aspect = halfWidth / params.across / (halfDepth / params.deep);
         return withFileCount(next, nearestSides(n, aspect, side).a + 1);
     }
-    const { a, b } = nearestSides(n, halfWidth / halfDepth, side);
-    return {
-        ...withFileCount(next, a + 1),
-        across: snapInterval((2 * halfWidth) / a, env),
-        deep: snapInterval((2 * halfDepth) / b, env),
+    const width = 2 * halfWidth;
+    const depth = 2 * halfDepth;
+    const fit = ({ a, b }: { a: number; b: number }) => {
+        const across = snapInterval(width / a, env);
+        const deep = snapInterval(depth / b, env);
+        return {
+            params: { ...withFileCount(next, a + 1), across, deep },
+            off: Math.abs(a * across - width) + Math.abs(b * deep - depth),
+            square: Math.abs(Math.log(across / deep)),
+        };
     };
+    let best = fit(nearestSides(n, width / depth, side));
+    // The frame's proportions, when they keep it within half a step a side
+    if (best.off <= 2 * halfStep(env) + 1e-9) return best.params;
+    const { min, max } = acrossRange(n, side);
+    for (let a = min; a <= max; a++) {
+        const f = fit({ a, b: Math.ceil(n / 2) - a });
+        if (f.square > SPLIT_BAND) continue;
+        if (best.square > SPLIT_BAND || f.off < best.off - 1e-9) best = f;
+    }
+    return best.params;
 }

@@ -2886,6 +2886,53 @@ test("change: a Spread box's handle drags its side where the pointer goes, the o
     ).toBeLessThan(2 * field.pixelsPerStep);
 });
 
+test("change: every mode switch keeps the box drawn: its center exactly, its sides by where they were (#449)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { grid: field } = await drawBox(show);
+    const half = field.pixelsPerStep / 2;
+    const bounds = async () => {
+        const o = (await shapeOverlay(page))!.outline!;
+        const xs = o.map((p) => p.x);
+        const ys = o.map((p) => p.y);
+        return {
+            left: Math.min(...xs),
+            right: Math.max(...xs),
+            top: Math.min(...ys),
+            bottom: Math.max(...ys),
+        };
+    };
+    const drawn = await bounds();
+    for (const mode of [
+        "outline",
+        "files",
+        "spread",
+        "outline",
+        "spread",
+        "files",
+    ] as const) {
+        await pickMode(page, mode);
+        const now = await bounds();
+        for (const side of ["left", "right", "top", "bottom"] as const)
+            expect(
+                Math.abs(now[side] - drawn[side]),
+                `${mode}: ${side}`,
+            ).toBeLessThanOrEqual(
+                // Each switch keeps the box within half a step; a few in a row stay near it
+                2 * half + 0.01,
+            );
+        expect((now.left + now.right) / 2).toBeCloseTo(
+            (drawn.left + drawn.right) / 2,
+            6,
+        );
+        expect((now.top + now.bottom) / 2).toBeCloseTo(
+            (drawn.top + drawn.bottom) / 2,
+            6,
+        );
+    }
+});
+
 test("change: Reshuffle's caret opens the spread's seed, and typing an earlier seed brings that spread back as one undo step (#437)", async ({
     show,
 }) => {

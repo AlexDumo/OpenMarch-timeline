@@ -90,7 +90,7 @@ const SPLIT_HYSTERESIS = 0.15;
  * How far, in log aspect, a split's cells may be from square and still count as fitting the
  * drawn rectangle: within 2× either way. Among the splits that fit, the fewest empty spots wins.
  */
-const SPLIT_BAND = Math.log(2);
+export const SPLIT_BAND = Math.log(2);
 
 export const filesOf = (p: BoxSize): number => Math.max(1, Math.round(p.files));
 
@@ -262,10 +262,11 @@ export function spreadIn(
 }
 
 /**
- * `next` (a spread switched to Files) in the space the spread took up (#439): of the file counts
- * whose cells are within 2× of square, the one whose half-step intervals come nearest the frame's
- * size (its own file count on a tie, so Grid → Spread → Grid is the box it was). A single file or
- * rank keeps its interval that way.
+ * `next` (a box switched to Files from another mode) in the space it took up (#439, #449): its
+ * own file count when that keeps the frame within half a step a side (so Grid → Spread → Grid is
+ * the box it was); otherwise, of the file counts whose cells are within 2× of square, the one
+ * whose half-step intervals come nearest the frame's size. A single file or rank keeps its
+ * interval that way.
  */
 export function filesIn(
     params: BoxParams,
@@ -291,6 +292,8 @@ export function filesIn(
         };
     };
     let best = fit(filesOf(next));
+    // Its own file count, when that keeps the frame within half a step a side
+    if (best.off <= 2 * halfStep(env) + 1e-9) return best.params;
     for (let files = 1; files <= Math.max(1, n); files++) {
         const f = fit(files);
         if (f.square > SPLIT_BAND) continue;
