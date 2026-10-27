@@ -101,11 +101,11 @@ export const boxTool: ToolKind<BoxParams> = {
                 // Reshuffle and a typed seed: the same frame, another layout in it
                 if (was === "spread") return next;
                 // Spread fills the frame the box had (#439); a single rank or file has none
-                const kept = spreadIn(params, next, n);
+                const kept = spreadIn(params, next, n, env);
                 if (kept) return kept;
             }
             const next: BoxParams = { ...flat, distribution: filled };
-            // Out of Spread into Files: the space the spread took up, refitted (#439)
+            // Out of Spread: the drawn box stays, the lines or the outline refitted to it (#439)
             if (was === "spread" && filled.mode === "files")
                 return filesIn(
                     params,
@@ -113,6 +113,8 @@ export const boxTool: ToolKind<BoxParams> = {
                     n,
                     env,
                 );
+            if (was === "spread" && filled.mode === "outline")
+                return outlineIn(params, next, n, filled, env);
             // A new mode resizes the shape: it grows from the pivot
             return grownFromPivot(
                 params,

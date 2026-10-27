@@ -228,3 +228,116 @@ describe("a mode switch keeps the frame the designer drew (#439)", () => {
         });
     });
 });
+
+describe("a spread's interval is never under half a step (#439 review)", () => {
+    it("a mode switch into a frame too small grows it from its center just enough", () => {
+        // 48 marchers in a box drawn at half-step intervals: too tight to spread at ½ step
+        const grid = drawnIn(boxTool, 48, { x: 0, y: 0 }, { x: 35, y: 15 });
+        const was = boxTool.frameOf(grid.params as BoxParams, 48);
+        const spread = switched(grid, "spread");
+        const p = spread.params as BoxParams;
+        const now = boxTool.frameOf(p, 48);
+        expect(p.across).toBeCloseTo(half, 9);
+        expect(now.center).toEqual(was.center);
+        expect(now.halfWidth).toBeGreaterThan(was.halfWidth);
+        expect(now.halfWidth / now.halfDepth).toBeCloseTo(
+            was.halfWidth / was.halfDepth,
+            9,
+        );
+        expect(closestOf(slotsOf(spread, ctx))).toBeGreaterThanOrEqual(
+            half * (1 - 1e-6),
+        );
+    });
+
+    it("a handle stops where the interval would go under half a step", () => {
+        let s = spreadDrawn(boxTool, 48, { x: 0, y: 0 }, { x: 90, y: 40 });
+        const e = boxTool.handles(s.params, 48).find((h) => h.key === "e")!;
+        s = press(s, e.at, env);
+        // To just inside the opposite side: far smaller than 48 fit at half a step
+        const f = boxTool.frameOf(s.params, 48);
+        s = pointerMove(
+            s,
+            { x: f.center.x - f.halfWidth + half, y: e.at.y },
+            env,
+        );
+        s = release(s, ctx);
+        const p = s.params as BoxParams;
+        expect(p.across).toBeGreaterThanOrEqual(half * (1 - 1e-6));
+        expect(p.across).toBeLessThan(half * 1.01);
+        expect(closestOf(slotsOf(s, ctx))).toBeGreaterThanOrEqual(
+            p.across * (1 - 1e-6),
+        );
+    });
+});
+
+describe("a spread's chip (#439 review)", () => {
+    const spacing = boxTool.params.find((q) => q.key === "across")!;
+
+    it("keeps the frame when the interval shown is typed back", () => {
+        const s = spreadDrawn(boxTool, 24, { x: 0, y: 0 }, { x: 90, y: 40 });
+        const shown = spacing.display(s.params, 24, STEP);
+        expect(spacing.type!(s.params, 24, shown, env)).toBe(s.params);
+    });
+
+    it("scales the frame about its pivot exactly for a typed interval", () => {
+        const s = spreadDrawn(boxTool, 24, { x: 0, y: 0 }, { x: 90, y: 40 });
+        const was = boxTool.frameOf(s.params, 24);
+        const p = spacing.type!(s.params, 24, "3", env) as BoxParams;
+        const now = boxTool.frameOf(p, 24);
+        expect(p.across).toBeCloseTo(3 * STEP, 9);
+        expect(now.center.x).toBeCloseTo(was.center.x, 9);
+        expect(now.center.y).toBeCloseTo(was.center.y, 9);
+        expect(now.halfWidth / now.halfDepth).toBeCloseTo(
+            was.halfWidth / was.halfDepth,
+            9,
+        );
+    });
+});
+
+describe("out of Spread, the drawn box stays (#439 review)", () => {
+    /** A spread box `width` × `depth` field units at the center of the drawn one */
+    function spreadSized(n: number, width: number) {
+        let s = spreadDrawn(boxTool, n, { x: 0, y: 0 }, { x: 90, y: 40 });
+        const e = boxTool.handles(s.params, n).find((h) => h.key === "e")!;
+        const f = boxTool.frameOf(s.params, n);
+        s = press(s, e.at, env);
+        s = pointerMove(
+            s,
+            { x: f.center.x - f.halfWidth + width, y: e.at.y },
+            env,
+        );
+        return release(s, ctx);
+    }
+
+    it("Spread → Outline keeps its center, and its size to the half steps", () => {
+        const s = spreadSized(20, 145);
+        const was = boxTool.frameOf(s.params as BoxParams, 20);
+        const out = switched(s, "outline");
+        const now = boxTool.frameOf(out.params as BoxParams, 20);
+        expect(now.center).toEqual(was.center);
+        expect(Math.abs(now.halfWidth - was.halfWidth)).toBeLessThanOrEqual(
+            half * 2,
+        );
+        expect(Math.abs(now.halfDepth - was.halfDepth)).toBeLessThanOrEqual(
+            half * 2,
+        );
+    });
+
+    it("Spread → Grid picks the layout whose half-step size comes nearest the frame", () => {
+        for (const n of [20, 26, 40]) {
+            const s = spreadSized(n, 145);
+            const was = boxTool.frameOf(s.params as BoxParams, n);
+            const grid = switched(s, "files");
+            const now = boxTool.frameOf(grid.params as BoxParams, n);
+            expect(now.center).toEqual(was.center);
+            expect(
+                Math.abs(now.halfWidth - was.halfWidth),
+                `${n} wide`,
+            ).toBeLessThanOrEqual(half);
+            expect(
+                Math.abs(now.halfDepth - was.halfDepth),
+                `${n} deep`,
+            ).toBeLessThanOrEqual(half);
+        }
+    });
+});

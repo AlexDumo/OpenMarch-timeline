@@ -115,7 +115,11 @@ function outlineOf(
 /** Spread layouts recently worked out: a shape asks for its spots, frame and outline in turn */
 const spreads = new Map<string, SpreadLayout>();
 const SPREADS_KEPT = 24;
-/** The last layout worked out for each spread (generator, count, seed), whatever its region */
+/**
+ * The last layout asked for (worked out, or known already) for each spread: generator, count,
+ * seed and the kind of region (a box's rectangle, a circle), whatever its size and proportions.
+ * The shape a handle drags asks for its own layout at the press, so a draft stretches that one.
+ */
 const lastOf = new Map<string, { region: Region; layout: SpreadLayout }>();
 
 /**
@@ -132,13 +136,14 @@ function spreadLayout(
     draft = false,
 ): SpreadLayout {
     const from = d.count ?? n;
-    const family = `${d.generator} ${n} ${d.seed} ${from}`;
+    const family = `${d.generator} ${n} ${d.seed} ${from} ${region.key.split(" ")[0]}`;
     const key = `${family} ${region.key}`;
     const known = spreads.get(key);
     if (known) {
         // Most recently used last, so the oldest goes first
         spreads.delete(key);
         spreads.set(key, known);
+        remember(family, region, known);
         return known;
     }
     const last = lastOf.get(family);
@@ -148,10 +153,14 @@ function spreadLayout(
     spreads.set(key, layout);
     if (spreads.size > SPREADS_KEPT)
         spreads.delete(spreads.keys().next().value!);
+    remember(family, region, layout);
+    return layout;
+}
+
+function remember(family: string, region: Region, layout: SpreadLayout) {
     lastOf.delete(family);
     lastOf.set(family, { region, layout });
     if (lastOf.size > SPREADS_KEPT) lastOf.delete(lastOf.keys().next().value!);
-    return layout;
 }
 
 /** `layout` (over `was`) stretched side to side and front to back onto `region`'s frame */

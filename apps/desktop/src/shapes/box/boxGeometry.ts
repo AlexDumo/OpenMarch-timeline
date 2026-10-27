@@ -4,6 +4,7 @@ import {
     filesDistribution,
     storedDistribution,
     type Distribution,
+    type SpreadDistribution,
     type FilesDistribution,
     type GapSide,
 } from "../distribute/distribution";
@@ -226,35 +227,45 @@ function spreadSized(
     if (was.mode !== "spread") throw new Error("Not a spread");
     // Reshaped, a spread from before #439 takes the generator whose frame is its own
     const d = { ...was, generator: SPREAD_GENERATOR };
-    const scale = spreadScale(rectRegion(spreadAspect / 2, 1 / 2), n, d, 1);
     return {
         ...(refile ? withFileCount(p, filesFor(width, depth, n)) : p),
         distribution: d,
         spreadAspect,
-        // The frame is `scale` intervals deep: the interval is what fits the count in it
-        across: depth / scale,
+        // The frame is its scale in intervals deep: the interval is what fits the count in it
+        across: depth / spreadDepth(spreadAspect, n, d),
     };
 }
 
+/** How many intervals deep a spread of `n` with frame `aspect` is */
+const spreadDepth = (aspect: number, n: number, d: SpreadDistribution) =>
+    spreadScale(rectRegion(aspect / 2, 1 / 2), n, d, 1);
+
 /**
  * `next` (the box switched to Spread) filling the frame `params` has (#439): its center, size and
- * turn kept, the interval whatever fits the count in it. A box with no area (a single rank or
- * file) has no frame to fill: undefined, and it keeps its interval.
+ * turn kept, the interval whatever fits the count in it. A frame too small for the count at half
+ * a step, the least interval, grows from its center just enough (the one time a switch grows
+ * it). A box with no area (a single rank or file) has no frame to fill: undefined, and it keeps
+ * its interval.
  */
 export function spreadIn(
     params: BoxParams,
     next: BoxParams,
     n: number,
+    env: ToolEnv,
 ): BoxParams | undefined {
     const { halfWidth, halfDepth } = boxFrame(params, n);
     if (!(halfWidth > 0) || !(halfDepth > 0)) return undefined;
     // Its file count stays, so back in Files it is the box it was
-    return spreadSized(next, n, 2 * halfWidth, 2 * halfDepth, false);
+    const sized = spreadSized(next, n, 2 * halfWidth, 2 * halfDepth, false);
+    const least = halfStep(env);
+    return sized.across < least ? { ...sized, across: least } : sized;
 }
 
 /**
- * `next` (a spread switched to Files, laid out `files` across) in the space the spread took up
- * (#439), each interval refitted to it in half steps; a single file or rank keeps its interval
+ * `next` (a spread switched to Files) in the space the spread took up (#439): of the file counts
+ * whose cells are within 2× of square, the one whose half-step intervals come nearest the frame's
+ * size (its own file count on a tie, so Grid → Spread → Grid is the box it was). A single file or
+ * rank keeps its interval that way.
  */
 export function filesIn(
     params: BoxParams,
@@ -263,13 +274,29 @@ export function filesIn(
     env: ToolEnv,
 ): BoxParams {
     const { halfWidth, halfDepth } = boxFrame(params, n);
-    const { across: a, deep: b } = boxBlock(next, n);
-    const across =
-        a > 1 ? snapInterval((2 * halfWidth) / (a - 1), env) : next.across;
-    const deep =
-        b > 1 ? snapInterval((2 * halfDepth) / (b - 1), env) : next.deep;
-    const { spreadAspect: _aspect, ...rest } = next;
-    return { ...rest, across, deep };
+    const width = 2 * halfWidth;
+    const depth = 2 * halfDepth;
+    const { spreadAspect: _aspect, ...flat } = next;
+    const fit = (files: number) => {
+        const p = withFileCount(flat, files);
+        const { across: a, deep: b } = boxBlock(p, n);
+        const across = a > 1 ? snapInterval(width / (a - 1), env) : p.across;
+        const deep = b > 1 ? snapInterval(depth / (b - 1), env) : p.deep;
+        return {
+            params: { ...p, across, deep },
+            off:
+                Math.abs((a - 1) * across - width) +
+                Math.abs((b - 1) * deep - depth),
+            square: Math.abs(Math.log(across / deep)),
+        };
+    };
+    let best = fit(filesOf(next));
+    for (let files = 1; files <= Math.max(1, n); files++) {
+        const f = fit(files);
+        if (f.square > SPLIT_BAND) continue;
+        if (best.square > SPLIT_BAND || f.off < best.off - 1e-9) best = f;
+    }
+    return best.params;
 }
 
 /** How far a spread box reaches either side of its center, and front to back */
@@ -971,12 +998,27 @@ function reshapeSpread(
     const least = halfStep(env);
     const side = (v: number) =>
         Math.max(least, env.snap ? Math.round(v / least) * least : v);
-    const width = movesX
-        ? side(Math.abs(to.x - anchor.x))
-        : 2 * frame.halfWidth;
-    const depth = movesY
-        ? side(Math.abs(to.y - anchor.y))
-        : 2 * frame.halfDepth;
+    const w0 = 2 * frame.halfWidth;
+    const d0 = 2 * frame.halfDepth;
+    let width = movesX ? side(Math.abs(to.x - anchor.x)) : w0;
+    let depth = movesY ? side(Math.abs(to.y - anchor.y)) : d0;
+    // The handle stops where the interval would go under half a step, as at the least size
+    const d = boxDistribution(base);
+    if (d.mode !== "spread") throw new Error("Not a spread");
+    const intervalAt = (w: number, h: number) => h / spreadDepth(w / h, n, d);
+    if (intervalAt(width, depth) < least && intervalAt(w0, d0) >= least) {
+        let lo = 0;
+        let hi = 1;
+        for (let i = 0; i < 40; i++) {
+            const t = (lo + hi) / 2;
+            const w = w0 + (width - w0) * t;
+            const h = d0 + (depth - d0) * t;
+            if (intervalAt(w, h) >= least) lo = t;
+            else hi = t;
+        }
+        width = w0 + (width - w0) * lo;
+        depth = d0 + (depth - d0) * lo;
+    }
     const next = spreadSized(base, n, width, depth, true);
     // Grown away from the fixed corner or side, toward the handle (past it, the other way)
     return {
@@ -1132,6 +1174,8 @@ export function grownFromPivot(
             y: after.center.y + was.y - now.y,
         },
     };
+    // A spread's frame isn't on the grid: the pivot stays exactly where it was (#439)
+    if (isSpread(moved)) return moved;
     // Where the marchers aren't half steps apart, the pivot stays exactly where it was (#423)
     return snapToGrid(
         moved,

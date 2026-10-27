@@ -376,6 +376,56 @@ describe("Even spread", () => {
         });
     });
 
+    describe("drafted mid-gesture (#439)", () => {
+        const drafted = (region: Region, n: number, d: SpreadDistribution) =>
+            distribute({
+                region,
+                n,
+                distribution: d,
+                across: INTERVAL,
+                deep: INTERVAL,
+                draft: true,
+            });
+
+        it("stretches the box's own last layout, even after a circle of the same count and seed", () => {
+            const d = spreadDistribution(9, 40);
+            const was = rectRegion(2, 0.5);
+            const box = spread(was, 40, d);
+            // Another shape asked for since: a circle spread just like it
+            spread(circleRegion(1), 40, d);
+            const now = rectRegion(2.4, 0.5);
+            const out = drafted(now, 40, d);
+            const sx =
+                (2.4 * spreadScale(now, 40, d, 1)) /
+                (2 * spreadScale(was, 40, d, 1));
+            const sy = spreadScale(now, 40, d, 1) / spreadScale(was, 40, d, 1);
+            out.forEach((s, i) => {
+                expect(s.x).toBeCloseTo(box[i]!.x * sx, 6);
+                expect(s.y).toBeCloseTo(box[i]!.y * sy, 6);
+            });
+        });
+
+        it("lays out exactly what it hasn't seen before, and never keeps a draft", () => {
+            const d = spreadDistribution(11, 30);
+            const region = rectRegion(1.7, 0.5);
+            // Nothing to stretch yet: the exact layout
+            expect(drafted(region, 30, d)).toEqual(spread(region, 30, d));
+            const other = rectRegion(2.2, 0.5);
+            const draft = drafted(other, 30, d);
+            // Asked for again without the draft: the exact layout, not the draft
+            expect(spread(other, 30, d)).not.toEqual(draft);
+            expect(spread(other, 30, d)).toEqual(
+                distribute({
+                    region: rectRegion(2.2, 0.5),
+                    n: 30,
+                    distribution: d,
+                    across: INTERVAL,
+                    deep: INTERVAL,
+                }),
+            );
+        });
+    });
+
     describe("as stored", () => {
         it("reads a spread with its seed, generator and count", () => {
             expect(
