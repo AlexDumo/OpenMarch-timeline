@@ -74,7 +74,6 @@ describe("the mode switch", () => {
         shown(boxTool, box, vi.fn(), 8);
         const dots = (mode: string) => {
             const svg = screen.getByTestId(`shape-mode-preview-${mode}`);
-            expect(svg).toHaveAttribute("data-spots", "12");
             return [...svg.querySelectorAll("circle")].map((c) => ({
                 x: Number(c.getAttribute("cx")),
                 y: Number(c.getAttribute("cy")),
@@ -96,7 +95,10 @@ describe("the mode switch", () => {
         };
         expect(inside(dots("files"))).toBeGreaterThan(0);
         expect(inside(dots("outline"))).toBe(0);
-        expect(dots("spread")).toHaveLength(12);
+        expect(dots("files")).toHaveLength(12);
+        expect(dots("outline")).toHaveLength(12);
+        // More for a spread, which reads as rows at 12 (owner)
+        expect(dots("spread")).toHaveLength(20);
     });
 
     it("is hidden while the kind has one mode", () => {

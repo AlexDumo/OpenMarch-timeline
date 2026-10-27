@@ -81,11 +81,15 @@ export function shapePreview(kind: AnyToolKind): ShapePreview {
  * `outline` pushed outward by {@link OUTLINE_GAP} of the spots' size, each corner along its two
  * edges' normals so every edge moves the same distance
  */
-function standOff(outline: readonly XY[], spots: readonly XY[]): XY[] {
+function standOff(
+    outline: readonly XY[],
+    spots: readonly XY[],
+    share = OUTLINE_GAP,
+): XY[] {
     const xs = spots.map((p) => p.x);
     const ys = spots.map((p) => p.y);
     const gap =
-        OUTLINE_GAP *
+        share *
         Math.max(
             Math.max(...xs) - Math.min(...xs),
             Math.max(...ys) - Math.min(...ys),
@@ -160,6 +164,13 @@ export const MODE_PREVIEW = { width: 24, height: 16 } as const;
  * leaves empty (4 × 3 against 10 round the edge)
  */
 const MODE_SPOTS = 12;
+/**
+ * A spread's example has more spots: 12 at picture size settle into rows and read as an
+ * unfinished grid (owner); 20 read as an even scatter over the whole shape
+ */
+const SPREAD_SPOTS = 20;
+/** How far a spread's outline stands off its spots, as a share of its size */
+const SPREAD_GAP = 0.06;
 
 export interface ModePreview extends ShapePreview {
     /** The dots' radius, in picture units */
@@ -195,7 +206,7 @@ function drawMode(
     mode: DistributionMode,
 ): ModePreview | null {
     if (!kind.closed?.modes.includes(mode)) return null;
-    const n = MODE_SPOTS;
+    const n = mode === "spread" ? SPREAD_SPOTS : MODE_SPOTS;
     const params = kind.fromFrame(
         {
             center: { x: 0, y: 0 },
@@ -214,9 +225,14 @@ function drawMode(
         .map(({ x, y }): XY => ({ x, y }));
     if (spots.length === 0) return null;
     const outline = kind.outline?.(filled, n) ?? null;
+    // A spread keeps its own distance from the edge: the outline stood off only a little shows it
+    // filling the shape, where the other modes' gap made it look bunched in the middle
+    const edge =
+        outline &&
+        standOff(outline, spots, mode === "spread" ? SPREAD_GAP : OUTLINE_GAP);
     const fitted = fitToView(
         spots,
-        outline && standOff(outline, spots),
+        edge,
         MODE_PREVIEW.width,
         MODE_PREVIEW.height,
         1.5,
