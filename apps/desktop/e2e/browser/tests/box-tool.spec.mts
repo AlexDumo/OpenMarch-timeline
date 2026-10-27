@@ -3013,21 +3013,21 @@ test.describe("the glide", () => {
 });
 
 // Keeping the shape and its editor in view (#441, owner: a turned box went
-// partly off the canvas unnoticed). Two lab versions: "Keep in view", the
-// default, pans just far enough to bring the shape and editor back after an
-// edit or a drag; "Hold the editor still" (`?variant=hold-editor`) pans so
-// the editor stays where it was on screen after an edit. Never during a drag.
+// partly off the canvas unnoticed; "Keep in view" won the lab A/B). After an
+// edit or a drag, the view pans just far enough to bring the shape and editor
+// back, and zooms out just enough when they no longer fit, never in. Never
+// during a drag.
 
 /** The field element's box in the viewport */
 const fieldRect = async (page: Page) =>
     (await page.getByTestId("fieldCanvas").boundingBox())!;
 
-/** The view's pan once it has stopped gliding */
+/** The view's pan once it has stopped gliding (and zooming) */
 async function settledPan(page: Page): Promise<Point> {
     let last = "";
     for (;;) {
-        const { pan } = (await readField(page)).viewport;
-        const now = `${pan.x.toFixed(1)},${pan.y.toFixed(1)}`;
+        const { pan, zoom } = (await readField(page)).viewport;
+        const now = `${pan.x.toFixed(1)},${pan.y.toFixed(1)},${zoom.toFixed(4)}`;
         if (now === last) return pan;
         last = now;
         await page.waitForTimeout(150);
@@ -3057,23 +3057,6 @@ async function outlineOnScreen(page: Page) {
         top: Math.min(...ys),
         bottom: Math.max(...ys),
     };
-}
-
-/**
- * Where the floating editor settles, its top middle (it widens about its middle as words come
- * and go): the same two frames apart, any hold after a press over
- */
-async function settledEditor(page: Page): Promise<Point> {
-    const editor = page.getByTestId("shape-tool-readout");
-    await expect(editor).toHaveAttribute("data-held", "false");
-    let last: Point | null = null;
-    for (;;) {
-        const b = (await editor.boundingBox())!;
-        const now = { x: b.x + b.width / 2, y: b.y };
-        if (last && near(now, last, 0.5)) return now;
-        last = now;
-        await page.waitForTimeout(150);
-    }
 }
 
 /** Pans the field so the open box's top is `px` below the field's top */
@@ -3161,55 +3144,58 @@ test("change: Keep in view: the view holds still during a drag on the field, and
     ).toBeLessThan(1.5);
 });
 
-test.describe("Hold the editor still", () => {
-    test.use({
-        initScript: `history.replaceState(null, "", "?variant=hold-editor")`,
-    });
+/** Zooms in at the open box's middle, with Ctrl + wheel, until the view is `times` closer */
+async function zoomInOnBox(page: Page, times: number) {
+    const { zoom } = (await readField(page)).viewport;
+    const { left, right, top, bottom } = await outlineOnScreen(page);
+    await page.mouse.move((left + right) / 2, (top + bottom) / 2);
+    await page.keyboard.down("Control");
+    while ((await readField(page)).viewport.zoom < zoom * times)
+        await page.mouse.wheel(0, -200);
+    await page.keyboard.up("Control");
+    await settledPan(page);
+}
 
-    test("change: the floating editor stays at the same spot on screen after + and after a turn, the field moving under it (#441)", async ({
-        show,
-    }) => {
-        const { page } = show;
-        await drawBox(show);
-        const at = await settledEditor(page);
-        const pan = await settledPan(page);
+/** Types `steps` into the editor's side-to-side spacing */
+async function typeAcross(page: Page, steps: string) {
+    await page.getByTestId("shape-editor-across").click();
+    const input = page.getByTestId("shape-editor-across-input");
+    await input.fill(steps);
+    await input.press("Enter");
+    await expect(page.getByTestId("shape-editor-across")).toContainText(steps);
+}
 
-        await sizeButton(page, true).click();
-        await expect(page.getByTestId("shape-editor-size")).not.toHaveText(
-            "4 × 2",
-        );
-        expect(near(await settledEditor(page), at, 1)).toBe(true);
+test("change: Keep in view: a typed spacing that makes the box wider than the view zooms out just enough to show it and its editor whole, and a smaller one never zooms back in (#441)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    await zoomInOnBox(page, 4);
+    const close = (await readField(page)).viewport.zoom;
 
-        // A quarter turn makes the box deeper: the field glides up so the editor stays put
-        await page.getByTestId("shape-editor-quarter-turn").click();
-        await expect(page.getByTestId("shape-editor-rotation")).toHaveText(
-            "90°",
-        );
-        const turned = await settledPan(page);
-        expect(turned.y).not.toBeCloseTo(pan.y, 0);
-        expect(near(await settledEditor(page), at, 1)).toBe(true);
-    });
+    await typeAcross(page, "20");
+    await settledPan(page);
+    const out = (await readField(page)).viewport.zoom;
+    expect(out).toBeLessThan(close);
+    const field = await fieldRect(page);
+    const shape = await outlineOnScreen(page);
+    const editor = (await page
+        .getByTestId("shape-tool-readout")
+        .boundingBox())!;
+    // Just enough: the box spans the field less its margins, and the editor is inside too
+    expect(Math.abs(shape.left - (field.x + 24))).toBeLessThan(1.5);
+    expect(Math.abs(shape.right - (field.x + field.width - 24))).toBeLessThan(
+        1.5,
+    );
+    expect(Math.min(shape.top, editor.y)).toBeGreaterThanOrEqual(field.y + 23);
+    expect(
+        Math.max(shape.bottom, editor.y + editor.height),
+    ).toBeLessThanOrEqual(field.y + field.height - 23);
 
-    test("change: a drag on the field doesn't pan the view, before or after it ends (#441)", async ({
-        show,
-    }) => {
-        const { page } = show;
-        await drawBox(show);
-        const field = await fieldRect(page);
-        const before = await settledPan(page);
-        const { top } = await outlineOnScreen(page);
-        const spots = (await shapeOverlay(page))!.spots;
-        const inside = await toScreen(page, {
-            x: spots.reduce((a, p) => a + p.x, 0) / spots.length,
-            y: spots.reduce((a, p) => a + p.y, 0) / spots.length,
-        });
-        await drag(page, inside, {
-            x: inside.x,
-            y: inside.y - (top - field.y + 30),
-        });
-        await page.waitForTimeout(500);
-        expect(await settledPan(page)).toEqual(before);
-    });
+    // Back to 2 steps: the box is small again, and the view stays out
+    await typeAcross(page, "2");
+    await settledPan(page);
+    expect((await readField(page)).viewport.zoom).toBe(out);
 });
 
 // The pivot on the field (#350): Cmd/Ctrl-drag from the center dot pulls it

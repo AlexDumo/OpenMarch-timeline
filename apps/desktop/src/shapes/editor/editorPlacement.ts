@@ -9,7 +9,7 @@ import type { XY } from "../types";
 /** The gap between the shape's outline and the editor, in CSS px */
 export const GAP_PX = 14;
 /** Room the spots' radius and the handles take beyond the outline */
-const CLEAR_PX = 6;
+export const CLEAR_PX = 6;
 /** Kept inside the field side to side */
 const MARGIN_PX = 4;
 

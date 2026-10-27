@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { FieldView } from "@/field/editor/view";
-import { editorPlacement } from "../editorPlacement";
+import { MIN_ZOOM, type FieldView } from "@/field/editor/view";
+import { CLEAR_PX, editorPlacement, GAP_PX } from "../editorPlacement";
 import {
-    holdEditorPan,
-    keepInViewPan,
+    keepInView,
     VIEW_MARGIN_PX,
-    viewFollowFor,
     type KeepInViewInput,
 } from "../keepInView";
 
@@ -36,9 +34,8 @@ const input = (over: Partial<KeepInViewInput> = {}): KeepInViewInput => ({
     ...over,
 });
 
-/** The shape's and editor's px box with the view panned */
-const shown = (i: KeepInViewInput, dx: number, dy: number) => {
-    const view = { ...i.view, panX: i.view.panX + dx, panY: i.view.panY + dy };
+/** The shape's and editor's px box in `view` */
+const shown = (i: KeepInViewInput, view: FieldView) => {
     const outline = i.outline.map((p) => ({
         x: view.panX + p.x * view.zoom,
         y: view.panY + p.y * view.zoom,
@@ -53,77 +50,76 @@ const shown = (i: KeepInViewInput, dx: number, dy: number) => {
     const xs = outline.map((p) => p.x);
     const ys = outline.map((p) => p.y);
     return {
-        left: Math.min(...xs, editor.left),
-        right: Math.max(...xs, editor.left + i.width),
+        left: Math.min(...xs),
+        right: Math.max(...xs),
         top: Math.min(...ys, editor.top),
         bottom: Math.max(...ys, editor.top + i.height),
-        editor,
     };
 };
 
+const expectInside = (i: KeepInViewInput, view: FieldView) => {
+    const s = shown(i, view);
+    const m = VIEW_MARGIN_PX - 0.5;
+    expect(s.left).toBeGreaterThanOrEqual(m);
+    expect(s.right).toBeLessThanOrEqual(view.width - m);
+    expect(s.top).toBeGreaterThanOrEqual(m);
+    expect(s.bottom).toBeLessThanOrEqual(view.height - m);
+};
+
 describe("keep in view", () => {
-    it("doesn't pan when the shape and editor are in view", () => {
-        expect(keepInViewPan(input())).toEqual({ dx: 0, dy: 0 });
+    it("doesn't move the view when the shape and editor are in view", () => {
+        expect(keepInView(input())).toEqual(VIEW);
     });
 
     it("pans just far enough to bring a corner off the right back", () => {
-        const i = input({ outline: box(98, 20) });
-        const { dx, dy } = keepInViewPan(i);
-        expect(dy).toBe(0);
+        const to = keepInView(input({ outline: box(98, 20) }));
+        expect(to.zoom).toBe(VIEW.zoom);
+        expect(to.panY).toBe(0);
         // The box's right edge (103 units = 1030 px) ends a margin inside the element
-        expect(dx).toBeCloseTo(1000 - VIEW_MARGIN_PX - 1030);
+        expect(to.panX).toBeCloseTo(1000 - VIEW_MARGIN_PX - 1030);
     });
 
     it("pans down when the shape goes off the top", () => {
-        const i = input({ outline: box(50, 1) });
-        const { dx, dy } = keepInViewPan(i);
-        expect(dx).toBe(0);
-        expect(dy).toBeCloseTo(VIEW_MARGIN_PX - -20);
+        const to = keepInView(input({ outline: box(50, 1) }));
+        expect(to.panX).toBe(0);
+        expect(to.panY).toBeCloseTo(VIEW_MARGIN_PX + 20);
     });
 
     it("keeps the editor in view too", () => {
         // The shape fits low in the view, and the editor flips above it: both end inside
         const i = input({ outline: box(50, 57) });
-        const { dx, dy } = keepInViewPan(i);
-        const after = shown(i, dx, dy);
-        expect(after.top).toBeGreaterThanOrEqual(VIEW_MARGIN_PX - 0.5);
-        expect(after.bottom).toBeLessThanOrEqual(600 - VIEW_MARGIN_PX + 0.5);
-    });
-
-    it("centers a shape bigger than the view", () => {
-        const i = input({ outline: box(80, 20, 150, 6) });
-        const { dx } = keepInViewPan(i);
-        expect(800 + dx).toBeCloseTo(500);
-    });
-
-    it("never zooms", () => {
-        const i = input({ outline: box(120, 70) });
-        const pan = keepInViewPan(i);
-        expect(Object.keys(pan).sort()).toEqual(["dx", "dy"]);
+        expectInside(i, keepInView(i));
     });
 });
 
-describe("hold the editor still", () => {
-    it("pans so the editor lands where it was", () => {
-        const before = shown(input(), 0, 0).editor;
-        // The box grew down and moved right: its editor would move
-        const i = input({ outline: box(56, 24, 12, 10) });
-        const { dx, dy } = holdEditorPan(i, before);
-        const after = shown(i, dx, dy).editor;
-        expect(after.left).toBeCloseTo(before.left);
-        expect(after.top).toBeCloseTo(before.top);
+describe("zooming out", () => {
+    it("zooms out just enough when the shape gets wider than the view", () => {
+        const i = input({ outline: box(60, 20, 150, 6) });
+        const to = keepInView(i);
+        // 150 units across fill the view less its margins
+        expect(to.zoom).toBeCloseTo((1000 - 2 * VIEW_MARGIN_PX) / 150);
+        expectInside(i, to);
     });
 
-    it("doesn't pan when the editor stays put", () => {
-        const before = shown(input(), 0, 0).editor;
-        expect(holdEditorPan(input(), before)).toEqual({ dx: 0, dy: 0 });
+    it("counts the editor under the shape when it gets too deep", () => {
+        const i = input({ outline: box(50, 30, 10, 60) });
+        const to = keepInView(i);
+        expect(to.zoom).toBeCloseTo(
+            (600 - 2 * VIEW_MARGIN_PX - GAP_PX - CLEAR_PX - 40) / 60,
+        );
+        expectInside(i, to);
     });
-});
 
-describe("the lab version", () => {
-    it("is Keep in view without one", () => {
-        expect(viewFollowFor(null)).toBe("keep");
-        expect(viewFollowFor("keep-in-view")).toBe("keep");
-        expect(viewFollowFor("hold-editor")).toBe("hold");
+    it("never zooms in, however small the shape", () => {
+        const view = { ...VIEW, zoom: 2 };
+        const i = input({ view, outline: box(50, 20, 1, 1) });
+        expect(keepInView(i).zoom).toBe(2);
+    });
+
+    it("stops at the field's least zoom and centers what still doesn't fit", () => {
+        const i = input({ outline: box(60, 20, 100_000, 6) });
+        const to = keepInView(i);
+        expect(to.zoom).toBe(MIN_ZOOM);
+        expect(to.panX + 60 * to.zoom).toBeCloseTo(500);
     });
 });

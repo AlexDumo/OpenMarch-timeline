@@ -11,8 +11,7 @@ import {
 import { animated, useSpring } from "@react-spring/web";
 import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
 import { editorPlacement } from "./editorPlacement";
-import { holdEditorPan, keepInViewPan, viewFollowFor } from "./keepInView";
-import { useLabVariant } from "@/lab/labVariant";
+import { keepInView } from "./keepInView";
 import { glideTo, isGliding } from "@/field/three/fieldNavigation";
 import { useShapePointerStore } from "../field/shapePointer";
 import { keepFocus } from "./keepFocus";
@@ -519,7 +518,6 @@ function ShapeEditorBar({
  */
 function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     const view = useFieldViewStore();
-    const follow = viewFollowFor(useLabVariant());
     // A drag on the field: the open shape's gesture or a placed shape's
     const toolGesture = useShapeToolStore((s) => !!s.tool?.gesture);
     const placedDrag = useShapePointerStore((s) => s.dragging);
@@ -591,47 +589,43 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         top: target.top,
     }));
 
-    // After an edit made in the editor, and after a drag on the field in "Keep in view", the view
-    // glides to keep the shape and the editor in view, or (lab version "Hold the editor still")
-    // to keep the editor where it was on screen (#441). Never during a drag. Runs before the
-    // spring below, so the editor holds still from the first frame.
+    // After an edit made in the editor, and after a drag on the field ends, the view glides to keep
+    // the shape and the editor in view, zooming out if they no longer fit (#441). Never during a
+    // drag. Runs before the spring below, so the editor springs along from the first frame.
     const edited = useRef(0);
     const noteEdit = useCallback(() => {
         edited.current = performance.now();
     }, []);
     const glide = useRef<number | null>(null);
-    const holding = useRef(false);
     const wasDragging = useRef(fieldDrag);
     useLayoutEffect(() => {
         const dragEnded = wasDragging.current && !fieldDrag;
         wasDragging.current = fieldDrag;
         if (fieldDrag || room.width === 0) return;
         const edit = performance.now() - edited.current < EDIT_WINDOW_MS;
-        if (!edit && !(dragEnded && follow === "keep")) return;
+        if (!edit && !dragEnded) return;
         edited.current = 0;
         const now = useFieldViewStore.getState();
-        const input = {
-            view: now,
-            outline: shapeOutline(kind, params, spots),
-            width: room.width,
-            height: room.height,
-        };
-        const hold = edit && follow === "hold";
-        const pan = hold
-            ? holdEditorPan(input, {
-                  left: spring.left.get(),
-                  top: spring.top.get(),
-              })
-            : keepInViewPan(input);
-        if (Math.abs(pan.dx) < 1 && Math.abs(pan.dy) < 1) return;
-        holding.current = hold;
-        glide.current = glideTo({
+        const from = {
             width: now.width,
             height: now.height,
             zoom: now.zoom,
-            panX: now.panX + pan.dx,
-            panY: now.panY + pan.dy,
+            panX: now.panX,
+            panY: now.panY,
+        };
+        const to = keepInView({
+            view: from,
+            outline: shapeOutline(kind, params, spots),
+            width: room.width,
+            height: room.height,
         });
+        if (
+            to.zoom === from.zoom &&
+            Math.abs(to.panX - from.panX) < 1 &&
+            Math.abs(to.panY - from.panY) < 1
+        )
+            return;
+        glide.current = glideTo(to);
         // Only the shape's change and the drag's end start it
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params, fieldDrag]);
@@ -643,9 +637,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     });
     useLayoutEffect(() => {
         const gliding = isGliding(glide.current);
-        if (!gliding) holding.current = false;
-        // "Hold the editor still": it stays where it is while the field glides under it
-        if (held || room.width === 0 || holding.current) return;
+        if (held || room.width === 0) return;
         // A pan or zoom, the first placing and reduced motion jump; the shape's changes spring,
         // and so does the editor's own glide, to its end
         const jump =
