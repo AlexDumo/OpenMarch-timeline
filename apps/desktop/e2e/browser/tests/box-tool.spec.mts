@@ -2960,7 +2960,7 @@ test("change: a Spread box's handle drags its side where the pointer goes, the o
     ).toBeLessThan(2 * field.pixelsPerStep);
 });
 
-test("change: every mode switch keeps the box drawn: its center exactly, its sides by where they were (#449)", async ({
+test("change: every mode switch keeps the box drawn: its center exactly, each side within half a step, and no drift however often it switches (#449)", async ({
     show,
 }) => {
     const { page } = show;
@@ -2978,24 +2978,26 @@ test("change: every mode switch keeps the box drawn: its center exactly, its sid
         };
     };
     const drawn = await bounds();
-    for (const mode of [
+    // Each mode's box on its first visit: every later visit is that box exactly, no drift
+    const first = new Map<string, Awaited<ReturnType<typeof bounds>>>([
+        ["files", drawn],
+    ]);
+    const modes = [
         "outline",
         "files",
         "spread",
         "outline",
         "spread",
         "files",
-    ] as const) {
+    ] as const;
+    for (const mode of [...modes, ...modes]) {
         await pickMode(page, mode);
         const now = await bounds();
         for (const side of ["left", "right", "top", "bottom"] as const)
             expect(
                 Math.abs(now[side] - drawn[side]),
                 `${mode}: ${side}`,
-            ).toBeLessThanOrEqual(
-                // Each switch keeps the box within half a step; a few in a row stay near it
-                2 * half + 0.01,
-            );
+            ).toBeLessThanOrEqual(half + 0.01);
         expect((now.left + now.right) / 2).toBeCloseTo(
             (drawn.left + drawn.right) / 2,
             6,
@@ -3004,6 +3006,14 @@ test("change: every mode switch keeps the box drawn: its center exactly, its sid
             (drawn.top + drawn.bottom) / 2,
             6,
         );
+        const seen = first.get(mode);
+        if (!seen) first.set(mode, now);
+        else
+            for (const side of ["left", "right", "top", "bottom"] as const)
+                expect(now[side], `${mode} again: ${side}`).toBeCloseTo(
+                    seen[side],
+                    6,
+                );
     }
 });
 

@@ -28,7 +28,10 @@ Outline to Grid could shrink the box.
 
 **Good to know**
 
-- Each side can move up to half a step on a switch, so several switches
-  in a row can add up to about a step.
+- The box remembers the size you drew or last shaped, so switching back
+  and forth doesn't make it creep. Each mode comes back exactly as you
+  left it, and Grid keeps its file count through a trip to Outline.
+- An outline that can't go round the box with spots at least half a
+  step apart grows to fit. Fewer than 4 marchers make a line.
 - A box with a single rank or file has no area to keep, so Outline lays
   it out the way it always did.

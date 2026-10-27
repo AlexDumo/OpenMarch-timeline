@@ -137,6 +137,95 @@ describe("a box keeps its frame through every mode switch (#449)", () => {
     );
 });
 
+describe("cycling modes never walks the box (#449 review)", () => {
+    /** Counts and drawn boxes that walked before: each switch measured the last one's frame */
+    const CASES: [number, XY][] = [
+        [48, { x: 45, y: 110 }],
+        [31, { x: 35, y: 30 }],
+        [15, { x: 80, y: 60 }],
+        [31, { x: 70, y: 60 }],
+        ...[7, 12, 15, 24, 48].flatMap((n) =>
+            DRAWS.map(([, to]) => [n, to] as [number, XY]),
+        ),
+    ];
+
+    it.each(
+        BOX_MODES.flatMap((a) =>
+            BOX_MODES.filter((b) => b !== a).map((b) => [a, b] as const),
+        ),
+    )(
+        "%s → %s → back, five times: the same frame and numbers each time",
+        (a, b) => {
+            for (const [n, to] of CASES) {
+                const start = switched(
+                    drawn(boxTool, n, { x: 0, y: 0 }, to),
+                    a,
+                );
+                const frame = frameOf(start);
+                let t = start;
+                for (let cycle = 1; cycle <= 5; cycle++) {
+                    t = switched(switched(t, b), a);
+                    const what = `${n} drawn to ${to.x},${to.y}, cycle ${cycle}`;
+                    expect(frameOf(t), what).toEqual(frame);
+                    const { files, across, deep } = t.params as {
+                        files: number;
+                        across: number;
+                        deep: number;
+                    };
+                    expect({ files, across, deep }, what).toEqual({
+                        files: (start.params as { files: number }).files,
+                        across: (start.params as { across: number }).across,
+                        deep: (start.params as { deep: number }).deep,
+                    });
+                }
+            }
+        },
+    );
+
+    it("fits the box as reshaped since the last switch, not the one remembered", () => {
+        const grid = drawn(boxTool, 24, { x: 0, y: 0 }, { x: 120, y: 50 });
+        let outline = switched(grid, "outline");
+        // A handle widens the outline: that's the box the designer wants now
+        const e = boxTool
+            .handles(outline.params, 24)
+            .find((h) => h.key === "e")!;
+        outline = press(outline, e.at, env);
+        outline = pointerMove(outline, { x: e.at.x + 40, y: e.at.y }, env);
+        outline = release(outline, ctx);
+        const reshaped = frameOf(outline);
+        expect(reshaped.halfWidth).toBeGreaterThan(
+            frameOf(grid).halfWidth + 10,
+        );
+        const back = switched(outline, "files");
+        expectKept(frameOf(back), reshaped, "after a reshape");
+    });
+
+    it("remembers through a placed recipe, saved as JSON", () => {
+        const grid = drawn(boxTool, 15, { x: 0, y: 0 }, { x: 80, y: 60 });
+        const outline = switched(grid, "outline");
+        const saved = {
+            ...outline,
+            params: JSON.parse(JSON.stringify(outline.params)),
+        };
+        expect(frameOf(switched(saved, "files"))).toEqual(frameOf(grid));
+    });
+
+    it("Grid → Outline takes the split nearest the drawn box, however long its sides", () => {
+        // 31 in a box drawn 70 × 60: 14 across by 2 deep fits it exactly
+        const grid = drawn(boxTool, 31, { x: 0, y: 0 }, { x: 70, y: 60 });
+        const outline = switched(grid, "outline");
+        expectKept(frameOf(outline), frameOf(grid), "31 in 70 × 60");
+        expect(frameOf(outline).halfWidth).toBeCloseTo(
+            frameOf(grid).halfWidth,
+            9,
+        );
+        expect(frameOf(outline).halfDepth).toBeCloseTo(
+            frameOf(grid).halfDepth,
+            9,
+        );
+    });
+});
+
 describe("a circle keeps its radius through every mode switch (#449)", () => {
     it.each(COUNTS)("Outline ↔ Spread at %i", (n) => {
         const outline = drawn(circleTool, n, { x: 0, y: 0 }, { x: 60, y: 0 });

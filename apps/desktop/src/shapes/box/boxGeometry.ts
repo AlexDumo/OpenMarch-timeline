@@ -62,6 +62,8 @@ export type BoxParams = BoxSize & {
      * proportions, files by ranks.
      */
     readonly spreadAspect?: number;
+    /** What the box remembers across mode switches (#449, `modeMemory.ts`); absent before */
+    readonly modes?: unknown;
     /**
      * Recipes stored before the distributor (#386) say how the box was filled this way: always
      * a grid with the short rank at the back, centered, which reads as Files, Short back. A box
@@ -241,43 +243,51 @@ function spreadSized(
 const spreadDepth = (aspect: number, n: number, d: SpreadDistribution) =>
     spreadScale(rectRegion(aspect / 2, 1 / 2), n, d, 1);
 
+/** A frame's size, side to side and front to back, in field units */
+export interface FrameSize {
+    readonly width: number;
+    readonly depth: number;
+}
+
+/** The size of the box's frame for `n` */
+export function frameSizeOf(p: BoxParams, n: number): FrameSize {
+    const { halfWidth, halfDepth } = boxFrame(p, n);
+    return { width: 2 * halfWidth, depth: 2 * halfDepth };
+}
+
 /**
- * `next` (the box switched to Spread) filling the frame `params` has (#439): its center, size and
+ * `next` (the box switched to Spread) filling a frame `width` × `depth` (#439): its center, size and
  * turn kept, the interval whatever fits the count in it. A frame too small for the count at half
  * a step, the least interval, grows from its center just enough (the one time a switch grows
  * it). A box with no area (a single rank or file) has no frame to fill: undefined, and it keeps
  * its interval.
  */
 export function spreadIn(
-    params: BoxParams,
+    { width, depth }: FrameSize,
     next: BoxParams,
     n: number,
     env: ToolEnv,
 ): BoxParams | undefined {
-    const { halfWidth, halfDepth } = boxFrame(params, n);
-    if (!(halfWidth > 0) || !(halfDepth > 0)) return undefined;
+    if (!(width > 0) || !(depth > 0)) return undefined;
     // Its file count stays, so back in Files it is the box it was
-    const sized = spreadSized(next, n, 2 * halfWidth, 2 * halfDepth, false);
+    const sized = spreadSized(next, n, width, depth, false);
     const least = halfStep(env);
     return sized.across < least ? { ...sized, across: least } : sized;
 }
 
 /**
- * `next` (a box switched to Files from another mode) in the space it took up (#439, #449): its
+ * `next` (a box switched to Files from another mode) in a frame `width` × `depth` (#439, #449): its
  * own file count when that keeps the frame within half a step a side (so Grid → Spread → Grid is
  * the box it was); otherwise, of the file counts whose cells are within 2× of square, the one
  * whose half-step intervals come nearest the frame's size. A single file or rank keeps its
  * interval that way.
  */
 export function filesIn(
-    params: BoxParams,
+    { width, depth }: FrameSize,
     next: BoxParams,
     n: number,
     env: ToolEnv,
 ): BoxParams {
-    const { halfWidth, halfDepth } = boxFrame(params, n);
-    const width = 2 * halfWidth;
-    const depth = 2 * halfDepth;
     const { spreadAspect: _aspect, ...flat } = next;
     const fit = (files: number) => {
         const p = withFileCount(flat, files);

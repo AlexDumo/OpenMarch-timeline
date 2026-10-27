@@ -4,13 +4,15 @@ import { distributionFor, type Distribution } from "../distribute/distribution";
 import { layoutCatalogue, resolveLayout } from "../distribute/layouts";
 import { acrossRange, nearestSides, OUTLINE_MIN } from "../distribute/outline";
 import { BOX_PARAMS } from "./boxParams";
+import { leftAs, readMemory, sameSize, type ModeMemory } from "./modeMemory";
 import { boxRegion, boxShape } from "./boxShape";
 import {
     boxBlock,
     filesIn,
     spreadIn,
-    SPLIT_BAND,
+    frameSizeOf,
     halfStep,
+    type FrameSize,
     boxDistribution,
     filesOf,
     grownFromPivot,
@@ -100,37 +102,21 @@ export const boxTool: ToolKind<BoxParams> = {
                 distribution.mode === "files" && resolved?.fellBack === null
                     ? { ...distribution, layout: resolved.layout }
                     : distribution;
-            const { spreadAspect: _aspect, ...flat } = rest;
             const was = boxDistribution(params).mode;
-            if (filled.mode === "spread") {
-                const next: BoxParams = { ...rest, distribution: filled };
-                // Reshuffle and a typed seed: the same frame, another layout in it
-                if (was === "spread") return next;
-                // Spread fills the frame the box had (#439); a single rank or file has none
-                const kept = spreadIn(params, next, n, env);
-                if (kept) return kept;
-            }
+            // Into another mode, the drawn box stays (#439, #449)
+            if (was !== filled.mode)
+                return switched(params, rest, n, filled, env);
+            // Reshuffle and a typed seed: the same frame, another layout in it
+            if (filled.mode === "spread")
+                return { ...rest, distribution: filled };
+            const { spreadAspect: _aspect, ...flat } = rest;
             const next: BoxParams = { ...flat, distribution: filled };
-            // Into another mode, the drawn box stays: its center, and its size as near as
-            // half-step intervals allow (#439, #449)
-            if (was !== "files" && filled.mode === "files")
-                return filesIn(
-                    params,
-                    withFileCount(next, filled.layout.files),
-                    n,
-                    env,
-                );
-            if (was !== "outline" && filled.mode === "outline")
-                return outlineIn(params, next, n, filled, env);
-            // The same mode laid out another way (a layout, a gap), or a box with no frame to
-            // keep: it grows from the pivot
+            // The same mode laid out another way (a layout, a gap): it grows from the pivot
             return grownFromPivot(
                 params,
                 filled.mode === "files"
                     ? withFileCount(next, filled.layout.files)
-                    : filled.mode === "outline"
-                      ? outlineIn(params, next, n, filled, env)
-                      : next,
+                    : next,
                 n,
                 env,
             );
@@ -139,31 +125,89 @@ export const boxTool: ToolKind<BoxParams> = {
 };
 
 /**
- * `next` (the box with its new distribution) sized for Outline. One already in Outline keeps its
- * spots across. Otherwise it keeps the space the box takes up (owner, lab feedback 2026-10-23:
- * designers care about the space, then adjust the interval; #449: every switch keeps the frame):
- * the sides with the space's proportions, each interval refitted to it in half steps; or, when
- * those miss the frame by more than half a step a side, of the splits whose cells are within 2×
- * of square, the one whose half-step intervals come nearest it. A single rank or file
- * has no space to keep, so it keeps its intervals and goes round as wide (or deep) as it can.
+ * The box switched to `distribution`'s mode (#439, #449): its center and turn kept, and its size
+ * fitted to the frame the designer drew or last shaped ({@link ModeMemory}), never to the frame
+ * a switch left, so switching back and forth doesn't walk the box. A mode left since that frame
+ * was drawn comes back with the numbers it had (Grid its file count and intervals, Outline its
+ * sides, Spread its seed), so a round trip is the box it was.
+ */
+function switched(
+    params: BoxParams,
+    rest: BoxParams,
+    n: number,
+    distribution: Distribution,
+    env: ToolEnv,
+): BoxParams {
+    const was = boxDistribution(params);
+    const now = frameSizeOf(params, n);
+    const memory = readMemory(params);
+    const stands =
+        memory !== undefined &&
+        memory.count === n &&
+        sameSize(memory.seen, now);
+    const frame = stands ? memory.frame : now;
+    const left = {
+        ...(stands ? memory.left : {}),
+        [was.mode]: leftAs(params, was),
+    };
+    const { spreadAspect: _aspect, ...flat } = rest;
+    const back = left[distribution.mode];
+    let next: BoxParams;
+    if (back) next = { ...flat, ...back, center: params.center };
+    else if (distribution.mode === "files")
+        next = filesIn(
+            frame,
+            withFileCount({ ...flat, distribution }, distribution.layout.files),
+            n,
+            env,
+        );
+    else if (distribution.mode === "outline")
+        next = outlineIn(
+            frame,
+            params,
+            { ...flat, distribution },
+            n,
+            distribution,
+            env,
+        );
+    else
+        next =
+            spreadIn(frame, { ...rest, distribution }, n, env) ??
+            // A single rank or file has no frame to fill: it grows from the pivot
+            grownFromPivot(params, { ...rest, distribution }, n, env);
+    const modes: ModeMemory = {
+        frame,
+        seen: frameSizeOf(next, n),
+        count: n,
+        left,
+    };
+    return { ...next, modes };
+}
+
+/**
+ * `next` (the box switched to Outline) in a frame `width` × `depth`: the sides with the frame's
+ * proportions, each interval refitted to it in half steps (owner, lab feedback 2026-10-23:
+ * designers care about the space, then adjust the interval); or, when those miss it by more than
+ * half a step a side, the split whose half-step intervals come nearest it, the squarer cells on a
+ * tie (#449). An outline must have its spots half a step apart or more, so one that can't go
+ * round the frame that close (48 round a box 3½ × 2½ steps) grows to the size it needs. Under
+ * {@link OUTLINE_MIN} marchers it is a line, and a box with no area (a single rank or file) keeps
+ * its intervals and goes round as wide (or deep) as it can.
  */
 function outlineIn(
+    { width, depth }: FrameSize,
     params: BoxParams,
     next: BoxParams,
     n: number,
     distribution: Extract<Distribution, { mode: "outline" }>,
     env: ToolEnv,
 ): BoxParams {
-    if (boxDistribution(params).mode === "outline") return next;
     if (n < OUTLINE_MIN) return withFileCount(next, Math.max(1, n));
-    const { halfWidth, halfDepth } = boxFrame(params, n);
     const side = distribution.oddGap.side;
-    if (!(halfWidth > 0) || !(halfDepth > 0)) {
-        const aspect = halfWidth / params.across / (halfDepth / params.deep);
+    if (!(width > 0) || !(depth > 0)) {
+        const aspect = width / params.across / (depth / params.deep);
         return withFileCount(next, nearestSides(n, aspect, side).a + 1);
     }
-    const width = 2 * halfWidth;
-    const depth = 2 * halfDepth;
     const fit = ({ a, b }: { a: number; b: number }) => {
         const across = snapInterval(width / a, env);
         const deep = snapInterval(depth / b, env);
@@ -179,8 +223,11 @@ function outlineIn(
     const { min, max } = acrossRange(n, side);
     for (let a = min; a <= max; a++) {
         const f = fit({ a, b: Math.ceil(n / 2) - a });
-        if (f.square > SPLIT_BAND) continue;
-        if (best.square > SPLIT_BAND || f.off < best.off - 1e-9) best = f;
+        if (
+            f.off < best.off - 1e-9 ||
+            (Math.abs(f.off - best.off) <= 1e-9 && f.square < best.square)
+        )
+            best = f;
     }
     return best.params;
 }
