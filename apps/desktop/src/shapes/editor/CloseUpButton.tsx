@@ -22,8 +22,7 @@ export function CloseUpButton({
     compact?: boolean;
     testId: string;
 }) {
-    const { closeUp } = target;
-    if (!closeUp) return null;
+    if (!target.closeUp) return null;
     const title = tolgee.t(
         "shapes.edit.closeUp.title",
         "Close up: fill the {count, plural, one {# empty spot} other {# empty spots}} with the marchers left",
@@ -35,7 +34,8 @@ export function CloseUpButton({
                 type="button"
                 aria-label={compact ? title : undefined}
                 onPointerDown={keepFocus}
-                onClick={closeUp}
+                // Read at the click: the floating editor doesn't redraw this for every edit (#455)
+                onClick={() => target.closeUp?.()}
                 data-testid={testId}
                 className={clsx("flex items-center gap-4", className)}
             >

@@ -831,6 +831,12 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         edited.current = performance.now();
     }, []);
     const glide = useRef<number | null>(null);
+    // What a view change does, kept current before the glide below can change the view at once
+    // (`follow`, further down)
+    const latestFollow = useRef<(view: FieldView) => void>(() => {});
+    useLayoutEffect(() => {
+        latestFollow.current = follow;
+    });
     const wasDragging = useRef(fieldDrag);
     useLayoutEffect(() => {
         const dragEnded = wasDragging.current && !fieldDrag;
@@ -897,9 +903,7 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
             config: EDITOR_SPRING,
         });
     };
-    const latestFollow = useRef(follow);
     useLayoutEffect(() => {
-        latestFollow.current = follow;
         follow(useFieldViewStore.getState());
         // `follow` reads only these
         // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -64,11 +64,14 @@ export function OutlineGap({
     const { gap, stored, sides } = now;
     const { flipX, flipY } = kind.frameOf(params, spots);
     const seen = gapAsSeen(gap, sides, flipX, flipY);
+    // The shape as it is at the pick: the floating editor doesn't redraw this for every edit
+    // (#455), and the menu stays open over the bar
     const set = (next: OddGap) => {
         const env = envFor();
         if (!env) return;
-        const changed = withOddGap(kind, params, spots, next, env);
-        if (changed !== params) target.apply(changed);
+        const now = target.params;
+        const changed = withOddGap(target.kind, now, target.spots, next, env);
+        if (changed !== now) target.apply(changed);
     };
     const title = `${tolgee.t("shapes.edit.gap.menu", "Leftover")}: ${sideLabel(seen.side)}`;
     return (
