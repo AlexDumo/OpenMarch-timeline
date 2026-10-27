@@ -2699,7 +2699,8 @@ test("change: Reshuffle's caret opens the spread's seed, and typing an earlier s
     await pickMode(page, "spread");
     const editor = page.getByTestId("shape-tool-readout");
     const reshuffle = editor.getByTestId("shape-editor-reshuffle");
-    const first = (await shapeOverlay(page))!.spots;
+    const opened = (await shapeOverlay(page))!;
+    const first = opened.spots;
     await reshuffle.click();
     await expect(reshuffle).toHaveAttribute("data-seed", "2");
     const second = (await shapeOverlay(page))!.spots;
@@ -2732,6 +2733,10 @@ test("change: Reshuffle's caret opens the spread's seed, and typing an earlier s
     await expect
         .poll(async () => sameSpots((await shapeOverlay(page))!.spots, first))
         .toBe(true);
+    // A typed seed is a layout in the same outline: the box didn't move (#439)
+    expect(
+        sameSpots((await shapeOverlay(page))!.outline!, opened.outline!),
+    ).toBe(true);
     // Enter typed the seed: the shape is still open, nobody moved
     await expect(editor).toBeVisible();
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));

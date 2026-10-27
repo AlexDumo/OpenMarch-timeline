@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { boxTool } from "../box/boxTool";
 import { circleTool } from "../circle/circleTool";
-import { distributionOf, reshuffle, withMode } from "../distribute/modes";
+import {
+    distributionOf,
+    reshuffle,
+    withMode,
+    withSeed,
+} from "../distribute/modes";
 import type { SpreadDistribution } from "../distribute/distribution";
 import { fieldToFrame } from "../frame/frame";
 import type { AnyToolKind, ToolEnv } from "../tool/toolKind";
@@ -74,6 +79,22 @@ describe.each(Object.entries(SHAPES))("a %s in Spread", (_, drawn) => {
                 expect(seedOf(r)).toBe(seedOf(s) + times);
                 expect(r.kind.frameOf(r.params, n)).toEqual(frame);
                 expect(r.kind.outline?.(r.params, n)).toEqual(outline);
+            }
+        });
+
+        it("keeps its frame and outline for a typed seed, near or far (#437)", () => {
+            const s = drawn(n);
+            const frame = s.kind.frameOf(s.params, n);
+            const outline = s.kind.outline?.(s.params, n);
+            for (const seed of [1, 9, 4242, 2 ** 31 - 1]) {
+                const typed = edit(
+                    s,
+                    withSeed(s.kind, s.params, s.spots, seed, env),
+                    ctx,
+                );
+                expect(seedOf(typed)).toBe(seed);
+                expect(typed.kind.frameOf(typed.params, n)).toEqual(frame);
+                expect(typed.kind.outline?.(typed.params, n)).toEqual(outline);
             }
         });
 

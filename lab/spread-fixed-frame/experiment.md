@@ -10,6 +10,7 @@ questions:
   - Did the marchers fill the whole shape every time, with no empty strip along one side?
   - Did any layout look crowded, or have someone left alone?
   - Did the spacing number still match how close the nearest marchers stand?
+  - Did typing a seed bring back the layout you expected, without moving the box?
 ---
 
 Before this build, each **Reshuffle** on a Spread box made the box a
@@ -20,10 +21,12 @@ fills it.
 **What to try**
 
 - Open a demo show or start a new one, and select 20 to 60 marchers.
-- Press **B** and drag out a box. In the inspector's **Shapes** section,
-  switch the fill from **Grid** to **Spread**.
-- Press **Reshuffle** several times and watch the box's outline and
-  handles. They shouldn't move.
+- Press **B** and drag out a box. On the second row under the shape,
+  open the mode menu and pick **Spread**.
+- Press **Reshuffle** on that row several times and watch the box's
+  outline and handles. They shouldn't move.
+- Open the arrow beside Reshuffle, type an earlier seed and press
+  **Enter**. That layout comes back, and the box still stays put.
 - Try a circle too (**O**), switched to Spread.
 - Change the spacing or drag a handle, then Reshuffle again.
 
