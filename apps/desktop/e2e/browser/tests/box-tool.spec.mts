@@ -2720,6 +2720,11 @@ test("change: Reshuffle's caret opens the spread's seed, and typing an earlier s
     await input.fill("1");
     await page.keyboard.press("Enter");
     await expect(reshuffle).toHaveAttribute("data-seed", "1");
+    // The seed keeps the focus, so a second Enter is the seed's too, not Place
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue("1");
+    await page.keyboard.press("Enter");
+    await expect(input).toBeFocused();
     await expect
         .poll(async () => sameSpots((await shapeOverlay(page))!.spots, first))
         .toBe(true);

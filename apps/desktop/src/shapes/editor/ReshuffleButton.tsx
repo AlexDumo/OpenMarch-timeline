@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import * as Popover from "@radix-ui/react-popover";
 import { CaretDownIcon, CopyIcon, ShuffleIcon } from "@phosphor-icons/react";
@@ -15,7 +15,10 @@ import type { ShapeEditTarget } from "./editTargets";
 import { keepFocus } from "./keepFocus";
 import { useMenuFocus } from "./menuFocus";
 
-type Target = Pick<ShapeEditTarget, "kind" | "params" | "spots" | "apply">;
+type Target = Pick<
+    ShapeEditTarget,
+    "kind" | "params" | "spots" | "apply" | "update"
+>;
 
 /**
  * Reshuffle (spec #385): a spread's next layout, on the floating editor's second row. Shown only
@@ -92,34 +95,50 @@ function SeedMenu({
     testId: string;
 }) {
     const [open, setOpen] = useState(false);
-    const [copied, setCopied] = useState(false);
+    // What's typed, kept in the one input (never remounted, so it keeps the focus) and shown
+    // afresh when the seed changes: Reshuffle, undo, a seed applied (review)
+    const [text, setText] = useState(String(seed));
+    const [invalid, setInvalid] = useState(false);
+    const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
+    // Escape cancels what's typed; any other close (a click away) commits it
+    const escaped = useRef(false);
+    useEffect(() => {
+        setText(String(seed));
+        setInvalid(false);
+    }, [seed]);
     // Opened by keyboard, focus goes to the seed
     const focus = useMenuFocus((el) => el.querySelector<HTMLElement>("input"));
     const label = tolgee.t("shapes.edit.seed.label", "Seed");
     const copyLabel = tolgee.t("shapes.edit.seed.copy", "Copy the seed");
-    /** Lays the spread out with the typed seed; false when it isn't one */
-    const apply = (text: string) => {
-        const typed = parseSeed(text);
-        const env = envFor();
-        if (typed === null || !env) return false;
+    const canCopy = typeof navigator.clipboard?.writeText === "function";
+    /**
+     * Lays the spread out with the typed seed, from the shape as it is now (`update`), as one
+     * change; false when it isn't a seed
+     */
+    const commit = (typedText: string) => {
+        const typed = parseSeed(typedText);
+        if (typed === null) return false;
         if (typed === seed) return true;
-        const next = withSeed(
-            target.kind,
-            target.params,
-            target.spots,
-            typed,
-            env,
-        );
-        if (next === null) return false;
-        target.apply(next);
+        target.update((now) => {
+            const env = envFor();
+            return (
+                (env && withSeed(target.kind, now, target.spots, typed, env)) ??
+                now
+            );
+        });
         return true;
     };
     return (
         <Popover.Root
             open={open}
             onOpenChange={(next) => {
+                if (!next) {
+                    if (escaped.current || !commit(text)) setText(String(seed));
+                    setInvalid(false);
+                }
+                escaped.current = false;
                 setOpen(next);
-                setCopied(false);
+                setCopy("idle");
             }}
         >
             <Tip label={`${label}: ${seed}`}>
@@ -141,6 +160,9 @@ function SeedMenu({
                     align="end"
                     sideOffset={6}
                     {...focus.content}
+                    onEscapeKeyDown={() => {
+                        escaped.current = true;
+                    }}
                     onPointerDown={(e) => e.stopPropagation()}
                     className="rounded-6 border-stroke bg-bg-1 bg-modal text-sub text-text shadow-modal z-50 flex flex-col gap-6 border p-8"
                     data-testid={`${testId}-menu`}
@@ -148,11 +170,14 @@ function SeedMenu({
                     <div className="flex items-center gap-8">
                         <span className="text-text/80">{label}</span>
                         <input
-                            // A new seed from Reshuffle shows at once
-                            key={seed}
-                            defaultValue={String(seed)}
+                            value={text}
+                            onChange={(e) => {
+                                setText(e.currentTarget.value);
+                                setInvalid(false);
+                            }}
                             inputMode="numeric"
                             aria-label={label}
+                            aria-invalid={invalid || undefined}
                             className="rounded-4 border-stroke bg-fg-1 w-80 border px-6 py-2 tabular-nums"
                             data-testid={`${testId}-input`}
                             onKeyDown={(e) => {
@@ -162,16 +187,7 @@ function SeedMenu({
                                 if (e.key !== "Escape") e.stopPropagation();
                                 if (e.key !== "Enter") return;
                                 e.preventDefault();
-                                const input = e.currentTarget;
-                                if (apply(input.value))
-                                    input.removeAttribute("aria-invalid");
-                                else input.setAttribute("aria-invalid", "true");
-                            }}
-                            onBlur={(e) => {
-                                if (apply(e.currentTarget.value)) return;
-                                // Not a seed: back to the one it has
-                                e.currentTarget.value = String(seed);
-                                e.currentTarget.removeAttribute("aria-invalid");
+                                setInvalid(!commit(text));
                             }}
                         />
                         <span
@@ -184,32 +200,41 @@ function SeedMenu({
                                 { count: target.spots },
                             )}
                         </span>
-                        <Tip
-                            label={
-                                copied
-                                    ? tolgee.t(
-                                          "shapes.edit.seed.copied",
-                                          "Copied",
-                                      )
-                                    : copyLabel
-                            }
-                        >
-                            <button
-                                type="button"
-                                aria-label={copyLabel}
-                                onClick={() => {
-                                    void navigator.clipboard
-                                        ?.writeText(String(seed))
-                                        .then(() => setCopied(true))
-                                        .catch(() => undefined);
-                                }}
-                                data-testid={`${testId}-copy`}
-                                data-copied={copied}
-                                className="rounded-4 hover:text-accent flex min-h-24 min-w-24 items-center justify-center p-4"
+                        {canCopy && (
+                            <Tip
+                                label={
+                                    copy === "copied"
+                                        ? tolgee.t(
+                                              "shapes.edit.seed.copied",
+                                              "Copied",
+                                          )
+                                        : copy === "failed"
+                                          ? tolgee.t(
+                                                "shapes.edit.seed.copyFailed",
+                                                "Copy failed",
+                                            )
+                                          : copyLabel
+                                }
                             >
-                                <CopyIcon size={14} />
-                            </button>
-                        </Tip>
+                                <button
+                                    type="button"
+                                    aria-label={copyLabel}
+                                    onClick={() => {
+                                        navigator.clipboard
+                                            .writeText(String(seed))
+                                            .then(
+                                                () => setCopy("copied"),
+                                                () => setCopy("failed"),
+                                            );
+                                    }}
+                                    data-testid={`${testId}-copy`}
+                                    data-copy={copy}
+                                    className="rounded-4 hover:text-accent flex min-h-24 min-w-24 items-center justify-center p-4"
+                                >
+                                    <CopyIcon size={14} />
+                                </button>
+                            </Tip>
+                        )}
                     </div>
                     <p className="text-text/60 max-w-[15rem] text-xs">
                         {tolgee.t(
