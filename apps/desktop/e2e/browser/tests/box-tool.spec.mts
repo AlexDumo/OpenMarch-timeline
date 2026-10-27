@@ -2904,6 +2904,42 @@ const sizeButton = (page: Page, more: boolean) =>
         name: more ? "One more across" : "One fewer across",
     });
 
+test("change: the floating editor ends up in the same place after a change whether or not the pointer is on it (#437)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    const editor = page.getByTestId("shape-tool-readout");
+    await expect(editor).toHaveAttribute("data-motion", "glide");
+    /** Where it settles: the same box two frames apart */
+    const settled = async () => {
+        let last = "";
+        for (;;) {
+            const b = (await editor.boundingBox())!;
+            const now = `${Math.round(b.x)},${Math.round(b.y)}`;
+            if (now === last) return now;
+            last = now;
+            await page.waitForTimeout(150);
+        }
+    };
+    const before = await settled();
+    // One more across, pressed with the pointer on the editor, which stays there
+    await sizeButton(page, true).click();
+    const hovered = await settled();
+    expect(hovered).not.toBe(before);
+    // Leaving doesn't move it: there's no hold to let go of
+    await page.mouse.move(5, 5);
+    await page.waitForTimeout(400);
+    expect(await settled()).toBe(hovered);
+
+    // The same change with the pointer away lands in the same place
+    await page.keyboard.press("ControlOrMeta+z");
+    expect(await settled()).toBe(before);
+    await page.mouse.move(5, 5);
+    await sizeButton(page, true).evaluate((el: HTMLElement) => el.click());
+    expect(await settled()).toBe(hovered);
+});
+
 test("change: − and + come back to the same spots, so the box doesn't creep", async ({
     show,
 }) => {

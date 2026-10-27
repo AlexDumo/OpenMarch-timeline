@@ -1,5 +1,15 @@
 import clsx from "clsx";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
+import { animated, useSpring } from "@react-spring/web";
+import { prefersReducedMotion } from "@/components/timeline/reducedMotion";
+import { useLabVariant } from "@/lab/labVariant";
+import { editorPlacement, type EditorMotion } from "./editorPlacement";
 import { keepFocus } from "./keepFocus";
 import { useActionHandler } from "@/shortcuts/useActionHandler";
 import { getActionShortcutLabel } from "@/shortcuts/labels";
@@ -60,8 +70,10 @@ import { PivotMenu } from "./PivotGrid";
 import { CloseUpButton } from "./CloseUpButton";
 import { useUiSettingsStore } from "@/stores/UiSettingsStore";
 
-/** The gap between the shape's outline and the editor, in CSS px */
-const GAP_PX = 14;
+/** Steady: how long the editor stays still after a press on it ends, so a second click lands */
+const PRESS_HOLD_MS = 450;
+/** A gentle spring that doesn't overshoot (#437) */
+const EDITOR_SPRING = { tension: 210, friction: 26, clamp: true };
 
 /**
  * The floating editor (08-shape-system-ux.md, "The floating editor"), the main place for editing
@@ -221,7 +233,7 @@ function ShapeEditorBar({
     );
 
     return (
-        <div
+        <animated.div
             ref={place.ref}
             className="shape-editor-surface text-sub text-text pointer-events-none absolute z-10 flex flex-col items-center gap-4 whitespace-nowrap *:pointer-events-auto"
             style={place.style}
@@ -230,6 +242,7 @@ function ShapeEditorBar({
             data-testid={testId}
             data-shape-editor
             data-placement={place.above ? "above" : "below"}
+            data-motion={place.motion}
             onPointerDown={(e) => e.stopPropagation()}
         >
             <div
@@ -479,18 +492,22 @@ function ShapeEditorBar({
                     />
                 </span>
             </div>
-        </div>
+        </animated.div>
     );
 }
 
 /**
- * Where the editor sits: under the shape's outline, centered, and above it when there's no room
- * below in the field, kept inside the field side to side. Follows the field as it pans and zooms,
- * but holds still while the pointer is on it, so a button doesn't slide away between two clicks
- * as the numbers change (sims, F3: 5 of 8 clicked the wrong thing).
+ * Where the editor sits (`editorPlacement`), sprung there whenever the shape or the editor's own
+ * size moves it, gently and without overshoot (#437, owner: predictable motion, no jump when the
+ * pointer leaves). A pan or zoom moves it at once, as only the shape's changes animate, and so
+ * does reduced motion. Two versions are tried in the lab: Glide follows every change; Steady
+ * keeps a calmer anchor and holds still while a press on the editor is under way, and a moment
+ * after, so a second click lands where the first did.
  */
 function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
     const view = useFieldViewStore();
+    const motion: EditorMotion =
+        useLabVariant() === "steady" ? "steady" : "glide";
     const ref = useRef<HTMLDivElement>(null);
     const [room, setRoom] = useState({
         width: 0,
@@ -498,14 +515,6 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         fieldWidth: Infinity,
         fieldHeight: Infinity,
     });
-    const [held, setHeld] = useState<{ left: number; top: number } | null>(
-        null,
-    );
-    const b = boundsOf(shapeOutline(kind, params, spots));
-    const bottom = fieldToElement(view, (b.left + b.right) / 2, b.bottom);
-    const top = fieldToElement(view, (b.left + b.right) / 2, b.top);
-    // The outline's spots have a radius and the handles stick out: clear them
-    const pad = GAP_PX + 6;
     // Its own size (the Save form opens) and the field's, as they change
     useLayoutEffect(() => {
         const el = ref.current;
@@ -524,42 +533,82 @@ function usePlacement(kind: AnyToolKind, params: unknown, spots: number) {
         observer.observe(field);
         return () => observer.disconnect();
     }, []);
-    const above =
-        bottom.y + pad + room.height > room.fieldHeight &&
-        top.y - pad - room.height > 0;
-    const anchor = above ? top : bottom;
-    const margin = 4;
-    const left = Math.max(
-        margin,
-        Math.min(
-            anchor.x - room.width / 2,
-            room.fieldWidth - room.width - margin,
-        ),
+    const wasAbove = useRef(false);
+    const toElement = (p: { x: number; y: number }) =>
+        fieldToElement(view, p.x, p.y);
+    const target = editorPlacement({
+        motion,
+        outline: shapeOutline(kind, params, spots).map(toElement),
+        center: toElement(kind.frameOf(params, spots).center),
+        width: room.width,
+        height: room.height,
+        fieldWidth: room.fieldWidth,
+        fieldHeight: room.fieldHeight,
+        wasAbove: wasAbove.current,
+    });
+    wasAbove.current = target.above;
+
+    // Steady: still while a press on the editor is under way, and a moment after it
+    const [pressing, setPressing] = useState(false);
+    const release = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        if (!pressing) return;
+        const up = () => {
+            if (release.current) clearTimeout(release.current);
+            release.current = setTimeout(
+                () => setPressing(false),
+                PRESS_HOLD_MS,
+            );
+        };
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
+        return () => {
+            window.removeEventListener("pointerup", up);
+            window.removeEventListener("pointercancel", up);
+        };
+    }, [pressing]);
+    useEffect(
+        () => () => {
+            if (release.current) clearTimeout(release.current);
+        },
+        [],
     );
-    const at = held ?? {
-        left,
-        top: above ? top.y - pad - room.height : bottom.y + pad,
-    };
+    const held = motion === "steady" && pressing;
+
+    const [spring, api] = useSpring(() => ({
+        left: target.left,
+        top: target.top,
+    }));
+    const shown = useRef<{ view: unknown; placed: boolean }>({
+        view,
+        placed: false,
+    });
+    useLayoutEffect(() => {
+        if (held || room.width === 0) return;
+        // A pan or zoom, the first placing and reduced motion jump; the shape's changes spring
+        const jump =
+            !shown.current.placed ||
+            shown.current.view !== view ||
+            prefersReducedMotion();
+        shown.current = { view, placed: true };
+        void api.start({
+            left: target.left,
+            top: target.top,
+            immediate: jump,
+            config: EDITOR_SPRING,
+        });
+    }, [api, held, room.width, target.left, target.top, view]);
     return {
         ref,
-        above,
-        style: at,
+        above: target.above,
+        motion,
+        style: spring,
         hold: {
-            onPointerEnter: () => setHeld(at),
-            onPointerLeave: () => setHeld(null),
+            onPointerDownCapture: () => {
+                if (release.current) clearTimeout(release.current);
+                setPressing(true);
+            },
         },
-    };
-}
-
-/** The field-square rectangle around an outline */
-function boundsOf(points: readonly { x: number; y: number }[]) {
-    const xs = points.map((p) => p.x);
-    const ys = points.map((p) => p.y);
-    return {
-        left: Math.min(...xs),
-        right: Math.max(...xs),
-        top: Math.min(...ys),
-        bottom: Math.max(...ys),
     };
 }
 
