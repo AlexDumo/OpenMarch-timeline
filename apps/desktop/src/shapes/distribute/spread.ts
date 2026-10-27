@@ -35,6 +35,17 @@ export const SPREAD_GENERATORS: readonly number[] = [1, 2];
  * generator 1's on average (#439).
  */
 const CLOSEST_OF_HEX = 0.88;
+/** Generator 2, thin shapes: rows of spots this far apart front to back (hex rows) */
+const ROW_PITCH = Math.sqrt(3) / 2;
+/** …this far in from every side, in intervals */
+const EDGE_ROOM = 0.2;
+/** …and the frame this much bigger than rows need, since a scatter packs looser than rows */
+const ROWS_SLACK = 1.1;
+/** Generator 2's floor: passes of parting tight pairs before it settles for what it has */
+const FLOOR_PASSES = 4;
+/** …each first pushing apart everyone nearer than this share over the interval, for this many rounds */
+const JAM_TARGET = 1.05;
+const JAM_ROUNDS = 20;
 
 /** Every marcher's distance from the edge lies in this band, in spacings (RESEARCH.md §5) */
 const MARGIN_MIN = 0.15;
@@ -189,9 +200,10 @@ function removeMostCrowded(w: Work, until: number) {
 
 /**
  * Push apart: neighbors nearer than `target` (the hex spacing when absent) push each other
- * off, each move held at least the marcher's own margin inside the edge (halved until it is)
+ * off, each move held at least the marcher's own margin inside the edge, or only `squeeze` when
+ * given (halved until it is)
  */
-function pushApart(w: Work, rounds: number, target?: number) {
+function pushApart(w: Work, rounds: number, target?: number, squeeze?: number) {
     const { points, margins } = w;
     const n = points.length;
     target ??= hexSpacing(w.region.area * w.k * w.k, n);
@@ -227,7 +239,11 @@ function pushApart(w: Work, rounds: number, target?: number) {
             const p = points[i]!;
             for (let h = 1; h > 0.01; h /= 2) {
                 const q = { x: p.x + mx[i]! * h, y: p.y + my[i]! * h };
-                if (depth(w, q) >= margins[i]!) {
+                const keep =
+                    squeeze === undefined
+                        ? margins[i]!
+                        : Math.min(squeeze, margins[i]!);
+                if (depth(w, q) >= keep) {
                     points[i] = q;
                     break;
                 }
@@ -281,13 +297,13 @@ const median = (values: readonly number[]): number =>
 
 /**
  * Pairs nearer than `floor` (by default {@link FLOOR} of the median neighbor distance) step
- * apart, each half the shortfall, held inside their margins (or only the least anyone keeps, when
- * `squeezed`), until none are (or the rounds run out). Generator 1 leaves a pair alone (`least`).
+ * apart, each half the shortfall, held inside their margins (or only `squeeze` inside the edge,
+ * when given), until none are (or the rounds run out). Generator 1 leaves a pair alone (`least`).
  */
 function raiseFloor(
     w: Work,
     floor = FLOOR * median(nearestDistances(w.points)),
-    squeezed = false,
+    squeeze?: number,
     least = 3,
 ) {
     const { points, margins } = w;
@@ -316,7 +332,10 @@ function raiseFloor(
         if (!close) return;
         for (let i = 0; i < n; i++) {
             const p = points[i]!;
-            const keep = squeezed ? MARGIN_MIN : margins[i]!;
+            const keep =
+                squeeze === undefined
+                    ? margins[i]!
+                    : Math.min(squeeze, margins[i]!);
             for (let h = 1; h > 0.01; h /= 2) {
                 const q = { x: p.x + mx[i]! * h, y: p.y + my[i]! * h };
                 if (depth(w, q) >= keep) {
@@ -350,23 +369,68 @@ function unevenness(points: readonly XY[]): number {
     return Math.sqrt(variance) / mean;
 }
 
+/**
+ * Generator 2's margins: none deeper than a thin shape holds. A marcher's margin is at most the
+ * shape's half short side less {@link MARGIN_MIN}, or half of it, so a strip of one file still has
+ * a middle to stand in. Wide shapes keep their margins as they are.
+ */
+function capMargins(region: Region, k: number, margins: number[]): number[] {
+    const { left, top, right, bottom } = region.bounds;
+    const shortHalf = (Math.min(right - left, bottom - top) / 2) * k;
+    const cap = Math.max(shortHalf - MARGIN_MIN, shortHalf / 2);
+    return margins.map((m) => Math.min(m, cap));
+}
+
+/**
+ * Generator 2's floor: pairs closer than `interval` (work units) step apart, inside their margins
+ * first, then as far as the edge itself (#439: edge marchers sit on or near it), a few passes so
+ * a crowd or a long chain settles
+ */
+function floorAt(w: Work, interval: number) {
+    // A hair over, so pairs settle on the interval rather than just under it
+    const floor = interval * (1 + 1e-4);
+    raiseFloor(w, floor, undefined, 2);
+    for (let t = 0; t < FLOOR_PASSES; t++) {
+        if (closestPair(w.points) >= interval) return;
+        // Jammed: the crowd around the tight pair makes room together, then the pair parts
+        pushApart(w, JAM_ROUNDS, floor * JAM_TARGET, 0);
+        raiseFloor(w, floor, 0, 2);
+    }
+}
+
+/** The work scale of a spread: generator 2 grows it with a thin shape's frame ({@link spreadSize}) */
+function workScaleOf(region: Region, n: number, generator: number): number {
+    const k = workScale(region, n);
+    return generator === 1
+        ? k
+        : (k * spreadSize(region, n)) / hexSize(region, n);
+}
+
 /** A fresh layout of `n` in work units, before scaling: the most even of the seed's tries */
-function freshWork(region: Region, n: number, seed: number): Work {
+function freshWork(
+    region: Region,
+    n: number,
+    seed: number,
+    generator: number,
+): Work {
     const tries = n > 1 && n <= SMALL_SPREAD ? SMALL_TRIES : 1;
+    const k = workScaleOf(region, n, generator);
     let best: Work | null = null;
     let bestScore = Infinity;
     for (let t = 0; t < tries; t++) {
         const own = seed * SMALL_TRIES + t;
+        const margins = marginsFor(own, n);
         const w: Work = {
             region,
             seed: own,
-            k: workScale(region, n),
-            margins: marginsFor(own, n),
+            k,
+            margins: generator === 1 ? margins : capMargins(region, k, margins),
             points: [],
         };
         addByBestCandidate(w, n, seeded(own));
         pushApart(w, SPREAD_ROUNDS);
         raiseFloor(w);
+        if (generator !== 1 && n > 1) floorAt(w, intervalIn(region, n, k));
         const score = tries > 1 ? unevenness(w.points) : 0;
         if (score < bestScore) {
             bestScore = score;
@@ -376,14 +440,58 @@ function freshWork(region: Region, n: number, seed: number): Work {
     return best!;
 }
 
+/** Generator 2: one interval in work units, at work scale `k` */
+const intervalIn = (region: Region, n: number, k: number) =>
+    k / spreadSize(region, n);
+
+/** Generator 2's size from the area alone: {@link CLOSEST_OF_HEX} hex spacings to the interval */
+function hexSize(region: Region, n: number): number {
+    const k = workScale(region, n);
+    return k / (CLOSEST_OF_HEX * hexSpacing(region.area * k * k, n));
+}
+
+/** Rows {@link ROW_PITCH} apart across `deep`, every other one half an interval along: spots in a `wide` × `deep` space */
+function rowsHold(wide: number, deep: number): number {
+    if (wide < 0 || deep < 0) return 0;
+    const rows = Math.floor(deep / ROW_PITCH) + 1;
+    const full = Math.floor(wide) + 1;
+    const shifted = wide >= 0.5 ? Math.floor(wide - 0.5) + 1 : 0;
+    return Math.ceil(rows / 2) * full + Math.floor(rows / 2) * shifted;
+}
+
+/**
+ * The least size at which `region`'s bounds hold `n` spots one interval apart in rows (either
+ * way), {@link EDGE_ROOM} in from every side. Seed-free: it only reads the bounds. It matters
+ * for a long, thin shape, where the area says the marchers fit but its width doesn't.
+ */
+function rowsSize(region: Region, n: number): number {
+    const { left, top, right, bottom } = region.bounds;
+    const a = right - left;
+    const b = bottom - top;
+    const holds = (size: number) => {
+        const x = a * size - 2 * EDGE_ROOM;
+        const y = b * size - 2 * EDGE_ROOM;
+        return Math.max(rowsHold(x, y), rowsHold(y, x)) >= n;
+    };
+    // One line along the long side always holds them
+    let hi = (n - 1 + 2 * EDGE_ROOM) / Math.max(a, b);
+    let lo = 0;
+    for (let i = 0; i < 60; i++) {
+        const mid = (lo + hi) / 2;
+        if (holds(mid)) hi = mid;
+        else lo = mid;
+    }
+    return hi;
+}
+
 /**
  * How big a generator 2 spread of `n` is at an interval of 1: `region` times this. Only the
  * shape and count decide it, never the seed, so it needs no layout: the region holds the spots
- * {@link CLOSEST_OF_HEX} hex spacings apart.
+ * {@link CLOSEST_OF_HEX} hex spacings apart, and a long, thin one at least enough for rows of them
+ * one interval apart, with room to scatter ({@link ROWS_SLACK}).
  */
 export function spreadSize(region: Region, n: number): number {
-    const k = workScale(region, n);
-    return k / (CLOSEST_OF_HEX * hexSpacing(region.area * k * k, n));
+    return Math.max(hexSize(region, n), rowsSize(region, n) * ROWS_SLACK);
 }
 
 /**
@@ -407,18 +515,24 @@ export function evenSpread(
 ): SpreadLayout {
     if (n <= 0 || !(region.area > 0)) return { spots: [], scale: 0 };
     let w: Work;
-    if (from === n || from <= 1 || n <= 1) w = freshWork(region, n, seed);
+    if (from === n || from <= 1 || n <= 1)
+        w = freshWork(region, n, seed, generator);
     else {
         // Worked at the old layout's own scale, its closest pair still the interval: the edge
         // grows (or shrinks) with the count around the marchers where they stand
-        const was = freshWork(region, from, seed);
+        const was = freshWork(region, from, seed, generator);
         const closest = closestPair(was.points);
+        const k =
+            generator === 1
+                ? (was.k * workScale(region, n)) / workScale(region, from)
+                : workScaleOf(region, n, generator);
+        // The same margins for the marchers that were there, new ones for new marchers
+        const margins = n > from ? marginsFor(was.seed, n) : was.margins;
         w = {
             region,
             seed: was.seed,
-            k: (was.k * workScale(region, n)) / workScale(region, from),
-            // The same margins for the marchers that were there, new ones for new marchers
-            margins: n > from ? marginsFor(was.seed, n) : was.margins,
+            k,
+            margins: generator === 1 ? margins : capMargins(region, k, margins),
             points: was.points,
         };
         // Those the edge moved past step back inside it
@@ -434,20 +548,14 @@ export function evenSpread(
         // No room near the change (a small spread packed against its edges): part the tight
         // pair even if that takes a marcher nearer the edge than its own distance
         if (closestPair(w.points) < closest * (1 - 1e-6))
-            raiseFloor(w, closest, true);
+            raiseFloor(w, closest, MARGIN_MIN);
     }
     // Generator 2: an interval is the spacing the shape and count give, whatever the seed
     const fixed = generator === 1 ? null : spreadSize(region, n) / w.k;
     if (n === 1) return { spots: [{ x: 0, y: 0 }], scale: w.k * (fixed ?? 1) };
-    if (fixed !== null) {
-        // Pairs closer than the interval step apart where there's room, inside their margins
-        // first, then as near the edge as anyone stands
-        raiseFloor(w, 1 / fixed, false, 2);
-        if (closestPair(w.points) * fixed < 1 - 1e-6)
-            raiseFloor(w, 1 / fixed, true, 2);
-    }
+    if (fixed !== null) floorAt(w, 1 / fixed);
     // Two marchers on one spot can't be scaled apart: lay it out afresh (never seen; a guard)
-    if (!(closestPair(w.points) > 0)) w = freshWork(region, n, seed);
+    if (!(closestPair(w.points) > 0)) w = freshWork(region, n, seed, generator);
     const unit = fixed ?? 1 / closestPair(w.points);
     const spots = w.points
         .map((p) => ({ x: p.x * unit, y: p.y * unit }))

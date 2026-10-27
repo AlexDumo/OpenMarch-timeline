@@ -135,6 +135,56 @@ describe("Even spread", () => {
                 }
     });
 
+    describe("in a long, thin shape (#439 review)", () => {
+        /** Boxes up to 20:1 either way, as files × ranks */
+        const THIN: [number, number][] = [
+            [8, 1],
+            [12, 1],
+            [20, 1],
+            [19, 2],
+            [1, 12],
+            [1, 20],
+            [2, 19],
+        ];
+
+        it("puts no pair closer than one interval, for 20 seeds", () => {
+            for (const [files, ranks] of THIN) {
+                const region = rectRegion(files / 2, ranks / 2);
+                for (const n of [2, 3, 6, 12, 22, 48])
+                    for (let seed = 1; seed <= 20; seed++)
+                        expect(
+                            Math.min(
+                                ...nearest(
+                                    spread(
+                                        region,
+                                        n,
+                                        spreadDistribution(seed, n),
+                                    ),
+                                ),
+                            ),
+                            `${files}×${ranks} ${n} ${seed}`,
+                        ).toBeGreaterThanOrEqual(INTERVAL * (1 - 1e-6));
+            }
+        });
+
+        it("never stacks two marchers in a single file", () => {
+            for (const [files, ranks, n, seed] of [
+                [20, 1, 20, 2],
+                [22, 1, 22, 4],
+                [1, 20, 20, 2],
+            ] as const) {
+                const spots = spread(
+                    rectRegion(files / 2, ranks / 2),
+                    n,
+                    spreadDistribution(seed, n),
+                );
+                expect(Math.min(...nearest(spots))).toBeGreaterThanOrEqual(
+                    INTERVAL * (1 - 1e-6),
+                );
+            }
+        });
+    });
+
     it("keeps one size for every seed, so Reshuffle keeps the shape's frame (#439)", () => {
         for (const region of Object.values(REGIONS))
             for (const n of [1, 2, 12, 36, 100]) {
@@ -269,7 +319,7 @@ describe("Even spread", () => {
             const after = spread(region, 30, next);
             expect(after).not.toEqual(before);
             // Still the same kind of spread
-            expect(Math.min(...nearest(after))).toBeCloseTo(INTERVAL, 9);
+            expectSpacing(Math.min(...nearest(after)), INTERVAL);
         });
 
         it("lays out for the count there is now, dropping an old count", () => {
