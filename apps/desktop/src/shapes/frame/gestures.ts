@@ -19,6 +19,7 @@ import {
     type FlipAxis,
     type Pivot,
 } from "./frame";
+import { linePull } from "./edgeGuides";
 import { carryPivot, pivotOf, snapPivot, withPivot } from "./pivot";
 
 /**
@@ -195,7 +196,8 @@ function dragged(
         case "handle":
             return kind.dragHandle(base, n, gesture.key, at, env);
         case "move":
-            return kind.move(
+            return moveOntoLines(
+                kind,
                 base,
                 n,
                 { x: at.x - gesture.grab.x, y: at.y - gesture.grab.y },
@@ -203,7 +205,8 @@ function dragged(
             );
         case "center": {
             const { center } = kind.frameOf(base, n);
-            return kind.move(
+            return moveOntoLines(
+                kind,
                 base,
                 n,
                 { x: at.x - center.x, y: at.y - center.y },
@@ -226,6 +229,41 @@ function dragged(
             return settled(kind, turned, n, env, gesture.pivot);
         }
     }
+}
+
+/**
+ * `base` moved by `delta`, a side or its center line landing on a field line within the pull
+ * radius (#444), as a stretch's edge does (#425); the kind's own grid snap on an axis with none.
+ * The radius is never more than a quarter step (half the grid's detent), so every half step near
+ * a line can still be reached: a stretch's quarter of its detent (#425) would be under a pixel for
+ * a move at the fitted zoom. Alt (no snap) doesn't pull.
+ */
+function moveOntoLines(
+    kind: AnyToolKind,
+    base: unknown,
+    n: number,
+    delta: XY,
+    env: ToolEnv,
+): unknown {
+    const snapped = kind.move(base, n, delta, env);
+    if (!env.snap || !env.fieldLines) return snapped;
+    const free = kind.move(base, n, delta, { ...env, snap: false });
+    const at = kind.frameOf(free, n).center;
+    const pull = linePull(
+        shapeOutline(kind, free, n),
+        at,
+        env.fieldLines,
+        Math.min(env.pullRadius ?? 0, env.stepPx / 4),
+    );
+    if (pull.x === null && pull.y === null) return snapped;
+    const frame = kind.frameOf(snapped, n);
+    return kind.withFrame(snapped, n, {
+        ...frame,
+        center: {
+            x: pull.x === null ? frame.center.x : at.x + pull.x,
+            y: pull.y === null ? frame.center.y : at.y + pull.y,
+        },
+    });
 }
 
 /**

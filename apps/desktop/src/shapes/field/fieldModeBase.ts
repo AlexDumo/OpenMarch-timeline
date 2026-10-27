@@ -130,9 +130,10 @@ export function frameDrawing(
 }
 
 /**
- * While a draw or a handle drag has the shape's edges on the field's lines (#425): a guide
- * along each, named as the coordinate sheet writes it (#427), the shape's sides on it drawn thicker and its
- * spots tinted. Nothing during any other gesture, or with none.
+ * While a draw, a handle drag or a move has the shape's edges on the field's lines (#425, #444;
+ * a move's center line too): a guide along each, named as the coordinate sheet writes it (#427),
+ * the shape's sides on it drawn thicker and its spots tinted. Nothing during any other gesture,
+ * or with none.
  */
 export function guideDrawing(
     kind: AnyToolKind,
@@ -143,7 +144,9 @@ export function guideDrawing(
     env: ToolEnv,
     field: ShapeField,
 ): Pick<FieldModeDrawing, "guides" | "guideEdges" | "onGuides"> {
-    if (gesture?.type !== "draw" && gesture?.type !== "handle") return {};
+    const type = gesture?.type;
+    const moving = type === "move" || type === "center";
+    if (type !== "draw" && type !== "handle" && !moving) return {};
     const { fieldProperties } = field;
     const { width, height } = fieldProperties;
     const { guides, edges, on } = edgeGuides(
@@ -151,6 +154,8 @@ export function guideDrawing(
         spots,
         env.fieldLines,
         { width, height },
+        // A move lands its center on a line too (#444)
+        moving ? kind.frameOf(params, n).center : undefined,
     );
     if (guides.length === 0) return {};
     // Named as the coordinate sheet would write a spot on the line (owner, #427)
