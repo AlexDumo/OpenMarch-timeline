@@ -346,7 +346,10 @@ describeDbTests("registered coordinate actions", (it) => {
         await trigger("performUndo");
 
         await waitFor(() =>
-            expect(warning).toHaveBeenCalledWith("No action to undo"),
+            expect(warning).toHaveBeenCalledWith(
+                "No action to undo",
+                expect.anything(),
+            ),
         );
         expect(warning).toHaveBeenCalledOnce();
         expect(await positionsOn(db, page, ids)).toEqual(before);

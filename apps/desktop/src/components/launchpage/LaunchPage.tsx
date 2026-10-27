@@ -16,6 +16,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { T } from "@tolgee/react";
 import { runAction } from "@/shortcuts/registry";
 import FilesContent from "./files/FilesContent";
+import WebShowLibrary from "../web/WebShowLibrary";
+import { isWebBuild } from "@/utilities/webBuild";
 import LearnContent from "./learn/LearnContent";
 import Toaster from "../ui/Toaster";
 import NewShowDialog from "./NewShowDialog";
@@ -117,7 +119,7 @@ export default function LaunchPage({ setDatabaseIsReady }: LaunchPageProps) {
     }, [queryClient, setDatabaseIsReady]);
 
     return (
-        <div className="from-bg-1 to-accent flex h-screen w-screen flex-col bg-linear-to-br from-[60%] to-[150%]">
+        <div className="from-bg-1 to-accent flex h-full min-h-0 w-full flex-col bg-linear-to-br from-[60%] to-[150%]">
             <TitleBar />
             {/* First launch: the welcome flow is the whole page until it's
                 finished. Nothing shows while the stored mode is being read. */}
@@ -137,7 +139,8 @@ export default function LaunchPage({ setDatabaseIsReady }: LaunchPageProps) {
                             onCreateNew={() => void requestOpenNewShowDialog()}
                             selectedTab={selectedTab}
                         />
-                        <FilesContent />
+                        {/* The web editor lists the shows kept in this browser */}
+                        {isWebBuild ? <WebShowLibrary /> : <FilesContent />}
                         <LearnContent />
                     </Tabs.Root>
                 )
@@ -205,7 +208,11 @@ function Sidebar({
                         <ListItem selected={selectedTab === "files"}>
                             <FolderIcon size={24} className="flex-shrink-0" />
                             <span className="min-w-0 break-words">
-                                <T keyName="launchpage.files.title" />
+                                {isWebBuild ? (
+                                    <T keyName="web.library.tab" />
+                                ) : (
+                                    <T keyName="launchpage.files.title" />
+                                )}
                             </span>
                         </ListItem>
                     </Tabs.Trigger>

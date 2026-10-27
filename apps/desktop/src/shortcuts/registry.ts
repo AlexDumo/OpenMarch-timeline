@@ -66,18 +66,23 @@ export function actionIgnoresRepeat(id: ActionId): boolean {
 }
 
 /** Runs the action's handler (its `press` for a key press, when it has one); null if it can't run */
-function runHandler(id: ActionId, byKey: boolean): ActionHandler | null {
+function runHandler(
+    id: ActionId,
+    byKey: boolean,
+    args?: ActionArgs,
+): ActionHandler | null {
     const handler = top(id);
     if (!handler || !handler.isEnabled() || isActionOffInWorkspace(id))
         return null;
     runListeners.forEach((listener) => listener(id));
     const run = byKey && handler.press ? handler.press : handler.run;
-    run(getActionDefinition(id).args);
+    run(args ?? getActionDefinition(id).args);
     return handler;
 }
 
-export function runAction(id: ActionId): boolean {
-    return runHandler(id, false) !== null;
+/** Runs the action; `args` replaces the definition's args (e.g. an exact nudge distance). */
+export function runAction(id: ActionId, args?: ActionArgs): boolean {
+    return runHandler(id, false, args) !== null;
 }
 
 /**
