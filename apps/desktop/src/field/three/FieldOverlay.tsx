@@ -63,6 +63,9 @@ const GUIDE_WIDTH = 1.5;
 const GUIDE_CASING = "rgba(0, 0, 0, 0.35)";
 const GUIDE_CASING_WIDTH = GUIDE_WIDTH + 2;
 const GUIDE_EDGE_WIDTH = 2.5 * SHAPE_OUTLINE_WIDTH;
+/** A corner or center on a guide with no side along it (#446): a ring in CSS px, as the pivot's */
+const GUIDE_MARK_RADIUS = 6;
+const GUIDE_MARK_WIDTH = GUIDE_EDGE_WIDTH;
 /** A guide's name tag at the canvas edge, in CSS px */
 const GUIDE_LABEL_PX = 12;
 const GUIDE_LABEL_HEIGHT = 20;
@@ -539,6 +542,22 @@ function ModeDrawing({
                         strokeWidth={GUIDE_EDGE_WIDTH}
                         strokeLinecap="round"
                         data-testid="fieldShapeGuideEdge"
+                    />
+                );
+            })}
+            {drawing.guideMarks?.map((point, i) => {
+                // A turned box's corner or a center on the line: no side shows it, so a ring does
+                const p = at(point);
+                return (
+                    <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={GUIDE_MARK_RADIUS}
+                        fill="none"
+                        stroke={GUIDE_INK}
+                        strokeWidth={GUIDE_MARK_WIDTH}
+                        data-testid="fieldShapeGuideMark"
                     />
                 );
             })}

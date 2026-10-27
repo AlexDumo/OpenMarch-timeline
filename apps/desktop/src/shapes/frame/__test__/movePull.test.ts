@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxFrame, type BoxParams } from "../../box/boxGeometry";
+import { boxCorners, boxFrame, type BoxParams } from "../../box/boxGeometry";
 import { boxTool } from "../../box/boxTool";
 import { circleTool } from "../../circle/circleTool";
 import type { AnyToolKind, ToolEnv } from "../../tool/toolKind";
@@ -164,16 +164,50 @@ describe("moving a box onto a line", () => {
         }
     });
 
-    it("leaves a box turned off the field's axes alone", () => {
-        const turned: BoxParams = { ...box, rotation: Math.PI / 6 };
-        const free = move(
-            boxTool,
-            turned,
-            { x: 13, y: 0 },
-            { fieldLines: undefined },
-        );
-        const p = move(boxTool, turned, { x: 13, y: 0 });
-        expect(p).toEqual(free);
+    describe("turned off the field's axes (#446)", () => {
+        const turnedBy = (degrees: number): BoxParams => ({
+            ...box,
+            center: { x: 40, y: -150 },
+            rotation: (degrees * Math.PI) / 180,
+        });
+        /** The corner farthest toward the 50's side, and where it ends after `p` */
+        const rightmost = (p: BoxParams) =>
+            boxCorners(p, N).reduce((a, b) => (b.x > a.x ? b : a));
+
+        it("lands a 15° box's corner on a yard line", () => {
+            const turned = turnedBy(15);
+            const c = rightmost(turned);
+            const p = move(boxTool, turned, { x: 80 - c.x - 0.9, y: 0 });
+            exact(rightmost(p as BoxParams).x, 80);
+            // Still turned the same, and the same size
+            exact((p as BoxParams).rotation, turned.rotation);
+        });
+
+        it("lands a 30° box's center on the back hash", () => {
+            const turned = turnedBy(30);
+            const p = move(boxTool, turned, { x: 0, y: -280 + 150 + 0.8 });
+            exact(boxFrame(p as BoxParams, N).center.y, -280);
+        });
+
+        it("lands a 15° box's corner on a yard line and the back hash at once", () => {
+            const turned = turnedBy(15);
+            const c = rightmost(turned);
+            const p = move(boxTool, turned, {
+                x: 80 - c.x - 0.7,
+                y: -280 - c.y + 0.6,
+            });
+            const at = rightmost(p as BoxParams);
+            exact(at.x, 80);
+            exact(at.y, -280);
+        });
+
+        it("moves by half steps away from lines", () => {
+            const turned = turnedBy(15);
+            // Its corners and center well clear of every line
+            const p = move(boxTool, turned, { x: 23, y: -7 }) as BoxParams;
+            exact(p.center.x, 40 + 25);
+            exact(p.center.y, -150 - 5);
+        });
     });
 
     it("doesn't pull a circle", () => {
