@@ -206,7 +206,7 @@ describe("Close up, a box in Outline", () => {
 });
 
 describe("Close up, a spread", () => {
-    it("relaxes into the gap from the layout it had, the closest pair still one interval", () => {
+    it("relaxes into the gap from the layout it had, no pair closer than the interval", () => {
         let t = drawn(boxTool, 16, { x: 0, y: 0 }, { x: 60, y: 60 });
         t = edit(t, withMode(boxTool, t.params, t.spots, "spread", env), ctx);
         const box = placedWithout(t, [4, 9]);
@@ -217,7 +217,10 @@ describe("Close up, a spread", () => {
         expect(d).toMatchObject({ mode: "spread", seed: 1, count: 16 });
         expectOnOwnSpots(boxTool, out);
         const across = (out.params as BoxParams).across;
-        expect(closest(out.members)).toBeCloseTo(across, 6);
+        expect(closest(out.members)).toBeGreaterThanOrEqual(
+            across * (1 - 1e-6),
+        );
+        expect(closest(out.members)).toBeLessThan(across * 1.2);
         // The same every time
         expect(closeUp(box, membersOf(box), env, ctx)).toEqual(out);
     });

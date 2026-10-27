@@ -2727,9 +2727,10 @@ test("change: Outline on 7 spreads the back by default, leaves its middle out on
     ).toBe(true);
 });
 
-// Even spread (#391, spec #385): a scatter with no visible files, the closest
-// pair one interval apart. Reshuffle in the chip and the inspector moves to the
-// next seed as one undo step, and the recipe keeps the seed and generator.
+// Even spread (#391, spec #385): a scatter with no visible files, no pair closer
+// than one interval. Reshuffle in the chip and the inspector moves to the next
+// seed as one undo step, keeping the shape's frame and outline (#439), and the
+// recipe keeps the seed and generator.
 
 /** The closest distance between any two spots */
 const closestPair = (spots: readonly Point[]) =>
@@ -2743,7 +2744,7 @@ const sameSpots = (a: readonly Point[], b: readonly Point[]) =>
     a.length === b.length &&
     a.every((p, i) => Math.hypot(p.x - b[i].x, p.y - b[i].y) < CLOSE);
 
-test("change: Spread scatters the box one interval apart, Reshuffle gives a new layout as one undo step, and the placed box reshuffles again", async ({
+test("change: Spread scatters the box one interval apart, Reshuffle gives a new layout in the same outline as one undo step, and the placed box reshuffles again", async ({
     show,
 }) => {
     const { page } = show;
@@ -2752,6 +2753,7 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     const steps = await undoSteps(show);
     const bar = page.getByTestId("shape-tool-readout");
     await expect(page.getByTestId("shape-editor-reshuffle")).toHaveCount(0);
+    const asGrid = (await shapeOverlay(page))!;
 
     await pickMode(page, "spread");
     await expect(page.getByTestId("shape-mode-menu")).toHaveAttribute(
@@ -2765,18 +2767,24 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     const text = await bar.getByTestId("shape-editor-across").innerText();
     const across =
         Number(text.replace("½", "") || 0) + (text.includes("½") ? 0.5 : 0);
-    const first = (await shapeOverlay(page))!.spots;
+    const opened = (await shapeOverlay(page))!;
+    const first = opened.spots;
     expect(first).toHaveLength(ALL.length);
-    expect(Math.abs(closestPair(first) - across * S)).toBeLessThan(CLOSE);
+    // Spread fills the box drawn: the outline is the grid's, to the pixel (#439)
+    expect(sameSpots(opened.outline!, asGrid.outline!)).toBe(true);
+    expect(closestPair(first)).toBeGreaterThan(across * S - CLOSE);
+    expect(closestPair(first)).toBeLessThan(across * S * 1.2);
 
-    // Reshuffle in the chip: a new layout, still one interval apart
+    // Reshuffle in the chip: a new layout in the same outline, no closer
     const reshuffle = bar.getByTestId("shape-editor-reshuffle");
     await expect(reshuffle).toHaveAttribute("data-seed", "1");
     await reshuffle.click();
     await expect(reshuffle).toHaveAttribute("data-seed", "2");
-    const second = (await shapeOverlay(page))!.spots;
+    const reshuffled = (await shapeOverlay(page))!;
+    const second = reshuffled.spots;
     expect(sameSpots(first, second)).toBe(false);
-    expect(Math.abs(closestPair(second) - across * S)).toBeLessThan(CLOSE);
+    expect(sameSpots(reshuffled.outline!, opened.outline!)).toBe(true);
+    expect(closestPair(second)).toBeGreaterThan(across * S - CLOSE);
 
     // One undo step brings the first layout back, redo the second
     await page.keyboard.press("ControlOrMeta+z");
@@ -2801,7 +2809,7 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     expect((await recipeParams()).distribution).toEqual({
         mode: "spread",
         seed: 2,
-        generator: 1,
+        generator: 2,
         count: ALL.length,
     });
 
@@ -2831,6 +2839,53 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     await expect.poll(() => onSpots(show, second)).toBe(false);
 });
 
+test("change: a Spread box's handle drags its side where the pointer goes, the other sides staying put, and back in Grid it keeps the space (#439)", async ({
+    show,
+}) => {
+    const { page } = show;
+    const { grid: field } = await drawBox(show);
+    const { zoom } = (await readField(page)).viewport;
+    // Half a step on the screen: how near the dragged side lands to the pointer
+    const halfStep = (field.pixelsPerStep / 2) * zoom;
+    await pickMode(page, "spread");
+    const before = (await shapeOverlay(page))!;
+    const xs = (o: FieldTestShapeOverlay) => o.handles.map((p) => p.x);
+    const ys = (o: FieldTestShapeOverlay) => o.handles.map((p) => p.y);
+    const east = before.handles.reduce((a, b) => (b.x > a.x ? b : a));
+    await drag(page, east, { x: east.x + 60, y: east.y }, { steps: 20 });
+    const after = (await shapeOverlay(page))!;
+    // The west side and the depth where they were; the east side by the pointer
+    expect(
+        Math.abs(Math.min(...xs(after)) - Math.min(...xs(before))),
+    ).toBeLessThan(1);
+    expect(
+        Math.abs(Math.min(...ys(after)) - Math.min(...ys(before))),
+    ).toBeLessThan(1);
+    expect(
+        Math.abs(Math.max(...ys(after)) - Math.max(...ys(before))),
+    ).toBeLessThan(1);
+    expect(
+        Math.abs(Math.max(...xs(after)) - (east.x + 60)),
+    ).toBeLessThanOrEqual(halfStep / 2 + 1);
+    // Released, the marchers stand inside the new outline (field units)
+    const ox = after.outline!.map((p) => p.x);
+    for (const p of after.spots) {
+        expect(p.x).toBeGreaterThanOrEqual(Math.min(...ox) - 1e-6);
+        expect(p.x).toBeLessThanOrEqual(Math.max(...ox) + 1e-6);
+    }
+    // Back in Grid, the box takes up the same space, as near as half steps allow
+    await pickMode(page, "files");
+    const grid = (await shapeOverlay(page))!;
+    const gx = grid.outline!.map((p) => p.x);
+    expect(
+        Math.abs(
+            Math.max(...gx) -
+                Math.min(...gx) -
+                (Math.max(...ox) - Math.min(...ox)),
+        ),
+    ).toBeLessThan(2 * field.pixelsPerStep);
+});
+
 test("change: Reshuffle's caret opens the spread's seed, and typing an earlier seed brings that spread back as one undo step (#437)", async ({
     show,
 }) => {
@@ -2839,7 +2894,8 @@ test("change: Reshuffle's caret opens the spread's seed, and typing an earlier s
     await pickMode(page, "spread");
     const editor = page.getByTestId("shape-tool-readout");
     const reshuffle = editor.getByTestId("shape-editor-reshuffle");
-    const first = (await shapeOverlay(page))!.spots;
+    const opened = (await shapeOverlay(page))!;
+    const first = opened.spots;
     await reshuffle.click();
     await expect(reshuffle).toHaveAttribute("data-seed", "2");
     const second = (await shapeOverlay(page))!.spots;
@@ -2872,6 +2928,10 @@ test("change: Reshuffle's caret opens the spread's seed, and typing an earlier s
     await expect
         .poll(async () => sameSpots((await shapeOverlay(page))!.spots, first))
         .toBe(true);
+    // A typed seed is a layout in the same outline: the box didn't move (#439)
+    expect(
+        sameSpots((await shapeOverlay(page))!.outline!, opened.outline!),
+    ).toBe(true);
     // Enter typed the seed: the shape is still open, nobody moved
     await expect(editor).toBeVisible();
     expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));

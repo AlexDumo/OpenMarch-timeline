@@ -14,6 +14,7 @@ import {
     dragRadius,
     drawCircle,
     grownFromPivot,
+    keepingRadius,
     insideCircle,
     moveCircle,
     RADIUS_HANDLE,
@@ -107,7 +108,10 @@ export const circleTool: ToolKind<CircleParams> = {
         distribution: (params) => circleDistribution(params),
         startMode: (_params, n, mode) => distributionFor(mode, 1, n),
         // A new mode resizes the circle: it grows from the pivot
-        withDistribution: (params, n, distribution, env) =>
-            grownFromPivot(params, { ...params, distribution }, n, env),
+        withDistribution: (params, n, distribution) =>
+            // Another mode keeps the circle drawn (#439); Reshuffle and a seed change nothing else
+            circleDistribution(params).mode === distribution.mode
+                ? { ...params, distribution }
+                : keepingRadius(params, { ...params, distribution }, n),
     },
 };

@@ -57,6 +57,12 @@ const REGIONS: Record<string, Region> = {
 
 const dist = (a: XY, b: XY) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 
+/** A spread's closest pair: never under the interval, and not much over it */
+function expectSpacing(closest: number, interval: number, what?: string) {
+    expect(closest, what).toBeGreaterThanOrEqual(interval * (1 - 1e-6));
+    expect(closest, what).toBeLessThan(interval * 1.2);
+}
+
 /** Each spot's distance to its nearest neighbor */
 function nearest(spots: readonly XY[]): number[] {
     return spots.map((p, i) =>
@@ -109,11 +115,102 @@ describe("Even spread", () => {
             }
     });
 
-    it("puts the closest pair exactly one interval apart", () => {
+    it("puts no pair closer than one interval, and from 12 the closest within 20% of it", () => {
+        // A few marchers have too few neighbors to even out with: they stand as far apart as
+        // the frame lets them, at least the interval
         for (const region of Object.values(REGIONS))
-            for (const n of [2, 5, 12, 36, 100, 300]) {
-                const closest = Math.min(...nearest(spread(region, n)));
-                expect(closest).toBeCloseTo(INTERVAL, 9);
+            for (const n of [2, 3, 5, 12, 36, 100, 300])
+                for (const seed of [1, 2, 3]) {
+                    const what = `${region.key} ${n} ${seed}`;
+                    const closest = Math.min(
+                        ...nearest(
+                            spread(region, n, spreadDistribution(seed, n)),
+                        ),
+                    );
+                    if (n >= 12) expectSpacing(closest, INTERVAL, what);
+                    else
+                        expect(closest, what).toBeGreaterThanOrEqual(
+                            INTERVAL * (1 - 1e-6),
+                        );
+                }
+    });
+
+    describe("in a long, thin shape (#439 review)", () => {
+        /** Boxes up to 20:1 either way, as files × ranks */
+        const THIN: [number, number][] = [
+            [8, 1],
+            [12, 1],
+            [20, 1],
+            [19, 2],
+            [1, 12],
+            [1, 20],
+            [2, 19],
+        ];
+
+        it("puts no pair closer than one interval, for 20 seeds", () => {
+            for (const [files, ranks] of THIN) {
+                const region = rectRegion(files / 2, ranks / 2);
+                for (const n of [2, 3, 6, 12, 22, 48])
+                    for (let seed = 1; seed <= 20; seed++)
+                        expect(
+                            Math.min(
+                                ...nearest(
+                                    spread(
+                                        region,
+                                        n,
+                                        spreadDistribution(seed, n),
+                                    ),
+                                ),
+                            ),
+                            `${files}×${ranks} ${n} ${seed}`,
+                        ).toBeGreaterThanOrEqual(INTERVAL * (1 - 1e-6));
+            }
+        });
+
+        it("never stacks two marchers in a single file", () => {
+            for (const [files, ranks, n, seed] of [
+                [20, 1, 20, 2],
+                [22, 1, 22, 4],
+                [1, 20, 20, 2],
+            ] as const) {
+                const spots = spread(
+                    rectRegion(files / 2, ranks / 2),
+                    n,
+                    spreadDistribution(seed, n),
+                );
+                expect(Math.min(...nearest(spots))).toBeGreaterThanOrEqual(
+                    INTERVAL * (1 - 1e-6),
+                );
+            }
+        });
+    });
+
+    it("keeps one size for every seed, so Reshuffle keeps the shape's frame (#439)", () => {
+        for (const region of Object.values(REGIONS))
+            for (const n of [1, 2, 12, 36, 100]) {
+                const scale = spreadScale(
+                    region,
+                    n,
+                    spreadDistribution(1, n),
+                    1,
+                );
+                for (const seed of [2, 3, 7])
+                    expect(
+                        spreadScale(region, n, spreadDistribution(seed, n), 1),
+                    ).toBe(scale);
+            }
+    });
+
+    it("lays out a generator 1 spread as it always did, its closest pair exactly one interval", () => {
+        for (const region of Object.values(REGIONS))
+            for (const n of [5, 36]) {
+                const d = { ...spreadDistribution(2, n), generator: 1 };
+                expect(Math.min(...nearest(spread(region, n, d)))).toBeCloseTo(
+                    INTERVAL,
+                    9,
+                );
+                const layout = evenSpread(region, n, 2, n, 1);
+                expect(spreadScale(region, n, d, 1)).toBe(layout.scale);
             }
     });
 
@@ -222,7 +319,7 @@ describe("Even spread", () => {
             const after = spread(region, 30, next);
             expect(after).not.toEqual(before);
             // Still the same kind of spread
-            expect(Math.min(...nearest(after))).toBeCloseTo(INTERVAL, 9);
+            expectSpacing(Math.min(...nearest(after)), INTERVAL);
         });
 
         it("lays out for the count there is now, dropping an old count", () => {
@@ -267,10 +364,7 @@ describe("Even spread", () => {
                             little / moved.length,
                             `${region.key} ${n}→${m}`,
                         ).toBeGreaterThan(0.75);
-                        expect(Math.min(...nearest(after))).toBeCloseTo(
-                            INTERVAL,
-                            9,
-                        );
+                        expectSpacing(Math.min(...nearest(after)), INTERVAL);
                     }
                 }
         });
@@ -279,6 +373,56 @@ describe("Even spread", () => {
             const region = circleRegion(1);
             const d = spreadDistribution(5, 20);
             expect(spread(region, 23, d)).toEqual(spread(region, 23, d));
+        });
+    });
+
+    describe("drafted mid-gesture (#439)", () => {
+        const drafted = (region: Region, n: number, d: SpreadDistribution) =>
+            distribute({
+                region,
+                n,
+                distribution: d,
+                across: INTERVAL,
+                deep: INTERVAL,
+                draft: true,
+            });
+
+        it("stretches the box's own last layout, even after a circle of the same count and seed", () => {
+            const d = spreadDistribution(9, 40);
+            const was = rectRegion(2, 0.5);
+            const box = spread(was, 40, d);
+            // Another shape asked for since: a circle spread just like it
+            spread(circleRegion(1), 40, d);
+            const now = rectRegion(2.4, 0.5);
+            const out = drafted(now, 40, d);
+            const sx =
+                (2.4 * spreadScale(now, 40, d, 1)) /
+                (2 * spreadScale(was, 40, d, 1));
+            const sy = spreadScale(now, 40, d, 1) / spreadScale(was, 40, d, 1);
+            out.forEach((s, i) => {
+                expect(s.x).toBeCloseTo(box[i]!.x * sx, 6);
+                expect(s.y).toBeCloseTo(box[i]!.y * sy, 6);
+            });
+        });
+
+        it("lays out exactly what it hasn't seen before, and never keeps a draft", () => {
+            const d = spreadDistribution(11, 30);
+            const region = rectRegion(1.7, 0.5);
+            // Nothing to stretch yet: the exact layout
+            expect(drafted(region, 30, d)).toEqual(spread(region, 30, d));
+            const other = rectRegion(2.2, 0.5);
+            const draft = drafted(other, 30, d);
+            // Asked for again without the draft: the exact layout, not the draft
+            expect(spread(other, 30, d)).not.toEqual(draft);
+            expect(spread(other, 30, d)).toEqual(
+                distribute({
+                    region: rectRegion(2.2, 0.5),
+                    n: 30,
+                    distribution: d,
+                    across: INTERVAL,
+                    deep: INTERVAL,
+                }),
+            );
         });
     });
 
@@ -302,6 +446,15 @@ describe("Even spread", () => {
                 generator: SPREAD_GENERATOR,
                 count: 30,
             });
+        });
+
+        it("reads a generator 1 spread (#391) as one, so it lays out as placed", () => {
+            expect(
+                storedDistribution(
+                    { distribution: { mode: "spread", seed: 3, generator: 1 } },
+                    1,
+                ),
+            ).toEqual({ mode: "spread", seed: 3, generator: 1 });
         });
 
         it("reads a spread from a generator this app doesn't have as none", () => {
