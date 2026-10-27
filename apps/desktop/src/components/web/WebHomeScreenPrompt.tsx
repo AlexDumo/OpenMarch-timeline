@@ -3,6 +3,7 @@ import { Description as DialogDescription } from "@radix-ui/react-dialog";
 import { ExportIcon } from "@phosphor-icons/react";
 import { useTolgee } from "@tolgee/react";
 import { useWebLibraryStore } from "@/stores/WebLibraryStore";
+import { useWelcomeFlowStore } from "@/stores/WelcomeFlowStore";
 
 /**
  * Once, in Safari on an iPad: how to add OpenMarch to the Home Screen, so
@@ -13,9 +14,14 @@ export default function WebHomeScreenPrompt() {
     const { t } = useTolgee(["language"]);
     const open = useWebLibraryStore((state) => state.homeScreenPromptOpen);
     const set = useWebLibraryStore((state) => state.set);
+    // Waits while the welcome flow is on screen, as the web welcome does
+    const welcomeFlowShowing = useWelcomeFlowStore((s) => s.showing);
     const close = () => set({ homeScreenPromptOpen: false });
     return (
-        <Dialog open={open} onOpenChange={(next) => !next && close()}>
+        <Dialog
+            open={open && !welcomeFlowShowing}
+            onOpenChange={(next) => !next && close()}
+        >
             <DialogContent className="w-[32rem]">
                 <DialogTitle>{t("web.homeScreen.title")}</DialogTitle>
                 <DialogDescription className="text-body text-text">

@@ -58,10 +58,18 @@ export function useHistoryActionHandlers() {
         runRef.current = run;
     });
 
-    // Key presses, touch gestures and toast Undo buttons share one queue (historyQueue), so every
-    // press runs, in order, on the stack the previous one left
+    // Undo and redo presses run through upstream's shared queue (historyQueue), in order, each on
+    // the stack the previous one left. Its touch gestures and toast Undo are meant to use it too;
+    // the fork's toast Undo buttons and title bar buttons still call the action directly.
     useEffect(
-        () => setHistoryPerformer((direction) => runRef.current(direction)),
+        () =>
+            setHistoryPerformer((direction) =>
+                runRef.current(direction).catch((error: unknown) => {
+                    // The queue swallows a failed press, so it's logged here
+                    console.error(`${direction} failed:`, error);
+                    throw error;
+                }),
+            ),
         [],
     );
 

@@ -31,6 +31,7 @@ import {
 import { useTolgee } from "@tolgee/react";
 import { toast } from "sonner";
 import clsx from "clsx";
+import ExampleShows from "@/components/launchpage/files/ExampleShows";
 import { useWebLibraryStore } from "@/stores/WebLibraryStore";
 import { formatAgo, type ShowSummary } from "@/utilities/webLibrary";
 import {
@@ -230,6 +231,9 @@ export default function WebShowLibrary() {
                     </li>
                 ))}
             </ul>
+
+            {/* A preview or lab build's example shows, for testers without a show of their own */}
+            <ExampleShows />
 
             <RenameDialog show={renaming} onClose={() => setRenaming(null)} />
 

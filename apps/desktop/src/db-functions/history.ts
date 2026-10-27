@@ -252,15 +252,16 @@ export const transactionWithHistory = async <T>(
             return result!;
         });
         historyEpoch++;
-        // Same epoch a getLatestUndoEntryToken call right now would see
-        options.onUndoToken?.(
-            undoEntry === null ? null : `${historyEpoch}\n${undoEntry}`,
-        );
         // Only reached once the transaction has committed
         for (const callback of committed) callback();
         notifyTimelineBatch(drained);
         if (touchedDisplayTables) bumpTimelineDisplayVersion();
         notifyHistoryChange();
+        // Last, so a throwing caller can't stop the drained batch reaching its listeners. Same
+        // epoch a getLatestUndoEntryToken call right now would see.
+        options.onUndoToken?.(
+            undoEntry === null ? null : `${historyEpoch}\n${undoEntry}`,
+        );
         return output;
     }
 

@@ -159,6 +159,34 @@ describeDbTests("writes past the last stored count", (it) => {
         });
     });
 
+    describe("a count-in before the first page", () => {
+        it("stays when counts are stored past the end (#1055)", async ({
+            db,
+            marchersAndPages: _,
+        }) => {
+            // Page 1 starts on beat 5, so beats 1 to 4 have no page
+            const beats = await db
+                .select({ id: schema.beats.id })
+                .from(schema.beats)
+                .orderBy(asc(schema.beats.position))
+                .all();
+            await db
+                .update(schema.pages)
+                .set({ start_beat: beats[5].id })
+                .where(sql`${schema.pages.start_beat} = ${beats[1].id}`);
+            await setUp(db);
+            const firstPages = (await grid(db)).slice(0, 2);
+            expect(firstPages[1][1]).toBe(5);
+
+            await transactionWithHistory(db, "test", (tx) =>
+                ensureCountsInTransaction({ tx, through: 105 }),
+            );
+
+            expect(await beatCount(db)).toBe(105);
+            expect((await grid(db)).slice(0, 2)).toEqual(firstPages);
+        });
+    });
+
     describe("page flags", () => {
         it("+ far past the end stores the counts up to the flag, and one undo removes them", async ({
             db,
