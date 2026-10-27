@@ -185,14 +185,39 @@ const keyOf = (dots: readonly { x: number; y: number }[]) =>
         .sort()
         .join(" ");
 
+/** Each lines array's keys, as it is and turned, by file and by rank: the menus ask often (#455) */
+const keys = new WeakMap<
+    readonly number[],
+    Partial<Record<"file" | "rank", { key: string; turned: string }>>
+>();
+
+function keysOf(lines: readonly number[], byFile: boolean) {
+    let entry = keys.get(lines);
+    if (!entry) {
+        entry = {};
+        keys.set(lines, entry);
+    }
+    const side = byFile ? "file" : "rank";
+    let found = entry[side];
+    if (!found) {
+        const dots = versionDots(lines, byFile);
+        found = {
+            key: keyOf(dots),
+            turned: keyOf(dots.map((d) => ({ x: -d.y, y: d.x }))),
+        };
+        entry[side] = found;
+    }
+    return found;
+}
+
 /** Two layouts that make the same key are the same shape */
 export function shapeKey(lines: readonly number[], byFile: boolean): string {
-    return keyOf(versionDots(lines, byFile));
+    return keysOf(lines, byFile).key;
 }
 
 /** The key of the shape turned a quarter: a layout that makes it is the same shape, turned */
 export function turnedKey(lines: readonly number[], byFile: boolean): string {
-    return keyOf(versionDots(lines, byFile).map((d) => ({ x: -d.y, y: d.x })));
+    return keysOf(lines, byFile).turned;
 }
 
 /** Whether `lines` make `version`'s shape, as it is or turned a quarter */

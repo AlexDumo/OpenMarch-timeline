@@ -116,7 +116,6 @@ export function LayoutMenu(props: PickerProps) {
     const rows = target.kind.closed?.layouts?.catalogue(target.spots) ?? [];
     if (now === null || rows.length === 0) return null;
     const n = target.spots;
-    const aspect = now.across / now.deep;
     // Short back with nothing short reads as Full (#437)
     const family = shownFamily(now);
     const showing = active ?? family;
@@ -125,12 +124,6 @@ export function LayoutMenu(props: PickerProps) {
         setOpen(false);
         setActive(null);
     };
-    /** A layout's row picture: the shape's own version, or the one nearest its proportions */
-    const pictureOf = (row: LayoutRow) =>
-        row.versions.find((v) => isOwn(v, now)) ??
-        nearestVersion(row.family, n, aspect) ??
-        undefined;
-    const shownRow = rows.find((r) => r.family === showing);
     return (
         <Popover.Root open={open} onOpenChange={setOpen}>
             <span
@@ -171,140 +164,170 @@ export function LayoutMenu(props: PickerProps) {
                     }}
                     data-testid="shape-layout-menu-content"
                 >
-                    <div
-                        className="flex flex-col gap-1 overflow-y-auto"
-                        role="menu"
-                        onKeyDown={(e) =>
-                            arrowFocus(e, [
-                                ...e.currentTarget.querySelectorAll<HTMLElement>(
-                                    '[role="menuitem"]:not([aria-disabled])',
-                                ),
-                            ])
-                        }
-                    >
-                        {rows.map((row) => {
-                            const missing = row.versions.length === 0;
-                            const picture = missing
-                                ? row.preview?.version
-                                : pictureOf(row);
-                            return (
-                                <div
-                                    key={row.family}
-                                    className={clsx(
-                                        "rounded-4 flex items-center",
-                                        showing === row.family &&
-                                            !missing &&
-                                            "bg-fg-2",
-                                    )}
-                                >
-                                    <Tip
-                                        label={
-                                            missing && row.hint
-                                                ? needsTitle(
-                                                      row.label,
-                                                      row.hint,
-                                                      n,
-                                                  )
-                                                : undefined
-                                        }
-                                    >
-                                        <button
-                                            type="button"
-                                            role="menuitem"
-                                            // aria-disabled, not disabled: the tooltip says why
-                                            aria-disabled={missing || undefined}
-                                            data-current={
-                                                family === row.family ||
-                                                undefined
-                                            }
-                                            onPointerEnter={() => {
-                                                if (!missing)
-                                                    setActive(row.family);
-                                            }}
-                                            // The versions follow the keyboard as the pointer
-                                            onFocus={() => {
-                                                if (!missing)
-                                                    setActive(row.family);
-                                            }}
-                                            onClick={() => {
-                                                if (picture && !missing)
-                                                    choose(picture);
-                                            }}
-                                            data-testid={`shape-layout-menu-row-${row.family}`}
-                                            className={clsx(
-                                                "flex min-w-40 items-center gap-6 px-4 py-2 text-left",
-                                                missing
-                                                    ? "text-text/40"
-                                                    : family === row.family
-                                                      ? "text-accent"
-                                                      : "hover:text-accent",
-                                            )}
-                                        >
-                                            <span
-                                                className={clsx(
-                                                    "flex w-24 justify-center",
-                                                    missing && "opacity-40",
-                                                )}
-                                            >
-                                                {picture && (
-                                                    <Thumbnail
-                                                        version={picture}
-                                                        small
-                                                    />
-                                                )}
-                                            </span>
-                                            <span className="grow">
-                                                {row.label}
-                                            </span>
-                                            {missing && row.hint && (
-                                                <span className="text-xs">
-                                                    {hintText(row.hint)}
-                                                </span>
-                                            )}
-                                        </button>
-                                    </Tip>
-                                    {!missing && (
-                                        <button
-                                            type="button"
-                                            aria-label={`Show the ${row.label} versions`}
-                                            onPointerDown={keepFocus}
-                                            onClick={() =>
-                                                setActive(row.family)
-                                            }
-                                            data-testid={`shape-layout-menu-expand-${row.family}`}
-                                            className="hover:text-accent px-4 py-2"
-                                        >
-                                            <CaretRightIcon size={10} />
-                                        </button>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                    {/* The versions in a panel as tall as the list and of one width, scrolling
-                        when a layout has more (owner: the menu jumped as Short back's tall list
-                        grew it) */}
-                    <div className="border-stroke relative w-[96px] shrink-0 self-stretch border-l">
-                        <div
-                            className="absolute inset-0 flex flex-wrap content-start gap-2 overflow-y-auto pl-8"
-                            data-testid="shape-layout-menu-versions"
-                        >
-                            {shownRow?.versions.map((version, i) => (
-                                <VersionButton
-                                    key={i}
-                                    name={`${shownRow.label} ${version.label}`}
-                                    version={version}
-                                    on={isOwn(version, now)}
-                                    onPick={() => choose(version)}
-                                    testId={`shape-layout-menu-version-${shownRow.family}-${i}`}
-                                    caption={version.label}
-                                />
-                            ))}
-                        </div>
-                    </div>
+                    {/* Built only while open: closed, the editor re-renders it for nothing (#455) */}
+                    {open && (
+                        <LayoutMenuBody
+                            rows={rows}
+                            now={now}
+                            n={n}
+                            family={family}
+                            showing={showing}
+                            setActive={setActive}
+                            choose={choose}
+                        />
+                    )}
                 </Popover.Content>
             </Popover.Portal>
         </Popover.Root>
+    );
+}
+
+/** The open layout menu: every layout with its picture, and the shown one's versions beside it */
+function LayoutMenuBody({
+    rows,
+    now,
+    n,
+    family,
+    showing,
+    setActive,
+    choose,
+}: {
+    rows: readonly LayoutRow[];
+    now: ResolvedLayout;
+    n: number;
+    family: LayoutFamily;
+    showing: LayoutFamily;
+    setActive: (family: LayoutFamily) => void;
+    choose: (version: LayoutVersion) => void;
+}) {
+    const aspect = now.across / now.deep;
+    /** A layout's row picture: the shape's own version, or the one nearest its proportions */
+    const pictureOf = (row: LayoutRow) =>
+        row.versions.find((v) => isOwn(v, now)) ??
+        nearestVersion(row.family, n, aspect) ??
+        undefined;
+    const shownRow = rows.find((r) => r.family === showing);
+    return (
+        <>
+            <div
+                className="flex flex-col gap-1 overflow-y-auto"
+                role="menu"
+                onKeyDown={(e) =>
+                    arrowFocus(e, [
+                        ...e.currentTarget.querySelectorAll<HTMLElement>(
+                            '[role="menuitem"]:not([aria-disabled])',
+                        ),
+                    ])
+                }
+            >
+                {rows.map((row) => {
+                    const missing = row.versions.length === 0;
+                    const picture = missing
+                        ? row.preview?.version
+                        : pictureOf(row);
+                    return (
+                        <div
+                            key={row.family}
+                            className={clsx(
+                                "rounded-4 flex items-center",
+                                showing === row.family && !missing && "bg-fg-2",
+                            )}
+                        >
+                            <Tip
+                                label={
+                                    missing && row.hint
+                                        ? needsTitle(row.label, row.hint, n)
+                                        : undefined
+                                }
+                            >
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    // aria-disabled, not disabled: the tooltip says why
+                                    aria-disabled={missing || undefined}
+                                    data-current={
+                                        family === row.family || undefined
+                                    }
+                                    onPointerEnter={() => {
+                                        if (!missing) setActive(row.family);
+                                    }}
+                                    // The versions follow the keyboard as the pointer
+                                    onFocus={() => {
+                                        if (!missing) setActive(row.family);
+                                    }}
+                                    onClick={() => {
+                                        if (picture && !missing)
+                                            choose(picture);
+                                    }}
+                                    data-testid={`shape-layout-menu-row-${row.family}`}
+                                    className={clsx(
+                                        "flex min-w-40 items-center gap-6 px-4 py-2 text-left",
+                                        missing
+                                            ? "text-text/40"
+                                            : family === row.family
+                                              ? "text-accent"
+                                              : "hover:text-accent",
+                                    )}
+                                >
+                                    <span
+                                        className={clsx(
+                                            "flex w-24 justify-center",
+                                            missing && "opacity-40",
+                                        )}
+                                    >
+                                        {picture && (
+                                            <Thumbnail
+                                                version={picture}
+                                                small
+                                            />
+                                        )}
+                                    </span>
+                                    <span className="grow">{row.label}</span>
+                                    {missing && row.hint && (
+                                        <span className="text-xs">
+                                            {hintText(row.hint)}
+                                        </span>
+                                    )}
+                                </button>
+                            </Tip>
+                            {!missing && (
+                                <button
+                                    type="button"
+                                    aria-label={`Show the ${row.label} versions`}
+                                    onPointerDown={keepFocus}
+                                    onClick={() => setActive(row.family)}
+                                    data-testid={`shape-layout-menu-expand-${row.family}`}
+                                    className="hover:text-accent px-4 py-2"
+                                >
+                                    <CaretRightIcon size={10} />
+                                </button>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+            {/* The versions in a panel as tall as the list and of one width, scrolling
+            when a layout has more (owner: the menu jumped as Short back's tall list
+            grew it) */}
+            <div className="border-stroke relative w-[96px] shrink-0 self-stretch border-l">
+                <div
+                    className="absolute inset-0 flex flex-wrap content-start gap-2 overflow-y-auto pl-8"
+                    data-testid="shape-layout-menu-versions"
+                >
+                    {shownRow?.versions.map((version, i) => (
+                        <VersionButton
+                            key={i}
+                            name={`${shownRow.label} ${version.label}`}
+                            version={version}
+                            on={isOwn(version, now)}
+                            onPick={() => choose(version)}
+                            testId={`shape-layout-menu-version-${shownRow.family}-${i}`}
+                            caption={version.label}
+                        />
+                    ))}
+                </div>
+            </div>
+        </>
     );
 }
 
