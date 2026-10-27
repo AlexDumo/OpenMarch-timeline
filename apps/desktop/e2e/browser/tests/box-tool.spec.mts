@@ -2501,6 +2501,10 @@ test("change: from the keyboard, Tab reaches the Leftover menu, Enter opens it o
     await expect(menuButton).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.getByTestId("outline-gap-back")).toBeFocused();
+    // An open shape: a tip says a click on the outline moves the gap
+    await expect(page.getByTestId("outline-gap-tip")).toHaveText(
+        "Click a marcher on the outline (not a corner) to move the gap there.",
+    );
     await page.keyboard.press("ArrowRight");
     await expect(page.getByTestId("outline-gap-front")).toBeFocused();
     await page.keyboard.press("Enter");
@@ -2681,6 +2685,53 @@ test("change: Spread scatters the box one interval apart, Reshuffle gives a new 
     expect(await undoSteps(show)).toBe(steps + 2);
     // The marchers moved to the new layout
     await expect.poll(() => onSpots(show, second)).toBe(false);
+});
+
+test("change: Reshuffle's caret opens the spread's seed, and typing an earlier seed brings that spread back as one undo step (#437)", async ({
+    show,
+}) => {
+    const { page } = show;
+    await drawBox(show);
+    await pickMode(page, "spread");
+    const editor = page.getByTestId("shape-tool-readout");
+    const reshuffle = editor.getByTestId("shape-editor-reshuffle");
+    const first = (await shapeOverlay(page))!.spots;
+    await reshuffle.click();
+    await expect(reshuffle).toHaveAttribute("data-seed", "2");
+    const second = (await shapeOverlay(page))!.spots;
+    expect(sameSpots(first, second)).toBe(false);
+
+    // From the keyboard: Tab from Reshuffle to its caret, Enter opens the seed
+    await reshuffle.focus();
+    await page.keyboard.press("Tab");
+    const caret = editor.getByTestId("shape-editor-reshuffle-seed");
+    await expect(caret).toBeFocused();
+    await page.keyboard.press("Enter");
+    const input = page.getByTestId("shape-editor-reshuffle-seed-input");
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue("2");
+    await expect(
+        page.getByTestId("shape-editor-reshuffle-seed-menu"),
+    ).toContainText("Same seed, same spread");
+
+    await input.fill("1");
+    await page.keyboard.press("Enter");
+    await expect(reshuffle).toHaveAttribute("data-seed", "1");
+    await expect
+        .poll(async () => sameSpots((await shapeOverlay(page))!.spots, first))
+        .toBe(true);
+    // Enter typed the seed: the shape is still open, nobody moved
+    await expect(editor).toBeVisible();
+    expect(await savedPositions(show, 0)).toEqual(asPositions(HOME));
+    await page.keyboard.press("Escape");
+    await expect(
+        page.getByTestId("shape-editor-reshuffle-seed-menu"),
+    ).toBeHidden();
+    await expect(editor).toBeVisible();
+    // One undo step of the open shape brings the second spread back
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(reshuffle).toHaveAttribute("data-seed", "2");
+    expect(sameSpots((await shapeOverlay(page))!.spots, second)).toBe(true);
 });
 
 // The box's layouts (#387, spec #385; owner lab feedback 2026-10-23): the

@@ -466,7 +466,11 @@ function ShapeEditorBar({
                     data-testid={`${testId}-mode-extras`}
                 >
                     <LayoutMenu target={target} envFor={() => envFor(PLAIN)} />
-                    <OutlineGap target={target} envFor={() => envFor(PLAIN)} />
+                    <OutlineGap
+                        target={target}
+                        envFor={() => envFor(PLAIN)}
+                        clickToMove={target.place !== undefined}
+                    />
                     <ReshuffleButton
                         target={target}
                         envFor={() => envFor(PLAIN)}

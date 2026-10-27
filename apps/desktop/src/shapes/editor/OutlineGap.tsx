@@ -37,15 +37,19 @@ const styleLabel = (style: OddGap["style"]) =>
  * Where an odd-count outline leaves its spot out (#390), beside the mode switch on the floating
  * editor's second row (#435): a small menu, "Leftover: Back", opening the side, as the field shows
  * it however the shape is flipped, and whether that side leaves a gap or spreads its marchers
- * evenly. A side starts at its middle; a click on the field picks any spot between corners.
- * Hidden when the shape has no gap (Grid, an even count, fewer than 4).
+ * evenly. A side starts at its middle; on an open shape a click on the field picks any spot
+ * between corners (`gapPickAt`), which a tip at the bottom says. Hidden when the shape has no gap
+ * (Grid, an even count, fewer than 4).
  */
 export function OutlineGap({
     target,
     envFor,
+    clickToMove = false,
 }: {
     target: Pick<ShapeEditTarget, "kind" | "params" | "spots" | "apply">;
     envFor: () => ToolEnv | null;
+    /** A click on the field moves the gap: an open shape, not a placed one (owner, #437) */
+    clickToMove?: boolean;
 }) {
     const { kind, params, spots } = target;
     const [open, setOpen] = useState(false);
@@ -161,6 +165,22 @@ export function OutlineGap({
                                 }
                             />
                         </div>
+                        {clickToMove && (
+                            <p
+                                className="text-text/60 max-w-[18rem] text-xs"
+                                data-testid="outline-gap-tip"
+                            >
+                                {gap.style === "gap"
+                                    ? tolgee.t(
+                                          "shapes.edit.gap.tipGap",
+                                          "Click a marcher on the outline (not a corner) to move the gap there.",
+                                      )
+                                    : tolgee.t(
+                                          "shapes.edit.gap.tipSpread",
+                                          "Click a marcher on another side (not a corner) to spread that side instead.",
+                                      )}
+                            </p>
+                        )}
                     </div>
                 </Popover.Content>
             </Popover.Portal>
