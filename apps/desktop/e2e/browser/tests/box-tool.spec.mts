@@ -1708,6 +1708,8 @@ test("change: Close up after an edit in the editor keeps the edit: the spacing t
     await page.getByTestId("shape-editor-deep-input").press("Enter");
     await expect(deep).toHaveText(typed);
     await waitForIdle(page);
+    // Past the save's hold, so Close up writes rather than waiting on the spacing's save
+    await page.waitForTimeout(1500);
 
     // Close up lays out the box as it is now, the new spacing included
     await editor.getByTestId("shape-editor-close-up").click();
@@ -1715,6 +1717,7 @@ test("change: Close up after an edit in the editor keeps the edit: the spacing t
         .poll(async () => (await latestRecipe(show)).params.spots)
         .toBe(7);
     await waitForIdle(page);
+    await expect(editor).not.toContainText("empty");
     await expect(deep).toHaveText(typed);
 });
 
