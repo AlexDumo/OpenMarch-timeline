@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { planCanvasEdit } from "@/timeline/timelineCoordinateWrites";
 import { momentOf } from "../tool/shapeMoment";
 import type { CommandRun, CommandStep } from "@/shortcuts/palette/commandBar";
@@ -143,7 +144,7 @@ export function beginShapeCommand(
         },
         // The last answer places the shape, through the host's place function (sims B354: a
         // "Done" that left it open read as a trap)
-        finishLabel: "Place",
+        finishLabel: tolgee.t("shapes.edit.place", "Place"),
         fillAhead: (answers) => fillAhead(kind, answers),
         finish(answers) {
             unsubscribe();

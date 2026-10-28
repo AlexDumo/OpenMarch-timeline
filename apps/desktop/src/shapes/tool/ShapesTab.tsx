@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import clsx from "clsx";
 import { useMemo } from "react";
 import { ShapesIcon } from "@phosphor-icons/react";
@@ -44,10 +45,17 @@ export default function ShapesTab() {
     const starred = useStarredShapes();
     /** A greyed-out shape's tooltip: its name, then why it can't be picked */
     const greyedTitle = (label: string) =>
-        gate.ok ? undefined : `${label}: ${gate.reason}`;
+        gate.ok
+            ? undefined
+            : tolgee.t("shapes.tool.tab.greyed", "{name}: {reason}", {
+                  name: label,
+                  reason: gate.reason,
+              });
     return (
         <div className="flex w-full flex-wrap items-center gap-8">
-            <ToolbarSection aria-label="Shape kinds">
+            <ToolbarSection
+                aria-label={tolgee.t("shapes.tool.tab.kinds", "Shape kinds")}
+            >
                 {SHAPE_TOOLS.map(({ kind, action }) => {
                     const on = kind === armed;
                     return (
@@ -138,7 +146,12 @@ export default function ShapesTab() {
                         </Tip>
                     );
                 })}
-                <Tip label="Open the shape library, to star shapes">
+                <Tip
+                    label={tolgee.t(
+                        "shapes.tool.tab.libraryTip",
+                        "Open the shape library, to star shapes",
+                    )}
+                >
                     <button
                         type="button"
                         onClick={showShapeLibrary}
@@ -146,7 +159,7 @@ export default function ShapesTab() {
                         data-testid="shapes-tab-library"
                     >
                         <ShapesIcon size={22} />
-                        Library
+                        {tolgee.t("shapes.tool.tab.library", "Library")}
                     </button>
                 </Tip>
             </ToolbarSection>
@@ -156,7 +169,11 @@ export default function ShapesTab() {
                     className="text-sub text-text-subtitle"
                     data-testid="shapes-tab-ring-hint"
                 >
-                    Hold {ringKey} on the field for the shape ring
+                    {tolgee.t(
+                        "shapes.tool.tab.ringHint",
+                        "Hold {key} on the field for the shape ring",
+                        { key: ringKey },
+                    )}
                 </span>
             )}
             {!gate.ok && (

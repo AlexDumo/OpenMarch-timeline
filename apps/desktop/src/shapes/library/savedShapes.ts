@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import type { SavedShape } from "@/db-functions/savedShapes";
 import {
     fromSaved,
@@ -195,7 +196,14 @@ export function savedToolKind(
         // The command bar starts from each parameter's default: the saved intervals here
         params: base.params.map((p) =>
             p.interval && saved.intervals[p.key] !== undefined
-                ? { ...p, default: saved.intervals[p.key] }
+                ? {
+                      ...p,
+                      // Live, so the label follows the language (the spread copies its value)
+                      get label() {
+                          return p.label;
+                      },
+                      default: saved.intervals[p.key],
+                  }
                 : p,
         ),
         draw(from: XY, to: XY, n: number, env: ToolEnv, previous?: unknown) {
@@ -253,21 +261,31 @@ export function savedShapeRows(
                     t.kind.shape.version === saved.kindVersion,
             )?.kind;
             if (!base) return [];
-            // A saved shape has its own name, so its note says which kind it is (story 22)
-            const note = [
-                base.shape.label,
-                spacingNote(Object.values(saved.intervals), saved.distribution),
-                inLibrary ? null : "this show only",
-            ]
-                .filter(Boolean)
-                .join(" · ");
             return [
                 {
                     id: saved.id,
                     group: "saved",
                     label: saved.name,
                     kind: savedToolKind(base, saved),
-                    note,
+                    // A saved shape has its own name, so its note says which kind it is (story
+                    // 22); a getter, so it follows the app's language
+                    get note() {
+                        return [
+                            base.shape.label,
+                            spacingNote(
+                                Object.values(saved.intervals),
+                                saved.distribution,
+                            ),
+                            inLibrary
+                                ? null
+                                : tolgee.t(
+                                      "shapes.library.note.showOnly",
+                                      "this show only",
+                                  ),
+                        ]
+                            .filter(Boolean)
+                            .join(" · ");
+                    },
                     saved: { shape: saved, inLibrary },
                 },
             ];

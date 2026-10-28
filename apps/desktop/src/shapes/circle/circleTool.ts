@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { resizeCursor } from "../frame/frame";
 import { formatSteps, parseSteps } from "../editor/format";
 import { scrubDistance, scrubValue, spacingRate } from "../editor/scrub";
@@ -36,7 +37,12 @@ const typedInterval = (
 /** The circle's one number: the interval between neighbors, which also sets its size */
 const INTERVAL: ToolParam<CircleParams> = {
     key: "interval",
-    label: "Spacing between neighbors, in steps",
+    get label() {
+        return tolgee.t(
+            "shapes.kinds.circle.params.interval",
+            "Spacing between neighbors, in steps",
+        );
+    },
     unit: "steps",
     primary: true,
     drag: "x",

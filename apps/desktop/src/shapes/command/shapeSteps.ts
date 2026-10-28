@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import {
     LAYOUT_FAMILIES,
     LAYOUT_LABELS,
@@ -131,7 +132,9 @@ export function modeStep(kind: AnyToolKind): ToolParam<unknown> | null {
     if (modes.length === 0) return null;
     return {
         key: "mode",
-        label: `Fill: ${modes.map((m) => MODE_LABELS[m]).join(", ")}`,
+        label: tolgee.t("shapes.command.fill", "Fill: {modes}", {
+            modes: modes.map((m) => MODE_LABELS[m]).join(", "),
+        }),
         unit: "choice",
         primary: false,
         drag: "x",
@@ -172,7 +175,9 @@ export function layoutStep(kind: AnyToolKind): ToolParam<unknown> | null {
     };
     return {
         key: "layout",
-        label: `Layout: ${LAYOUT_FAMILIES.map((f) => LAYOUT_LABELS[f]).join(", ")}`,
+        label: tolgee.t("shapes.command.layout", "Layout: {layouts}", {
+            layouts: LAYOUT_FAMILIES.map((f) => LAYOUT_LABELS[f]).join(", "),
+        }),
         unit: "choice",
         primary: false,
         drag: "x",

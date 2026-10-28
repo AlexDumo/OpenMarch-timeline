@@ -631,7 +631,8 @@
             "top": "Top",
             "useHashes": "Use Hashes",
             "width": "Width",
-            "widthHeight": "w/h"
+            "widthHeight": "w/h",
+            "stepSizeWarningThresholdRatio": "{label} ({steps} to 5)"
         },
         "messages": {
             "fieldRatio": "{ratio} or {decimal}",
@@ -853,114 +854,6 @@
                 "splitHelp": "Put the playhead inside the move to split it there.",
                 "title": "Move"
             }
-        },
-        "shapeTool": {
-            "title": "Shape",
-            "draw": {
-                "byClicks": "click its points on the field, double-click to finish",
-                "byDrag": "drag on the field to draw it",
-                "hint": "Drag on the field to draw the {kind}, or tune it here.",
-                "moveBox": "Drag to move this box",
-                "sizeInBox": "Spacing, size and Place are in the box beside the shape.",
-                "warnings": "{count, plural, one {# warning} other {# warnings}}",
-                "hintBend": "Move the pointer to bend the arc, then click to set it.",
-                "hintClicks": "Click points on the field to draw the {kind}; double-click to finish.",
-                "tool": "Shape tool",
-                "toolDraw": "Draw",
-                "toolPanel": "Panel only (earlier)"
-            },
-            "fill": {
-                "box": "Box",
-                "circle": "Circle",
-                "filled": "Filled",
-                "grid": "Grid",
-                "natural": "Natural",
-                "outline": "Outline",
-                "staggered": "Staggered"
-            },
-            "leftUnplaced": "The {kind} wasn't placed",
-            "placeAnyway": "Some marchers would walk through each other. Place anyway, or change the shape.",
-            "placeAnywayButton": "Place anyway",
-            "useNearest": "Use Nearest",
-            "bringBack": "Bring it back",
-            "view": {
-                "auto": "Auto",
-                "autoByShape": "Auto (depends on the shape)",
-                "autoIs": "Auto ({choice})",
-                "faint": "Faint",
-                "handles": "Handles",
-                "handlesFade": "Fade when away",
-                "handlesHide": "Hide when away",
-                "handlesShow": "Always show",
-                "hide": "Hide",
-                "off": "Off",
-                "labels": "Preview labels",
-                "labelsAuto": "As field ({choice})",
-                "labelsNames": "Drill numbers",
-                "labelsNone": "Off",
-                "labelsNumbers": "Numbers only",
-                "legendBigSteps": "Walks needing steps over the limit (orange)",
-                "legendCollisions": "Walks that cross or pass too close (red)",
-                "legendHandles": "Handles to drag: move, size, turn",
-                "legendNew": "Where each marcher goes",
-                "legendOld": "The shape being replaced",
-                "legendProblemWalks": "Other walks: point at a marcher to see its walk",
-                "legendShowOnly": "The show look draws only where each marcher goes. V shows every mark.",
-                "legendStart": "Where they start this move",
-                "legendStartAt": "Where they start this move: Page {page}",
-                "legendWalks": "Each marcher's walk",
-                "look": "Look (V)",
-                "lookShow": "The show (dots only)",
-                "lookWalks": "Dots and walks",
-                "lookWorking": "Working (all marks)",
-                "oldShape": "Old shape",
-                "paths": "Walks",
-                "pathsAll": "All",
-                "pathsNone": "Off",
-                "pathsCollisions": "Collisions only",
-                "pathsProblems": "Problems only",
-                "show": "Show",
-                "starts": "Start marks",
-                "strong": "Strong",
-                "title": "View",
-                "toLegend": "View and legend"
-            },
-            "hint": "Pick a shape for the selected marchers (L for a line, O for a circle).",
-            "hintPlaced": "These marchers were placed as a shape. Edit it, or pick a new shape.",
-            "editPlaced": "Edit {kind}",
-            "movedByHand": "{count, plural, one {# moved by hand} other {# moved by hand}}",
-            "overridesKeep": "Keep",
-            "overridesReset": "Reset",
-            "pick": "Pick a shape",
-            "spacing": "Spacing",
-            "gaps": "Interval",
-            "intervalHelp": "Straight distance between neighbors, in steps. 2 = every gap 2 steps · 4,4,2 = one gap each · 4x3 = 3 gaps of 4 steps",
-            "order": "Order",
-            "orderNearest": "Nearest",
-            "orderNearestHelp": "Each marcher goes to a spot near where they stand, with the least travel overall.",
-            "orderKeep": "Keep order",
-            "orderKeepHelp": "Marchers keep their order along the shape.",
-            "reverse": "Reverse",
-            "apply": "Place",
-            "cancel": "Cancel",
-            "spacingFit": "Fit",
-            "spacingInterval": "Interval",
-            "intervalPlaceholder": "2 or 4x3,2x4",
-            "anchor": "Lay from",
-            "anchorKeep": "Keep fixed",
-            "intervalLocked": "Interval locked: the shape keeps it. Click to let the spacing fit the shape",
-            "intervalFits": "Spacing fits the shape. Click, or type an interval, to lock it",
-            "sizeLocked": "Size locked: a locked interval is laid on the shape as sized. Click to let the size follow the interval",
-            "sizeFollows": "Size follows the interval. Click, or type a size, to lock it",
-            "sizeKeepsPath": "This shape keeps the path you draw: a locked interval is laid along it",
-            "stateFit": "Spacing fits the shape. Type an interval to lock it; the size lock decides whether the shape then resizes.",
-            "stateFollow": "Interval locked: dragging resizes the shape to keep it.",
-            "stateKeep": "Interval and size locked: the run is laid on the shape.",
-            "anchorStart": "Start",
-            "anchorCenter": "Center",
-            "anchorEnd": "End",
-            "marchers": "{count, plural, one {# marcher} other {# marchers}}",
-            "more": "More"
         },
         "title": "Inspector"
     },
@@ -1972,26 +1865,70 @@
     },
     "shapes": {
         "box": {
-            "discarded": {
-                "message": "Box discarded",
-                "undo": "Undo"
-            },
             "left": {
                 "closeUp": "Close up",
                 "hint": "Their spots stay empty. Undo puts them back.",
                 "many": "{count} left the box",
                 "one": "{name} left the box",
                 "resplit": "Re-split"
+            },
+            "params": {
+                "fewerAcross": "One fewer across",
+                "moreAcross": "One more across",
+                "short": "{count} short",
+                "size": "Size, across × deep",
+                "spacingAcross": "Side-to-side spacing, in steps",
+                "spacingDeep": "Front-to-back spacing, in steps"
             }
         },
         "circle": "Circle",
+        "command": {
+            "fill": "Fill: {modes}",
+            "layout": "Layout: {layouts}"
+        },
+        "distribute": {
+            "hint": {
+                "add": "add {count}",
+                "remove": "remove {count}"
+            },
+            "layout": {
+                "full": "Full",
+                "notched": "Notched",
+                "rounded": "Rounded",
+                "shortBack": "Short back",
+                "stagger": "Stagger"
+            },
+            "version": {
+                "frontToBack": "{counts}, front to back",
+                "leftToRight": "{counts}, left to right",
+                "short": "{across} × {deep}, {short} short",
+                "staggered": "{across} × {deep} staggered",
+                "straight": "{across} × {deep} straight"
+            }
+        },
         "edit": {
+            "away": {
+                "dismiss": "Dismiss",
+                "dismissTip": "Dismiss the shape (undo brings it back)",
+                "goBack": "Go back",
+                "text": "Shape open at {moment}"
+            },
             "closeUp": {
                 "label": "Close up",
                 "title": "Close up: fill the {count, plural, one {# empty spot} other {# empty spots}} with the marchers left"
             },
+            "drawHint": "Drag on the field to draw a {shape} · Esc to cancel",
+            "drawnOn": "from {page}",
+            "edge": {
+                "label": "Edge",
+                "tip": "Edge: {edge} evenly along the outline, {inside} spread inside",
+                "tipEdgeOnly": "Edge: too few marchers for an inside, so all {edge} stand on the edge"
+            },
+            "empty": "{count} empty",
+            "flipAcross": "Flip side to side",
+            "flipDeep": "Flip front to back",
             "gap": {
-                "label": "Gap",
+                "menu": "Leftover",
                 "side": {
                     "back": "Back",
                     "front": "Front",
@@ -2003,7 +1940,17 @@
                     "gap": "Leaves a gap",
                     "spread": "Spreads evenly"
                 },
-                "styleLabel": "That side"
+                "styleLabel": "That side",
+                "tipGap": "Click a marcher on the outline (not a corner) to move the gap there.",
+                "tipSpread": "Click a marcher on another side (not a corner) to spread that side instead."
+            },
+            "layout": {
+                "aria": "Layout: {label}",
+                "cantMake": "{label} can't make {count}",
+                "label": "Layout",
+                "needs": "{label} needs {count, plural, one {# marcher} other {# marchers}}: {hint}",
+                "needsEither": "{label} needs {a} or {b} marchers: {hint}",
+                "showVersions": "Show the {label} versions"
             },
             "mode": {
                 "files": "Grid",
@@ -2011,28 +1958,284 @@
                 "outline": "Outline",
                 "spread": "Spread"
             },
+            "pathways": {
+                "hide": "Hide the pathways from the start flag",
+                "show": "Show the pathways from the start flag"
+            },
+            "pivot": {
+                "aria": "Pivot: {pivot}",
+                "custom": "Pivot: where it was dragged on the field",
+                "label": "Pivot",
+                "names": {
+                    "c": "center",
+                    "e": "right",
+                    "n": "back",
+                    "ne": "back right",
+                    "nw": "back left",
+                    "s": "front",
+                    "se": "front right",
+                    "sw": "front left",
+                    "w": "left"
+                },
+                "tip": "Turn and flip around the {pivot}"
+            },
+            "place": "Place",
+            "quarterTurn": "Turn 90° clockwise",
+            "ratioLock": {
+                "locked": "Spacings locked together: click to unlock",
+                "unlocked": "Lock the two spacings together"
+            },
+            "recalculate": {
+                "already": "Who goes where is already least travel",
+                "closeUpFirst": "Recalculate who goes where: close up the empty spots first",
+                "label": "Recalculate",
+                "title": "Recalculate who goes where, by least travel"
+            },
             "reshuffle": {
                 "label": "Reshuffle",
                 "title": "Reshuffle: a new layout"
+            },
+            "scrubTip": "{label}: click to type, drag to change",
+            "seed": {
+                "copied": "Copied",
+                "copy": "Copy the seed",
+                "copyFailed": "Copy failed",
+                "count": "for {count} marchers",
+                "hint": "Same seed and count in the same shape: same spread. The spacing only scales it.",
+                "label": "Seed"
+            },
+            "steps": "steps",
+            "turn": "Turn, in degrees clockwise"
+        },
+        "field": {
+            "stepLimit": "{steps} to 5"
+        },
+        "frame": {
+            "scale": {
+                "apart": "{spacings} apart",
+                "size": "{sizes} steps"
             }
         },
+        "kinds": {
+            "arc": {
+                "hint": {
+                    "bend": "Bend"
+                },
+                "label": "Arc",
+                "validate": {
+                    "flat": "The arc is flat, so it's a straight line",
+                    "sameSpot": "The arc's ends are on the same spot"
+                }
+            },
+            "block": {
+                "across": "Across",
+                "deep": "Deep",
+                "files": "Files",
+                "hint": {
+                    "files": "Files",
+                    "intervalAcross": "Interval across",
+                    "intervalDeep": "Interval deep",
+                    "turn": "Turn"
+                },
+                "keepIntervals": {
+                    "label": "Keep intervals",
+                    "locked": "Intervals locked: dragging the side adds or removes files. Click to stretch the intervals instead",
+                    "unlocked": "Dragging the side stretches the intervals. Click to lock them, so it adds or removes files"
+                },
+                "label": "Box",
+                "pattern": "Pattern",
+                "ranks": {
+                    "grid": "Grid",
+                    "label": "Ranks",
+                    "staggered": "Staggered"
+                },
+                "readout": {
+                    "interval": "Interval",
+                    "intervalValue": "{across} × {deep} steps",
+                    "ranksFiles": "Ranks × files"
+                },
+                "rotation": "Rotation",
+                "shortRank": {
+                    "center": "Center",
+                    "label": "Short rank",
+                    "left": "Left",
+                    "right": "Right"
+                },
+                "size": "Size",
+                "validate": {
+                    "lastRankOne": "With {files, plural, one {# file} other {# files}} the last rank has 1 marcher",
+                    "noFiles": "A block needs at least 1 file"
+                }
+            },
+            "circle": {
+                "hint": {
+                    "radius": "Radius, and where marcher 1 starts"
+                },
+                "label": "Circle",
+                "params": {
+                    "interval": "Spacing between neighbors, in steps"
+                },
+                "readout": {
+                    "circumference": "Circumference"
+                },
+                "validate": {
+                    "noRadius": "The circle has no radius",
+                    "overlap": "The intervals go all the way around the circle, so marchers overlap",
+                    "partFilled": "{count, plural, one {# marcher at this interval fills} other {# marchers at this interval fill}} {run} of the circle's {total} steps. Open the size lock to make the circle close."
+                }
+            },
+            "curve": {
+                "hint": {
+                    "point": "Point (double-click it to remove)"
+                },
+                "label": "Curve",
+                "validate": {
+                    "points": "The curve needs at least 2 different points"
+                }
+            },
+            "fill": {
+                "edgeField": "Edge (0 = auto)",
+                "group": "Fill",
+                "hint": {
+                    "size": "Size"
+                },
+                "label": "Filled",
+                "layout": "Layout",
+                "readout": {
+                    "about": "About",
+                    "apart": "{steps} steps apart",
+                    "edge": "Edge",
+                    "edgeAuto": "{count} (auto)"
+                },
+                "validate": {
+                    "noSize": "The shape has no size"
+                }
+            },
+            "line": {
+                "label": "Line",
+                "validate": {
+                    "sameSpot": "The line's ends are on the same spot"
+                }
+            },
+            "measure": {
+                "angle": "Angle",
+                "depth": "Depth",
+                "radius": "Radius",
+                "sweep": "Sweep",
+                "width": "Width"
+            },
+            "path": {
+                "readout": {
+                    "interval": "Interval",
+                    "length": "Length",
+                    "run": "Run"
+                },
+                "spacing": "Spacing"
+            }
+        },
+        "library": {
+            "addNamed": "Add {name} to my Library",
+            "addTip": "Add to my Library, for every show",
+            "close": "Close",
+            "deleteNamed": "Delete {name}",
+            "deleteTip": "Delete this saved shape",
+            "dismiss": "Dismiss",
+            "draw": "Draw a {name}",
+            "full": "{max} shapes are starred, as many as the ring holds. Unstar one first to star {name}.",
+            "group": {
+                "basic": "Basic",
+                "saved": "Saved"
+            },
+            "intro": "Star a shape to keep it in the Shapes tab and the shape ring, up to {max}.",
+            "note": {
+                "apart": "{spacing} apart",
+                "modeSpacing": "{mode} {spacing}",
+                "showOnly": "this show only",
+                "stagger": "stagger {fraction}",
+                "staggerLeft": "stagger {fraction} left"
+            },
+            "savedEmpty": "Save a shape from its ⋯ row or the inspector to keep it here, for every show.",
+            "star": "Star",
+            "starNamed": "Star {name}",
+            "title": "Shapes",
+            "unstar": "Unstar",
+            "unstarNamed": "Unstar {name}"
+        },
         "placed": {
+            "editError": "Error editing the shape",
+            "fillError": "Error filling the shape",
             "label": "{name} · {interval} steps",
             "left": {
                 "many": "{count} left the {shape}",
                 "one": "{name} left the {shape}"
+            },
+            "selectWhole": "Select {shape}",
+            "summary": {
+                "empty": "{count, plural, other {# empty}}",
+                "steps": "{interval} steps"
             }
         },
         "save": {
+            "ariaLabel": "Save this shape to your library",
+            "button": "Save",
+            "cancel": "Cancel",
             "descriptionLabel": "Description of the saved shape (optional)",
-            "descriptionPlaceholder": "Description (optional)"
+            "descriptionPlaceholder": "Description (optional)",
+            "nameLabel": "Name of the saved shape",
+            "savedAs": "Saved as {name}",
+            "tip": "Save this shape to your library, starred"
         },
         "saved": {
             "copyFailed": "Couldn't copy the saved shape into the show",
             "deleteFailed": "Couldn't delete the saved shape from the show"
         },
+        "spacing": {
+            "empty": "Enter an interval in steps",
+            "noGaps": "A run needs at least 1 gap",
+            "notInterval": "\"{part}\" isn't an interval. Type steps (2), a list (4,4,2) or steps x gaps (4x3)",
+            "notPositive": "An interval must be more than 0 steps",
+            "repeating": "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: repeating from the first",
+            "unused": "{needed, plural, one {# gap} other {# gaps}} needed, {given} typed: the last {unused} unused"
+        },
         "square": "Square",
+        "tool": {
+            "moment": {
+                "count": "count {count}",
+                "home": "home"
+            },
+            "placeError": "Error placing the shape",
+            "ring": {
+                "hint": "Click a shape, or anywhere else to close",
+                "starred": "Starred"
+            },
+            "section": {
+                "box": "Box",
+                "title": "Shapes"
+            },
+            "selectMarchersFirst": "Select marchers first",
+            "tab": {
+                "greyed": "{name}: {reason}",
+                "kinds": "Shape kinds",
+                "library": "Library",
+                "libraryTip": "Open the shape library, to star shapes",
+                "ringHint": "Hold {key} on the field for the shape ring"
+            }
+        },
+        "transform": {
+            "flipAcross": "Flip ↔",
+            "flipAcrossTip": "Flip side to side around the pivot",
+            "flipDeep": "Flip ↕",
+            "flipDeepTip": "Flip front to back around the pivot",
+            "title": "Transform"
+        },
         "triangle": "Triangle",
+        "validate": {
+            "noPosition": "The shape has a spot with no position",
+            "offField": "{count, plural, one {# marcher would stand} other {# marchers would stand}} off the field",
+            "sameSpot": "{count, plural, one {# marcher would stand} other {# marchers would stand}} on the same spot",
+            "stepsTooLong": "{count, plural, one {# marcher needs steps longer than the {limit} limit ({longest}, drawn in orange).} other {# marchers need steps longer than the {limit} limit (longest {longest}, drawn in orange).}} Set the limit in Field › Customize.",
+            "tooClose": "{count, plural, one {# marcher is} other {# marchers are}} closer than {min, plural, one {# step} other {# steps}}"
+        },
         "x": "X"
     },
     "showChecks": {
@@ -2714,6 +2917,12 @@
             "fits_nobody": "fits none of its marchers",
             "kind_not_allowed": "a phrase on a channel that takes states only",
             "transition_cut": "its transition starts before the cue before it lands"
+        }
+    },
+    "shortcutsDialog": {
+        "shape": {
+            "fineControl": "Fine control, still catching yard lines and hashes",
+            "noSnapping": "Drag a shape without snapping"
         }
     }
 }

@@ -75,8 +75,15 @@
             "selectAll": "すべて選択"
         },
         "shape": {
+            "apply": "マーチャーを形状に配置",
+            "block": "形状：ブロック",
+            "circle": "形状：円",
             "delete": "選択されている形状を削除",
-            "noMarchersSelected": "行進者が選択されていません"
+            "keywords": "形状 フォーム フォーメーション セット 配置 shape",
+            "noMarchersSelected": "行進者が選択されていません",
+            "quarterTurn": "形状：時計回りに90°回転",
+            "recalculate": "形状：誰がどこに行くかを再計算",
+            "ring": "お気に入りリング：長押しで形状を選択、タップで開いたままにする"
         },
         "swap": {
             "error": "スワップできませんでした マーチャーズ {marcher1} と {marcher2}",
@@ -190,11 +197,18 @@
         "save": "保存"
     },
     "commandPalette": {
+        "back": "戻る",
+        "cancel": "キャンセル",
         "close": "閉じる",
+        "done": "完了",
         "empty": "一致するコマンドはありません。",
         "navigate": "移動",
+        "next": "次へ",
+        "notUnderstood": "認識できませんでした — もう一度お試しください",
         "placeholder": "コマンドを検索…",
         "run": "実行",
+        "shape": "形状",
+        "stepOf": "{step}/{count}",
         "suggested": "おすすめ",
         "title": "コマンドパレット",
         "unavailable": "現在は利用できません"
@@ -456,7 +470,9 @@
             "top": "上部",
             "useHashes": "ハッシュ を 使用",
             "width": "幅",
-            "widthHeight": "幅 / 高さ"
+            "widthHeight": "幅 / 高さ",
+            "stepSizeWarningThresholdRatio": "{label}（{steps}対5）",
+            "stepSizeWarningThreshold": "歩幅の警告しきい値"
         },
         "messages": {
             "fieldRatio": "{ratio} または {decimal}",
@@ -512,7 +528,8 @@
             "stepsFromFrontToHomeLabel": "前 サイドライン から ホーム 番号 の 外側 まで の ステップ 数 （前 サイドライン に 近い）",
             "stepsFromFrontToHomeLabelTop": "前面 サイドライン から ホーム 番号 の 内側 （フィールド の 中心 に 近い方） まで の ステップ 数",
             "stepSize": "フィールドの各ステップのサイズ（インチまたはセンチメートル）",
-            "useHashes": "Y チェックポイントに ハッシュ を使用します 。 フットボール フィールド のように 。 チェックを外す と、線 が 使用されます 。"
+            "useHashes": "Y チェックポイントに ハッシュ を使用します 。 フットボール フィールド のように 。 チェックを外す と、線 が 使用されます 。",
+            "stepSizeWarningThreshold": "歩幅がこの距離を超えるマーチャーは、警告色のパスで示されます。0にすると無効になります。"
         },
         "units": {
             "steps": "ステップ"
@@ -598,7 +615,8 @@
                 "success": "ページ 分割 に 成功 しました"
             },
             "subset": "サブセット",
-            "title": "ページ {pageNumber}"
+            "title": "ページ {pageNumber}",
+            "playing": "再生中…"
         },
         "shape": {
             "addSegmentButton": "追加",
@@ -1121,13 +1139,406 @@
         "shortcuts.tapBeats": "ビートをタップ",
         "title": "設定",
         "tolgeeApiKeyPlaceholder": "Tolgee API キー",
-        "tolgeeDevToolsToggle": "Tolgee インコンテキスト 翻訳"
+        "tolgeeDevToolsToggle": "Tolgee インコンテキスト 翻訳",
+        "field": "フィールド",
+        "field.description": "フィールドの見た目。",
+        "field.gridLines": "グリッド線",
+        "field.halfLines": "ハーフライン",
+        "field.labelPosition": "ラベルの位置",
+        "field.labelPosition.above": "ドットの上",
+        "field.labelPosition.beside": "ドットの横",
+        "field.labelSize": "ラベルのサイズ",
+        "field.labelSize.large": "大",
+        "field.labelSize.normal": "標準",
+        "field.labelSize.small": "小",
+        "field.shapeFocus": "形状の作成中",
+        "field.shapeFocus.drawing": "描画中のみ薄くする",
+        "field.shapeFocus.drawing.description": "開いている形状の外にいるマーチャーは、描画中のみ薄く表示されます。",
+        "field.shapeFocus.rest": "他を薄くする",
+        "field.shapeFocus.rest.description": "開いている形状の外にいるマーチャーは、形状が開いている間ずっと薄く表示されます。",
+        "field.stepSizeWarnings": "ステップサイズの警告",
+        "field.stepSizeWarnings.description": "ステップが大きすぎて行進できない動きに印を付け、そのパスを常に表示します。"
     },
     "shapes": {
+        "box": {
+            "left": {
+                "closeUp": "詰める",
+                "hint": "その位置は空いたままになります。元に戻すと戻ります。",
+                "many": "{count}人がブロックから外れました",
+                "one": "{name}がブロックから外れました",
+                "resplit": "再分割"
+            },
+            "params": {
+                "fewerAcross": "左右に1人減らす",
+                "moreAcross": "左右に1人増やす",
+                "short": "{count}人不足",
+                "size": "サイズ（左右×前後）",
+                "spacingAcross": "左右の間隔（ステップ）",
+                "spacingDeep": "前後の間隔（ステップ）"
+            }
+        },
         "circle": "円",
+        "command": {
+            "fill": "配置方法：{modes}",
+            "layout": "レイアウト：{layouts}"
+        },
+        "distribute": {
+            "hint": {
+                "add": "{count}人追加",
+                "remove": "{count}人削除"
+            },
+            "layout": {
+                "full": "フル",
+                "notched": "切り欠き",
+                "rounded": "角丸",
+                "shortBack": "後列短縮",
+                "stagger": "千鳥"
+            },
+            "version": {
+                "frontToBack": "{counts}（前から後ろ）",
+                "leftToRight": "{counts}（左から右）",
+                "short": "{across} × {deep}、{short}人不足",
+                "staggered": "{across} × {deep} 千鳥",
+                "straight": "{across} × {deep} 直線"
+            }
+        },
+        "edit": {
+            "away": {
+                "dismiss": "破棄",
+                "dismissTip": "形状を破棄（元に戻すで復元できます）",
+                "goBack": "戻る",
+                "text": "{moment}で形状を編集中"
+            },
+            "closeUp": {
+                "label": "詰める",
+                "title": "詰める：{count, plural, other {#か所の空き}}を残りのマーチャーで埋める"
+            },
+            "drawHint": "フィールド上をドラッグして{shape}を描画 · Escでキャンセル",
+            "drawnOn": "{page}から",
+            "edge": {
+                "label": "縁",
+                "tip": "縁：{edge}人を輪郭に沿って均等に、{inside}人を内側に散開",
+                "tipEdgeOnly": "縁：内側に置くにはマーチャーが少ないため、{edge}人全員が縁に立ちます"
+            },
+            "empty": "空き{count}",
+            "flipAcross": "左右に反転",
+            "flipDeep": "前後に反転",
+            "gap": {
+                "menu": "余り",
+                "side": {
+                    "back": "後ろ",
+                    "front": "前",
+                    "left": "左",
+                    "right": "右"
+                },
+                "sideLabel": "隙間の側",
+                "style": {
+                    "gap": "隙間を残す",
+                    "spread": "均等に広げる"
+                },
+                "styleLabel": "その側",
+                "tipGap": "輪郭上のマーチャー（角以外）をクリックすると、そこに隙間を移動します。",
+                "tipSpread": "別の辺のマーチャー（角以外）をクリックすると、代わりにその辺を均等にします。"
+            },
+            "layout": {
+                "aria": "レイアウト：{label}",
+                "cantMake": "{label}では{count}人を作れません",
+                "label": "レイアウト",
+                "needs": "{label}には{count}人のマーチャーが必要です：{hint}",
+                "needsEither": "{label}には{a}人または{b}人のマーチャーが必要です：{hint}",
+                "showVersions": "{label}のバージョンを表示"
+            },
+            "mode": {
+                "files": "グリッド",
+                "label": "配置方法",
+                "outline": "輪郭",
+                "spread": "散開"
+            },
+            "pathways": {
+                "hide": "スタートフラグからのパスを非表示",
+                "show": "スタートフラグからのパスを表示"
+            },
+            "pivot": {
+                "aria": "ピボット：{pivot}",
+                "custom": "ピボット：フィールド上でドラッグした位置",
+                "label": "ピボット",
+                "names": {
+                    "c": "中心",
+                    "e": "右",
+                    "n": "後ろ",
+                    "ne": "右後ろ",
+                    "nw": "左後ろ",
+                    "s": "前",
+                    "se": "右前",
+                    "sw": "左前",
+                    "w": "左"
+                },
+                "tip": "{pivot}を中心に回転・反転"
+            },
+            "place": "配置",
+            "quarterTurn": "時計回りに90°回転",
+            "ratioLock": {
+                "locked": "間隔は連動中：クリックで解除",
+                "unlocked": "2つの間隔を連動させる"
+            },
+            "recalculate": {
+                "already": "誰がどこへ行くかはすでに移動距離が最小です",
+                "closeUpFirst": "誰がどこへ行くかを再計算：先に空きを詰めてください",
+                "label": "再計算",
+                "title": "移動距離が最小になるよう、誰がどこへ行くかを再計算"
+            },
+            "reshuffle": {
+                "label": "再シャッフル",
+                "title": "再シャッフル：新しい配置"
+            },
+            "scrubTip": "{label}：クリックで入力、ドラッグで変更",
+            "seed": {
+                "copied": "コピーしました",
+                "copy": "シードをコピー",
+                "copyFailed": "コピーできませんでした",
+                "count": "{count}人のマーチャー用",
+                "hint": "同じ形状で同じシードと人数なら、同じ散開になります。間隔は拡大縮小するだけです。",
+                "label": "シード"
+            },
+            "steps": "ステップ",
+            "turn": "回転（時計回りの角度）"
+        },
+        "field": {
+            "stepLimit": "{steps}対5"
+        },
+        "frame": {
+            "scale": {
+                "apart": "{spacings}間隔",
+                "size": "{sizes}ステップ"
+            }
+        },
+        "kinds": {
+            "arc": {
+                "hint": {
+                    "bend": "曲げる"
+                },
+                "label": "円弧",
+                "validate": {
+                    "flat": "円弧が平らなので直線になっています",
+                    "sameSpot": "円弧の両端が同じ位置にあります"
+                }
+            },
+            "block": {
+                "across": "左右",
+                "deep": "前後",
+                "files": "縦列",
+                "hint": {
+                    "files": "縦列",
+                    "intervalAcross": "左右の間隔",
+                    "intervalDeep": "前後の間隔",
+                    "turn": "回転"
+                },
+                "keepIntervals": {
+                    "label": "間隔を保持",
+                    "locked": "間隔はロック中：辺をドラッグすると縦列が増減します。クリックすると代わりに間隔を伸縮します",
+                    "unlocked": "辺をドラッグすると間隔が伸縮します。クリックしてロックすると縦列が増減します"
+                },
+                "label": "ブロック",
+                "pattern": "パターン",
+                "ranks": {
+                    "grid": "グリッド",
+                    "label": "横列",
+                    "staggered": "千鳥"
+                },
+                "readout": {
+                    "interval": "間隔",
+                    "intervalValue": "{across} × {deep} ステップ",
+                    "ranksFiles": "横列 × 縦列"
+                },
+                "rotation": "回転",
+                "shortRank": {
+                    "center": "中央",
+                    "label": "短い横列",
+                    "left": "左",
+                    "right": "右"
+                },
+                "size": "サイズ",
+                "validate": {
+                    "lastRankOne": "{files}縦列だと最後の横列はマーチャー1人になります",
+                    "noFiles": "ブロックには縦列が1つ以上必要です"
+                }
+            },
+            "circle": {
+                "hint": {
+                    "radius": "半径とマーチャー1の開始位置"
+                },
+                "label": "円",
+                "params": {
+                    "interval": "隣同士の間隔（ステップ）"
+                },
+                "readout": {
+                    "circumference": "円周"
+                },
+                "validate": {
+                    "noRadius": "円に半径がありません",
+                    "overlap": "間隔が円を一周してしまうため、マーチャーが重なります",
+                    "partFilled": "この間隔のマーチャー{count}人は、円の{total}ステップのうち{run}ステップを占めます。サイズのロックを外すと円が閉じます。"
+                }
+            },
+            "curve": {
+                "hint": {
+                    "point": "点（ダブルクリックで削除）"
+                },
+                "label": "曲線",
+                "validate": {
+                    "points": "曲線には異なる点が2つ以上必要です"
+                }
+            },
+            "fill": {
+                "edgeField": "縁（0 = 自動）",
+                "group": "塗りつぶし",
+                "hint": {
+                    "size": "サイズ"
+                },
+                "label": "塗りつぶし",
+                "layout": "レイアウト",
+                "readout": {
+                    "about": "約",
+                    "apart": "{steps}ステップ間隔",
+                    "edge": "縁",
+                    "edgeAuto": "{count}（自動）"
+                },
+                "validate": {
+                    "noSize": "形状にサイズがありません"
+                }
+            },
+            "line": {
+                "label": "直線",
+                "validate": {
+                    "sameSpot": "直線の両端が同じ位置にあります"
+                }
+            },
+            "measure": {
+                "angle": "角度",
+                "depth": "奥行き",
+                "radius": "半径",
+                "sweep": "中心角",
+                "width": "幅"
+            },
+            "path": {
+                "readout": {
+                    "interval": "間隔",
+                    "length": "長さ",
+                    "run": "区間"
+                },
+                "spacing": "間隔"
+            }
+        },
+        "library": {
+            "addNamed": "{name}をマイライブラリに追加",
+            "addTip": "すべてのショーで使えるようにマイライブラリに追加",
+            "close": "閉じる",
+            "deleteNamed": "{name}を削除",
+            "deleteTip": "この保存済みの形状を削除",
+            "dismiss": "閉じる",
+            "draw": "{name}を描く",
+            "full": "スター付きの形状が{max}個あり、リングがいっぱいです。{name}にスターを付けるには、先にどれかのスターを外してください。",
+            "group": {
+                "basic": "基本",
+                "saved": "保存済み"
+            },
+            "intro": "形状にスターを付けると、形状タブと形状リングに表示されます（最大{max}個）。",
+            "note": {
+                "apart": "間隔{spacing}",
+                "modeSpacing": "{mode} {spacing}",
+                "showOnly": "このショーのみ",
+                "stagger": "千鳥{fraction}",
+                "staggerLeft": "千鳥{fraction}左"
+            },
+            "savedEmpty": "⋯の行かインスペクターから形状を保存すると、すべてのショーで使えるようにここに保管されます。",
+            "star": "スターを付ける",
+            "starNamed": "{name}にスターを付ける",
+            "title": "形状",
+            "unstar": "スターを外す",
+            "unstarNamed": "{name}のスターを外す"
+        },
+        "placed": {
+            "editError": "形状の編集中にエラーが発生しました",
+            "fillError": "形状を埋める際にエラーが発生しました",
+            "label": "{name} · {interval}ステップ",
+            "left": {
+                "many": "{count}人が{shape}から外れました",
+                "one": "{name}が{shape}から外れました"
+            },
+            "selectWhole": "{shape}を選択",
+            "summary": {
+                "empty": "{count, plural, other {空き#}}",
+                "steps": "{interval}ステップ"
+            }
+        },
+        "save": {
+            "ariaLabel": "この形状をライブラリに保存",
+            "button": "保存",
+            "cancel": "キャンセル",
+            "descriptionLabel": "保存した形状の説明（任意）",
+            "descriptionPlaceholder": "説明（任意）",
+            "nameLabel": "保存する形状の名前",
+            "savedAs": "{name}として保存しました",
+            "tip": "この形状をスター付きでライブラリに保存"
+        },
+        "saved": {
+            "copyFailed": "保存した形状をショーにコピーできませんでした",
+            "deleteFailed": "保存した形状をショーから削除できませんでした"
+        },
+        "spacing": {
+            "empty": "間隔をステップで入力してください",
+            "noGaps": "区間には1つ以上の間隔が必要です",
+            "notInterval": "「{part}」は間隔ではありません。ステップ（2）、リスト（4,4,2）、またはステップx間隔数（4x3）を入力してください",
+            "notPositive": "間隔は0ステップより大きくしてください",
+            "repeating": "必要な間隔は{needed}個、入力は{given}個：最初から繰り返します",
+            "unused": "必要な間隔は{needed}個、入力は{given}個：最後の{unused}個は使われません"
+        },
         "square": "正方形",
+        "tool": {
+            "moment": {
+                "count": "カウント{count}",
+                "home": "開始位置"
+            },
+            "placeError": "形状の配置中にエラーが発生しました",
+            "ring": {
+                "hint": "形状をクリック、または他の場所をクリックして閉じる",
+                "starred": "スター付き"
+            },
+            "section": {
+                "box": "ブロック",
+                "title": "形状"
+            },
+            "selectMarchersFirst": "先にマーチャーを選択してください",
+            "tab": {
+                "greyed": "{name}：{reason}",
+                "kinds": "形状の種類",
+                "library": "ライブラリ",
+                "libraryTip": "形状ライブラリを開いてスターを付ける",
+                "ringHint": "フィールド上で{key}を長押しすると形状リングが開きます"
+            }
+        },
+        "transform": {
+            "flipAcross": "反転 ↔",
+            "flipAcrossTip": "ピボットを中心に左右反転",
+            "flipDeep": "反転 ↕",
+            "flipDeepTip": "ピボットを中心に前後反転",
+            "title": "変形"
+        },
         "triangle": "三角形",
+        "validate": {
+            "noPosition": "形状に位置のないスポットがあります",
+            "offField": "マーチャー{count}人がフィールドの外に出ます",
+            "sameSpot": "マーチャー{count}人が同じ位置に立ちます",
+            "stepsTooLong": "{count, plural, other {マーチャー{count}人が上限{limit}を超える歩幅を必要とします（最大{longest}、オレンジで表示）。}}上限はフィールド › カスタマイズで設定できます。",
+            "tooClose": "マーチャー{count}人の間隔が{min}ステップ未満です"
+        },
         "x": "X"
+    },
+    "shortcutsDialog": {
+        "shape": {
+            "fineControl": "細かく調整（ヤードラインとハッシュには引き続きスナップ）",
+            "noSnapping": "スナップせずに形状をドラッグ"
+        }
     },
     "tags": {
         "title": "タグ"
@@ -1145,6 +1556,28 @@
         "audio": "オーディオ",
         "controls": {
             "label": "再生 コントロール"
+        },
+        "holdMarks": {
+            "holds": "選択したマーチャーはページ{page}から静止しています",
+            "holdsFromStart": "選択したマーチャーは最初から静止しています",
+            "holdsFromStartHint": "開始した位置にとどまります",
+            "holdsHere": "選択したマーチャーはこのページで静止しています",
+            "holdsHereHint": "最後の動きで止まった位置にとどまります",
+            "holdsHint": "ページ{page}で止まった位置にとどまります",
+            "kept": "選択したマーチャーはここで保持されています",
+            "keptHint": "前のページが変わってもここにとどまります",
+            "mixed": "選択した一部のマーチャーはページ{page}から静止しています",
+            "mixedFromStart": "選択した一部のマーチャーは最初から静止しています",
+            "mixedHere": "選択した一部のマーチャーはこのページで静止しています",
+            "mixedHint": "一部はここで独自の動きがあります",
+            "moves": "選択したマーチャーはこのページで動きます",
+            "movesHint": "ここで独自の動きがあります"
+        },
+        "keep": {
+            "followed": {
+                "keepOne": "ページ{page}を以前のまま保持",
+                "keepPages": "ページ{first}–{last}を以前のまま保持"
+            }
         },
         "label": "タイムライン",
         "masterVolume": "マスタ 音量",
@@ -1202,7 +1635,16 @@
         "view": {
             "gridLines": "グリッド ライン",
             "halfLines": "半分 の 線",
+            "labels": "ラベル",
+            "labelsAuto": "自動（混み合うと小さく）",
+            "labelsNames": "ドリル番号",
+            "labelsNumbers": "番号のみ",
+            "labelsOff": "オフ",
             "nextPaths": "次の パス",
+            "shapes": "形状",
+            "shapesAlways": "常に",
+            "shapesOff": "オフ",
+            "shapesSelected": "選択時",
             "uiSettingsToolbar": "UI 設定 ツールバー"
         }
     },

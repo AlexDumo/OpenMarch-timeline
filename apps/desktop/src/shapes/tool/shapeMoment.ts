@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import {
     useTimelineSelectionStore,
     type TimelineSelectionState,
@@ -82,5 +83,9 @@ export function goBackTo(moment: ShapeMoment): void {
 
 /** "count 12", or "home" at beat 0: where the shape belongs, for the away chip */
 export function momentLabel(moment: ShapeMoment): string {
-    return moment.playheadBeat === 0 ? "home" : `count ${moment.playheadBeat}`;
+    return moment.playheadBeat === 0
+        ? tolgee.t("shapes.tool.moment.home", "home")
+        : tolgee.t("shapes.tool.moment.count", "count {count}", {
+              count: moment.playheadBeat,
+          });
 }

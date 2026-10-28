@@ -65,6 +65,13 @@ export function boxSpots(p: BoxParams, n: number, draft = false): Slot[] {
 
 export const boxShape: ShapeKind<BoxParams> = {
     ...(blockKind as unknown as ShapeKind<BoxParams>),
+    // The spread above copies the block's translated label and groups once; read them live
+    get label() {
+        return blockKind.label;
+    },
+    get groups() {
+        return blockKind.groups as unknown as ShapeKind<BoxParams>["groups"];
+    },
     generate(p, n, ctx) {
         if (n <= 0) return [];
         return isPreBox(p)

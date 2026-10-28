@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import type { Path } from "../geometry/path";
 import { sampleAlong } from "../spacing";
 import type { ParamGroup, Readout, ShapeContext, Spacing, XY } from "../types";
@@ -5,8 +6,18 @@ import type { ParamGroup, Readout, ShapeContext, Spacing, XY } from "../types";
 /** Shared pieces of path kinds (line, arc, curve, ...), so spacing reads the same in each. */
 
 export const SPACING_GROUP: ParamGroup<{ spacing: Spacing }> = {
-    label: "Spacing",
-    fields: [{ type: "spacing", key: "spacing", label: "Spacing" }],
+    get label() {
+        return tolgee.t("shapes.kinds.path.spacing", "Spacing");
+    },
+    fields: [
+        {
+            type: "spacing",
+            key: "spacing",
+            get label() {
+                return tolgee.t("shapes.kinds.path.spacing", "Spacing");
+            },
+        },
+    ],
 };
 
 /** Path kinds start by fitting the marchers' current extent: spacing derived, nothing moves far. */
@@ -65,16 +76,24 @@ export function pathReadouts(
     if (spacing.mode === "interval" && spacing.size !== "follow") {
         const slots = sampleAlong(path, spacing, n, ctx.stepPx);
         const run = (slots.at(-1)?.s ?? 0) - (slots[0]?.s ?? 0);
-        return [{ label: "Run", value: formatSteps(run, ctx) }];
+        return [
+            {
+                label: tolgee.t("shapes.kinds.path.readout.run", "Run"),
+                value: formatSteps(run, ctx),
+            },
+        ];
     }
     const readouts: Readout[] = [
-        { label: "Length", value: formatSteps(path.length, ctx) },
+        {
+            label: tolgee.t("shapes.kinds.path.readout.length", "Length"),
+            value: formatSteps(path.length, ctx),
+        },
     ];
     if (spacing.mode === "fit" && n > 1) {
         // Straight between neighbors, as drill measures it
         const slots = sampleAlong(path, spacing, n, ctx.stepPx);
         readouts.push({
-            label: "Interval",
+            label: tolgee.t("shapes.kinds.path.readout.interval", "Interval"),
             value: formatSteps(
                 Math.hypot(
                     slots[1]!.x - slots[0]!.x,

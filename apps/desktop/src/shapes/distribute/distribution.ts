@@ -1,3 +1,4 @@
+import tolgee from "@/global/singletons/Tolgee";
 import { SPREAD_GENERATOR, SPREAD_GENERATORS } from "./spread";
 
 /**
@@ -12,11 +13,17 @@ export const DISTRIBUTION_MODES = ["files", "outline", "spread"] as const;
 
 export type DistributionMode = (typeof DISTRIBUTION_MODES)[number];
 
-/** What the mode switch and the command bar call each mode */
+/** What the mode switch and the command bar call each mode, in the current language */
 export const MODE_LABELS: Readonly<Record<DistributionMode, string>> = {
-    files: "Grid",
-    outline: "Outline",
-    spread: "Spread",
+    get files() {
+        return tolgee.t("shapes.edit.mode.files", "Grid");
+    },
+    get outline() {
+        return tolgee.t("shapes.edit.mode.outline", "Outline");
+    },
+    get spread() {
+        return tolgee.t("shapes.edit.mode.spread", "Spread");
+    },
 };
 
 /**
@@ -44,13 +51,23 @@ export const LAYOUT_FAMILIES = [
 
 export type LayoutFamily = (typeof LAYOUT_FAMILIES)[number];
 
-/** What the picker and the command bar call each layout */
+/** What the picker and the command bar call each layout, in the current language */
 export const LAYOUT_LABELS: Readonly<Record<LayoutFamily, string>> = {
-    full: "Full",
-    stagger: "Stagger",
-    rounded: "Rounded",
-    shortBack: "Short back",
-    notched: "Notched",
+    get full() {
+        return tolgee.t("shapes.distribute.layout.full", "Full");
+    },
+    get stagger() {
+        return tolgee.t("shapes.distribute.layout.stagger", "Stagger");
+    },
+    get rounded() {
+        return tolgee.t("shapes.distribute.layout.rounded", "Rounded");
+    },
+    get shortBack() {
+        return tolgee.t("shapes.distribute.layout.shortBack", "Short back");
+    },
+    get notched() {
+        return tolgee.t("shapes.distribute.layout.notched", "Notched");
+    },
 };
 
 export interface FilesLayout {
