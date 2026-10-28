@@ -75,8 +75,15 @@
             "selectAll": "Tout sélectionner"
         },
         "shape": {
+            "apply": "Placer les marcheurs sur la forme",
+            "block": "Forme : Bloc",
+            "circle": "Forme : Cercle",
             "delete": "Supprime les formes sélectionnées actuelles",
-            "noMarchersSelected": "Aucun marcheur sélectionné"
+            "keywords": "forme figure formation set placer shape",
+            "noMarchersSelected": "Aucun marcheur sélectionné",
+            "quarterTurn": "Forme : Tourner de 90° dans le sens horaire",
+            "recalculate": "Forme : Recalculer qui va où",
+            "ring": "Anneau des favoris : maintenez pour choisir une forme, touchez pour le garder ouvert"
         },
         "swap": {
             "error": "Impossible d'échanger les marcheurs {{marcher1}} et {{marcher2}}",
@@ -190,11 +197,18 @@
         "save": "Sauvegarder"
     },
     "commandPalette": {
+        "back": "Retour",
+        "cancel": "Annuler",
         "close": "Fermer",
+        "done": "Terminé",
         "empty": "Aucune commande ne correspond.",
         "navigate": "Naviguer",
+        "next": "Suivant",
+        "notUnderstood": "Non compris — réessayez",
         "placeholder": "Rechercher des commandes…",
         "run": "Exécuter",
+        "shape": "Forme",
+        "stepOf": "{step} sur {count}",
         "suggested": "Suggestions",
         "title": "Palette de commandes",
         "unavailable": "Indisponible pour le moment"
@@ -598,7 +612,8 @@
                 "success": "Page scindée avec succès"
             },
             "subset": "Sous-ensemble",
-            "title": "Page {pageNumber}"
+            "title": "Page {pageNumber}",
+            "playing": "Lecture…"
         },
         "shape": {
             "addSegmentButton": "Ajouter",
@@ -625,6 +640,114 @@
             "ungroupShapeButton": "Dissocier",
             "ungroupShapeTooltip": "Supprimer cette forme pour cette page. Ne déplacera pas les marcheurs de leur position actuelle",
             "viewTab": "Vue"
+        },
+        "shapeTool": {
+            "anchor": "Placer depuis",
+            "anchorCenter": "Centre",
+            "anchorEnd": "Fin",
+            "anchorKeep": "Garder fixe",
+            "anchorStart": "Début",
+            "apply": "Placer",
+            "bringBack": "La rétablir",
+            "cancel": "Annuler",
+            "draw": {
+                "byClicks": "cliquez ses points sur le terrain, double-cliquez pour terminer",
+                "byDrag": "faites glisser sur le terrain pour la dessiner",
+                "hint": "Faites glisser sur le terrain pour dessiner {kind}, ou ajustez-le ici.",
+                "hintBend": "Déplacez le pointeur pour courber l'arc, puis cliquez pour le fixer.",
+                "hintClicks": "Cliquez des points sur le terrain pour dessiner {kind} ; double-cliquez pour terminer.",
+                "moveBox": "Faites glisser pour déplacer ce cadre",
+                "sizeInBox": "L'espacement, la taille et Placer se trouvent dans le cadre à côté de la forme.",
+                "tool": "Outil forme",
+                "toolDraw": "Dessiner",
+                "toolPanel": "Panneau seul (ancien)",
+                "warnings": "{count, plural, one {# avertissement} other {# avertissements}}"
+            },
+            "editPlaced": "Modifier {kind}",
+            "fill": {
+                "box": "Bloc",
+                "circle": "Cercle",
+                "filled": "Plein",
+                "grid": "Grille",
+                "natural": "Naturel",
+                "outline": "Contour",
+                "staggered": "En quinconce"
+            },
+            "gaps": "Intervalle",
+            "hint": "Choisissez une forme pour les marcheurs sélectionnés (L pour une ligne, O pour un cercle).",
+            "hintPlaced": "Ces marcheurs ont été placés en forme. Modifiez-la, ou choisissez une nouvelle forme.",
+            "intervalFits": "L'espacement s'ajuste à la forme. Cliquez, ou saisissez un intervalle, pour le verrouiller",
+            "intervalHelp": "Distance en ligne droite entre voisins, en pas. 2 = chaque écart de 2 pas · 4,4,2 = un écart chacun · 4x3 = 3 écarts de 4 pas",
+            "intervalLocked": "Intervalle verrouillé : la forme le garde. Cliquez pour que l'espacement s'ajuste à la forme",
+            "intervalPlaceholder": "2 ou 4x3,2x4",
+            "leftUnplaced": "{kind} n'a pas été placé",
+            "marchers": "{count, plural, one {# marcheur} other {# marcheurs}}",
+            "more": "Plus",
+            "movedByHand": "{count, plural, one {# déplacé à la main} other {# déplacés à la main}}",
+            "order": "Ordre",
+            "orderKeep": "Garder l'ordre",
+            "orderKeepHelp": "Les marcheurs gardent leur ordre le long de la forme.",
+            "orderNearest": "Plus proche",
+            "orderNearestHelp": "Chaque marcheur va à un point proche de sa position, avec le moins de déplacement au total.",
+            "overridesKeep": "Conserver",
+            "overridesReset": "Réinitialiser",
+            "pick": "Choisissez une forme",
+            "placeAnyway": "Certains marcheurs se traverseraient. Placez quand même, ou modifiez la forme.",
+            "placeAnywayButton": "Placer quand même",
+            "reverse": "Inverser",
+            "sizeFollows": "La taille suit l'intervalle. Cliquez, ou saisissez une taille, pour la verrouiller",
+            "sizeKeepsPath": "Cette forme garde le tracé que vous dessinez : un intervalle verrouillé est posé le long de celui-ci",
+            "sizeLocked": "Taille verrouillée : un intervalle verrouillé est posé sur la forme à sa taille actuelle. Cliquez pour que la taille suive l'intervalle",
+            "spacing": "Espacement",
+            "spacingFit": "Ajuster",
+            "spacingInterval": "Intervalle",
+            "stateFit": "L'espacement s'ajuste à la forme. Saisissez un intervalle pour le verrouiller ; le verrou de taille décide alors si la forme se redimensionne.",
+            "stateFollow": "Intervalle verrouillé : faire glisser redimensionne la forme pour le garder.",
+            "stateKeep": "Intervalle et taille verrouillés : la rangée est posée sur la forme.",
+            "title": "Forme",
+            "useNearest": "Utiliser Plus proche",
+            "view": {
+                "auto": "Auto",
+                "autoByShape": "Auto (selon la forme)",
+                "autoIs": "Auto ({choice})",
+                "faint": "Léger",
+                "handles": "Poignées",
+                "handlesFade": "Estomper à distance",
+                "handlesHide": "Masquer à distance",
+                "handlesShow": "Toujours afficher",
+                "hide": "Masquer",
+                "labels": "Étiquettes de l'aperçu",
+                "labelsAuto": "Comme le terrain ({choice})",
+                "labelsNames": "Numéros de drill",
+                "labelsNone": "Désactivé",
+                "labelsNumbers": "Numéros seuls",
+                "legendBigSteps": "Trajets avec des pas au-delà de la limite (orange)",
+                "legendCollisions": "Trajets qui se croisent ou passent trop près (rouge)",
+                "legendHandles": "Poignées à faire glisser : déplacer, taille, tourner",
+                "legendNew": "Où va chaque marcheur",
+                "legendOld": "La forme remplacée",
+                "legendProblemWalks": "Autres trajets : pointez un marcheur pour voir son trajet",
+                "legendShowOnly": "L'aspect spectacle ne dessine que l'arrivée de chaque marcheur. V affiche toutes les marques.",
+                "legendStart": "Où ils commencent ce mouvement",
+                "legendStartAt": "Où ils commencent ce mouvement : page {page}",
+                "legendWalks": "Le trajet de chaque marcheur",
+                "look": "Aspect (V)",
+                "lookShow": "Le spectacle (points seuls)",
+                "lookWalks": "Points et trajets",
+                "lookWorking": "Travail (toutes les marques)",
+                "off": "Désactivé",
+                "oldShape": "Ancienne forme",
+                "paths": "Trajets",
+                "pathsAll": "Tous",
+                "pathsCollisions": "Collisions seules",
+                "pathsNone": "Désactivé",
+                "pathsProblems": "Problèmes seuls",
+                "show": "Afficher",
+                "starts": "Marques de départ",
+                "strong": "Marqué",
+                "title": "Affichage",
+                "toLegend": "Affichage et légende"
+            }
         },
         "title": "Inspecteur"
     },
@@ -1121,10 +1244,87 @@
         "shortcuts.tapBeats": "Marquer les temps",
         "title": "Paramètres",
         "tolgeeApiKeyPlaceholder": "Clé API Tolgee",
-        "tolgeeDevToolsToggle": "Tolgee Traduction In-Context"
+        "tolgeeDevToolsToggle": "Tolgee Traduction In-Context",
+        "field": "Terrain",
+        "field.description": "L'apparence du terrain.",
+        "field.gridLines": "Lignes de grille",
+        "field.halfLines": "Demi-lignes",
+        "field.labelPosition": "Position des étiquettes",
+        "field.labelPosition.above": "Au-dessus du point",
+        "field.labelPosition.beside": "À côté du point",
+        "field.labelSize": "Taille des étiquettes",
+        "field.labelSize.large": "Grande",
+        "field.labelSize.normal": "Normale",
+        "field.labelSize.small": "Petite",
+        "field.shapeFocus": "Pendant la création de formes",
+        "field.shapeFocus.drawing": "Estomper seulement pendant le dessin",
+        "field.shapeFocus.drawing.description": "Les marcheurs hors d'une forme ouverte s'estompent seulement pendant que vous la dessinez.",
+        "field.shapeFocus.rest": "Estomper le reste",
+        "field.shapeFocus.rest.description": "Les marcheurs hors d'une forme ouverte s'estompent tant qu'elle est ouverte.",
+        "field.stepSizeWarnings": "Alertes de taille de pas",
+        "field.stepSizeWarnings.description": "Signale les mouvements dont les pas sont trop grands pour être marchés, et affiche toujours leurs chemins."
     },
     "shapes": {
+        "box": {
+            "discarded": {
+                "message": "Bloc supprimé",
+                "undo": "Annuler"
+            },
+            "left": {
+                "closeUp": "Resserrer",
+                "hint": "Leurs places restent vides. Annuler les remet.",
+                "many": "{count} ont quitté le bloc",
+                "one": "{name} a quitté le bloc",
+                "resplit": "Rediviser"
+            }
+        },
         "circle": "Cercle",
+        "edit": {
+            "closeUp": {
+                "label": "Resserrer",
+                "title": "Resserrer : remplir {count, plural, one {# place vide} other {# places vides}} avec les marcheurs restants"
+            },
+            "gap": {
+                "label": "Écart",
+                "side": {
+                    "back": "Arrière",
+                    "front": "Avant",
+                    "left": "Gauche",
+                    "right": "Droite"
+                },
+                "sideLabel": "Côté de l'écart",
+                "style": {
+                    "gap": "Laisse un écart",
+                    "spread": "Répartit également"
+                },
+                "styleLabel": "Ce côté"
+            },
+            "mode": {
+                "files": "Grille",
+                "label": "Remplissage",
+                "outline": "Contour",
+                "spread": "Dispersion"
+            },
+            "reshuffle": {
+                "label": "Remélanger",
+                "title": "Remélanger : une nouvelle disposition"
+            }
+        },
+        "placed": {
+            "label": "{name} · {interval} pas",
+            "left": {
+                "many": "{count} ont quitté {shape}",
+                "one": "{name} a quitté {shape}"
+            }
+        },
+        "save": {
+            "descriptionLabel": "Description de la forme enregistrée (facultatif)",
+            "descriptionPlaceholder": "Description (facultatif)"
+        },
+        "saved": {
+            "copyFailed": "Impossible de copier la forme enregistrée dans le spectacle",
+            "deleteFailed": "Impossible de supprimer la forme enregistrée du spectacle"
+        },
         "square": "Carré",
         "triangle": "Triangle",
         "x": "X"
@@ -1145,6 +1345,28 @@
         "audio": "Audio",
         "controls": {
             "label": "Contrôles de lecture"
+        },
+        "holdMarks": {
+            "holds": "Les marcheurs sélectionnés tiennent depuis la page {page}",
+            "holdsFromStart": "Les marcheurs sélectionnés tiennent depuis le début",
+            "holdsFromStartHint": "Ils restent là où ils ont commencé",
+            "holdsHere": "Les marcheurs sélectionnés tiennent sur cette page",
+            "holdsHereHint": "Ils restent là où leur dernier mouvement les a laissés",
+            "holdsHint": "Ils restent là où la page {page} les a laissés",
+            "kept": "Les marcheurs sélectionnés sont conservés ici",
+            "keptHint": "Ils restent ici quand les pages précédentes changent",
+            "mixed": "Certains marcheurs sélectionnés tiennent depuis la page {page}",
+            "mixedFromStart": "Certains marcheurs sélectionnés tiennent depuis le début",
+            "mixedHere": "Certains marcheurs sélectionnés tiennent sur cette page",
+            "mixedHint": "Certains ont leur propre mouvement ici",
+            "moves": "Les marcheurs sélectionnés bougent sur cette page",
+            "movesHint": "Ils ont leur propre mouvement ici"
+        },
+        "keep": {
+            "followed": {
+                "keepOne": "Garder la page {page} comme avant",
+                "keepPages": "Garder les pages {first}–{last} comme avant"
+            }
         },
         "label": "Chronologie",
         "masterVolume": "Volume principal",
@@ -1202,7 +1424,16 @@
         "view": {
             "gridLines": "Lignes de grille",
             "halfLines": "Demi-lignes",
+            "labels": "Étiquettes",
+            "labelsAuto": "Auto (plus petites si serré)",
+            "labelsNames": "Numéros de drill",
+            "labelsNumbers": "Numéros seuls",
+            "labelsOff": "Désactivé",
             "nextPaths": "Prochains chemins",
+            "shapes": "Formes",
+            "shapesAlways": "Toujours",
+            "shapesOff": "Désactivé",
+            "shapesSelected": "Si sélectionné",
             "uiSettingsToolbar": "Barre d'outils des paramètres de l'interface utilisateur"
         }
     },
