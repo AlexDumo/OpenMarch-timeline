@@ -24,6 +24,13 @@ const blankShow = path.join(migrationsFolder, "_blank.dots");
 
 /** The renderer is served from disk under this origin; nothing listens on it. */
 const APP_ORIGIN = "https://app.openmarch.test";
+
+/**
+ * Errors the browser harness itself causes, allowed in every browser scenario: the time-stretch
+ * worklet (#216) can't load, because the route that serves the renderer from disk doesn't see
+ * AudioWorklet module requests.
+ */
+const HARNESS_PAGE_ERRORS = [/Audio worklet error/];
 const VIEWPORT = { width: 1600, height: 1000 };
 
 const requireBuilt = (file: string, script: string) => {
@@ -503,9 +510,12 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
             await app.close();
         }
 
+        const allowed = [
+            ...allowedPageErrors,
+            ...(target === "browser" ? HARNESS_PAGE_ERRORS : []),
+        ];
         const unexpected = pageErrors.filter(
-            (message) =>
-                !allowedPageErrors.some((allowed) => allowed.test(message)),
+            (message) => !allowed.some((pattern) => pattern.test(message)),
         );
         expect(unexpected, "The page logged or threw errors").toEqual([]);
     },
