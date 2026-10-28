@@ -13,7 +13,11 @@ import { SidebarModalLauncher } from "@/components/sidebar/SidebarModal";
 import ShapePreviewIcon from "../preview/ShapePreviewIcon";
 import { useSidebarModalStore } from "@/stores/SidebarModalStore";
 import { MAX_STARS, type ShapeLibraryRow } from "./shapeLibrary";
-import { useShapeLibraryRows, useShapeStarsStore } from "./shapeStars";
+import {
+    useNewerSavedShapeCount,
+    useShapeLibraryRows,
+    useShapeStarsStore,
+} from "./shapeStars";
 import { kindPickGate, pickShapeKind } from "../tool/pickKind";
 import { useShapeShown } from "../tool/shapeToolStore";
 import { addSavedShapeToLibrary, deleteSavedShape } from "./saveShape";
@@ -58,6 +62,7 @@ export function ShapeLibraryContents({
     const { setOpen } = useSidebarModalStore();
     const libraryRows = useShapeLibraryRows();
     const rows = rowsProp ?? libraryRows;
+    const newer = useNewerSavedShapeCount();
     const stars = useShapeStarsStore((s) => s.stars);
     const asking = useShapeStarsStore((s) => s.asking);
     const toggle = useShapeStarsStore((s) => s.toggle);
@@ -132,6 +137,17 @@ export function ShapeLibraryContents({
                                 >
                                     Save a shape from its ⋯ row or the inspector
                                     to keep it here, for every show.
+                                </p>
+                            )}
+                            {id === "saved" && newer > 0 && (
+                                <p
+                                    className="text-sub text-text-subtitle"
+                                    data-testid="shape-library-saved-newer"
+                                >
+                                    {newer === 1
+                                        ? "1 saved shape needs"
+                                        : `${newer} saved shapes need`}{" "}
+                                    a newer version of OpenMarch.
                                 </p>
                             )}
                             <ul className="flex flex-col gap-4">

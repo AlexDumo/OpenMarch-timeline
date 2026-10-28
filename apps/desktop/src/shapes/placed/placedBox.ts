@@ -89,7 +89,12 @@ function placedOf(
     // A spread from a generator this app doesn't have can't be laid out again
     if (!canLayOut(params)) return null;
     // Nor can a box whose numbers were edited into something else (B4)
-    if (kind === boxTool && !boxNumbersReadable(params)) return null;
+    if (kind === boxTool && !boxNumbersReadable(params)) {
+        console.warn(
+            `Placed shape ${recipe.id} isn't shown: its file count or intervals aren't numbers`,
+        );
+        return null;
+    }
     return {
         kind,
         params,

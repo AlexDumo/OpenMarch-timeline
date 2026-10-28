@@ -9,7 +9,11 @@ import {
     type ShapeLibraryRow,
 } from "./shapeLibrary";
 import { useSavedShapeLibrary } from "./savedShapeLibrary";
-import { savedShapeRows, type SavedShape } from "./savedShapes";
+import {
+    newerSavedShapes,
+    savedShapeRows,
+    type SavedShape,
+} from "./savedShapes";
 import { userList } from "./userStorage";
 
 /**
@@ -71,4 +75,14 @@ export function useShapeLibraryRows(): readonly ShapeLibraryRow[] {
     const library = useSavedShapeLibrary((s) => s.shapes);
     const show = useQuery(allSavedShapesQueryOptions()).data ?? NONE;
     return useMemo(() => libraryRowsOf(library, show), [library, show]);
+}
+
+/** How many saved shapes the library leaves out because they need a newer app */
+export function useNewerSavedShapeCount(): number {
+    const library = useSavedShapeLibrary((s) => s.shapes);
+    const show = useQuery(allSavedShapesQueryOptions()).data ?? NONE;
+    return useMemo(
+        () => newerSavedShapes(library, show, SHAPE_TOOLS),
+        [library, show],
+    );
 }
